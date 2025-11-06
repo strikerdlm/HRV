@@ -1,24 +1,23 @@
 ---
 layout: default
-title: Hexoskin WAV Analyzer
+title: HRV Analysis
 ---
 
-# Hexoskin WAV Analyzer
-
-![Hexoskin WAV Analyzer](assets/images/header.png)
+# Comprehensive Heart Rate Variability (HRV) Analysis
 
 ## About
 
-The Hexoskin WAV Analyzer is an advanced application for analyzing physiological data from Hexoskin smart garments. Developed by Diego Malpica, MD for aerospace medicine research, this tool helps researchers and clinicians work with physiological data collected during space analog simulations and other research scenarios.
+This project provides a comprehensive Jupyter notebook for analyzing Heart Rate Variability (HRV) using the best methods available in Python. Developed by Diego Malpica, MD for aerospace medicine research, this tool helps researchers and clinicians work with physiological data collected during space analog simulations and other research scenarios.
 
 ## Key Features
 
-- **Data Loading**: Load and decode Hexoskin WAV files (ECG, breathing, etc.)
-- **Preprocessing**: Apply filters, resample data, and normalize datasets
-- **Visualization**: Plot data with customizable options and time unit conversion
-- **Statistical Analysis**: Perform descriptive statistics and normality tests
-- **Comparison**: Compare datasets with non-parametric statistical tests
-- **Export**: Save processed data to CSV and export graphs as PNG images
+- **Time Domain Metrics**: SDNN, RMSSD, pNN50, and other statistical measures
+- **Frequency Domain Metrics**: VLF, LF, HF powers, LF/HF ratio using power spectral density
+- **Nonlinear Metrics**: Poincaré plot, DFA (Detrended Fluctuation Analysis), entropy measures
+- **Autonomic Nervous System Analysis**: Parasympathetic and sympathetic indices
+- **Comprehensive Visualization**: RR interval time series, power spectral density, Poincaré plots
+- **Statistical Analysis**: Summary statistics, correlations, and group comparisons
+- **Export Capabilities**: Save results to CSV for further analysis
 
 ## Getting Started
 
@@ -26,39 +25,40 @@ The Hexoskin WAV Analyzer is an advanced application for analyzing physiological
 
 ```bash
 # Clone the repository
-git clone https://github.com/strikerdlm/hexoskin-wav-analyzer.git
+git clone https://github.com/strikerdlm/hrv-analysis.git
 
 # Navigate to the project directory
-cd hexoskin-wav-analyzer
+cd hrv-analysis
 
 # Install dependencies
-pip install -r requirements.txt
+pip install numpy pandas scipy matplotlib seaborn
+pip install hrvanalysis  # Optional but recommended
 ```
-
-For detailed installation instructions, see the [Installation Guide](https://github.com/strikerdlm/hexoskin-wav-analyzer/blob/main/INSTALL.md).
 
 ### Usage
 
-```bash
-# Run the GUI application
-python hexoskin_wav_loader.py
+Open the Jupyter notebook:
 
-# Or use the example script
-python hexoskin_wav_example.py path/to/your/file.wav
+```bash
+jupyter notebook scripts/HRV_Comprehensive_Analysis.ipynb
 ```
 
-For detailed usage instructions, see the [README](https://github.com/strikerdlm/hexoskin-wav-analyzer/blob/main/README.md).
+The notebook includes:
+1. Data loading functions for CSV files
+2. Comprehensive HRV analysis functions
+3. Visualization tools
+4. Statistical summaries
+5. Export capabilities
 
 ## Documentation
 
-- [Installation Guide](https://github.com/strikerdlm/hexoskin-wav-analyzer/blob/main/INSTALL.md)
-- [User Manual](https://github.com/strikerdlm/hexoskin-wav-analyzer/blob/main/README.md)
-- [Contributing Guidelines](https://github.com/strikerdlm/hexoskin-wav-analyzer/blob/main/CONTRIBUTING.md)
-- [Release Notes](https://github.com/strikerdlm/hexoskin-wav-analyzer/blob/main/RELEASE_NOTES.md)
+- [Installation Guide](Installation_Guide.md)
+- [User Manual](User_Manual.md)
+- [Scientific Discussion](Scientific_Discussion_Parasympathetic_Analysis.md)
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/strikerdlm/hexoskin-wav-analyzer/blob/main/LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.
 
 ## Acknowledgments
 
