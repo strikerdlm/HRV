@@ -1,11 +1,11 @@
 theme: jekyll-theme-cayman
-title: Hexoskin WAV Analyzer
-description: An advanced application for analyzing physiological data from Hexoskin WAV files
+title: HRV Analysis
+description: Comprehensive Heart Rate Variability analysis using the best methods available in Python
 show_downloads: true
 google_analytics:
 github:
-  repository_url: https://github.com/strikerdlm/hexoskin-wav-analyzer
-  zip_url: https://github.com/strikerdlm/hexoskin-wav-analyzer/archive/refs/heads/main.zip
-  tar_url: https://github.com/strikerdlm/hexoskin-wav-analyzer/archive/refs/heads/main.tar.gz
+  repository_url: https://github.com/strikerdlm/hrv-analysis
+  zip_url: https://github.com/strikerdlm/hrv-analysis/archive/refs/heads/main.zip
+  tar_url: https://github.com/strikerdlm/hrv-analysis/archive/refs/heads/main.tar.gz
   owner_name: Diego Malpica, MD
   owner_url: https://github.com/strikerdlm 

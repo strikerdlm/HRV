@@ -1,6 +1,6 @@
-# Hexoskin WAV Analyzer Documentation
+# HRV Analysis Documentation
 
-This directory contains the files for the GitHub Pages site of the Hexoskin WAV Analyzer project.
+This directory contains the files for the GitHub Pages site of the HRV Analysis project.
 
 ## Structure
 
