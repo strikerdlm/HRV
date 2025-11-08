@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -624,5 +624,120 @@ def covariate_adjust_short_term(
 	if sdnn is not None and np.isfinite(sdnn) and sdnn_sigma > 0:
 		out["sdnn_z_cov"] = float((float(sdnn) - sdnn_expected) / sdnn_sigma)
 	return out
+
+
+@dataclass(frozen=True, slots=True)
+class ReadinessBaseline:
+	"""Statistical summary of historical parasympathetic index values."""
+
+	count: int
+	mean: float
+	std: float
+	very_low_cut: float
+	low_cut: float
+	high_cut: float
+	history: Tuple[float, ...]
+
+
+def build_readiness_baseline(
+	values: Sequence[float],
+	*,
+	min_samples: int = 7,
+	max_samples: int = 90,
+) -> ReadinessBaseline:
+	"""Construct readiness baseline from historical parasympathetic index values.
+
+	Args:
+		values: Historical PNS index values ordered from oldest to newest.
+		min_samples: Minimum number of historical samples required (default 7).
+		max_samples: Maximum samples to retain (default 90, reflecting ~90 days).
+
+	Returns:
+		ReadinessBaseline dataclass with summary statistics and percentile cuts.
+
+	Raises:
+		ValueError: If there are fewer than `min_samples` valid values or if
+			max_samples < min_samples.
+	"""
+	if max_samples < min_samples:
+		raise ValueError("max_samples must be greater than or equal to min_samples")
+	arr = np.asarray(values, dtype=float)
+	arr = arr[np.isfinite(arr)]
+	if arr.size == 0:
+		raise ValueError("No finite values supplied for baseline construction")
+	if arr.size > max_samples:
+		arr = arr[-int(max_samples) :]
+	if arr.size < int(min_samples):
+		raise ValueError(
+			f"At least {min_samples} historical samples are required; received {arr.size}"
+		)
+	arr_sorted = np.sort(arr)
+	mean = float(np.mean(arr_sorted))
+	std = float(np.std(arr_sorted, ddof=1)) if arr_sorted.size > 1 else 0.0
+	very_low_cut = float(np.percentile(arr_sorted, 3.0, method="linear"))
+	low_cut = float(np.percentile(arr_sorted, 17.0, method="linear"))
+	high_cut = float(np.percentile(arr_sorted, 84.0, method="linear"))
+	return ReadinessBaseline(
+		count=int(arr_sorted.size),
+		mean=mean,
+		std=std,
+		very_low_cut=very_low_cut,
+		low_cut=low_cut,
+		high_cut=high_cut,
+		history=tuple(float(v) for v in arr_sorted.tolist()),
+	)
+
+
+def readiness_from_pns(
+	current_value: float,
+	baseline: ReadinessBaseline,
+) -> Dict[str, float | str | int]:
+	"""Calculate readiness index metrics from the current PNS value and baseline.
+
+	Args:
+		current_value: Current parasympathetic index (0–1 scale recommended).
+		baseline: Baseline statistics returned by `build_readiness_baseline`.
+
+	Returns:
+		Dictionary containing readiness score (percentile rank), z-score,
+		category label, and baseline-derived thresholds.
+	"""
+	if not np.isfinite(current_value):
+		raise ValueError("current_value must be finite")
+	if baseline.count <= 0:
+		raise ValueError("baseline must contain at least one value")
+	arr = np.asarray(baseline.history, dtype=float)
+	arr_sorted = np.sort(arr)
+	count = arr_sorted.size
+	# Percentile rank using right-inclusive count
+	position = int(np.searchsorted(arr_sorted, current_value, side="right"))
+	percentile_rank = float((position / count) * 100.0)
+	std = float(baseline.std)
+	if std < 1e-9:
+		z_score = 0.0
+	else:
+		z_score = float((current_value - baseline.mean) / std)
+	if current_value <= baseline.very_low_cut:
+		category = "VERY LOW"
+	elif current_value <= baseline.low_cut:
+		category = "LOW"
+	elif current_value <= baseline.high_cut:
+		category = "NORMAL"
+	else:
+		category = "HIGH"
+	score = float(np.clip(percentile_rank, 0.0, 100.0))
+	return {
+		"readiness_score": score,
+		"readiness_category": category,
+		"percentile_rank": percentile_rank,
+		"z_score": z_score,
+		"pns_index": float(current_value),
+		"baseline_mean": float(baseline.mean),
+		"baseline_std": std,
+		"very_low_cut": float(baseline.very_low_cut),
+		"low_cut": float(baseline.low_cut),
+		"high_cut": float(baseline.high_cut),
+		"baseline_count": int(baseline.count),
+	}
 
 
