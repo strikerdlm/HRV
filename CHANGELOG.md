@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+### [0.2.1] - 2025-11-08
+- Fixed a deviation detection regression where missing or constant windowed metrics were incorrectly escalated to alert-level status.
+- Updated README guidance to explain the new guardrails for robust z-score calculations in windowed analyses.
+
 ### [0.2.0] - 2025-11-08
 - Added advanced HRV analytics suite (heart rate fragmentation, DC/AC via PRSA, symbolic dynamics, permutation entropy, MFDFA, RQA, frequency-domain entropy, HR-normalized RMSSD).
 - Surfaced novel metrics within the Streamlit metrics tab for quick inspection.
