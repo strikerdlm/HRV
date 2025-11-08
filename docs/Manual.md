@@ -70,6 +70,13 @@ Key sources: Psychophysiology Publication Guidelines (Part 1, 2024), Task Force 
 - Normogram-style gauges for SDNN, RMSSD, LF/HF, and HF power versus commonly cited short-term anchors.
 - Caveats: population, age, posture, and breathing change distributions; prioritize within-subject trends.
 
+### ANS Function Tests
+- The **ANS Function Tests** tab computes classic autonomic function ratios when you supply time windows (seconds from recording start):
+  - **Valsalva ratio**: requires phase II (strain) and phase IV (recovery) windows; reports the minimum RR (phase II), maximum RR (phase IV), and their ratio.
+  - **Deep breathing**: specify the start time, cycle length, and number of paced breathing cycles. The app returns expiratory/inspiratory (E:I) differences, ratios, and per-cycle details.
+  - **30:15 ratio**: specify the moment of standing plus windows around the 15th and 30th beats post-stand; the ratio is longest RR around beat 30 divided by shortest RR around beat 15.
+- For best results, enable artifact correction and align windows with the actual protocol cues (e.g., microphone cues, on-screen timers). If a window contains insufficient beats, the app warns and skips that metric.
+
 ### Science and References
 - Concise scientific notes and citations.
 
@@ -112,6 +119,12 @@ Clinical emphasis:
 
 ### Entropy metrics (complexity/regularity)
 - Approximate Entropy (ApEn) and Sample Entropy (SampEn) (unitless): quantify regularity/complexity in RR dynamics. Parameters commonly use m=2 and r=0.15–0.20·SD for short-term HRV. Lower entropy suggests more regular (less complex) dynamics—seen in rigid autonomic regulation states; higher entropy indicates greater complexity. Entropy estimates are sensitive to window length and parameters.
+
+### Autonomic function ratios
+- **Valsalva ratio**: longest RR during phase IV divided by the shortest RR during phase II of the Valsalva manoeuvre. Values ≥1.2 are often cited as normal in middle-aged adults; lower ratios may indicate impaired parasympathetic function. Ensure the windows capture the correct phases (approximately 5–15 s for strain, 15–25 s for release).
+- **Deep breathing (E:I) response**: difference and ratio between expiratory and inspiratory RR intervals during paced breathing (commonly 6 breaths/min). Larger E:I differences/ratios reflect greater vagal modulation.
+- **30:15 ratio**: ratio of the longest RR near the 30th beat after standing to the shortest RR near the 15th beat. Ratios ≥1.04 are typical in healthy adults; lower values suggest impaired reflex tachycardia response.
+- Interpret ratios alongside age-specific norms, medications, and posture instructions. Document exact timing cues to improve reproducibility.
 
 
 ## Interpretation Principles

@@ -33,6 +33,7 @@ Then open the local URL shown by Streamlit (typically http://localhost:8501).
 - Spectrogram (time–frequency) of interpolated RR
 - Sliding window metrics (window/step/min RR configurable)
 - Normogram‑style gauges (SDNN, RMSSD, LF/HF, HF power) against common short‑term anchors
+- Autonomic function test helpers (Valsalva ratio, deep-breathing E:I response, 30:15 ratio) with configurable time windows
 - Basic “Interpretation” notes and references
 
 ## Data Expectations
@@ -118,6 +119,13 @@ These follow common definitions in the HRV literature; interpretation depends on
 ## New: Entropy metrics
 - Default nonlinear metrics now include Approximate Entropy (ApEn) and Sample Entropy (SampEn) with m=2 and r=0.2·SD.
 - View values in the “Metrics” tab; UI parameter controls (m, r) are planned.
+
+## New: Autonomic function tests
+- The “ANS Function Tests” tab lets you configure time windows (in seconds from recording start) for:
+  - **Valsalva ratio** (phase II vs phase IV windows)
+  - **Deep breathing** E:I difference/ratio over repeated breathing cycles
+  - **30:15 ratio** around a sit-to-stand event
+- Use cleaned RR data (when QC is enabled) to minimise artifact influence. Each test reports component RR values alongside the derived ratio for transparency.
 
 ## Legacy materials
 If you need the earlier comprehensive Jupyter workflows and enhanced system description, see:
