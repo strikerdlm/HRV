@@ -40,6 +40,9 @@ Then open the local URL shown by Streamlit (typically http://localhost:8501).
 - The app uses basic bounds (300–2000 ms) and interpolation for spectral methods (4 Hz).
 - Quality of input (artifact/ectopic handling) directly impacts frequency and nonlinear metrics.
 
+### Frequency method
+- Choose PSD method in the sidebar: Welch (default), Periodogram, or AR (Yule–Walker approximation).
+
 ## Troubleshooting
 - No plots? The app loads ECharts from a CDN by default. If you need offline support, install a local copy:
   ```powershell
@@ -92,6 +95,29 @@ The items below are informed by the existing enhanced system (see `docs/Enhanced
 - Sacha (2016)–style HR correction considerations: see discussion in Frontiers in Physiology (2016). [Frontiers link](https://www.frontiersin.org/journals/physiology/articles/10.3389/fphys.2016.00356/full)
 
 Additional resources are listed inside the app’s “References” tab.
+
+## New: Data Quality & Preprocessing (artifact correction)
+- Toggle artifact correction in the sidebar (“Data Quality”). Current method: threshold vs moving median or previous beat, with deviation threshold and median window size.
+- The time series tab overlays:
+  - raw series
+  - cleaned series (green)
+  - flagged artifacts (red points)
+- Cleaned RR is used automatically in frequency, nonlinear, spectrogram, and windowed metrics when enabled.
+
+Notes:
+- The simple, transparent heuristics implemented here are conservative and bounded. Published software (e.g., Kubios) offers advanced options; our aim is reproducibility and clarity. See Quigley et al. 2024 (Psychophysiology) for measurement/reporting guidance and Frontiers (2016) for HR/respiration influences.
+
+## New: Geometric metrics
+- The app now adds geometric HRV metrics to the metrics table:
+  - HRV triangular index (HRVI)
+  - TINN (approximated baseline width)
+  - Baevsky Stress Index (SI = AMo/(2·Mo·MxDMn); AMo as fraction)
+
+These follow common definitions in the HRV literature; interpretation depends on protocol and cohort.
+
+## New: Entropy metrics
+- Default nonlinear metrics now include Approximate Entropy (ApEn) and Sample Entropy (SampEn) with m=2 and r=0.2·SD.
+- View values in the “Metrics” tab; UI parameter controls (m, r) are planned.
 
 ## Legacy materials
 If you need the earlier comprehensive Jupyter workflows and enhanced system description, see:
