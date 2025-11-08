@@ -674,6 +674,7 @@ def main() -> None:
 	min_sustain = st.sidebar.number_input("Min windows to define an episode", min_value=1, max_value=60, value=3, step=1)
 	st.sidebar.markdown("---")
 	st.sidebar.subheader("Performance & display")
+	minimal_mode = st.sidebar.checkbox("Minimal mode (fastest)", value=True)
 	max_datasets = st.sidebar.number_input("Process first N datasets", min_value=1, value=3, step=1)
 	rr_plot_cap = st.sidebar.selectbox("RR plot point cap per dataset", ["500","2000","10000","No limit"], index=1)
 	skip_freq = st.sidebar.checkbox("Skip Frequency overlay plot", value=True)
@@ -691,6 +692,20 @@ def main() -> None:
 	sex = st.sidebar.selectbox("Sex", ["Female", "Male"], index=1)
 	bmi = st.sidebar.number_input("BMI (kg/m²)", min_value=10.0, max_value=60.0, value=29.0, step=0.5)
 	exercise = st.sidebar.selectbox("Exercise regularity", ["Sedentary", "Moderate", "Athlete"], index=0)
+
+	# Apply minimal mode overrides to ensure fastest behavior by default
+	if minimal_mode:
+		max_datasets = 1
+		rr_plot_cap = "500"
+		skip_freq = True
+		skip_poincare = True
+		skip_spectrogram = True
+		skip_gauges = True
+		fast_windowing = True
+		high_compute = False
+		max_windows = min(int(max_windows), 800)
+		enable_ml = False
+		st.sidebar.caption("Minimal mode: processing 1 dataset, fast time-domain windowing, heavy plots/tabs skipped.")
 
 	# Prepare dataset dict (limit number of datasets for performance)
 	datasets_all = uploads
