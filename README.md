@@ -33,6 +33,7 @@ Then open the local URL shown by Streamlit (typically http://localhost:8501).
 - Spectrogram (time–frequency) of interpolated RR
 - Sliding window metrics (window/step/min RR configurable)
 - Normogram‑style gauges (SDNN, RMSSD, LF/HF, HF power) against common short‑term anchors
+- Advanced analytics: heart rate fragmentation (PIP/IALS/PSS), deceleration & acceleration capacity (PRSA), symbolic dynamics (0V/2UV), permutation entropy, multifractal DFA, recurrence quantification (DET/LAM/Lmax), frequency-domain entropy, heart-rate–normalized RMSSD (“master curve”)
 - Autonomic function test helpers (Valsalva ratio, deep-breathing E:I response, 30:15 ratio) with configurable time windows
 - Basic “Interpretation” notes and references
 
@@ -126,6 +127,14 @@ These follow common definitions in the HRV literature; interpretation depends on
   - **Deep breathing** E:I difference/ratio over repeated breathing cycles
   - **30:15 ratio** around a sit-to-stand event
 - Use cleaned RR data (when QC is enabled) to minimise artifact influence. Each test reports component RR values alongside the derived ratio for transparency.
+
+## New: Advanced HRV metrics (2025 update)
+- Heart rate fragmentation suite (PIP, IALS, PSS) for detecting autonomous disorganization and arrhythmic risk signals.
+- Phase-rectified signal averaging capacities (DC/AC) with anchor counts for vagal vs sympathetic modulation.
+- Symbolic dynamics (0V, 1V, 2LV, 2UV), permutation entropy, and frequency-domain entropy to characterise stress resilience in short recordings.
+- Multifractal DFA spectrum width and recurrence quantification metrics (RR, DET, LAM, Lmax) for multi-scale and phase-space complexity tracking.
+- Heart rate “master curve” normalization of RMSSD to minimise heart-rate dependence when comparing across workloads or individuals.
+- All advanced metrics are listed in the metrics tab (with a dedicated summary table) and are available in exported data frames for modelling workflows.
 
 ## Legacy materials
 If you need the earlier comprehensive Jupyter workflows and enhanced system description, see:
