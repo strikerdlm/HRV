@@ -719,7 +719,7 @@ def main() -> None:
 	for name, up in datasets.items():
 		if up.rr_ms.size >= 10:
 			use_rr = up.rr_ms_clean if (apply_clean and up.rr_ms_clean is not None) else up.rr_ms
-			m = compute_comprehensive_hrv(use_rr)
+			m = compute_comprehensive_hrv(use_rr, include_advanced=True)
 			m["source"] = name
 			if apply_clean and up.qc_summary:
 				m["qc_flagged_pct"] = float(up.qc_summary.get("flagged_pct", 0.0))
@@ -856,6 +856,28 @@ def main() -> None:
 	with tab_metrics:
 		if not multi_results_df.empty:
 			st.dataframe(multi_results_df)
+			novel_columns = [
+				"hrf_pip_pct",
+				"hrf_ials",
+				"hrf_pss_pct",
+				"deceleration_capacity",
+				"acceleration_capacity",
+				"permutation_entropy",
+				"permutation_entropy_norm",
+				"symbolic_0v_pct",
+				"symbolic_2uv_pct",
+				"mfdfa_width",
+				"rqa_rr",
+				"rqa_det",
+				"entropy_lf",
+				"entropy_hf",
+				"entropy_lf_hf_ratio",
+				"rmssd_master_ratio",
+			]
+			available_novel = [col for col in novel_columns if col in multi_results_df.columns]
+			if available_novel:
+				st.markdown("Novel metrics (advanced signal analytics):")
+				st.dataframe(multi_results_df[["source"] + available_novel])
 			if enable_cov and "rmssd_z_cov" in multi_results_df.columns:
 				st.markdown("Covariate-adjusted (patient profile) expectations and z-scores:")
 				cols_to_show = ["source"]
