@@ -140,6 +140,7 @@ These follow common definitions in the HRV literature; interpretation depends on
 
 ## New: Deviation detection & readiness (Q4 2025)
 - **Robust deviation detection** — enable the sidebar toggle to compute median/MAD-based z-scores across windowed metrics (RMSSD, SDNN, LF/HF, HF power by default). Windows breaching the warn or alert thresholds are colour-coded (yellow/red), displayed on the deviation timeline, and shaded directly on the tachogram.
+- **Noise-aware guardrails** — constant or sparsely populated window series now stay neutral. Missing values are skipped, and tiny perturbations around the per-source medians are treated as green so only genuine shifts trigger yellow/red alerts.
 - **Anomaly episodes** — contiguous yellow/red runs that meet the “Min windows to define an episode” requirement are summarised so you can quickly flag sustained shifts for review.
 - **Patient profile adjustments** — supply age, sex, BMI, and exercise level to generate covariate-adjusted expectations (`rmssd_expected`, `sdnn_expected`) with z-scores; both the metrics table and exports include these comparisons.
 - **Readiness tab** — build a Kubios-style readiness baseline from historical parasympathetic index values. Select the current session, choose a historical window, and view readiness percentile, category, baseline statistics, and trend plot.
