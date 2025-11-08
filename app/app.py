@@ -350,8 +350,8 @@ def main() -> None:
 		""",
 		unsafe_allow_html=True,
 	)
-	st.title("HRV Analysis — Developed by Dr. Diego Malpica (Aerospace Medicine)")
-	st.caption("Modern, scientific, interactive analysis with Apache ECharts. Repo: https://github.com/strikerdlm/HRV")
+	st.title("HRV Analysis")
+	st.caption("Modern, scientific, interactive analysis with Apache ECharts.")
 	st.markdown(
 		"Using Apache ECharts for high-quality, interactive plots "
 		"(see the official handbook: [ECharts Handbook](https://echarts.apache.org/handbook/en/get-started/))."
@@ -411,21 +411,12 @@ def main() -> None:
 	multi_results_df = pd.DataFrame(multi_results) if multi_results else pd.DataFrame()
 
 	# Tabs
-	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_gauges, tab_science, tab_refs = st.tabs(
-		["Overview", "Time Series", "Frequency", "Nonlinear", "Spectrogram", "Windowed", "Metrics", "Gauges", "Science", "References"]
+	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_gauges, tab_science, tab_refs, tab_about = st.tabs(
+		["Overview", "Time Series", "Frequency", "Nonlinear", "Spectrogram", "Windowed", "Metrics", "Gauges", "Science", "References", "About"]
 	)
 	with tab_overview:
 		if meta_rows:
 			st.dataframe(pd.DataFrame(meta_rows))
-		st.markdown(
-			"**About the author**  \n"
-			"Developed by Dr. Diego Leonel Malpica Hincapié (Aerospace Medicine, Colombia). "
-			"Affiliations and public records indicate service within Colombian Military Health (Fuerza Aérea Colombiana).  \n"
-			"Sources: "
-			"[SIGEP II — Función Pública](https://www.funcionpublica.gov.co/web/sigep/hdv/-/directorio/S767357-8012-4/view), "
-			"[Redalyc article listing](https://www.redalyc.org/journal/6735/673573283005/movil/).  \n"
-			"Project repository: https://github.com/strikerdlm/HRV"
-		)
 	with tab_ts:
 		_plot_rr_timeseries(datasets)
 		_plot_hr_timeseries(datasets)
@@ -495,6 +486,26 @@ def main() -> None:
 			"[Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf), "
 			"[Shaffer & Ginsberg 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full), "
 			"[Nunan et al. 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/)."
+		)
+	with tab_about:
+		st.markdown(
+			"### About the Author\n"
+			"**Dr. Diego Leonel Malpica Hincapié** — Aerospace Medicine (Colombia)\n\n"
+			"- Professional service within Colombian Military Health / Fuerza Aérea Colombiana (public record).\n"
+			"- Focus areas: aerospace medicine, operational performance, fatigue, psychophysiology, and HRV.\n"
+			"- This app and analysis workflow were authored and curated by Dr. Malpica.\n\n"
+			"Sources:\n"
+			"- SIGEP II — Función Pública (public record): "
+			"[profile link](https://www.funcionpublica.gov.co/web/sigep/hdv/-/directorio/S767357-8012-4/view)\n"
+			"- Related academic listing with name occurrence: "
+			"[Redalyc article page](https://www.redalyc.org/journal/6735/673573283005/movil/)\n\n"
+			"Project links:\n"
+			"- GitHub repository: https://github.com/strikerdlm/HRV\n"
+			"- HRV Normative review in this project: `docs/Normative.md`\n"
+			"- Charting: [Apache ECharts](https://echarts.apache.org/handbook/en/get-started/)\n\n"
+			"Notes:\n"
+			"- HRV interpretation is protocol- and cohort-dependent. Use within-subject trends and documented context "
+			"(posture, time-of-day, respiration) for decisions.\n"
 		)
 	with tab_refs:
 		st.markdown(
