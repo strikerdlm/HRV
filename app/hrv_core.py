@@ -385,6 +385,7 @@ def compute_windowed_hrv(
 	step: str = "1min",
 	min_rr_count: int = 60,
 	max_windows: int = 500,
+	include_advanced: bool = True,
 ) -> pd.DataFrame:
 	"""Sliding-window HRV metrics with explicit bounds."""
 	if df_in.empty:
@@ -420,7 +421,7 @@ def compute_windowed_hrv(
 		if len(w) < min_rr_count:
 			continue
 		rr = w[rr_col].to_numpy()
-		metrics = compute_comprehensive_hrv(rr, include_advanced=False)
+		metrics = compute_comprehensive_hrv(rr, include_advanced=include_advanced)
 		metrics["start"] = s
 		metrics["end"] = e
 		if "source" in df.columns:
