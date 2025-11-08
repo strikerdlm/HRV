@@ -9,11 +9,13 @@ import streamlit as st
 
 from echarts_component import EChartsConfig, render_echarts
 from hrv_core import (
+	build_readiness_baseline,
+	clean_rr_intervals,
 	compute_comprehensive_hrv,
 	compute_windowed_hrv,
 	load_rr_intervals_from_text,
-	clean_rr_intervals,
 	psd_curve,
+	readiness_from_pns,
 	spectrogram_rr,
 )
 
@@ -644,6 +646,7 @@ def main() -> None:
 
 	# Full-recording metrics
 	multi_results: List[Dict] = []
+	ordered_sources: List[str] = []
 	for name, up in datasets.items():
 		if up.rr_ms.size >= 10:
 			use_rr = up.rr_ms_clean if (apply_clean and up.rr_ms_clean is not None) else up.rr_ms
@@ -664,6 +667,7 @@ def main() -> None:
 				)
 				m.update(adj)
 			multi_results.append(m)
+			ordered_sources.append(name)
 	multi_results_df = pd.DataFrame(multi_results) if multi_results else pd.DataFrame()
 
 	# Long-term summaries (5-min windows): SDANN (std of mean_nni), SDNNIDX (mean of window SDNN)
@@ -677,9 +681,19 @@ def main() -> None:
 		if not multi_results_df.empty:
 			multi_results_df = multi_results_df.merge(lts, on="source", how="left")
 
+	pns_mapping: Dict[str, float] = {}
+	if not multi_results_df.empty and "parasympathetic_index" in multi_results_df.columns:
+		for src in ordered_sources:
+			row = multi_results_df[multi_results_df["source"] == src]
+			if row.empty:
+				continue
+			val = float(row["parasympathetic_index"].iloc[0])
+			if np.isfinite(val):
+				pns_mapping[src] = val
+
 	# Tabs
-	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_gauges, tab_science, tab_refs, tab_about = st.tabs(
-		["Overview", "Time Series", "Frequency", "Nonlinear", "Spectrogram", "Windowed", "Metrics", "Gauges", "Science", "References", "About"]
+	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_readiness, tab_gauges, tab_science, tab_refs, tab_about = st.tabs(
+		["Overview", "Time Series", "Frequency", "Nonlinear", "Spectrogram", "Windowed", "Metrics", "Readiness", "Gauges", "Science", "References", "About"]
 	)
 	with tab_overview:
 		if meta_rows:
@@ -768,6 +782,119 @@ def main() -> None:
 				st.dataframe(multi_results_df[cols_to_show])
 		else:
 			st.info("No metrics to display.")
+	with tab_readiness:
+		st.markdown(
+			"**Readiness index (PNS percentile)**  \n"
+			"Compares the current parasympathetic index with your historical baseline. "
+			"Categories follow the Kubios readiness definitions (VERY LOW, LOW, NORMAL, HIGH)."
+		)
+		if not pns_mapping:
+			st.info("Upload multiple sessions with successful metric computation to enable readiness analysis.")
+		else:
+			ordered_names = [name for name in ordered_sources if name in pns_mapping]
+			if not ordered_names:
+				st.info("Ready metrics unavailable; ensure parasympathetic index was computed.")
+			else:
+				default_idx = max(len(ordered_names) - 1, 0)
+				current_sel = st.selectbox("Current measurement", ordered_names, index=default_idx)
+				default_baseline = [name for name in ordered_names if name != current_sel]
+				baseline_sel = st.multiselect(
+					"Historical baseline datasets (oldest to newest)",
+					options=ordered_names,
+					default=default_baseline,
+				)
+				include_current = st.checkbox("Include current measurement in baseline", value=False)
+				min_hist = int(
+					st.number_input("Minimum historical samples", min_value=3, max_value=30, value=7, step=1)
+				)
+				max_default = int(max(min_hist, min(30, len(ordered_names))))
+				max_hist = int(
+					st.slider(
+						"Historical window (max records retained)",
+						min_value=min_hist,
+						max_value=90,
+						value=max_default,
+						step=1,
+					)
+				)
+				history_names: List[str] = []
+				for name in ordered_names:
+					if name in baseline_sel and (include_current or name != current_sel):
+						history_names.append(name)
+				if include_current and current_sel not in history_names:
+					history_names.append(current_sel)
+				if not history_names:
+					st.warning("Select at least one baseline record to build readiness baseline.")
+				else:
+					history_values = [pns_mapping[name] for name in ordered_names if name in history_names]
+					try:
+						baseline = build_readiness_baseline(history_values, min_samples=min_hist, max_samples=max_hist)
+					except ValueError as exc:
+						st.warning(f"Baseline configuration issue: {exc}")
+					else:
+						current_pns = float(pns_mapping.get(current_sel, np.nan))
+						if not np.isfinite(current_pns):
+							st.warning("Current measurement lacks a valid parasympathetic index.")
+						else:
+							readiness = readiness_from_pns(current_pns, baseline)
+							col_a, col_b, col_c = st.columns(3)
+							col_a.metric("Readiness score (percentile)", f"{readiness['readiness_score']:.1f}")
+							col_b.metric("Category", readiness["readiness_category"])
+							col_c.metric("PNS index", f"{readiness['pns_index']:.3f}")
+							details_df = pd.DataFrame(
+								{
+									"baseline_mean": [readiness["baseline_mean"]],
+									"baseline_std": [readiness["baseline_std"]],
+									"very_low_cut": [readiness["very_low_cut"]],
+									"low_cut": [readiness["low_cut"]],
+									"high_cut": [readiness["high_cut"]],
+									"baseline_samples": [readiness["baseline_count"]],
+									"z_score": [readiness["z_score"]],
+								}
+							)
+							st.dataframe(details_df)
+							history_labels = history_names.copy()
+							if current_sel not in history_labels:
+								history_labels.append(current_sel)
+							line_series = {
+								"name": "Baseline PNS history",
+								"type": "line",
+								"showSymbol": True,
+								"smooth": True,
+								"data": [[label, float(pns_mapping[label])] for label in history_names],
+							}
+							current_series = {
+								"name": f"{current_sel} (current)",
+								"type": "scatter",
+								"symbolSize": 12,
+								"itemStyle": {"color": "#1e88e5"},
+								"data": [[current_sel, readiness["pns_index"]]],
+							}
+							opt = {
+								"title": {"text": "Parasympathetic index baseline", "left": "center"},
+								"tooltip": {"trigger": "axis"},
+								"xAxis": {"type": "category", "name": "Session", "data": history_labels},
+								"yAxis": {"type": "value", "name": "PNS index"},
+								"legend": {"top": 24},
+								"series": [line_series, current_series],
+							}
+							mark_lines = [
+								{"yAxis": readiness["very_low_cut"], "name": "Very low cut"},
+								{"yAxis": readiness["low_cut"], "name": "Low cut"},
+								{"yAxis": readiness["high_cut"], "name": "High cut"},
+							]
+							line_series["markLine"] = {"symbol": "none", "data": mark_lines}
+							render_echarts(opt, height_px=360, config=EChartsConfig())
+							st.markdown(
+								"- **VERY LOW**: below ~3% of historical PNS values; indicative of high stress or limited recovery.  \n"
+								"- **LOW**: between ~3% and 17%, often aligned with moderate stress or incomplete rest.  \n"
+								"- **NORMAL**: within ~17–84% of history, reflecting typical readiness.  \n"
+								"- **HIGH**: above ~84%, often seen with strong recovery and parasympathetic dominance."
+							)
+							st.caption(
+								"Baseline uses the selected historical sessions (last-in-first-out capped at the chosen window). "
+								"Consistent daily morning recordings (1–5 minutes, relaxed breathing) improve reliability."
+							)
 	with tab_gauges:
 		_render_normogram_gauges(multi_results_df)
 		st.markdown(
