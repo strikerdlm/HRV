@@ -57,15 +57,26 @@ def _cached_windowed(
 	max_windows: int,
 	include_advanced: bool,
 ) -> pd.DataFrame:
-	return compute_windowed_hrv(
-		df,
-		rr_col=rr_col,
-		window=window,
-		step=step,
-		min_rr_count=min_rr_count,
-		max_windows=max_windows,
-		include_advanced=include_advanced,
-	)
+	try:
+		return compute_windowed_hrv(
+			df,
+			rr_col=rr_col,
+			window=window,
+			step=step,
+			min_rr_count=min_rr_count,
+			max_windows=max_windows,
+			include_advanced=include_advanced,
+		)
+	except TypeError:
+		# Backward-compat fallback if the imported function does not accept include_advanced
+		return compute_windowed_hrv(
+			df,
+			rr_col=rr_col,
+			window=window,
+			step=step,
+			min_rr_count=min_rr_count,
+			max_windows=max_windows,
+		)
 
 
 @dataclass(slots=True)
