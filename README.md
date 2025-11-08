@@ -34,6 +34,8 @@ Then open the local URL shown by Streamlit (typically http://localhost:8501).
 - Sliding window metrics (window/step/min RR configurable)
 - Normogram‑style gauges (SDNN, RMSSD, LF/HF, HF power) against common short‑term anchors
 - Advanced analytics: heart rate fragmentation (PIP/IALS/PSS), deceleration & acceleration capacity (PRSA), symbolic dynamics (0V/2UV), permutation entropy, multifractal DFA, recurrence quantification (DET/LAM/Lmax), frequency-domain entropy, heart-rate–normalized RMSSD (“master curve”)
+- Deviation detection timeline for sliding-window metrics with anomaly episodes and tachogram overlays
+- Patient profile adjustments (age, sex, BMI, exercise) and readiness baselines with Kubios-style categories
 - Autonomic function test helpers (Valsalva ratio, deep-breathing E:I response, 30:15 ratio) with configurable time windows
 - Basic “Interpretation” notes and references
 
@@ -135,6 +137,14 @@ These follow common definitions in the HRV literature; interpretation depends on
 - Multifractal DFA spectrum width and recurrence quantification metrics (RR, DET, LAM, Lmax) for multi-scale and phase-space complexity tracking.
 - Heart rate “master curve” normalization of RMSSD to minimise heart-rate dependence when comparing across workloads or individuals.
 - All advanced metrics are listed in the metrics tab (with a dedicated summary table) and are available in exported data frames for modelling workflows.
+
+## New: Deviation detection & readiness (Q4 2025)
+- **Robust deviation detection** — enable the sidebar toggle to compute median/MAD-based z-scores across windowed metrics (RMSSD, SDNN, LF/HF, HF power by default). Windows breaching the warn or alert thresholds are colour-coded (yellow/red), displayed on the deviation timeline, and shaded directly on the tachogram.
+- **Anomaly episodes** — contiguous yellow/red runs that meet the “Min windows to define an episode” requirement are summarised so you can quickly flag sustained shifts for review.
+- **Patient profile adjustments** — supply age, sex, BMI, and exercise level to generate covariate-adjusted expectations (`rmssd_expected`, `sdnn_expected`) with z-scores; both the metrics table and exports include these comparisons.
+- **Readiness tab** — build a Kubios-style readiness baseline from historical parasympathetic index values. Select the current session, choose a historical window, and view readiness percentile, category, baseline statistics, and trend plot.
+- **Respiratory-rate gauge** — when an HF peak is detected reliably, the gauges tab now surfaces breaths/min as a qualitative respiration cue for protocol adherence.
+- See `docs/Manual.md` for detailed workflows covering covariate adjustment, deviation detection, and readiness baseline configuration.
 
 ## Legacy materials
 If you need the earlier comprehensive Jupyter workflows and enhanced system description, see:
