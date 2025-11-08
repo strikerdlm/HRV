@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -15,6 +15,8 @@ from hrv_core import (
 	clean_rr_intervals,
 	psd_curve,
 	spectrogram_rr,
+	compute_readiness_score,
+	ReadinessScore,
 )
 
 
@@ -538,6 +540,26 @@ def main() -> None:
 	sex = st.sidebar.selectbox("Sex", ["Female", "Male"], index=0)
 	bmi = st.sidebar.number_input("BMI (kg/m²)", min_value=10.0, max_value=60.0, value=25.0, step=0.5)
 	exercise = st.sidebar.selectbox("Exercise regularity", ["Sedentary", "Moderate", "Athlete"], index=0)
+	dataset_names = list(uploads.keys())
+	readiness_enabled = False
+	readiness_current: Optional[str] = None
+	readiness_baseline_names: List[str] = []
+	readiness_min_history = 14
+	if dataset_names:
+		st.sidebar.markdown("---")
+		st.sidebar.subheader("Readiness index")
+		readiness_enabled = st.sidebar.checkbox("Compute readiness index", value=False)
+		if readiness_enabled:
+			readiness_current = st.sidebar.selectbox("Current measurement", dataset_names, index=0)
+			default_baseline = [name for name in dataset_names if name != readiness_current]
+			readiness_baseline_names = st.sidebar.multiselect(
+				"Baseline datasets (≥14 historical measurements recommended)",
+				dataset_names,
+				default=default_baseline,
+			)
+			readiness_min_history = int(
+				st.sidebar.number_input("Minimum baseline samples", min_value=5, max_value=365, value=14, step=1)
+			)
 
 	# Prepare dataset dict
 	datasets = uploads
@@ -666,6 +688,40 @@ def main() -> None:
 			multi_results.append(m)
 	multi_results_df = pd.DataFrame(multi_results) if multi_results else pd.DataFrame()
 
+	readiness_result: Optional[ReadinessScore] = None
+	readiness_warning: Optional[str] = None
+	readiness_baseline_summary: Optional[Tuple[float, float]] = None
+	if readiness_enabled:
+		if readiness_current is None:
+			readiness_warning = "Select a current measurement to compute readiness."
+		elif multi_results_df.empty or "parasympathetic_index" not in multi_results_df.columns:
+			readiness_warning = "Parasympathetic index is unavailable; cannot compute readiness."
+		else:
+			selected_baseline = [name for name in readiness_baseline_names if name != readiness_current]
+			baseline_series = (
+				multi_results_df[multi_results_df["source"].isin(selected_baseline)]["parasympathetic_index"].dropna()
+				if selected_baseline
+				else pd.Series(dtype=float)
+			)
+			current_series = multi_results_df[multi_results_df["source"] == readiness_current]["parasympathetic_index"].dropna()
+			baseline_array = baseline_series.to_numpy(dtype=float)
+			if baseline_array.size == 0:
+				readiness_warning = "No historical baseline PNS data selected for readiness computation."
+			elif current_series.empty:
+				readiness_warning = f"No parasympathetic index value for current dataset '{readiness_current}'."
+			else:
+				try:
+					readiness_result = compute_readiness_score(
+						float(current_series.iloc[0]),
+						baseline_array,
+						minimum_history=int(readiness_min_history),
+					)
+					median_val = float(np.median(baseline_array))
+					iqr_val = float(np.subtract(*np.percentile(baseline_array, [75.0, 25.0])))
+					readiness_baseline_summary = (median_val, iqr_val)
+				except ValueError as exc:
+					readiness_warning = str(exc)
+
 	# Long-term summaries (5-min windows): SDANN (std of mean_nni), SDNNIDX (mean of window SDNN)
 	if not windowed_df.empty and "mean_nni" in windowed_df.columns and "sdnn" in windowed_df.columns:
 		lts = (
@@ -704,6 +760,33 @@ def main() -> None:
 					columns={"respiratory_rate_bpm": "respiratory_rate [breaths/min]"}
 				)
 			)
+		if readiness_enabled:
+			st.markdown("### Readiness index overview")
+			if readiness_result is not None:
+				readiness_df = pd.DataFrame(
+					[
+						{
+							"source": readiness_current,
+							"readiness_index (percentile)": readiness_result.readiness_index,
+							"category": readiness_result.category,
+							"current_pns_index": readiness_result.pns_index,
+							"baseline_samples": readiness_result.baseline_count,
+							"very_low_threshold": readiness_result.thresholds[0],
+							"low_threshold": readiness_result.thresholds[1],
+							"high_threshold": readiness_result.thresholds[2],
+						}
+					]
+				)
+				st.dataframe(readiness_df)
+				if readiness_baseline_summary is not None:
+					median_val, iqr_val = readiness_baseline_summary
+					st.caption(
+						f"Baseline PNS median {median_val:.3f}, IQR {iqr_val:.3f}. "
+						"Readiness categories follow Kubios HRV guidance: VERY LOW (≤2-3%), LOW (~14%), "
+						"NORMAL (~68%), HIGH (~16%)."
+					)
+			elif readiness_warning:
+				st.warning(readiness_warning)
 	with tab_ts:
 		_plot_rr_timeseries(datasets, dev_windows=windowed_df if (apply_dev and "dev_level" in windowed_df.columns) else None)
 		_plot_hr_timeseries(datasets)

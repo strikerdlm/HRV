@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -624,5 +624,80 @@ def covariate_adjust_short_term(
 	if sdnn is not None and np.isfinite(sdnn) and sdnn_sigma > 0:
 		out["sdnn_z_cov"] = float((float(sdnn) - sdnn_expected) / sdnn_sigma)
 	return out
+
+
+@dataclass(frozen=True)
+class ReadinessScore:
+	"""Container for readiness index evaluation derived from PNS history."""
+
+	readiness_index: float
+	category: str
+	percentile: float
+	baseline_count: int
+	thresholds: Tuple[float, float, float]
+	pns_index: float
+
+
+def compute_readiness_score(
+	current_pns_index: float,
+	historical_pns_indices: Sequence[float],
+	*,
+	minimum_history: int = 14,
+	quantile_bounds: Tuple[float, float, float] = (0.025, 0.16, 0.84),
+) -> ReadinessScore:
+	"""Compute readiness index (0-100 percentile) and categorical label.
+
+	Args:
+		current_pns_index: Parasympathetic index for the current resting measurement.
+		historical_pns_indices: Iterable of historical parasympathetic index values (ideally ≥90 days).
+		minimum_history: Minimum number of historical samples required to compute percentiles.
+		quantile_bounds: Three monotonically increasing quantiles defining category thresholds:
+			- very low boundary (default 2.5th percentile)
+			- low boundary (default 16th percentile)
+			- high boundary (default 84th percentile)
+
+	Returns:
+		ReadinessScore with readiness_index equal to the empirical percentile (0-100).
+
+	Raises:
+		ValueError: If inputs are invalid or insufficient history is provided.
+	"""
+	if not np.isfinite(current_pns_index):
+		raise ValueError("current_pns_index must be a finite float")
+	if any(q <= 0.0 or q >= 1.0 for q in quantile_bounds):
+		raise ValueError("quantile_bounds must contain quantiles strictly between 0 and 1")
+	if sorted(quantile_bounds) != list(quantile_bounds):
+		raise ValueError("quantile_bounds must be in strictly increasing order")
+	history_arr = np.asarray(list(historical_pns_indices), dtype=float)
+	if history_arr.ndim != 1:
+		raise ValueError("historical_pns_indices must be a one-dimensional sequence")
+	history_arr = history_arr[np.isfinite(history_arr)]
+	if history_arr.size < int(minimum_history):
+		raise ValueError(
+			f"At least {minimum_history} historical PNS samples are required; got {history_arr.size}"
+		)
+	sorted_history = np.sort(history_arr)
+	threshold_values = tuple(float(np.quantile(sorted_history, q)) for q in quantile_bounds)
+	position = float(np.searchsorted(sorted_history, current_pns_index, side="right"))
+	percentile = float((position / float(sorted_history.size)) * 100.0)
+
+	very_low, low, high = threshold_values
+	if current_pns_index <= very_low:
+		category = "VERY LOW"
+	elif current_pns_index <= low:
+		category = "LOW"
+	elif current_pns_index <= high:
+		category = "NORMAL"
+	else:
+		category = "HIGH"
+
+	return ReadinessScore(
+		readiness_index=percentile,
+		category=category,
+		percentile=percentile,
+		baseline_count=int(sorted_history.size),
+		thresholds=threshold_values,
+		pns_index=float(current_pns_index),
+	)
 
 
