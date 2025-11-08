@@ -327,6 +327,15 @@ def _render_normogram_gauges(multi_results_df: pd.DataFrame) -> None:
 		render_echarts(_gauge_option("LF/HF (ratio)", lfhf, lfhf_mu, lfhf_sigma, lfhf_vmin, lfhf_vmax, ""), height_px=300, config=EChartsConfig())
 	with cols2[1]:
 		render_echarts(_gauge_option("HF Power (ms²)", hf_power, hf_mu, hf_sigma, hf_vmin, hf_vmax, "ms²"), height_px=300, config=EChartsConfig())
+	# Respiratory rate gauge (derived from HF peak when RSA present)
+	resp_bpm = float(row.get("respiratory_rate_bpm", np.nan))
+	cols3 = st.columns(1)
+	with cols3[0]:
+		render_echarts(
+			_gauge_option("Respiratory rate (breaths/min)", resp_bpm, 16.0, 4.0, 6.0, 30.0, "breaths/min"),
+			height_px=300,
+			config=EChartsConfig(),
+		)
 	st.caption("Bands reflect mean ± SD from short-term (∼5 min) references; see Normative.md for details and caveats.")
 
 
@@ -479,6 +488,13 @@ def main() -> None:
 	with tab_overview:
 		if meta_rows:
 			st.dataframe(pd.DataFrame(meta_rows))
+		# Show derived respiratory rate when available
+		if not multi_results_df.empty and "respiratory_rate_bpm" in multi_results_df.columns:
+			st.dataframe(
+				multi_results_df[["source", "respiratory_rate_bpm"]].rename(
+					columns={"respiratory_rate_bpm": "respiratory_rate [breaths/min]"}
+				)
+			)
 	with tab_ts:
 		_plot_rr_timeseries(datasets)
 		_plot_hr_timeseries(datasets)
