@@ -146,6 +146,12 @@ These follow common definitions in the HRV literature; interpretation depends on
 - **Respiratory-rate gauge** — when an HF peak is detected reliably, the gauges tab now surfaces breaths/min as a qualitative respiration cue for protocol adherence.
 - See `docs/Manual.md` for detailed workflows covering covariate adjustment, deviation detection, and readiness baseline configuration.
 
+## New: Markdown exports & ML-assisted deviation clustering
+- **Export tab** — download a Markdown report summarising the current session. Choose between *summary* (partial) and *complete* scopes, optionally filter datasets, and append analyst notes before exporting.
+- **Section controls** — include or omit windowed metrics and ML insights on demand. The summaries render directly in-app so you can review the report before downloading.
+- **ML-assisted clustering (optional)** — toggle “ML-assisted deviation clustering” in the sidebar to run a deterministic, bounded k-means pass across windowed metrics. High-deviation clusters appear in the windowed tab and can be injected into the Markdown report.
+- Reports embed timestamps and method choices for traceability. Store any downstream API keys or secrets in `.env` files—never commit credentials to the repository.
+
 ## Legacy materials
 If you need the earlier comprehensive Jupyter workflows and enhanced system description, see:
 - `docs/Enhanced_HRV_Analysis.md`
