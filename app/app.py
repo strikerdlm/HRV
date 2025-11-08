@@ -658,7 +658,7 @@ def main() -> None:
 		step = st.text_input("Step", "1min")
 	with col_c:
 		min_rr = st.number_input("Min RR per window", min_value=30, max_value=1000, value=60, step=10)
-	max_windows = st.sidebar.number_input("Max windows (for long tracings)", min_value=200, max_value=20000, value=3000, step=100)
+	max_windows = st.sidebar.number_input("Max windows (for long tracings)", min_value=200, max_value=20000, value=1500, step=100)
 
 	# QC controls
 	st.sidebar.markdown("---")
@@ -669,6 +669,7 @@ def main() -> None:
 	median_win = st.sidebar.number_input("Median window (odd)", min_value=3, max_value=99, value=11, step=2)
 	psd_method = st.sidebar.selectbox("PSD method", ["welch", "periodogram", "ar"], index=0)
 	fast_windowing = st.sidebar.checkbox("Fast time-domain windowing (skip spectral/nonlinear in windows)", value=True)
+	high_compute = st.sidebar.checkbox("Advanced analysis (high compute for full-recording metrics)", value=False)
 	st.sidebar.markdown("---")
 	st.sidebar.subheader("Deviation detection")
 	apply_dev = st.sidebar.checkbox("Detect deviations in windowed metrics", value=True)
@@ -686,9 +687,9 @@ def main() -> None:
 	st.sidebar.markdown("---")
 	st.sidebar.subheader("Patient profile (covariate adjustment)")
 	enable_cov = st.sidebar.checkbox("Enable covariate adjustment (RMSSD/SDNN)", value=False)
-	age_years = st.sidebar.number_input("Age (years)", min_value=10, max_value=100, value=40, step=1)
-	sex = st.sidebar.selectbox("Sex", ["Female", "Male"], index=0)
-	bmi = st.sidebar.number_input("BMI (kg/m²)", min_value=10.0, max_value=60.0, value=25.0, step=0.5)
+	age_years = st.sidebar.number_input("Age (years)", min_value=10, max_value=100, value=45, step=1)
+	sex = st.sidebar.selectbox("Sex", ["Female", "Male"], index=1)
+	bmi = st.sidebar.number_input("BMI (kg/m²)", min_value=10.0, max_value=60.0, value=29.0, step=0.5)
 	exercise = st.sidebar.selectbox("Exercise regularity", ["Sedentary", "Moderate", "Athlete"], index=0)
 
 	# Prepare dataset dict
@@ -818,7 +819,7 @@ def main() -> None:
 	for name, up in datasets.items():
 		if up.rr_ms.size >= 10:
 			use_rr = up.rr_ms_clean if (apply_clean and up.rr_ms_clean is not None) else up.rr_ms
-			m = _cached_comprehensive(use_rr, include_advanced=True)
+			m = _cached_comprehensive(use_rr, include_advanced=bool(high_compute))
 			m["source"] = name
 			if apply_clean and up.qc_summary:
 				m["qc_flagged_pct"] = float(up.qc_summary.get("flagged_pct", 0.0))
