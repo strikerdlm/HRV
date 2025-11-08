@@ -267,6 +267,93 @@ def _plot_spectrogram(datasets: Dict[str, UploadedRR]) -> None:
 	render_echarts(opt, height_px=520, config=EChartsConfig())
 
 
+def _compute_deviation_scores(
+	windowed_df: pd.DataFrame,
+	*,
+	metrics: List[str],
+	z_warn: float = 1.0,
+	z_alert: float = 2.0,
+) -> pd.DataFrame:
+	"""Compute robust deviation per window by source using median/MAD.
+
+	Returns input DataFrame with added columns:
+	- dev_index: max |robust z| across selected metrics
+	- dev_level: 'green' | 'yellow' | 'red'
+	"""
+	if windowed_df.empty or not metrics:
+		return windowed_df
+	df = windowed_df.copy()
+	if "source" not in df.columns or "start" not in df.columns:
+		return df
+	def _robust_stats(x: pd.Series) -> Tuple[float, float]:
+		med = float(np.median(x.values))
+		mad = float(np.median(np.abs(x.values - med)))
+		return med, mad
+	dev_indices: List[float] = []
+	for idx, row in df.iterrows():
+		src = row.get("source", None)
+		if src is None:
+			dev_indices.append(0.0)
+			continue
+		sub = df[df["source"] == src]
+		z_vals: List[float] = []
+		for mname in metrics:
+			if mname not in df.columns or not np.isfinite(row.get(mname, np.nan)):
+				continue
+			med, mad = _robust_stats(sub[mname].dropna())
+			if mad <= 1e-12:
+				z = 0.0
+			else:
+				z = 0.6745 * (float(row[mname]) - med) / mad
+			z_vals.append(abs(float(z)))
+		dev_indices.append(float(max(z_vals) if z_vals else 0.0))
+	df["dev_index"] = dev_indices
+	def _level(v: float) -> str:
+		return "green" if v < z_warn else ("yellow" if v < z_alert else "red")
+	df["dev_level"] = [ _level(v) for v in df["dev_index"].astype(float).tolist() ]
+	return df
+
+
+def _plot_deviation_timeline(windowed_df: pd.DataFrame) -> None:
+	if windowed_df.empty or "start" not in windowed_df.columns or "dev_level" not in windowed_df.columns:
+		st.info("No deviation data to display.")
+		return
+	series = []
+	colors = {"green": "#43a047", "yellow": "#fb8c00", "red": "#e53935"}
+	for src, sub in windowed_df.groupby("source"):
+		for level in ["green", "yellow", "red"]:
+			ss = sub[sub["dev_level"] == level]
+			if ss.empty:
+				continue
+			data = [[str(x), float(y)] for x, y in zip(ss["start"].astype(str), ss["dev_index"].astype(float))]
+			series.append(
+				{
+					"name": f"{src} — {level}",
+					"type": "scatter",
+					"symbolSize": 8,
+					"itemStyle": {"color": colors[level]},
+					"data": data,
+				}
+			)
+	opt = {
+		"title": {"text": "Deviation Timeline (max |robust z| across metrics)", "left": "center"},
+		"tooltip": {"trigger": "item"},
+		"legend": {"top": 24},
+		"xAxis": {"type": "time", "name": "Window start"},
+		"yAxis": {"type": "value", "name": "Deviation index"},
+		"dataZoom": [{"type": "inside"}, {"type": "slider"}],
+		"series": series,
+		"markLine": {
+			"silent": True,
+			"data": [
+				{"yAxis": 1.0, "lineStyle": {"type": "dashed", "color": "#fb8c00"}},
+				{"yAxis": 2.0, "lineStyle": {"type": "dashed", "color": "#e53935"}},
+			],
+		},
+	}
+	render_echarts(opt, height_px=360, config=EChartsConfig())
+
+
 def _gauge_option(title: str, value: float, mu: float, sigma: float, vmin: float, vmax: float, unit: str) -> Dict:
 	# Compute band thresholds
 	lo = max(vmin, mu - sigma)
@@ -413,6 +500,16 @@ def main() -> None:
 	max_dev = st.sidebar.slider("Deviation threshold", min_value=0.05, max_value=0.5, value=0.2, step=0.05)
 	median_win = st.sidebar.number_input("Median window (odd)", min_value=3, max_value=99, value=11, step=2)
 	psd_method = st.sidebar.selectbox("PSD method", ["welch", "periodogram", "ar"], index=0)
+	st.sidebar.markdown("---")
+	st.sidebar.subheader("Deviation detection")
+	apply_dev = st.sidebar.checkbox("Detect deviations in windowed metrics", value=True)
+	dev_metrics = st.sidebar.multiselect(
+		"Metrics to monitor",
+		options=["rmssd", "sdnn", "lf_hf_ratio", "hf_power"],
+		default=["rmssd", "sdnn", "lf_hf_ratio", "hf_power"],
+	)
+	z_warn = st.sidebar.slider("Warn threshold (|z|)", min_value=0.5, max_value=3.0, value=1.0, step=0.1)
+	z_alert = st.sidebar.slider("Alert threshold (|z|)", min_value=1.0, max_value=5.0, value=2.0, step=0.1)
 
 	# Prepare dataset dict
 	datasets = uploads
@@ -465,6 +562,8 @@ def main() -> None:
 			windowed_all.append(wdf.assign(source=name))
 	if windowed_all:
 		windowed_df = pd.concat(windowed_all, ignore_index=True)
+		if apply_dev:
+			windowed_df = _compute_deviation_scores(windowed_df, metrics=dev_metrics, z_warn=float(z_warn), z_alert=float(z_alert))
 	else:
 		windowed_df = pd.DataFrame()
 
@@ -539,6 +638,9 @@ def main() -> None:
 		)
 		if not windowed_df.empty:
 			st.dataframe(windowed_df[["start", "source"] + [c for c in windowed_df.columns if c not in ("start", "source")]].head(50))
+			if apply_dev and "dev_level" in windowed_df.columns:
+				st.markdown("Deviation timeline across selected metrics (green < warn, yellow ≥ warn, red ≥ alert):")
+				_plot_deviation_timeline(windowed_df)
 		else:
 			st.info("No windowed metrics to display.")
 	with tab_metrics:
