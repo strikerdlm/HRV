@@ -1,131 +1,105 @@
-# Comprehensive Heart Rate Variability (HRV) Analysis
+# HRV Analysis — Streamlit + Apache ECharts
 
-A complete Jupyter notebook for comprehensive HRV analysis using the best methods available in Python.
-
-## Overview
-
-This project provides a comprehensive Jupyter notebook (`scripts/HRV_Comprehensive_Analysis.ipynb`) that implements state-of-the-art HRV analysis methods including:
-
-- **Time Domain Metrics**: SDNN, RMSSD, pNN50, NN50, NN20, and other statistical measures
-- **Frequency Domain Metrics**: VLF, LF, HF powers, LF/HF ratio using Welch's method and periodogram
-- **Nonlinear Metrics**: Poincaré plot (SD1, SD2), DFA (Detrended Fluctuation Analysis)
-- **Autonomic Nervous System Analysis**: Parasympathetic and sympathetic indices, ANS balance
-- **Comprehensive Visualization**: RR interval time series, power spectral density, Poincaré plots
-- **Statistical Analysis**: Summary statistics, correlations, group comparisons
+Modern, interactive Heart Rate Variability (HRV) analysis app focused on scientific visualization and robust, reproducible metrics. Upload Polar‑style RR text files and explore time/frequency, nonlinear, spectrogram, windowed metrics, and normogram gauges in one place.
 
 ## Quick Start
 
-### Installation
+### 1) Prerequisites
+- Python 3.10+ recommended
+- Windows PowerShell 7+ (this repo includes PowerShell helpers for Windows)
 
-```bash
-# Install required packages
-pip install numpy pandas scipy matplotlib seaborn
-
-# Optional: Install hrvanalysis library for additional metrics
-pip install hrvanalysis
+### 2) Install
+```powershell
+# From the project root
+python -m venv .venv
+. .\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-### Usage
-
-1. Open the Jupyter notebook:
-```bash
-jupyter notebook scripts/HRV_Comprehensive_Analysis.ipynb
+### 3) Run the app
+```powershell
+streamlit run app/app.py
 ```
+Then open the local URL shown by Streamlit (typically http://localhost:8501).
 
-2. Load your data:
-   - Modify the data loading section to point to your CSV files
-   - Ensure your data has a heart rate column (e.g., `heart_rate [bpm]`)
-   - Optional: Include grouping columns like `subject`, `Sol`, `condition`, etc.
+### 4) Load RR data
+- Click “Upload RR (.txt)” in the sidebar and select one or more text files.
+- Format: one RR value per line in milliseconds (ms). Values outside [300, 2000] ms are ignored.
 
-3. Run all cells to perform comprehensive HRV analysis
+## What’s Included
+- Time series of RR and heart rate (derived)
+- Frequency domain (Welch PSD) with VLF/LF/HF overlays
+- Nonlinear Poincaré plot
+- Spectrogram (time–frequency) of interpolated RR
+- Sliding window metrics (window/step/min RR configurable)
+- Normogram‑style gauges (SDNN, RMSSD, LF/HF, HF power) against common short‑term anchors
+- Basic “Interpretation” notes and references
 
-## Data Format
+## Data Expectations
+- Short‑term analyses typically use ∼5 minutes of stationary RR intervals.
+- The app uses basic bounds (300–2000 ms) and interpolation for spectral methods (4 Hz).
+- Quality of input (artifact/ectopic handling) directly impacts frequency and nonlinear metrics.
 
-Your input data should be a pandas DataFrame with:
-- **Heart rate column**: `heart_rate [bpm]` or similar
-- **Optional grouping columns**: `subject`, `Sol`, `condition`, etc.
-- **Optional time column**: `timestamp` or `time [s/1000]`
+## Troubleshooting
+- No plots? The app loads ECharts from a CDN by default. If you need offline support, install a local copy:
+  ```powershell
+  npm i echarts
+  ```
+  The app will auto‑use `node_modules/echarts/dist/echarts.min.js` when present.
+- Empty metrics: ensure enough RR samples (≥50 for frequency, ≥100 for DFA, ≥10 for basic stats).
+- Windowed metrics: ensure the “Min RR per window” threshold is attainable with your data.
 
-Example:
-```python
-import pandas as pd
+## Security and Keys
+- The app itself does not require API keys. If you integrate optional online search (e.g., literature lookups), store keys in a `.env` file and never commit secrets. Add `.env` to `.gitignore`.
 
-df = pd.DataFrame({
-    'heart_rate [bpm]': [70, 72, 68, 75, ...],
-    'subject': ['Subject1', 'Subject1', ...],
-    'Sol': [1, 1, 2, 2, ...],
-    'timestamp': pd.date_range('2023-01-01', periods=1000, freq='1s')
-})
-```
+## Roadmap (science‑driven)
+The items below are informed by the existing enhanced system (see `docs/Enhanced_HRV_Analysis.md`) and recent literature. Order roughly reflects expected implementation sequence.
 
-## Features
+1) Data quality and preprocessing
+   - Configurable artifact/ectopic handling with interpolation strategies and audit logs
+   - Visual QC (tachogram with flagged beats) before metrics
+   - HR‑correction options for selected indices where justified (e.g., Sacha‑style corrections)
 
-### Time Domain Analysis
-- Mean NN intervals, SDNN, RMSSD
-- pNN50, pNN20 (percentage of successive intervals differing by >50ms or >20ms)
-- Heart rate statistics (mean, std, min, max)
-- Coefficient of variation measures
+2) Expanded metrics
+   - Geometric: RR triangular index, TINN
+   - Stress index (Baevsky) and related geometric distributions
+   - Entropy: ApEn, SampEn (with explicit m, r parameters) and documentation
+   - Nonlinear extensions: additional DFA options and parameter transparency
 
-### Frequency Domain Analysis
-- Power spectral density using Welch's method
-- VLF (0.0033-0.04 Hz), LF (0.04-0.15 Hz), HF (0.15-0.4 Hz) bands
-- Normalized units and percentages
-- LF/HF ratio for sympathovagal balance
+3) Frequency and time–frequency
+   - Autoregressive (Burg) PSD alongside Welch; method selection in UI
+   - Wavelet‑based time–frequency option with band energy tracking over time
+   - Respiration‑aware overlays (estimate from HF peak or input breathing rate)
 
-### Nonlinear Analysis
-- Poincaré plot metrics (SD1, SD2, ellipse area)
-- Detrended Fluctuation Analysis (DFA α1, α2)
-- Fractal scaling properties
+4) Norms and personalization
+   - Age/sex‑aware reference ranges and cohort caveats
+   - Within‑subject trend focus; exportable baseline definitions
 
-### Autonomic Nervous System Indices
-- Parasympathetic index (based on HF power, RMSSD, pNN50, SD1)
-- Sympathetic index (based on LF/HF ratio)
-- ANS balance score
+5) Modeling and ML (optional, opt‑in dependencies)
+   - GAMs/mixed‑effects summaries for longitudinal data (statsmodels)
+   - Clustering (phenotypes) and forecasting (ARIMA/Prophet) on selected metrics
+   - Export interactive HTML summaries (Plotly) and CSV/JSON results
 
-### Visualization
-- RR interval time series plots
-- Power spectral density plots with frequency band markers
-- Poincaré plots with SD1/SD2 ellipses
-- Correlation heatmaps of HRV metrics
+6) Evidence & reproducibility
+   - “Evidence” panel surfacing key references for each metric/method
+   - Optional in‑app literature links (no full text), with API keys in `.env` only
+   - Deterministic seeds; explicit version/method reporting in exports
 
-## Output
+## References (selected)
+- Task Force of the ESC/NASPE (1996). Heart rate variability: standards of measurement, physiological interpretation, and clinical use. Circulation, 93(5), 1043–1065.
+- Shaffer & Ginsberg (2017). An overview of HRV metrics and norms. Frontiers in Public Health. [Frontiers link](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full)
+- Quigley et al. (2024). Publication guidelines for HR and HRV studies in Psychophysiology—Part 1. Psychophysiology. [Wiley link](https://onlinelibrary.wiley.com/doi/10.1111/psyp.14604)
+- Sacha (2016)–style HR correction considerations: see discussion in Frontiers in Physiology (2016). [Frontiers link](https://www.frontiersin.org/journals/physiology/articles/10.3389/fphys.2016.00356/full)
 
-The notebook generates:
-1. **Comprehensive HRV metrics** as a pandas DataFrame
-2. **Visualizations** for each analysis segment
-3. **Summary statistics** and group comparisons
-4. **CSV export** of all computed metrics
+Additional resources are listed inside the app’s “References” tab.
 
-## Requirements
-
-- Python 3.7+
-- numpy
-- pandas
-- scipy
-- matplotlib
-- seaborn
-- hrvanalysis (optional, for additional metrics)
-
-## References
-
-1. Task Force of the European Society of Cardiology. (1996). Heart rate variability: standards of measurement, physiological interpretation, and clinical use. *Circulation*, 93(5), 1043-1065.
-
-2. Shaffer, F., & Ginsberg, J. P. (2017). An overview of heart rate variability metrics and norms. *Frontiers in public health*, 5, 258.
-
-3. Malik, M., et al. (1996). Heart rate variability: Standards of measurement, physiological interpretation, and clinical use. *European Heart Journal*, 17(3), 354-381.
+## Legacy materials
+If you need the earlier comprehensive Jupyter workflows and enhanced system description, see:
+- `docs/Enhanced_HRV_Analysis.md`
+- `docs/scripts/HRV_Comprehensive_Analysis.ipynb`
 
 ## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see `LICENSE`.
 
 ## Author
-
-Diego Malpica, MD  
-Aerospace and Physiology Research
-
-## Acknowledgments
-
-- Centro de Telemedicina de Colombia
-- Women AeroSTEAM
-- Valquiria Space Analog Simulation team
-
+Dr. Diego Leonel Malpica Hincapié — Aerospace Medicine (Colombia). Project links and citations appear in‑app under “About” and “References.”
