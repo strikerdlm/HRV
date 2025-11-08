@@ -277,6 +277,16 @@ def _interpretation(multi_results: pd.DataFrame, windowed: Optional[pd.DataFrame
 
 def main() -> None:
 	st.set_page_config(page_title="HRV Analysis — Streamlit + ECharts", layout="wide")
+	# Make the central container and iframes use the full page width
+	st.markdown(
+		"""
+		<style>
+		.block-container { max-width: 100% !important; padding-left: 1rem; padding-right: 1rem; }
+		iframe { width: 100% !important; }
+		</style>
+		""",
+		unsafe_allow_html=True,
+	)
 	st.title("HRV Analysis")
 	st.caption("Modern, scientific, interactive analysis with Apache ECharts.")
 	st.markdown(
