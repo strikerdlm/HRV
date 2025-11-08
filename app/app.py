@@ -8,6 +8,8 @@ import pandas as pd
 import streamlit as st
 
 from echarts_component import EChartsConfig, render_echarts
+from export_utils import ExportConfiguration, ExportScope, build_markdown_report
+from ml_enhancements import run_windowed_kmeans
 from hrv_core import (
 	build_readiness_baseline,
 	clean_rr_intervals,
@@ -603,6 +605,9 @@ def main() -> None:
 	z_alert = st.sidebar.slider("Alert threshold (|z|)", min_value=1.0, max_value=5.0, value=2.0, step=0.1)
 	min_sustain = st.sidebar.number_input("Min windows to define an episode", min_value=1, max_value=60, value=3, step=1)
 	st.sidebar.markdown("---")
+	st.sidebar.subheader("ML enhancements")
+	enable_ml = st.sidebar.checkbox("Enable ML-assisted deviation clustering", value=False)
+	st.sidebar.markdown("---")
 	st.sidebar.subheader("Patient profile (covariate adjustment)")
 	enable_cov = st.sidebar.checkbox("Enable covariate adjustment (RMSSD/SDNN)", value=False)
 	age_years = st.sidebar.number_input("Age (years)", min_value=10, max_value=100, value=40, step=1)
@@ -666,6 +671,23 @@ def main() -> None:
 			windowed_df = _compute_deviation_scores(windowed_df, metrics=dev_metrics, z_warn=float(z_warn), z_alert=float(z_alert))
 	else:
 		windowed_df = pd.DataFrame()
+
+	ml_summary_df = pd.DataFrame()
+	ml_error_message = ""
+	if enable_ml and not windowed_df.empty:
+		ml_metrics = list(dev_metrics) if dev_metrics else ["rmssd", "sdnn", "lf_hf_ratio", "hf_power"]
+		try:
+			ml_result = run_windowed_kmeans(
+				windowed_df,
+				ml_metrics,
+				n_clusters=2,
+				max_iterations=50,
+			)
+		except ValueError as exc:
+			ml_error_message = str(exc)
+		else:
+			windowed_df = ml_result.windowed_with_clusters
+			ml_summary_df = ml_result.cluster_summary
 
 	# Aggregate anomaly episodes (contiguous yellow/red windows)
 	def _episodes(df: pd.DataFrame, min_len: int) -> pd.DataFrame:
@@ -761,7 +783,7 @@ def main() -> None:
 				pns_mapping[src] = val
 
 	# Tabs
-	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_ans, tab_readiness, tab_gauges, tab_science, tab_refs, tab_about = st.tabs(
+	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_ans, tab_readiness, tab_gauges, tab_science, tab_export, tab_refs, tab_about = st.tabs(
 		[
 			"Overview",
 			"Time Series",
@@ -774,6 +796,7 @@ def main() -> None:
 			"Readiness",
 			"Gauges",
 			"Science",
+			"Export",
 			"References",
 			"About",
 		]
@@ -851,6 +874,13 @@ def main() -> None:
 				if not episodes_df.empty:
 					st.markdown("Anomaly episodes (contiguous yellow/red windows):")
 					st.dataframe(episodes_df.sort_values(["source","start"]))
+			if enable_ml:
+				if ml_summary_df.empty:
+					if ml_error_message:
+						st.warning(f"ML clustering unavailable: {ml_error_message}")
+				else:
+					st.markdown("ML-assisted deviation clusters (unsupervised k-means):")
+					st.dataframe(ml_summary_df)
 		else:
 			st.info("No windowed metrics to display.")
 	with tab_metrics:
@@ -1111,6 +1141,76 @@ def main() -> None:
 			"[Shaffer & Ginsberg 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full), "
 			"[Nunan et al. 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/)."
 		)
+	with tab_export:
+		st.subheader("Export report")
+		if not meta_rows and multi_results_df.empty:
+			st.info("Run an analysis to enable export.")
+		else:
+			scope_choice = st.radio(
+				"Report scope",
+				options=[ExportScope.SUMMARY, ExportScope.COMPLETE],
+				index=0,
+				format_func=lambda scope: "Summary (partial)" if scope == ExportScope.SUMMARY else "Complete (full)",
+			)
+			include_windowed_opt = st.checkbox(
+				"Include windowed metrics section",
+				value=(scope_choice == ExportScope.COMPLETE),
+				disabled=windowed_df.empty,
+			)
+			include_ml_opt = st.checkbox(
+				"Include ML clustering summary",
+				value=(enable_ml and not ml_summary_df.empty),
+				disabled=ml_summary_df.empty,
+			)
+			available_sources: List[str] = []
+			if ordered_sources:
+				available_sources = ordered_sources
+			elif meta_rows:
+				meta_sources = {str(row.get("source", row.get("name", ""))) for row in meta_rows if row.get("source") or row.get("name")}
+				available_sources = sorted([src for src in meta_sources if src])
+			elif not multi_results_df.empty and "source" in multi_results_df.columns:
+				available_sources = sorted(multi_results_df["source"].astype(str).unique().tolist())
+			selected_sources = st.multiselect(
+				"Datasets to include",
+				options=available_sources,
+				default=available_sources,
+			)
+			notes_input = st.text_area(
+				"Additional notes (optional)",
+				placeholder="Add protocol notes, observations, or follow-up actions.",
+				height=120,
+			)
+			export_config = ExportConfiguration(
+				scope=scope_choice,
+				include_windowed=include_windowed_opt,
+				include_ml=include_ml_opt,
+			)
+			try:
+				report_markdown = build_markdown_report(
+					meta_rows=meta_rows,
+					multi_results_df=multi_results_df,
+					windowed_df=windowed_df,
+					episodes_df=episodes_df,
+					ml_summary_df=ml_summary_df if include_ml_opt else None,
+					config=export_config,
+					selected_sources=selected_sources,
+					additional_notes=notes_input,
+				)
+			except ValueError as exc:
+				st.warning(str(exc))
+			else:
+				st.text_area("Report preview", report_markdown, height=360)
+				file_suffix = scope_choice.value
+				timestamp_str = pd.Timestamp.utcnow().strftime("%Y%m%dT%H%M%SZ")
+				file_name = f"hrv_report_{file_suffix}_{timestamp_str}.md"
+				st.download_button(
+					label="Download markdown report",
+					data=report_markdown.encode("utf-8"),
+					file_name=file_name,
+					mime="text/markdown",
+				)
+				if include_ml_opt and ml_summary_df.empty and enable_ml and ml_error_message:
+					st.info(f"ML section included but no clusters were generated: {ml_error_message}")
 	with tab_about:
 		st.markdown(
 			"### About the Author\n"
