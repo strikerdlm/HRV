@@ -242,6 +242,69 @@ def _plot_spectrogram(datasets: Dict[str, UploadedRR]) -> None:
 	render_echarts(opt, height_px=520, config=EChartsConfig())
 
 
+def _gauge_option(title: str, value: float, mu: float, sigma: float, vmin: float, vmax: float, unit: str) -> Dict:
+	# Compute band thresholds
+	lo = max(vmin, mu - sigma)
+	hi = min(vmax, mu + sigma)
+	span = max(1e-9, vmax - vmin)
+	lo_r = max(0.0, min(1.0, (lo - vmin) / span))
+	hi_r = max(0.0, min(1.0, (hi - vmin) / span))
+	# Axis line colors: [0..lo]=red, (lo..hi]=green, (hi..1]=orange
+	axis_colors = [[lo_r, "#e53935"], [hi_r, "#43a047"], [1.0, "#fb8c00"]]
+	return {
+		"title": {"text": title, "left": "center"},
+		"series": [
+			{
+				"type": "gauge",
+				"min": float(vmin),
+				"max": float(vmax),
+				"axisLine": {"lineStyle": {"width": 14, "color": axis_colors}},
+				"pointer": {"width": 4},
+				"splitNumber": 8,
+				"progress": {"show": False},
+				"detail": {"formatter": f"{value:.1f} {unit}", "fontSize": 14},
+				"data": [{"value": float(value)}],
+			}
+		],
+	}
+
+
+def _render_normogram_gauges(multi_results_df: pd.DataFrame) -> None:
+	if multi_results_df.empty:
+		st.info("No metrics available for gauges.")
+		return
+	names = multi_results_df["source"].astype(str).tolist() if "source" in multi_results_df.columns else ["Current"]
+	sel = st.selectbox("Select dataset for gauges", names, index=0)
+	row = multi_results_df[multi_results_df["source"] == sel].iloc[0] if "source" in multi_results_df.columns else multi_results_df.iloc[0]
+	# Anchors from Normative.md (short-term ~5 min)
+	sdnn_mu, sdnn_sigma = 50.0, 16.0
+	rmssd_mu, rmssd_sigma = 42.0, 15.0
+	lfhf_mu, lfhf_sigma = 2.8, 2.6
+	hf_mu, hf_sigma = 657.0, 777.0
+	# Values
+	sdnn = float(row.get("sdnn", np.nan))
+	rmssd = float(row.get("rmssd", np.nan))
+	lfhf = float(row.get("lf_hf_ratio", np.nan))
+	hf_power = float(row.get("hf_power", np.nan))
+	# Gauge ranges
+	sdnn_vmin, sdnn_vmax = 0.0, 120.0
+	rmssd_vmin, rmssd_vmax = 0.0, 100.0
+	lfhf_vmin, lfhf_vmax = 0.0, 12.0
+	# For HF power, choose a dynamic max to keep needle in range
+	hf_vmin, hf_vmax = 0.0, float(max(hf_mu + 3 * hf_sigma, (hf_power if np.isfinite(hf_power) else 0.0) * 1.5, 3000.0))
+	cols = st.columns(2)
+	with cols[0]:
+		render_echarts(_gauge_option("SDNN (ms)", sdnn, sdnn_mu, sdnn_sigma, sdnn_vmin, sdnn_vmax, "ms"), height_px=300, config=EChartsConfig())
+	with cols[1]:
+		render_echarts(_gauge_option("RMSSD (ms)", rmssd, rmssd_mu, rmssd_sigma, rmssd_vmin, rmssd_vmax, "ms"), height_px=300, config=EChartsConfig())
+	cols2 = st.columns(2)
+	with cols2[0]:
+		render_echarts(_gauge_option("LF/HF (ratio)", lfhf, lfhf_mu, lfhf_sigma, lfhf_vmin, lfhf_vmax, ""), height_px=300, config=EChartsConfig())
+	with cols2[1]:
+		render_echarts(_gauge_option("HF Power (ms²)", hf_power, hf_mu, hf_sigma, hf_vmin, hf_vmax, "ms²"), height_px=300, config=EChartsConfig())
+	st.caption("Bands reflect mean ± SD from short-term (∼5 min) references; see Normative.md for details and caveats.")
+
+
 def _interpretation(multi_results: pd.DataFrame, windowed: Optional[pd.DataFrame]) -> None:
 	if multi_results.empty:
 		return
@@ -310,7 +373,7 @@ def main() -> None:
 
 	# Prepare dataset dict
 	datasets = uploads
-	st.subheader("Overview")
+	# Compute reusable results
 	meta_rows = []
 	for name, up in datasets.items():
 		if up.rr_ms.size == 0:
@@ -323,25 +386,6 @@ def main() -> None:
 				"mean_hr": float(np.mean(60000.0 / up.rr_ms)),
 			}
 		)
-	if meta_rows:
-		st.dataframe(pd.DataFrame(meta_rows))
-
-	# Plots
-	st.subheader("Time Series")
-	_plot_rr_timeseries(datasets)
-	_plot_hr_timeseries(datasets)
-
-	st.subheader("Frequency Domain")
-	_plot_psd_overlay(datasets)
-
-	st.subheader("Nonlinear")
-	_plot_poincare(datasets)
-
-	st.subheader("Time-Frequency (Spectrogram)")
-	_plot_spectrogram(datasets)
-
-	# Windowed metrics
-	st.subheader("Windowed Metrics (per dataset)")
 	windowed_all: List[pd.DataFrame] = []
 	for name, up in datasets.items():
 		wdf = compute_windowed_hrv(
@@ -354,12 +398,10 @@ def main() -> None:
 			windowed_all.append(wdf.assign(source=name))
 	if windowed_all:
 		windowed_df = pd.concat(windowed_all, ignore_index=True)
-		st.dataframe(windowed_df[["start", "source"] + [c for c in windowed_df.columns if c not in ("start", "source")]].head(50))
 	else:
 		windowed_df = pd.DataFrame()
 
 	# Full-recording metrics
-	st.subheader("Full-Recording HRV Metrics")
 	multi_results: List[Dict] = []
 	for name, up in datasets.items():
 		if up.rr_ms.size >= 10:
@@ -367,10 +409,45 @@ def main() -> None:
 			m["source"] = name
 			multi_results.append(m)
 	multi_results_df = pd.DataFrame(multi_results) if multi_results else pd.DataFrame()
-	if not multi_results_df.empty:
-		st.dataframe(multi_results_df)
 
-	_interpretation(multi_results_df, windowed_df if not windowed_df.empty else None)
+	# Tabs
+	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_gauges, tab_science = st.tabs(
+		["Overview", "Time Series", "Frequency", "Nonlinear", "Spectrogram", "Windowed", "Metrics", "Gauges", "Science"]
+	)
+	with tab_overview:
+		if meta_rows:
+			st.dataframe(pd.DataFrame(meta_rows))
+	with tab_ts:
+		_plot_rr_timeseries(datasets)
+		_plot_hr_timeseries(datasets)
+	with tab_freq:
+		_plot_psd_overlay(datasets)
+	with tab_nl:
+		_plot_poincare(datasets)
+	with tab_tfr:
+		_plot_spectrogram(datasets)
+	with tab_window:
+		if not windowed_df.empty:
+			st.dataframe(windowed_df[["start", "source"] + [c for c in windowed_df.columns if c not in ("start", "source")]].head(50))
+		else:
+			st.info("No windowed metrics to display.")
+	with tab_metrics:
+		if not multi_results_df.empty:
+			st.dataframe(multi_results_df)
+		else:
+			st.info("No metrics to display.")
+	with tab_gauges:
+		_render_normogram_gauges(multi_results_df)
+	with tab_science:
+		st.markdown(
+			"- **Time-domain (SDNN, RMSSD)**: Short-term SDNN (~5 min) ≈ 50±16 ms; RMSSD ≈ 42±15 ms in healthy adults; both decrease with age. RMSSD reflects vagal (parasympathetic) activity.\n"
+			"- **Frequency-domain (LF/HF)**: LF (0.04–0.15 Hz), HF (0.15–0.40 Hz). LF/HF (~2.8±2.6) has limitations as a sympathovagal balance index; interpret with breathing context.\n"
+			"- **Nonlinear (Poincaré, DFA)**: SD1≈RMSSD; SD2 relates to longer-term variability. DFA α1 in 0.75–1.25 is typical at rest.\n\n"
+			"Key references: "
+			"[Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf), "
+			"[Shaffer & Ginsberg 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full), "
+			"[Nunan et al. 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/)."
+		)
 
 
 if __name__ == "__main__":
