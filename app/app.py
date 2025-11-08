@@ -84,14 +84,33 @@ def _echarts_scatter_series(name: str, x_vals: np.ndarray, y_vals: np.ndarray) -
 	}
 
 
-def _plot_rr_timeseries(datasets: Dict[str, UploadedRR]) -> None:
+def _plot_rr_timeseries(datasets: Dict[str, UploadedRR], dev_windows: Optional[pd.DataFrame] = None) -> None:
 	series = []
 	for name, up in datasets.items():
 		if up.df.empty:
 			continue
 		x = up.df["timestamp"].astype(str).tolist()
 		y = up.df["rr_intervals_ms"].astype(float).tolist()
-		series.append(_echarts_line_series(f"{name} (raw)", x, y))
+		ser = _echarts_line_series(f"{name} (raw)", x, y)
+		# Add deviation markAreas per dataset if available
+		if dev_windows is not None and not dev_windows.empty and "dev_level" in dev_windows.columns:
+			sub = dev_windows[dev_windows["source"] == name]
+			if not sub.empty:
+				items = []
+				for _, row in sub.iterrows():
+					start = row.get("start", None)
+					end = row.get("end", None)
+					level = str(row.get("dev_level", ""))
+					if pd.isna(start) or pd.isna(end) or level not in ("yellow", "red"):
+						continue
+					color = "rgba(251,140,0,0.12)" if level == "yellow" else "rgba(229,57,53,0.12)"
+					items.append([
+						{"xAxis": str(pd.to_datetime(start)) , "itemStyle": {"color": color}},
+						{"xAxis": str(pd.to_datetime(end)) , "itemStyle": {"color": color}},
+					])
+				if items:
+					ser["markArea"] = {"silent": True, "data": items}
+		series.append(ser)
 		if "rr_intervals_ms_clean" in up.df.columns:
 			y_cl = up.df["rr_intervals_ms_clean"].astype(float).tolist()
 			series.append(
@@ -587,6 +606,19 @@ def main() -> None:
 	with tab_overview:
 		if meta_rows:
 			st.dataframe(pd.DataFrame(meta_rows))
+		# Deviation summary per dataset
+		if apply_dev and not windowed_df.empty and "dev_level" in windowed_df.columns:
+			summary = (
+				windowed_df.groupby("source")["dev_level"]
+				.value_counts()
+				.unstack(fill_value=0)
+				.reindex(columns=["green", "yellow", "red"], fill_value=0)
+				.reset_index()
+			)
+			# Add max deviation index per source for quick scan
+			max_dev = windowed_df.groupby("source")["dev_index"].max().rename("max_dev_index")
+			summary = summary.merge(max_dev, on="source", how="left")
+			st.dataframe(summary.rename(columns={"green":"windows_green","yellow":"windows_yellow","red":"windows_red"}))
 		# Show derived respiratory rate when available
 		if not multi_results_df.empty and "respiratory_rate_bpm" in multi_results_df.columns:
 			st.dataframe(
@@ -595,7 +627,7 @@ def main() -> None:
 				)
 			)
 	with tab_ts:
-		_plot_rr_timeseries(datasets)
+		_plot_rr_timeseries(datasets, dev_windows=windowed_df if (apply_dev and "dev_level" in windowed_df.columns) else None)
 		_plot_hr_timeseries(datasets)
 		st.markdown(
 			"**Scientific notes (time series)**  \n"
