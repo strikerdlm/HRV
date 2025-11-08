@@ -262,6 +262,8 @@ def compute_frequency_domain_metrics(
 		vlf_peak = float(freqs[vlf_mask][np.argmax(psd[vlf_mask])]) if np.any(vlf_mask) and vlf_power > 0 else 0.0
 		lf_peak = float(freqs[lf_mask][np.argmax(psd[lf_mask])]) if np.any(lf_mask) and lf_power > 0 else 0.0
 		hf_peak = float(freqs[hf_mask][np.argmax(psd[hf_mask])]) if np.any(hf_mask) and hf_power > 0 else 0.0
+		# Derived respiratory rate (breaths/min) from HF peak (Hz) when RSA is present
+		respiratory_rate_bpm = float(hf_peak * 60.0) if hf_peak > 0 else 0.0
 		return {
 			"vlf_power": vlf_power,
 			"lf_power": lf_power,
@@ -276,6 +278,7 @@ def compute_frequency_domain_metrics(
 			"vlf_peak": vlf_peak,
 			"lf_peak": lf_peak,
 			"hf_peak": hf_peak,
+			"respiratory_rate_bpm": respiratory_rate_bpm,
 			"method": method,
 			"sampling_rate": sampling_rate,
 		}
