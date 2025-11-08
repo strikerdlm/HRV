@@ -436,12 +436,7 @@ def _compute_deviation_scores(
 	z_warn: float = 1.0,
 	z_alert: float = 2.0,
 ) -> pd.DataFrame:
-	"""Compute robust deviation per window by source using median/MAD.
-
-	Returns input DataFrame with added columns:
-	- dev_index: max |robust z| across selected metrics
-	- dev_level: 'green' | 'yellow' | 'red'
-	"""
+	"""Compute robust deviation per window by source using median/MAD (vectorized)."""
 	if windowed_df.empty or not metrics:
 		return windowed_df
 	df = windowed_df.copy()
@@ -449,62 +444,31 @@ def _compute_deviation_scores(
 		return df
 	metrics_present = [m for m in metrics if m in df.columns]
 	if not metrics_present:
+		df["dev_index"] = 0.0
+		df["dev_level"] = "green"
 		return df
 
-	# Pre-compute robust statistics per source/metric with defensive fallbacks.
-	stats: Dict[str, Dict[str, Tuple[float, float]]] = {}
-	for src, group in df.groupby("source"):
-		src_stats: Dict[str, Tuple[float, float]] = {}
-		for metric in metrics_present:
-			series = pd.to_numeric(group[metric], errors="coerce").dropna()
-			if series.empty:
-				continue
-			median = float(np.median(series))
-			mad = float(np.median(np.abs(series - median)))
-			if not np.isfinite(median):
-				continue
-			if not np.isfinite(mad):
-				mad = 0.0
-			src_stats[metric] = (median, mad)
-		if src_stats:
-			stats[str(src)] = src_stats
+	# Vectorized robust z for each metric
+	z_cols: List[str] = []
+	for mname in metrics_present:
+		val = pd.to_numeric(df[mname], errors="coerce")
+		med = df.groupby("source")[mname].transform(lambda x: float(np.median(pd.to_numeric(x, errors="coerce").dropna())))
+		mad = df.groupby("source")[mname].transform(lambda x: float(np.median(np.abs(pd.to_numeric(x, errors="coerce").dropna() - np.median(pd.to_numeric(x, errors="coerce").dropna())))))
+		# Avoid division by zero; if MAD=0 treat as zero deviation around median
+		mad_safe = mad.replace(0, np.nan)
+		z = 0.6745 * (val - med) / mad_safe
+		z_abs = z.abs().fillna(0.0)
+		col = f"__z_{mname}"
+		df[col] = z_abs
+		z_cols.append(col)
 
-	def _robust_z(value: float, median: float, mad: float) -> float:
-		if mad <= 1e-12:
-			# Constant or near-constant series: treat small perturbations as non-deviating.
-			tolerance = max(1e-6, 0.01 * abs(median))
-			return 0.0 if abs(value - median) <= tolerance else 10.0
-		return float(0.6745 * (value - median) / mad)
-
-	dev_indices: List[float] = []
-	for _, row in df.iterrows():
-		src_key = str(row.get("source", ""))
-		if src_key not in stats:
-			dev_indices.append(0.0)
-			continue
-		z_vals: List[float] = []
-		for metric in metrics_present:
-			value = float(row.get(metric, np.nan))
-			if not np.isfinite(value):
-				continue
-			median_mad = stats[src_key].get(metric)
-			if median_mad is None:
-				continue
-			median, mad = median_mad
-			z_score = abs(_robust_z(value, median, mad))
-			if np.isfinite(z_score):
-				z_vals.append(z_score)
-		dev_indices.append(float(max(z_vals) if z_vals else 0.0))
-	df["dev_index"] = dev_indices
-
-	def _level(v: float) -> str:
-		if v < z_warn:
-			return "green"
-		if v < z_alert:
-			return "yellow"
-		return "red"
-
-	df["dev_level"] = [_level(float(v)) for v in df["dev_index"].astype(float).tolist()]
+	df["dev_index"] = df[z_cols].max(axis=1) if z_cols else 0.0
+	df.drop(columns=z_cols, inplace=True, errors="ignore")
+	df["dev_level"] = np.where(
+		df["dev_index"] < float(z_warn),
+		"green",
+		np.where(df["dev_index"] < float(z_alert), "yellow", "red"),
+	)
 	return df
 
 
