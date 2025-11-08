@@ -510,6 +510,7 @@ def main() -> None:
 		step = st.text_input("Step", "1min")
 	with col_c:
 		min_rr = st.number_input("Min RR per window", min_value=30, max_value=1000, value=60, step=10)
+	max_windows = st.sidebar.number_input("Max windows (for long tracings)", min_value=200, max_value=20000, value=3000, step=100)
 
 	# QC controls
 	st.sidebar.markdown("---")
@@ -529,6 +530,7 @@ def main() -> None:
 	)
 	z_warn = st.sidebar.slider("Warn threshold (|z|)", min_value=0.5, max_value=3.0, value=1.0, step=0.1)
 	z_alert = st.sidebar.slider("Alert threshold (|z|)", min_value=1.0, max_value=5.0, value=2.0, step=0.1)
+	min_sustain = st.sidebar.number_input("Min windows to define an episode", min_value=1, max_value=60, value=3, step=1)
 	st.sidebar.markdown("---")
 	st.sidebar.subheader("Patient profile (covariate adjustment)")
 	enable_cov = st.sidebar.checkbox("Enable covariate adjustment (RMSSD/SDNN)", value=False)
@@ -583,6 +585,7 @@ def main() -> None:
 			window=win,
 			step=step,
 			min_rr_count=int(min_rr),
+			max_windows=int(max_windows),
 		)
 		if not wdf.empty:
 			windowed_all.append(wdf.assign(source=name))
@@ -592,6 +595,52 @@ def main() -> None:
 			windowed_df = _compute_deviation_scores(windowed_df, metrics=dev_metrics, z_warn=float(z_warn), z_alert=float(z_alert))
 	else:
 		windowed_df = pd.DataFrame()
+
+	# Aggregate anomaly episodes (contiguous yellow/red windows)
+	def _episodes(df: pd.DataFrame, min_len: int) -> pd.DataFrame:
+		if df.empty or "dev_level" not in df.columns:
+			return pd.DataFrame()
+		out = []
+		step_td = pd.to_timedelta(step)
+		for src, sub in df.sort_values(["source","start"]).groupby("source"):
+			cur_level = None
+			cur_start = None
+			cur_end = None
+			cur_count = 0
+			cur_max = 0.0
+			prev_start = None
+			for _, r in sub.iterrows():
+				level = str(r.get("dev_level","green"))
+				if level == "green":
+					level = None
+				start_ts = pd.to_datetime(r.get("start"))
+				end_ts = pd.to_datetime(r.get("end"))
+				if cur_level is None and level is not None:
+					cur_level = level
+					cur_start = start_ts
+					cur_end = end_ts
+					cur_count = 1
+					cur_max = float(r.get("dev_index", 0.0))
+				elif cur_level is not None:
+					# continue if same level and contiguous
+					if level == cur_level and prev_start is not None and (start_ts - prev_start) <= step_td * 1.5:
+						cur_end = end_ts
+						cur_count += 1
+						cur_max = max(cur_max, float(r.get("dev_index", 0.0)))
+					else:
+						if cur_count >= int(min_len):
+							out.append({"source": src, "level": cur_level, "start": cur_start, "end": cur_end, "n_windows": cur_count, "max_dev_index": cur_max})
+						cur_level = level
+						cur_start = start_ts if level is not None else None
+						cur_end = end_ts if level is not None else None
+						cur_count = 1 if level is not None else 0
+						cur_max = float(r.get("dev_index", 0.0)) if level is not None else 0.0
+				prev_start = start_ts
+			if cur_level is not None and cur_count >= int(min_len):
+				out.append({"source": src, "level": cur_level, "start": cur_start, "end": cur_end, "n_windows": cur_count, "max_dev_index": cur_max})
+		return pd.DataFrame(out)
+
+	episodes_df = _episodes(windowed_df, int(min_sustain)) if (apply_dev and not windowed_df.empty and "dev_level" in windowed_df.columns) else pd.DataFrame()
 
 	# Full-recording metrics
 	multi_results: List[Dict] = []
@@ -616,6 +665,17 @@ def main() -> None:
 				m.update(adj)
 			multi_results.append(m)
 	multi_results_df = pd.DataFrame(multi_results) if multi_results else pd.DataFrame()
+
+	# Long-term summaries (5-min windows): SDANN (std of mean_nni), SDNNIDX (mean of window SDNN)
+	if not windowed_df.empty and "mean_nni" in windowed_df.columns and "sdnn" in windowed_df.columns:
+		lts = (
+			windowed_df.groupby("source")
+			.agg(sdann_5min=("mean_nni", lambda x: float(np.std(pd.to_numeric(x, errors="coerce").dropna(), ddof=1))),
+			     sdnnidx_5min=("sdnn", lambda x: float(np.mean(pd.to_numeric(x, errors="coerce").dropna()))))
+			.reset_index()
+		)
+		if not multi_results_df.empty:
+			multi_results_df = multi_results_df.merge(lts, on="source", how="left")
 
 	# Tabs
 	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_gauges, tab_science, tab_refs, tab_about = st.tabs(
@@ -691,6 +751,9 @@ def main() -> None:
 			if apply_dev and "dev_level" in windowed_df.columns:
 				st.markdown("Deviation timeline across selected metrics (green < warn, yellow ≥ warn, red ≥ alert):")
 				_plot_deviation_timeline(windowed_df)
+				if not episodes_df.empty:
+					st.markdown("Anomaly episodes (contiguous yellow/red windows):")
+					st.dataframe(episodes_df.sort_values(["source","start"]))
 		else:
 			st.info("No windowed metrics to display.")
 	with tab_metrics:
