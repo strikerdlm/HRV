@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -11,7 +11,10 @@ from echarts_component import EChartsConfig, render_echarts
 from hrv_core import (
 	build_readiness_baseline,
 	clean_rr_intervals,
+	compute_30_15_ratio,
 	compute_comprehensive_hrv,
+	compute_deep_breathing_response,
+	compute_valsalva_ratio,
 	compute_windowed_hrv,
 	load_rr_intervals_from_text,
 	psd_curve,
@@ -78,12 +81,73 @@ def _echarts_line_series(name: str, x_vals: List, y_vals: List, smooth: bool = T
 
 
 def _echarts_scatter_series(name: str, x_vals: np.ndarray, y_vals: np.ndarray) -> Dict:
+	points: List[List[Any]] = []
+	for x, y in zip(x_vals, y_vals):
+		if isinstance(x, (int, float, np.number)):
+			x_value: Any = float(x)
+		else:
+			x_value = str(x)
+		points.append([x_value, float(y)])
 	return {
 		"name": name,
 		"type": "scatter",
 		"symbolSize": 4,
-		"data": [[float(x), float(y)] for x, y in zip(x_vals, y_vals)],
+		"data": points,
 	}
+
+
+def _prepare_rr_series(upload: UploadedRR, use_clean: bool) -> Tuple[pd.Series, pd.Series]:
+	"""Return aligned timestamp and RR interval series for a dataset."""
+	if upload.df.empty:
+		raise ValueError(f"Dataset '{upload.name}' contains no RR samples.")
+	column = "rr_intervals_ms_clean" if (use_clean and "rr_intervals_ms_clean" in upload.df.columns) else "rr_intervals_ms"
+	if column not in upload.df.columns:
+		raise ValueError(f"Column '{column}' not available for dataset '{upload.name}'.")
+	timestamps = pd.to_datetime(upload.df["timestamp"], errors="coerce")
+	rr_ms = pd.to_numeric(upload.df[column], errors="coerce")
+	mask = timestamps.notna() & rr_ms.notna()
+	if not mask.any():
+		raise ValueError(f"No valid RR samples found for dataset '{upload.name}'.")
+	return timestamps.loc[mask], rr_ms.loc[mask]
+
+
+def _parse_window_seconds(raw_value: str, label: str) -> Tuple[float, float]:
+	"""Parse a window definition string into a (start, end) tuple of seconds."""
+	if not raw_value.strip():
+		raise ValueError(f"{label} cannot be empty.")
+	clean = raw_value.strip()
+	for sep in (",", ";"):
+		clean = clean.replace(sep, " ")
+	parts: List[str] = []
+	for token in clean.split():
+		if "-" in token:
+			subparts = [segment for segment in token.split("-") if segment]
+			parts.extend(subparts)
+		else:
+			parts.append(token)
+	if len(parts) != 2:
+		raise ValueError(f"{label} must specify exactly two numbers (start and end seconds).")
+	try:
+		start = float(parts[0])
+		end = float(parts[1])
+	except ValueError as exc:  # pragma: no cover - defensive
+		raise ValueError(f"{label} must contain numeric values.") from exc
+	if not np.isfinite(start) or not np.isfinite(end):
+		raise ValueError(f"{label} must contain finite values.")
+	if end <= start:
+		raise ValueError(f"{label} end must be greater than start.")
+	return start, end
+
+
+def _parse_float(raw_value: float | int | str, label: str) -> float:
+	"""Parse a float input ensuring finiteness."""
+	try:
+		value = float(raw_value)
+	except (TypeError, ValueError) as exc:  # pragma: no cover - defensive
+		raise ValueError(f"{label} must be a number.") from exc
+	if not np.isfinite(value):
+		raise ValueError(f"{label} must be finite.")
+	return value
 
 
 def _plot_rr_timeseries(datasets: Dict[str, UploadedRR], dev_windows: Optional[pd.DataFrame] = None) -> None:
@@ -122,17 +186,22 @@ def _plot_rr_timeseries(datasets: Dict[str, UploadedRR], dev_windows: Optional[p
 				}
 			)
 		if "artifact_flag" in up.df.columns:
-			mask = up.df["artifact_flag"].astype(bool).to_numpy()
+			mask_series = up.df["artifact_flag"].fillna(False)
+			mask = mask_series.astype(bool).to_numpy()
 			if mask.any():
-				xf = up.df.loc[mask, "timestamp"].astype(float).to_numpy()
-				yf = up.df.loc[mask, "rr_intervals_ms"].astype(float).to_numpy()
-				series.append(
-					{
-						**_echarts_scatter_series(f"{name} artifacts", xf, yf),
-						"itemStyle": {"color": "#e53935"},
-						"symbolSize": 5,
-					}
-				)
+				timestamps_masked = up.df.loc[mask, "timestamp"]
+				rr_masked = pd.to_numeric(up.df.loc[mask, "rr_intervals_ms"], errors="coerce")
+				valid_mask = rr_masked.notna()
+				if valid_mask.any():
+					xf = timestamps_masked.loc[valid_mask].astype(str).to_numpy()
+					yf = rr_masked.loc[valid_mask].to_numpy(dtype=float)
+					series.append(
+						{
+							**_echarts_scatter_series(f"{name} artifacts", xf, yf),
+							"itemStyle": {"color": "#e53935"},
+							"symbolSize": 5,
+						}
+					)
 	opt = {
 		"title": {"text": "RR Intervals over Time", "left": "center"},
 		"tooltip": {"trigger": "axis"},
@@ -692,8 +761,22 @@ def main() -> None:
 				pns_mapping[src] = val
 
 	# Tabs
-	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_readiness, tab_gauges, tab_science, tab_refs, tab_about = st.tabs(
-		["Overview", "Time Series", "Frequency", "Nonlinear", "Spectrogram", "Windowed", "Metrics", "Readiness", "Gauges", "Science", "References", "About"]
+	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_ans, tab_readiness, tab_gauges, tab_science, tab_refs, tab_about = st.tabs(
+		[
+			"Overview",
+			"Time Series",
+			"Frequency",
+			"Nonlinear",
+			"Spectrogram",
+			"Windowed",
+			"Metrics",
+			"ANS Function Tests",
+			"Readiness",
+			"Gauges",
+			"Science",
+			"References",
+			"About",
+		]
 	)
 	with tab_overview:
 		if meta_rows:
@@ -782,6 +865,98 @@ def main() -> None:
 				st.dataframe(multi_results_df[cols_to_show])
 		else:
 			st.info("No metrics to display.")
+	with tab_ans:
+		st.subheader("Autonomic Function Tests")
+		st.markdown(
+			"Configure time windows relative to the recording start to derive classical autonomic function ratios. "
+			"Windows are specified in seconds as `start end` (e.g., `15 25`)."
+		)
+		if not datasets:
+			st.info("Upload a dataset to compute autonomic function metrics.")
+		else:
+			names = list(datasets.keys())
+			selected_dataset_name = st.selectbox("Dataset", names, index=0)
+			selected_dataset = datasets[selected_dataset_name]
+			use_clean_for_ans = st.checkbox(
+				"Use cleaned RR series (if available)",
+				value=bool(apply_clean),
+				key="ans_use_clean_checkbox",
+			)
+			try:
+				ts_series, rr_series = _prepare_rr_series(selected_dataset, use_clean_for_ans)
+			except ValueError as exc:
+				st.warning(str(exc))
+			else:
+				with st.form(f"ans-form-{selected_dataset_name}"):
+					col_a, col_b = st.columns(2)
+					vals_phase_ii_input = col_a.text_input("Valsalva phase II window (s)", "15 25")
+					vals_phase_iv_input = col_b.text_input("Valsalva phase IV window (s)", "25 35")
+					deep_start_input = col_a.number_input("Deep breathing start (s)", min_value=0.0, value=0.0, step=1.0)
+					deep_cycle_input = col_b.number_input("Deep breathing cycle length (s)", min_value=1.0, value=10.0, step=0.5)
+					deep_cycles_input = col_a.number_input("Number of breathing cycles", min_value=1, max_value=12, value=6, step=1)
+					stand_time_input = col_b.number_input("Stand event time (s)", min_value=0.0, value=60.0, step=1.0)
+					ratio15_window_input = col_a.text_input("30:15 ratio – 15th-beat window (s)", "5 20")
+					ratio30_window_input = col_b.text_input("30:15 ratio – 30th-beat window (s)", "20 40")
+					submit_ans = st.form_submit_button("Compute ANS metrics")
+				if submit_ans:
+					errors: List[str] = []
+					valsalva_result: Optional[Dict[str, float]] = None
+					deep_breathing_result: Optional[Dict[str, Any]] = None
+					ratio_30_15_result: Optional[Dict[str, float]] = None
+					try:
+						phase_ii_window = _parse_window_seconds(vals_phase_ii_input, "Valsalva phase II window")
+						phase_iv_window = _parse_window_seconds(vals_phase_iv_input, "Valsalva phase IV window")
+						valsalva_result = compute_valsalva_ratio(ts_series, rr_series, phase_ii_window, phase_iv_window)
+					except ValueError as exc:
+						errors.append(f"Valsalva ratio: {exc}")
+					try:
+						start_time_s = _parse_float(deep_start_input, "Deep breathing start (s)")
+						cycle_length_s = _parse_float(deep_cycle_input, "Deep breathing cycle length (s)")
+						deep_breathing_result = compute_deep_breathing_response(
+							ts_series,
+							rr_series,
+							start_time_s=start_time_s,
+							cycle_length_s=cycle_length_s,
+							n_cycles=int(deep_cycles_input),
+						)
+					except ValueError as exc:
+						errors.append(f"Deep breathing response: {exc}")
+					try:
+						window_15_s = _parse_window_seconds(ratio15_window_input, "30:15 ratio (15th-beat window)")
+						window_30_s = _parse_window_seconds(ratio30_window_input, "30:15 ratio (30th-beat window)")
+						stand_time_s = _parse_float(stand_time_input, "Stand event time (s)")
+						ratio_30_15_result = compute_30_15_ratio(
+							ts_series,
+							rr_series,
+							stand_time_s=stand_time_s,
+							window_15_s=window_15_s,
+							window_30_s=window_30_s,
+						)
+					except ValueError as exc:
+						errors.append(f"30:15 ratio: {exc}")
+					if errors:
+						for err in errors:
+							st.warning(err)
+					if valsalva_result is not None:
+						st.markdown("### Valsalva Ratio")
+						cols = st.columns(3)
+						cols[0].metric("Valsalva ratio", f"{valsalva_result['valsalva_ratio']:.2f}")
+						cols[1].metric("Phase II min RR (ms)", f"{valsalva_result['phase_ii_min_rr_ms']:.1f}")
+						cols[2].metric("Phase IV max RR (ms)", f"{valsalva_result['phase_iv_max_rr_ms']:.1f}")
+					if deep_breathing_result is not None:
+						st.markdown("### Deep Breathing (E:I Response)")
+						col_db1, col_db2, col_db3 = st.columns(3)
+						col_db1.metric("Mean E–I difference (ms)", f"{deep_breathing_result['ei_mean_difference_ms']:.1f}")
+						col_db2.metric("Mean E–I ratio", f"{deep_breathing_result['ei_mean_ratio']:.3f}")
+						col_db3.metric("Mean HR difference (bpm)", f"{deep_breathing_result['hr_mean_difference_bpm']:.1f}")
+						details_df = pd.DataFrame(list(deep_breathing_result["cycle_details"]))
+						st.dataframe(details_df.rename(columns={"cycle_index": "cycle"}))
+					if ratio_30_15_result is not None:
+						st.markdown("### 30:15 Ratio")
+						col_30a, col_30b, col_30c = st.columns(3)
+						col_30a.metric("30:15 ratio", f"{ratio_30_15_result['ratio_30_15']:.2f}")
+						col_30b.metric("15th-beat min RR (ms)", f"{ratio_30_15_result['rr_15_min_ms']:.1f}")
+						col_30c.metric("30th-beat max RR (ms)", f"{ratio_30_15_result['rr_30_max_ms']:.1f}")
 	with tab_readiness:
 		st.markdown(
 			"**Readiness index (PNS percentile)**  \n"

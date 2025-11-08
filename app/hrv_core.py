@@ -572,6 +572,217 @@ def compute_entropy_metrics(
 	return {"apen": apen, "sampen": sampen}
 
 
+def _relative_seconds_from_timestamps(timestamps: pd.Series) -> np.ndarray:
+	"""Convert a datetime-like pandas Series to seconds relative to the first timestamp."""
+	if timestamps.empty:
+		raise ValueError("timestamps series must contain at least one value")
+	if not pd.api.types.is_datetime64_any_dtype(timestamps):
+		raise TypeError("timestamps series must be datetime64 dtype")
+	start = timestamps.iloc[0]
+	relative = (timestamps - start).dt.total_seconds()
+	return relative.to_numpy(dtype=float)
+
+
+def _validate_window(window: Tuple[float, float], label: str) -> Tuple[float, float]:
+	"""Validate and return a (start, end) window in seconds."""
+	if len(window) != 2:
+		raise ValueError(f"{label} must contain exactly two values (start, end)")
+	start, end = float(window[0]), float(window[1])
+	if not np.isfinite(start) or not np.isfinite(end):
+		raise ValueError(f"{label} must contain finite numeric values")
+	if end <= start:
+		raise ValueError(f"{label} end must be greater than start")
+	return start, end
+
+
+def _extract_window_values(
+	relative_seconds: np.ndarray,
+	values: np.ndarray,
+	window: Tuple[float, float],
+	label: str,
+) -> np.ndarray:
+	"""Return values whose corresponding times fall within the given window."""
+	start, end = _validate_window(window, label)
+	if relative_seconds.size != values.size:
+		raise ValueError("relative_seconds and values must share the same length")
+	mask = (relative_seconds >= start) & (relative_seconds <= end)
+	window_values = values[mask]
+	if window_values.size == 0:
+		raise ValueError(f"No samples found inside {label} window ({start}–{end} s)")
+	return window_values.astype(float)
+
+
+def compute_valsalva_ratio(
+	timestamps: pd.Series,
+	rr_intervals_ms: pd.Series,
+	phase_ii_window: Tuple[float, float],
+	phase_iv_window: Tuple[float, float],
+) -> Dict[str, float]:
+	"""Compute the Valsalva ratio using windows for phase II (strain) and phase IV (release).
+
+	Args:
+		timestamps: Datetime index aligned with RR samples.
+		rr_intervals_ms: RR interval series (ms) aligned with timestamps.
+		phase_ii_window: Tuple defining the phase II window in seconds from recording start.
+		phase_iv_window: Tuple defining the phase IV window in seconds from recording start.
+
+	Returns:
+		Dictionary containing phase minima/maxima and the Valsalva ratio.
+
+	Raises:
+		ValueError: If inputs are incompatible or windows contain insufficient samples.
+	"""
+	if rr_intervals_ms.size == 0:
+		raise ValueError("RR interval series is empty; cannot compute Valsalva ratio")
+	rr_numeric = pd.to_numeric(rr_intervals_ms, errors="coerce")
+	valid = rr_numeric.notna()
+	if not valid.any():
+		raise ValueError("RR interval series contains no valid numeric samples")
+	rr_values = rr_numeric.loc[valid].to_numpy(dtype=float)
+	time_values = timestamps.loc[valid]
+	relative_seconds = _relative_seconds_from_timestamps(time_values)
+	phase_ii_values = _extract_window_values(relative_seconds, rr_values, phase_ii_window, "phase II")
+	phase_iv_values = _extract_window_values(relative_seconds, rr_values, phase_iv_window, "phase IV")
+	phase_ii_min = float(np.min(phase_ii_values))
+	phase_iv_max = float(np.max(phase_iv_values))
+	if phase_ii_min <= 0.0:
+		raise ValueError("Phase II minimum RR must be positive to compute the ratio")
+	valsalva_ratio = float(phase_iv_max / phase_ii_min)
+	return {
+		"valsalva_ratio": valsalva_ratio,
+		"phase_ii_min_rr_ms": phase_ii_min,
+		"phase_iv_max_rr_ms": phase_iv_max,
+		"phase_ii_window": tuple(float(v) for v in phase_ii_window),
+		"phase_iv_window": tuple(float(v) for v in phase_iv_window),
+	}
+
+
+def compute_deep_breathing_response(
+	timestamps: pd.Series,
+	rr_intervals_ms: pd.Series,
+	start_time_s: float,
+	cycle_length_s: float,
+	n_cycles: int,
+) -> Dict[str, Any]:
+	"""Compute E:I response metrics for a paced deep-breathing protocol.
+
+	Args:
+		timestamps: Datetime index aligned with RR samples.
+		rr_intervals_ms: RR interval series (ms) aligned with timestamps.
+		start_time_s: Time (seconds from recording start) where the breathing protocol begins.
+		cycle_length_s: Duration of a single breathing cycle in seconds.
+		n_cycles: Number of consecutive cycles to analyse.
+
+	Returns:
+		Dictionary with mean E–I difference, ratio, HR difference, and per-cycle details.
+
+	Raises:
+		ValueError: If parameters are invalid or cycles lack sufficient samples.
+	"""
+	if n_cycles <= 0 or n_cycles > 20:
+		raise ValueError("n_cycles must be between 1 and 20")
+	if cycle_length_s <= 0.0 or not np.isfinite(cycle_length_s):
+		raise ValueError("cycle_length_s must be a positive finite number")
+	rr_numeric = pd.to_numeric(rr_intervals_ms, errors="coerce")
+	valid = rr_numeric.notna()
+	if not valid.any():
+		raise ValueError("RR interval series contains no valid numeric samples")
+	rr_values = rr_numeric.loc[valid].to_numpy(dtype=float)
+	time_values = timestamps.loc[valid]
+	relative_seconds = _relative_seconds_from_timestamps(time_values)
+	if start_time_s < 0.0:
+		raise ValueError("start_time_s cannot be negative")
+	cycle_stats: List[Dict[str, float]] = []
+	for idx in range(n_cycles):
+		window_start = start_time_s + (idx * cycle_length_s)
+		window_end = window_start + cycle_length_s
+		window_values = _extract_window_values(
+			relative_seconds,
+			rr_values,
+			(window_start, window_end),
+			f"cycle {idx + 1}",
+		)
+		exp_rr = float(np.max(window_values))
+		insp_rr = float(np.min(window_values))
+		if insp_rr <= 0.0:
+			raise ValueError("Inspiratory RR must be positive to compute ratios")
+		diff = exp_rr - insp_rr
+		ratio = float(exp_rr / insp_rr)
+		exp_hr = float(60000.0 / insp_rr)  # HR highest during inspiration (shorter RR)
+		insp_hr = float(60000.0 / exp_rr)  # HR lowest during expiration (longer RR)
+		hr_diff = exp_hr - insp_hr
+		cycle_stats.append(
+			{
+				"cycle_index": float(idx + 1),
+				"expiration_rr_ms": exp_rr,
+				"inspiration_rr_ms": insp_rr,
+				"ei_difference_ms": diff,
+				"ei_ratio": ratio,
+				"hr_difference_bpm": hr_diff,
+			}
+		)
+	diff_values = np.array([item["ei_difference_ms"] for item in cycle_stats], dtype=float)
+	ratio_values = np.array([item["ei_ratio"] for item in cycle_stats], dtype=float)
+	hr_differences = np.array([item["hr_difference_bpm"] for item in cycle_stats], dtype=float)
+	return {
+		"ei_mean_difference_ms": float(np.mean(diff_values)),
+		"ei_max_difference_ms": float(np.max(diff_values)),
+		"ei_mean_ratio": float(np.mean(ratio_values)),
+		"hr_mean_difference_bpm": float(np.mean(hr_differences)),
+		"cycles_analyzed": int(n_cycles),
+		"cycle_details": tuple(cycle_stats),
+	}
+
+
+def compute_30_15_ratio(
+	timestamps: pd.Series,
+	rr_intervals_ms: pd.Series,
+	stand_time_s: float,
+	window_15_s: Tuple[float, float],
+	window_30_s: Tuple[float, float],
+) -> Dict[str, float]:
+	"""Compute the 30:15 ratio for orthostatic testing.
+
+	Args:
+		timestamps: Datetime index aligned with RR samples.
+		rr_intervals_ms: RR interval series (ms) aligned with timestamps.
+		stand_time_s: Time (seconds from recording start) when standing occurs.
+		window_15_s: Window (seconds after stand) to search for the shortest RR around beat 15.
+		window_30_s: Window (seconds after stand) to search for the longest RR around beat 30.
+
+	Returns:
+		Dictionary with component RR values and the 30:15 ratio.
+
+	Raises:
+		ValueError: If windows are invalid or lack data.
+	"""
+	if stand_time_s < 0.0 or not np.isfinite(stand_time_s):
+		raise ValueError("stand_time_s must be a finite, non-negative value")
+	rr_numeric = pd.to_numeric(rr_intervals_ms, errors="coerce")
+	valid = rr_numeric.notna()
+	if not valid.any():
+		raise ValueError("RR interval series contains no valid numeric samples")
+	rr_values = rr_numeric.loc[valid].to_numpy(dtype=float)
+	time_values = timestamps.loc[valid]
+	relative_seconds = _relative_seconds_from_timestamps(time_values) - float(stand_time_s)
+	window_15 = _validate_window(window_15_s, "30:15 (15th-beat) window")
+	window_30 = _validate_window(window_30_s, "30:15 (30th-beat) window")
+	rr_15_values = _extract_window_values(relative_seconds, rr_values, window_15, "30:15 (15th-beat) window")
+	rr_30_values = _extract_window_values(relative_seconds, rr_values, window_30, "30:15 (30th-beat) window")
+	shortest_15 = float(np.min(rr_15_values))
+	longest_30 = float(np.max(rr_30_values))
+	if shortest_15 <= 0.0:
+		raise ValueError("Shortest RR in 15th-beat window must be positive to compute ratio")
+	ratio = float(longest_30 / shortest_15)
+	return {
+		"ratio_30_15": ratio,
+		"rr_15_min_ms": shortest_15,
+		"rr_30_max_ms": longest_30,
+		"window_15_s": tuple(float(v) for v in window_15),
+		"window_30_s": tuple(float(v) for v in window_30),
+	}
+
+
 def covariate_adjust_short_term(
 	*,
 	age_years: float,
