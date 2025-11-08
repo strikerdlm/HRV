@@ -1,0 +1,8 @@
+[server]
+fileWatcherType = "poll"
+headless = true
+
+[logger]
+level = "error"
+
+
