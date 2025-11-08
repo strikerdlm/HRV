@@ -11,27 +11,13 @@ from scipy.interpolate import interp1d
 
 
 def _moving_median(values: np.ndarray, window: int) -> np.ndarray:
-	"""Return centered moving median with edge reflection.
-
-	Args:
-		values: 1D array of RR intervals (ms).
-		window: Odd window size >= 3.
-
-	Returns:
-		Array of same length with moving median estimates.
-	"""
+	"""Return centered moving median using pandas rolling (fast)."""
 	if values.size == 0:
 		return values
-	w = int(max(3, window))
-	if w % 2 == 0:
-		w += 1
-	pad = w // 2
-	x = np.pad(values, (pad, pad), mode="reflect")
-	out = np.empty_like(values, dtype=float)
-	for i in range(values.size):
-		seg = x[i : i + w]
-		out[i] = float(np.median(seg))
-	return out
+	w = int(max(3, window + (window % 2 == 0)))
+	ser = pd.Series(values, dtype=float)
+	out = ser.rolling(window=w, center=True, min_periods=1).median()
+	return out.to_numpy(dtype=float)
 
 
 def detect_artifacts(
