@@ -529,6 +529,13 @@ def main() -> None:
 	)
 	z_warn = st.sidebar.slider("Warn threshold (|z|)", min_value=0.5, max_value=3.0, value=1.0, step=0.1)
 	z_alert = st.sidebar.slider("Alert threshold (|z|)", min_value=1.0, max_value=5.0, value=2.0, step=0.1)
+	st.sidebar.markdown("---")
+	st.sidebar.subheader("Patient profile (covariate adjustment)")
+	enable_cov = st.sidebar.checkbox("Enable covariate adjustment (RMSSD/SDNN)", value=False)
+	age_years = st.sidebar.number_input("Age (years)", min_value=10, max_value=100, value=40, step=1)
+	sex = st.sidebar.selectbox("Sex", ["Female", "Male"], index=0)
+	bmi = st.sidebar.number_input("BMI (kg/m²)", min_value=10.0, max_value=60.0, value=25.0, step=0.5)
+	exercise = st.sidebar.selectbox("Exercise regularity", ["Sedentary", "Moderate", "Athlete"], index=0)
 
 	# Prepare dataset dict
 	datasets = uploads
@@ -596,6 +603,17 @@ def main() -> None:
 			if apply_clean and up.qc_summary:
 				m["qc_flagged_pct"] = float(up.qc_summary.get("flagged_pct", 0.0))
 				m["qc_method"] = str(up.qc_summary.get("qc_method", {}))
+			if enable_cov:
+				from hrv_core import covariate_adjust_short_term as _cov
+				adj = _cov(
+					age_years=int(age_years),
+					sex=str(sex),
+					bmi=float(bmi),
+					exercise_level=str(exercise),
+					rmssd=float(m.get("rmssd", np.nan)),
+					sdnn=float(m.get("sdnn", np.nan)),
+				)
+				m.update(adj)
 			multi_results.append(m)
 	multi_results_df = pd.DataFrame(multi_results) if multi_results else pd.DataFrame()
 
@@ -678,6 +696,13 @@ def main() -> None:
 	with tab_metrics:
 		if not multi_results_df.empty:
 			st.dataframe(multi_results_df)
+			if enable_cov and "rmssd_z_cov" in multi_results_df.columns:
+				st.markdown("Covariate-adjusted (patient profile) expectations and z-scores:")
+				cols_to_show = ["source"]
+				for c in ["rmssd","rmssd_expected","rmssd_z_cov","sdnn","sdnn_expected","sdnn_z_cov"]:
+					if c in multi_results_df.columns:
+						cols_to_show.append(c)
+				st.dataframe(multi_results_df[cols_to_show])
 		else:
 			st.info("No metrics to display.")
 	with tab_gauges:

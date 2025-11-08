@@ -572,3 +572,57 @@ def compute_entropy_metrics(
 	return {"apen": apen, "sampen": sampen}
 
 
+def covariate_adjust_short_term(
+	*,
+	age_years: float,
+	sex: str,
+	bmi: float,
+	exercise_level: str,
+	rmssd: Optional[float],
+	sdnn: Optional[float],
+) -> Dict[str, float]:
+	"""Compute covariate-adjusted expectations and z-scores for short-term RMSSD and SDNN.
+
+	The adjustment uses transparent, conservative coefficients grounded in common anchors:
+	- Baselines (female, 40y, BMI 25, sedentary): RMSSD_mu=42 ms (sigma≈15), SDNN_mu=50 ms (sigma≈16)
+	- Age effect (per year): RMSSD −0.3 ms, SDNN −0.35 ms
+	- BMI effect (per unit): RMSSD −0.4 ms, SDNN −0.3 ms
+	- Male offsets: RMSSD −2.0 ms, SDNN −1.0 ms
+	- Exercise offsets: sedentary 0; moderate +5 ms; athlete +12 ms (RMSSD); SDNN +5/+10 ms
+
+	These defaults are intended as starting points and should be interpreted with protocol context.
+	"""
+	# Baselines and sigmas
+	rmssd_mu0 = 42.0
+	rmssd_sigma = 15.0
+	sdnn_mu0 = 50.0
+	sdnn_sigma = 16.0
+	# Coefficients
+	b_age_rmssd = -0.3
+	b_bmi_rmssd = -0.4
+	b_male_rmssd = -2.0
+	b_age_sdnn = -0.35
+	b_bmi_sdnn = -0.3
+	b_male_sdnn = -1.0
+	# Exercise offsets
+	ex_levels = {"sedentary": (0.0, 0.0), "moderate": (5.0, 5.0), "athlete": (12.0, 10.0)}
+	ex_rmssd_off, ex_sdnn_off = ex_levels.get(str(exercise_level).lower(), (0.0, 0.0))
+	male = 1.0 if str(sex).lower().startswith("m") else 0.0
+	age_years = float(age_years)
+	bmi = float(bmi)
+	# Expected means
+	rmssd_expected = rmssd_mu0 + b_age_rmssd * (age_years - 40.0) + b_bmi_rmssd * (bmi - 25.0) + b_male_rmssd * male + ex_rmssd_off
+	sdnn_expected = sdnn_mu0 + b_age_sdnn * (age_years - 40.0) + b_bmi_sdnn * (bmi - 25.0) + b_male_sdnn * male + ex_sdnn_off
+	out: Dict[str, float] = {
+		"rmssd_expected": float(rmssd_expected),
+		"sdnn_expected": float(sdnn_expected),
+		"rmssd_z_cov": 0.0,
+		"sdnn_z_cov": 0.0,
+	}
+	if rmssd is not None and np.isfinite(rmssd) and rmssd_sigma > 0:
+		out["rmssd_z_cov"] = float((float(rmssd) - rmssd_expected) / rmssd_sigma)
+	if sdnn is not None and np.isfinite(sdnn) and sdnn_sigma > 0:
+		out["sdnn_z_cov"] = float((float(sdnn) - sdnn_expected) / sdnn_sigma)
+	return out
+
+
