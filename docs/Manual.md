@@ -39,11 +39,18 @@ Scientific notes:
 
 Key sources: Psychophysiology Publication Guidelines (Part 1, 2024), Task Force 1996 consensus, Shaffer & Ginsberg 2017, Sacha/Frontiers 2016 on HR correction considerations.
 
+### Covariate adjustment (patient profile)
+- Optional sidebar controls let you enter age, sex, BMI, and exercise level.
+- When enabled, RMSSD and SDNN are paired with covariate-adjusted expectations and z-scores (`rmssd_expected`, `rmssd_z_cov`, `sdnn_expected`, `sdnn_z_cov`) derived from conservative literature anchors.
+- Use these adjustments to contextualize individual readings; document the covariates used and interpret alongside the unadjusted metrics.
+
 
 ## Tabs and Visualizations
 
 ### Overview
 - Shows per-dataset metadata: beats, recording duration (minutes), mean HR (bpm), and percentage of flagged artifacts (if QC enabled).
+- When deviation detection is enabled, the summary table counts green/yellow/red windows per dataset and reports the peak deviation index.
+- Respiratory rate estimates (breaths/min) derived from the HF spectral peak appear when the PSD provides a reliable value.
 
 ### Time Series
 - RR intervals vs time; heart rate vs time.
@@ -62,13 +69,19 @@ Key sources: Psychophysiology Publication Guidelines (Part 1, 2024), Task Force 
 ### Windowed
 - Sliding-window metrics (e.g., 5-min window, 1-min step) with minimum RR count threshold.
 - Useful for long recordings and time-varying conditions (stationarity improves per-window validity).
+- Optional deviation detection computes robust z-scores across selected metrics (RMSSD, SDNN, LF/HF, HF power by default) using median/MAD per dataset; warn and alert thresholds colour-code windows (green/yellow/red).
+- The deviation timeline visualises when monitored metrics diverge; contiguous yellow/red runs meeting the “Min windows to define an episode” value are summarised as anomaly episodes.
+- Deviant windows are also shaded on the tachogram so you can correlate numerical flags with signal segments.
 
 ### Metrics
 - Full table of computed metrics (time, frequency, geometric, nonlinear, entropy), including QC summary if enabled.
+- Advanced analytics columns include heart-rate fragmentation (PIP, IALS, PSS), phase-rectified capacities (deceleration/acceleration and anchor counts), symbolic dynamics percentages, permutation entropy (absolute/normalized), multifractal DFA descriptors, recurrence quantification measures, and heart-rate-normalized RMSSD outputs.
+- When patient-profile adjustment is active, expected values and z-scores for RMSSD/SDNN appear so you can judge deviations against covariate-aware baselines.
 
 ### Gauges
 - Normogram-style gauges for SDNN, RMSSD, LF/HF, and HF power versus commonly cited short-term anchors.
 - Caveats: population, age, posture, and breathing change distributions; prioritize within-subject trends.
+- A respiratory-rate gauge (breaths/min) appears when the HF peak is well defined; treat it as a qualitative respiration cue rather than a primary ventilatory measure.
 
 ### ANS Function Tests
 - The **ANS Function Tests** tab computes classic autonomic function ratios when you supply time windows (seconds from recording start):
@@ -76,6 +89,12 @@ Key sources: Psychophysiology Publication Guidelines (Part 1, 2024), Task Force 
   - **Deep breathing**: specify the start time, cycle length, and number of paced breathing cycles. The app returns expiratory/inspiratory (E:I) differences, ratios, and per-cycle details.
   - **30:15 ratio**: specify the moment of standing plus windows around the 15th and 30th beats post-stand; the ratio is longest RR around beat 30 divided by shortest RR around beat 15.
 - For best results, enable artifact correction and align windows with the actual protocol cues (e.g., microphone cues, on-screen timers). If a window contains insufficient beats, the app warns and skips that metric.
+
+### Readiness
+- Builds a readiness baseline from historical parasympathetic index values (derived from HF power, RMSSD, pNN50, and SD1).
+- Select a current dataset, choose baseline sessions (last-in-first-out, capped by the “Historical window” slider), and decide whether to include the current measurement.
+- Outputs readiness percentile, Kubios-style category (VERY LOW/LOW/NORMAL/HIGH), parasympathetic index, and baseline summary statistics. A line chart plots the baseline history with category thresholds.
+- Require at least seven historical sessions recorded under comparable conditions (posture, time-of-day, breathing) for reliable categorisation. Rebuild the baseline whenever measurement conditions change.
 
 ### Science and References
 - Concise scientific notes and citations.
@@ -120,6 +139,15 @@ Clinical emphasis:
 ### Entropy metrics (complexity/regularity)
 - Approximate Entropy (ApEn) and Sample Entropy (SampEn) (unitless): quantify regularity/complexity in RR dynamics. Parameters commonly use m=2 and r=0.15–0.20·SD for short-term HRV. Lower entropy suggests more regular (less complex) dynamics—seen in rigid autonomic regulation states; higher entropy indicates greater complexity. Entropy estimates are sensitive to window length and parameters.
 
+### Advanced analytics (fragmentation, PRSA, symbolic, multifractal, recurrence, HR-normalised RMSSD)
+- Heart-rate fragmentation metrics (`hrf_pip_pct`, `hrf_ials`, `hrf_pss_pct`, `hrf_segment_count`) capture rapid alternating accelerations/decelerations; sustained high fragmentation can flag arrhythmic risk or autonomic disorganization.
+- Phase-rectified signal averaging outputs (`deceleration_capacity`, `acceleration_capacity`, anchor counts) quantify asymmetry in vagal versus sympathetic modulation; low deceleration capacity often accompanies reduced vagal drive.
+- Symbolic dynamics percentages (`symbolic_0v_pct`, `symbolic_1v_pct`, `symbolic_2lv_pct`, `symbolic_2uv_pct`) summarise short symbolic patterns; richer variability yields lower 0V and higher 2UV proportions.
+- Permutation entropy (absolute and normalised) reflects the diversity of ordinal patterns; lower values indicate more regular series but depend on window length and order settings.
+- Multifractal DFA descriptors (`mfdfa_width`, `mfdfa_alpha_min`, `mfdfa_alpha_max`, `mfdfa_hurst_mean`) track scale-dependent variability; narrow widths imply monofractal behaviour.
+- Recurrence quantification metrics (`rqa_rr`, `rqa_det`, `rqa_lam`, `rqa_lmax`) describe recurrence density, determinism, laminarity, and maximum diagonal length. Interpret deviations with protocol context, as radius/embedding defaults influence outcomes.
+- Heart-rate-normalised RMSSD metrics (`rmssd_master_expected`, `rmssd_master_ratio`, `rmssd_master_residual`) compare observed RMSSD with a master curve anchored to mean HR, reducing heart-rate dependence when monitoring recovery.
+
 ### Autonomic function ratios
 - **Valsalva ratio**: longest RR during phase IV divided by the shortest RR during phase II of the Valsalva manoeuvre. Values ≥1.2 are often cited as normal in middle-aged adults; lower ratios may indicate impaired parasympathetic function. Ensure the windows capture the correct phases (approximately 5–15 s for strain, 15–25 s for release).
 - **Deep breathing (E:I) response**: difference and ratio between expiratory and inspiratory RR intervals during paced breathing (commonly 6 breaths/min). Larger E:I differences/ratios reflect greater vagal modulation.
@@ -152,6 +180,7 @@ Clinical emphasis:
 - Short-term vs 24-hour: SDNN and spectral indices differ across durations; avoid extrapolating short-term results to 24-hour risk markers.
 - Respiration: HF power and LF/HF are sensitive to breathing; misinterpretation is common when breathing is uncontrolled or unknown.
 - Entropy metrics: parameter- and length-sensitive; compare like-with-like and avoid over-interpretation in very short windows.
+- Readiness scoring depends on a stable baseline. Rebuild or reinterpret baselines if posture, time-of-day, breathing protocol, or sensor type changes materially.
 
 
 ## Quick Guide (Clinical)
@@ -181,5 +210,7 @@ Clinical emphasis:
 - QC heuristics are transparent and bounded; they are not a substitute for full ECG beat annotation or clinical-grade editing. For high-stakes analyses, consider manual review.
 - Frequency methods include Welch (default), Periodogram, and an AR (Yule–Walker) approximation for educational comparison; results differ across methods and settings.
 - Entropy defaults (m=2, r=0.2·SD) follow common practice for short-term HRV but should be adjusted for specific study aims and lengths when needed.
+- Deviation detection relies on robust statistics within the current session. Review flagged windows alongside qualitative notes rather than treating them as automated diagnoses.
+- Readiness scoring mirrors Kubios percentile categories for familiarity but should complement—never replace—clinical evaluation or longitudinal decision-making.
 
 
