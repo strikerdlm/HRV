@@ -25,6 +25,37 @@ from hrv_core import (
 )
 
 
+@st.cache_data(show_spinner=False)
+def _cached_comprehensive(rr: np.ndarray, include_advanced: bool) -> Dict[str, Any]:
+	return compute_comprehensive_hrv(rr, include_advanced=include_advanced)
+
+
+@st.cache_data(show_spinner=False)
+def _cached_psd(rr: np.ndarray, method: str) -> Tuple[np.ndarray, np.ndarray]:
+	return psd_curve(rr, sampling_rate=4.0, method=method)
+
+
+@st.cache_data(show_spinner=False)
+def _cached_windowed(
+	df: pd.DataFrame,
+	rr_col: str,
+	window: str,
+	step: str,
+	min_rr_count: int,
+	max_windows: int,
+	include_advanced: bool,
+) -> pd.DataFrame:
+	return compute_windowed_hrv(
+		df,
+		rr_col=rr_col,
+		window=window,
+		step=step,
+		min_rr_count=min_rr_count,
+		max_windows=max_windows,
+		include_advanced=include_advanced,
+	)
+
+
 @dataclass(slots=True)
 class UploadedRR:
 	name: str
@@ -240,7 +271,7 @@ def _plot_psd_overlay(datasets: Dict[str, UploadedRR], *, method: str) -> None:
 	series = []
 	for name, up in datasets.items():
 		rr = up.rr_ms_clean if (up.rr_ms_clean is not None) else up.rr_ms
-		f, p = psd_curve(rr, sampling_rate=4.0, method=str(method))
+		f, p = _cached_psd(rr, method=str(method))
 		if f.size == 0:
 			continue
 		series.append(
@@ -625,6 +656,7 @@ def main() -> None:
 	max_dev = st.sidebar.slider("Deviation threshold", min_value=0.05, max_value=0.5, value=0.2, step=0.05)
 	median_win = st.sidebar.number_input("Median window (odd)", min_value=3, max_value=99, value=11, step=2)
 	psd_method = st.sidebar.selectbox("PSD method", ["welch", "periodogram", "ar"], index=0)
+	fast_windowing = st.sidebar.checkbox("Fast time-domain windowing (skip spectral/nonlinear in windows)", value=True)
 	st.sidebar.markdown("---")
 	st.sidebar.subheader("Deviation detection")
 	apply_dev = st.sidebar.checkbox("Detect deviations in windowed metrics", value=True)
@@ -687,13 +719,14 @@ def main() -> None:
 		)
 	windowed_all: List[pd.DataFrame] = []
 	for name, up in datasets.items():
-		wdf = compute_windowed_hrv(
+		wdf = _cached_windowed(
 			up.df,
 			rr_col="rr_intervals_ms_clean" if (apply_clean and "rr_intervals_ms_clean" in up.df.columns) else "rr_intervals_ms",
 			window=win,
 			step=step,
 			min_rr_count=int(min_rr),
 			max_windows=int(max_windows),
+			include_advanced=not bool(fast_windowing),
 		)
 		if not wdf.empty:
 			windowed_all.append(wdf.assign(source=name))
@@ -773,7 +806,7 @@ def main() -> None:
 	for name, up in datasets.items():
 		if up.rr_ms.size >= 10:
 			use_rr = up.rr_ms_clean if (apply_clean and up.rr_ms_clean is not None) else up.rr_ms
-			m = compute_comprehensive_hrv(use_rr, include_advanced=True)
+			m = _cached_comprehensive(use_rr, include_advanced=True)
 			m["source"] = name
 			if apply_clean and up.qc_summary:
 				m["qc_flagged_pct"] = float(up.qc_summary.get("flagged_pct", 0.0))
