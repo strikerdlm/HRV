@@ -350,8 +350,8 @@ def main() -> None:
 		""",
 		unsafe_allow_html=True,
 	)
-	st.title("HRV Analysis")
-	st.caption("Modern, scientific, interactive analysis with Apache ECharts.")
+	st.title("HRV Analysis — Developed by Dr. Diego Malpica (Aerospace Medicine)")
+	st.caption("Modern, scientific, interactive analysis with Apache ECharts. Repo: https://github.com/strikerdlm/HRV")
 	st.markdown(
 		"Using Apache ECharts for high-quality, interactive plots "
 		"(see the official handbook: [ECharts Handbook](https://echarts.apache.org/handbook/en/get-started/))."
@@ -411,22 +411,63 @@ def main() -> None:
 	multi_results_df = pd.DataFrame(multi_results) if multi_results else pd.DataFrame()
 
 	# Tabs
-	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_gauges, tab_science = st.tabs(
-		["Overview", "Time Series", "Frequency", "Nonlinear", "Spectrogram", "Windowed", "Metrics", "Gauges", "Science"]
+	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_gauges, tab_science, tab_refs = st.tabs(
+		["Overview", "Time Series", "Frequency", "Nonlinear", "Spectrogram", "Windowed", "Metrics", "Gauges", "Science", "References"]
 	)
 	with tab_overview:
 		if meta_rows:
 			st.dataframe(pd.DataFrame(meta_rows))
+		st.markdown(
+			"**About the author**  \n"
+			"Developed by Dr. Diego Leonel Malpica Hincapié (Aerospace Medicine, Colombia). "
+			"Affiliations and public records indicate service within Colombian Military Health (Fuerza Aérea Colombiana).  \n"
+			"Sources: "
+			"[SIGEP II — Función Pública](https://www.funcionpublica.gov.co/web/sigep/hdv/-/directorio/S767357-8012-4/view), "
+			"[Redalyc article listing](https://www.redalyc.org/journal/6735/673573283005/movil/).  \n"
+			"Project repository: https://github.com/strikerdlm/HRV"
+		)
 	with tab_ts:
 		_plot_rr_timeseries(datasets)
 		_plot_hr_timeseries(datasets)
+		st.markdown(
+			"**Scientific notes (time series)**  \n"
+			"- RR intervals (ms) are beat-to-beat times; healthy resting dynamics are irregular and complex.  \n"
+			"- Heart rate (bpm) is the inverse of RR; variability in RR reflects autonomic modulation.  \n"
+			"Short-term norms and physiological context summarized by "
+			"[Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf) "
+			"and updated in [Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full)."
+		)
 	with tab_freq:
 		_plot_psd_overlay(datasets)
+		st.markdown(
+			"**Scientific notes (frequency domain)**  \n"
+			"- Bands: VLF 0.0033–0.04 Hz, LF 0.04–0.15 Hz, HF 0.15–0.40 Hz.  \n"
+			"- HF indexes respiratory sinus arrhythmia (parasympathetic activity); LF reflects baroreflex and mixed influences; LF/HF has limited validity as a ‘balance’ index and should be interpreted with breathing context.  \n"
+			"References: [Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf); "
+			"[Nunan et al., 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/); "
+			"[Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full)."
+		)
 	with tab_nl:
 		_plot_poincare(datasets)
+		st.markdown(
+			"**Scientific notes (nonlinear)**  \n"
+			"- Poincaré SD1 ≈ RMSSD (short-term vagal modulation); SD2 relates to longer-term variability.  \n"
+			"- DFA α1 ≈ 0.75–1.25 at rest reflects healthy fractal-like regulation; lower values can indicate exercise intensity near the aerobic threshold in exertional contexts.  \n"
+			"References: [Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full)."
+		)
 	with tab_tfr:
 		_plot_spectrogram(datasets)
+		st.markdown(
+			"**Scientific notes (time–frequency)**  \n"
+			"- Spectrogram visualizes how spectral power evolves; HF tracks respiration; LF reflects slower autonomic rhythms.  \n"
+			"- Stationarity assumptions matter; windowed PSD improves interpretability for long, varying recordings."
+		)
 	with tab_window:
+		st.markdown(
+			"**Scientific notes (windowed metrics)**  \n"
+			"- Sliding windows (e.g., 5 min, step 1 min) estimate locally stationary segments to track trends over time.  \n"
+			"- Minimum RR count safeguards metric stability; interpretation should consider protocol and respiration."
+		)
 		if not windowed_df.empty:
 			st.dataframe(windowed_df[["start", "source"] + [c for c in windowed_df.columns if c not in ("start", "source")]].head(50))
 		else:
@@ -438,6 +479,13 @@ def main() -> None:
 			st.info("No metrics to display.")
 	with tab_gauges:
 		_render_normogram_gauges(multi_results_df)
+		st.markdown(
+			"**Scientific notes (normogram gauges)**  \n"
+			"- Gauges compare observed values to short-term (∼5 min) population references (mean ± SD).  \n"
+			"- Cohort, age, posture, and breathing materially shift distributions; use within-subject trends for decisions.  \n"
+			"References: [Nunan et al., 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/); "
+			"[Sammito & Böckelmann, 2016](https://pubmed.ncbi.nlm.nih.gov/27986557/)."
+		)
 	with tab_science:
 		st.markdown(
 			"- **Time-domain (SDNN, RMSSD)**: Short-term SDNN (~5 min) ≈ 50±16 ms; RMSSD ≈ 42±15 ms in healthy adults; both decrease with age. RMSSD reflects vagal (parasympathetic) activity.\n"
@@ -447,6 +495,20 @@ def main() -> None:
 			"[Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf), "
 			"[Shaffer & Ginsberg 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full), "
 			"[Nunan et al. 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/)."
+		)
+	with tab_refs:
+		st.markdown(
+			"**Selected references (APA format)**  \n"
+			"- Malik, M., Bigger, J. T., Camm, A. J., Kleiger, R. E., Malliani, A., Moss, A. J., & Schwartz, P. J. (1996). Heart rate variability: Standards of measurement, physiological interpretation, and clinical use. European Heart Journal, 17(3), 354–381. "
+			"https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf  \n"
+			"- Shaffer, F., & Ginsberg, J. P. (2017). An overview of heart rate variability metrics and norms. Frontiers in Public Health, 5, 258. "
+			"https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full  \n"
+			"- Nunan, D., Sandercock, G. R. H., & Brodie, D. A. (2010). A quantitative systematic review of normal values for short-term heart rate variability in healthy adults. Pacing and Clinical Electrophysiology, 33(11), 1407–1417. https://pubmed.ncbi.nlm.nih.gov/20663071/  \n"
+			"- Quigley, K. S., Berntson, G. G., Gianaros, P. J., Jennings, J. R., Norman, G. J., Thayer, J. F., & de Geus, E. (2024). Publication guidelines for human heart rate and heart rate variability studies in psychophysiology—Part 1: Physiological underpinnings and foundations of measurement. Psychophysiology. https://onlinelibrary.wiley.com/doi/10.1111/psyp.14604  \n"
+			"- Laborde, S., Mosley, E., & Thayer, J. F. (2017). Heart rate variability and cardiac vagal tone in psychophysiological research—Recommendations for experiment planning, data analysis, and data reporting. Frontiers in Psychology, 8, 213. "
+			"https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2017.00213/full  \n"
+			"- Sammito, S., & Böckelmann, I. (2016). Reference values for time- and frequency-domain heart rate variability measures. Heart Rhythm, 13(6), 1309–1316. https://pubmed.ncbi.nlm.nih.gov/27986557/  \n"
+			"- Berkoff, D. J., Cairns, C. B., Sanchez, L. D., & Moorman, C. T. (2007). Heart rate variability in elite American track-and-field athletes. Journal of Strength and Conditioning Research, 21(1), 227–231. https://pubmed.ncbi.nlm.nih.gov/17313294/"
 		)
 
 
