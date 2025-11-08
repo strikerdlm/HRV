@@ -7,8 +7,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
-from .echarts_component import EChartsConfig, render_echarts
-from .hrv_core import (
+from echarts_component import EChartsConfig, render_echarts
+from hrv_core import (
 	compute_comprehensive_hrv,
 	compute_windowed_hrv,
 	load_rr_intervals_from_text,
