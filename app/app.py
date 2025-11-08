@@ -79,6 +79,11 @@ def _cached_windowed(
 		)
 
 
+@st.cache_data(show_spinner=False)
+def _cached_spectrogram(rr: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+	return spectrogram_rr(rr, sampling_rate=4.0)
+
+
 @dataclass(slots=True)
 class UploadedRR:
 	name: str
@@ -206,13 +211,20 @@ def _parse_float(raw_value: float | int | str, label: str) -> float:
 	return value
 
 
-def _plot_rr_timeseries(datasets: Dict[str, UploadedRR], dev_windows: Optional[pd.DataFrame] = None) -> None:
+def _plot_rr_timeseries(datasets: Dict[str, UploadedRR], dev_windows: Optional[pd.DataFrame] = None, *, max_points: Optional[int] = None) -> None:
 	series = []
 	for name, up in datasets.items():
 		if up.df.empty:
 			continue
-		x = up.df["timestamp"].astype(str).tolist()
-		y = up.df["rr_intervals_ms"].astype(float).tolist()
+		x_vals = up.df["timestamp"].astype(str).tolist()
+		y_vals = up.df["rr_intervals_ms"].astype(float).tolist()
+		if max_points is not None and len(y_vals) > max_points:
+			idx = np.linspace(0, len(y_vals) - 1, max_points).astype(int)
+			x = [x_vals[i] for i in idx]
+			y = [y_vals[i] for i in idx]
+		else:
+			x = x_vals
+			y = y_vals
 		ser = _echarts_line_series(f"{name} (raw)", x, y)
 		# Add deviation markAreas per dataset if available
 		if dev_windows is not None and not dev_windows.empty and "dev_level" in dev_windows.columns:
@@ -234,7 +246,11 @@ def _plot_rr_timeseries(datasets: Dict[str, UploadedRR], dev_windows: Optional[p
 					ser["markArea"] = {"silent": True, "data": items}
 		series.append(ser)
 		if "rr_intervals_ms_clean" in up.df.columns:
-			y_cl = up.df["rr_intervals_ms_clean"].astype(float).tolist()
+			y_cl_vals = up.df["rr_intervals_ms_clean"].astype(float).tolist()
+			if max_points is not None and len(y_cl_vals) > max_points:
+				y_cl = [y_cl_vals[i] for i in idx]
+			else:
+				y_cl = y_cl_vals
 			series.append(
 				{
 					**_echarts_line_series(f"{name} (cleaned)", x, y_cl),
@@ -693,6 +709,15 @@ def main() -> None:
 	z_alert = st.sidebar.slider("Alert threshold (|z|)", min_value=1.0, max_value=5.0, value=2.0, step=0.1)
 	min_sustain = st.sidebar.number_input("Min windows to define an episode", min_value=1, max_value=60, value=3, step=1)
 	st.sidebar.markdown("---")
+	st.sidebar.subheader("Performance & display")
+	max_datasets = st.sidebar.number_input("Process first N datasets", min_value=1, value=3, step=1)
+	rr_plot_cap = st.sidebar.selectbox("RR plot point cap per dataset", ["500","2000","10000","No limit"], index=1)
+	skip_freq = st.sidebar.checkbox("Skip Frequency overlay plot", value=True)
+	skip_poincare = st.sidebar.checkbox("Skip Poincaré plot", value=True)
+	skip_spectrogram = st.sidebar.checkbox("Skip Spectrogram", value=True)
+	skip_gauges = st.sidebar.checkbox("Skip Gauges", value=False)
+	show_debug = st.sidebar.checkbox("Show detailed progress logs", value=False)
+
 	st.sidebar.subheader("ML enhancements")
 	enable_ml = st.sidebar.checkbox("Enable ML-assisted deviation clustering", value=False)
 	st.sidebar.markdown("---")
@@ -703,8 +728,10 @@ def main() -> None:
 	bmi = st.sidebar.number_input("BMI (kg/m²)", min_value=10.0, max_value=60.0, value=29.0, step=0.5)
 	exercise = st.sidebar.selectbox("Exercise regularity", ["Sedentary", "Moderate", "Athlete"], index=0)
 
-	# Prepare dataset dict
-	datasets = uploads
+	# Prepare dataset dict (limit number of datasets for performance)
+	datasets_all = uploads
+	dataset_items = list(datasets_all.items())
+	datasets = dict(dataset_items[: int(max_datasets)])
 
 	# Apply cleaning
 	if apply_clean:
@@ -727,8 +754,11 @@ def main() -> None:
 					up.df.loc[: n - 1, "artifact_flag"] = ~valid_mask[:n]
 				else:
 					up.df["artifact_flag"] = False
-	# Compute reusable results
+	# Compute reusable results with progress
 	meta_rows = []
+	pb_clean = st.progress(0, text="Preparing datasets..." if not apply_clean else "Cleaning datasets...")
+	total = max(1, len(datasets))
+	done = 0
 	for name, up in datasets.items():
 		if up.rr_ms.size == 0:
 			continue
@@ -741,7 +771,12 @@ def main() -> None:
 				"flagged_pct": float(up.qc_summary.get("flagged_pct", 0.0)) if (apply_clean and up.qc_summary) else 0.0,
 			}
 		)
+		done += 1
+		pb_clean.progress(min(100, int(done * 100 / total)))
 	windowed_all: List[pd.DataFrame] = []
+	pb_win = st.progress(0, text="Computing windowed metrics...")
+	total_win = max(1, len(datasets))
+	done_win = 0
 	for name, up in datasets.items():
 		wdf = _cached_windowed(
 			up.df,
@@ -754,6 +789,8 @@ def main() -> None:
 		)
 		if not wdf.empty:
 			windowed_all.append(wdf.assign(source=name))
+		done_win += 1
+		pb_win.progress(min(100, int(done_win * 100 / total_win)))
 	if windowed_all:
 		windowed_df = pd.concat(windowed_all, ignore_index=True)
 		if apply_dev:
@@ -827,6 +864,9 @@ def main() -> None:
 	# Full-recording metrics
 	multi_results: List[Dict] = []
 	ordered_sources: List[str] = []
+	pb_full = st.progress(0, text="Computing full-recording metrics...")
+	total_full = max(1, len(datasets))
+	done_full = 0
 	for name, up in datasets.items():
 		if up.rr_ms.size >= 10:
 			use_rr = up.rr_ms_clean if (apply_clean and up.rr_ms_clean is not None) else up.rr_ms
@@ -848,6 +888,8 @@ def main() -> None:
 				m.update(adj)
 			multi_results.append(m)
 			ordered_sources.append(name)
+			done_full += 1
+			pb_full.progress(min(100, int(done_full * 100 / total_full)))
 	multi_results_df = pd.DataFrame(multi_results) if multi_results else pd.DataFrame()
 
 	# Long-term summaries (5-min windows): SDANN (std of mean_nni), SDNNIDX (mean of window SDNN)
@@ -914,7 +956,8 @@ def main() -> None:
 				)
 			)
 	with tab_ts:
-		_plot_rr_timeseries(datasets, dev_windows=windowed_df if (apply_dev and "dev_level" in windowed_df.columns) else None)
+		max_pts = None if rr_plot_cap == "No limit" else int(rr_plot_cap)
+		_plot_rr_timeseries(datasets, dev_windows=windowed_df if (apply_dev and "dev_level" in windowed_df.columns) else None, max_points=max_pts)
 		_plot_hr_timeseries(datasets)
 		st.markdown(
 			"**Scientific notes (time series)**  \n"
@@ -925,7 +968,10 @@ def main() -> None:
 			"and updated in [Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full)."
 		)
 	with tab_freq:
-		_plot_psd_overlay(datasets, method=psd_method)
+		if skip_freq:
+			st.info("Frequency overlay disabled (Performance & display).")
+		else:
+			_plot_psd_overlay(datasets, method=psd_method)
 		st.markdown(
 			"**Scientific notes (frequency domain)**  \n"
 			"- Bands: VLF 0.0033–0.04 Hz, LF 0.04–0.15 Hz, HF 0.15–0.40 Hz.  \n"
@@ -935,7 +981,10 @@ def main() -> None:
 			"[Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full)."
 		)
 	with tab_nl:
-		_plot_poincare(datasets)
+		if skip_poincare:
+			st.info("Poincaré plot disabled (Performance & display).")
+		else:
+			_plot_poincare(datasets)
 		st.markdown(
 			"**Scientific notes (nonlinear)**  \n"
 			"- Poincaré SD1 ≈ RMSSD (short-term vagal modulation); SD2 relates to longer-term variability.  \n"
@@ -943,7 +992,10 @@ def main() -> None:
 			"References: [Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full)."
 		)
 	with tab_tfr:
-		_plot_spectrogram(datasets)
+		if skip_spectrogram:
+			st.info("Spectrogram disabled (Performance & display).")
+		else:
+			_plot_spectrogram(datasets)
 		st.markdown(
 			"**Scientific notes (time–frequency)**  \n"
 			"- Spectrogram visualizes how spectral power evolves; HF tracks respiration; LF reflects slower autonomic rhythms.  \n"
@@ -1212,7 +1264,10 @@ def main() -> None:
 								"Consistent daily morning recordings (1–5 minutes, relaxed breathing) improve reliability."
 							)
 	with tab_gauges:
-		_render_normogram_gauges(multi_results_df)
+		if skip_gauges:
+			st.info("Gauges disabled (Performance & display).")
+		else:
+			_render_normogram_gauges(multi_results_df)
 		st.markdown(
 			"**Scientific notes (normogram gauges)**  \n"
 			"- Gauges compare observed values to short-term (∼5 min) population references (mean ± SD).  \n"
