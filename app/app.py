@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional
 
 import numpy as np
 import pandas as pd
@@ -12,6 +12,7 @@ from hrv_core import (
 	compute_comprehensive_hrv,
 	compute_windowed_hrv,
 	load_rr_intervals_from_text,
+	clean_rr_intervals,
 	psd_curve,
 	spectrogram_rr,
 )
@@ -22,6 +23,9 @@ class UploadedRR:
 	name: str
 	rr_ms: np.ndarray
 	df: pd.DataFrame
+	rr_ms_clean: Optional[np.ndarray] = None
+	artifact_valid_mask: Optional[np.ndarray] = None
+	qc_summary: Optional[Dict] = None
 
 
 def _to_dataframe(name: str, rr_ms: np.ndarray) -> pd.DataFrame:
@@ -87,7 +91,27 @@ def _plot_rr_timeseries(datasets: Dict[str, UploadedRR]) -> None:
 			continue
 		x = up.df["timestamp"].astype(str).tolist()
 		y = up.df["rr_intervals_ms"].astype(float).tolist()
-		series.append(_echarts_line_series(name, x, y))
+		series.append(_echarts_line_series(f"{name} (raw)", x, y))
+		if "rr_intervals_ms_clean" in up.df.columns:
+			y_cl = up.df["rr_intervals_ms_clean"].astype(float).tolist()
+			series.append(
+				{
+					**_echarts_line_series(f"{name} (cleaned)", x, y_cl),
+					"lineStyle": {"width": 2, "color": "#43a047"},
+				}
+			)
+		if "artifact_flag" in up.df.columns:
+			mask = up.df["artifact_flag"].astype(bool).to_numpy()
+			if mask.any():
+				xf = up.df.loc[mask, "timestamp"].astype(float).to_numpy()
+				yf = up.df.loc[mask, "rr_intervals_ms"].astype(float).to_numpy()
+				series.append(
+					{
+						**_echarts_scatter_series(f"{name} artifacts", xf, yf),
+						"itemStyle": {"color": "#e53935"},
+						"symbolSize": 5,
+					}
+				)
 	opt = {
 		"title": {"text": "RR Intervals over Time", "left": "center"},
 		"tooltip": {"trigger": "axis"},
@@ -120,23 +144,23 @@ def _plot_hr_timeseries(datasets: Dict[str, UploadedRR]) -> None:
 	render_echarts(opt, height_px=420, config=EChartsConfig())
 
 
-def _plot_psd_overlay(datasets: Dict[str, UploadedRR]) -> None:
+def _plot_psd_overlay(datasets: Dict[str, UploadedRR], *, method: str) -> None:
 	series = []
 	for name, up in datasets.items():
-		rr = up.rr_ms
-		f, p = psd_curve(rr, sampling_rate=4.0)
+		rr = up.rr_ms_clean if (up.rr_ms_clean is not None) else up.rr_ms
+		f, p = psd_curve(rr, sampling_rate=4.0, method=str(method))
 		if f.size == 0:
 			continue
 		series.append(
 			{
-				"name": name,
+				"name": f"{name}{' (cleaned)' if (up.rr_ms_clean is not None) else ''}",
 				"type": "line",
 				"showSymbol": False,
 				"data": [[float(fi), float(pi)] for fi, pi in zip(f, p)],
 			}
 		)
 	opt = {
-		"title": {"text": "PSD Overlay (Welch)", "left": "center"},
+		"title": {"text": f"PSD Overlay ({method.title()})", "left": "center"},
 		"tooltip": {"trigger": "axis"},
 		"legend": {"top": 24},
 		"xAxis": {"type": "value", "name": "Frequency (Hz)"},
@@ -178,7 +202,7 @@ def _plot_psd_overlay(datasets: Dict[str, UploadedRR]) -> None:
 def _plot_poincare(datasets: Dict[str, UploadedRR], max_points: int = 5000) -> None:
 	series = []
 	for name, up in datasets.items():
-		rr = up.rr_ms
+		rr = up.rr_ms_clean if (up.rr_ms_clean is not None) else up.rr_ms
 		if rr.size < 2:
 			continue
 		rr = rr[(rr >= 300.0) & (rr <= 2000.0)]
@@ -208,7 +232,8 @@ def _plot_spectrogram(datasets: Dict[str, UploadedRR]) -> None:
 	if not names:
 		return
 	sel = st.selectbox("Spectrogram dataset", names, index=0)
-	rr = datasets[sel].rr_ms
+	up = datasets[sel]
+	rr = up.rr_ms_clean if (up.rr_ms_clean is not None) else up.rr_ms
 	fxx, txx, Sxx = spectrogram_rr(rr, sampling_rate=4.0)
 	if fxx.size == 0:
 		st.info("Insufficient RR for spectrogram.")
@@ -371,8 +396,39 @@ def main() -> None:
 	with col_c:
 		min_rr = st.number_input("Min RR per window", min_value=30, max_value=1000, value=60, step=10)
 
+	# QC controls
+	st.sidebar.markdown("---")
+	st.sidebar.subheader("Data Quality")
+	apply_clean = st.sidebar.checkbox("Apply artifact correction", value=True)
+	method = st.sidebar.selectbox("QC method", ["threshold_median", "threshold_prev"], index=0)
+	max_dev = st.sidebar.slider("Deviation threshold", min_value=0.05, max_value=0.5, value=0.2, step=0.05)
+	median_win = st.sidebar.number_input("Median window (odd)", min_value=3, max_value=99, value=11, step=2)
+	psd_method = st.sidebar.selectbox("PSD method", ["welch", "periodogram", "ar"], index=0)
+
 	# Prepare dataset dict
 	datasets = uploads
+
+	# Apply cleaning
+	if apply_clean:
+		for name, up in datasets.items():
+			if up.rr_ms.size == 0:
+				continue
+			cleaned, valid_mask, summary = clean_rr_intervals(
+				up.rr_ms,
+				method=str(method),
+				max_deviation=float(max_dev),
+				median_window=int(median_win),
+			)
+			up.rr_ms_clean = cleaned
+			up.artifact_valid_mask = valid_mask
+			up.qc_summary = summary
+			if not up.df.empty:
+				n = min(len(up.df), cleaned.size)
+				up.df.loc[: n - 1, "rr_intervals_ms_clean"] = cleaned[:n]
+				if valid_mask.size >= n:
+					up.df.loc[: n - 1, "artifact_flag"] = ~valid_mask[:n]
+				else:
+					up.df["artifact_flag"] = False
 	# Compute reusable results
 	meta_rows = []
 	for name, up in datasets.items():
@@ -384,12 +440,14 @@ def main() -> None:
 				"beats": int(up.rr_ms.size),
 				"duration_min": float(up.rr_ms.sum() / (1000.0 * 60.0)),
 				"mean_hr": float(np.mean(60000.0 / up.rr_ms)),
+				"flagged_pct": float(up.qc_summary.get("flagged_pct", 0.0)) if (apply_clean and up.qc_summary) else 0.0,
 			}
 		)
 	windowed_all: List[pd.DataFrame] = []
 	for name, up in datasets.items():
 		wdf = compute_windowed_hrv(
 			up.df,
+			rr_col="rr_intervals_ms_clean" if (apply_clean and "rr_intervals_ms_clean" in up.df.columns) else "rr_intervals_ms",
 			window=win,
 			step=step,
 			min_rr_count=int(min_rr),
@@ -405,8 +463,12 @@ def main() -> None:
 	multi_results: List[Dict] = []
 	for name, up in datasets.items():
 		if up.rr_ms.size >= 10:
-			m = compute_comprehensive_hrv(up.rr_ms)
+			use_rr = up.rr_ms_clean if (apply_clean and up.rr_ms_clean is not None) else up.rr_ms
+			m = compute_comprehensive_hrv(use_rr)
 			m["source"] = name
+			if apply_clean and up.qc_summary:
+				m["qc_flagged_pct"] = float(up.qc_summary.get("flagged_pct", 0.0))
+				m["qc_method"] = str(up.qc_summary.get("qc_method", {}))
 			multi_results.append(m)
 	multi_results_df = pd.DataFrame(multi_results) if multi_results else pd.DataFrame()
 
@@ -429,7 +491,7 @@ def main() -> None:
 			"and updated in [Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full)."
 		)
 	with tab_freq:
-		_plot_psd_overlay(datasets)
+		_plot_psd_overlay(datasets, method=psd_method)
 		st.markdown(
 			"**Scientific notes (frequency domain)**  \n"
 			"- Bands: VLF 0.0033–0.04 Hz, LF 0.04–0.15 Hz, HF 0.15–0.40 Hz.  \n"

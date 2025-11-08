@@ -5,8 +5,119 @@ from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import numpy as np
 import pandas as pd
-from scipy import signal
+from scipy import signal, linalg
 from scipy.interpolate import interp1d
+
+
+def _moving_median(values: np.ndarray, window: int) -> np.ndarray:
+	"""Return centered moving median with edge reflection.
+
+	Args:
+		values: 1D array of RR intervals (ms).
+		window: Odd window size >= 3.
+
+	Returns:
+		Array of same length with moving median estimates.
+	"""
+	if values.size == 0:
+		return values
+	w = int(max(3, window))
+	if w % 2 == 0:
+		w += 1
+	pad = w // 2
+	x = np.pad(values, (pad, pad), mode="reflect")
+	out = np.empty_like(values, dtype=float)
+	for i in range(values.size):
+		seg = x[i : i + w]
+		out[i] = float(np.median(seg))
+	return out
+
+
+def detect_artifacts(
+	rr_ms: np.ndarray,
+	*,
+	method: str = "threshold_median",
+	max_deviation: float = 0.2,
+	median_window: int = 11,
+) -> np.ndarray:
+	"""Detect artifacts/ectopic beats using simple bounded heuristics.
+
+	Methods:
+	- threshold_median: flag if |rr - moving_median| / moving_median > max_deviation
+	- threshold_prev: flag if |rr[i] - rr[i-1]| / rr[i-1] > max_deviation (i>0); rr[0] uses median
+
+	Returns:
+		Boolean mask of valid samples (True = keep).
+	"""
+	if rr_ms.size == 0:
+		return np.array([], dtype=bool)
+	rr = rr_ms.astype(float)
+	if method == "threshold_prev":
+		ref = np.roll(rr, 1)
+		ref[0] = float(np.median(rr))
+	else:
+		ref = _moving_median(rr, window=median_window)
+	with np.errstate(divide="ignore", invalid="ignore"):
+		dev = np.abs(rr - ref) / np.maximum(ref, 1e-9)
+	valid = dev <= float(max_deviation)
+	# Always keep within physiological bounds even if heuristic says invalid
+	in_bounds = (rr >= 300.0) & (rr <= 2000.0)
+	return valid & in_bounds
+
+
+def interpolate_outliers(rr_ms: np.ndarray, valid_mask: np.ndarray) -> np.ndarray:
+	"""Linearly interpolate over invalid samples; endpoints are forward/backward filled.
+
+	Args:
+		rr_ms: RR series (ms).
+		valid_mask: Boolean mask of valid samples (True means keep original).
+
+	Returns:
+		Cleaned RR series with invalid points replaced by interpolation.
+	"""
+	if rr_ms.size == 0:
+		return rr_ms
+	rr = rr_ms.astype(float).copy()
+	valid_idx = np.where(valid_mask)[0]
+	if valid_idx.size == 0:
+		# Nothing to anchor; return original
+		return rr
+	if valid_idx.size == rr.size:
+		return rr
+	invalid_idx = np.where(~valid_mask)[0]
+	# Build interpolation over indices
+	x = valid_idx.astype(float)
+	y = rr[valid_idx]
+	f = interp1d(x, y, kind="linear", bounds_error=False, fill_value=(y[0], y[-1]))
+	rr[invalid_idx] = f(invalid_idx.astype(float))
+	return rr
+
+
+def clean_rr_intervals(
+	rr_ms: np.ndarray,
+	*,
+	method: str = "threshold_median",
+	max_deviation: float = 0.2,
+	median_window: int = 11,
+) -> Tuple[np.ndarray, np.ndarray, Dict[str, float]]:
+	"""Detect and correct artifacts by interpolation.
+
+	Returns:
+		(cleaned_rr_ms, valid_mask, summary_dict)
+	"""
+	if rr_ms.size == 0:
+		return rr_ms, np.array([], dtype=bool), {"n": 0.0, "n_flagged": 0.0, "flagged_pct": 0.0}
+	valid = detect_artifacts(rr_ms, method=method, max_deviation=max_deviation, median_window=median_window)
+	cleaned = interpolate_outliers(rr_ms, valid_mask=valid)
+	n = float(rr_ms.size)
+	n_flagged = float(np.sum(~valid))
+	summary = {
+		"n": n,
+		"n_flagged": n_flagged,
+		"flagged_pct": float((n_flagged / n) * 100.0) if n > 0 else 0.0,
+		"qc_method": {"method": method, "max_deviation": float(max_deviation), "median_window": int(median_window)},
+	}
+	return cleaned, valid, summary
 
 
 def load_rr_intervals_from_text(name: str, content: str) -> np.ndarray:
@@ -108,8 +219,30 @@ def compute_frequency_domain_metrics(
 		rr_det = signal.detrend(rr_interp)
 		if method == "welch":
 			freqs, psd = signal.welch(rr_det, fs=sampling_rate, nperseg=min(len(rr_det) // 4, 256), window="hann")
-		else:
+		elif method == "periodogram":
 			freqs, psd = signal.periodogram(rr_det, fs=sampling_rate, window="hann")
+		elif method == "ar":
+			# Simple AR(Yule-Walker) PSD with fixed order
+			order = int(min(16, max(4, len(rr_det) // 20)))
+			# Autocorrelation
+			x = rr_det - np.mean(rr_det)
+			r = np.correlate(x, x, mode="full")[len(x) - 1 : len(x) - 1 + order + 1] / len(x)
+			R = linalg.toeplitz(r[:-1])
+			try:
+				a = np.linalg.solve(R, -r[1:])
+				sigma2 = float(r[0] + np.dot(a, r[1:]))
+			except Exception:
+				a = np.zeros(order, dtype=float)
+				sigma2 = float(np.var(x))
+			# Frequency response
+			freqs = np.linspace(0.0, sampling_rate / 2.0, num=512, endpoint=True)
+			w = 2.0 * np.pi * freqs / sampling_rate
+			den = np.ones_like(freqs, dtype=complex)
+			for k in range(1, order + 1):
+				den += a[k - 1] * np.exp(-1j * w * k)
+			psd = (sigma2 / (np.abs(den) ** 2)).real
+		else:
+			freqs, psd = signal.welch(rr_det, fs=sampling_rate, nperseg=min(len(rr_det) // 4, 256), window="hann")
 		vlf_band = (0.0033, 0.04)
 		lf_band = (0.04, 0.15)
 		hf_band = (0.15, 0.4)
@@ -218,6 +351,9 @@ def compute_comprehensive_hrv(rr_intervals: np.ndarray) -> Dict[str, Any]:
 	results.update(compute_frequency_domain_metrics(rr_intervals))
 	results.update(compute_poincare_metrics(rr_intervals))
 	results.update(compute_dfa_metrics(rr_intervals))
+	results.update(compute_geometric_metrics(rr_intervals))
+	# Entropy metrics with default parameters (m=2, r=0.2*SD)
+	results.update(compute_entropy_metrics(rr_intervals, m=2, r_ratio=0.2))
 	if "hf_power" in results and "rmssd" in results:
 		parasym_components = [
 			float(results.get("hf_nu", 0.0)) / 100.0,
@@ -287,7 +423,7 @@ def compute_windowed_hrv(
 	return pd.DataFrame(results)
 
 
-def psd_curve(rr: np.ndarray, sampling_rate: float = 4.0) -> Tuple[np.ndarray, np.ndarray]:
+def psd_curve(rr: np.ndarray, sampling_rate: float = 4.0, *, method: str = "welch") -> Tuple[np.ndarray, np.ndarray]:
 	"""Return (freqs, psd) arrays suitable for plotting."""
 	if rr.size < 50:
 		return np.array([]), np.array([])
@@ -295,7 +431,17 @@ def psd_curve(rr: np.ndarray, sampling_rate: float = 4.0) -> Tuple[np.ndarray, n
 	if t_reg.size == 0:
 		return np.array([]), np.array([])
 	rr_det = signal.detrend(rr_interp)
-	freqs, psd = signal.welch(rr_det, fs=sampling_rate, nperseg=min(len(rr_det) // 4, 256), window="hann")
+	if method == "welch":
+		freqs, psd = signal.welch(rr_det, fs=sampling_rate, nperseg=min(len(rr_det) // 4, 256), window="hann")
+	elif method == "periodogram":
+		freqs, psd = signal.periodogram(rr_det, fs=sampling_rate, window="hann")
+	else:
+		# fall back to metrics routine for AR or unknown
+		out = compute_frequency_domain_metrics(rr, method=method, sampling_rate=sampling_rate)
+		if not out:
+			return np.array([]), np.array([])
+		# Recompute for plotting grid based on returned band metrics isn't practical; use Welch fallback
+		freqs, psd = signal.welch(rr_det, fs=sampling_rate, nperseg=min(len(rr_det) // 4, 256), window="hann")
 	return freqs.astype(float), psd.astype(float)
 
 
@@ -321,5 +467,105 @@ def spectrogram_rr(
 		mode="psd",
 	)
 	return fxx.astype(float), txx.astype(float), Sxx.astype(float)
+
+
+def compute_geometric_metrics(rr_intervals: np.ndarray) -> Dict[str, float]:
+	"""Compute geometric HRV metrics: HRV triangular index, TINN (approx), Baevsky Stress Index.
+
+	Notes:
+	- HRV triangular index (HRVI) = N / max(bin count) with bin width ~7.8125 ms.
+	- TINN approximated as baseline width between first/last nonzero histogram bins around the mode.
+	- Baevsky Stress Index SI = AMo / (2 * Mo * MxDMn), with AMo fraction (0..1), Mo in ms, MxDMn range in ms.
+	"""
+	if rr_intervals.size < 3:
+		return {}
+	rr = rr_intervals.astype(float)
+	bin_width = 7.8125  # ms
+	min_v = float(np.min(rr))
+	max_v = float(np.max(rr))
+	if not np.isfinite(min_v) or not np.isfinite(max_v) or max_v <= min_v:
+		return {}
+	bins = int(max(10, np.ceil((max_v - min_v) / bin_width)))
+	hist, edges = np.histogram(rr, bins=bins, range=(min_v, max_v))
+	N = int(rr.size)
+	max_count = int(np.max(hist)) if hist.size > 0 else 0
+	hrvi = float(N / max_count) if max_count > 0 else 0.0
+	# Mode and amplitude
+	mode_idx = int(np.argmax(hist)) if hist.size > 0 else 0
+	mode_center = float((edges[mode_idx] + edges[mode_idx + 1]) / 2.0) if hist.size > 0 else float(np.median(rr))
+	AMo = float(hist[mode_idx] / N) if N > 0 and hist.size > 0 else 0.0
+	MxDMn = float(max_v - min_v)
+	si = float(AMo / (2.0 * mode_center * MxDMn)) if (mode_center > 0 and MxDMn > 0) else 0.0
+	# Approximate TINN as baseline width between first and last nonzero bins
+	nonzero_bins = np.where(hist > 0)[0]
+	if nonzero_bins.size >= 2:
+		left_edge = float(edges[nonzero_bins[0]])
+		right_edge = float(edges[nonzero_bins[-1] + 1])
+		tinn = float(right_edge - left_edge)
+	else:
+		tinn = 0.0
+	return {"hrv_triangular_index": hrvi, "tinn": tinn, "baevsky_stress_index": si}
+
+
+def compute_entropy_metrics(
+	rr_intervals: np.ndarray,
+	*,
+	m: int = 2,
+	r_ratio: float = 0.2,
+) -> Dict[str, float]:
+	"""Compute Approximate Entropy (ApEn) and Sample Entropy (SampEn) for RR series.
+
+	Args:
+		rr_intervals: RR intervals in milliseconds.
+		m: Embedding dimension (commonly 2).
+		r_ratio: Tolerance as fraction of the series standard deviation (commonly 0.15–0.20).
+
+	Returns:
+		Dictionary with 'apen' and 'sampen'. Returns 0.0 when undefined.
+	"""
+	n = int(rr_intervals.size)
+	if n < (m + 2):
+		return {"apen": 0.0, "sampen": 0.0}
+	x = rr_intervals.astype(float)
+	sd = float(np.std(x, ddof=0))
+	r = float(max(1e-9, r_ratio * sd))
+
+	def _phi(dim: int) -> float:
+		counts: List[int] = []
+		for i in range(0, n - dim + 1):
+			ref = x[i : i + dim]
+			c = 0
+			for j in range(0, n - dim + 1):
+				if i == j:
+					continue
+				win = x[j : j + dim]
+				if np.max(np.abs(ref - win)) <= r:
+					c += 1
+			counts.append(c)
+		if not counts:
+			return 0.0
+		return float(np.mean(np.array(counts, dtype=float) / max(1, (n - dim))))
+
+	phi_m = _phi(m)
+	phi_m1 = _phi(m + 1)
+	apen = float(-np.log(phi_m1 / max(1e-12, phi_m))) if (phi_m > 0 and phi_m1 > 0) else 0.0
+
+	# SampEn: negative log of conditional probability without self-matches
+	def _match_count(dim: int) -> Tuple[int, int]:
+		Cm = 0
+		for i in range(0, n - dim):
+			ref = x[i : i + dim]
+			for j in range(i + 1, n - dim + 1):
+				win = x[j : j + dim]
+				if np.max(np.abs(ref - win)) <= r:
+					Cm += 1
+		return Cm, (n - dim) * (n - dim + 1) // 2
+
+	Cm, total_m = _match_count(m)
+	Cm1, total_m1 = _match_count(m + 1)
+	p_m = float(Cm / max(1, total_m))
+	p_m1 = float(Cm1 / max(1, total_m1))
+	sampen = float(-np.log(p_m1 / max(1e-12, p_m))) if (p_m > 0 and p_m1 > 0) else 0.0
+	return {"apen": apen, "sampen": sampen}
 
 
