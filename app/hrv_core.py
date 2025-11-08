@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
-from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -342,7 +343,11 @@ def compute_dfa_metrics(rr_intervals: np.ndarray) -> Dict[str, float]:
 	return {"dfa_alpha1": alpha1, "dfa_alpha2": alpha2}
 
 
-def compute_comprehensive_hrv(rr_intervals: np.ndarray) -> Dict[str, Any]:
+def compute_comprehensive_hrv(
+	rr_intervals: np.ndarray,
+	*,
+	include_advanced: bool = True,
+) -> Dict[str, Any]:
 	"""Compute time, frequency, Poincaré, and DFA metrics plus indices."""
 	results: Dict[str, Any] = {
 		"n_intervals": int(rr_intervals.size),
@@ -357,6 +362,14 @@ def compute_comprehensive_hrv(rr_intervals: np.ndarray) -> Dict[str, Any]:
 	results.update(compute_geometric_metrics(rr_intervals))
 	# Entropy metrics with default parameters (m=2, r=0.2*SD)
 	results.update(compute_entropy_metrics(rr_intervals, m=2, r_ratio=0.2))
+	if include_advanced:
+		results.update(compute_heart_rate_fragmentation(rr_intervals))
+		results.update(compute_phase_rectified_capacity(rr_intervals, scale=2))
+		results.update(compute_symbolic_dynamics_metrics(rr_intervals))
+		results.update(compute_permutation_entropy(rr_intervals, order=3, delay=1))
+		results.update(compute_mfdfa_metrics(rr_intervals))
+		results.update(compute_rqa_metrics(rr_intervals))
+		results.update(compute_frequency_domain_entropy(rr_intervals))
 	if "hf_power" in results and "rmssd" in results:
 		parasym_components = [
 			float(results.get("hf_nu", 0.0)) / 100.0,
@@ -368,6 +381,12 @@ def compute_comprehensive_hrv(rr_intervals: np.ndarray) -> Dict[str, Any]:
 		lf_hf_ratio = float(results.get("lf_hf_ratio", 0.0))
 		results["sympathetic_index"] = float(min(1.0, lf_hf_ratio / 5.0))
 		results["ans_balance"] = float(results["parasympathetic_index"] - results["sympathetic_index"])
+		if include_advanced:
+			norm_metrics = compute_hr_normalized_metrics(
+				mean_hr_bpm=float(results.get("mean_hr", 0.0)),
+				rmssd_ms=float(results.get("rmssd", 0.0)),
+			)
+			results.update(norm_metrics)
 	return results
 
 
@@ -415,7 +434,7 @@ def compute_windowed_hrv(
 		if len(w) < min_rr_count:
 			continue
 		rr = w[rr_col].to_numpy()
-		metrics = compute_comprehensive_hrv(rr)
+		metrics = compute_comprehensive_hrv(rr, include_advanced=False)
 		metrics["start"] = s
 		metrics["end"] = e
 		if "source" in df.columns:
@@ -570,6 +589,493 @@ def compute_entropy_metrics(
 	p_m1 = float(Cm1 / max(1, total_m1))
 	sampen = float(-np.log(p_m1 / max(1e-12, p_m))) if (p_m > 0 and p_m1 > 0) else 0.0
 	return {"apen": apen, "sampen": sampen}
+
+
+def compute_heart_rate_fragmentation(rr_intervals: np.ndarray) -> Dict[str, float]:
+	"""Compute heart rate fragmentation metrics (PIP, IALS, PSS).
+
+	Args:
+		rr_intervals: RR interval series in milliseconds.
+
+	Returns:
+		Dictionary with HRF metrics expressed in percentage/beat units.
+	"""
+	if rr_intervals.size < 5:
+		return {
+			"hrf_pip_pct": 0.0,
+			"hrf_ials": 0.0,
+			"hrf_pss_pct": 0.0,
+			"hrf_segment_count": 0.0,
+		}
+	diff = np.diff(rr_intervals.astype(float))
+	signs = np.sign(diff)
+	prev_sign = 0.0
+	inflections = 0
+	valid_transitions = 0
+	for sign in signs:
+		if sign == 0.0:
+			continue
+		if prev_sign != 0.0:
+			valid_transitions += 1
+			if sign != prev_sign:
+				inflections += 1
+		prev_sign = sign
+	pip = float(100.0 * inflections / valid_transitions) if valid_transitions > 0 else 0.0
+	segment_lengths: List[int] = []
+	current_sign = 0.0
+	current_run = 0
+	for sign in signs:
+		if sign == 0.0:
+			if current_run > 0:
+				segment_lengths.append(current_run + 1)
+				current_run = 0
+				current_sign = 0.0
+			continue
+		if sign == current_sign:
+			current_run += 1
+		else:
+			if current_run > 0:
+				segment_lengths.append(current_run + 1)
+			current_sign = sign
+			current_run = 1
+	if current_run > 0:
+		segment_lengths.append(current_run + 1)
+	if not segment_lengths:
+		return {
+			"hrf_pip_pct": pip,
+			"hrf_ials": 0.0,
+			"hrf_pss_pct": 0.0,
+			"hrf_segment_count": 0.0,
+		}
+	segments = np.asarray(segment_lengths, dtype=float)
+	mean_length = float(np.mean(segments))
+	ials = float(1.0 / mean_length) if mean_length > 0.0 else 0.0
+	pss = float(100.0 * np.sum(segments < 3.0) / segments.size)
+	return {
+		"hrf_pip_pct": pip,
+		"hrf_ials": ials,
+		"hrf_pss_pct": pss,
+		"hrf_segment_count": float(segments.size),
+	}
+
+
+def compute_phase_rectified_capacity(
+	rr_intervals: np.ndarray,
+	*,
+	scale: int = 2,
+) -> Dict[str, float]:
+	"""Compute deceleration and acceleration capacities using PRSA."""
+	if rr_intervals.size < (2 * scale + 1) or scale < 1:
+		return {
+			"deceleration_capacity": 0.0,
+			"acceleration_capacity": 0.0,
+			"dc_anchor_count": 0.0,
+			"ac_anchor_count": 0.0,
+		}
+	rr = rr_intervals.astype(float)
+	window = 2 * scale + 1
+	dc_segments: List[np.ndarray] = []
+	ac_segments: List[np.ndarray] = []
+	for idx in range(scale, rr.size - scale):
+		delta = rr[idx] - rr[idx - 1]
+		segment = rr[idx - scale : idx + scale + 1]
+		if segment.size != window:
+			continue
+		if delta > 0:
+			dc_segments.append(segment)
+		elif delta < 0:
+			ac_segments.append(segment)
+	if dc_segments:
+		dc_stack = np.vstack(dc_segments)
+		pre = dc_stack[:, :scale]
+		post = dc_stack[:, scale + 1 :]
+		dc = float(np.mean(post) - np.mean(pre))
+	else:
+		dc = 0.0
+	if ac_segments:
+		ac_stack = np.vstack(ac_segments)
+		pre = ac_stack[:, :scale]
+		post = ac_stack[:, scale + 1 :]
+		ac = float(np.mean(post) - np.mean(pre))
+	else:
+		ac = 0.0
+	return {
+		"deceleration_capacity": dc,
+		"acceleration_capacity": ac,
+		"dc_anchor_count": float(len(dc_segments)),
+		"ac_anchor_count": float(len(ac_segments)),
+	}
+
+
+def compute_symbolic_dynamics_metrics(
+	rr_intervals: np.ndarray,
+	*,
+	levels: int = 6,
+	pattern_length: int = 3,
+) -> Dict[str, float]:
+	"""Compute symbolic dynamics pattern percentages (0V, 1V, 2LV, 2UV)."""
+	if rr_intervals.size < pattern_length or levels < 2:
+		return {
+			"symbolic_0v_pct": 0.0,
+			"symbolic_1v_pct": 0.0,
+			"symbolic_2lv_pct": 0.0,
+			"symbolic_2uv_pct": 0.0,
+		}
+	rr = rr_intervals.astype(float)
+	min_rr = float(np.min(rr))
+	max_rr = float(np.max(rr))
+	if not np.isfinite(min_rr) or not np.isfinite(max_rr) or max_rr <= min_rr:
+		return {
+			"symbolic_0v_pct": 0.0,
+			"symbolic_1v_pct": 0.0,
+			"symbolic_2lv_pct": 0.0,
+			"symbolic_2uv_pct": 0.0,
+		}
+	bins = np.linspace(min_rr, max_rr, num=levels + 1)
+	symbols = np.digitize(rr, bins[1:-1], right=False)
+	total_patterns = rr.size - pattern_length + 1
+	if total_patterns <= 0:
+		return {
+			"symbolic_0v_pct": 0.0,
+			"symbolic_1v_pct": 0.0,
+			"symbolic_2lv_pct": 0.0,
+			"symbolic_2uv_pct": 0.0,
+		}
+	counts = {"0V": 0, "1V": 0, "2LV": 0, "2UV": 0}
+	for start in range(total_patterns):
+		pattern = symbols[start : start + pattern_length]
+		if np.all(pattern == pattern[0]):
+			counts["0V"] += 1
+			continue
+		if np.all(np.diff(pattern) > 0) or np.all(np.diff(pattern) < 0):
+			counts["2LV"] += 1
+			continue
+		if pattern[0] != pattern[1] and pattern[1] != pattern[2] and (
+			(pattern[0] < pattern[1] > pattern[2]) or (pattern[0] > pattern[1] < pattern[2])
+		):
+			counts["2UV"] += 1
+		else:
+			counts["1V"] += 1
+	return {
+		"symbolic_0v_pct": float(100.0 * counts["0V"] / total_patterns),
+		"symbolic_1v_pct": float(100.0 * counts["1V"] / total_patterns),
+		"symbolic_2lv_pct": float(100.0 * counts["2LV"] / total_patterns),
+		"symbolic_2uv_pct": float(100.0 * counts["2UV"] / total_patterns),
+	}
+
+
+def compute_permutation_entropy(
+	rr_intervals: np.ndarray,
+	*,
+	order: int = 3,
+	delay: int = 1,
+) -> Dict[str, float]:
+	"""Compute permutation entropy (absolute and normalized)."""
+	if order < 2 or delay < 1:
+		raise ValueError("order must be >=2 and delay must be >=1")
+	n = int(rr_intervals.size)
+	window = (order - 1) * delay
+	if n <= window:
+		return {"permutation_entropy": 0.0, "permutation_entropy_norm": 0.0}
+	data = rr_intervals.astype(float)
+	pattern_counts: Dict[Tuple[int, ...], int] = {}
+	for start in range(n - window):
+		indices = range(start, start + order * delay, delay)
+		window_values = data[list(indices)]
+		ranks = tuple(np.argsort(window_values, kind="mergesort"))
+		pattern_counts[ranks] = pattern_counts.get(ranks, 0) + 1
+	counts = np.array(list(pattern_counts.values()), dtype=float)
+	probabilities = counts / np.sum(counts)
+	entropy = float(-np.sum(probabilities * np.log(probabilities + 1e-12)))
+	max_entropy = math.log(math.factorial(order))
+	normalized = float(entropy / max_entropy) if max_entropy > 0 else 0.0
+	return {"permutation_entropy": entropy, "permutation_entropy_norm": normalized}
+
+
+def _mfdfa_segment_rms(profile: np.ndarray, scale: int, order: int) -> np.ndarray:
+	segments = profile.size // scale
+	if segments < 2:
+		return np.array([], dtype=float)
+	rms_values: List[float] = []
+	for start in range(0, segments * scale, scale):
+		segment = profile[start : start + scale]
+		x = np.arange(segment.size)
+		coeffs = np.polyfit(x, segment, order)
+		trend = np.polyval(coeffs, x)
+		detrended = segment - trend
+		rms_values.append(float(np.sqrt(np.mean(detrended**2))))
+	return np.asarray(rms_values, dtype=float)
+
+
+def _mfdfa_prepare_maps(
+	profile: np.ndarray,
+	scales: Sequence[int],
+	q_values: Sequence[float],
+	order: int,
+) -> Tuple[np.ndarray, Dict[float, np.ndarray]]:
+	log_scales: List[float] = []
+	fq_maps: Dict[float, List[float]] = {q: [] for q in q_values}
+	for scale in scales:
+		rms_values = _mfdfa_segment_rms(profile, scale, order)
+		if rms_values.size == 0:
+			continue
+		log_scales.append(math.log(scale))
+		for q in q_values:
+			if abs(q) < 1e-8:
+				value = float(math.exp(np.mean(np.log(rms_values + 1e-12))))
+			else:
+				rms_q = np.mean(rms_values**q)
+				value = float(rms_q ** (1.0 / q)) if rms_q > 0 else 0.0
+			fq_maps[q].append(math.log(value + 1e-12))
+	log_scales_arr = np.asarray(log_scales, dtype=float)
+	return log_scales_arr, {q: np.asarray(vals, dtype=float) for q, vals in fq_maps.items()}
+
+
+def _mfdfa_estimate_hurst(
+	log_scales: np.ndarray,
+	fq_maps: Dict[float, np.ndarray],
+) -> Tuple[np.ndarray, np.ndarray]:
+	if log_scales.size == 0:
+		return np.array([], dtype=float), np.array([], dtype=float)
+	q_list: List[float] = []
+	h_values: List[float] = []
+	for q, values in fq_maps.items():
+		if values.size != log_scales.size:
+			continue
+		slope, _ = np.polyfit(log_scales, values, 1)
+		q_list.append(float(q))
+		h_values.append(float(slope))
+	q_arr = np.asarray(q_list, dtype=float)
+	h_arr = np.asarray(h_values, dtype=float)
+	if q_arr.size <= 1:
+		return q_arr, h_arr
+	order = np.argsort(q_arr)
+	return q_arr[order], h_arr[order]
+
+
+def compute_mfdfa_metrics(
+	rr_intervals: np.ndarray,
+	*,
+	order: int = 1,
+	scales: Optional[Sequence[int]] = None,
+	q_values: Optional[Sequence[float]] = None,
+) -> Dict[str, float]:
+	"""Compute multifractal DFA spectrum width and related statistics."""
+	if rr_intervals.size < 128:
+		return {
+			"mfdfa_width": 0.0,
+			"mfdfa_alpha_min": 0.0,
+			"mfdfa_alpha_max": 0.0,
+			"mfdfa_hurst_mean": 0.0,
+		}
+	rr = rr_intervals.astype(float)
+	profile = np.cumsum(rr - np.mean(rr))
+	if scales is None:
+		max_scale = max(16, int(rr.size // 10))
+		scales = [s for s in range(16, max_scale, 8) if s > order + 1]
+	if not scales:
+		return {
+			"mfdfa_width": 0.0,
+			"mfdfa_alpha_min": 0.0,
+			"mfdfa_alpha_max": 0.0,
+			"mfdfa_hurst_mean": 0.0,
+		}
+	if q_values is None:
+		q_values = (-5.0, -3.0, -1.0, 0.0, 1.0, 3.0, 5.0)
+	log_scales, fq_maps = _mfdfa_prepare_maps(profile, scales, q_values, order)
+	if log_scales.size == 0:
+		return {
+			"mfdfa_width": 0.0,
+			"mfdfa_alpha_min": 0.0,
+			"mfdfa_alpha_max": 0.0,
+			"mfdfa_hurst_mean": 0.0,
+		}
+	q_arr, h_arr = _mfdfa_estimate_hurst(log_scales, fq_maps)
+	if h_arr.size == 0:
+		return {
+			"mfdfa_width": 0.0,
+			"mfdfa_alpha_min": 0.0,
+			"mfdfa_alpha_max": 0.0,
+			"mfdfa_hurst_mean": 0.0,
+		}
+	tau = q_arr * h_arr - 1.0
+	alpha = np.gradient(tau, q_arr, edge_order=1) + h_arr
+	f_alpha = q_arr * alpha - tau
+	alpha_min = float(np.min(alpha))
+	alpha_max = float(np.max(alpha))
+	width = float(alpha_max - alpha_min)
+	return {
+		"mfdfa_width": width,
+		"mfdfa_alpha_min": alpha_min,
+		"mfdfa_alpha_max": alpha_max,
+		"mfdfa_hurst_mean": float(np.mean(h_arr)),
+	}
+
+
+def _run_lengths(sequence: Iterable[int]) -> List[int]:
+	lengths: List[int] = []
+	current = 0
+	for item in sequence:
+		if item:
+			current += 1
+		elif current > 0:
+			lengths.append(current)
+			current = 0
+	if current > 0:
+		lengths.append(current)
+	return lengths
+
+
+def compute_rqa_metrics(
+	rr_intervals: np.ndarray,
+	*,
+	embedding_dim: int = 2,
+	delay: int = 1,
+	radius: Optional[float] = None,
+	min_diag: int = 2,
+	min_vert: int = 2,
+) -> Dict[str, float]:
+	"""Compute recurrence quantification analysis metrics."""
+	if embedding_dim < 1 or delay < 1:
+		raise ValueError("embedding_dim must be >=1 and delay must be >=1")
+	n = int(rr_intervals.size)
+	required = (embedding_dim - 1) * delay + 1
+	if n < required or n < 32:
+		return {
+			"rqa_rr": 0.0,
+			"rqa_det": 0.0,
+			"rqa_lam": 0.0,
+			"rqa_lmax": 0.0,
+		}
+	rr = rr_intervals.astype(float)
+	embedded = []
+	for start in range(0, n - required + 1):
+		indices = [start + i * delay for i in range(embedding_dim)]
+		embedded.append(rr[indices])
+	matrix = np.asarray(embedded, dtype=float)
+	if matrix.shape[0] < 2:
+		return {
+			"rqa_rr": 0.0,
+			"rqa_det": 0.0,
+			"rqa_lam": 0.0,
+			"rqa_lmax": 0.0,
+		}
+	diff = matrix[:, None, :] - matrix[None, :, :]
+	distances = np.sqrt(np.sum(diff**2, axis=2))
+	if radius is None:
+		std = float(np.std(distances))
+		radius = 0.1 * std if std > 0 else 1e-6
+	recur = (distances <= radius).astype(int)
+	np.fill_diagonal(recur, 0)
+	total_points = float(np.sum(recur))
+	if total_points <= 0:
+		return {
+			"rqa_rr": 0.0,
+			"rqa_det": 0.0,
+			"rqa_lam": 0.0,
+			"rqa_lmax": 0.0,
+		}
+	N = recur.shape[0]
+	rqa_rr = float(total_points / (N * N))
+	diag_lengths: List[int] = []
+	for offset in range(-(N - 1), N):
+		diag = np.diag(recur, k=offset)
+		diag_lengths.extend(_run_lengths(diag))
+	det_lengths = [length for length in diag_lengths if length >= min_diag]
+	det_points = float(sum(det_lengths))
+	rqa_det = float(det_points / total_points) if total_points > 0 else 0.0
+	lmax = float(max(det_lengths)) if det_lengths else 0.0
+	lam_lengths: List[int] = []
+	for col in recur.T:
+		lam_lengths.extend(_run_lengths(col))
+	lam_selected = [length for length in lam_lengths if length >= min_vert]
+	lam_points = float(sum(lam_selected))
+	rqa_lam = float(lam_points / total_points) if total_points > 0 else 0.0
+	return {
+		"rqa_rr": rqa_rr,
+		"rqa_det": rqa_det,
+		"rqa_lam": rqa_lam,
+		"rqa_lmax": lmax,
+	}
+
+
+def compute_frequency_domain_entropy(
+	rr_intervals: np.ndarray,
+	*,
+	sampling_rate: float = 4.0,
+	method: str = "welch",
+) -> Dict[str, float]:
+	"""Compute entropy-based frequency-domain HRV metrics."""
+	freqs, psd = psd_curve(rr_intervals, sampling_rate=sampling_rate, method=method)
+	if freqs.size == 0:
+		return {
+			"entropy_lf": 0.0,
+			"entropy_hf": 0.0,
+			"entropy_total": 0.0,
+			"entropy_lf_hf_ratio": 0.0,
+		}
+
+	def _band_entropy(mask: np.ndarray) -> float:
+		selected = psd[mask]
+		if selected.size <= 1:
+			return 0.0
+		prob = selected / np.sum(selected)
+		entropy = -np.sum(prob * np.log(prob + 1e-12))
+		return float(entropy / math.log(selected.size))
+
+	lf_mask = (freqs >= 0.04) & (freqs < 0.15)
+	hf_mask = (freqs >= 0.15) & (freqs <= 0.4)
+	valid_mask = freqs > 0.0
+	total_entropy = _band_entropy(valid_mask)
+	lf_entropy = _band_entropy(lf_mask)
+	hf_entropy = _band_entropy(hf_mask)
+	ratio = float(lf_entropy / hf_entropy) if hf_entropy > 0 else 0.0
+	return {
+		"entropy_lf": lf_entropy,
+		"entropy_hf": hf_entropy,
+		"entropy_total": total_entropy,
+		"entropy_lf_hf_ratio": ratio,
+	}
+
+
+@dataclass(frozen=True, slots=True)
+class MasterCurveParams:
+	"""Parameters for heart-rate normalization of RMSSD."""
+
+	amplitude: float = 44.0
+	decay: float = 0.033
+	offset: float = 5.0
+	hr_reference: float = 50.0
+
+
+def compute_hr_normalized_metrics(
+	mean_hr_bpm: float,
+	rmssd_ms: float,
+	*,
+	params: MasterCurveParams = MasterCurveParams(),
+) -> Dict[str, float]:
+	"""Normalize RMSSD against a master curve to reduce heart-rate dependence."""
+	if not np.isfinite(mean_hr_bpm) or mean_hr_bpm <= 0.0 or not np.isfinite(rmssd_ms) or rmssd_ms < 0.0:
+		return {
+			"rmssd_master_expected": 0.0,
+			"rmssd_master_ratio": 0.0,
+			"rmssd_master_residual": 0.0,
+		}
+	adjusted_hr = float(mean_hr_bpm - params.hr_reference)
+	expected = params.amplitude * math.exp(-params.decay * adjusted_hr) + params.offset
+	if expected <= 0.0:
+		return {
+			"rmssd_master_expected": expected,
+			"rmssd_master_ratio": 0.0,
+			"rmssd_master_residual": rmssd_ms,
+		}
+	ratio = float(rmssd_ms / expected)
+	residual = float(rmssd_ms - expected)
+	return {
+		"rmssd_master_expected": float(expected),
+		"rmssd_master_ratio": ratio,
+		"rmssd_master_residual": residual,
+	}
 
 
 def _relative_seconds_from_timestamps(timestamps: pd.Series) -> np.ndarray:
