@@ -6,6 +6,18 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 import streamlit as st
+import os
+
+# Windows console safety to mitigate Colorama/Click re-entrancy during shutdown
+if os.name == "nt":
+	try:
+		# Disable colored console to avoid nested writes on shutdown
+		os.environ.setdefault("CLICOLOR", "0")
+		os.environ.setdefault("NO_COLOR", "1")
+		import colorama  # type: ignore
+		colorama.just_fix_windows_console()
+	except Exception:
+		pass
 
 from echarts_component import EChartsConfig, render_echarts
 from export_utils import ExportConfiguration, ExportScope, build_markdown_report
