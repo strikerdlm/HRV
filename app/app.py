@@ -768,11 +768,21 @@ def main() -> None:
 	dataset_items = list(datasets_all.items())
 	datasets = dict(dataset_items[: int(max_datasets)])
 
-	# Apply cleaning
-	if apply_clean:
-		for name, up in datasets.items():
-			if up.rr_ms.size == 0:
-				continue
+	# Cleaning + metadata with immediate progress feedback
+	total = max(1, len(datasets))
+	pb_clean = st.progress(
+		0,
+		text="Cleaning datasets..." if apply_clean else "Preparing datasets...",
+	)
+	logger.info("Starting %s of %d dataset(s)", "cleaning" if apply_clean else "preparation", total)
+	meta_rows = []
+	completed = 0
+	for name, up in datasets.items():
+		if up.rr_ms.size == 0:
+			completed += 1
+			pb_clean.progress(min(100, int(completed * 100 / total)))
+			continue
+		if apply_clean:
 			cleaned, valid_mask, summary = clean_rr_intervals(
 				up.rr_ms,
 				method=str(method),
@@ -789,14 +799,6 @@ def main() -> None:
 					up.df.loc[: n - 1, "artifact_flag"] = ~valid_mask[:n]
 				else:
 					up.df["artifact_flag"] = False
-	# Compute reusable results with progress
-	meta_rows = []
-	pb_clean = st.progress(0, text="Preparing datasets..." if not apply_clean else "Cleaning datasets...")
-	total = max(1, len(datasets))
-	done = 0
-	for name, up in datasets.items():
-		if up.rr_ms.size == 0:
-			continue
 		meta_rows.append(
 			{
 				"source": name,
@@ -806,8 +808,10 @@ def main() -> None:
 				"flagged_pct": float(up.qc_summary.get("flagged_pct", 0.0)) if (apply_clean and up.qc_summary) else 0.0,
 			}
 		)
-		done += 1
-		pb_clean.progress(min(100, int(done * 100 / total)))
+		completed += 1
+		pb_clean.progress(min(100, int(completed * 100 / total)))
+	logger.info("Finished %s of %d dataset(s)", "cleaning" if apply_clean else "preparation", total)
+
 	windowed_all: List[pd.DataFrame] = []
 	pb_win = st.progress(0, text="Computing windowed metrics...")
 	total_win = max(1, len(datasets))
