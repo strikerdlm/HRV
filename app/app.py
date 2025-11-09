@@ -873,6 +873,86 @@ def _scan_lag_correlations(
 	return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
 
 
+OPEN_METEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/era5"
+BOGOTA = {"latitude": 4.7110, "longitude": -74.0721}
+
+@st.cache_data(ttl=1800)
+def fetch_open_meteo_hourly(start_date: str, end_date: str, *, latitude: float = BOGOTA["latitude"], longitude: float = BOGOTA["longitude"]) -> pd.DataFrame:
+	params = {
+		"latitude": latitude,
+		"longitude": longitude,
+		"start_date": start_date,
+		"end_date": end_date,
+		"hourly": ",".join(["temperature_2m", "relative_humidity_2m", "surface_pressure"]),
+		"timezone": "UTC",
+	}
+	r = requests.get(OPEN_METEO_ARCHIVE, params=params, timeout=20)
+	r.raise_for_status()
+	payload = r.json()
+	hourly = payload.get("hourly", {})
+	if not hourly:
+		return pd.DataFrame()
+	df = pd.DataFrame(hourly)
+	if "time" in df.columns:
+		df["time"] = pd.to_datetime(df["time"], errors="coerce", utc=True)
+		df = df.rename(columns={
+			"time": "weather_time",
+			"temperature_2m": "temp_c",
+			"relative_humidity_2m": "rh_pct",
+			"surface_pressure": "pressure_hpa",
+		})
+	return df
+
+
+def fdr_bh(pvals: np.ndarray, alpha: float = 0.05) -> Tuple[np.ndarray, float]:
+	p = np.asarray(pvals, dtype=float)
+	m = p.size
+	if m == 0:
+		return p, alpha
+	order = np.argsort(p)
+	ordered = p[order]
+	thresholds = alpha * (np.arange(1, m + 1) / m)
+	reject = ordered <= thresholds
+	if not reject.any():
+		q = np.full_like(p, fill_value=np.nan, dtype=float)
+		return q, alpha
+	kmax = np.where(reject)[0].max()
+	crit_p = ordered[kmax]
+	# q-values (Benjamini–Hochberg adjusted p) monotone
+	q = np.empty_like(ordered)
+	min_coeff = 1.0
+	for i in range(m - 1, -1, -1):
+		min_coeff = min(min_coeff, m * ordered[i] / (i + 1))
+		q[i] = min_coeff
+	q = np.minimum(1.0, q)
+	# revert to original order
+	q_full = np.empty_like(q)
+	q_full[order] = q
+	return q_full, crit_p
+
+
+def partial_pearson_r_p(x: np.ndarray, y: np.ndarray, cov: Optional[np.ndarray]) -> Tuple[float, float, int]:
+	x = np.asarray(x, dtype=float)
+	y = np.asarray(y, dtype=float)
+	mask = np.isfinite(x) & np.isfinite(y)
+	if cov is not None and cov.size > 0:
+		cov = np.asarray(cov, dtype=float)
+		mask = mask & np.all(np.isfinite(cov), axis=1)
+	x = x[mask]
+	y = y[mask]
+	if cov is not None and cov.size > 0:
+		Z = cov[mask]
+		Z = np.column_stack([np.ones(Z.shape[0]), Z])  # add intercept
+		# residualize x and y on covariates (including intercept)
+		beta_x, *_ = np.linalg.lstsq(Z, x, rcond=None)
+		x_res = x - Z @ beta_x
+		beta_y, *_ = np.linalg.lstsq(Z, y, rcond=None)
+		y_res = y - Z @ beta_y
+		return _pearson_r_p(x_res, y_res)
+	else:
+		return _pearson_r_p(x, y)
+
+
 def main() -> None:
 	logger: logging.Logger = setup_console_logging(logging.INFO)
 	# Streamlit detailed tracebacks in the UI and console
