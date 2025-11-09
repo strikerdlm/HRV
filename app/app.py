@@ -726,7 +726,6 @@ def main() -> None:
 			background: transparent;
 			box-shadow: none;
 		}
-		header[data-testid="stHeader"] [data-testid="stToolbar"] { display: none; }
 		footer { visibility: hidden; }
 		.stApp > main {
 			padding-top: clamp(1rem, 4vh, 2.5rem);
