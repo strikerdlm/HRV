@@ -3645,12 +3645,12 @@ def _echarts_gauge(
 		"series": [
 			{
 				"type": "gauge",
-				"startAngle": 210,
-				"endAngle": -30,
+				"startAngle": 215,
+				"endAngle": -35,
 				"min": float(min_val),
 				"max": float(max_val),
-				"center": ["50%", "60%"],
-				"radius": "88%",
+				"center": ["50%", "64%"],
+				"radius": "90%",
 				"splitNumber": 8,
 				"progress": {"show": False},
 				"axisLine": {
@@ -3693,12 +3693,12 @@ def _echarts_gauge(
 			},
 			{
 				"type": "gauge",
-				"startAngle": 210,
-				"endAngle": -30,
+				"startAngle": 215,
+				"endAngle": -35,
 				"min": float(min_val),
 				"max": float(max_val),
-				"radius": "72%",
-				"center": ["50%", "60%"],
+				"radius": "74%",
+				"center": ["50%", "64%"],
 				"pointer": {"show": False},
 				"progress": {"show": False},
 				"axisLine": {"show": False},
