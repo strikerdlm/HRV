@@ -267,6 +267,42 @@ def _cached_spectrogram(rr: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndar
 	return spectrogram_rr(rr, sampling_rate=4.0)
 
 
+SPACE_WEATHER_MAX_DAYS = 30
+
+
+def _space_weather_state() -> Dict[str, Any]:
+	state = st.session_state.setdefault(
+		"space_weather_state",
+		{
+			"loaded": False,
+			"kp_df": pd.DataFrame(),
+			"kp_error": "",
+			"flux_df": pd.DataFrame(),
+			"flux_error": "",
+			"last_updated": None,
+		},
+	)
+	return state
+
+
+def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
+	state["loaded"] = False
+	state["kp_df"] = pd.DataFrame()
+	state["kp_error"] = ""
+	state["flux_df"] = pd.DataFrame()
+	state["flux_error"] = ""
+	try:
+		state["kp_df"] = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
+	except (requests.RequestException, ValueError) as exc:
+		state["kp_error"] = f"Failed to retrieve K-index data: {exc}"
+	try:
+		state["flux_df"] = get_swpc_solar_radio_flux()
+	except (requests.RequestException, ValueError) as exc:
+		state["flux_error"] = f"Failed to retrieve solar radio flux: {exc}"
+	state["last_updated"] = pd.Timestamp.utcnow()
+	state["loaded"] = True
+
+
 def _request_interpretation_with_progress(
 	container: st.delta_generator.DeltaGenerator,
 	analysis_payload: str,
@@ -1917,202 +1953,235 @@ def main() -> None:
 		)
 	with tab_space_weather:
 		st.subheader("Space Weather (NOAA SWPC)")
-		col_sw_kp, col_sw_flux = st.columns(2)
+		space_state = _space_weather_state()
+		fetch_clicked = st.button("Fetch space weather data", key="fetch_space_weather")
+		if fetch_clicked:
+			with st.spinner("Fetching NOAA SWPC datasets..."):
+				_fetch_space_weather_datasets(space_state)
+			last_fetch = space_state.get("last_updated")
+			if isinstance(last_fetch, pd.Timestamp):
+				st.success(f"Space weather datasets updated at {last_fetch.strftime('%Y-%m-%d %H:%M UTC')}.")
+			else:
+				st.success("Space weather datasets updated.")
+		if not space_state.get("loaded"):
+			st.info("Click 'Fetch space weather data' to populate NOAA SWPC metrics.")
+		else:
+			last_fetch = space_state.get("last_updated")
+			if isinstance(last_fetch, pd.Timestamp):
+				st.caption(f"Last fetched: {last_fetch.strftime('%Y-%m-%d %H:%M UTC')}")
 
-		kp_df = pd.DataFrame()
-		kp_error = False
-		with col_sw_kp:
-			st.markdown("#### Planetary K-index (3-hour cadence)")
-			kp_history_days = st.slider("Kp history (days)", min_value=3, max_value=30, value=14, step=1, key="kp_days")
-			try:
-				kp_df = get_swpc_kp_index(days=int(kp_history_days))
-			except requests.RequestException as exc:
-				st.error(f"Failed to retrieve K-index data: {exc}")
-				kp_error = True
-			except ValueError as exc:
-				st.error(f"Unexpected response for K-index: {exc}")
-				kp_error = True
-			if not kp_error:
-				if not kp_df.empty and "kp_index" in kp_df.columns:
-					kp_numeric = kp_df.dropna(subset=["kp_index"])
-					if not kp_numeric.empty:
-						latest_kp = float(kp_numeric["kp_index"].iloc[-1])
-						latest_time = kp_numeric["time_tag"].iloc[-1] if "time_tag" in kp_numeric.columns else None
-						delta_kp = float(kp_numeric["kp_index"].iloc[-1] - kp_numeric["kp_index"].iloc[-2]) if kp_numeric.shape[0] >= 2 else 0.0
-						st.metric("Latest Kp index", f"{latest_kp:.1f}", f"{delta_kp:+.1f}", help=f"UTC: {latest_time}")
-						if "time_tag" in kp_numeric.columns:
-							default_win = min(16, max(4, int(kp_numeric.shape[0] // 10)))
-							kp_win = st.number_input(
-								"Rolling CI window (points)",
-								min_value=4,
-								max_value=int(max(8, kp_numeric.shape[0])),
-								value=int(default_win),
-								step=1,
-								key="kp_win",
-							)
-							times = kp_numeric["time_tag"].tolist()
-							vals = kp_numeric["kp_index"].astype(float).reset_index(drop=True)
-							minp = max(3, int(kp_win // 2))
-							roll_mean = vals.rolling(int(kp_win), min_periods=minp).mean()
-							roll_std = vals.rolling(int(kp_win), min_periods=minp).std(ddof=1)
-							roll_n = vals.rolling(int(kp_win), min_periods=minp).count()
-							se = roll_std / np.sqrt(roll_n)
-							low = roll_mean - 1.96 * se
-							high = roll_mean + 1.96 * se
-							_echarts_time_with_ci(times, vals.tolist(), low.tolist(), high.tolist(), title="Kp with rolling 95% CI", y_name="Kp", series_name="Kp")
-						st.caption("Kp summarises geomagnetic disturbance (0–9). The chart shows trends across the selected history; the shaded band is the 95% rolling confidence interval (mean ±1.96·SE).")
-					else:
-						st.info("Kp values are not available in the NOAA feed.")
+			col_sw_kp, col_sw_flux = st.columns(2)
+
+			kp_df_full = space_state.get("kp_df", pd.DataFrame())
+			kp_error_msg = space_state.get("kp_error", "")
+			flux_df_full = space_state.get("flux_df", pd.DataFrame())
+			flux_error_msg = space_state.get("flux_error", "")
+			kp_df = pd.DataFrame()
+			kp_error = bool(kp_error_msg)
+			with col_sw_kp:
+				st.markdown("#### Planetary K-index (3-hour cadence)")
+				kp_history_days = st.slider(
+					"Kp history (days)",
+					min_value=3,
+					max_value=30,
+					value=14,
+					step=1,
+					key="kp_days",
+				)
+				if kp_error_msg:
+					st.error(kp_error_msg)
 				else:
-					st.info("Kp data currently unavailable.")
-
-		flux_df = pd.DataFrame()
-		flux_error = False
-		with col_sw_flux:
-			st.markdown("#### Solar Radio Flux (F10.7 cm)")
-			flux_history_days = st.slider("F10.7 history (days)", min_value=7, max_value=90, value=30, step=1, key="flux_days")
-			try:
-				flux_df = get_swpc_solar_radio_flux()
-			except requests.RequestException as exc:
-				st.error(f"Failed to retrieve solar radio flux: {exc}")
-				flux_error = True
-			except ValueError as exc:
-				st.error(f"Unexpected response for solar radio flux: {exc}")
-				flux_error = True
-			if not flux_error:
-				if not flux_df.empty:
-					if "time_tag" in flux_df.columns:
-						cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(flux_history_days))
-						flux_df = flux_df[pd.to_datetime(flux_df["time_tag"], utc=True, errors="coerce") >= cutoff]
-					numeric_flux_cols = [col for col in flux_df.columns if flux_df[col].dtype.kind in "fcid"]
-					value_candidates = [
-						col
-						for col in numeric_flux_cols
-						if any(keyword in col.lower() for keyword in ("flux", "observed", "adjusted", "predicted", "value"))
-					]
-					value_col = value_candidates[0] if value_candidates else (numeric_flux_cols[0] if numeric_flux_cols else None)
-					if value_col:
-						flux_numeric = flux_df.dropna(subset=[value_col])
-						if not flux_numeric.empty:
-							latest_flux = float(flux_numeric[value_col].iloc[-1])
-							latest_time = flux_numeric["time_tag"].iloc[-1] if "time_tag" in flux_numeric.columns else None
-							delta_flux = float(latest_flux - flux_numeric[value_col].iloc[-2]) if flux_numeric.shape[0] >= 2 else 0.0
-							st.metric("Latest F10.7 flux", f"{latest_flux:.1f}", f"{delta_flux:+.1f}", help=f"UTC: {latest_time}")
-							if "time_tag" in flux_numeric.columns:
-								f_win = st.number_input(
+					kp_df = kp_df_full.copy()
+					if not kp_df.empty and "time_tag" in kp_df.columns:
+						time_series = pd.to_datetime(kp_df["time_tag"], errors="coerce", utc=True)
+						cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(kp_history_days))
+						mask = time_series >= cutoff
+						kp_df = kp_df.loc[mask].copy()
+						kp_df["time_tag"] = time_series[mask]
+					if not kp_df.empty and "kp_index" in kp_df.columns:
+						kp_numeric = kp_df.dropna(subset=["kp_index"])
+						if not kp_numeric.empty:
+							latest_kp = float(kp_numeric["kp_index"].iloc[-1])
+							latest_time = kp_numeric["time_tag"].iloc[-1] if "time_tag" in kp_numeric.columns else None
+							delta_kp = float(kp_numeric["kp_index"].iloc[-1] - kp_numeric["kp_index"].iloc[-2]) if kp_numeric.shape[0] >= 2 else 0.0
+							st.metric("Latest Kp index", f"{latest_kp:.1f}", f"{delta_kp:+.1f}", help=f"UTC: {latest_time}")
+							if "time_tag" in kp_numeric.columns:
+								default_win = min(16, max(4, int(kp_numeric.shape[0] // 10)))
+								kp_win = st.number_input(
 									"Rolling CI window (points)",
-									min_value=5,
-									max_value=int(max(10, flux_numeric.shape[0])),
-									value=int(min(24, flux_numeric.shape[0])),
+									min_value=4,
+									max_value=int(max(8, kp_numeric.shape[0])),
+									value=int(default_win),
 									step=1,
-									key="f107_win",
+									key="kp_win",
 								)
-								times = pd.to_datetime(flux_numeric["time_tag"], utc=True, errors="coerce").tolist()
-								vals = flux_numeric[value_col].astype(float).reset_index(drop=True)
-								minp = max(3, int(f_win // 2))
-								roll_mean = vals.rolling(int(f_win), min_periods=minp).mean()
-								roll_std = vals.rolling(int(f_win), min_periods=minp).std(ddof=1)
-								roll_n = vals.rolling(int(f_win), min_periods=minp).count()
+								times = kp_numeric["time_tag"].tolist()
+								vals = kp_numeric["kp_index"].astype(float).reset_index(drop=True)
+								minp = max(3, int(kp_win // 2))
+								roll_mean = vals.rolling(int(kp_win), min_periods=minp).mean()
+								roll_std = vals.rolling(int(kp_win), min_periods=minp).std(ddof=1)
+								roll_n = vals.rolling(int(kp_win), min_periods=minp).count()
 								se = roll_std / np.sqrt(roll_n)
 								low = roll_mean - 1.96 * se
 								high = roll_mean + 1.96 * se
-								_echarts_time_with_ci(times, vals.tolist(), low.tolist(), high.tolist(), title="F10.7 with rolling 95% CI", y_name="sfu", series_name="F10.7")
-							st.caption("F10.7 (solar radio flux) reflects solar EUV output. Higher readings indicate a more excited sun, which can modify ionospheric conditions and HF communications.")
+								_echarts_time_with_ci(times, vals.tolist(), low.tolist(), high.tolist(), title="Kp with rolling 95% CI", y_name="Kp", series_name="Kp")
+							st.caption("Kp summarises geomagnetic disturbance (0–9). The chart shows trends across the selected history; the shaded band is the 95% rolling confidence interval (mean ±1.96·SE).")
 						else:
-							st.info("Solar radio flux values are not available in the NOAA feed.")
+							st.info("Kp values are not available in the NOAA feed.")
 					else:
-						st.info("Solar radio flux dataset does not contain numeric values to display.")
+						st.info("Kp data currently unavailable.")
+
+			flux_df = pd.DataFrame()
+			with col_sw_flux:
+				st.markdown("#### Solar Radio Flux (F10.7 cm)")
+				flux_history_days = st.slider(
+					"F10.7 history (days)",
+					min_value=7,
+					max_value=90,
+					value=30,
+					step=1,
+					key="flux_days",
+				)
+				if flux_error_msg:
+					st.error(flux_error_msg)
 				else:
-					st.info("Solar radio flux data currently unavailable.")
-
-		st.markdown("#### Inspect an additional NOAA dataset")
-		selected_dataset = st.selectbox("NOAA endpoint", list(SWPC_EXTRA_DATASETS.keys()))
-		if selected_dataset:
-			with st.expander(f"{selected_dataset} (latest rows)"):
-				try:
-					extra_df = _fetch_swpc_dataset(SWPC_EXTRA_DATASETS[selected_dataset])
-				except requests.RequestException as exc:
-					st.error(f"Failed to retrieve {selected_dataset.lower()}: {exc}")
-				except ValueError as exc:
-					st.error(f"Unexpected response for {selected_dataset.lower()}: {exc}")
-				else:
-					if extra_df.empty:
-						st.info("No data returned for this feed.")
-					else:
-						st.dataframe(extra_df.tail(100))
-
-		with st.expander("SpaceWeatherLive snapshot (scrape + OpenAI fallback)"):
-			if st.button("Fetch SpaceWeatherLive data", key="btn_fetch_swl"):
-				snap = None
-				try:
-					snap = fetch_spaceweatherlive_snapshot()
-				except Exception as exc:
-					st.warning(f"Direct scrape failed ({exc}); attempting OpenAI fallback…")
-					try:
-						home_html = requests.get("https://www.spaceweatherlive.com/", timeout=12).text
-						solar_html = requests.get("https://www.spaceweatherlive.com/en/solar-activity.html", timeout=12).text
-						snap = extract_spaceweather_with_openai({"home": home_html, "solar_activity": solar_html})
-					except Exception as e2:
-						snap = None
-						st.error(f"OpenAI fallback failed: {e2}")
-				if snap:
-					col_a, col_b, col_c, col_d = st.columns(4)
-					with col_a:
-						val = snap.solar_wind_speed_kms
-						if val is not None:
-							st.metric("Solar wind speed", f"{val:.0f} km/s")
-						else:
-							st.caption("Solar wind speed: n/a")
-					with col_b:
-						val = snap.solar_wind_density_pcc
-						if val is not None:
-							st.metric("Solar wind density", f"{val:.1f} p/cm³")
-						else:
-							st.caption("Solar wind density: n/a")
-					with col_c:
-						val = snap.imf_bt_nt
-						if val is not None:
-							st.metric("IMF Bt", f"{val:.1f} nT")
-						else:
-							st.caption("IMF Bt: n/a")
-					with col_d:
-						val = snap.imf_bz_nt
-						if val is not None:
-							st.metric("IMF Bz", f"{val:.1f} nT")
-						else:
-							st.caption("IMF Bz: n/a")
-
-					col_e, col_f, col_g = st.columns(3)
-					with col_e:
-						if snap.sunspot_number is not None:
-							st.metric("Sunspot number", f"{int(snap.sunspot_number)}")
-						else:
-							st.caption("Sunspot number: n/a")
-					with col_f:
-						if snap.f107_flux is not None:
-							st.metric("F10.7 cm flux", f"{snap.f107_flux:.1f} sfu")
-						else:
-							st.caption("F10.7 cm flux: n/a")
-					with col_g:
-						fp = snap.flare_probabilities
-						if any(val is not None for val in (fp.c_class_pct, fp.m_class_pct, fp.x_class_pct)):
-							st.metric(
-								"Flare probability (C/M/X)",
-								f"{(fp.c_class_pct or 0):.0f}% / {(fp.m_class_pct or 0):.0f}% / {(fp.x_class_pct or 0):.0f}%",
-							)
-						else:
-							st.caption("Flare probabilities: n/a")
-
-					if snap.kp_forecast:
-						kp_rows = [
-							{"Day": k.day_label, "Min Kp": k.min_kp, "Max Kp": k.max_kp}
-							for k in snap.kp_forecast
+					flux_df = flux_df_full.copy()
+					if not flux_df.empty and "time_tag" in flux_df.columns:
+						time_series = pd.to_datetime(flux_df["time_tag"], utc=True, errors="coerce")
+						cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(flux_history_days))
+						mask = time_series >= cutoff
+						flux_df = flux_df.loc[mask].copy()
+						flux_df["time_tag"] = time_series[mask]
+					if not flux_df.empty:
+						numeric_flux_cols = [col for col in flux_df.columns if flux_df[col].dtype.kind in "fcid"]
+						value_candidates = [
+							col
+							for col in numeric_flux_cols
+							if any(keyword in col.lower() for keyword in ("flux", "observed", "adjusted", "predicted", "value"))
 						]
-						kp_df_view = pd.DataFrame(kp_rows)
-						st.dataframe(kp_df_view)
-					st.caption("Source: SpaceWeatherLive — scraped UI snapshot; if scraping failed, values were extracted by OpenAI from the page HTML.")
-				else:
-					st.info("No SpaceWeatherLive data available.")
+						value_col = value_candidates[0] if value_candidates else (numeric_flux_cols[0] if numeric_flux_cols else None)
+						if value_col:
+							flux_numeric = flux_df.dropna(subset=[value_col])
+							if not flux_numeric.empty:
+								latest_flux = float(flux_numeric[value_col].iloc[-1])
+								latest_time = flux_numeric["time_tag"].iloc[-1] if "time_tag" in flux_numeric.columns else None
+								delta_flux = float(latest_flux - flux_numeric[value_col].iloc[-2]) if flux_numeric.shape[0] >= 2 else 0.0
+								st.metric("Latest F10.7 flux", f"{latest_flux:.1f}", f"{delta_flux:+.1f}", help=f"UTC: {latest_time}")
+								if "time_tag" in flux_numeric.columns:
+									f_win = st.number_input(
+										"Rolling CI window (points)",
+										min_value=5,
+										max_value=int(max(10, flux_numeric.shape[0])),
+										value=int(min(24, flux_numeric.shape[0])),
+										step=1,
+										key="f107_win",
+									)
+									times = pd.to_datetime(flux_numeric["time_tag"], utc=True, errors="coerce").tolist()
+									vals = flux_numeric[value_col].astype(float).reset_index(drop=True)
+									minp = max(3, int(f_win // 2))
+									roll_mean = vals.rolling(int(f_win), min_periods=minp).mean()
+									roll_std = vals.rolling(int(f_win), min_periods=minp).std(ddof=1)
+									roll_n = vals.rolling(int(f_win), min_periods=minp).count()
+									se = roll_std / np.sqrt(roll_n)
+									low = roll_mean - 1.96 * se
+									high = roll_mean + 1.96 * se
+									_echarts_time_with_ci(times, vals.tolist(), low.tolist(), high.tolist(), title="F10.7 with rolling 95% CI", y_name="sfu", series_name="F10.7")
+								st.caption("F10.7 (solar radio flux) reflects solar EUV output. Higher readings indicate a more excited sun, which can modify ionospheric conditions and HF communications.")
+							else:
+								st.info("Solar radio flux values are not available in the NOAA feed.")
+						else:
+							st.info("Solar radio flux dataset does not contain numeric values to display.")
+					else:
+						st.info("Solar radio flux data currently unavailable.")
+
+			st.markdown("#### Inspect an additional NOAA dataset")
+			selected_dataset = st.selectbox("NOAA endpoint", list(SWPC_EXTRA_DATASETS.keys()))
+			if selected_dataset:
+				with st.expander(f"{selected_dataset} (latest rows)"):
+					try:
+						extra_df = _fetch_swpc_dataset(SWPC_EXTRA_DATASETS[selected_dataset])
+					except requests.RequestException as exc:
+						st.error(f"Failed to retrieve {selected_dataset.lower()}: {exc}")
+					except ValueError as exc:
+						st.error(f"Unexpected response for {selected_dataset.lower()}: {exc}")
+					else:
+						if extra_df.empty:
+							st.info("No data returned for this feed.")
+						else:
+							st.dataframe(extra_df.tail(100))
+
+			with st.expander("SpaceWeatherLive snapshot (scrape + OpenAI fallback)"):
+				if st.button("Fetch SpaceWeatherLive data", key="btn_fetch_swl"):
+					snap = None
+					try:
+						snap = fetch_spaceweatherlive_snapshot()
+					except Exception as exc:
+						st.warning(f"Direct scrape failed ({exc}); attempting OpenAI fallback…")
+						try:
+							home_html = requests.get("https://www.spaceweatherlive.com/", timeout=12).text
+							solar_html = requests.get("https://www.spaceweatherlive.com/en/solar-activity.html", timeout=12).text
+							snap = extract_spaceweather_with_openai({"home": home_html, "solar_activity": solar_html})
+						except Exception as e2:
+							snap = None
+							st.error(f"OpenAI fallback failed: {e2}")
+					if snap:
+						col_a, col_b, col_c, col_d = st.columns(4)
+						with col_a:
+							val = snap.solar_wind_speed_kms
+							if val is not None:
+								st.metric("Solar wind speed", f"{val:.0f} km/s")
+							else:
+								st.caption("Solar wind speed: n/a")
+						with col_b:
+							val = snap.solar_wind_density_pcc
+							if val is not None:
+								st.metric("Solar wind density", f"{val:.1f} p/cm³")
+							else:
+								st.caption("Solar wind density: n/a")
+						with col_c:
+							val = snap.imf_bt_nt
+							if val is not None:
+								st.metric("IMF Bt", f"{val:.1f} nT")
+							else:
+								st.caption("IMF Bt: n/a")
+						with col_d:
+							val = snap.imf_bz_nt
+							if val is not None:
+								st.metric("IMF Bz", f"{val:.1f} nT")
+							else:
+								st.caption("IMF Bz: n/a")
+
+						col_e, col_f, col_g = st.columns(3)
+						with col_e:
+							if snap.sunspot_number is not None:
+								st.metric("Sunspot number", f"{int(snap.sunspot_number)}")
+							else:
+								st.caption("Sunspot number: n/a")
+						with col_f:
+							if snap.f107_flux is not None:
+								st.metric("F10.7 cm flux", f"{snap.f107_flux:.1f} sfu")
+							else:
+								st.caption("F10.7 cm flux: n/a")
+						with col_g:
+							fp = snap.flare_probabilities
+							if any(val is not None for val in (fp.c_class_pct, fp.m_class_pct, fp.x_class_pct)):
+								st.metric(
+									"Flare probability (C/M/X)",
+									f"{(fp.c_class_pct or 0):.0f}% / {(fp.m_class_pct or 0):.0f}% / {(fp.x_class_pct or 0):.0f}%",
+								)
+							else:
+								st.caption("Flare probabilities: n/a")
+
+						if snap.kp_forecast:
+							kp_rows = [
+								{"Day": k.day_label, "Min Kp": k.min_kp, "Max Kp": k.max_kp}
+								for k in snap.kp_forecast
+							]
+							kp_df_view = pd.DataFrame(kp_rows)
+							st.dataframe(kp_df_view)
+						st.caption("Source: SpaceWeatherLive — scraped UI snapshot; if scraping failed, values were extracted by OpenAI from the page HTML.")
+					else:
+						st.info("No SpaceWeatherLive data available.")
 
 		st.markdown("### HRV window metrics vs. planetary K-index")
 		st.caption("Align HRV windows to expected arrival by applying a time lag before merging.")
