@@ -702,14 +702,162 @@ def main() -> None:
 	# Streamlit detailed tracebacks in the UI and console
 	st.set_option("client.showErrorDetails", True)
 	st.set_page_config(page_title="HRV Analysis — Streamlit + ECharts", layout="wide")
-	# Make the central container and iframes use the full page width
+	# Apply global styling (responsive margins, full-width components, elegant theme)
 	st.markdown(
 		"""
 		<style>
-		.block-container { max-width: 100% !important; padding-left: 0; padding-right: 0; }
-		div[data-testid="stIFrame"] { width: 100% !important; }
-		div[data-testid="stIFrame"] > iframe { width: 100% !important; }
-		[title~="st.iframe"] { width: 100% !important; }
+		:root {
+			--surface-bg: rgba(255, 255, 255, 0.82);
+			--surface-border: rgba(255, 255, 255, 0.36);
+			--accent: #1f8ff7;
+			--accent-secondary: #7f56d9;
+			--text-primary: #111827;
+			--text-muted: #6b7280;
+		}
+		.stApp {
+			background:
+				radial-gradient(120% 140% at 15% 15%, rgba(127, 86, 217, 0.18), transparent),
+				radial-gradient(100% 120% at 85% 20%, rgba(31, 143, 247, 0.22), transparent),
+				#0b1220;
+			color: var(--text-primary);
+			font-family: "Inter", "Segoe UI", system-ui, -apple-system, sans-serif;
+		}
+		header[data-testid="stHeader"] {
+			background: transparent;
+			box-shadow: none;
+		}
+		header[data-testid="stHeader"] [data-testid="stToolbar"] { display: none; }
+		footer { visibility: hidden; }
+		.stApp > main {
+			padding-top: clamp(1rem, 4vh, 2.5rem);
+			padding-bottom: clamp(3rem, 8vh, 4rem);
+		}
+		.block-container {
+			max-width: min(1260px, 98vw) !important;
+			margin: 0 auto !important;
+			padding-left: clamp(1.2rem, 3.8vw, 3.2rem) !important;
+			padding-right: clamp(1.2rem, 3.8vw, 3.2rem) !important;
+			padding-top: clamp(1.5rem, 5vh, 3.5rem) !important;
+			padding-bottom: clamp(2.4rem, 6vh, 3.8rem) !important;
+			background: var(--surface-bg);
+			backdrop-filter: blur(22px);
+			border-radius: 26px;
+			border: 1px solid var(--surface-border);
+			box-shadow: 0 28px 60px rgba(15, 23, 42, 0.32);
+		}
+		@media (max-width: 960px) {
+			.block-container {
+				border-radius: 20px;
+				padding-left: 1.3rem !important;
+				padding-right: 1.3rem !important;
+			}
+		}
+		@media (max-width: 640px) {
+			.block-container {
+				border-radius: 16px;
+				padding-left: 1rem !important;
+				padding-right: 1rem !important;
+			}
+		}
+		div[data-testid="stIFrame"],
+		div[data-testid="stIFrame"] > iframe,
+		[title~="st.iframe"] {
+			width: 100% !important;
+			min-width: 100% !important;
+			border: none !important;
+		}
+		div[data-testid="stIFrame"] {
+			display: block;
+			flex: 1 1 auto;
+		}
+		[data-testid="stSidebar"] > div:first-child {
+			background: linear-gradient(195deg, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.78));
+			backdrop-filter: blur(14px);
+			border-right: 1px solid rgba(255, 255, 255, 0.08);
+			padding: 2.2rem 1.35rem 2.5rem;
+		}
+		[data-testid="stSidebar"] .stMarkdown,
+		[data-testid="stSidebar"] label,
+		[data-testid="stSidebar"] p,
+		[data-testid="stSidebar"] span {
+			color: rgba(248, 250, 252, 0.92) !important;
+		}
+		[data-testid="stSidebar"] .stNumberInput input,
+		[data-testid="stSidebar"] .stSelectbox div[data-baseweb="select"] div,
+		[data-testid="stSidebar"] .stTextInput input,
+		[data-testid="stSidebar"] .stSlider,
+		[data-testid="stSidebar"] .stMultiSelect div[data-baseweb="select"] div {
+			background-color: rgba(30, 41, 59, 0.8) !important;
+			border-color: rgba(148, 163, 184, 0.42) !important;
+			color: #f8fafc !important;
+		}
+		[data-testid="stSidebar"] .stButton button {
+			background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%) !important;
+			color: #ffffff !important;
+			border: none !important;
+			box-shadow: 0 12px 30px rgba(31, 143, 247, 0.35);
+		}
+		[data-testid="stSidebar"] .stButton button:hover {
+			transform: translateY(-1px);
+			box-shadow: 0 16px 38px rgba(31, 143, 247, 0.4);
+		}
+		.stTabs [data-baseweb="tab-list"] {
+			gap: 0.6rem;
+			padding: 0.85rem 0;
+		}
+		.stTabs [data-baseweb="tab"] {
+			background: rgba(15, 23, 42, 0.1);
+			border-radius: 999px;
+			padding: 0.55rem 1.15rem;
+			border: 1px solid transparent;
+			color: var(--text-muted);
+			font-weight: 600;
+			transition: all 0.25s ease;
+		}
+		.stTabs [data-baseweb="tab"][aria-selected="true"] {
+			background: linear-gradient(135deg, var(--accent) 0%, var(--accent-secondary) 100%);
+			color: #ffffff !important;
+			box-shadow: 0 12px 28px rgba(48, 100, 255, 0.35);
+			border-color: rgba(255, 255, 255, 0.22);
+		}
+		.stTabs [data-baseweb="tab"]:hover {
+			transform: translateY(-1px);
+			box-shadow: 0 10px 20px rgba(15, 23, 42, 0.18);
+		}
+		.stAlert {
+			border-radius: 18px;
+			border: 1px solid rgba(148, 163, 184, 0.28);
+			background: rgba(248, 250, 252, 0.65);
+			color: #0f172a;
+		}
+		.metric-container > div:first-child {
+			font-size: 0.82rem;
+			text-transform: uppercase;
+			color: var(--text-muted);
+			letter-spacing: 0.06em;
+		}
+		.metric-container > div:nth-child(2) {
+			color: var(--text-primary);
+			font-size: 1.8rem;
+			font-weight: 700;
+		}
+		.stTable > div {
+			border-radius: 18px;
+			border: 1px solid rgba(148, 163, 184, 0.2);
+			overflow: hidden;
+		}
+		.stButton button {
+			border-radius: 14px !important;
+			font-weight: 600 !important;
+		}
+		@media (max-width: 768px) {
+			[data-testid="stSidebar"] > div:first-child {
+				padding: 1.75rem 1.1rem 2rem;
+			}
+			.stTabs [data-baseweb="tab"] {
+				padding: 0.45rem 0.85rem;
+			}
+		}
 		</style>
 		""",
 		unsafe_allow_html=True,
