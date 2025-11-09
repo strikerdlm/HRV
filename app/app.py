@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import concurrent.futures
 import hashlib
@@ -144,6 +144,105 @@ def _kp_to_numeric(value: Any) -> Optional[float]:
 			return None
 	offset = _KP_SUFFIX_OFFSETS.get(suffix, 0.0)
 	return float(round(base + offset, 2))
+
+
+DONKI_API_BASE = "https://api.nasa.gov/DONKI"
+DONKI_TIMEOUT = 20
+DONKI_ENDPOINTS: Dict[str, Dict[str, Any]] = {
+	"FLR": {
+		"path": "FLR",
+		"default_days": 30,
+		"default_params": {},
+		"time_columns": ["beginTime", "peakTime", "endTime"],
+		"title": "Flare count",
+	},
+	"CME": {
+		"path": "CME",
+		"default_days": 30,
+		"default_params": {},
+		"time_columns": ["startTime", "time21_5"],
+		"title": "CME count",
+	},
+	"CMEAnalysis": {
+		"path": "CMEAnalysis",
+		"default_days": 30,
+		"default_params": {
+			"mostAccurateOnly": "true",
+			"completeEntryOnly": "true",
+			"speed": "0",
+			"halfAngle": "0",
+			"catalog": "ALL",
+			"keyword": "NONE",
+		},
+		"time_columns": ["time21_5", "time18_4"],
+		"title": "CME analysis entries",
+	},
+	"GST": {
+		"path": "GST",
+		"default_days": 30,
+		"default_params": {},
+		"time_columns": ["startTime", "allKpIndex[].observedTime"],
+		"title": "Geomagnetic storms",
+	},
+	"IPS": {
+		"path": "IPS",
+		"default_days": 30,
+		"default_params": {"location": "ALL", "catalog": "ALL"},
+		"time_columns": ["eventTime", "shockArrivalTime", "time"],
+		"title": "Interplanetary shocks",
+	},
+	"HSS": {
+		"path": "HSS",
+		"default_days": 30,
+		"default_params": {},
+		"time_columns": ["startTime", "linkTime"],
+		"title": "High speed streams",
+	},
+	"RBE": {
+		"path": "RBE",
+		"default_days": 30,
+		"default_params": {},
+		"time_columns": ["eventStartTime", "eventEndTime"],
+		"title": "Radiation belt enhancements",
+	},
+	"SEP": {
+		"path": "SEP",
+		"default_days": 30,
+		"default_params": {},
+		"time_columns": ["eventTime", "startTime"],
+		"title": "SEP events",
+	},
+	"MPC": {
+		"path": "MPC",
+		"default_days": 30,
+		"default_params": {},
+		"time_columns": ["eventTime"],
+		"title": "Magnetopause crossings",
+	},
+	"WSAEnlilSimulations": {
+		"path": "WSAEnlilSimulations",
+		"default_days": 7,
+		"default_params": {},
+		"time_columns": ["modelCompletionTime"],
+		"title": "WSA+Enlil simulations",
+	},
+	"notifications": {
+		"path": "notifications",
+		"default_days": 7,
+		"default_params": {"type": "all"},
+		"time_columns": ["messageIssueTime"],
+		"title": "Notifications",
+	},
+}
+DONKI_LABEL_TO_CODE: Dict[str, str] = {
+	"FLR (Solar Flares)": "FLR",
+	"CME": "CME",
+	"GST (Geomagnetic Storm)": "GST",
+	"IPS": "IPS",
+	"HSS": "HSS",
+	"RBE": "RBE",
+	"SEP": "SEP",
+}
 
 
 @st.cache_data(ttl=300)
@@ -307,6 +406,213 @@ def _space_weather_state() -> Dict[str, Any]:
 		},
 	)
 	return state
+
+
+def _donki_state() -> Dict[str, Any]:
+	state = st.session_state.setdefault(
+		"donki_state",
+		{
+			"loaded": False,
+			"datasets": {},
+			"errors": {},
+			"start_date": "",
+			"end_date": "",
+			"last_updated": None,
+			"summary": pd.DataFrame(),
+			"daily_counts": {},
+		},
+	)
+	return state
+
+
+def _donki_default_range(days: int) -> Tuple[str, str]:
+	if days <= 0:
+		raise ValueError("days must be positive")
+	end_dt = pd.Timestamp.utcnow().normalize()
+	start_dt = end_dt - pd.Timedelta(days=int(days))
+	return start_dt.date().isoformat(), end_dt.date().isoformat()
+
+
+def _get_donki_time_columns(endpoint: str) -> List[str]:
+	config = DONKI_ENDPOINTS.get(endpoint, {})
+	return list(config.get("time_columns", []))
+
+
+def fetch_donki(endpoint: str, start_date: str, end_date: str, params: Optional[Dict[str, Any]] = None) -> pd.DataFrame:
+	if not NASA_API_KEY:
+		raise RuntimeError("NASA_API_KEY is not set.")
+	config = DONKI_ENDPOINTS.get(endpoint)
+	if config is None:
+		raise ValueError(f"Unsupported DONKI endpoint '{endpoint}'.")
+	query: Dict[str, Any] = dict(config.get("default_params", {}))
+	query.update({"startDate": start_date, "endDate": end_date})
+	if params:
+		query.update(params)
+	query["api_key"] = NASA_API_KEY
+	path = config.get("path", endpoint)
+	url = f"{DONKI_API_BASE}/{path}"
+	response = requests.get(url, params=query, timeout=DONKI_TIMEOUT)
+	response.raise_for_status()
+	data = response.json()
+	if not data:
+		return pd.DataFrame()
+	if isinstance(data, dict):
+		rows: List[Dict[str, Any]] = [data]
+	else:
+		rows = list(data)
+	df = pd.json_normalize(rows)
+	time_columns = _get_donki_time_columns(endpoint)
+	for col in time_columns:
+		if col in df.columns:
+			df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
+	df = df.apply(pd.to_numeric, errors="ignore")
+	return df
+
+
+def _extract_datetime_values(value: Any) -> List[pd.Timestamp]:
+	collected: List[pd.Timestamp] = []
+	stack: List[Any] = [value]
+	while stack:
+		current = stack.pop()
+		if current is None:
+			continue
+		if isinstance(current, (str, bytes)):
+			ts = pd.to_datetime(current, errors="coerce", utc=True)
+			if pd.notna(ts):
+				collected.append(ts)
+			continue
+		if isinstance(current, (list, tuple, set)):
+			stack.extend(list(current))
+			continue
+		if isinstance(current, dict):
+			stack.extend(list(current.values()))
+			continue
+		if isinstance(current, (int, float, bool)):
+			continue
+		try:
+			ts = pd.to_datetime(current, errors="coerce", utc=True)
+		except Exception:
+			ts = pd.NaT
+		if pd.notna(ts):
+			collected.append(ts)
+	return collected
+
+
+def _collect_donki_times(df: pd.DataFrame, columns: List[str]) -> pd.Series:
+	values: List[pd.Timestamp] = []
+	for col in columns:
+		if col not in df.columns:
+			continue
+		column = df[col]
+		if column.dtype == object:
+			for item in column:
+				values.extend(_extract_datetime_values(item))
+		else:
+			series = pd.to_datetime(column, errors="coerce", utc=True)
+			values.extend(series.dropna().tolist())
+	if not values:
+		return pd.Series(dtype="datetime64[ns, UTC]")
+	series = pd.to_datetime(values, errors="coerce", utc=True).dropna()
+	return series.sort_values(ignore_index=True)
+
+
+def donki_event_series(
+	df: pd.DataFrame,
+	time_columns: List[str],
+	*,
+	freq: str = "H",
+) -> pd.DataFrame:
+	timestamps = _collect_donki_times(df, time_columns)
+	if timestamps.empty:
+		return pd.DataFrame()
+	floored = timestamps.dt.floor(freq)
+	counts = floored.value_counts().sort_index()
+	out = pd.DataFrame({"time_tag": counts.index.to_pydatetime(), "event_count": counts.values})
+	out["time_tag"] = pd.to_datetime(out["time_tag"], utc=True)
+	return out.sort_values("time_tag")
+
+
+def _build_donki_summary(datasets: Mapping[str, pd.DataFrame]) -> pd.DataFrame:
+	rows: List[Dict[str, Any]] = []
+	for code, df in datasets.items():
+		title = DONKI_ENDPOINTS.get(code, {}).get("title", code)
+		time_columns = _get_donki_time_columns(code)
+		timestamps = _collect_donki_times(df, time_columns)
+		if timestamps.empty:
+			rows.append(
+				{
+					"event_type": title,
+					"events": 0,
+					"first_event": None,
+					"latest_event": None,
+				}
+			)
+			continue
+		rows.append(
+			{
+				"event_type": title,
+				"events": int(len(timestamps)),
+				"first_event": timestamps.iloc[0],
+				"latest_event": timestamps.iloc[-1],
+			}
+		)
+	summary_df = pd.DataFrame(rows)
+	if not summary_df.empty:
+		if "first_event" in summary_df.columns:
+			summary_df["first_event"] = pd.to_datetime(summary_df["first_event"], utc=True)
+		if "latest_event" in summary_df.columns:
+			summary_df["latest_event"] = pd.to_datetime(summary_df["latest_event"], utc=True)
+	return summary_df.sort_values("event_type") if not summary_df.empty else summary_df
+
+
+def _donki_daily_counts(datasets: Mapping[str, pd.DataFrame]) -> Dict[str, pd.Series]:
+	out: Dict[str, pd.Series] = {}
+	for code, df in datasets.items():
+		time_columns = _get_donki_time_columns(code)
+		ts_df = donki_event_series(df, time_columns, freq="D")
+		if ts_df.empty:
+			continue
+		series = ts_df.set_index("time_tag")["event_count"].astype(float)
+		out[DONKI_ENDPOINTS.get(code, {}).get("title", code)] = series
+	return out
+
+
+def _fetch_donki_datasets(
+	state: Dict[str, Any],
+	start_date: str,
+	end_date: str,
+	endpoints: Optional[List[str]] = None,
+) -> None:
+	if not NASA_API_KEY:
+		state["loaded"] = False
+		state["errors"] = {"auth": "NASA_API_KEY is not set."}
+		return
+	targets = endpoints or list(DONKI_ENDPOINTS.keys())
+	datasets: Dict[str, pd.DataFrame] = {}
+	errors: Dict[str, str] = {}
+	for code in targets:
+		try:
+			config = DONKI_ENDPOINTS.get(code, {})
+			default_days = int(config.get("default_days", 30))
+			start_to_use = start_date
+			end_to_use = end_date
+			if default_days == 7:
+				adjust_start, adjust_end = _donki_default_range(7)
+				start_to_use = max(adjust_start, start_date)
+				end_to_use = end_date if end_date else adjust_end
+			datasets[code] = fetch_donki(code, start_to_use, end_to_use)
+		except requests.HTTPError as exc:
+			errors[code] = f"{exc.response.status_code if exc.response else 'HTTP'} error"
+		except Exception as exc:
+			errors[code] = str(exc)
+	state["datasets"] = datasets
+	state["errors"] = errors
+	state["start_date"] = start_date
+	state["end_date"] = end_date
+	state["last_updated"] = pd.Timestamp.utcnow()
+	state["summary"] = _build_donki_summary(datasets)
+	state["daily_counts"] = _donki_daily_counts(datasets)
+	state["loaded"] = True if datasets else False
 
 
 def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
@@ -1978,8 +2284,26 @@ def main() -> None:
 	with tab_space_weather:
 		st.subheader("Space Weather (NOAA SWPC)")
 		space_state = _space_weather_state()
-		fetch_clicked = st.button("Fetch space weather data", key="fetch_space_weather")
-		if fetch_clicked:
+		donki_state = _donki_state()
+		col_fetch_sw, col_fetch_donki = st.columns(2)
+		with col_fetch_sw:
+			fetch_sw_clicked = st.button("Fetch space weather data", key="fetch_space_weather")
+		with col_fetch_donki:
+			fetch_donki_clicked = st.button(
+				"Fetch NASA DONKI events",
+				key="fetch_donki",
+				disabled=not NASA_API_KEY,
+				help="Requires NASA_API_KEY in your .env file.",
+			)
+		donki_window_days = st.slider(
+			"DONKI window (days)",
+			min_value=7,
+			max_value=30,
+			value=30,
+			step=1,
+			key="donki_window_days",
+		)
+		if fetch_sw_clicked:
 			with st.spinner("Fetching NOAA SWPC datasets..."):
 				_fetch_space_weather_datasets(space_state)
 			last_fetch = space_state.get("last_updated")
@@ -1987,6 +2311,21 @@ def main() -> None:
 				st.success(f"Space weather datasets updated at {last_fetch.strftime('%Y-%m-%d %H:%M UTC')}.")
 			else:
 				st.success("Space weather datasets updated.")
+		if fetch_donki_clicked:
+			if not NASA_API_KEY:
+				st.warning("Set NASA_API_KEY in your .env file to query NASA DONKI APIs.")
+			else:
+				start_donki, end_donki = _donki_default_range(int(donki_window_days))
+				with st.spinner("Fetching NASA DONKI datasets..."):
+					_fetch_donki_datasets(donki_state, start_donki, end_donki)
+				last_donki = donki_state.get("last_updated")
+				if isinstance(last_donki, pd.Timestamp):
+					st.success(f"DONKI datasets updated at {last_donki.strftime('%Y-%m-%d %H:%M UTC')}.")
+				else:
+					st.success("DONKI datasets updated.")
+		kp_df = pd.DataFrame()
+		flux_df = pd.DataFrame()
+		kp_error = False
 		if not space_state.get("loaded"):
 			st.info("Click 'Fetch space weather data' to populate NOAA SWPC metrics.")
 		else:
@@ -2000,6 +2339,7 @@ def main() -> None:
 			kp_error_msg = space_state.get("kp_error", "")
 			flux_df_full = space_state.get("flux_df", pd.DataFrame())
 			flux_error_msg = space_state.get("flux_error", "")
+			kp_error = bool(kp_error_msg)
 			kp_df = pd.DataFrame()
 			with col_sw_kp:
 				st.markdown("#### Planetary K-index (3-hour cadence)")
@@ -2209,6 +2549,39 @@ def main() -> None:
 					else:
 						st.info("Solar radio flux data currently unavailable.")
 
+		if donki_state.get("loaded"):
+			start_cov = donki_state.get("start_date", "")
+			end_cov = donki_state.get("end_date", "")
+			st.markdown("#### NASA DONKI event summary")
+			if start_cov and end_cov:
+				st.caption(f"DONKI coverage: {start_cov} → {end_cov} (UTC)")
+			errors = donki_state.get("errors", {})
+			for code, msg in errors.items():
+				title = DONKI_ENDPOINTS.get(code, {}).get("title", code)
+				st.warning(f"{title}: {msg}")
+			donki_summary = donki_state.get("summary", pd.DataFrame())
+			if donki_summary.empty:
+				st.info("No DONKI events returned for the selected window.")
+			else:
+				st.dataframe(donki_summary)
+			daily_counts = donki_state.get("daily_counts", {})
+			if daily_counts:
+				_echarts_multi_time_series(
+					daily_counts,
+					title="DONKI events per day",
+					y_name="events",
+				)
+			with st.expander("View raw NASA DONKI datasets"):
+				for code, df in donki_state.get("datasets", {}).items():
+					title = DONKI_ENDPOINTS.get(code, {}).get("title", code)
+					st.markdown(f"**{title}** — {df.shape[0]} rows")
+					st.dataframe(df.head(200))
+		elif NASA_API_KEY:
+			st.info("Click 'Fetch NASA DONKI events' to populate NASA space weather datasets.")
+		else:
+			st.info("Set NASA_API_KEY in your environment to enable NASA DONKI analytics.")
+
+		if space_state.get("loaded"):
 			st.markdown("#### Inspect an additional NOAA dataset")
 			selected_dataset = st.selectbox("NOAA endpoint", list(SWPC_EXTRA_DATASETS.keys()))
 			if selected_dataset:
@@ -2757,45 +3130,50 @@ def main() -> None:
 				choices = ["FLR (Solar Flares)", "CME", "GST (Geomagnetic Storm)", "IPS", "HSS", "RBE", "SEP"]
 				selected = st.multiselect("DONKI predictors", choices, default=["FLR (Solar Flares)", "CME", "GST (Geomagnetic Storm)"])
 				predictor_series: List[Tuple[str, pd.DataFrame, str, str]] = []
-				try:
-					if "FLR (Solar Flares)" in selected:
-						flr = fetch_donki("FLR", start_date, end_date)
-						fs = donki_event_series(flr, ["beginTime", "peakTime", "startTime"]) if not flr.empty else pd.DataFrame()
-						if not fs.empty:
-							predictor_series.append(("Flare count", fs.rename(columns={"time_tag": "time","event_count": "donki_flare_count"}), "time", "donki_flare_count"))
-					if "CME" in selected:
-						cme = fetch_donki("CME", start_date, end_date)
-						cs = donki_event_series(cme, ["startTime"]) if not cme.empty else pd.DataFrame()
-						if not cs.empty:
-							predictor_series.append(("CME count", cs.rename(columns={"time_tag": "time","event_count": "donki_cme_count"}), "time", "donki_cme_count"))
-					if "GST (Geomagnetic Storm)" in selected:
-						gst = fetch_donki("GST", start_date, end_date)
-						gs = donki_event_series(gst, ["startTime"]) if not gst.empty else pd.DataFrame()
-						if not gs.empty:
-							predictor_series.append(("Geomagnetic storm count", gs.rename(columns={"time_tag": "time","event_count": "donki_gst_count"}), "time", "donki_gst_count"))
-					if "IPS" in selected:
-						ips = fetch_donki("IPS", start_date, end_date)
-						isr = donki_event_series(ips, ["eventTime", "shockArrivalTime", "time"]) if not ips.empty else pd.DataFrame()
-						if not isr.empty:
-							predictor_series.append(("IPS count", isr.rename(columns={"time_tag": "time","event_count": "donki_ips_count"}), "time", "donki_ips_count"))
-					if "HSS" in selected:
-						hss = fetch_donki("HSS", start_date, end_date)
-						hs = donki_event_series(hss, ["startTime", "time"]) if not hss.empty else pd.DataFrame()
-						if not hs.empty:
-							predictor_series.append(("HSS count", hs.rename(columns={"time_tag": "time","event_count": "donki_hss_count"}), "time", "donki_hss_count"))
-					if "RBE" in selected:
-						rbe = fetch_donki("RBE", start_date, end_date)
-						rb = donki_event_series(rbe, ["time"]) if not rbe.empty else pd.DataFrame()
-						if not rb.empty:
-							predictor_series.append(("RBE count", rb.rename(columns={"time_tag": "time","event_count": "donki_rbe_count"}), "time", "donki_rbe_count"))
-					if "SEP" in selected:
-						sep = fetch_donki("SEP", start_date, end_date)
-						sp = donki_event_series(sep, ["eventTime", "startTime", "time"]) if not sep.empty else pd.DataFrame()
-						if not sp.empty:
-							predictor_series.append(("SEP count", sp.rename(columns={"time_tag": "time","event_count": "donki_sep_count"}), "time", "donki_sep_count"))
-				except Exception as exc:
-					st.warning(f"DONKI error: {exc}")
-					predictor_series = []
+				if not donki_state.get("loaded"):
+					st.info("Fetch NASA DONKI events to enable DONKI correlations.")
+				else:
+					window_times = pd.to_datetime(windowed_df["start"], errors="coerce", utc=True).dropna()
+					window_min = window_times.min() if not window_times.empty else None
+					window_max = window_times.max() if not window_times.empty else None
+					donki_datasets = donki_state.get("datasets", {})
+					donki_errors = donki_state.get("errors", {})
+					for label in selected:
+						code = DONKI_LABEL_TO_CODE.get(label)
+						if not code:
+							continue
+						df_code = donki_datasets.get(code, pd.DataFrame())
+						if df_code.empty:
+							if code in donki_errors:
+								title = DONKI_ENDPOINTS.get(code, {}).get("title", code)
+								st.warning(f"{title}: {donki_errors[code]}")
+							else:
+								st.info(f"No records available for {label}.")
+							continue
+						time_columns = _get_donki_time_columns(code)
+						series_df = donki_event_series(df_code, time_columns)
+						if series_df.empty:
+							st.info(f"No time-stamped entries found for {label}.")
+							continue
+						if window_min is not None and window_max is not None:
+							margin = pd.Timedelta(days=2)
+							series_df = series_df[
+								(series_df["time_tag"] >= window_min - margin)
+								& (series_df["time_tag"] <= window_max + margin)
+							]
+						if series_df.empty:
+							st.info(f"{label}: no events overlapping the HRV window.")
+							continue
+						title = DONKI_ENDPOINTS.get(code, {}).get("title", label)
+						value_col = f"donki_{code.lower()}_count"
+						predictor_series.append(
+							(
+								title,
+								series_df.rename(columns={"event_count": value_col}),
+								"time_tag",
+								value_col,
+							)
+						)
 
 				if predictor_series:
 					st.markdown("#### DONKI correlations (lag scan)")
@@ -3016,6 +3394,53 @@ def _echarts_sparkline(
 				},
 			}
 		],
+	}
+	render_echarts(opt, height_px=height_px, width="100%", config=EChartsConfig())
+
+
+def _echarts_multi_time_series(
+	series_map: Dict[str, pd.Series],
+	*,
+	title: str,
+	y_name: str,
+	height_px: int = 320,
+) -> None:
+	series: List[Dict[str, Any]] = []
+	for name, series_data in series_map.items():
+		if series_data.empty:
+			continue
+		points = [
+			[str(pd.to_datetime(idx, utc=True)), float(val)]
+			for idx, val in series_data.sort_index().items()
+			if np.isfinite(val)
+		]
+		if not points:
+			continue
+		series.append(
+			{
+				"name": name,
+				"type": "line",
+				"showSymbol": False,
+				"smooth": True,
+				"data": points,
+			}
+		)
+	if not series:
+		st.info(f"{title}: no data to display.")
+		return
+	opt = {
+		"title": {"text": title, "left": "center"},
+		"tooltip": {"trigger": "axis"},
+		"legend": {"top": 24},
+		"grid": {"left": 36, "right": 20, "top": 56, "bottom": 36, "containLabel": True},
+		"xAxis": {"type": "time", "axisLabel": {"color": "#475569"}},
+		"yAxis": {
+			"type": "value",
+			"name": y_name,
+			"axisLabel": {"color": "#475569"},
+			"splitLine": {"lineStyle": {"color": "rgba(148,163,184,0.25)"}},
+		},
+		"series": series,
 	}
 	render_echarts(opt, height_px=height_px, width="100%", config=EChartsConfig())
 
