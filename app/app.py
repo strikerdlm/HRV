@@ -1818,12 +1818,25 @@ def main() -> None:
 						except requests.RequestException as exc:
 							st.warning(f"Weather API error: {exc}")
 					if not cov_df.empty:
-						# align covariates to HRV window starts
+						# align covariates to HRV window starts (ensure timezone-aware)
+						align_df = windowed_df[["start"]].copy()
+						align_df["align_time"] = pd.to_datetime(align_df["start"], errors="coerce")
+						if align_df["align_time"].dt.tz is None:
+							align_df["align_time"] = align_df["align_time"].dt.tz_localize("UTC")
+						else:
+							align_df["align_time"] = align_df["align_time"].dt.tz_convert("UTC")
+						align_df = align_df.drop(columns=["start"]).dropna(subset=["align_time"])
+
+						cov_df = cov_df.copy()
+						if cov_df["weather_time"].dt.tz is None:
+							cov_df["weather_time"] = cov_df["weather_time"].dt.tz_localize("UTC")
+						else:
+							cov_df["weather_time"] = cov_df["weather_time"].dt.tz_convert("UTC")
+
+						cov_cols_available = [c for c in ["weather_time", "temp_c", "rh_pct", "pressure_hpa", "wind_ms", "precip_mm", "cloudcover_pct"] if c in cov_df.columns]
 						cov_aligned = pd.merge_asof(
-							windowed_df[["start"]].sort_values("start").rename(columns={"start": "align_time"}),
-							cov_df.sort_values("weather_time")[
-								["weather_time", "temp_c", "rh_pct", "pressure_hpa"]
-							],
+							align_df.sort_values("align_time"),
+							cov_df.sort_values("weather_time")[cov_cols_available],
 							left_on="align_time",
 							right_on="weather_time",
 							direction="nearest",
