@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timezone
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 import concurrent.futures
@@ -244,6 +245,93 @@ DONKI_LABEL_TO_CODE: Dict[str, str] = {
 	"SEP": "SEP",
 }
 
+CACHE_BASE_DIR = Path(__file__).resolve().parent / "data_cache"
+SPACE_WEATHER_CACHE_DIR = CACHE_BASE_DIR / "space_weather"
+DONKI_CACHE_DIR = CACHE_BASE_DIR / "donki"
+SPACE_WEATHER_CACHE_TTL = pd.Timedelta(hours=6)
+DONKI_CACHE_TTL = pd.Timedelta(hours=24)
+
+
+def _ensure_cache_dir(path: Path) -> None:
+	"""
+	Create the cache directory if it does not exist.
+
+	Parameters
+	----------
+	path : Path
+		Target directory path.
+	"""
+	try:
+		path.mkdir(parents=True, exist_ok=True)
+	except OSError as exc:  # pragma: no cover - defensive
+		logging.getLogger("hrv_app").warning("Unable to ensure cache directory %s: %s", path, exc, exc_info=True)
+
+
+def _read_dataframe_cache(cache_path: Path, *, max_age: Optional[pd.Timedelta]) -> Optional[pd.DataFrame]:
+	"""
+	Load a cached pandas DataFrame saved in JSON format.
+
+	Parameters
+	----------
+	cache_path : Path
+		Path to the JSON cache file.
+	max_age : Optional[pd.Timedelta]
+		Maximum allowed age for the cached data. If None, no age check is performed.
+
+	Returns
+	-------
+	Optional[pd.DataFrame]
+		Loaded DataFrame if the cache exists, is valid, and not expired; otherwise None.
+	"""
+	if not cache_path.exists():
+		return None
+	try:
+		with cache_path.open("r", encoding="utf-8") as handle:
+			payload = json.load(handle)
+	except (OSError, json.JSONDecodeError):
+		return None
+
+	stored_at_raw = payload.get("stored_at")
+	stored_at = pd.to_datetime(stored_at_raw, utc=True, errors="coerce")
+	if max_age is not None:
+		if pd.isna(stored_at):
+			return None
+		if stored_at + max_age < pd.Timestamp.now(tz=timezone.utc):
+			return None
+
+	data_json = payload.get("data")
+	if not isinstance(data_json, str):
+		return None
+	try:
+		df = pd.read_json(data_json, orient="table", convert_dates=True)
+	except ValueError:
+		return None
+	return df
+
+
+def _write_dataframe_cache(cache_path: Path, df: pd.DataFrame) -> None:
+	"""
+	Persist a pandas DataFrame to disk using a JSON payload (orient='table').
+
+	Parameters
+	----------
+	cache_path : Path
+		Target cache file path.
+	df : pd.DataFrame
+		DataFrame to serialize. Empty frames are allowed.
+	"""
+	payload = {
+		"stored_at": pd.Timestamp.now(tz=timezone.utc).isoformat(),
+		"data": df.to_json(orient="table", date_format="iso"),
+	}
+	try:
+		_ensure_cache_dir(cache_path.parent)
+		with cache_path.open("w", encoding="utf-8") as handle:
+			json.dump(payload, handle)
+	except OSError as exc:  # pragma: no cover - defensive
+		logging.getLogger("hrv_app").warning("Failed to write cache %s: %s", cache_path, exc, exc_info=True)
+
+
 
 @st.cache_data(ttl=300)
 def _fetch_swpc_dataset(path: str) -> pd.DataFrame:
@@ -272,6 +360,12 @@ def _fetch_swpc_dataset(path: str) -> pd.DataFrame:
 	return df
 
 def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
+	if days is None or int(days) <= 0:
+		raise ValueError("days must be a positive integer")
+	cache_file = SPACE_WEATHER_CACHE_DIR / f"kp_index_{int(days)}.json"
+	cached_df = _read_dataframe_cache(cache_file, max_age=SPACE_WEATHER_CACHE_TTL)
+	if cached_df is not None:
+		return cached_df
 	url = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
 	response = requests.get(url, timeout=SWPC_TIMEOUT)
 	response.raise_for_status()
@@ -292,9 +386,15 @@ def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
 	if "kp_index" in df.columns:
 		df["kp_index"] = df["kp_index"].apply(_kp_to_numeric)
 		df["kp_index"] = pd.to_numeric(df["kp_index"], errors="coerce")
-	return df.sort_values("time_tag") if "time_tag" in df.columns else df
+	df = df.sort_values("time_tag") if "time_tag" in df.columns else df
+	_write_dataframe_cache(cache_file, df)
+	return df
 
 def get_swpc_solar_radio_flux() -> pd.DataFrame:
+	cache_file = SPACE_WEATHER_CACHE_DIR / "solar_radio_flux.json"
+	cached_df = _read_dataframe_cache(cache_file, max_age=SPACE_WEATHER_CACHE_TTL)
+	if cached_df is not None:
+		return cached_df
 	candidates = ["f107_cm_flux.json", "solar_radio_flux.json", "predicted_f107cm_flux.json"]
 	df = pd.DataFrame()
 	for path in candidates:
@@ -333,6 +433,7 @@ def get_swpc_solar_radio_flux() -> pd.DataFrame:
 	else:
 		for col in numeric_cols:
 			df[col] = pd.to_numeric(df[col], errors="coerce")
+	_write_dataframe_cache(cache_file, df)
 	return df
 
 def get_swpc_solar_probabilities() -> pd.DataFrame:
@@ -600,7 +701,14 @@ def _fetch_donki_datasets(
 				adjust_start, adjust_end = _donki_default_range(7)
 				start_to_use = max(adjust_start, start_date)
 				end_to_use = end_date if end_date else adjust_end
-			datasets[code] = fetch_donki(code, start_to_use, end_to_use)
+			cache_file = DONKI_CACHE_DIR / f"{code}_{start_to_use}_{end_to_use or 'auto'}.json"
+			cached_df = _read_dataframe_cache(cache_file, max_age=DONKI_CACHE_TTL)
+			if cached_df is not None:
+				datasets[code] = cached_df
+				continue
+			df = fetch_donki(code, start_to_use, end_to_use)
+			_write_dataframe_cache(cache_file, df)
+			datasets[code] = df
 		except requests.HTTPError as exc:
 			errors[code] = f"{exc.response.status_code if exc.response else 'HTTP'} error"
 		except Exception as exc:
@@ -1815,7 +1923,7 @@ def main() -> None:
 						cur_end = end_ts
 						cur_count += 1
 						cur_max = max(cur_max, float(r.get("dev_index", 0.0)))
-					else:
+				else:
 						if cur_count >= int(min_len):
 							out.append({"source": src, "level": cur_level, "start": cur_start, "end": cur_end, "n_windows": cur_count, "max_dev_index": cur_max})
 						cur_level = level
@@ -2332,16 +2440,135 @@ def main() -> None:
 			last_fetch = space_state.get("last_updated")
 			if isinstance(last_fetch, pd.Timestamp):
 				st.caption(f"Last fetched: {last_fetch.strftime('%Y-%m-%d %H:%M UTC')}")
-
-			col_sw_kp, col_sw_flux = st.columns(2)
-
 			kp_df_full = space_state.get("kp_df", pd.DataFrame())
 			kp_error_msg = space_state.get("kp_error", "")
 			flux_df_full = space_state.get("flux_df", pd.DataFrame())
 			flux_error_msg = space_state.get("flux_error", "")
 			kp_error = bool(kp_error_msg)
-			kp_df = pd.DataFrame()
-			with col_sw_kp:
+
+			with st.container():
+				st.markdown("#### Solar Radio Flux (F10.7 cm)")
+				flux_history_days = st.slider(
+					"F10.7 history (days)",
+					min_value=7,
+					max_value=90,
+					value=30,
+					step=1,
+					key="flux_days",
+				)
+				if flux_error_msg:
+					st.error(flux_error_msg)
+				else:
+					flux_df = flux_df_full.copy()
+					if not flux_df.empty and "time_tag" in flux_df.columns:
+						time_series = pd.to_datetime(flux_df["time_tag"], utc=True, errors="coerce")
+						cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(flux_history_days))
+						mask = time_series >= cutoff
+						flux_df = flux_df.loc[mask].copy()
+						flux_df["time_tag"] = time_series[mask]
+					if not flux_df.empty:
+						numeric_flux_cols = [col for col in flux_df.columns if flux_df[col].dtype.kind in "fcid"]
+						value_candidates = [
+							col
+							for col in numeric_flux_cols
+							if any(keyword in col.lower() for keyword in ("flux", "observed", "adjusted", "predicted", "value"))
+						]
+						value_col = value_candidates[0] if value_candidates else (numeric_flux_cols[0] if numeric_flux_cols else None)
+						if value_col:
+							flux_numeric = flux_df.dropna(subset=[value_col]).sort_values("time_tag")
+							if not flux_numeric.empty:
+								latest_flux = float(flux_numeric[value_col].iloc[-1])
+								latest_time = flux_numeric["time_tag"].iloc[-1] if "time_tag" in flux_numeric.columns else None
+								prev_flux = float(flux_numeric[value_col].iloc[-2]) if flux_numeric.shape[0] >= 2 else latest_flux
+								delta_flux = latest_flux - prev_flux
+								col_flux_gauge, col_flux_chart = st.columns([1, 2])
+								with col_flux_gauge:
+									_echarts_gauge(
+										latest_flux,
+										min_val=60.0,
+										max_val=260.0,
+										title="F10.7 now",
+										unit="sfu",
+										precision=1,
+										thresholds=[
+											(90.0, "#22c55e"),
+											(130.0, "#facc15"),
+											(180.0, "#ef4444"),
+										],
+										height_px=260,
+									)
+									if latest_time is not None:
+										st.caption(f"UTC timestamp: {latest_time.strftime('%Y-%m-%d %H:%M')}")
+									st.caption("Quiet solar output ≲90 sfu • enhanced 90–130 sfu • high ≥180 sfu.")
+								with col_flux_chart:
+									flux_recent = flux_numeric.tail(min(160, flux_numeric.shape[0]))
+									_echarts_sparkline(
+										flux_recent["time_tag"].tolist(),
+										flux_recent[value_col].astype(float).tolist(),
+										title="F10.7 trend (selected window)",
+										color_primary="#f97316",
+										area_colors=("rgba(249,115,22,0.28)", "rgba(249,115,22,0.05)"),
+									)
+									st.metric("Δ since previous point", f"{delta_flux:+.1f}")
+									st.caption("Three-hour cadence view of F10.7 solar radio flux over the selected history window.")
+								flux_numeric = flux_numeric.sort_values("time_tag")
+								stats_cols = st.columns(3)
+								last_week_mask = flux_numeric["time_tag"] >= pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=7)
+								weekly_mean = flux_numeric.loc[last_week_mask, value_col].mean() if last_week_mask.any() else flux_numeric[value_col].mean()
+								stats_cols[0].metric("7 d mean", f"{weekly_mean:.1f}")
+								stats_cols[1].metric("Max (window)", f"{flux_numeric[value_col].max():.1f}")
+								stats_cols[2].metric("Std dev", f"{flux_numeric[value_col].std(ddof=1):.1f}")
+								series_candidates: Dict[str, pd.Series] = {}
+								for col in numeric_flux_cols:
+									series = flux_numeric.set_index("time_tag")[col].astype(float)
+									if series.notna().any():
+										friendly = col.replace("_", " ").replace("[", "").replace("]", "").title()
+										series_candidates[friendly] = series.dropna()
+								if len(series_candidates) > 1:
+									_echarts_multi_time_series(
+										series_candidates,
+										title="F10.7 component comparison",
+										y_name="Solar flux (sfu)",
+									)
+									st.caption("Comparison of observed, adjusted, and predicted solar radio flux where provided by NOAA.")
+								if "time_tag" in flux_numeric.columns and flux_numeric.shape[0] >= 5:
+									st.markdown("##### Rolling confidence interval")
+									f_win = st.number_input(
+										"Rolling CI window (points)",
+										min_value=5,
+										max_value=int(max(10, flux_numeric.shape[0])),
+										value=int(min(24, flux_numeric.shape[0])),
+										step=1,
+										key="f107_win",
+									)
+									vals = flux_numeric[value_col].astype(float).reset_index(drop=True)
+									minp = max(3, int(f_win // 2))
+									roll_mean = vals.rolling(int(f_win), min_periods=minp).mean()
+									roll_std = vals.rolling(int(f_win), min_periods=minp).std(ddof=1)
+									roll_n = vals.rolling(int(f_win), min_periods=minp).count()
+									se = roll_std / np.sqrt(roll_n)
+									low = roll_mean - 1.96 * se
+									high = roll_mean + 1.96 * se
+									_echarts_time_with_ci(
+										flux_numeric["time_tag"].tolist(),
+										vals.tolist(),
+										low.tolist(),
+										high.tolist(),
+										title="F10.7 rolling 95% confidence interval",
+										y_name="sfu",
+										series_name="F10.7",
+									)
+									st.caption("Rolling mean ±1.96·SE highlights medium-term swings in solar radio flux relevant to ionospheric conditions.")
+								else:
+									st.info("Not enough F10.7 samples to build a rolling confidence interval.")
+							else:
+								st.info("Solar radio flux values are not available in the NOAA feed.")
+						else:
+							st.info("Solar radio flux dataset does not contain numeric values to display.")
+					else:
+						st.info("Solar radio flux data currently unavailable.")
+
+			with st.container():
 				st.markdown("#### Planetary K-index (3-hour cadence)")
 				kp_history_days = st.slider(
 					"Kp history (days)",
@@ -2388,6 +2615,7 @@ def main() -> None:
 								)
 								if latest_time is not None:
 									st.caption(f"UTC timestamp: {latest_time.strftime('%Y-%m-%d %H:%M')}")
+								st.caption("Geomagnetic categories: quiet ≤3 • unsettled 4 • storm ≥5.")
 							with col_kp_chart:
 								kp_recent = kp_numeric.tail(min(120, kp_numeric.shape[0]))
 								_echarts_sparkline(
@@ -2398,14 +2626,29 @@ def main() -> None:
 									area_colors=("rgba(14,165,233,0.32)", "rgba(14,165,233,0.06)"),
 								)
 								st.metric("Δ since previous point", f"{delta_kp:+.2f}")
+								st.caption("Recent 3-hour cadence progression of Kp highlighting short-term geomagnetic swings.")
 							stats_cols = st.columns(3)
-							now_utc = pd.Timestamp.utcnow()
+							now_utc = pd.Timestamp.now(tz="UTC")
 							last_24_mask = kp_numeric["time_tag"] >= now_utc - pd.Timedelta(hours=24)
 							mean_24h = kp_numeric.loc[last_24_mask, "kp_index"].mean() if last_24_mask.any() else kp_numeric["kp_index"].tail(min(8, kp_numeric.shape[0])).mean()
 							stats_cols[0].metric("24 h mean", f"{mean_24h:.2f}")
 							stats_cols[1].metric("Peak (window)", f"{kp_numeric['kp_index'].max():.2f}")
 							stats_cols[2].metric("Storm counts (Kp≥5)", f"{int((kp_numeric['kp_index'] >= 5.0).sum())}")
-							if "time_tag" in kp_numeric.columns and kp_numeric.shape[0] >= 4:
+							daily_mean = (
+								kp_numeric.set_index("time_tag")["kp_index"]
+								.resample("D")
+								.mean()
+								.dropna()
+							)
+							if not daily_mean.empty:
+								_echarts_multi_time_series(
+									{"Daily mean Kp": daily_mean},
+									title="Daily mean Kp",
+									y_name="Kp",
+									height_px=300,
+								)
+								st.caption("Daily mean Kp derived from NOAA's 3-hour cadence values.")
+							if kp_numeric.shape[0] >= 4:
 								st.markdown("##### Rolling confidence interval")
 								default_win = min(18, max(4, int(kp_numeric.shape[0] // 8)))
 								kp_win = st.number_input(
@@ -2433,121 +2676,13 @@ def main() -> None:
 									y_name="Kp",
 									series_name="Kp",
 								)
-								st.caption("Quiet Kp≤3 · unsettled 4 · storm-level ≥5. The shaded band shows mean ±1.96·SE across the chosen rolling window.")
+								st.caption("Shaded band shows rolling mean ±1.96·SE, contextualising Kp variability around the moving average.")
 							else:
 								st.info("Not enough Kp samples to build a rolling confidence interval.")
 						else:
 							st.info("Kp values are not available in the NOAA feed.")
 					else:
 						st.info("Kp data currently unavailable.")
-
-			flux_df = pd.DataFrame()
-			with col_sw_flux:
-				st.markdown("#### Solar Radio Flux (F10.7 cm)")
-				flux_history_days = st.slider(
-					"F10.7 history (days)",
-					min_value=7,
-					max_value=90,
-					value=30,
-					step=1,
-					key="flux_days",
-				)
-				if flux_error_msg:
-					st.error(flux_error_msg)
-				else:
-					flux_df = flux_df_full.copy()
-					if not flux_df.empty and "time_tag" in flux_df.columns:
-						time_series = pd.to_datetime(flux_df["time_tag"], utc=True, errors="coerce")
-						cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(flux_history_days))
-						mask = time_series >= cutoff
-						flux_df = flux_df.loc[mask].copy()
-						flux_df["time_tag"] = time_series[mask]
-					if not flux_df.empty:
-						numeric_flux_cols = [col for col in flux_df.columns if flux_df[col].dtype.kind in "fcid"]
-						value_candidates = [
-							col
-							for col in numeric_flux_cols
-							if any(keyword in col.lower() for keyword in ("flux", "observed", "adjusted", "predicted", "value"))
-						]
-						value_col = value_candidates[0] if value_candidates else (numeric_flux_cols[0] if numeric_flux_cols else None)
-						if value_col:
-							flux_numeric = flux_df.dropna(subset=[value_col])
-							if not flux_numeric.empty:
-								latest_flux = float(flux_numeric[value_col].iloc[-1])
-								latest_time = flux_numeric["time_tag"].iloc[-1] if "time_tag" in flux_numeric.columns else None
-								delta_flux = float(latest_flux - flux_numeric[value_col].iloc[-2]) if flux_numeric.shape[0] >= 2 else 0.0
-								col_flux_gauge, col_flux_chart = st.columns([1, 2])
-								with col_flux_gauge:
-									_echarts_gauge(
-										latest_flux,
-										min_val=60.0,
-										max_val=260.0,
-										title="F10.7 now",
-										unit="sfu",
-										precision=1,
-										thresholds=[
-											(90.0, "#22c55e"),
-											(130.0, "#facc15"),
-											(180.0, "#ef4444"),
-										],
-										height_px=260,
-									)
-									if latest_time is not None:
-										st.caption(f"UTC timestamp: {latest_time.strftime('%Y-%m-%d %H:%M')}")
-								with col_flux_chart:
-									flux_recent = flux_numeric.sort_values("time_tag").tail(min(160, flux_numeric.shape[0]))
-									_echarts_sparkline(
-										flux_recent["time_tag"].tolist(),
-										flux_recent[value_col].astype(float).tolist(),
-										title="F10.7 trend (selected window)",
-										color_primary="#f97316",
-										area_colors=("rgba(249,115,22,0.28)", "rgba(249,115,22,0.05)"),
-									)
-									st.metric("Δ since previous point", f"{delta_flux:+.1f}")
-								flux_numeric = flux_numeric.sort_values("time_tag")
-								stats_cols = st.columns(3)
-								last_week = flux_numeric["time_tag"] >= pd.Timestamp.utcnow() - pd.Timedelta(days=7)
-								weekly_mean = flux_numeric.loc[last_week, value_col].mean() if last_week.any() else flux_numeric[value_col].mean()
-								stats_cols[0].metric("7 d mean", f"{weekly_mean:.1f}")
-								stats_cols[1].metric("Max (window)", f"{flux_numeric[value_col].max():.1f}")
-								stats_cols[2].metric("Std dev", f"{flux_numeric[value_col].std(ddof=1):.1f}")
-								if "time_tag" in flux_numeric.columns and flux_numeric.shape[0] >= 5:
-									st.markdown("##### Rolling confidence interval")
-									f_win = st.number_input(
-										"Rolling CI window (points)",
-										min_value=5,
-										max_value=int(max(10, flux_numeric.shape[0])),
-										value=int(min(24, flux_numeric.shape[0])),
-										step=1,
-										key="f107_win",
-									)
-									times = pd.to_datetime(flux_numeric["time_tag"], utc=True, errors="coerce").tolist()
-									vals = flux_numeric[value_col].astype(float).reset_index(drop=True)
-									minp = max(3, int(f_win // 2))
-									roll_mean = vals.rolling(int(f_win), min_periods=minp).mean()
-									roll_std = vals.rolling(int(f_win), min_periods=minp).std(ddof=1)
-									roll_n = vals.rolling(int(f_win), min_periods=minp).count()
-									se = roll_std / np.sqrt(roll_n)
-									low = roll_mean - 1.96 * se
-									high = roll_mean + 1.96 * se
-									_echarts_time_with_ci(
-										times,
-										vals.tolist(),
-										low.tolist(),
-										high.tolist(),
-										title="F10.7 rolling 95% confidence interval",
-										y_name="sfu",
-										series_name="F10.7",
-									)
-									st.caption("F10.7 tracks solar extreme ultraviolet output. Elevated levels often coincide with enhanced ionospheric density and HF propagation changes.")
-								else:
-									st.info("Not enough F10.7 samples to build a rolling confidence interval.")
-							else:
-								st.info("Solar radio flux values are not available in the NOAA feed.")
-						else:
-							st.info("Solar radio flux dataset does not contain numeric values to display.")
-					else:
-						st.info("Solar radio flux data currently unavailable.")
 
 		if donki_state.get("loaded"):
 			start_cov = donki_state.get("start_date", "")
@@ -2564,6 +2699,27 @@ def main() -> None:
 				st.info("No DONKI events returned for the selected window.")
 			else:
 				st.dataframe(donki_summary)
+				if "events" in donki_summary.columns:
+					st.markdown("##### DONKI event gauges")
+					max_events = float(max(1, int(donki_summary["events"].max())))
+					gauge_cols = st.columns(3)
+					for idx, row in donki_summary.iterrows():
+						with gauge_cols[idx % 3]:
+							event_title = str(row.get("event_type", "Event"))
+							event_count = float(row.get("events", 0.0))
+							_echarts_gauge(
+								event_count,
+								min_val=0.0,
+								max_val=max_events * 1.2,
+								title=event_title,
+								formatter="{value:.0f}",
+								thresholds=[
+									(max_events * 0.33, "#22c55e"),
+									(max_events * 0.66, "#facc15"),
+									(max_events * 1.0, "#ef4444"),
+								],
+							)
+							st.caption(f"{event_title}: {int(event_count)} events in the selected DONKI period.")
 			daily_counts = donki_state.get("daily_counts", {})
 			if daily_counts:
 				_echarts_multi_time_series(
@@ -2571,11 +2727,28 @@ def main() -> None:
 					title="DONKI events per day",
 					y_name="events",
 				)
+				st.caption("Aggregated daily DONKI events grouped by endpoint for the selected window.")
 			with st.expander("View raw NASA DONKI datasets"):
 				for code, df in donki_state.get("datasets", {}).items():
 					title = DONKI_ENDPOINTS.get(code, {}).get("title", code)
 					st.markdown(f"**{title}** — {df.shape[0]} rows")
 					st.dataframe(df.head(200))
+					time_columns = _get_donki_time_columns(code)
+					timestamps = _collect_donki_times(df, time_columns)
+					if not timestamps.empty:
+						daily_series = timestamps.dt.floor("D").value_counts().sort_index()
+						daily_series.index = pd.to_datetime(daily_series.index, utc=True, errors="coerce")
+						daily_series = daily_series[daily_series.index.notna()]
+						if not daily_series.empty:
+							_echarts_multi_time_series(
+								{title: daily_series},
+								title=f"{title} events per day",
+								y_name="events",
+								height_px=260,
+							)
+							st.caption(f"{title}: daily event counts over the cached DONKI window.")
+					else:
+						st.caption("No timestamped entries available for plotting.")
 		elif NASA_API_KEY:
 			st.info("Click 'Fetch NASA DONKI events' to populate NASA space weather datasets.")
 		else:
@@ -2679,315 +2852,203 @@ def main() -> None:
 		cedula = st.text_input("Cedula (identification number)", value="", placeholder="e.g., 12345678")
 		use_weather = st.checkbox("Include weather covariates (Bogotá) for partial correlations", value=True)
 
+		metric_list: List[str] = []
+		if not windowed_df.empty:
+			preferred_metrics = ["rmssd", "sdnn", "hf_power", "lf_hf_ratio", "mean_hr", "pnn50", "pnn20"]
+			metric_list = [col for col in preferred_metrics if col in windowed_df.columns]
+			if not metric_list:
+				numeric_candidates = [
+					col
+					for col in windowed_df.select_dtypes(include=[np.number]).columns
+					if col not in ("kp_index",)
+				]
+				metric_list = numeric_candidates[:8]
+		lags = list(range(int(lag_min), int(lag_max) + 1, int(lag_step)))
+		if not lags:
+			lags = [0]
+
 		if windowed_df.empty:
 			st.info("Windowed HRV metrics are not available. Run an analysis first.")
-		elif kp_error or kp_df.empty or "kp_index" not in kp_df.columns:
-			st.info("Planetary K-index data not available for correlation.")
 		elif "start" not in windowed_df.columns:
 			st.info("Windowed HRV data does not include start timestamps.")
+		elif not metric_list:
+			st.info("No numeric HRV metrics available for correlation.")
+		elif kp_error or kp_df.empty or "kp_index" not in kp_df.columns:
+			st.info("Planetary K-index data not available for correlation.")
 		else:
-			metric_list = [col for col in ["rmssd", "sdnn", "hf_power", "lf_hf_ratio", "mean_hr", "pnn50", "pnn20"] if col in windowed_df.columns]
-			if not metric_list:
-				metric_list = [col for col in windowed_df.select_dtypes(include=[np.number]).columns if col not in ("kp_index",)]
-				metric_list = metric_list[:8]
-			if not metric_list:
-				st.info("No numeric HRV metrics available for correlation.")
-			else:
-				# optional weather covariates fetched for time span of HRV windows
-				cov_df = pd.DataFrame()
-				if use_weather:
-					start_dt = pd.to_datetime(windowed_df["start"], errors="coerce", utc=True).dropna()
-					if not start_dt.empty:
-						span_min = start_dt.min().date().isoformat()
-						span_max = start_dt.max().date().isoformat()
-						try:
-							cov_df = fetch_open_meteo_hourly(span_min, span_max)
-						except requests.RequestException as exc:
-							st.warning(f"Weather API error: {exc}")
-					if not cov_df.empty:
-						# align covariates to HRV window starts (ensure timezone-aware)
-						align_df = windowed_df[["start"]].copy()
-						align_df["align_time"] = pd.to_datetime(align_df["start"], errors="coerce")
-						if align_df["align_time"].dt.tz is None:
-							align_df["align_time"] = align_df["align_time"].dt.tz_localize("UTC")
-						else:
-							align_df["align_time"] = align_df["align_time"].dt.tz_convert("UTC")
-						align_df = align_df.drop(columns=["start"]).dropna(subset=["align_time"])
-
-						cov_df = cov_df.copy()
-						if cov_df["weather_time"].dt.tz is None:
-							cov_df["weather_time"] = cov_df["weather_time"].dt.tz_localize("UTC")
-						else:
-							cov_df["weather_time"] = cov_df["weather_time"].dt.tz_convert("UTC")
-
-						cov_cols_available = [c for c in ["weather_time", "temp_c", "rh_pct", "pressure_hpa", "wind_ms", "precip_mm", "cloudcover_pct"] if c in cov_df.columns]
-						cov_aligned = pd.merge_asof(
-							align_df.sort_values("align_time"),
-							cov_df.sort_values("weather_time")[cov_cols_available],
-							left_on="align_time",
-							right_on="weather_time",
-							direction="nearest",
-							tolerance=pd.Timedelta(minutes=int(merge_tol)),
-						)
-						cov_aligned = cov_aligned.drop(columns=["align_time", "weather_time"], errors="ignore")
-						windowed_df = pd.concat([windowed_df.reset_index(drop=True), cov_aligned.reset_index(drop=True)], axis=1)
-
-				lags = list(range(int(lag_min), int(lag_max) + 1, int(lag_step)))
-				lag_results = _scan_lag_correlations(windowed_df, kp_df, metric_list, lags, merge_tolerance_minutes=int(merge_tol))
-				if lag_results.empty:
-					st.info("No lagged correlations could be computed with current data.")
-				else:
-					if "p_value" in lag_results.columns and lag_results["p_value"].notna().any():
-						qvals, crit = fdr_bh(lag_results["p_value"].fillna(1.0).to_numpy(), alpha=0.05)
-						lag_results["q_value"] = qvals
+			# optional weather covariates fetched for time span of HRV windows
+			cov_df = pd.DataFrame()
+			if use_weather:
+				start_dt = pd.to_datetime(windowed_df["start"], errors="coerce", utc=True).dropna()
+				if not start_dt.empty:
+					span_min = start_dt.min().date().isoformat()
+					span_max = start_dt.max().date().isoformat()
+					try:
+						cov_df = fetch_open_meteo_hourly(span_min, span_max)
+					except requests.RequestException as exc:
+						st.warning(f"Weather API error: {exc}")
+				if not cov_df.empty:
+					# align covariates to HRV window starts (ensure timezone-aware)
+					align_df = windowed_df[["start"]].copy()
+					align_df["align_time"] = pd.to_datetime(align_df["start"], errors="coerce")
+					if align_df["align_time"].dt.tz is None:
+						align_df["align_time"] = align_df["align_time"].dt.tz_localize("UTC")
 					else:
-						lag_results["q_value"] = np.nan
+						align_df["align_time"] = align_df["align_time"].dt.tz_convert("UTC")
+					align_df = align_df.drop(columns=["start"]).dropna(subset=["align_time"])
 
-					if "pearson_r" in lag_results.columns:
-						idx = lag_results.groupby("metric")["pearson_r"].apply(lambda s: s.abs().idxmax())
-						if isinstance(idx, pd.Series):
-							best_rows = lag_results.loc[idx.values].copy()
-						else:
-							best_rows = lag_results.copy()
-						best_rows = best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False, ignore_index=True)
+					cov_df = cov_df.copy()
+					if cov_df["weather_time"].dt.tz is None:
+						cov_df["weather_time"] = cov_df["weather_time"].dt.tz_localize("UTC")
+					else:
+						cov_df["weather_time"] = cov_df["weather_time"].dt.tz_convert("UTC")
+
+					cov_cols_available = [c for c in ["weather_time", "temp_c", "rh_pct", "pressure_hpa", "wind_ms", "precip_mm", "cloudcover_pct"] if c in cov_df.columns]
+					cov_aligned = pd.merge_asof(
+						align_df.sort_values("align_time"),
+						cov_df.sort_values("weather_time")[cov_cols_available],
+						left_on="align_time",
+						right_on="weather_time",
+						direction="nearest",
+						tolerance=pd.Timedelta(minutes=int(merge_tol)),
+					)
+					cov_aligned = cov_aligned.drop(columns=["align_time", "weather_time"], errors="ignore")
+					windowed_df = pd.concat([windowed_df.reset_index(drop=True), cov_aligned.reset_index(drop=True)], axis=1)
+
+			lag_results = _scan_lag_correlations(windowed_df, kp_df, metric_list, lags, merge_tolerance_minutes=int(merge_tol))
+			if lag_results.empty:
+				st.info("No lagged correlations could be computed with current data.")
+			else:
+				if "p_value" in lag_results.columns and lag_results["p_value"].notna().any():
+					qvals, crit = fdr_bh(lag_results["p_value"].fillna(1.0).to_numpy(), alpha=0.05)
+					lag_results["q_value"] = qvals
+				else:
+					lag_results["q_value"] = np.nan
+
+				if "pearson_r" in lag_results.columns:
+					idx = lag_results.groupby("metric")["pearson_r"].apply(lambda s: s.abs().idxmax())
+					if isinstance(idx, pd.Series):
+						best_rows = lag_results.loc[idx.values].copy()
 					else:
 						best_rows = lag_results.copy()
+					best_rows = best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False, ignore_index=True)
+				else:
+					best_rows = lag_results.copy()
 
-					st.subheader("Best correlation per metric (by |r|)")
-					st.dataframe(best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False))
-					if not best_rows.empty and "pearson_r" in best_rows.columns:
-						top_row = best_rows.iloc[0]
-						abs_r = float(abs(top_row.get("pearson_r", 0.0)))
-						lag_hours_top = int(top_row.get("lag_hours", 0))
-						p_val_top = float(top_row.get("p_value", np.nan)) if "p_value" in top_row else float("nan")
-						q_val_top = float(top_row.get("q_value", np.nan)) if "q_value" in top_row else float("nan")
-						n_top = int(top_row.get("n", 0))
-						metric_name = str(top_row.get("metric", ""))
-						sign_dir = "positive" if float(top_row.get("pearson_r", 0.0)) >= 0 else "negative"
-						lag_description = (
-							"Geomagnetic activity (Kp) precedes HRV changes" if lag_hours_top > 0 else (
-								"HRV changes precede geomagnetic activity" if lag_hours_top < 0 else "Simultaneous relationship"
-							)
+				st.subheader("Best correlation per metric (by |r|)")
+				st.dataframe(best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False))
+				if not best_rows.empty and "pearson_r" in best_rows.columns:
+					top_row = best_rows.iloc[0]
+					abs_r = float(abs(top_row.get("pearson_r", 0.0)))
+					lag_hours_top = int(top_row.get("lag_hours", 0))
+					p_val_top = float(top_row.get("p_value", np.nan)) if "p_value" in top_row else float("nan")
+					q_val_top = float(top_row.get("q_value", np.nan)) if "q_value" in top_row else float("nan")
+					n_top = int(top_row.get("n", 0))
+					metric_name = str(top_row.get("metric", ""))
+					sign_dir = "positive" if float(top_row.get("pearson_r", 0.0)) >= 0 else "negative"
+					lag_description = (
+						"Geomagnetic activity (Kp) precedes HRV changes" if lag_hours_top > 0 else (
+							"HRV changes precede geomagnetic activity" if lag_hours_top < 0 else "Simultaneous relationship"
 						)
-						lag_span = max(1.0, float(max(abs(val) for val in lags)) if lags else 1.0)
-						col_g1, col_g2, col_g3, col_g4 = st.columns(4)
-						with col_g1:
+					)
+					lag_span = max(1.0, float(max(abs(val) for val in lags)) if lags else 1.0)
+					col_g1, col_g2, col_g3, col_g4 = st.columns(4)
+					with col_g1:
+						_echarts_gauge(
+							abs_r,
+							min_val=0.0,
+							max_val=1.0,
+							title=f"|r| — {metric_name}",
+							formatter="{value:.2f}",
+							thresholds=[
+								(0.2, "#f97316"),
+								(0.4, "#facc15"),
+								(0.6, "#4ade80"),
+								(1.0, "#16a34a"),
+							],
+						)
+					with col_g2:
+						if np.isfinite(q_val_top):
 							_echarts_gauge(
-								abs_r,
+								q_val_top,
 								min_val=0.0,
-								max_val=1.0,
-								title=f"|r| — {metric_name}",
-								formatter="{value:.2f}",
+								max_val=0.1,
+								title="FDR-adjusted q-value",
+								formatter="{value:.3f}",
 								thresholds=[
-									(0.2, "#f97316"),
-									(0.4, "#facc15"),
-									(0.6, "#4ade80"),
-									(1.0, "#16a34a"),
+									(0.01, "#22c55e"),
+									(0.05, "#facc15"),
+									(0.1, "#ef4444"),
 								],
 							)
-						with col_g2:
-							if np.isfinite(q_val_top):
-								_echarts_gauge(
-									q_val_top,
-									min_val=0.0,
-									max_val=0.1,
-									title="FDR-adjusted q-value",
-									formatter="{value:.3f}",
-									thresholds=[
-										(0.01, "#22c55e"),
-										(0.05, "#facc15"),
-										(0.1, "#ef4444"),
-									],
-								)
-							elif np.isfinite(p_val_top):
-								_echarts_gauge(
-									p_val_top,
-									min_val=0.0,
-									max_val=0.1,
-									title="p-value",
-									formatter="{value:.3f}",
-									thresholds=[
-										(0.01, "#22c55e"),
-										(0.05, "#facc15"),
-										(0.1, "#ef4444"),
-									],
-								)
-							else:
-								st.info("Significance metrics unavailable for this correlation.")
-						with col_g3:
+						elif np.isfinite(p_val_top):
 							_echarts_gauge(
-								float(abs(lag_hours_top)),
+								p_val_top,
 								min_val=0.0,
-								max_val=lag_span,
-								title="Lag magnitude (h)",
-								formatter="{value:.0f}",
+								max_val=0.1,
+								title="p-value",
+								formatter="{value:.3f}",
 								thresholds=[
-									(max(1.0, lag_span * 0.25), "#38bdf8"),
-									(max(3.0, lag_span * 0.5), "#2563eb"),
-									(lag_span, "#1d4ed8"),
+									(0.01, "#22c55e"),
+									(0.05, "#facc15"),
+									(0.1, "#ef4444"),
 								],
 							)
-						with col_g4:
-							max_n = float(max(n_top, 10)) * 1.1
-							_echarts_gauge(
-								float(n_top),
-								min_val=0.0,
-								max_val=max_n,
-								title="Sample size (n)",
-								formatter="{value:.0f}",
-								thresholds=[
-									(max_n * 0.25, "#f87171"),
-									(max_n * 0.5, "#facc15"),
-									(max_n * 0.75, "#22c55e"),
-								],
+						else:
+							st.info("Significance metrics unavailable for this correlation.")
+					with col_g3:
+						_echarts_gauge(
+							float(abs(lag_hours_top)),
+							min_val=0.0,
+							max_val=lag_span,
+							title="Lag magnitude (h)",
+							formatter="{value:.0f}",
+							thresholds=[
+								(max(1.0, lag_span * 0.25), "#38bdf8"),
+								(max(3.0, lag_span * 0.5), "#2563eb"),
+								(lag_span, "#1d4ed8"),
+							],
+						)
+					with col_g4:
+						max_n = float(max(n_top, 10)) * 1.1
+						_echarts_gauge(
+							float(n_top),
+							min_val=0.0,
+							max_val=max_n,
+							title="Sample size (n)",
+							formatter="{value:.0f}",
+							thresholds=[
+								(max_n * 0.25, "#f87171"),
+								(max_n * 0.5, "#facc15"),
+								(max_n * 0.75, "#22c55e"),
+							],
+						)
+					clinical_text = (
+						f"- **Clinical takeaway:** When geomagnetic activity {'rises' if sign_dir == 'positive' else 'falls'}, `{metric_name}` tends to {'increase' if sign_dir == 'positive' else 'decrease'} about {lag_hours_top} hour(s) later."
+						if lag_hours_top != 0
+						else f"- **Clinical takeaway:** `{metric_name}` shifts in step with geomagnetic activity."
+					)
+					st.markdown(
+						"**Interpretation summary**" "\n"
+						f"- **Metric:** `{metric_name}` shows a {sign_dir} Pearson correlation with Kp (|r| = {abs_r:.2f}).\n"
+						f"- **Lag interpretation:** {lag_description}; the maximum |lag| tested was ±{int(lag_span)} h.\n"
+						f"- **Significance:** "
+						+ (
+							f"q = {q_val_top:.3f} (FDR-adjusted){' ✔' if np.isfinite(q_val_top) and q_val_top <= 0.05 else ''}"
+							if np.isfinite(q_val_top)
+							else (
+								f"p = {p_val_top:.3f}{' ✔' if np.isfinite(p_val_top) and p_val_top <= 0.05 else ''}"
+								if np.isfinite(p_val_top)
+								else "No significance estimate available."
 							)
-						clinical_text = (
-							f"- **Clinical takeaway:** When geomagnetic activity {'rises' if sign_dir == 'positive' else 'falls'}, `{metric_name}` tends to {'increase' if sign_dir == 'positive' else 'decrease'} about {lag_hours_top} hour(s) later."
-							if lag_hours_top != 0
-							else f"- **Clinical takeaway:** `{metric_name}` shifts in step with geomagnetic activity."
 						)
-						st.markdown(
-							"**Interpretation summary**" "\n"
-							f"- **Metric:** `{metric_name}` shows a {sign_dir} Pearson correlation with Kp (|r| = {abs_r:.2f}).\n"
-							f"- **Lag interpretation:** {lag_description}; the maximum |lag| tested was ±{int(lag_span)} h.\n"
-							f"- **Significance:** "
-							+ (
-								f"q = {q_val_top:.3f} (FDR-adjusted){' ✔' if np.isfinite(q_val_top) and q_val_top <= 0.05 else ''}"
-								if np.isfinite(q_val_top)
-								else (
-									f"p = {p_val_top:.3f}{' ✔' if np.isfinite(p_val_top) and p_val_top <= 0.05 else ''}"
-									if np.isfinite(p_val_top)
-									else "Significance unavailable"
-								)
-							)
-							+ "\n"
-							f"- **Sample size:** n = {n_top}; larger n increases confidence in stability.\n"
-							+ clinical_text
-						)
-						st.caption(
-							"Effect sizes |r|≈0.1/0.3/0.5 are conventionally considered small/moderate/large."
-							" Multiple-comparison control uses Benjamini–Hochberg FDR when available."
-						)
-
-					# Partial correlation on the best metric-lag (if covariates available)
-					merged_best = pd.DataFrame()
-					cov_cols: List[str] = []
-					if use_weather and not cov_df.empty:
-						st.markdown("#### Partial correlation with weather covariates")
-						row = best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False).iloc[0]
-						best_metric = str(row["metric"]) if "metric" in row else metric_list[0]
-						best_lag = int(row.get("lag_hours", 0))
-						k_shift = kp_df.copy()
-						k_shift["time_tag"] = pd.to_datetime(k_shift["time_tag"], errors="coerce", utc=True)
-						k_shift = k_shift.dropna(subset=["time_tag"])
-						if not k_shift.empty:
-							time_idx = pd.DatetimeIndex(k_shift["time_tag"].to_list())
-							time_idx = time_idx + pd.to_timedelta(best_lag, unit="h")
-							k_shift["time_tag"] = time_idx
-							merged_best = pd.merge_asof(
-								windowed_df.sort_values("start"),
-								k_shift.sort_values("time_tag")[
-									["time_tag", "kp_index"]
-								],
-								left_on="start",
-								right_on="time_tag",
-								direction="nearest",
-								tolerance=pd.Timedelta(minutes=int(merge_tol)),
-							)
-							merged_best = merged_best.dropna(subset=["kp_index", best_metric])
-							cov_cols = [c for c in ["temp_c", "rh_pct", "pressure_hpa", "wind_ms", "precip_mm", "cloudcover_pct"] if c in merged_best.columns]
-							if cov_cols:
-								cov_mat = merged_best[cov_cols].to_numpy(dtype=float)
-								rp, pp, n = partial_pearson_r_p(
-									merged_best["kp_index"].to_numpy(dtype=float),
-									merged_best[best_metric].to_numpy(dtype=float),
-									cov_mat,
-								)
-								col_pc1, col_pc2, col_pc3 = st.columns(3)
-								with col_pc1:
-									_echarts_gauge(
-										float(abs(rp)),
-										min_val=0.0,
-										max_val=1.0,
-										title=f"|Partial r| — {best_metric}",
-										formatter="{value:.2f}",
-										thresholds=[
-											(0.2, "#38bdf8"),
-											(0.4, "#22c55e"),
-											(0.6, "#16a34a"),
-										],
-									)
-								with col_pc2:
-									if np.isfinite(pp):
-										_echarts_gauge(
-											float(pp),
-											min_val=0.0,
-											max_val=0.1,
-											title="Partial p-value",
-											formatter="{value:.3f}",
-											thresholds=[
-												(0.01, "#22c55e"),
-												(0.05, "#facc15"),
-												(0.1, "#ef4444"),
-											],
-										)
-									else:
-										st.info("Partial p-value unavailable; check sample alignment.")
-								with col_pc3:
-									max_n_pc = float(max(n, 10)) * 1.1
-									_echarts_gauge(
-										float(n),
-										min_val=0.0,
-										max_val=max_n_pc,
-										title="Partial n",
-										formatter="{value:.0f}",
-										thresholds=[
-											(max_n_pc * 0.25, "#f87171"),
-											(max_n_pc * 0.5, "#facc15"),
-											(max_n_pc * 0.75, "#22c55e"),
-										],
-									)
-								st.markdown(
-									"**Partial-correlation insight**" "\n"
-									f"- Controlling for {', '.join(cov_cols)}, the HRV metric retains a |partial r| of {abs(rp):.2f}.\n"
-									f"- Sample size for the partial model: n = {int(n)} (after removing NaNs across covariates).\n"
-									+ (
-										f"- The partial p-value of {pp:.3f} {'meets' if np.isfinite(pp) and pp <= 0.05 else 'does not meet'} the 0.05 criterion for residual association.\n"
-										if np.isfinite(pp)
-										else ""
-									)
-									+ f"- Clinical takeaway: After accounting for local weather, `{best_metric}` still {'tracks' if abs(rp) >= 0.2 else 'shows only a weak link with'} geomagnetic variability."
-								)
-								st.caption("Partial correlations help distinguish whether geomagnetic effects persist after accounting for local environmental covariates (temperature, humidity, pressure, wind, precipitation, cloud cover).")
-							else:
-								st.info("Weather covariates were not aligned; partial correlation skipped.")
-
-					# Residual diagnostics for OLS model (best setting)
-					st.markdown("#### Residual diagnostics (OLS)")
-					if not merged_best.empty and cov_cols:
-						X = np.column_stack([
-							np.ones(merged_best.shape[0]),
-							merged_best["kp_index"].to_numpy(dtype=float),
-							merged_best[cov_cols].to_numpy(dtype=float),
-						])
-						y = merged_best[best_metric].to_numpy(dtype=float)
-						beta, *_ = np.linalg.lstsq(X, y, rcond=None)
-						fitted = X @ beta
-						resid = y - fitted
-						r2 = 1.0 - (np.sum((y - fitted) ** 2) / np.sum((y - y.mean()) ** 2) if np.var(y) > 0 else 0.0)
-						dw = np.sum(np.diff(resid) ** 2) / np.sum(resid ** 2) if resid.size > 1 else np.nan
-						st.write(f"R²={r2:.3f}, Durbin–Watson={dw:.3f}")
-						if _scipy_stats is not None and resid.size > 7:
-							stat, p_norm = _scipy_stats.normaltest(resid)
-							st.write(f"Residual normality (D'Agostino): p={p_norm:.3g}")
-						st.line_chart(pd.DataFrame({"residuals": resid}))
-						st.caption(
-							"R² indicates how much variance in the HRV metric is explained by Kp plus weather covariates; higher values show better fit. "
-							"Durbin–Watson ≈2 signals uncorrelated residuals (values <2 imply positive autocorrelation). "
-							"The D'Agostino test assesses whether residuals follow a Gaussian distribution—a key assumption for parametric inferences."
-						)
-					elif use_weather and not cov_df.empty:
-						st.info("Insufficient aligned data for residual diagnostics with weather covariates.")
+						+ "\n"
+						f"- **Sample size:** n = {n_top} contributing HRV windows.\n"
+						+ clinical_text
+					)
+					st.caption(
+						"Interpret DONKI correlations as exploratory links between specific solar/geomagnetic drivers and HRV metrics; the lag points to the most likely propagation delay from solar activity to physiological response."
+					)
 
 		st.markdown("#### Database summary")
 		db_df = _load_jsonl()
@@ -3176,127 +3237,138 @@ def main() -> None:
 						)
 
 				if predictor_series:
-					st.markdown("#### DONKI correlations (lag scan)")
-					for title, s_df, tcol, vcol in predictor_series:
-						res = _scan_lag_correlations_generic(windowed_df, s_df.rename(columns={tcol: "time_tag"}), "time_tag", vcol, metric_list, lags, merge_tolerance_minutes=int(merge_tol))
-						if res.empty:
-							st.info(f"No aligned samples for {title}.")
-							continue
-						if "p_value" in res.columns and res["p_value"].notna().any():
-							res["q_value"], _ = fdr_bh(res["p_value"].fillna(1.0).to_numpy(), alpha=0.05)
-						st.write(title)
-						st.dataframe(res.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False).head(20))
+					if not metric_list:
+						st.info("Run the HRV window analysis to expose metrics before scanning DONKI correlations.")
+					else:
+						st.markdown("#### DONKI correlations (lag scan)")
+						for title, s_df, tcol, vcol in predictor_series:
+							res = _scan_lag_correlations_generic(
+								windowed_df,
+								s_df.rename(columns={tcol: "time_tag"}),
+								"time_tag",
+								vcol,
+								metric_list,
+								lags,
+								merge_tolerance_minutes=int(merge_tol),
+							)
+							if res.empty:
+								st.info(f"No aligned samples for {title}.")
+								continue
+							if "p_value" in res.columns and res["p_value"].notna().any():
+								res["q_value"], _ = fdr_bh(res["p_value"].fillna(1.0).to_numpy(), alpha=0.05)
+							st.write(title)
+							st.dataframe(res.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False).head(20))
 
-						res_sorted = res.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False)
-						if not res_sorted.empty:
-							best_res = res_sorted.iloc[0]
-							r_val = float(best_res.get("pearson_r", 0.0))
-							abs_r_val = float(abs(r_val))
-							lag_best = int(best_res.get("lag_hours", 0))
-							n_best = int(best_res.get("n", 0))
-							p_best = float(best_res.get("p_value", np.nan)) if "p_value" in best_res else float("nan")
-							q_best = float(best_res.get("q_value", np.nan)) if "q_value" in best_res else float("nan")
-							metric_best = str(best_res.get("metric", ""))
-							if "lag_hours" in res_sorted.columns and res_sorted["lag_hours"].notna().any():
-								lag_span_ds = float(np.nanmax(np.abs(res_sorted["lag_hours"].to_numpy(dtype=float))))
-							else:
-								lag_span_ds = float(max(abs(val) for val in lags)) if lags else 1.0
-							donki_desc = (
-								"Space-weather intensity leads HRV changes" if lag_best > 0 else (
-									"HRV changes lead the space-weather metric" if lag_best < 0 else "Simultaneous variability"
-								)
-							)
-							col_d1, col_d2, col_d3, col_d4 = st.columns(4)
-							with col_d1:
-								_echarts_gauge(
-									abs_r_val,
-									min_val=0.0,
-									max_val=1.0,
-									title=f"|r| — {metric_best}",
-									formatter="{value:.2f}",
-									thresholds=[
-										(0.2, "#f97316"),
-										(0.4, "#facc15"),
-										(0.6, "#4ade80"),
-										(1.0, "#16a34a"),
-									],
-								)
-							with col_d2:
-								if np.isfinite(q_best):
-									_echarts_gauge(
-										q_best,
-										min_val=0.0,
-										max_val=0.1,
-										title="FDR q-value",
-										formatter="{value:.3f}",
-										thresholds=[
-											(0.01, "#22c55e"),
-											(0.05, "#facc15"),
-											(0.1, "#ef4444"),
-										],
-									)
-								elif np.isfinite(p_best):
-									_echarts_gauge(
-										p_best,
-										min_val=0.0,
-										max_val=0.1,
-										title="p-value",
-										formatter="{value:.3f}",
-										thresholds=[
-											(0.01, "#22c55e"),
-											(0.05, "#facc15"),
-											(0.1, "#ef4444"),
-										],
-									)
+							res_sorted = res.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False)
+							if not res_sorted.empty:
+								best_res = res_sorted.iloc[0]
+								r_val = float(best_res.get("pearson_r", 0.0))
+								abs_r_val = float(abs(r_val))
+								lag_best = int(best_res.get("lag_hours", 0))
+								n_best = int(best_res.get("n", 0))
+								p_best = float(best_res.get("p_value", np.nan)) if "p_value" in best_res else float("nan")
+								q_best = float(best_res.get("q_value", np.nan)) if "q_value" in best_res else float("nan")
+								metric_best = str(best_res.get("metric", ""))
+								if "lag_hours" in res_sorted.columns and res_sorted["lag_hours"].notna().any():
+									lag_span_ds = float(np.nanmax(np.abs(res_sorted["lag_hours"].to_numpy(dtype=float))))
 								else:
-									st.info("Significance metrics unavailable.")
-							with col_d3:
-								_echarts_gauge(
-									float(abs(lag_best)),
-									min_val=0.0,
-									max_val=max(1.0, lag_span_ds),
-									title="Lag (h)",
-									formatter="{value:.0f}",
-									thresholds=[
-										(max(1.0, lag_span_ds * 0.25), "#38bdf8"),
-										(max(3.0, lag_span_ds * 0.5), "#2563eb"),
-										(max(6.0, lag_span_ds), "#1d4ed8"),
-									],
-								)
-							with col_d4:
-								max_n_ds = float(max(n_best, 10)) * 1.1
-								_echarts_gauge(
-									float(n_best),
-									min_val=0.0,
-									max_val=max_n_ds,
-									title="Samples (n)",
-									formatter="{value:.0f}",
-									thresholds=[
-										(max_n_ds * 0.25, "#f87171"),
-										(max_n_ds * 0.5, "#facc15"),
-										(max_n_ds * 0.75, "#22c55e"),
-									],
-								)
-							st.markdown(
-								f"**{title} insight**" "\n"
-								f"- Metric `{metric_best}` correlates with HRV at |r| = {abs_r_val:.2f} ({'positive' if r_val >= 0 else 'negative'}).\n"
-								f"- Optimal lag: {lag_best} h ({donki_desc}).\n"
-								+ (
-									f"- q = {q_best:.3f} after FDR control."
-									if np.isfinite(q_best)
-									else (
-										f"- p = {p_best:.3f}."
-										if np.isfinite(p_best)
-										else "- Significance metric unavailable."
+									lag_span_ds = float(max(abs(val) for val in lags)) if lags else 1.0
+								donki_desc = (
+									"Space-weather intensity leads HRV changes" if lag_best > 0 else (
+										"HRV changes lead the space-weather metric" if lag_best < 0 else "Simultaneous variability"
 									)
 								)
-								+ "\n"
-								f"- Samples contributing to this correlation: n = {n_best}.\n"
-								f"- Clinical takeaway: {title} episodes are followed by {'stronger' if r_val >= 0 else 'weaker'} `{metric_best}` responses after ~{abs(lag_best)} hour(s), suggesting a potential physiological timing window."
-							)
-							st.caption(
-								"Interpret DONKI correlations as exploratory links between specific solar/geomagnetic drivers and HRV metrics; the lag points to the most likely propagation delay from solar activity to physiological response."
-							)
+								col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+								with col_d1:
+									_echarts_gauge(
+										abs_r_val,
+										min_val=0.0,
+										max_val=1.0,
+										title=f"|r| — {metric_best}",
+										formatter="{value:.2f}",
+										thresholds=[
+											(0.2, "#f97316"),
+											(0.4, "#facc15"),
+											(0.6, "#4ade80"),
+											(1.0, "#16a34a"),
+										],
+									)
+								with col_d2:
+									if np.isfinite(q_best):
+										_echarts_gauge(
+											q_best,
+											min_val=0.0,
+											max_val=0.1,
+											title="FDR q-value",
+											formatter="{value:.3f}",
+											thresholds=[
+												(0.01, "#22c55e"),
+												(0.05, "#facc15"),
+												(0.1, "#ef4444"),
+											],
+										)
+									elif np.isfinite(p_best):
+										_echarts_gauge(
+											p_best,
+											min_val=0.0,
+											max_val=0.1,
+											title="p-value",
+											formatter="{value:.3f}",
+											thresholds=[
+												(0.01, "#22c55e"),
+												(0.05, "#facc15"),
+												(0.1, "#ef4444"),
+											],
+										)
+									else:
+										st.info("Significance metrics unavailable.")
+								with col_d3:
+									_echarts_gauge(
+										float(abs(lag_best)),
+										min_val=0.0,
+										max_val=max(1.0, lag_span_ds),
+										title="Lag (h)",
+										formatter="{value:.0f}",
+										thresholds=[
+											(max(1.0, lag_span_ds * 0.25), "#38bdf8"),
+											(max(3.0, lag_span_ds * 0.5), "#2563eb"),
+											(max(6.0, lag_span_ds), "#1d4ed8"),
+										],
+									)
+								with col_d4:
+									max_n_ds = float(max(n_best, 10)) * 1.1
+									_echarts_gauge(
+										float(n_best),
+										min_val=0.0,
+										max_val=max_n_ds,
+										title="Samples (n)",
+										formatter="{value:.0f}",
+										thresholds=[
+											(max_n_ds * 0.25, "#f87171"),
+											(max_n_ds * 0.5, "#facc15"),
+											(max_n_ds * 0.75, "#22c55e"),
+										],
+									)
+								st.markdown(
+									f"**{title} insight**" "\n"
+									f"- Metric `{metric_best}` correlates with HRV at |r| = {abs_r_val:.2f} ({'positive' if r_val >= 0 else 'negative'}).\n"
+									f"- Optimal lag: {lag_best} h ({donki_desc}).\n"
+									+ (
+										f"- q = {q_best:.3f} after FDR control."
+										if np.isfinite(q_best)
+										else (
+											f"- p = {p_best:.3f}."
+											if np.isfinite(p_best)
+											else "- Significance metric unavailable."
+										)
+									)
+									+ "\n"
+									f"- Samples contributing to this correlation: n = {n_best}.\n"
+									f"- Clinical takeaway: {title} episodes are followed by {'stronger' if r_val >= 0 else 'weaker'} `{metric_best}` responses after ~{abs(lag_best)} hour(s), suggesting a potential physiological timing window."
+								)
+								st.caption(
+									"Interpret DONKI correlations as exploratory links between specific solar/geomagnetic drivers and HRV metrics; the lag points to the most likely propagation delay from solar activity to physiological response."
+								)
 
 
 def _fisher_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
