@@ -512,8 +512,8 @@ def _collect_donki_times(df: pd.DataFrame, columns: List[str]) -> pd.Series:
 			values.extend(series.dropna().tolist())
 	if not values:
 		return pd.Series(dtype="datetime64[ns, UTC]")
-	series = pd.to_datetime(values, errors="coerce", utc=True).dropna()
-	return series.sort_values(ignore_index=True)
+	timestamps = pd.Series(values, dtype="datetime64[ns, UTC]")
+	return timestamps.dropna().sort_values(ignore_index=True)
 
 
 def donki_event_series(
