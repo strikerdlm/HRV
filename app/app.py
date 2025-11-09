@@ -13,6 +13,10 @@ import requests
 import json
 from pathlib import Path
 from uuid import uuid4
+from dotenv import load_dotenv
+
+# Load .env variables early (e.g., NASA_API_KEY, ACCUWEATHER_API_KEY)
+load_dotenv()
 
 # Windows console safety to mitigate Colorama/Click re-entrancy during shutdown
 if os.name == "nt":
@@ -883,7 +887,14 @@ def fetch_open_meteo_hourly(start_date: str, end_date: str, *, latitude: float =
 		"longitude": longitude,
 		"start_date": start_date,
 		"end_date": end_date,
-		"hourly": ",".join(["temperature_2m", "relative_humidity_2m", "surface_pressure"]),
+		"hourly": ",".join([
+			"temperature_2m",
+			"relative_humidity_2m",
+			"surface_pressure",
+			"windspeed_10m",
+			"precipitation",
+			"cloudcover",
+		]),
 		"timezone": "UTC",
 	}
 	r = requests.get(OPEN_METEO_ARCHIVE, params=params, timeout=20)
@@ -900,6 +911,9 @@ def fetch_open_meteo_hourly(start_date: str, end_date: str, *, latitude: float =
 			"temperature_2m": "temp_c",
 			"relative_humidity_2m": "rh_pct",
 			"surface_pressure": "pressure_hpa",
+			"windspeed_10m": "wind_ms",
+			"precipitation": "precip_mm",
+			"cloudcover": "cloudcover_pct",
 		})
 	return df
 
@@ -1687,19 +1701,25 @@ def main() -> None:
 				kp_error = True
 			if not kp_error:
 				if not kp_df.empty and "kp_index" in kp_df.columns:
-					kp_numeric = kp_df.dropna(subset=["kp_index"])
+					kp_numeric = kp_df.dropna(subset=["kp_index"]) 
 					if not kp_numeric.empty:
 						latest_kp = float(kp_numeric["kp_index"].iloc[-1])
 						latest_time = kp_numeric["time_tag"].iloc[-1] if "time_tag" in kp_numeric.columns else None
 						delta_kp = float(kp_numeric["kp_index"].iloc[-1] - kp_numeric["kp_index"].iloc[-2]) if kp_numeric.shape[0] >= 2 else 0.0
-						st.metric(
-							"Latest Kp index",
-							f"{latest_kp:.1f}",
-							f"{delta_kp:+.1f}",
-							help=f"Timestamp (UTC): {latest_time}" if latest_time is not None else None,
-						)
+						st.metric("Latest Kp index", f"{latest_kp:.1f}", f"{delta_kp:+.1f}", help=f"UTC: {latest_time}")
 						if "time_tag" in kp_numeric.columns:
-							st.line_chart(kp_numeric.set_index("time_tag")[["kp_index"]])
+							kp_win = st.number_input("Kp CI window (points)", min_value=10, max_value=int(min(2000, kp_numeric.shape[0])), value=int(min(180, kp_numeric.shape[0])), step=10, key="kp_win")
+							times = kp_numeric["time_tag"].tolist()
+							vals = kp_numeric["kp_index"].astype(float).reset_index(drop=True)
+							minp = max(3, int(kp_win // 3))
+							roll_mean = vals.rolling(int(kp_win), min_periods=minp).mean()
+							roll_std = vals.rolling(int(kp_win), min_periods=minp).std(ddof=1)
+							roll_n = vals.rolling(int(kp_win), min_periods=minp).count()
+							se = roll_std / np.sqrt(roll_n)
+							low = roll_mean - 1.96 * se
+							high = roll_mean + 1.96 * se
+							_echarts_time_with_ci(times, vals.tolist(), low.tolist(), high.tolist(), title="Kp with rolling 95% CI", y_name="Kp", series_name="Kp")
+						st.caption("CI uses a rolling window over points to estimate uncertainty (mean ± 1.96·SE).")
 					else:
 						st.info("Kp values are not available in the NOAA feed.")
 				else:
@@ -1719,13 +1739,7 @@ def main() -> None:
 				flux_error = True
 			if not flux_error:
 				if not flux_df.empty:
-					value_candidates = [
-						"observed_value",
-						"flux",
-						"predicted_value",
-						"adjusted_flux",
-						"flux_observed",
-					]
+					value_candidates = ["observed_value", "flux", "predicted_value", "adjusted_flux", "flux_observed"]
 					value_col = next((col for col in value_candidates if col in flux_df.columns), None)
 					if value_col:
 						flux_numeric = flux_df.dropna(subset=[value_col])
@@ -1733,14 +1747,20 @@ def main() -> None:
 							latest_flux = float(flux_numeric[value_col].iloc[-1])
 							latest_time = flux_numeric["time_tag"].iloc[-1] if "time_tag" in flux_numeric.columns else None
 							delta_flux = float(latest_flux - flux_numeric[value_col].iloc[-2]) if flux_numeric.shape[0] >= 2 else 0.0
-							st.metric(
-								"Latest F10.7 flux",
-								f"{latest_flux:.1f}",
-								f"{delta_flux:+.1f}",
-								help=f"Timestamp (UTC): {latest_time}" if latest_time is not None else None,
-							)
+							st.metric("Latest F10.7 flux", f"{latest_flux:.1f}", f"{delta_flux:+.1f}", help=f"UTC: {latest_time}")
 							if "time_tag" in flux_numeric.columns:
-								st.line_chart(flux_numeric.set_index("time_tag")[[value_col]])
+								f_win = st.number_input("F10.7 CI window (points)", min_value=5, max_value=int(min(1000, flux_numeric.shape[0])), value=int(min(24, flux_numeric.shape[0])), step=1, key="f107_win")
+								times = flux_numeric["time_tag"].tolist()
+								vals = flux_numeric[value_col].astype(float).reset_index(drop=True)
+								minp = max(3, int(f_win // 3))
+								roll_mean = vals.rolling(int(f_win), min_periods=minp).mean()
+								roll_std = vals.rolling(int(f_win), min_periods=minp).std(ddof=1)
+								roll_n = vals.rolling(int(f_win), min_periods=minp).count()
+								se = roll_std / np.sqrt(roll_n)
+								low = roll_mean - 1.96 * se
+								high = roll_mean + 1.96 * se
+								_echarts_time_with_ci(times, vals.tolist(), low.tolist(), high.tolist(), title="F10.7 with rolling 95% CI", y_name="sfu", series_name="F10.7")
+							st.caption("F10.7 rolling CI uses mean ± 1.96·SE over the selected window.")
 						else:
 							st.info("Solar radio flux values are not available in the NOAA feed.")
 					else:
@@ -1830,7 +1850,10 @@ def main() -> None:
 					st.markdown("#### Correlation vs. Lag (absolute r)")
 					pivot = lag_results.pivot_table(index="lag_hours", columns="metric", values="pearson_r", aggfunc="mean")
 					if not pivot.empty:
-						st.line_chart(pivot.abs())
+						lags_x = pivot.index.astype(float).tolist()
+						series_map = {str(col): pivot[col].astype(float).tolist() for col in pivot.columns}
+						_echarts_multi_series(lags_x, series_map, title="HRV metrics: |r| vs lag", x_name="Lag (h)", y_name="|r|", absolute=True)
+						st.caption("Positive lags shift Kp forward in time; significant peaks may indicate biological response delays.")
 
 					# Partial correlation on the best metric-lag (if covariates available)
 					if use_weather and not cov_df.empty:
@@ -1851,7 +1874,7 @@ def main() -> None:
 							tolerance=pd.Timedelta(minutes=int(merge_tol)),
 						)
 						merged_best = merged_best.dropna(subset=["kp_index", best_metric])
-						cov_cols = [c for c in ["temp_c", "rh_pct", "pressure_hpa"] if c in merged_best.columns]
+						cov_cols = [c for c in ["temp_c", "rh_pct", "pressure_hpa", "wind_ms", "precip_mm", "cloudcover_pct"] if c in merged_best.columns]
 						if cov_cols:
 							cov_mat = merged_best[cov_cols].to_numpy(dtype=float)
 							rp, pp, n = partial_pearson_r_p(
@@ -2006,24 +2029,49 @@ def main() -> None:
 			else:
 				start_date = span.min().date().isoformat()
 				end_date = span.max().date().isoformat()
+				st.caption(f"DONKI query window: {start_date} to {end_date}")
+				choices = ["FLR (Solar Flares)", "CME", "GST (Geomagnetic Storm)", "IPS", "HSS", "RBE", "SEP"]
+				selected = st.multiselect("DONKI predictors", choices, default=["FLR (Solar Flares)", "CME", "GST (Geomagnetic Storm)"])
+				predictor_series: List[Tuple[str, pd.DataFrame, str, str]] = []
 				try:
-					flr = fetch_donki("FLR", start_date, end_date)
-					cme = fetch_donki("CME", start_date, end_date)
-					gst = fetch_donki("GST", start_date, end_date)
+					if "FLR (Solar Flares)" in selected:
+						flr = fetch_donki("FLR", start_date, end_date)
+						fs = donki_event_series(flr, ["beginTime", "peakTime", "startTime"]) if not flr.empty else pd.DataFrame()
+						if not fs.empty:
+							predictor_series.append(("Flare count", fs.rename(columns={"time_tag": "time","event_count": "donki_flare_count"}), "time", "donki_flare_count"))
+					if "CME" in selected:
+						cme = fetch_donki("CME", start_date, end_date)
+						cs = donki_event_series(cme, ["startTime"]) if not cme.empty else pd.DataFrame()
+						if not cs.empty:
+							predictor_series.append(("CME count", cs.rename(columns={"time_tag": "time","event_count": "donki_cme_count"}), "time", "donki_cme_count"))
+					if "GST (Geomagnetic Storm)" in selected:
+						gst = fetch_donki("GST", start_date, end_date)
+						gs = donki_event_series(gst, ["startTime"]) if not gst.empty else pd.DataFrame()
+						if not gs.empty:
+							predictor_series.append(("Geomagnetic storm count", gs.rename(columns={"time_tag": "time","event_count": "donki_gst_count"}), "time", "donki_gst_count"))
+					if "IPS" in selected:
+						ips = fetch_donki("IPS", start_date, end_date)
+						isr = donki_event_series(ips, ["eventTime", "shockArrivalTime", "time"]) if not ips.empty else pd.DataFrame()
+						if not isr.empty:
+							predictor_series.append(("IPS count", isr.rename(columns={"time_tag": "time","event_count": "donki_ips_count"}), "time", "donki_ips_count"))
+					if "HSS" in selected:
+						hss = fetch_donki("HSS", start_date, end_date)
+						hs = donki_event_series(hss, ["startTime", "time"]) if not hss.empty else pd.DataFrame()
+						if not hs.empty:
+							predictor_series.append(("HSS count", hs.rename(columns={"time_tag": "time","event_count": "donki_hss_count"}), "time", "donki_hss_count"))
+					if "RBE" in selected:
+						rbe = fetch_donki("RBE", start_date, end_date)
+						rb = donki_event_series(rbe, ["time"]) if not rbe.empty else pd.DataFrame()
+						if not rb.empty:
+							predictor_series.append(("RBE count", rb.rename(columns={"time_tag": "time","event_count": "donki_rbe_count"}), "time", "donki_rbe_count"))
+					if "SEP" in selected:
+						sep = fetch_donki("SEP", start_date, end_date)
+						sp = donki_event_series(sep, ["eventTime", "startTime", "time"]) if not sep.empty else pd.DataFrame()
+						if not sp.empty:
+							predictor_series.append(("SEP count", sp.rename(columns={"time_tag": "time","event_count": "donki_sep_count"}), "time", "donki_sep_count"))
 				except Exception as exc:
 					st.warning(f"DONKI error: {exc}")
-					flr = cme = gst = pd.DataFrame()
-				flr_series = donki_event_series(flr, ["beginTime", "peakTime", "startTime"]) if not flr.empty else pd.DataFrame()
-				cme_series = donki_event_series(cme, ["startTime"]) if not cme.empty else pd.DataFrame()
-				gst_series = donki_event_series(gst, ["startTime", "allKpIndex"]) if not gst.empty else pd.DataFrame()
-
-				predictor_series: List[Tuple[str, pd.DataFrame, str, str]] = []
-				if not flr_series.empty:
-					predictor_series.append(("Flare count", flr_series.rename(columns={"time_tag": "time","event_count": "donki_flare_count"}), "time", "donki_flare_count"))
-				if not cme_series.empty:
-					predictor_series.append(("CME count", cme_series.rename(columns={"time_tag": "time","event_count": "donki_cme_count"}), "time", "donki_cme_count"))
-				if not gst_series.empty:
-					predictor_series.append(("Geomagnetic storm count", gst_series.rename(columns={"time_tag": "time","event_count": "donki_gst_count"}), "time", "donki_gst_count"))
+					predictor_series = []
 
 				if predictor_series:
 					st.markdown("#### DONKI correlations (lag scan)")
@@ -2038,23 +2086,126 @@ def main() -> None:
 						st.dataframe(res.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False).head(20))
 
 						# Optional: CI band for correlation vs lag using Fisher z (95%)
-						def fisher_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
-							if n <= 3 or not np.isfinite(r):
-								return (np.nan, np.nan)
-							z = np.arctanh(np.clip(r, -0.999999, 0.999999))
-							se = 1.0 / np.sqrt(n - 3)
-							z_crit = 1.96  # for ~95%
-							zl, zu = z - z_crit * se, z + z_crit * se
-							return (np.tanh(zl), np.tanh(zu))
-
-						agg = res.groupby("lag_hours").apply(lambda g: pd.Series({
-							"r_mean": g["pearson_r"].mean(),
-							"n_min": g["n"].min()
-						})).reset_index()
+						agg = res.groupby("lag_hours").apply(lambda g: pd.Series({"r_mean": g["pearson_r"].mean(), "n_min": g["n"].min(), "p_min": g["p_value"].min() if "p_value" in g.columns else np.nan, "q_min": g["q_value"].min() if "q_value" in g.columns else np.nan})).reset_index()
 						if not agg.empty:
-							ci = agg.apply(lambda row: fisher_ci(row["r_mean"], int(row["n_min"]) if np.isfinite(row["n_min"]) else 0), axis=1)
+							ci = agg.apply(lambda row: _fisher_ci(row["r_mean"], int(row["n_min"]) if np.isfinite(row["n_min"]) else 0), axis=1)
 							agg["ci_low"], agg["ci_high"] = zip(*ci)
-							st.line_chart(agg.set_index("lag_hours")[ ["r_mean"] ])
+							sig_mask = []
+							for _, rowa in agg.iterrows():
+								q = rowa.get("q_min")
+								p = rowa.get("p_min")
+								sig_mask.append(bool(np.isfinite(q) and q <= 0.05) or bool(np.isfinite(p) and p <= 0.05))
+							_echarts_line_with_ci(agg["lag_hours"].astype(float).tolist(), agg["r_mean"].astype(float).tolist(), agg["ci_low"].astype(float).tolist(), agg["ci_high"].astype(float).tolist(), sig_mask, title=f"{title}: r vs lag (95% CI)", x_name="Lag (h)", y_name="Pearson r")
+
+				# Explanatory panels
+				desc = {
+					"FLR (Solar Flares)": "Solar flares are bursts of electromagnetic radiation. Here we correlate hourly flare counts with HRV. Flares can precede CMEs but may impact HF/LF via radio flux and ionospheric effects.",
+					"CME": "Coronal Mass Ejections are eruptions of plasma and magnetic field. Arrival at Earth can drive geomagnetic storms (Kp increases), potentially affecting HRV time-domain and frequency metrics with a lag.",
+					"GST (Geomagnetic Storm)": "DONKI GST marks periods of geomagnetic storms. We use hourly storm occurrence counts as a predictor aligned to HRV windows.",
+					"IPS": "Interplanetary shocks are abrupt changes in solar wind conditions that can herald storm onsets. Counts may correlate with short-lag HRV changes.",
+					"HSS": "High Speed Streams from coronal holes can modulate geomagnetic activity and HRV over multi-day scales. Counts are a coarse proxy for exposure.",
+					"RBE": "Radiation Belt Enhancements reflect energetic particle dynamics in the magnetosphere; potential indirect effects on human physiology are explored here.",
+					"SEP": "Solar Energetic Particle events involve high-energy protons/electrons. We examine whether hourly SEP occurrences align with HRV fluctuations across lags.",
+				}
+				with st.expander("About the selected DONKI predictors"):
+					for lab in selected:
+						st.markdown(f"**{lab}** — {desc.get(lab, 'Event type used as hourly predictor aligned to HRV windows.')}\n")
+
+
+def _fisher_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
+	if not np.isfinite(r) or n <= 3:
+		return (float("nan"), float("nan"))
+	z = np.arctanh(np.clip(r, -0.999999, 0.999999))
+	se = 1.0 / np.sqrt(n - 3)
+	z_crit = 1.96  # ~95%
+	zl, zu = z - z_crit * se, z + z_crit * se
+	return (float(np.tanh(zl)), float(np.tanh(zu)))
+
+
+def _echarts_timeseries(time_vals: List[pd.Timestamp], y_vals: List[float], *, title: str, y_name: str, series_name: str) -> None:
+	data = [[str(t), float(v)] for t, v in zip(time_vals, y_vals) if pd.notna(t) and np.isfinite(v)]
+	opt = {
+		"title": {"text": title, "left": "center"},
+		"tooltip": {"trigger": "axis"},
+		"xAxis": {"type": "time"},
+		"yAxis": {"type": "value", "name": y_name},
+		"grid": {"left": 40, "right": 18, "containLabel": True},
+		"series": [{"name": series_name, "type": "line", "showSymbol": False, "smooth": True, "data": data}],
+	}
+	render_echarts(opt, height_px=320, width="100%", config=EChartsConfig())
+
+
+def _echarts_multi_series(x_vals: List[float], series_map: Dict[str, List[float]], *, title: str, x_name: str, y_name: str, absolute: bool = False) -> None:
+	series = []
+	for name, vals in series_map.items():
+		pairs = [[float(x), float(abs(v) if absolute else v)] for x, v in zip(x_vals, vals) if np.isfinite(x) and np.isfinite(v)]
+		series.append({"name": name, "type": "line", "smooth": True, "showSymbol": False, "data": pairs})
+	opt = {
+		"title": {"text": title, "left": "center"},
+		"tooltip": {"trigger": "axis"},
+		"legend": {"top": 24},
+		"xAxis": {"type": "value", "name": x_name},
+		"yAxis": {"type": "value", "name": y_name},
+		"grid": {"left": 40, "right": 18, "containLabel": True},
+		"series": series,
+	}
+	render_echarts(opt, height_px=320, width="100%", config=EChartsConfig())
+
+
+def _echarts_line_with_ci(x_vals: List[float], y_vals: List[float], ci_low: List[float], ci_high: List[float], sig_mask: List[bool], *, title: str, x_name: str, y_name: str) -> None:
+	# Build stacked area for CI: lower and (upper-lower)
+	lower = []
+	band = []
+	scat = []
+	for x, yl, yh, y, sig in zip(x_vals, ci_low, ci_high, y_vals, sig_mask):
+		if np.isfinite(x) and np.isfinite(yl) and np.isfinite(yh):
+			lower.append([float(x), float(yl)])
+			band.append([float(x), float(max(0.0, yh - yl))])
+		else:
+			lower.append([float(x), None])
+			band.append([float(x), None])
+		if np.isfinite(x) and np.isfinite(y):
+			scat.append({"value": [float(x), float(y)], "itemStyle": {"color": "#d32f2f" if sig else "#1e88e5"}, "symbolSize": 8 if sig else 5})
+	opt = {
+		"title": {"text": title, "left": "center"},
+		"tooltip": {"trigger": "axis"},
+		"legend": {"top": 24},
+		"xAxis": {"type": "value", "name": x_name},
+		"yAxis": {"type": "value", "name": y_name},
+		"grid": {"left": 48, "right": 18, "containLabel": True},
+		"series": [
+			{"name": "CI low", "type": "line", "showSymbol": False, "data": lower, "lineStyle": {"opacity": 0}},
+			{"name": "CI band", "type": "line", "showSymbol": False, "data": band, "stack": "ci", "areaStyle": {"color": "rgba(30,136,229,0.18)"}, "lineStyle": {"opacity": 0}},
+			{"name": "r (points)", "type": "scatter", "data": scat},
+		],
+	}
+	render_echarts(opt, height_px=340, width="100%", config=EChartsConfig())
+
+
+def _echarts_time_with_ci(time_vals: List[pd.Timestamp], y_vals: List[float], ci_low: List[float], ci_high: List[float], *, title: str, y_name: str, series_name: str) -> None:
+	lower = []
+	band = []
+	main = []
+	for t, yl, yh, y in zip(time_vals, ci_low, ci_high, y_vals):
+		if pd.notna(t):
+			ts = str(t)
+			lower.append([ts, float(yl) if np.isfinite(yl) else None])
+			band.append([ts, float(yh - yl) if (np.isfinite(yl) and np.isfinite(yh)) else None])
+			main.append([ts, float(y) if np.isfinite(y) else None])
+	opt = {
+		"title": {"text": title, "left": "center"},
+		"tooltip": {"trigger": "axis"},
+		"legend": {"top": 24},
+		"xAxis": {"type": "time"},
+		"yAxis": {"type": "value", "name": y_name},
+		"grid": {"left": 48, "right": 18, "containLabel": True},
+		"series": [
+			{"name": "CI low", "type": "line", "showSymbol": False, "data": lower, "lineStyle": {"opacity": 0}},
+			{"name": "CI band", "type": "line", "showSymbol": False, "data": band, "stack": "ci", "areaStyle": {"color": "rgba(30,136,229,0.15)"}, "lineStyle": {"opacity": 0}},
+			{"name": series_name, "type": "line", "showSymbol": False, "smooth": True, "data": main, "lineStyle": {"color": "#1e88e5", "width": 2}},
+		],
+	}
+	render_echarts(opt, height_px=340, width="100%", config=EChartsConfig())
 
 
 if __name__ == "__main__":
