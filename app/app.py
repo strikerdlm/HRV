@@ -2796,7 +2796,16 @@ def main() -> None:
 						try:
 							home_html = requests.get("https://www.spaceweatherlive.com/", timeout=12).text
 							solar_html = requests.get("https://www.spaceweatherlive.com/en/solar-activity.html", timeout=12).text
-							snap = extract_spaceweather_with_openai({"home": home_html, "solar_activity": solar_html})
+							cme_html = requests.get("https://www.spaceweatherlive.com/en/solar-activity/latest-cmes.html", timeout=12).text
+							ursigram_html = requests.get("https://www.spaceweatherlive.com/en/reports/sidc-ursigram.html", timeout=12).text
+							snap = extract_spaceweather_with_openai(
+								{
+									"home": home_html,
+									"solar_activity": solar_html,
+									"latest_cmes": cme_html,
+									"sidc_ursigram": ursigram_html,
+								}
+							)
 						except Exception as e2:
 							snap = None
 							st.error(f"OpenAI fallback failed: {e2}")
@@ -2847,6 +2856,102 @@ def main() -> None:
 								)
 							else:
 								st.caption("Flare probabilities: n/a")
+
+						if snap.cme_records:
+							cme_stats = snap.cme_velocity_stats()
+							count_val = float(cme_stats.get("count") or 0)
+							count_max = max(5.0, count_val * 1.4 + 1.0)
+							median_val = cme_stats.get("median")
+							max_val = cme_stats.get("max")
+							velocity_ceiling = 400.0
+							if isinstance(max_val, (int, float)):
+								velocity_ceiling = max(velocity_ceiling, float(max_val) * 1.1 + 50.0)
+							elif isinstance(median_val, (int, float)):
+								velocity_ceiling = max(velocity_ceiling, float(median_val) * 1.5 + 50.0)
+							cme_cols = st.columns(3)
+							with cme_cols[0]:
+								_echarts_gauge(
+									count_val,
+									min_val=0.0,
+									max_val=count_max,
+									title="CACTus CME count",
+									formatter="{value:.0f}",
+									thresholds=[
+										(count_max * 0.33, "#22c55e"),
+										(count_max * 0.66, "#facc15"),
+										(count_max, "#ef4444"),
+									],
+								)
+								st.caption(f"Detections parsed: {int(count_val)} (latest table).")
+							with cme_cols[1]:
+								if isinstance(median_val, (int, float)):
+									_echarts_gauge(
+										float(median_val),
+										min_val=0.0,
+										max_val=velocity_ceiling,
+										title="Median CME speed (km/s)",
+										formatter="{value:.0f}",
+										thresholds=[
+											(velocity_ceiling * 0.33, "#22c55e"),
+											(velocity_ceiling * 0.66, "#facc15"),
+											(velocity_ceiling, "#ef4444"),
+										],
+									)
+									st.caption(f"Median speed across detections: {median_val:.0f} km/s.")
+								else:
+									st.caption("Median CME speed: n/a")
+							with cme_cols[2]:
+								if isinstance(max_val, (int, float)):
+									_echarts_gauge(
+										float(max_val),
+										min_val=0.0,
+										max_val=velocity_ceiling,
+										title="Fastest CME (km/s)",
+										formatter="{value:.0f}",
+										thresholds=[
+											(velocity_ceiling * 0.33, "#22c55e"),
+											(velocity_ceiling * 0.66, "#facc15"),
+											(velocity_ceiling, "#ef4444"),
+										],
+									)
+									st.caption(f"Peak speed among listed CMEs: {max_val:.0f} km/s.")
+								else:
+									st.caption("Peak CME speed: n/a")
+							cme_rows: List[Dict[str, object]] = []
+							for entry in snap.cme_records[:15]:
+								cme_rows.append(
+									{
+										"CME ID": entry.cactus_id,
+										"Onset (UTC)": entry.onset_time_utc.isoformat().replace("+00:00", "Z")
+										if entry.onset_time_utc
+										else None,
+										"Duration (h)": entry.duration_hours,
+										"Position angle (°)": entry.position_angle_deg,
+										"Angular width (°)": entry.angular_width_deg,
+										"Velocity (km/s)": entry.velocity_kms,
+										"Velocity variation": entry.velocity_variation_kms,
+										"Velocity min": entry.velocity_min_kms,
+										"Velocity max": entry.velocity_max_kms,
+										"Halo": entry.halo_class,
+									}
+								)
+							if cme_rows:
+								st.dataframe(pd.DataFrame(cme_rows))
+						else:
+							st.caption("CACTus CME detections: n/a")
+
+						if snap.sidc_report and (
+							snap.sidc_report.bulletin_excerpt or snap.sidc_report.cme_highlights
+						):
+							with st.expander("SIDC Ursigram highlights (CME context)"):
+								if snap.sidc_report.issued_utc:
+									st.caption(
+										f"Issued: {snap.sidc_report.issued_utc.strftime('%Y-%m-%d %H:%M UTC')}"
+									)
+								if snap.sidc_report.cme_highlights:
+									st.markdown(f"**CME highlights:** {snap.sidc_report.cme_highlights}")
+								if snap.sidc_report.bulletin_excerpt:
+									st.write(snap.sidc_report.bulletin_excerpt)
 
 						if snap.kp_forecast:
 							kp_rows = [
