@@ -7,6 +7,8 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 import os
+import sys
+import logging
 
 # Windows console safety to mitigate Colorama/Click re-entrancy during shutdown
 if os.name == "nt":
@@ -35,6 +37,53 @@ from hrv_core import (
 	readiness_from_pns,
 	spectrogram_rr,
 )
+
+
+def setup_console_logging(level: int = logging.INFO) -> logging.Logger:
+	"""
+	Configure an application logger that writes to stderr with a stable format.
+	This function is idempotent across Streamlit reruns: it clears
+	existing handlers on the application logger to avoid duplicate
+	messages.
+
+	Parameters
+	----------
+	level : int
+		Logging level to apply (e.g., logging.INFO, logging.DEBUG).
+
+	Returns
+	-------
+	logging.Logger
+		Configured logger instance for the application.
+
+	Raises
+	------
+	TypeError
+		If 'level' is not an int logging level.
+	"""
+	if not isinstance(level, int):
+		raise TypeError("level must be an int logging level")
+	app_logger = logging.getLogger("hrv_app")
+	app_logger.propagate = False
+	# Clear existing handlers to prevent duplicates after Streamlit reruns
+	for handler in list(app_logger.handlers):
+		app_logger.removeHandler(handler)
+
+	stream_handler = logging.StreamHandler(stream=sys.stderr)
+	stream_handler.setLevel(level)
+	formatter = logging.Formatter(
+		fmt="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+		datefmt="%H:%M:%S",
+	)
+	stream_handler.setFormatter(formatter)
+
+	app_logger.addHandler(stream_handler)
+	app_logger.setLevel(level)
+
+	# Route Python warnings to logging so they appear in the console too
+	logging.captureWarnings(True)
+
+	return app_logger
 
 
 @st.cache_data(show_spinner=False)
@@ -618,6 +667,9 @@ def _interpretation(multi_results: pd.DataFrame, windowed: Optional[pd.DataFrame
 
 
 def main() -> None:
+	logger: logging.Logger = setup_console_logging(logging.INFO)
+	# Streamlit detailed tracebacks in the UI and console
+	st.set_option("client.showErrorDetails", True)
 	st.set_page_config(page_title="HRV Analysis — Streamlit + ECharts", layout="wide")
 	# Make the central container and iframes use the full page width
 	st.markdown(
@@ -682,6 +734,10 @@ def main() -> None:
 	skip_spectrogram = st.sidebar.checkbox("Skip Spectrogram", value=True)
 	skip_gauges = st.sidebar.checkbox("Skip Gauges", value=False)
 	show_debug = st.sidebar.checkbox("Show detailed progress logs", value=False)
+	# Adjust runtime log verbosity from sidebar preference
+	logger.setLevel(logging.DEBUG if show_debug else logging.INFO)
+	for _handler in logger.handlers:
+		_handler.setLevel(logger.level)
 
 	st.sidebar.subheader("ML enhancements")
 	enable_ml = st.sidebar.checkbox("Enable ML-assisted deviation clustering", value=False)
@@ -789,6 +845,7 @@ def main() -> None:
 				max_iterations=50,
 			)
 		except ValueError as exc:
+			logger.warning("ML clustering failed: %s", exc, exc_info=True)
 			ml_error_message = str(exc)
 		else:
 			windowed_df = ml_result.windowed_with_clusters
@@ -1057,6 +1114,7 @@ def main() -> None:
 			try:
 				ts_series, rr_series = _prepare_rr_series(selected_dataset, use_clean_for_ans)
 			except ValueError as exc:
+				logger.warning("Preparing RR series failed: %s", exc, exc_info=True)
 				st.warning(str(exc))
 			else:
 				with st.form(f"ans-form-{selected_dataset_name}"):
@@ -1080,6 +1138,7 @@ def main() -> None:
 						phase_iv_window = _parse_window_seconds(vals_phase_iv_input, "Valsalva phase IV window")
 						valsalva_result = compute_valsalva_ratio(ts_series, rr_series, phase_ii_window, phase_iv_window)
 					except ValueError as exc:
+						logger.warning("Valsalva ratio computation inputs invalid: %s", exc, exc_info=True)
 						errors.append(f"Valsalva ratio: {exc}")
 					try:
 						start_time_s = _parse_float(deep_start_input, "Deep breathing start (s)")
@@ -1092,6 +1151,7 @@ def main() -> None:
 							n_cycles=int(deep_cycles_input),
 						)
 					except ValueError as exc:
+						logger.warning("Deep breathing response inputs invalid: %s", exc, exc_info=True)
 						errors.append(f"Deep breathing response: {exc}")
 					try:
 						window_15_s = _parse_window_seconds(ratio15_window_input, "30:15 ratio (15th-beat window)")
@@ -1105,6 +1165,7 @@ def main() -> None:
 							window_30_s=window_30_s,
 						)
 					except ValueError as exc:
+						logger.warning("30:15 ratio inputs invalid: %s", exc, exc_info=True)
 						errors.append(f"30:15 ratio: {exc}")
 					if errors:
 						for err in errors:
@@ -1177,6 +1238,7 @@ def main() -> None:
 					try:
 						baseline = build_readiness_baseline(history_values, min_samples=min_hist, max_samples=max_hist)
 					except ValueError as exc:
+						logger.warning("Readiness baseline configuration issue: %s", exc, exc_info=True)
 						st.warning(f"Baseline configuration issue: {exc}")
 					else:
 						current_pns = float(pns_mapping.get(current_sel, np.nan))
@@ -1320,6 +1382,7 @@ def main() -> None:
 					additional_notes=notes_input,
 				)
 			except ValueError as exc:
+				logger.warning("Report generation failed: %s", exc, exc_info=True)
 				st.warning(str(exc))
 			else:
 				st.text_area("Report preview", report_markdown, height=360)
