@@ -2,7 +2,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import timezone
-from typing import Any, Dict, List, Mapping, Optional, Tuple
+from typing import (
+	Any,
+	Dict,
+	Iterable,
+	List,
+	Mapping,
+	Optional,
+	Sequence,
+	Set,
+	Tuple,
+)
 
 import concurrent.futures
 import hashlib
@@ -2004,6 +2014,11 @@ def main() -> None:
 		ml_summary_df=ml_summary_df,
 	)
 
+	metric_list: List[str] = _select_hrv_metric_columns(
+		windowed_df,
+		exclude=("kp_index",),
+	)
+
 	# Tabs
 	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_ans, tab_readiness, tab_gauges, tab_science, tab_space_weather, tab_export, tab_refs, tab_about = st.tabs(
 		[
@@ -2852,17 +2867,6 @@ def main() -> None:
 		cedula = st.text_input("Cedula (identification number)", value="", placeholder="e.g., 12345678")
 		use_weather = st.checkbox("Include weather covariates (Bogotá) for partial correlations", value=True)
 
-		metric_list: List[str] = []
-		if not windowed_df.empty:
-			preferred_metrics = ["rmssd", "sdnn", "hf_power", "lf_hf_ratio", "mean_hr", "pnn50", "pnn20"]
-			metric_list = [col for col in preferred_metrics if col in windowed_df.columns]
-			if not metric_list:
-				numeric_candidates = [
-					col
-					for col in windowed_df.select_dtypes(include=[np.number]).columns
-					if col not in ("kp_index",)
-				]
-				metric_list = numeric_candidates[:8]
 		lags = list(range(int(lag_min), int(lag_max) + 1, int(lag_step)))
 		if not lags:
 			lags = [0]
@@ -3582,6 +3586,7 @@ def _echarts_gauge(
 	unit: str = "",
 	precision: int = 2,
 	thresholds: Optional[List[Tuple[float, str]]] = None,
+	formatter: Optional[str] = None,
 	height_px: int = 300,
 ) -> None:
 	if not np.isfinite(value):
@@ -3591,7 +3596,13 @@ def _echarts_gauge(
 		max_val = min_val + 1.0
 	span = max_val - min_val
 	value_clamped = float(np.clip(value, min_val, max_val))
-	display_value = round(value_clamped, precision)
+	if formatter is not None and not isinstance(formatter, str):
+		raise TypeError("formatter must be a string or None.")
+	if precision < 0:
+		raise ValueError("precision must be non-negative.")
+	if height_px <= 0:
+		raise ValueError("height_px must be positive.")
+	display_value = value_clamped if formatter else round(value_clamped, precision)
 	segments = thresholds or []
 	color_segments: List[List[Any]] = []
 	if segments:
@@ -3625,7 +3636,7 @@ def _echarts_gauge(
 				"detail": {
 					"valueAnimation": True,
 					"offsetCenter": [0, "10%"],
-					"formatter": f"{{value}}{unit_suffix}",
+					"formatter": formatter if formatter else f"{{value}}{unit_suffix}",
 					"color": "#0f172a",
 					"fontSize": 26,
 				},
@@ -3634,6 +3645,76 @@ def _echarts_gauge(
 		],
 	}
 	render_echarts(opt, height_px=height_px, width="100%", config=EChartsConfig())
+
+
+def _select_hrv_metric_columns(
+	windowed_df: pd.DataFrame,
+	*,
+	exclude: Iterable[str] = (),
+	limit: int = 8,
+	preferred: Optional[Sequence[str]] = None,
+) -> List[str]:
+	"""
+	Select HRV metric columns appropriate for correlation analyses.
+
+	Parameters
+	----------
+	windowed_df : pd.DataFrame
+		DataFrame containing windowed HRV metrics. May be empty.
+	exclude : Iterable[str], optional
+		Exact column names to omit from the result.
+	limit : int, optional
+		Maximum number of fallback numeric columns to return when the
+		preferred metrics are absent.
+	preferred : Optional[Sequence[str]], optional
+		Ordered collection of preferred metric names to use when present.
+
+	Returns
+	-------
+	List[str]
+		Ordered list of metric column names suitable for correlation work.
+
+	Raises
+	------
+	ValueError
+		If 'limit' is less than 1.
+	TypeError
+		If 'exclude' contains a non-string element.
+	"""
+	if limit < 1:
+		raise ValueError("limit must be at least 1.")
+	exclude_set: Set[str] = set()
+	for col in exclude:
+		if not isinstance(col, str):
+			raise TypeError("exclude entries must be strings.")
+		exclude_set.add(col)
+	if windowed_df.empty:
+		return []
+	baseline_preferred: Sequence[str] = preferred or (
+		"rmssd",
+		"sdnn",
+		"hf_power",
+		"lf_hf_ratio",
+		"mean_hr",
+		"pnn50",
+		"pnn20",
+	)
+	selected: List[str] = []
+	for column in baseline_preferred:
+		if (
+			column in windowed_df.columns
+			and column not in exclude_set
+			and pd.api.types.is_numeric_dtype(windowed_df[column])
+		):
+			selected.append(column)
+	if selected:
+		return selected
+	numeric_candidates = [
+		column
+		for column in windowed_df.select_dtypes(include=[np.number]).columns
+		if column not in exclude_set
+	]
+	return numeric_candidates[:limit]
 
 
 def _scan_lag_correlations_generic(
