@@ -3,17 +3,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
-import numpy as np
-import pandas as pd
-import streamlit as st
+import concurrent.futures
+import hashlib
+import json
+import logging
 import os
 import sys
-import logging
+import time
+
+import numpy as np
+import pandas as pd
 import requests
-import json
+import streamlit as st
+from dotenv import load_dotenv
 from pathlib import Path
 from uuid import uuid4
-from dotenv import load_dotenv
 
 # Load .env variables early (e.g., NASA_API_KEY, ACCUWEATHER_API_KEY)
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
@@ -46,6 +50,12 @@ from hrv_core import (
 	psd_curve,
 	readiness_from_pns,
 	spectrogram_rr,
+)
+from gpt_interpretation import (
+	GPT5InterpretationError,
+	InterpretationResult,
+	build_analysis_payload,
+	request_interpretation,
 )
 try:
 	from spaceweatherlive_client import fetch_spaceweatherlive_snapshot
@@ -255,6 +265,112 @@ def _cached_windowed(
 @st.cache_data(show_spinner=False)
 def _cached_spectrogram(rr: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
 	return spectrogram_rr(rr, sampling_rate=4.0)
+
+
+def _request_interpretation_with_progress(
+	container: st.delta_generator.DeltaGenerator,
+	analysis_payload: str,
+	timeout: float = 50.0,
+) -> InterpretationResult:
+	progress_slot = container.container()
+	progress_bar = progress_slot.progress(0, text="Preparing GPT-5 interpretation (0%)")
+	checkpoints = [12, 28, 44, 60, 76, 92]
+	step_delay = min(1.0, timeout / max(len(checkpoints) + 1, 2))
+	try:
+		with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+			future = executor.submit(request_interpretation, analysis_payload, timeout=timeout)
+			for percent in checkpoints:
+				if future.done():
+					break
+				progress_bar.progress(percent, text=f"Generating GPT-5 interpretation ({percent}%)")
+				time.sleep(step_delay)
+			result = future.result(timeout=max(1.0, timeout - step_delay * len(checkpoints)))
+	except concurrent.futures.TimeoutError as exc:
+		progress_slot.empty()
+		raise GPT5InterpretationError("GPT-5 interpretation timed out.") from exc
+	except GPT5InterpretationError:
+		progress_slot.empty()
+		raise
+	except Exception as exc:  # pragma: no cover - defensive
+		progress_slot.empty()
+		raise GPT5InterpretationError(f"Unexpected GPT-5 error: {exc}") from exc
+	progress_bar.progress(100, text="GPT-5 interpretation ready (100%)")
+	time.sleep(0.25)
+	progress_slot.empty()
+	return result
+
+
+def _render_gpt_high_interpretation(
+	container: st.delta_generator.DeltaGenerator,
+	*,
+	enabled: bool,
+	meta_rows: List[Dict[str, Any]],
+	multi_results_df: pd.DataFrame,
+	windowed_df: pd.DataFrame,
+	episodes_df: pd.DataFrame,
+	ml_summary_df: pd.DataFrame,
+) -> None:
+	state = st.session_state.setdefault(
+		"gpt5_high_state",
+		{
+			"payload_hash": "",
+			"markdown": "",
+			"sources": [],
+			"reasoning_encrypted": None,
+		},
+	)
+	if not enabled:
+		container.empty()
+		st.session_state["gpt5_export_markdown"] = ""
+		return
+	title_container = container.container()
+	body_container = container.container()
+	title_container.markdown("### GPT-5 High Interpretation")
+	if not meta_rows and multi_results_df.empty and windowed_df.empty:
+		body_container.info("Run the analysis to enable the GPT-5 interpretation.")
+		st.session_state["gpt5_export_markdown"] = ""
+		return
+	try:
+		analysis_payload = build_analysis_payload(
+			meta_rows,
+			multi_results_df,
+			windowed_df,
+			episodes_df,
+			ml_summary_df,
+		)
+	except (GPT5InterpretationError, ValueError, TypeError) as exc:
+		body_container.error(str(exc))
+		st.session_state["gpt5_export_markdown"] = ""
+		return
+	except Exception as exc:  # pragma: no cover - defensive
+		body_container.error(f"Failed to build analysis payload: {exc}")
+		st.session_state["gpt5_export_markdown"] = ""
+		return
+	payload_hash = hashlib.sha256(analysis_payload.encode("utf-8")).hexdigest()
+	regenerate = body_container.button("Regenerate interpretation", key="gpt5_high_regenerate")
+	should_request = regenerate or state["payload_hash"] != payload_hash
+	if should_request:
+		try:
+			result = _request_interpretation_with_progress(body_container, analysis_payload)
+		except GPT5InterpretationError as exc:
+			if "OPENAI_API_KEY" in str(exc).upper():
+				body_container.warning("Set OPENAI_API_KEY in your .env file before committing to version control.")
+			else:
+				body_container.error(str(exc))
+			st.session_state["gpt5_export_markdown"] = ""
+			return
+		state["payload_hash"] = payload_hash
+		state["markdown"] = result.markdown
+		state["sources"] = result.sources
+		state["reasoning_encrypted"] = result.reasoning_encrypted
+	if not state["markdown"]:
+		body_container.info("GPT-5 interpretation will appear here once generated.")
+		st.session_state["gpt5_export_markdown"] = ""
+		return
+	body_container.markdown(state["markdown"])
+	if state["sources"]:
+		body_container.caption("Sources: " + ", ".join(state["sources"]))
+	st.session_state["gpt5_export_markdown"] = state["markdown"]
 
 
 @dataclass(slots=True)
@@ -1161,6 +1277,15 @@ def main() -> None:
 
 	st.sidebar.subheader("ML enhancements")
 	enable_ml = st.sidebar.checkbox("Enable ML-assisted deviation clustering", value=False)
+
+	st.sidebar.markdown("---")
+	st.sidebar.subheader("AI interpretation")
+	gpt_high_enabled = st.sidebar.toggle(
+		"gpt-5-high interpretation",
+		value=False,
+		help="Send analysis outputs to OpenAI GPT-5 (high reasoning) to obtain a doctoral-level markdown report. Requires OPENAI_API_KEY in the .env file.",
+	)
+
 	st.sidebar.markdown("---")
 	st.sidebar.subheader("Patient profile (covariate adjustment)")
 	enable_cov = st.sidebar.checkbox("Enable covariate adjustment (RMSSD/SDNN)", value=False)
@@ -1393,6 +1518,17 @@ def main() -> None:
 			val = float(row["parasympathetic_index"].iloc[0])
 			if np.isfinite(val):
 				pns_mapping[src] = val
+
+	ai_section = st.container()
+	_render_gpt_high_interpretation(
+		ai_section,
+		enabled=gpt_high_enabled,
+		meta_rows=meta_rows,
+		multi_results_df=multi_results_df,
+		windowed_df=windowed_df,
+		episodes_df=episodes_df,
+		ml_summary_df=ml_summary_df,
+	)
 
 	# Tabs
 	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_ans, tab_readiness, tab_gauges, tab_science, tab_space_weather, tab_export, tab_refs, tab_about = st.tabs(
@@ -2374,6 +2510,20 @@ def main() -> None:
 				)
 				if include_ml_opt and ml_summary_df.empty and enable_ml and ml_error_message:
 					st.info(f"ML section included but no clusters were generated: {ml_error_message}")
+		gpt_report_md = st.session_state.get("gpt5_export_markdown", "")
+		if gpt_report_md:
+			st.markdown("---")
+			st.subheader("GPT-5 high interpretation")
+			st.text_area("GPT-5 interpretation preview", gpt_report_md, height=360)
+			gpt_file_name = f"hrv_gpt5_high_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.md"
+			st.download_button(
+				label="Download GPT-5 interpretation",
+				data=gpt_report_md.encode("utf-8"),
+				file_name=gpt_file_name,
+				mime="text/markdown",
+			)
+		elif gpt_high_enabled:
+			st.info("GPT-5 interpretation is enabled; trigger the analysis to populate this section.")
 	with tab_about:
 		st.markdown(
 			"### About the Author\n"
