@@ -750,12 +750,8 @@ def main() -> None:
 		""",
 		unsafe_allow_html=True,
 	)
-	st.title("HRV Analysis")
-	st.caption("Modern, scientific, interactive analysis with Apache ECharts.")
-	st.markdown(
-		"Using Apache ECharts for high-quality, interactive plots "
-		"(see the official handbook: [ECharts Handbook](https://echarts.apache.org/handbook/en/get-started/))."
-	)
+	st.title("Heart Rate Variability Analysis")
+	st.caption("Developed by Dr Diego Malpica")
 
 	uploads = _upload_section()
 	if not uploads:
