@@ -519,6 +519,7 @@ def _space_weather_state() -> Dict[str, Any]:
 			"swl_snapshots": [],
 			"swl_last_updated": None,
 			"swl_cme_daily": pd.DataFrame(),
+			"swl_feature_matrix": pd.DataFrame(),
 		},
 	)
 	return state
@@ -612,6 +613,16 @@ def _extract_datetime_values(value: Any) -> List[pd.Timestamp]:
 		if pd.notna(ts):
 			collected.append(ts)
 	return collected
+
+
+def _safe_feature_name(text: str) -> str:
+	"""
+	Convert an arbitrary label into a safe, snake_case feature name suitable for column names.
+	"""
+	if not isinstance(text, str) or not text:
+		return "feature"
+	normalised = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+	return normalised or "feature"
 
 
 def _collect_donki_times(df: pd.DataFrame, columns: List[str]) -> pd.Series:
@@ -871,6 +882,122 @@ def _build_cme_predictor_series(cme_df: pd.DataFrame) -> List[Tuple[str, pd.Data
 			)
 
 	return predictors
+
+
+def _merge_series_with_lags(
+	base_times: pd.DataFrame,
+	series_df: pd.DataFrame,
+	time_col: str,
+	value_col: str,
+	lags_hours: Sequence[int],
+	tolerance_minutes: int,
+	prefix: str,
+) -> pd.DataFrame:
+	"""
+	Align a predictor series to HRV window start times across multiple lags.
+	"""
+	if series_df.empty or value_col not in series_df.columns:
+		return pd.DataFrame(index=base_times.index)
+	series = series_df[[time_col, value_col]].dropna(subset=[time_col, value_col]).copy()
+	if series.empty:
+		return pd.DataFrame(index=base_times.index)
+	series[time_col] = pd.to_datetime(series[time_col], errors="coerce", utc=True)
+	series = series.dropna(subset=[time_col]).sort_values(time_col)
+	if series.empty:
+		return pd.DataFrame(index=base_times.index)
+	base_sorted = base_times[["window_start"]].sort_values("window_start")
+	tolerance = pd.Timedelta(minutes=int(tolerance_minutes))
+	feature_frames: Dict[str, pd.Series] = {}
+	for lag in lags_hours:
+		shifted = series.copy()
+		if lag:
+			shift_delta = pd.Timedelta(hours=int(lag))
+			shifted[time_col] = shifted[time_col] + shift_delta
+		merged = pd.merge_asof(
+			base_sorted,
+			shifted,
+			left_on="window_start",
+			right_on=time_col,
+			direction="nearest",
+			tolerance=tolerance,
+		)
+		col_name = _safe_feature_name(f"{prefix}_lag_{lag:+d}h")
+		feature_frames[col_name] = merged[value_col]
+	feature_df = pd.DataFrame(feature_frames, index=base_sorted.index)
+	return feature_df.reindex(base_times.index)
+
+
+def _build_space_weather_feature_matrix(
+	windowed_df: pd.DataFrame,
+	predictors: Sequence[Tuple[str, pd.DataFrame, str, str]],
+	*,
+	lags_hours: Sequence[int],
+	tolerance_minutes: int,
+	metric_columns: Sequence[str],
+) -> pd.DataFrame:
+	"""
+	Build a feature matrix aligning HRV window metrics with lagged space-weather predictors.
+	"""
+	if windowed_df.empty:
+		raise ValueError("HRV windowed dataframe is empty.")
+	if "start" not in windowed_df.columns:
+		raise ValueError("HRV windowed dataframe lacks a 'start' timestamp column.")
+	if not predictors:
+		raise ValueError("No predictor series supplied.")
+	use_metrics = [
+		col
+		for col in metric_columns
+		if col in windowed_df.columns and pd.api.types.is_numeric_dtype(windowed_df[col])
+	]
+	if not use_metrics:
+		raise ValueError("No numeric HRV metric columns available for feature construction.")
+	base = windowed_df[["start"] + use_metrics].copy()
+	base["window_start"] = pd.to_datetime(base["start"], errors="coerce", utc=True)
+	base = base.dropna(subset=["window_start"]).reset_index(drop=True)
+	if base.empty:
+		raise ValueError("All HRV windows have invalid timestamps; cannot align predictors.")
+	base_times = base[["window_start"]]
+	feature_blocks: List[pd.DataFrame] = []
+	used_names: Set[str] = set()
+	unique_lags = sorted({int(lag) for lag in lags_hours}) or [0]
+	for title, s_df, tcol, vcol in predictors:
+		prefix_raw = f"{title}_{vcol}"
+		prefix = _safe_feature_name(prefix_raw)
+		aligned_block = _merge_series_with_lags(
+			base_times,
+			s_df,
+			tcol,
+			vcol,
+			unique_lags,
+			int(tolerance_minutes),
+			prefix,
+		)
+		if aligned_block.empty:
+			continue
+		rename_map: Dict[str, str] = {}
+		for column in aligned_block.columns:
+			candidate = column
+			if candidate in used_names:
+				suffix = 1
+				while f"{candidate}_{suffix}" in used_names:
+					suffix += 1
+				candidate = f"{candidate}_{suffix}"
+			rename_map[column] = candidate
+			used_names.add(candidate)
+		feature_blocks.append(aligned_block.rename(columns=rename_map))
+	features = (
+		pd.concat(feature_blocks, axis=1, sort=False).reset_index(drop=True)
+		if feature_blocks
+		else pd.DataFrame(index=base.index)
+	)
+	result = pd.concat(
+		[
+			base[["window_start"] + use_metrics].reset_index(drop=True),
+			features,
+		],
+		axis=1,
+	)
+	return result
 
 
 def _render_lag_scan_summary(title: str, res: pd.DataFrame, *, lags: Sequence[int]) -> None:
@@ -3676,6 +3803,7 @@ def main() -> None:
 							)
 							_render_lag_scan_summary(title, res, lags=lags)
 
+				cme_predictors: List[Tuple[str, pd.DataFrame, str, str]] = []
 				cme_df_state = space_state.get("swl_cme_df", pd.DataFrame())
 				if cme_df_state.empty:
 					st.info("Fetch SpaceWeatherLive data to enable CME correlations.")
@@ -3699,6 +3827,47 @@ def main() -> None:
 									merge_tolerance_minutes=int(merge_tol),
 								)
 								_render_lag_scan_summary(title, res, lags=lags)
+
+				all_predictors = predictor_series + cme_predictors
+				with st.expander("Build HRV ↔ space-weather feature matrix (beta)"):
+					if windowed_df.empty or "start" not in windowed_df.columns:
+						st.caption("Load HRV data with window timestamps to build the feature matrix.")
+					elif not metric_list:
+						st.caption("Run the HRV metrics analysis to expose numeric metrics used as targets.")
+					elif not all_predictors:
+						st.caption("Fetch DONKI or SpaceWeatherLive datasets first to provide predictor series.")
+					else:
+						feature_lags = sorted({int(lag) for lag in lags}) or [0]
+						st.caption(
+							f"Lags applied to each predictor: {', '.join(str(lag) for lag in feature_lags)} hour(s); "
+							f"merge tolerance {int(merge_tol)} minutes."
+						)
+						if st.button("Generate feature matrix", key="btn_build_spaceweather_matrix"):
+							try:
+								feature_df = _build_space_weather_feature_matrix(
+									windowed_df,
+									all_predictors,
+									lags_hours=feature_lags,
+									tolerance_minutes=int(merge_tol),
+									metric_columns=metric_list,
+								)
+							except ValueError as exc:
+								st.warning(str(exc))
+							else:
+								space_state["swl_feature_matrix"] = feature_df
+								st.dataframe(feature_df.head(120))
+								st.caption(
+									f"Feature matrix shape: {feature_df.shape[0]} rows × {feature_df.shape[1]} columns. "
+									"Rows correspond to HRV windows; predictor columns include lagged DONKI and CME metrics."
+								)
+								csv_bytes = feature_df.to_csv(index=False).encode("utf-8")
+								st.download_button(
+									"Download feature matrix (CSV)",
+									data=csv_bytes,
+									file_name=f"hrv_spaceweather_features_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+									mime="text/csv",
+									key="btn_download_spaceweather_matrix",
+								)
 
 
 def _fisher_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
