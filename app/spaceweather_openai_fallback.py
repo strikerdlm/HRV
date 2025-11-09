@@ -1,0 +1,156 @@
+from __future__ import annotations
+
+from dataclasses import asdict
+from typing import Dict, Mapping, Optional
+
+import json
+import os
+
+from openai import OpenAI
+
+from .spaceweatherlive_client import (
+	FlareProbabilities,
+	KpForecastEntry,
+	SpaceWeatherSnapshot,
+)
+from datetime import datetime, timezone
+
+
+def _build_instruction() -> str:
+	return (
+		"You are a research assistant. Extract key space weather metrics from the provided HTML snippets. "
+		"Return a strict JSON object with this schema:\n"
+		"{\n"
+		'  "kp_forecast": [{"day": str, "min_kp": number|null, "max_kp": number|null}],\n'
+		'  "solar_wind_speed_kms": number|null,\n'
+		'  "solar_wind_density_pcc": number|null,\n'
+		'  "imf_bt_nt": number|null,\n'
+		'  "imf_bz_nt": number|null,\n'
+		'  "sunspot_number": number|null,\n'
+		'  "f107_flux": number|null,\n'
+		'  "flare_probabilities": {"C": number|null, "M": number|null, "X": number|null}\n'
+		"}\n"
+		"- Numbers must be numeric (not strings). If a field is missing, use null.\n"
+		"- For Kp values like 'Kp5-' output 5.0.\n"
+	)
+
+
+def extract_spaceweather_with_openai(
+	html_sections: Mapping[str, str],
+	model: str = "gpt-5",
+) -> Optional[SpaceWeatherSnapshot]:
+	"""
+	Fallback extraction: ask OpenAI Responses API to parse SpaceWeatherLive HTML into a JSON payload,
+	then map that to SpaceWeatherSnapshot.
+
+	Parameters
+	----------
+	html_sections : Mapping[str, str]
+		Dictionary with HTML snippets keyed by page name (e.g. {"home": "<html...>", "solar_activity": "<html...>"}).
+	model : str
+		OpenAI model name (default: "gpt-5").
+
+	Returns
+	-------
+	Optional[SpaceWeatherSnapshot]
+		Parsed snapshot if the model returns valid JSON; None on failure.
+	"""
+	# Ensure API key is configured via environment (never commit secrets)
+	if not os.getenv("OPENAI_API_KEY"):
+		return None
+
+	client = OpenAI()
+
+	# Combine all HTML segments into one user content block
+	joined_html = "\n\n".join([f"[{k}]\n{v}" for k, v in html_sections.items()])
+
+	try:
+		resp = client.responses.create(
+			model=model,
+			input=[
+				{
+					"role": "developer",
+					"content": [{"type": "input_text", "text": _build_instruction()}],
+				},
+				{
+					"role": "user",
+					"content": [{"type": "input_text", "text": joined_html}],
+				},
+			],
+			text={"format": {"type": "json_object"}, "verbosity": "medium"},
+			reasoning={"effort": "high", "summary": "auto"},
+			store=False,
+			include=[],
+		)
+	except Exception:
+		return None
+
+	# Extract text content (robust to minor client variations)
+	json_text: Optional[str] = None
+	try:
+		if hasattr(resp, "output_text"):
+			json_text = resp.output_text  # type: ignore[attr-defined]
+		elif hasattr(resp, "output") and resp.output:
+			# responses SDK often returns structured chunks; fall back to first text chunk
+			chunks = getattr(resp, "output")
+			for ch in chunks:  # type: ignore[assignment]
+				content = getattr(ch, "content", None)
+				if isinstance(content, list):
+					for c in content:
+						if isinstance(c, dict) and c.get("type") == "output_text":
+							json_text = c.get("text")
+							break
+				if json_text:
+					break
+	except Exception:
+		json_text = None
+
+	if not json_text:
+		return None
+
+	try:
+		payload: Dict[str, object] = json.loads(json_text)
+	except json.JSONDecodeError:
+		return None
+
+	# Map JSON payload into our dataclasses with defensive checks
+	kp_raw = payload.get("kp_forecast") if isinstance(payload, dict) else None
+	kp: list[KpForecastEntry] = []
+	if isinstance(kp_raw, list):
+		for item in kp_raw:
+			if not isinstance(item, dict):
+				continue
+			day = str(item.get("day")) if item.get("day") is not None else ""
+			min_kp = item.get("min_kp")
+			max_kp = item.get("max_kp")
+			kp.append(
+				KpForecastEntry(
+					day_label=day,
+					min_kp=float(min_kp) if isinstance(min_kp, (int, float)) else None,
+					max_kp=float(max_kp) if isinstance(max_kp, (int, float)) else None,
+				)
+			)
+
+	def _num_or_none(x: object) -> Optional[float]:
+		return float(x) if isinstance(x, (int, float)) else None
+
+	flare = payload.get("flare_probabilities") if isinstance(payload, dict) else None
+	fp = FlareProbabilities(
+		c_class_pct=_num_or_none(flare.get("C")) if isinstance(flare, dict) else None,
+		m_class_pct=_num_or_none(flare.get("M")) if isinstance(flare, dict) else None,
+		x_class_pct=_num_or_none(flare.get("X")) if isinstance(flare, dict) else None,
+	)
+
+	return SpaceWeatherSnapshot(
+		timestamp_utc=datetime.now(timezone.utc),
+		kp_forecast=kp,
+		solar_wind_speed_kms=_num_or_none(payload.get("solar_wind_speed_kms")) if isinstance(payload, dict) else None,
+		solar_wind_density_pcc=_num_or_none(payload.get("solar_wind_density_pcc")) if isinstance(payload, dict) else None,
+		imf_bt_nt=_num_or_none(payload.get("imf_bt_nt")) if isinstance(payload, dict) else None,
+		imf_bz_nt=_num_or_none(payload.get("imf_bz_nt")) if isinstance(payload, dict) else None,
+		sunspot_number=int(payload.get("sunspot_number")) if isinstance(payload, dict) and isinstance(payload.get("sunspot_number"), (int, float)) else None,
+		f107_flux=_num_or_none(payload.get("f107_flux")) if isinstance(payload, dict) else None,
+		flare_probabilities=fp,
+	)
+
+

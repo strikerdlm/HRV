@@ -47,6 +47,8 @@ from hrv_core import (
 	readiness_from_pns,
 	spectrogram_rr,
 )
+from spaceweatherlive_client import fetch_spaceweatherlive_snapshot
+from spaceweather_openai_fallback import extract_spaceweather_with_openai
 
 
 def setup_console_logging(level: int = logging.INFO) -> logging.Logger:
@@ -1895,6 +1897,79 @@ def main() -> None:
 						st.info("No data returned for this feed.")
 					else:
 						st.dataframe(extra_df.tail(100))
+
+		with st.expander("SpaceWeatherLive snapshot (scrape + OpenAI fallback)"):
+			if st.button("Fetch SpaceWeatherLive data", key="btn_fetch_swl"):
+				snap = None
+				try:
+					snap = fetch_spaceweatherlive_snapshot()
+				except Exception as exc:
+					st.warning(f"Direct scrape failed ({exc}); attempting OpenAI fallback…")
+					try:
+						home_html = requests.get("https://www.spaceweatherlive.com/", timeout=12).text
+						solar_html = requests.get("https://www.spaceweatherlive.com/en/solar-activity.html", timeout=12).text
+						snap = extract_spaceweather_with_openai({"home": home_html, "solar_activity": solar_html})
+					except Exception as e2:
+						snap = None
+						st.error(f"OpenAI fallback failed: {e2}")
+				if snap:
+					col_a, col_b, col_c, col_d = st.columns(4)
+					with col_a:
+						val = snap.solar_wind_speed_kms
+						if val is not None:
+							st.metric("Solar wind speed", f"{val:.0f} km/s")
+						else:
+							st.caption("Solar wind speed: n/a")
+					with col_b:
+						val = snap.solar_wind_density_pcc
+						if val is not None:
+							st.metric("Solar wind density", f"{val:.1f} p/cm³")
+						else:
+							st.caption("Solar wind density: n/a")
+					with col_c:
+						val = snap.imf_bt_nt
+						if val is not None:
+							st.metric("IMF Bt", f"{val:.1f} nT")
+						else:
+							st.caption("IMF Bt: n/a")
+					with col_d:
+						val = snap.imf_bz_nt
+						if val is not None:
+							st.metric("IMF Bz", f"{val:.1f} nT")
+						else:
+							st.caption("IMF Bz: n/a")
+
+					col_e, col_f, col_g = st.columns(3)
+					with col_e:
+						if snap.sunspot_number is not None:
+							st.metric("Sunspot number", f"{int(snap.sunspot_number)}")
+						else:
+							st.caption("Sunspot number: n/a")
+					with col_f:
+						if snap.f107_flux is not None:
+							st.metric("F10.7 cm flux", f"{snap.f107_flux:.1f} sfu")
+						else:
+							st.caption("F10.7 cm flux: n/a")
+					with col_g:
+						fp = snap.flare_probabilities
+						if any(val is not None for val in (fp.c_class_pct, fp.m_class_pct, fp.x_class_pct)):
+							st.metric(
+								"Flare probability (C/M/X)",
+								f"{(fp.c_class_pct or 0):.0f}% / {(fp.m_class_pct or 0):.0f}% / {(fp.x_class_pct or 0):.0f}%",
+							)
+						else:
+							st.caption("Flare probabilities: n/a")
+
+					if snap.kp_forecast:
+						kp_rows = [
+							{"Day": k.day_label, "Min Kp": k.min_kp, "Max Kp": k.max_kp}
+							for k in snap.kp_forecast
+						]
+						kp_df_view = pd.DataFrame(kp_rows)
+						st.dataframe(kp_df_view)
+					st.caption("Source: SpaceWeatherLive — scraped UI snapshot; if scraping failed, values were extracted by OpenAI from the page HTML.")
+				else:
+					st.info("No SpaceWeatherLive data available.")
 
 		st.markdown("### HRV window metrics vs. planetary K-index")
 		st.caption("Align HRV windows to expected arrival by applying a time lag before merging.")
