@@ -343,7 +343,7 @@ def _plot_rr_timeseries(datasets: Dict[str, UploadedRR], dev_windows: Optional[p
 			**({"max": str(x_max)} if x_max is not None else {}),
 		},
 		"yAxis": {"type": "value", "name": "RR (ms)"},
-		"dataZoom": [{"type": "inside"}, {"type": "slider"}],
+		"dataZoom": [{"type": "inside"}, {"type": "slider", "left": 32, "right": 16}],
 		"series": series,
 	}
 	render_echarts(opt, height_px=420, width="100%", config=EChartsConfig())
@@ -377,7 +377,7 @@ def _plot_hr_timeseries(datasets: Dict[str, UploadedRR]) -> None:
 			**({"max": str(x_max)} if x_max is not None else {}),
 		},
 		"yAxis": {"type": "value", "name": "HR (bpm)"},
-		"dataZoom": [{"type": "inside"}, {"type": "slider"}],
+		"dataZoom": [{"type": "inside"}, {"type": "slider", "left": 32, "right": 16}],
 		"series": series,
 	}
 	render_echarts(opt, height_px=420, width="100%", config=EChartsConfig())
@@ -405,7 +405,7 @@ def _plot_psd_overlay(datasets: Dict[str, UploadedRR], *, method: str) -> None:
 		"grid": {"left": 32, "right": 16, "containLabel": True},
 		"xAxis": {"type": "value", "name": "Frequency (Hz)", "boundaryGap": False},
 		"yAxis": {"type": "log", "name": "PSD (ms²/Hz)"},
-		"dataZoom": [{"type": "inside"}, {"type": "slider"}],
+		"dataZoom": [{"type": "inside"}, {"type": "slider", "left": 32, "right": 16}],
 		"series": series,
 		"visualMap": [
 			{
@@ -579,7 +579,7 @@ def _plot_deviation_timeline(windowed_df: pd.DataFrame) -> None:
 		"grid": {"left": 32, "right": 16, "containLabel": True},
 		"xAxis": {"type": "time", "name": "Window start", "boundaryGap": False},
 		"yAxis": {"type": "value", "name": "Deviation index"},
-		"dataZoom": [{"type": "inside"}, {"type": "slider"}],
+		"dataZoom": [{"type": "inside"}, {"type": "slider", "left": 32, "right": 16}],
 		"series": series,
 		"markLine": {
 			"silent": True,
