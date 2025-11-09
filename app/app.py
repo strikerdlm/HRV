@@ -9,6 +9,10 @@ import streamlit as st
 import os
 import sys
 import logging
+import requests
+import json
+from pathlib import Path
+from uuid import uuid4
 
 # Windows console safety to mitigate Colorama/Click re-entrancy during shutdown
 if os.name == "nt":
@@ -84,6 +88,74 @@ def setup_console_logging(level: int = logging.INFO) -> logging.Logger:
 	logging.captureWarnings(True)
 
 	return app_logger
+
+
+SWPC_BASE_URL = "https://services.swpc.noaa.gov/json/"
+SWPC_TIMEOUT = 15
+SWPC_EXTRA_DATASETS = {
+	"Solar Regions": "solar_regions.json",
+	"Solar Flare Probabilities": "solar_probabilities.json",
+	"Electron Fluence Forecast": "electron_fluence_forecast.json",
+}
+
+@st.cache_data(ttl=300)
+def _fetch_swpc_dataset(path: str) -> pd.DataFrame:
+	url = f"{SWPC_BASE_URL}{path}"
+	response = requests.get(url, timeout=SWPC_TIMEOUT)
+	response.raise_for_status()
+	payload = response.json()
+	if isinstance(payload, dict):
+		records = payload.get("data") or payload.get("series") or payload.get("observations")
+		if records is None:
+			records = [payload]
+		elif not isinstance(records, list):
+			records = [records]
+	elif isinstance(payload, list):
+		records = payload
+	else:
+		records = []
+	df = pd.json_normalize(records)
+	if not df.empty:
+		for col in df.columns:
+			if df[col].dtype == object:
+				lowered = col.lower()
+				if "time" in lowered or "date" in lowered or "tag" in lowered:
+					df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
+		df = df.apply(pd.to_numeric, errors="ignore")
+	return df
+
+def get_swpc_kp_index() -> pd.DataFrame:
+	df = _fetch_swpc_dataset("planetary_k_index_1m.json")
+	if "time_tag" in df.columns:
+		df = df.dropna(subset=["time_tag"])
+		df = df.sort_values("time_tag")
+	if "kp_index" in df.columns:
+		df["kp_index"] = pd.to_numeric(df["kp_index"], errors="coerce")
+	return df
+
+def get_swpc_solar_radio_flux() -> pd.DataFrame:
+	df = _fetch_swpc_dataset("solar_radio_flux.json")
+	if "time_tag" in df.columns:
+		df = df.dropna(subset=["time_tag"])
+		df = df.sort_values("time_tag")
+	preferred_cols = [
+		"observed_value",
+		"flux",
+		"predicted_value",
+		"adjusted_flux",
+		"flux_observed",
+	]
+	for col in preferred_cols:
+		if col in df.columns:
+			df[col] = pd.to_numeric(df[col], errors="coerce")
+	return df
+
+def get_swpc_solar_probabilities() -> pd.DataFrame:
+	df = _fetch_swpc_dataset("solar_probabilities.json")
+	if "time_tag" in df.columns:
+		df = df.dropna(subset=["time_tag"])
+		df = df.sort_values("time_tag")
+	return df
 
 
 @st.cache_data(show_spinner=False)
@@ -697,6 +769,110 @@ def _interpretation(multi_results: pd.DataFrame, windowed: Optional[pd.DataFrame
 	)
 
 
+def _project_data_dir() -> Path:
+	root = Path(__file__).resolve().parents[1]
+	data_dir = root / "data"
+	data_dir.mkdir(parents=True, exist_ok=True)
+	return data_dir
+
+DB_JSONL = "hrv_solar_db.jsonl"
+
+
+def _append_jsonl(record: Dict[str, Any]) -> None:
+	path = _project_data_dir() / DB_JSONL
+	with path.open("a", encoding="utf-8") as f:
+		f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _load_jsonl() -> pd.DataFrame:
+	path = _project_data_dir() / DB_JSONL
+	if not path.exists():
+		return pd.DataFrame()
+	rows = []
+	with path.open("r", encoding="utf-8") as f:
+		for line in f:
+			line = line.strip()
+			if not line:
+				continue
+			try:
+				rows.append(json.loads(line))
+			except json.JSONDecodeError:
+				continue
+	return pd.json_normalize(rows)
+
+
+try:
+	from scipy import stats as _scipy_stats  # type: ignore
+except Exception:  # pragma: no cover - optional dependency
+	_scipy_stats = None
+
+
+def _pearson_r_p(x: np.ndarray, y: np.ndarray) -> Tuple[float, float, int]:
+	mask = np.isfinite(x) & np.isfinite(y)
+	xv = x[mask]
+	yv = y[mask]
+	n = int(min(xv.size, yv.size))
+	if n < 3:
+		return float("nan"), float("nan"), n
+	if _scipy_stats is not None:
+		r, p = _scipy_stats.pearsonr(xv, yv)
+		return float(r), float(p), n
+	# Fallback: only r, approximate p as NaN
+	r = float(np.corrcoef(xv, yv)[0, 1])
+	return r, float("nan"), n
+
+
+def _corr_table(merged: pd.DataFrame, predictor_col: str, target_cols: List[str]) -> pd.DataFrame:
+	rows: List[Dict[str, Any]] = []
+	for col in target_cols:
+		if col == predictor_col:
+			continue
+		if col not in merged.columns:
+			continue
+		r, p, n = _pearson_r_p(merged[predictor_col].to_numpy(dtype=float), merged[col].to_numpy(dtype=float))
+		rows.append({"metric": col, "pearson_r": r, "p_value": p, "n": n})
+	return pd.DataFrame(rows)
+
+
+def _scan_lag_correlations(
+	windowed_df: pd.DataFrame,
+	kp_df: pd.DataFrame,
+	metrics: List[str],
+	lags_hours: List[int],
+	merge_tolerance_minutes: int = 90,
+) -> pd.DataFrame:
+	results: List[Dict[str, Any]] = []
+	if "start" not in windowed_df.columns or "kp_index" not in kp_df.columns or "time_tag" not in kp_df.columns:
+		return pd.DataFrame()
+	w = windowed_df.copy()
+	w["start"] = pd.to_datetime(w["start"], errors="coerce", utc=True)
+	w = w.dropna(subset=["start"])
+	if w.empty:
+		return pd.DataFrame()
+	k = kp_df.copy()
+	k = k.dropna(subset=["time_tag", "kp_index"]).sort_values("time_tag")
+	if k.empty:
+		return pd.DataFrame()
+	for lag in lags_hours:
+		k_shift = k.copy()
+		k_shift["time_tag"] = k_shift["time_tag"] + pd.to_timedelta(int(lag), unit="h")
+		merged = pd.merge_asof(
+			w.sort_values("start"),
+			k_shift[["time_tag", "kp_index"]].sort_values("time_tag"),
+			left_on="start",
+			right_on="time_tag",
+			direction="nearest",
+			tolerance=pd.Timedelta(minutes=int(merge_tolerance_minutes)),
+		)
+		merged = merged.dropna(subset=["kp_index"])
+		if merged.empty:
+			continue
+		corr_df = _corr_table(merged, "kp_index", metrics)
+		corr_df["lag_hours"] = int(lag)
+		results.append(corr_df)
+	return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
+
+
 def main() -> None:
 	logger: logging.Logger = setup_console_logging(logging.INFO)
 	# Streamlit detailed tracebacks in the UI and console
@@ -1029,7 +1205,7 @@ def main() -> None:
 				pns_mapping[src] = val
 
 	# Tabs
-	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_ans, tab_readiness, tab_gauges, tab_science, tab_export, tab_refs, tab_about = st.tabs(
+	tab_overview, tab_ts, tab_freq, tab_nl, tab_tfr, tab_window, tab_metrics, tab_ans, tab_readiness, tab_gauges, tab_science, tab_space_weather, tab_export, tab_refs, tab_about = st.tabs(
 		[
 			"Overview",
 			"Time Series",
@@ -1042,6 +1218,7 @@ def main() -> None:
 			"Readiness",
 			"Gauges",
 			"Science",
+			"Space Weather",
 			"Export",
 			"References",
 			"About",
@@ -1090,7 +1267,7 @@ def main() -> None:
 		st.markdown(
 			"**Scientific notes (frequency domain)**  \n"
 			"- Bands: VLF 0.0033–0.04 Hz, LF 0.04–0.15 Hz, HF 0.15–0.40 Hz.  \n"
-			"- HF indexes respiratory sinus arrhythmia (parasympathetic activity); LF reflects baroreflex and mixed influences; LF/HF has limited validity as a ‘balance’ index and should be interpreted with breathing context.  \n"
+			"- HF indexes respiratory sinus arrhythmia (parasympathetic activity); LF reflects baroreflex and mixed influences; LF/HF has limited validity as a 'balance' index and should be interpreted with breathing context.  \n"
 			"References: [Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf); "
 			"[Nunan et al., 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/); "
 			"[Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full)."
@@ -1412,6 +1589,162 @@ def main() -> None:
 			"[Shaffer & Ginsberg 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full), "
 			"[Nunan et al. 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/)."
 		)
+	with tab_space_weather:
+		st.subheader("Space Weather (NOAA SWPC)")
+		col_sw_kp, col_sw_flux = st.columns(2)
+
+		kp_df = pd.DataFrame()
+		kp_error = False
+		with col_sw_kp:
+			st.markdown("#### Planetary K-index (1 minute)")
+			try:
+				kp_df = get_swpc_kp_index()
+			except requests.RequestException as exc:
+				st.error(f"Failed to retrieve K-index data: {exc}")
+				kp_error = True
+			except ValueError as exc:
+				st.error(f"Unexpected response for K-index: {exc}")
+				kp_error = True
+			if not kp_error:
+				if not kp_df.empty and "kp_index" in kp_df.columns:
+					kp_numeric = kp_df.dropna(subset=["kp_index"])
+					if not kp_numeric.empty:
+						latest_kp = float(kp_numeric["kp_index"].iloc[-1])
+						latest_time = kp_numeric["time_tag"].iloc[-1] if "time_tag" in kp_numeric.columns else None
+						delta_kp = float(kp_numeric["kp_index"].iloc[-1] - kp_numeric["kp_index"].iloc[-2]) if kp_numeric.shape[0] >= 2 else 0.0
+						st.metric(
+							"Latest Kp index",
+							f"{latest_kp:.1f}",
+							f"{delta_kp:+.1f}",
+							help=f"Timestamp (UTC): {latest_time}" if latest_time is not None else None,
+						)
+						if "time_tag" in kp_numeric.columns:
+							st.line_chart(kp_numeric.set_index("time_tag")[["kp_index"]])
+					else:
+						st.info("Kp values are not available in the NOAA feed.")
+				else:
+					st.info("Kp data currently unavailable.")
+
+		flux_df = pd.DataFrame()
+		flux_error = False
+		with col_sw_flux:
+			st.markdown("#### Solar Radio Flux (F10.7 cm)")
+			try:
+				flux_df = get_swpc_solar_radio_flux()
+			except requests.RequestException as exc:
+				st.error(f"Failed to retrieve solar radio flux: {exc}")
+				flux_error = True
+			except ValueError as exc:
+				st.error(f"Unexpected response for solar radio flux: {exc}")
+				flux_error = True
+			if not flux_error:
+				if not flux_df.empty:
+					value_candidates = [
+						"observed_value",
+						"flux",
+						"predicted_value",
+						"adjusted_flux",
+						"flux_observed",
+					]
+					value_col = next((col for col in value_candidates if col in flux_df.columns), None)
+					if value_col:
+						flux_numeric = flux_df.dropna(subset=[value_col])
+						if not flux_numeric.empty:
+							latest_flux = float(flux_numeric[value_col].iloc[-1])
+							latest_time = flux_numeric["time_tag"].iloc[-1] if "time_tag" in flux_numeric.columns else None
+							delta_flux = float(latest_flux - flux_numeric[value_col].iloc[-2]) if flux_numeric.shape[0] >= 2 else 0.0
+							st.metric(
+								"Latest F10.7 flux",
+								f"{latest_flux:.1f}",
+								f"{delta_flux:+.1f}",
+								help=f"Timestamp (UTC): {latest_time}" if latest_time is not None else None,
+							)
+							if "time_tag" in flux_numeric.columns:
+								st.line_chart(flux_numeric.set_index("time_tag")[[value_col]])
+						else:
+							st.info("Solar radio flux values are not available in the NOAA feed.")
+					else:
+						st.info("Solar radio flux dataset does not contain numeric values to display.")
+				else:
+					st.info("Solar radio flux data currently unavailable.")
+
+		st.markdown("#### Inspect an additional NOAA dataset")
+		selected_dataset = st.selectbox("NOAA endpoint", list(SWPC_EXTRA_DATASETS.keys()))
+		if selected_dataset:
+			with st.expander(f"{selected_dataset} (latest rows)"):
+				try:
+					extra_df = _fetch_swpc_dataset(SWPC_EXTRA_DATASETS[selected_dataset])
+				except requests.RequestException as exc:
+					st.error(f"Failed to retrieve {selected_dataset.lower()}: {exc}")
+				except ValueError as exc:
+					st.error(f"Unexpected response for {selected_dataset.lower()}: {exc}")
+				else:
+					if extra_df.empty:
+						st.info("No data returned for this feed.")
+					else:
+						st.dataframe(extra_df.tail(100))
+
+		st.markdown("### HRV window metrics vs. planetary K-index")
+		st.caption("Align HRV windows to expected arrival by applying a time lag before merging.")
+		lag_min, lag_max = st.slider("Lag range (hours, applied to Kp times)", -48, 48, (-12, 12), step=1)
+		lag_step = st.number_input("Lag step (hours)", min_value=1, max_value=12, value=3, step=1)
+		merge_tol = st.number_input("Merge tolerance (minutes)", min_value=15, max_value=360, value=90, step=15)
+		cedula = st.text_input("Cedula (identification number)", value="", placeholder="e.g., 12345678")
+
+		if windowed_df.empty:
+			st.info("Windowed HRV metrics are not available. Run an analysis first.")
+		elif kp_error or kp_df.empty or "kp_index" not in kp_df.columns:
+			st.info("Planetary K-index data not available for correlation.")
+		elif "start" not in windowed_df.columns:
+			st.info("Windowed HRV data does not include start timestamps.")
+		else:
+			metric_list = [col for col in ["rmssd", "sdnn", "hf_power", "lf_hf_ratio", "mean_hr", "pnn50", "pnn20"] if col in windowed_df.columns]
+			if not metric_list:
+				metric_list = [col for col in windowed_df.select_dtypes(include=[np.number]).columns if col not in ("kp_index",)]
+				metric_list = metric_list[:8]
+			if not metric_list:
+				st.info("No numeric HRV metrics available for correlation.")
+			else:
+				lags = list(range(int(lag_min), int(lag_max) + 1, int(lag_step)))
+				lag_results = _scan_lag_correlations(windowed_df, kp_df, metric_list, lags, merge_tolerance_minutes=int(merge_tol))
+				if lag_results.empty:
+					st.info("No lagged correlations could be computed with current data.")
+				else:
+					best_rows = lag_results.sort_values(["metric", "pearson_r"], key=lambda s: s.abs()).groupby("metric").tail(1)
+					st.subheader("Best correlation per metric (by |r|)")
+					st.dataframe(best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False))
+					st.markdown("#### Correlation vs. Lag (absolute r)")
+					pivot = lag_results.pivot_table(index="lag_hours", columns="metric", values="pearson_r", aggfunc="mean")
+					if not pivot.empty:
+						st.line_chart(pivot.abs())
+
+					if st.button("Append best results to local database"):
+						if not cedula.strip().isdigit():
+							st.warning("Please provide a numeric Cedula before saving.")
+						else:
+							session_id = str(uuid4())
+							utc_now = pd.Timestamp.utcnow().isoformat()
+							for _, row in best_rows.iterrows():
+								rec = {
+									"cedula": cedula.strip(),
+									"session_id": session_id,
+									"created_utc": utc_now,
+									"metric": str(row.get("metric")),
+									"pearson_r": float(row.get("pearson_r", float("nan"))),
+									"p_value": float(row.get("p_value", float("nan"))),
+									"n": int(row.get("n", 0)),
+									"lag_hours": int(row.get("lag_hours", 0)),
+								}
+								_append_jsonl(rec)
+							st.success("Results appended to database.")
+
+		st.markdown("#### Database summary")
+		db_df = _load_jsonl()
+		if db_df.empty:
+			st.caption("No records saved yet.")
+		else:
+			st.dataframe(db_df.sort_values("created_utc", ascending=False).head(200))
+
 	with tab_export:
 		st.subheader("Export report")
 		if not meta_rows and multi_results_df.empty:
