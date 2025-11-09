@@ -47,8 +47,15 @@ from hrv_core import (
 	readiness_from_pns,
 	spectrogram_rr,
 )
-from spaceweatherlive_client import fetch_spaceweatherlive_snapshot
-from spaceweather_openai_fallback import extract_spaceweather_with_openai
+try:
+	from spaceweatherlive_client import fetch_spaceweatherlive_snapshot
+except ImportError:
+	from .spaceweatherlive_client import fetch_spaceweatherlive_snapshot  # type: ignore
+
+try:
+	from spaceweather_openai_fallback import extract_spaceweather_with_openai
+except ImportError:
+	from .spaceweather_openai_fallback import extract_spaceweather_with_openai  # type: ignore
 
 
 def setup_console_logging(level: int = logging.INFO) -> logging.Logger:

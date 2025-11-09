@@ -8,11 +8,18 @@ import os
 
 from openai import OpenAI
 
-from .spaceweatherlive_client import (
-	FlareProbabilities,
-	KpForecastEntry,
-	SpaceWeatherSnapshot,
-)
+try:
+	from spaceweatherlive_client import (
+		FlareProbabilities,
+		KpForecastEntry,
+		SpaceWeatherSnapshot,
+	)
+except ImportError:
+	from .spaceweatherlive_client import (  # type: ignore
+		FlareProbabilities,
+		KpForecastEntry,
+		SpaceWeatherSnapshot,
+	)
 from datetime import datetime, timezone
 
 
