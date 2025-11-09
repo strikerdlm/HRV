@@ -1996,6 +1996,65 @@ def main() -> None:
 			"- Sammito, S., & Böckelmann, I. (2016). Reference values for time- and frequency-domain heart rate variability measures. Heart Rhythm, 13(6), 1309–1316. https://pubmed.ncbi.nlm.nih.gov/27986557/  \n"
 			"- Berkoff, D. J., Cairns, C. B., Sanchez, L. D., & Moorman, C. T. (2007). Heart rate variability in elite American track-and-field athletes. Journal of Strength and Conditioning Research, 21(1), 227–231. https://pubmed.ncbi.nlm.nih.gov/17313294/"
 		)
+		st.markdown("### NASA DONKI events")
+		if not NASA_API_KEY:
+			st.info("Set NASA_API_KEY in your environment to enable DONKI events.")
+		else:
+			span = pd.to_datetime(windowed_df["start"], errors="coerce", utc=True).dropna()
+			if span.empty:
+				st.info("Load HRV data to define the date range for DONKI queries.")
+			else:
+				start_date = span.min().date().isoformat()
+				end_date = span.max().date().isoformat()
+				try:
+					flr = fetch_donki("FLR", start_date, end_date)
+					cme = fetch_donki("CME", start_date, end_date)
+					gst = fetch_donki("GST", start_date, end_date)
+				except Exception as exc:
+					st.warning(f"DONKI error: {exc}")
+					flr = cme = gst = pd.DataFrame()
+				flr_series = donki_event_series(flr, ["beginTime", "peakTime", "startTime"]) if not flr.empty else pd.DataFrame()
+				cme_series = donki_event_series(cme, ["startTime"]) if not cme.empty else pd.DataFrame()
+				gst_series = donki_event_series(gst, ["startTime", "allKpIndex"]) if not gst.empty else pd.DataFrame()
+
+				predictor_series: List[Tuple[str, pd.DataFrame, str, str]] = []
+				if not flr_series.empty:
+					predictor_series.append(("Flare count", flr_series.rename(columns={"time_tag": "time","event_count": "donki_flare_count"}), "time", "donki_flare_count"))
+				if not cme_series.empty:
+					predictor_series.append(("CME count", cme_series.rename(columns={"time_tag": "time","event_count": "donki_cme_count"}), "time", "donki_cme_count"))
+				if not gst_series.empty:
+					predictor_series.append(("Geomagnetic storm count", gst_series.rename(columns={"time_tag": "time","event_count": "donki_gst_count"}), "time", "donki_gst_count"))
+
+				if predictor_series:
+					st.markdown("#### DONKI correlations (lag scan)")
+					for title, s_df, tcol, vcol in predictor_series:
+						res = _scan_lag_correlations_generic(windowed_df, s_df.rename(columns={tcol: "time_tag"}), "time_tag", vcol, metric_list, lags, merge_tolerance_minutes=int(merge_tol))
+						if res.empty:
+							st.info(f"No aligned samples for {title}.")
+							continue
+						if "p_value" in res.columns and res["p_value"].notna().any():
+							res["q_value"], _ = fdr_bh(res["p_value"].fillna(1.0).to_numpy(), alpha=0.05)
+						st.write(title)
+						st.dataframe(res.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False).head(20))
+
+						# Optional: CI band for correlation vs lag using Fisher z (95%)
+						def fisher_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
+							if n <= 3 or not np.isfinite(r):
+								return (np.nan, np.nan)
+							z = np.arctanh(np.clip(r, -0.999999, 0.999999))
+							se = 1.0 / np.sqrt(n - 3)
+							z_crit = 1.96  # for ~95%
+							zl, zu = z - z_crit * se, z + z_crit * se
+							return (np.tanh(zl), np.tanh(zu))
+
+						agg = res.groupby("lag_hours").apply(lambda g: pd.Series({
+							"r_mean": g["pearson_r"].mean(),
+							"n_min": g["n"].min()
+						})).reset_index()
+						if not agg.empty:
+							ci = agg.apply(lambda row: fisher_ci(row["r_mean"], int(row["n_min"]) if np.isfinite(row["n_min"]) else 0), axis=1)
+							agg["ci_low"], agg["ci_high"] = zip(*ci)
+							st.line_chart(agg.set_index("lag_hours")[ ["r_mean"] ])
 
 
 if __name__ == "__main__":
