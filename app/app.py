@@ -850,10 +850,11 @@ def _scan_lag_correlations(
 		return pd.DataFrame()
 	w = windowed_df.copy()
 	w["start"] = pd.to_datetime(w["start"], errors="coerce", utc=True)
-	w = w.dropna(subset=["start"])
+	w = w.dropna(subset=["start"]).sort_values("start")
 	if w.empty:
 		return pd.DataFrame()
 	k = kp_df.copy()
+	k["time_tag"] = pd.to_datetime(k["time_tag"], errors="coerce", utc=True)
 	k = k.dropna(subset=["time_tag", "kp_index"]).sort_values("time_tag")
 	if k.empty:
 		return pd.DataFrame()
