@@ -98,6 +98,18 @@ def render_echarts(
 	).strip()
 
 	# Extra 20px to accommodate padding
-	components.html(html, height=height_px + 20, scrolling=False)
+	if isinstance(width, (int, float)):
+		iframe_width = int(width)
+	elif isinstance(width, str):
+		width = width.strip()
+		if width.endswith("px") and width[:-2].isdigit():
+			iframe_width = int(float(width[:-2]))
+		elif width.endswith("%"):
+			iframe_width = 0  # let Streamlit auto-expand
+		else:
+			iframe_width = 0
+	else:
+		iframe_width = 0
+	components.html(html, height=height_px + 20, width=iframe_width, scrolling=False)
 
 
