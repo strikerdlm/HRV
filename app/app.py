@@ -122,6 +122,29 @@ SWPC_EXTRA_DATASETS = {
 	"Solar Flare Probabilities": "solar_probabilities.json",
 	"Electron Fluence Forecast": "electron_fluence_forecast.json",
 }
+_KP_SUFFIX_OFFSETS: Dict[str, float] = {"-": -1.0 / 3.0, "o": 0.0, "+": 1.0 / 3.0}
+
+
+def _kp_to_numeric(value: Any) -> Optional[float]:
+	if value is None:
+		return None
+	if isinstance(value, (int, float)) and np.isfinite(value):
+		return float(value)
+	text = str(value).strip()
+	if not text:
+		return None
+	suffix = text[-1].lower()
+	base_text = text[:-1] if (suffix in _KP_SUFFIX_OFFSETS and text[:-1]) else text
+	try:
+		base = float(base_text)
+	except ValueError:
+		try:
+			return float(text)
+		except ValueError:
+			return None
+	offset = _KP_SUFFIX_OFFSETS.get(suffix, 0.0)
+	return float(round(base + offset, 2))
+
 
 @st.cache_data(ttl=300)
 def _fetch_swpc_dataset(path: str) -> pd.DataFrame:
@@ -168,6 +191,7 @@ def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
 			cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(days))
 			df = df[df["time_tag"] >= cutoff]
 	if "kp_index" in df.columns:
+		df["kp_index"] = df["kp_index"].apply(_kp_to_numeric)
 		df["kp_index"] = pd.to_numeric(df["kp_index"], errors="coerce")
 	return df.sort_values("time_tag") if "time_tag" in df.columns else df
 
@@ -1977,7 +2001,6 @@ def main() -> None:
 			flux_df_full = space_state.get("flux_df", pd.DataFrame())
 			flux_error_msg = space_state.get("flux_error", "")
 			kp_df = pd.DataFrame()
-			kp_error = bool(kp_error_msg)
 			with col_sw_kp:
 				st.markdown("#### Planetary K-index (3-hour cadence)")
 				kp_history_days = st.slider(
@@ -1999,14 +2022,52 @@ def main() -> None:
 						kp_df = kp_df.loc[mask].copy()
 						kp_df["time_tag"] = time_series[mask]
 					if not kp_df.empty and "kp_index" in kp_df.columns:
-						kp_numeric = kp_df.dropna(subset=["kp_index"])
+						kp_df["kp_index"] = pd.to_numeric(kp_df["kp_index"], errors="coerce")
+						kp_numeric = kp_df.dropna(subset=["kp_index"]).sort_values("time_tag")
 						if not kp_numeric.empty:
+							kp_df = kp_numeric
 							latest_kp = float(kp_numeric["kp_index"].iloc[-1])
 							latest_time = kp_numeric["time_tag"].iloc[-1] if "time_tag" in kp_numeric.columns else None
-							delta_kp = float(kp_numeric["kp_index"].iloc[-1] - kp_numeric["kp_index"].iloc[-2]) if kp_numeric.shape[0] >= 2 else 0.0
-							st.metric("Latest Kp index", f"{latest_kp:.1f}", f"{delta_kp:+.1f}", help=f"UTC: {latest_time}")
-							if "time_tag" in kp_numeric.columns:
-								default_win = min(16, max(4, int(kp_numeric.shape[0] // 10)))
+							prev_value = float(kp_numeric["kp_index"].iloc[-2]) if kp_numeric.shape[0] >= 2 else latest_kp
+							delta_kp = latest_kp - prev_value
+							col_kp_gauge, col_kp_chart = st.columns([1, 2])
+							with col_kp_gauge:
+								_echarts_gauge(
+									latest_kp,
+									min_val=0.0,
+									max_val=9.0,
+									title="Kp now",
+									unit="Kp",
+									precision=2,
+									thresholds=[
+										(3.0, "#22c55e"),
+										(5.0, "#f97316"),
+										(7.0, "#ef4444"),
+									],
+									height_px=260,
+								)
+								if latest_time is not None:
+									st.caption(f"UTC timestamp: {latest_time.strftime('%Y-%m-%d %H:%M')}")
+							with col_kp_chart:
+								kp_recent = kp_numeric.tail(min(120, kp_numeric.shape[0]))
+								_echarts_sparkline(
+									kp_recent["time_tag"].tolist(),
+									kp_recent["kp_index"].astype(float).tolist(),
+									title="Kp trend (selected window)",
+									color_primary="#0ea5e9",
+									area_colors=("rgba(14,165,233,0.32)", "rgba(14,165,233,0.06)"),
+								)
+								st.metric("Δ since previous point", f"{delta_kp:+.2f}")
+							stats_cols = st.columns(3)
+							now_utc = pd.Timestamp.utcnow()
+							last_24_mask = kp_numeric["time_tag"] >= now_utc - pd.Timedelta(hours=24)
+							mean_24h = kp_numeric.loc[last_24_mask, "kp_index"].mean() if last_24_mask.any() else kp_numeric["kp_index"].tail(min(8, kp_numeric.shape[0])).mean()
+							stats_cols[0].metric("24 h mean", f"{mean_24h:.2f}")
+							stats_cols[1].metric("Peak (window)", f"{kp_numeric['kp_index'].max():.2f}")
+							stats_cols[2].metric("Storm counts (Kp≥5)", f"{int((kp_numeric['kp_index'] >= 5.0).sum())}")
+							if "time_tag" in kp_numeric.columns and kp_numeric.shape[0] >= 4:
+								st.markdown("##### Rolling confidence interval")
+								default_win = min(18, max(4, int(kp_numeric.shape[0] // 8)))
 								kp_win = st.number_input(
 									"Rolling CI window (points)",
 									min_value=4,
@@ -2015,7 +2076,6 @@ def main() -> None:
 									step=1,
 									key="kp_win",
 								)
-								times = kp_numeric["time_tag"].tolist()
 								vals = kp_numeric["kp_index"].astype(float).reset_index(drop=True)
 								minp = max(3, int(kp_win // 2))
 								roll_mean = vals.rolling(int(kp_win), min_periods=minp).mean()
@@ -2024,8 +2084,18 @@ def main() -> None:
 								se = roll_std / np.sqrt(roll_n)
 								low = roll_mean - 1.96 * se
 								high = roll_mean + 1.96 * se
-								_echarts_time_with_ci(times, vals.tolist(), low.tolist(), high.tolist(), title="Kp with rolling 95% CI", y_name="Kp", series_name="Kp")
-							st.caption("Kp summarises geomagnetic disturbance (0–9). The chart shows trends across the selected history; the shaded band is the 95% rolling confidence interval (mean ±1.96·SE).")
+								_echarts_time_with_ci(
+									kp_numeric["time_tag"].tolist(),
+									vals.tolist(),
+									low.tolist(),
+									high.tolist(),
+									title="Kp rolling 95% confidence interval",
+									y_name="Kp",
+									series_name="Kp",
+								)
+								st.caption("Quiet Kp≤3 · unsettled 4 · storm-level ≥5. The shaded band shows mean ±1.96·SE across the chosen rolling window.")
+							else:
+								st.info("Not enough Kp samples to build a rolling confidence interval.")
 						else:
 							st.info("Kp values are not available in the NOAA feed.")
 					else:
@@ -2066,8 +2136,43 @@ def main() -> None:
 								latest_flux = float(flux_numeric[value_col].iloc[-1])
 								latest_time = flux_numeric["time_tag"].iloc[-1] if "time_tag" in flux_numeric.columns else None
 								delta_flux = float(latest_flux - flux_numeric[value_col].iloc[-2]) if flux_numeric.shape[0] >= 2 else 0.0
-								st.metric("Latest F10.7 flux", f"{latest_flux:.1f}", f"{delta_flux:+.1f}", help=f"UTC: {latest_time}")
-								if "time_tag" in flux_numeric.columns:
+								col_flux_gauge, col_flux_chart = st.columns([1, 2])
+								with col_flux_gauge:
+									_echarts_gauge(
+										latest_flux,
+										min_val=60.0,
+										max_val=260.0,
+										title="F10.7 now",
+										unit="sfu",
+										precision=1,
+										thresholds=[
+											(90.0, "#22c55e"),
+											(130.0, "#facc15"),
+											(180.0, "#ef4444"),
+										],
+										height_px=260,
+									)
+									if latest_time is not None:
+										st.caption(f"UTC timestamp: {latest_time.strftime('%Y-%m-%d %H:%M')}")
+								with col_flux_chart:
+									flux_recent = flux_numeric.sort_values("time_tag").tail(min(160, flux_numeric.shape[0]))
+									_echarts_sparkline(
+										flux_recent["time_tag"].tolist(),
+										flux_recent[value_col].astype(float).tolist(),
+										title="F10.7 trend (selected window)",
+										color_primary="#f97316",
+										area_colors=("rgba(249,115,22,0.28)", "rgba(249,115,22,0.05)"),
+									)
+									st.metric("Δ since previous point", f"{delta_flux:+.1f}")
+								flux_numeric = flux_numeric.sort_values("time_tag")
+								stats_cols = st.columns(3)
+								last_week = flux_numeric["time_tag"] >= pd.Timestamp.utcnow() - pd.Timedelta(days=7)
+								weekly_mean = flux_numeric.loc[last_week, value_col].mean() if last_week.any() else flux_numeric[value_col].mean()
+								stats_cols[0].metric("7 d mean", f"{weekly_mean:.1f}")
+								stats_cols[1].metric("Max (window)", f"{flux_numeric[value_col].max():.1f}")
+								stats_cols[2].metric("Std dev", f"{flux_numeric[value_col].std(ddof=1):.1f}")
+								if "time_tag" in flux_numeric.columns and flux_numeric.shape[0] >= 5:
+									st.markdown("##### Rolling confidence interval")
 									f_win = st.number_input(
 										"Rolling CI window (points)",
 										min_value=5,
@@ -2085,8 +2190,18 @@ def main() -> None:
 									se = roll_std / np.sqrt(roll_n)
 									low = roll_mean - 1.96 * se
 									high = roll_mean + 1.96 * se
-									_echarts_time_with_ci(times, vals.tolist(), low.tolist(), high.tolist(), title="F10.7 with rolling 95% CI", y_name="sfu", series_name="F10.7")
-								st.caption("F10.7 (solar radio flux) reflects solar EUV output. Higher readings indicate a more excited sun, which can modify ionospheric conditions and HF communications.")
+									_echarts_time_with_ci(
+										times,
+										vals.tolist(),
+										low.tolist(),
+										high.tolist(),
+										title="F10.7 rolling 95% confidence interval",
+										y_name="sfu",
+										series_name="F10.7",
+									)
+									st.caption("F10.7 tracks solar extreme ultraviolet output. Elevated levels often coincide with enhanced ionospheric density and HF propagation changes.")
+								else:
+									st.info("Not enough F10.7 samples to build a rolling confidence interval.")
 							else:
 								st.info("Solar radio flux values are not available in the NOAA feed.")
 						else:
@@ -2844,6 +2959,65 @@ def _echarts_multi_series(x_vals: List[float], series_map: Dict[str, List[float]
 		"series": series,
 	}
 	render_echarts(opt, height_px=320, width="100%", config=EChartsConfig())
+
+
+def _echarts_sparkline(
+	time_vals: List[pd.Timestamp],
+	values: List[float],
+	*,
+	title: str,
+	color_primary: str,
+	area_colors: Optional[Tuple[str, str]] = None,
+	height_px: int = 260,
+) -> None:
+	data = []
+	for ts, val in zip(time_vals, values):
+		if pd.isna(ts) or not np.isfinite(val):
+			continue
+		data.append([str(pd.to_datetime(ts)), float(val)])
+	if not data:
+		st.info(f"{title}: no data to display.")
+		return
+	area_start, area_end = area_colors or ("rgba(59,130,246,0.32)", "rgba(59,130,246,0.04)")
+	opt = {
+		"title": {"text": title, "left": "center"},
+		"tooltip": {"trigger": "axis"},
+		"grid": {"left": 36, "right": 16, "top": 48, "bottom": 36, "containLabel": True},
+		"xAxis": {
+			"type": "time",
+			"boundaryGap": False,
+			"axisLabel": {"color": "#475569"},
+			"axisLine": {"lineStyle": {"color": "#cbd5f5"}},
+		},
+		"yAxis": {
+			"type": "value",
+			"axisLabel": {"color": "#475569"},
+			"splitLine": {"lineStyle": {"color": "rgba(148,163,184,0.25)"}},
+		},
+		"series": [
+			{
+				"type": "line",
+				"showSymbol": False,
+				"data": data,
+				"smooth": True,
+				"lineStyle": {"width": 3, "color": color_primary},
+				"areaStyle": {
+					"color": {
+						"type": "linear",
+						"x": 0,
+						"y": 0,
+						"x2": 0,
+						"y2": 1,
+						"colorStops": [
+							{"offset": 0, "color": area_start},
+							{"offset": 1, "color": area_end},
+						],
+					},
+				},
+			}
+		],
+	}
+	render_echarts(opt, height_px=height_px, width="100%", config=EChartsConfig())
 
 
 def _echarts_line_with_ci(x_vals: List[float], y_vals: List[float], ci_low: List[float], ci_high: List[float], sig_mask: List[bool], *, title: str, x_name: str, y_name: str) -> None:
