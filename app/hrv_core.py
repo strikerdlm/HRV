@@ -346,8 +346,9 @@ def compute_comprehensive_hrv(
 	results.update(compute_poincare_metrics(rr_intervals))
 	results.update(compute_dfa_metrics(rr_intervals))
 	results.update(compute_geometric_metrics(rr_intervals))
-	# Entropy metrics with default parameters (m=2, r=0.2*SD)
-	results.update(compute_entropy_metrics(rr_intervals, m=2, r_ratio=0.2))
+	# Entropy metrics are computationally heavy (O(n^2)); treat as advanced.
+	if include_advanced:
+		results.update(compute_entropy_metrics(rr_intervals, m=2, r_ratio=0.2))
 	if include_advanced:
 		results.update(compute_heart_rate_fragmentation(rr_intervals))
 		results.update(compute_phase_rectified_capacity(rr_intervals, scale=2))
@@ -421,7 +422,11 @@ def compute_windowed_hrv(
 		if len(w) < min_rr_count:
 			continue
 		rr = w[rr_col].to_numpy()
-		metrics = compute_comprehensive_hrv(rr, include_advanced=include_advanced)
+		# Fast path: time-domain only when include_advanced is False
+		if include_advanced:
+			metrics = compute_comprehensive_hrv(rr, include_advanced=True)
+		else:
+			metrics = compute_time_domain_metrics(rr)
 		metrics["start"] = s
 		metrics["end"] = e
 		if "source" in df.columns:
