@@ -1,22 +1,19 @@
-## Changelog
+# Changelog
 
-All notable changes to this project will be documented in this file.
+## [Unreleased]
+### Added
+- Space Weather tab with NOAA SWPC K‑index and F10.7 feeds (no key required).
+- Open‑Meteo Archive integration for Bogotá weather covariates.
+- Lag scan correlations (Pearson), p‑values (SciPy), FDR q‑values.
+- Partial correlations controlling for temperature, humidity, pressure.
+- OLS residual diagnostics: R², Durbin–Watson, normality test, residual plots.
+- JSONL persistence of best correlations keyed by Cedula.
 
-### [0.2.1] - 2025-11-08
-- Fixed a deviation detection regression where missing or constant windowed metrics were incorrectly escalated to alert-level status.
-- Updated README guidance to explain the new guardrails for robust z-score calculations in windowed analyses.
+### Changed
+- Tabs extended to include “Space Weather”.
 
-### [0.2.0] - 2025-11-08
-- Added advanced HRV analytics suite (heart rate fragmentation, DC/AC via PRSA, symbolic dynamics, permutation entropy, MFDFA, RQA, frequency-domain entropy, HR-normalized RMSSD).
-- Surfaced novel metrics within the Streamlit metrics tab for quick inspection.
-- Updated README with a dedicated 2025 advanced metrics overview.
-
-### [0.1.0] - 2025-11-08
-- Initial Streamlit + Apache ECharts app documented
-- Added quick start, troubleshooting, security/key guidance in README
-- Outlined science-driven roadmap (QC, expanded metrics, AR/wavelet, norms, ML, evidence panel)
-
-Notes:
-- No API keys are required for current features. If future features require keys, store them in a `.env` file and never commit secrets.
+### Notes
+- P‑values computed when SciPy is installed.
+- NOAA endpoints cached for 5 minutes.
 
 
