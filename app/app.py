@@ -1851,14 +1851,22 @@ def main() -> None:
 				if lag_results.empty:
 					st.info("No lagged correlations could be computed with current data.")
 				else:
-					# FDR across metrics x lags
 					if "p_value" in lag_results.columns and lag_results["p_value"].notna().any():
 						qvals, crit = fdr_bh(lag_results["p_value"].fillna(1.0).to_numpy(), alpha=0.05)
 						lag_results["q_value"] = qvals
 					else:
 						lag_results["q_value"] = np.nan
 
-					best_rows = lag_results.sort_values(["metric", "pearson_r"], key=lambda s: s.abs()).groupby("metric").tail(1)
+					if "pearson_r" in lag_results.columns:
+						idx = lag_results.groupby("metric")["pearson_r"].apply(lambda s: s.abs().idxmax())
+						if isinstance(idx, pd.Series):
+							best_rows = lag_results.loc[idx.values].copy()
+						else:
+							best_rows = lag_results.copy()
+						best_rows = best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False, ignore_index=True)
+					else:
+						best_rows = lag_results.copy()
+
 					st.subheader("Best correlation per metric (by |r|)")
 					st.dataframe(best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False))
 					st.markdown("#### Correlation vs. Lag (absolute r)")
