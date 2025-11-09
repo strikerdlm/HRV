@@ -146,7 +146,7 @@ def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
 	if "time_tag" in df.columns:
 		df["time_tag"] = pd.to_datetime(df["time_tag"], errors="coerce", utc=True)
 		if days is not None:
-			cutoff = pd.Timestamp.utcnow().tz_localize("UTC") - pd.Timedelta(days=int(days))
+			cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(days))
 			df = df[df["time_tag"] >= cutoff]
 	if "kp_index" in df.columns:
 		df["kp_index"] = pd.to_numeric(df["kp_index"], errors="coerce")
@@ -1837,7 +1837,7 @@ def main() -> None:
 			if not flux_error:
 				if not flux_df.empty:
 					if "time_tag" in flux_df.columns:
-						cutoff = pd.Timestamp.utcnow().tz_localize("UTC") - pd.Timedelta(days=int(flux_history_days))
+						cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(flux_history_days))
 						flux_df = flux_df[pd.to_datetime(flux_df["time_tag"], utc=True, errors="coerce") >= cutoff]
 					numeric_flux_cols = [col for col in flux_df.columns if flux_df[col].dtype.kind in "fcid"]
 					value_candidates = [
