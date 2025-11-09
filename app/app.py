@@ -1770,6 +1770,7 @@ def main() -> None:
 		lag_step = st.number_input("Lag step (hours)", min_value=1, max_value=12, value=3, step=1)
 		merge_tol = st.number_input("Merge tolerance (minutes)", min_value=15, max_value=360, value=90, step=15)
 		cedula = st.text_input("Cedula (identification number)", value="", placeholder="e.g., 12345678")
+		use_weather = st.checkbox("Include weather covariates (Bogotá) for partial correlations", value=True)
 
 		if windowed_df.empty:
 			st.info("Windowed HRV metrics are not available. Run an analysis first.")
@@ -1785,11 +1786,44 @@ def main() -> None:
 			if not metric_list:
 				st.info("No numeric HRV metrics available for correlation.")
 			else:
+				# optional weather covariates fetched for time span of HRV windows
+				cov_df = pd.DataFrame()
+				if use_weather:
+					start_dt = pd.to_datetime(windowed_df["start"], errors="coerce", utc=True).dropna()
+					if not start_dt.empty:
+						span_min = start_dt.min().date().isoformat()
+						span_max = start_dt.max().date().isoformat()
+						try:
+							cov_df = fetch_open_meteo_hourly(span_min, span_max)
+						except requests.RequestException as exc:
+							st.warning(f"Weather API error: {exc}")
+					if not cov_df.empty:
+						# align covariates to HRV window starts
+						cov_aligned = pd.merge_asof(
+							windowed_df[["start"]].sort_values("start").rename(columns={"start": "align_time"}),
+							cov_df.sort_values("weather_time")[
+								["weather_time", "temp_c", "rh_pct", "pressure_hpa"]
+							],
+							left_on="align_time",
+							right_on="weather_time",
+							direction="nearest",
+							tolerance=pd.Timedelta(minutes=int(merge_tol)),
+						)
+						cov_aligned = cov_aligned.drop(columns=["align_time", "weather_time"], errors="ignore")
+						windowed_df = pd.concat([windowed_df.reset_index(drop=True), cov_aligned.reset_index(drop=True)], axis=1)
+
 				lags = list(range(int(lag_min), int(lag_max) + 1, int(lag_step)))
 				lag_results = _scan_lag_correlations(windowed_df, kp_df, metric_list, lags, merge_tolerance_minutes=int(merge_tol))
 				if lag_results.empty:
 					st.info("No lagged correlations could be computed with current data.")
 				else:
+					# FDR across metrics x lags
+					if "p_value" in lag_results.columns and lag_results["p_value"].notna().any():
+						qvals, crit = fdr_bh(lag_results["p_value"].fillna(1.0).to_numpy(), alpha=0.05)
+						lag_results["q_value"] = qvals
+					else:
+						lag_results["q_value"] = np.nan
+
 					best_rows = lag_results.sort_values(["metric", "pearson_r"], key=lambda s: s.abs()).groupby("metric").tail(1)
 					st.subheader("Best correlation per metric (by |r|)")
 					st.dataframe(best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False))
@@ -1798,25 +1832,56 @@ def main() -> None:
 					if not pivot.empty:
 						st.line_chart(pivot.abs())
 
-					if st.button("Append best results to local database"):
-						if not cedula.strip().isdigit():
-							st.warning("Please provide a numeric Cedula before saving.")
+					# Partial correlation on the best metric-lag (if covariates available)
+					if use_weather and not cov_df.empty:
+						st.markdown("#### Partial correlation with weather covariates")
+						row = best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False).iloc[0]
+						best_metric = str(row["metric"]) if "metric" in row else metric_list[0]
+						best_lag = int(row.get("lag_hours", 0))
+						k_shift = kp_df.copy()
+						k_shift["time_tag"] = k_shift["time_tag"] + pd.to_timedelta(best_lag, unit="h")
+						merged_best = pd.merge_asof(
+							windowed_df.sort_values("start"),
+							k_shift.sort_values("time_tag")[
+								["time_tag", "kp_index"]
+							],
+							left_on="start",
+							right_on="time_tag",
+							direction="nearest",
+							tolerance=pd.Timedelta(minutes=int(merge_tol)),
+						)
+						merged_best = merged_best.dropna(subset=["kp_index", best_metric])
+						cov_cols = [c for c in ["temp_c", "rh_pct", "pressure_hpa"] if c in merged_best.columns]
+						if cov_cols:
+							cov_mat = merged_best[cov_cols].to_numpy(dtype=float)
+							rp, pp, n = partial_pearson_r_p(
+								merged_best["kp_index"].to_numpy(dtype=float),
+								merged_best[best_metric].to_numpy(dtype=float),
+								cov_mat,
+							)
+							st.write(f"Partial r (Kp vs {best_metric} | weather): {rp:.3f} (p={pp:.3g}, n={n})")
 						else:
-							session_id = str(uuid4())
-							utc_now = pd.Timestamp.utcnow().isoformat()
-							for _, row in best_rows.iterrows():
-								rec = {
-									"cedula": cedula.strip(),
-									"session_id": session_id,
-									"created_utc": utc_now,
-									"metric": str(row.get("metric")),
-									"pearson_r": float(row.get("pearson_r", float("nan"))),
-									"p_value": float(row.get("p_value", float("nan"))),
-									"n": int(row.get("n", 0)),
-									"lag_hours": int(row.get("lag_hours", 0)),
-								}
-								_append_jsonl(rec)
-							st.success("Results appended to database.")
+							st.info("Weather covariates were not aligned; partial correlation skipped.")
+
+					# Residual diagnostics for OLS model (best setting)
+					st.markdown("#### Residual diagnostics (OLS)")
+					if not cov_df.empty and cov_cols:
+						X = np.column_stack([
+							np.ones(merged_best.shape[0]),
+							merged_best["kp_index"].to_numpy(dtype=float),
+							merged_best[cov_cols].to_numpy(dtype=float),
+						])
+						y = merged_best[best_metric].to_numpy(dtype=float)
+						beta, *_ = np.linalg.lstsq(X, y, rcond=None)
+						fitted = X @ beta
+						resid = y - fitted
+						r2 = 1.0 - (np.sum((y - fitted) ** 2) / np.sum((y - y.mean()) ** 2) if np.var(y) > 0 else 0.0)
+						dw = np.sum(np.diff(resid) ** 2) / np.sum(resid ** 2) if resid.size > 1 else np.nan
+						st.write(f"R²={r2:.3f}, Durbin–Watson={dw:.3f}")
+						if _scipy_stats is not None and resid.size > 7:
+							stat, p_norm = _scipy_stats.normaltest(resid)
+							st.write(f"Residual normality (D'Agostino): p={p_norm:.3g}")
+						st.line_chart(pd.DataFrame({"residuals": resid}))
 
 		st.markdown("#### Database summary")
 		db_df = _load_jsonl()
