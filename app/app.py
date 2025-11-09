@@ -402,7 +402,8 @@ def _plot_psd_overlay(datasets: Dict[str, UploadedRR], *, method: str) -> None:
 		"title": {"text": f"PSD Overlay ({method.title()})", "left": "center"},
 		"tooltip": {"trigger": "axis"},
 		"legend": {"top": 24},
-		"xAxis": {"type": "value", "name": "Frequency (Hz)"},
+		"grid": {"left": 32, "right": 16, "containLabel": True},
+		"xAxis": {"type": "value", "name": "Frequency (Hz)", "boundaryGap": False},
 		"yAxis": {"type": "log", "name": "PSD (ms²/Hz)"},
 		"dataZoom": [{"type": "inside"}, {"type": "slider"}],
 		"series": series,
@@ -435,7 +436,7 @@ def _plot_psd_overlay(datasets: Dict[str, UploadedRR], *, method: str) -> None:
 		s["markArea"] = {"silent": True, "data": [], "itemStyle": {"opacity": 1.0}}
 	opt["series"] = series
 	opt["markArea"] = mark_areas
-	render_echarts(opt, height_px=420, config=EChartsConfig())
+	render_echarts(opt, height_px=420, width="100%", config=EChartsConfig())
 
 
 def _plot_poincare(datasets: Dict[str, UploadedRR], max_points: int = 5000) -> None:
@@ -458,11 +459,12 @@ def _plot_poincare(datasets: Dict[str, UploadedRR], max_points: int = 5000) -> N
 		"title": {"text": "Poincaré Plot (RRₙ vs RRₙ₊₁)", "left": "center"},
 		"tooltip": {"trigger": "item"},
 		"legend": {"top": 24},
-		"xAxis": {"type": "value", "name": "RRₙ (ms)"},
+		"grid": {"left": 32, "right": 16, "containLabel": True},
+		"xAxis": {"type": "value", "name": "RRₙ (ms)", "boundaryGap": False},
 		"yAxis": {"type": "value", "name": "RRₙ₊₁ (ms)"},
 		"series": series,
 	}
-	render_echarts(opt, height_px=520, config=EChartsConfig())
+	render_echarts(opt, height_px=520, width="100%", config=EChartsConfig())
 
 
 def _plot_spectrogram(datasets: Dict[str, UploadedRR]) -> None:
@@ -488,7 +490,7 @@ def _plot_spectrogram(datasets: Dict[str, UploadedRR]) -> None:
 	opt = {
 		"title": {"text": f"RR Spectrogram — {sel}", "left": "center"},
 		"tooltip": {"position": "top"},
-		"grid": {"height": "70%", "top": "10%"},
+		"grid": {"height": "70%", "top": "10%", "left": 32, "right": 16, "containLabel": True},
 		"xAxis": {"type": "value", "name": "Time (s)"},
 		"yAxis": {"type": "value", "name": "Frequency (Hz)"},
 		"visualMap": {
@@ -503,7 +505,7 @@ def _plot_spectrogram(datasets: Dict[str, UploadedRR]) -> None:
 			{"name": "PSD", "type": "heatmap", "data": points, "emphasis": {"itemStyle": {"shadowBlur": 10}}}
 		],
 	}
-	render_echarts(opt, height_px=520, config=EChartsConfig())
+	render_echarts(opt, height_px=520, width="100%", config=EChartsConfig())
 
 
 def _compute_deviation_scores(
@@ -574,7 +576,8 @@ def _plot_deviation_timeline(windowed_df: pd.DataFrame) -> None:
 		"title": {"text": "Deviation Timeline (max |robust z| across metrics)", "left": "center"},
 		"tooltip": {"trigger": "item"},
 		"legend": {"top": 24},
-		"xAxis": {"type": "time", "name": "Window start"},
+		"grid": {"left": 32, "right": 16, "containLabel": True},
+		"xAxis": {"type": "time", "name": "Window start", "boundaryGap": False},
 		"yAxis": {"type": "value", "name": "Deviation index"},
 		"dataZoom": [{"type": "inside"}, {"type": "slider"}],
 		"series": series,
@@ -586,7 +589,7 @@ def _plot_deviation_timeline(windowed_df: pd.DataFrame) -> None:
 			],
 		},
 	}
-	render_echarts(opt, height_px=360, config=EChartsConfig())
+	render_echarts(opt, height_px=360, width="100%", config=EChartsConfig())
 
 
 def _gauge_option(title: str, value: float, mu: float, sigma: float, vmin: float, vmax: float, unit: str) -> Dict:
@@ -703,7 +706,7 @@ def main() -> None:
 	st.markdown(
 		"""
 		<style>
-		.block-container { max-width: 100% !important; padding-left: 1rem; padding-right: 1rem; }
+		.block-container { max-width: 100% !important; padding-left: 0; padding-right: 0; }
 		iframe { width: 100% !important; }
 		</style>
 		""",
@@ -1330,7 +1333,8 @@ def main() -> None:
 							opt = {
 								"title": {"text": "Parasympathetic index baseline", "left": "center"},
 								"tooltip": {"trigger": "axis"},
-								"xAxis": {"type": "category", "name": "Session", "data": history_labels},
+								"grid": {"left": 32, "right": 16, "containLabel": True},
+								"xAxis": {"type": "category", "name": "Session", "data": history_labels, "boundaryGap": False},
 								"yAxis": {"type": "value", "name": "PNS index"},
 								"legend": {"top": 24},
 								"series": [line_series, current_series],
@@ -1341,7 +1345,7 @@ def main() -> None:
 								{"yAxis": readiness["high_cut"], "name": "High cut"},
 							]
 							line_series["markLine"] = {"symbol": "none", "data": mark_lines}
-							render_echarts(opt, height_px=360, config=EChartsConfig())
+							render_echarts(opt, height_px=360, width="100%", config=EChartsConfig())
 							st.markdown(
 								"- **VERY LOW**: below ~3% of historical PNS values; indicative of high stress or limited recovery.  \n"
 								"- **LOW**: between ~3% and 17%, often aligned with moderate stress or incomplete rest.  \n"
