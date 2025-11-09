@@ -130,14 +130,27 @@ def _fetch_swpc_dataset(path: str) -> pd.DataFrame:
 		df = df.apply(pd.to_numeric, errors="ignore")
 	return df
 
-def get_swpc_kp_index() -> pd.DataFrame:
-	df = _fetch_swpc_dataset("planetary_k_index_1m.json")
+def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
+	url = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
+	response = requests.get(url, timeout=SWPC_TIMEOUT)
+	response.raise_for_status()
+	payload = response.json()
+	if not payload:
+		return pd.DataFrame()
+	if isinstance(payload, list) and payload and isinstance(payload[0], list):
+		header = payload[0]
+		rows = payload[1:]
+		df = pd.DataFrame(rows, columns=header)
+	else:
+		df = pd.json_normalize(payload)
 	if "time_tag" in df.columns:
-		df = df.dropna(subset=["time_tag"])
-		df = df.sort_values("time_tag")
+		df["time_tag"] = pd.to_datetime(df["time_tag"], errors="coerce", utc=True)
+		if days is not None:
+			cutoff = pd.Timestamp.utcnow().tz_localize("UTC") - pd.Timedelta(days=int(days))
+			df = df[df["time_tag"] >= cutoff]
 	if "kp_index" in df.columns:
 		df["kp_index"] = pd.to_numeric(df["kp_index"], errors="coerce")
-	return df
+	return df.sort_values("time_tag") if "time_tag" in df.columns else df
 
 def get_swpc_solar_radio_flux() -> pd.DataFrame:
 	candidates = ["f107_cm_flux.json", "solar_radio_flux.json", "predicted_f107cm_flux.json"]
@@ -1764,9 +1777,10 @@ def main() -> None:
 		kp_df = pd.DataFrame()
 		kp_error = False
 		with col_sw_kp:
-			st.markdown("#### Planetary K-index (1 minute)")
+			st.markdown("#### Planetary K-index (3-hour cadence)")
+			kp_history_days = st.slider("Kp history (days)", min_value=3, max_value=30, value=14, step=1, key="kp_days")
 			try:
-				kp_df = get_swpc_kp_index()
+				kp_df = get_swpc_kp_index(days=int(kp_history_days))
 			except requests.RequestException as exc:
 				st.error(f"Failed to retrieve K-index data: {exc}")
 				kp_error = True
@@ -1775,17 +1789,25 @@ def main() -> None:
 				kp_error = True
 			if not kp_error:
 				if not kp_df.empty and "kp_index" in kp_df.columns:
-					kp_numeric = kp_df.dropna(subset=["kp_index"]) 
+					kp_numeric = kp_df.dropna(subset=["kp_index"])
 					if not kp_numeric.empty:
 						latest_kp = float(kp_numeric["kp_index"].iloc[-1])
 						latest_time = kp_numeric["time_tag"].iloc[-1] if "time_tag" in kp_numeric.columns else None
 						delta_kp = float(kp_numeric["kp_index"].iloc[-1] - kp_numeric["kp_index"].iloc[-2]) if kp_numeric.shape[0] >= 2 else 0.0
 						st.metric("Latest Kp index", f"{latest_kp:.1f}", f"{delta_kp:+.1f}", help=f"UTC: {latest_time}")
 						if "time_tag" in kp_numeric.columns:
-							kp_win = st.number_input("Kp CI window (points)", min_value=10, max_value=int(min(2000, kp_numeric.shape[0])), value=int(min(180, kp_numeric.shape[0])), step=10, key="kp_win")
+							default_win = min(16, max(4, int(kp_numeric.shape[0] // 10)))
+							kp_win = st.number_input(
+								"Rolling CI window (points)",
+								min_value=4,
+								max_value=int(max(8, kp_numeric.shape[0])),
+								value=int(default_win),
+								step=1,
+								key="kp_win",
+							)
 							times = kp_numeric["time_tag"].tolist()
 							vals = kp_numeric["kp_index"].astype(float).reset_index(drop=True)
-							minp = max(3, int(kp_win // 3))
+							minp = max(3, int(kp_win // 2))
 							roll_mean = vals.rolling(int(kp_win), min_periods=minp).mean()
 							roll_std = vals.rolling(int(kp_win), min_periods=minp).std(ddof=1)
 							roll_n = vals.rolling(int(kp_win), min_periods=minp).count()
@@ -1793,7 +1815,7 @@ def main() -> None:
 							low = roll_mean - 1.96 * se
 							high = roll_mean + 1.96 * se
 							_echarts_time_with_ci(times, vals.tolist(), low.tolist(), high.tolist(), title="Kp with rolling 95% CI", y_name="Kp", series_name="Kp")
-						st.caption("CI uses a rolling window over points to estimate uncertainty (mean ± 1.96·SE).")
+						st.caption("Kp summarises geomagnetic disturbance (0–9). The chart shows trends across the selected history; the shaded band is the 95% rolling confidence interval (mean ±1.96·SE).")
 					else:
 						st.info("Kp values are not available in the NOAA feed.")
 				else:
@@ -1803,6 +1825,7 @@ def main() -> None:
 		flux_error = False
 		with col_sw_flux:
 			st.markdown("#### Solar Radio Flux (F10.7 cm)")
+			flux_history_days = st.slider("F10.7 history (days)", min_value=7, max_value=90, value=30, step=1, key="flux_days")
 			try:
 				flux_df = get_swpc_solar_radio_flux()
 			except requests.RequestException as exc:
@@ -1813,6 +1836,9 @@ def main() -> None:
 				flux_error = True
 			if not flux_error:
 				if not flux_df.empty:
+					if "time_tag" in flux_df.columns:
+						cutoff = pd.Timestamp.utcnow().tz_localize("UTC") - pd.Timedelta(days=int(flux_history_days))
+						flux_df = flux_df[pd.to_datetime(flux_df["time_tag"], utc=True, errors="coerce") >= cutoff]
 					numeric_flux_cols = [col for col in flux_df.columns if flux_df[col].dtype.kind in "fcid"]
 					value_candidates = [
 						col
@@ -1828,10 +1854,17 @@ def main() -> None:
 							delta_flux = float(latest_flux - flux_numeric[value_col].iloc[-2]) if flux_numeric.shape[0] >= 2 else 0.0
 							st.metric("Latest F10.7 flux", f"{latest_flux:.1f}", f"{delta_flux:+.1f}", help=f"UTC: {latest_time}")
 							if "time_tag" in flux_numeric.columns:
-								f_win = st.number_input("F10.7 CI window (points)", min_value=5, max_value=int(min(1000, flux_numeric.shape[0])), value=int(min(24, flux_numeric.shape[0])), step=1, key="f107_win")
-								times = flux_numeric["time_tag"].tolist()
+								f_win = st.number_input(
+									"Rolling CI window (points)",
+									min_value=5,
+									max_value=int(max(10, flux_numeric.shape[0])),
+									value=int(min(24, flux_numeric.shape[0])),
+									step=1,
+									key="f107_win",
+								)
+								times = pd.to_datetime(flux_numeric["time_tag"], utc=True, errors="coerce").tolist()
 								vals = flux_numeric[value_col].astype(float).reset_index(drop=True)
-								minp = max(3, int(f_win // 3))
+								minp = max(3, int(f_win // 2))
 								roll_mean = vals.rolling(int(f_win), min_periods=minp).mean()
 								roll_std = vals.rolling(int(f_win), min_periods=minp).std(ddof=1)
 								roll_n = vals.rolling(int(f_win), min_periods=minp).count()
@@ -1839,7 +1872,7 @@ def main() -> None:
 								low = roll_mean - 1.96 * se
 								high = roll_mean + 1.96 * se
 								_echarts_time_with_ci(times, vals.tolist(), low.tolist(), high.tolist(), title="F10.7 with rolling 95% CI", y_name="sfu", series_name="F10.7")
-							st.caption("F10.7 rolling CI uses mean ± 1.96·SE over the selected window.")
+							st.caption("F10.7 (solar radio flux) reflects solar EUV output. Higher readings indicate a more excited sun, which can modify ionospheric conditions and HF communications.")
 						else:
 							st.info("Solar radio flux values are not available in the NOAA feed.")
 					else:
@@ -2033,6 +2066,11 @@ def main() -> None:
 									(max_n * 0.75, "#22c55e"),
 								],
 							)
+						clinical_text = (
+							f"- **Clinical takeaway:** When geomagnetic activity {'rises' if sign_dir == 'positive' else 'falls'}, `{metric_name}` tends to {'increase' if sign_dir == 'positive' else 'decrease'} about {lag_hours_top} hour(s) later."
+							if lag_hours_top != 0
+							else f"- **Clinical takeaway:** `{metric_name}` shifts in step with geomagnetic activity."
+						)
 						st.markdown(
 							"**Interpretation summary**" "\n"
 							f"- **Metric:** `{metric_name}` shows a {sign_dir} Pearson correlation with Kp (|r| = {abs_r:.2f}).\n"
@@ -2048,7 +2086,8 @@ def main() -> None:
 								)
 							)
 							+ "\n"
-							f"- **Sample size:** n = {n_top}; larger n increases confidence in stability."
+							f"- **Sample size:** n = {n_top}; larger n increases confidence in stability.\n"
+							+ clinical_text
 						)
 						st.caption(
 							"Effect sizes |r|≈0.1/0.3/0.5 are conventionally considered small/moderate/large."
@@ -2138,10 +2177,11 @@ def main() -> None:
 									f"- Controlling for {', '.join(cov_cols)}, the HRV metric retains a |partial r| of {abs(rp):.2f}.\n"
 									f"- Sample size for the partial model: n = {int(n)} (after removing NaNs across covariates).\n"
 									+ (
-										f"- The partial p-value of {pp:.3f} {'meets' if np.isfinite(pp) and pp <= 0.05 else 'does not meet'} the 0.05 criterion for residual association."
+										f"- The partial p-value of {pp:.3f} {'meets' if np.isfinite(pp) and pp <= 0.05 else 'does not meet'} the 0.05 criterion for residual association.\n"
 										if np.isfinite(pp)
 										else ""
 									)
+									+ f"- Clinical takeaway: After accounting for local weather, `{best_metric}` still {'tracks' if abs(rp) >= 0.2 else 'shows only a weak link with'} geomagnetic variability."
 								)
 								st.caption("Partial correlations help distinguish whether geomagnetic effects persist after accounting for local environmental covariates (temperature, humidity, pressure, wind, precipitation, cloud cover).")
 							else:
@@ -2457,7 +2497,8 @@ def main() -> None:
 									)
 								)
 								+ "\n"
-								f"- Samples contributing to this correlation: n = {n_best}."
+								f"- Samples contributing to this correlation: n = {n_best}.\n"
+								f"- Clinical takeaway: {title} episodes are followed by {'stronger' if r_val >= 0 else 'weaker'} `{metric_best}` responses after ~{abs(lag_best)} hour(s), suggesting a potential physiological timing window."
 							)
 							st.caption(
 								"Interpret DONKI correlations as exploratory links between specific solar/geomagnetic drivers and HRV metrics; the lag points to the most likely propagation delay from solar activity to physiological response."
@@ -2560,7 +2601,17 @@ def _echarts_time_with_ci(time_vals: List[pd.Timestamp], y_vals: List[float], ci
 	render_echarts(opt, height_px=340, width="100%", config=EChartsConfig())
 
 
-def _echarts_gauge(value: float, *, min_val: float, max_val: float, title: str, unit: str = "", formatter: str = "{value:.2f}", thresholds: Optional[List[Tuple[float, str]]] = None, height_px: int = 220) -> None:
+def _echarts_gauge(
+	value: float,
+	*,
+	min_val: float,
+	max_val: float,
+	title: str,
+	unit: str = "",
+	precision: int = 2,
+	thresholds: Optional[List[Tuple[float, str]]] = None,
+	height_px: int = 300,
+) -> None:
 	if not np.isfinite(value):
 		st.info(f"{title}: value unavailable.")
 		return
@@ -2568,6 +2619,7 @@ def _echarts_gauge(value: float, *, min_val: float, max_val: float, title: str, 
 		max_val = min_val + 1.0
 	span = max_val - min_val
 	value_clamped = float(np.clip(value, min_val, max_val))
+	display_value = round(value_clamped, precision)
 	segments = thresholds or []
 	color_segments: List[List[Any]] = []
 	if segments:
@@ -2580,9 +2632,7 @@ def _echarts_gauge(value: float, *, min_val: float, max_val: float, title: str, 
 			color_segments.append([1.0, color_segments[-1][1]])
 	else:
 		color_segments = [[0.5, "#38bdf8"], [1.0, "#2563eb"]]
-	detail_formatter = formatter
-	if unit:
-		detail_formatter = f"{formatter} {unit}"
+	unit_suffix = f" {unit}" if unit else ""
 	opt = {
 		"title": {"text": title, "left": "center"},
 		"series": [
@@ -2593,21 +2643,21 @@ def _echarts_gauge(value: float, *, min_val: float, max_val: float, title: str, 
 				"min": float(min_val),
 				"max": float(max_val),
 				"center": ["50%", "60%"],
-				"pointer": {"show": True, "length": "70%", "width": 6},
-				"progress": {"show": True, "roundCap": True, "width": 10},
-				"axisLine": {"roundCap": True, "lineStyle": {"width": 10, "color": color_segments}},
+				"pointer": {"show": True, "length": "74%", "width": 6},
+				"progress": {"show": True, "roundCap": True, "width": 12},
+				"axisLine": {"roundCap": True, "lineStyle": {"width": 12, "color": color_segments}},
 				"axisTick": {"show": False},
 				"splitLine": {"show": False},
-				"axisLabel": {"distance": -32, "color": "#475569", "fontSize": 11},
-				"title": {"offsetCenter": [0, "72%"], "color": "#1f2937", "fontSize": 13},
+				"axisLabel": {"distance": -32, "color": "#475569", "fontSize": 12},
+				"title": {"offsetCenter": [0, "78%"], "color": "#1f2937", "fontSize": 14},
 				"detail": {
 					"valueAnimation": True,
 					"offsetCenter": [0, "10%"],
-					"formatter": detail_formatter,
+					"formatter": f"{{value}}{unit_suffix}",
 					"color": "#0f172a",
-					"fontSize": 20,
+					"fontSize": 26,
 				},
-				"data": [{"value": value_clamped}],
+				"data": [{"value": display_value}],
 			}
 		],
 	}
