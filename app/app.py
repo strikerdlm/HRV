@@ -262,9 +262,17 @@ def _parse_float(raw_value: float | int | str, label: str) -> float:
 
 def _plot_rr_timeseries(datasets: Dict[str, UploadedRR], dev_windows: Optional[pd.DataFrame] = None, *, max_points: Optional[int] = None) -> None:
 	series = []
+	x_min: Optional[pd.Timestamp] = None
+	x_max: Optional[pd.Timestamp] = None
 	for name, up in datasets.items():
 		if up.df.empty:
 			continue
+		ts_ser = pd.to_datetime(up.df["timestamp"], errors="coerce").dropna()
+		if not ts_ser.empty:
+			cur_min = ts_ser.iloc[0]
+			cur_max = ts_ser.iloc[-1]
+			x_min = cur_min if (x_min is None or cur_min < x_min) else x_min
+			x_max = cur_max if (x_max is None or cur_max > x_max) else x_max
 		x_vals = up.df["timestamp"].astype(str).tolist()
 		y_vals = up.df["rr_intervals_ms"].astype(float).tolist()
 		if max_points is not None and len(y_vals) > max_points:
@@ -327,19 +335,33 @@ def _plot_rr_timeseries(datasets: Dict[str, UploadedRR], dev_windows: Optional[p
 		"title": {"text": "RR Intervals over Time", "left": "center"},
 		"tooltip": {"trigger": "axis"},
 		"legend": {"top": 24},
-		"xAxis": {"type": "time"},
+		"grid": {"left": 32, "right": 16, "containLabel": True},
+		"xAxis": {
+			"type": "time",
+			"boundaryGap": False,
+			**({"min": str(x_min)} if x_min is not None else {}),
+			**({"max": str(x_max)} if x_max is not None else {}),
+		},
 		"yAxis": {"type": "value", "name": "RR (ms)"},
 		"dataZoom": [{"type": "inside"}, {"type": "slider"}],
 		"series": series,
 	}
-	render_echarts(opt, height_px=420, config=EChartsConfig())
+	render_echarts(opt, height_px=420, width="100%", config=EChartsConfig())
 
 
 def _plot_hr_timeseries(datasets: Dict[str, UploadedRR]) -> None:
 	series = []
+	x_min: Optional[pd.Timestamp] = None
+	x_max: Optional[pd.Timestamp] = None
 	for name, up in datasets.items():
 		if up.df.empty:
 			continue
+		ts_ser = pd.to_datetime(up.df["timestamp"], errors="coerce").dropna()
+		if not ts_ser.empty:
+			cur_min = ts_ser.iloc[0]
+			cur_max = ts_ser.iloc[-1]
+			x_min = cur_min if (x_min is None or cur_min < x_min) else x_min
+			x_max = cur_max if (x_max is None or cur_max > x_max) else x_max
 		x = up.df["timestamp"].astype(str).tolist()
 		y = up.df["heart_rate [bpm]"].astype(float).tolist()
 		series.append(_echarts_line_series(name, x, y))
@@ -347,12 +369,18 @@ def _plot_hr_timeseries(datasets: Dict[str, UploadedRR]) -> None:
 		"title": {"text": "Heart Rate over Time", "left": "center"},
 		"tooltip": {"trigger": "axis"},
 		"legend": {"top": 24},
-		"xAxis": {"type": "time"},
+		"grid": {"left": 32, "right": 16, "containLabel": True},
+		"xAxis": {
+			"type": "time",
+			"boundaryGap": False,
+			**({"min": str(x_min)} if x_min is not None else {}),
+			**({"max": str(x_max)} if x_max is not None else {}),
+		},
 		"yAxis": {"type": "value", "name": "HR (bpm)"},
 		"dataZoom": [{"type": "inside"}, {"type": "slider"}],
 		"series": series,
 	}
-	render_echarts(opt, height_px=420, config=EChartsConfig())
+	render_echarts(opt, height_px=420, width="100%", config=EChartsConfig())
 
 
 def _plot_psd_overlay(datasets: Dict[str, UploadedRR], *, method: str) -> None:
@@ -768,19 +796,20 @@ def main() -> None:
 	dataset_items = list(datasets_all.items())
 	datasets = dict(dataset_items[: int(max_datasets)])
 
-	# Cleaning + metadata with immediate progress feedback
+	# Cleaning + metadata with immediate percentage updates (no progress bars)
 	total = max(1, len(datasets))
-	pb_clean = st.progress(
-		0,
-		text="Cleaning datasets..." if apply_clean else "Preparing datasets...",
-	)
+	txt_clean = st.empty()
+	txt_clean.text(("Cleaning datasets... " if apply_clean else "Preparing datasets... ") + "0%")
 	logger.info("Starting %s of %d dataset(s)", "cleaning" if apply_clean else "preparation", total)
 	meta_rows = []
 	completed = 0
 	for name, up in datasets.items():
 		if up.rr_ms.size == 0:
 			completed += 1
-			pb_clean.progress(min(100, int(completed * 100 / total)))
+			txt_clean.text(
+				("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
+				+ f"{min(100, int(completed * 100 / total))}%"
+			)
 			continue
 		if apply_clean:
 			cleaned, valid_mask, summary = clean_rr_intervals(
@@ -809,11 +838,16 @@ def main() -> None:
 			}
 		)
 		completed += 1
-		pb_clean.progress(min(100, int(completed * 100 / total)))
+		txt_clean.text(
+			("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
+			+ f"{min(100, int(completed * 100 / total))}%"
+		)
 	logger.info("Finished %s of %d dataset(s)", "cleaning" if apply_clean else "preparation", total)
+	txt_clean.text(("Cleaning complete." if apply_clean else "Preparation complete.") + " 100%")
 
 	windowed_all: List[pd.DataFrame] = []
-	pb_win = st.progress(0, text="Computing windowed metrics...")
+	txt_win = st.empty()
+	txt_win.text("Computing windowed metrics... 0%")
 	total_win = max(1, len(datasets))
 	done_win = 0
 	for name, up in datasets.items():
@@ -829,13 +863,14 @@ def main() -> None:
 		if not wdf.empty:
 			windowed_all.append(wdf.assign(source=name))
 		done_win += 1
-		pb_win.progress(min(100, int(done_win * 100 / total_win)))
+		txt_win.text("Computing windowed metrics... " + f"{min(100, int(done_win * 100 / total_win))}%")
 	if windowed_all:
 		windowed_df = pd.concat(windowed_all, ignore_index=True)
 		if apply_dev:
 			windowed_df = _compute_deviation_scores(windowed_df, metrics=dev_metrics, z_warn=float(z_warn), z_alert=float(z_alert))
 	else:
 		windowed_df = pd.DataFrame()
+	txt_win.text("Computing windowed metrics... 100%")
 
 	ml_summary_df = pd.DataFrame()
 	ml_error_message = ""
@@ -904,7 +939,9 @@ def main() -> None:
 	# Full-recording metrics
 	multi_results: List[Dict] = []
 	ordered_sources: List[str] = []
-	pb_full = st.progress(0, text="Computing full-recording metrics...")
+	txt_full = st.empty()
+	txt_full.text("Computing full-recording metrics... 0%")
+
 	total_full = max(1, len(datasets))
 	done_full = 0
 	for name, up in datasets.items():
@@ -929,7 +966,8 @@ def main() -> None:
 			multi_results.append(m)
 			ordered_sources.append(name)
 			done_full += 1
-			pb_full.progress(min(100, int(done_full * 100 / total_full)))
+			txt_full.text("Computing full-recording metrics... " + f"{min(100, int(done_full * 100 / total_full))}%")
+	txt_full.text("Computing full-recording metrics... 100%")
 	multi_results_df = pd.DataFrame(multi_results) if multi_results else pd.DataFrame()
 
 	# Long-term summaries (5-min windows): SDANN (std of mean_nni), SDNNIDX (mean of window SDNN)
@@ -1239,12 +1277,18 @@ def main() -> None:
 					st.warning("Select at least one baseline record to build readiness baseline.")
 				else:
 					history_values = [pns_mapping[name] for name in ordered_names if name in history_names]
-					try:
-						baseline = build_readiness_baseline(history_values, min_samples=min_hist, max_samples=max_hist)
-					except ValueError as exc:
-						logger.warning("Readiness baseline configuration issue: %s", exc, exc_info=True)
-						st.warning(f"Baseline configuration issue: {exc}")
+					# Avoid raising errors when insufficient history is available
+					if len(history_values) < int(min_hist):
+						st.info(f"Readiness baseline needs at least {int(min_hist)} samples; currently {len(history_values)}.")
+						baseline = None
 					else:
+						try:
+							baseline = build_readiness_baseline(history_values, min_samples=min_hist, max_samples=max_hist)
+						except ValueError as exc:
+							logger.warning("Readiness baseline configuration issue: %s", exc, exc_info=True)
+							st.warning(f"Baseline configuration issue: {exc}")
+							baseline = None
+					if baseline is not None:
 						current_pns = float(pns_mapping.get(current_sel, np.nan))
 						if not np.isfinite(current_pns):
 							st.warning("Current measurement lacks a valid parasympathetic index.")
