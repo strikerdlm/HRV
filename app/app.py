@@ -3602,7 +3602,7 @@ def _echarts_gauge(
 		raise ValueError("precision must be non-negative.")
 	if height_px <= 0:
 		raise ValueError("height_px must be positive.")
-	display_value = value_clamped if formatter else round(value_clamped, precision)
+	display_numeric = round(value_clamped, precision)
 	segments = thresholds or []
 	color_segments: List[List[Any]] = []
 	if segments:
@@ -3616,6 +3616,21 @@ def _echarts_gauge(
 	else:
 		color_segments = [[0.5, "#38bdf8"], [1.0, "#2563eb"]]
 	unit_suffix = f" {unit}" if unit else ""
+	if formatter is None:
+		detail_text = f"{display_numeric}{unit_suffix}"
+	else:
+		try:
+			python_formatted = formatter.format(value=value_clamped)
+		except (KeyError, IndexError, ValueError) as exc:
+			st.warning(
+				f"{title} gauge formatter '{formatter}' failed; using default display. ({exc})"
+			)
+			python_formatted = str(display_numeric)
+		if unit_suffix and unit not in python_formatted:
+			detail_text = f"{python_formatted}{unit_suffix}"
+		else:
+			detail_text = python_formatted
+	detail_text = str(detail_text)
 	opt = {
 		"title": {"text": title, "left": "center"},
 		"series": [
@@ -3636,11 +3651,11 @@ def _echarts_gauge(
 				"detail": {
 					"valueAnimation": True,
 					"offsetCenter": [0, "10%"],
-					"formatter": formatter if formatter else f"{{value}}{unit_suffix}",
+					"formatter": detail_text,
 					"color": "#0f172a",
 					"fontSize": 26,
 				},
-				"data": [{"value": display_value}],
+				"data": [{"value": value_clamped}],
 			}
 		],
 	}
