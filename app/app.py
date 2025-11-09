@@ -1000,6 +1000,131 @@ def _build_space_weather_feature_matrix(
 	return result
 
 
+def _compute_feature_correlations(
+	matrix_df: pd.DataFrame,
+	metric_columns: Sequence[str],
+	feature_columns: Sequence[str],
+) -> pd.DataFrame:
+	"""
+	Compute Pearson correlations between HRV metrics and predictor features.
+	"""
+	if matrix_df.empty:
+		raise ValueError("Feature matrix is empty.")
+	common_metrics = [col for col in metric_columns if col in matrix_df.columns]
+	if not common_metrics:
+		raise ValueError("None of the specified metric columns are present in the feature matrix.")
+	common_features = [col for col in feature_columns if col in matrix_df.columns]
+	if not common_features:
+		raise ValueError("No predictor features available for correlation analysis.")
+	rows: List[Dict[str, Any]] = []
+	for metric in common_metrics:
+		for feature in common_features:
+			pair = matrix_df[[metric, feature]].dropna()
+			n_samples = int(pair.shape[0])
+			if n_samples < 3:
+				continue
+			r_val = float(pair[metric].corr(pair[feature]))
+			rows.append(
+				{
+					"metric": metric,
+					"feature": feature,
+					"pearson_r": r_val,
+					"samples": n_samples,
+				}
+			)
+	if not rows:
+		raise ValueError("No overlapping samples found to compute correlations.")
+	result_df = pd.DataFrame(rows)
+	result_df["abs_r"] = result_df["pearson_r"].abs()
+	return result_df.sort_values("abs_r", ascending=False, ignore_index=True)
+
+
+def _fit_linear_response_model(
+	matrix_df: pd.DataFrame,
+	target_column: str,
+	feature_columns: Sequence[str],
+	train_fraction: float = 0.75,
+) -> Dict[str, Any]:
+	"""
+	Train a simple linear regression model (OLS) predicting a HRV metric from space-weather predictors.
+	"""
+	if not 0.1 <= train_fraction <= 0.95:
+		raise ValueError("train_fraction must be between 0.1 and 0.95.")
+	columns_needed = [target_column] + list(feature_columns)
+	missing_cols = [col for col in columns_needed if col not in matrix_df.columns]
+	if missing_cols:
+		raise ValueError(f"Missing columns in feature matrix: {', '.join(missing_cols)}")
+	data = matrix_df[columns_needed].dropna().reset_index(drop=True)
+	if data.empty:
+		raise ValueError("No complete rows available after dropping NaNs.")
+	n_rows = data.shape[0]
+	n_features = len(feature_columns)
+	if n_rows <= n_features + 1:
+		raise ValueError("Not enough samples to train the model; add more windows or reduce feature count.")
+	rng = np.random.default_rng(941)
+	indices = np.arange(n_rows)
+	rng.shuffle(indices)
+	data = data.iloc[indices].reset_index(drop=True)
+	split_idx = max(int(n_rows * float(train_fraction)), n_features + 1)
+	if split_idx >= n_rows:
+		split_idx = n_rows - 1
+	X_all = data[feature_columns].to_numpy(dtype=float)
+	y_all = data[target_column].to_numpy(dtype=float)
+	feature_mean = np.nanmean(X_all, axis=0)
+	feature_std = np.nanstd(X_all, axis=0)
+	feature_std[feature_std == 0.0] = 1.0
+	X_all = (X_all - feature_mean) / feature_std
+	X_train = X_all[:split_idx, :]
+	y_train = y_all[:split_idx]
+	X_test = X_all[split_idx:, :]
+	y_test = y_all[split_idx:]
+	X_train_design = np.hstack([np.ones((X_train.shape[0], 1)), X_train])
+	coef, _, _, _ = np.linalg.lstsq(X_train_design, y_train, rcond=None)
+	def _predict(x_matrix: np.ndarray) -> np.ndarray:
+		design = np.hstack([np.ones((x_matrix.shape[0], 1)), x_matrix])
+		return design @ coef
+	y_train_pred = _predict(X_train)
+	y_test_pred = _predict(X_test)
+	def _r_squared(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+		if y_true.size == 0:
+			return float("nan")
+		ss_tot = float(np.square(y_true - y_true.mean()).sum())
+		if ss_tot == 0.0:
+			return float("nan")
+		ss_res = float(np.square(y_true - y_pred).sum())
+		return 1.0 - (ss_res / ss_tot)
+	def _rmse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+		if y_true.size == 0:
+			return float("nan")
+		return float(np.sqrt(np.square(y_true - y_pred).mean()))
+	def _mae(y_true: np.ndarray, y_pred: np.ndarray) -> float:
+		if y_true.size == 0:
+			return float("nan")
+		return float(np.abs(y_true - y_pred).mean())
+	metrics = {
+		"train_samples": int(y_train.size),
+		"test_samples": int(y_test.size),
+		"train_r2": _r_squared(y_train, y_train_pred),
+		"test_r2": _r_squared(y_test, y_test_pred),
+		"train_rmse": _rmse(y_train, y_train_pred),
+		"test_rmse": _rmse(y_test, y_test_pred),
+		"train_mae": _mae(y_train, y_train_pred),
+		"test_mae": _mae(y_test, y_test_pred),
+	}
+	coef_table = pd.DataFrame(
+		{
+			"feature": ["intercept"] + list(feature_columns),
+			"coefficient": coef.astype(float),
+		}
+	)
+	return {
+		"metrics": metrics,
+		"coefficients": coef_table,
+		"feature_mean": feature_mean,
+		"feature_std": feature_std,
+	}
+
+
 def _render_lag_scan_summary(title: str, res: pd.DataFrame, *, lags: Sequence[int]) -> None:
 	if res.empty:
 		st.info(f"No aligned samples for {title}.")
@@ -3868,6 +3993,99 @@ def main() -> None:
 									mime="text/csv",
 									key="btn_download_spaceweather_matrix",
 								)
+					feature_matrix_cached = space_state.get("swl_feature_matrix", pd.DataFrame())
+					if not feature_matrix_cached.empty:
+						preview_cols = min(12, feature_matrix_cached.shape[1])
+						st.markdown("##### Current feature matrix preview")
+						st.dataframe(feature_matrix_cached.head(80).iloc[:, :preview_cols])
+						current_metrics = [col for col in metric_list if col in feature_matrix_cached.columns]
+						available_features = [
+							col
+							for col in feature_matrix_cached.columns
+							if col not in {"window_start", *current_metrics}
+						]
+						if current_metrics and available_features:
+							default_features = available_features[: min(12, len(available_features))]
+							selected_corr_features = st.multiselect(
+								"Predictor columns for correlation scan",
+								options=available_features,
+								default=default_features,
+								key="corr_feature_selector",
+							)
+							if st.button("Compute feature ↔ metric correlations", key="btn_compute_feature_corr"):
+								try:
+									corr_df = _compute_feature_correlations(
+										feature_matrix_cached,
+										current_metrics,
+										selected_corr_features if selected_corr_features else available_features,
+									)
+								except ValueError as exc:
+									st.warning(str(exc))
+								else:
+									st.dataframe(corr_df.head(150))
+									corr_csv = corr_df.to_csv(index=False).encode("utf-8")
+									st.download_button(
+										"Download correlations (CSV)",
+										data=corr_csv,
+										file_name=f"hrv_spaceweather_correlations_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+										mime="text/csv",
+										key="btn_download_feature_corr",
+									)
+							with st.expander("Train linear response model (experimental)"):
+								target_metric = st.selectbox(
+									"Target HRV metric",
+									options=current_metrics,
+									index=0,
+									key="model_target_metric",
+								)
+								default_model_features = available_features[: min(10, len(available_features))]
+								selected_model_features = st.multiselect(
+									"Predictor features",
+									options=available_features,
+									default=default_model_features,
+									key="model_feature_selector",
+								)
+								train_fraction = st.slider(
+									"Training fraction",
+									min_value=0.6,
+									max_value=0.9,
+									value=0.75,
+									step=0.05,
+									key="model_train_fraction",
+								)
+								if st.button("Fit linear model", key="btn_fit_linear_model"):
+									try:
+										model_out = _fit_linear_response_model(
+											feature_matrix_cached,
+											target_metric,
+											selected_model_features if selected_model_features else available_features,
+											train_fraction=float(train_fraction),
+										)
+									except ValueError as exc:
+										st.warning(str(exc))
+									else:
+										metrics_view = model_out["metrics"]
+										col_metrics = st.columns(3)
+										col_metrics[0].metric("Train R²", f"{metrics_view['train_r2']:.3f}")
+										col_metrics[1].metric("Test R²", f"{metrics_view['test_r2']:.3f}")
+										col_metrics[2].metric("Test RMSE", f"{metrics_view['test_rmse']:.3f}")
+										st.caption(
+											f"Train samples: {metrics_view['train_samples']} • "
+											f"Test samples: {metrics_view['test_samples']} • "
+											f"Test MAE: {metrics_view['test_mae']:.3f}"
+										)
+										coef_df = model_out["coefficients"]
+										st.dataframe(coef_df)
+										coef_csv = coef_df.to_csv(index=False).encode("utf-8")
+										st.download_button(
+											"Download coefficients (CSV)",
+											data=coef_csv,
+											file_name=f"hrv_linear_model_coefficients_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+											mime="text/csv",
+											key="btn_download_model_coeffs",
+										)
+						else:
+							st.caption("Add HRV metrics and predictor columns to compute correlations and train models.")
 
 
 def _fisher_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
