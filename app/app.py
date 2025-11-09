@@ -3639,8 +3639,8 @@ def _echarts_gauge(
 		"title": {
 			"text": title,
 			"left": "center",
-			"top": "4%",
-			"textStyle": {"fontSize": 16, "fontWeight": 600, "color": "#0f172a"},
+			"top": "0%",
+			"textStyle": {"fontSize": 18, "fontWeight": 700, "color": "#0f172a"},
 		},
 		"series": [
 			{
@@ -3649,8 +3649,8 @@ def _echarts_gauge(
 				"endAngle": -35,
 				"min": float(min_val),
 				"max": float(max_val),
-				"center": ["50%", "58%"],
-				"radius": "86%",
+				"center": ["50%", "66%"],
+				"radius": "92%",
 				"splitNumber": 8,
 				"progress": {"show": False},
 				"axisLine": {
@@ -3683,7 +3683,7 @@ def _echarts_gauge(
 				"detail": {
 					"show": True,
 					"valueAnimation": True,
-					"offsetCenter": [0, "46%"],
+					"offsetCenter": [0, "52%"],
 					"formatter": detail_text,
 					"color": "#0f172a",
 					"fontSize": 24,
@@ -3697,8 +3697,8 @@ def _echarts_gauge(
 				"endAngle": -35,
 				"min": float(min_val),
 				"max": float(max_val),
-				"radius": "70%",
-				"center": ["50%", "58%"],
+				"radius": "78%",
+				"center": ["50%", "66%"],
 				"pointer": {"show": False},
 				"progress": {"show": False},
 				"axisLine": {"show": False},
