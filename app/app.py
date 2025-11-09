@@ -140,19 +140,43 @@ def get_swpc_kp_index() -> pd.DataFrame:
 	return df
 
 def get_swpc_solar_radio_flux() -> pd.DataFrame:
-	df = _fetch_swpc_dataset("solar_radio_flux.json")
-	if "time_tag" in df.columns:
-		df = df.dropna(subset=["time_tag"])
-		df = df.sort_values("time_tag")
-	preferred_cols = [
-		"observed_value",
-		"flux",
-		"predicted_value",
-		"adjusted_flux",
-		"flux_observed",
+	candidates = ["f107_cm_flux.json", "solar_radio_flux.json", "predicted_f107cm_flux.json"]
+	df = pd.DataFrame()
+	for path in candidates:
+		try:
+			df_candidate = _fetch_swpc_dataset(path)
+		except requests.HTTPError as exc:
+			status = getattr(exc.response, "status_code", None)
+			if status == 404:
+				continue
+			raise
+		if not df_candidate.empty:
+			df = df_candidate
+			break
+	if df.empty:
+		return df
+	# Ensure a unified time column name
+	time_cols = [col for col in df.columns if np.issubdtype(df[col].dtype, np.datetime64)]
+	if time_cols:
+		main_time = time_cols[0]
+		df = df.dropna(subset=[main_time]).sort_values(main_time)
+		if "time_tag" not in df.columns:
+			df = df.rename(columns={main_time: "time_tag"})
+	else:
+		df["time_tag"] = pd.to_datetime(df.iloc[:, 0], errors="coerce", utc=True)
+		df = df.dropna(subset=["time_tag"]).sort_values("time_tag")
+	# Identify numeric flux columns
+	numeric_cols = [col for col in df.columns if df[col].dtype.kind in "fcid"]
+	flux_candidates = [
+		col
+		for col in numeric_cols
+		if any(keyword in col.lower() for keyword in ("flux", "value", "observed", "adjusted"))
 	]
-	for col in preferred_cols:
-		if col in df.columns:
+	if flux_candidates:
+		for col in flux_candidates:
+			df[col] = pd.to_numeric(df[col], errors="coerce")
+	else:
+		for col in numeric_cols:
 			df[col] = pd.to_numeric(df[col], errors="coerce")
 	return df
 
@@ -1789,8 +1813,13 @@ def main() -> None:
 				flux_error = True
 			if not flux_error:
 				if not flux_df.empty:
-					value_candidates = ["observed_value", "flux", "predicted_value", "adjusted_flux", "flux_observed"]
-					value_col = next((col for col in value_candidates if col in flux_df.columns), None)
+					numeric_flux_cols = [col for col in flux_df.columns if flux_df[col].dtype.kind in "fcid"]
+					value_candidates = [
+						col
+						for col in numeric_flux_cols
+						if any(keyword in col.lower() for keyword in ("flux", "observed", "adjusted", "predicted", "value"))
+					]
+					value_col = value_candidates[0] if value_candidates else (numeric_flux_cols[0] if numeric_flux_cols else None)
 					if value_col:
 						flux_numeric = flux_df.dropna(subset=[value_col])
 						if not flux_numeric.empty:
@@ -1918,13 +1947,83 @@ def main() -> None:
 
 					st.subheader("Best correlation per metric (by |r|)")
 					st.dataframe(best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False))
-					st.markdown("#### Correlation vs. Lag (absolute r)")
-					pivot = lag_results.pivot_table(index="lag_hours", columns="metric", values="pearson_r", aggfunc="mean")
-					if not pivot.empty:
-						lags_x = pivot.index.astype(float).tolist()
-						series_map = {str(col): pivot[col].astype(float).tolist() for col in pivot.columns}
-						_echarts_multi_series(lags_x, series_map, title="HRV metrics: |r| vs lag", x_name="Lag (h)", y_name="|r|", absolute=True)
-						st.caption("Positive lags shift Kp forward in time; significant peaks may indicate biological response delays.")
+					if not best_rows.empty and "pearson_r" in best_rows.columns:
+						top_row = best_rows.iloc[0]
+						abs_r = float(abs(top_row.get("pearson_r", 0.0)))
+						lag_hours_top = int(top_row.get("lag_hours", 0))
+						p_val_top = float(top_row.get("p_value", np.nan)) if "p_value" in top_row else float("nan")
+						q_val_top = float(top_row.get("q_value", np.nan)) if "q_value" in top_row else float("nan")
+						metric_name = str(top_row.get("metric", ""))
+						sign_dir = "positive" if float(top_row.get("pearson_r", 0.0)) >= 0 else "negative"
+						lag_description = "Geomagnetic activity (Kp) leads HRV" if lag_hours_top > 0 else ("HRV leads geomagnetic changes" if lag_hours_top < 0 else "Simultaneous response")
+						col_g1, col_g2, col_g3 = st.columns(3)
+						with col_g1:
+							_echarts_gauge(
+								abs_r,
+								min_val=0.0,
+								max_val=1.0,
+								title=f"|r| — {metric_name}",
+								formatter="{value:.2f}",
+								thresholds=[
+									(0.2, "#f97316"),
+									(0.4, "#facc15"),
+									(0.6, "#4ade80"),
+									(1.0, "#16a34a"),
+								],
+							)
+						with col_g2:
+							if np.isfinite(q_val_top):
+								_echarts_gauge(
+									q_val_top,
+									min_val=0.0,
+									max_val=0.1,
+									title="FDR-adjusted q-value",
+									formatter="{value:.3f}",
+									thresholds=[
+										(0.01, "#22c55e"),
+										(0.05, "#facc15"),
+										(0.1, "#ef4444"),
+									],
+								)
+							elif np.isfinite(p_val_top):
+								_echarts_gauge(
+									p_val_top,
+									min_val=0.0,
+									max_val=0.1,
+									title="p-value",
+									formatter="{value:.3f}",
+									thresholds=[
+										(0.01, "#22c55e"),
+										(0.05, "#facc15"),
+										(0.1, "#ef4444"),
+									],
+								)
+						with col_g3:
+							_echarts_gauge(
+								float(abs(lag_hours_top)),
+								min_val=0.0,
+								max_val=max(1.0, float(max(abs(lags)) if lags else 1.0)),
+								title="Lag magnitude (h)",
+								formatter="{value:.0f}",
+								thresholds=[
+									(1.0, "#38bdf8"),
+									(3.0, "#2563eb"),
+									(6.0, "#1d4ed8"),
+								],
+							)
+						st.markdown(
+							f"**What it means:** The strongest association is for `{metric_name}` with a "
+							f"{sign_dir} correlation (|r| = {abs_r:.2f}) when the planetary K-index is shifted by "
+							f"{lag_hours_top} hour(s). {lag_description}." + (
+								f" An FDR-adjusted q-value of {q_val_top:.3f} indicates the effect {'remains' if np.isfinite(q_val_top) and q_val_top <= 0.05 else 'does not remain'} significant after multiple comparisons."
+								if np.isfinite(q_val_top)
+								else (
+									f" A p-value of {p_val_top:.3f} {'meets' if np.isfinite(p_val_top) and p_val_top <= 0.05 else 'does not meet'} the 0.05 threshold."
+									if np.isfinite(p_val_top)
+									else ""
+								)
+						)
+						st.caption("Use the gauges above to gauge effect size (|r|), statistical significance (q or p), and the required lead/lag alignment between geomagnetic activity and HRV windows.")
 
 					# Partial correlation on the best metric-lag (if covariates available)
 					merged_best = pd.DataFrame()
@@ -1961,6 +2060,43 @@ def main() -> None:
 									cov_mat,
 								)
 								st.write(f"Partial r (Kp vs {best_metric} | weather): {rp:.3f} (p={pp:.3g}, n={n})")
+								col_pc1, col_pc2 = st.columns(2)
+								with col_pc1:
+									_echarts_gauge(
+										float(abs(rp)),
+										min_val=0.0,
+										max_val=1.0,
+										title=f"|Partial r| — {best_metric}",
+										formatter="{value:.2f}",
+										thresholds=[
+											(0.2, "#38bdf8"),
+											(0.4, "#22c55e"),
+											(0.6, "#16a34a"),
+										],
+									)
+								with col_pc2:
+									if np.isfinite(pp):
+										_echarts_gauge(
+											float(pp),
+											min_val=0.0,
+											max_val=0.1,
+											title="Partial p-value",
+											formatter="{value:.3f}",
+											thresholds=[
+												(0.01, "#22c55e"),
+												(0.05, "#facc15"),
+												(0.1, "#ef4444"),
+											],
+										)
+								st.markdown(
+									f"**Partial correlation interpretation:** Controlling for {', '.join(cov_cols)} yields a |r| of {abs(rp):.2f} (n = {int(n)}). "
+									+ (
+										f"The partial p-value of {pp:.3f} "
+										f"{'meets' if np.isfinite(pp) and pp <= 0.05 else 'does not meet'} the conventional 0.05 criterion."
+										if np.isfinite(pp)
+										else ""
+									)
+								)
 							else:
 								st.info("Weather covariates were not aligned; partial correlation skipped.")
 
@@ -1983,6 +2119,7 @@ def main() -> None:
 							stat, p_norm = _scipy_stats.normaltest(resid)
 							st.write(f"Residual normality (D'Agostino): p={p_norm:.3g}")
 						st.line_chart(pd.DataFrame({"residuals": resid}))
+						st.caption("R² quantifies the variance in the HRV metric explained by Kp plus weather covariates; Durbin–Watson checks autocorrelation (≈2 is ideal); residual normality highlights whether Gaussian assumptions hold.")
 					elif use_weather and not cov_df.empty:
 						st.info("Insufficient aligned data for residual diagnostics with weather covariates.")
 
@@ -2286,6 +2423,60 @@ def _echarts_time_with_ci(time_vals: List[pd.Timestamp], y_vals: List[float], ci
 		],
 	}
 	render_echarts(opt, height_px=340, width="100%", config=EChartsConfig())
+
+
+def _echarts_gauge(value: float, *, min_val: float, max_val: float, title: str, unit: str = "", formatter: str = "{value:.2f}", thresholds: Optional[List[Tuple[float, str]]] = None, height_px: int = 220) -> None:
+	if not np.isfinite(value):
+		st.info(f"{title}: value unavailable.")
+		return
+	if max_val <= min_val:
+		max_val = min_val + 1.0
+	span = max_val - min_val
+	value_clamped = float(np.clip(value, min_val, max_val))
+	segments = thresholds or []
+	color_segments: List[List[Any]] = []
+	if segments:
+		segments_sorted = sorted(segments, key=lambda item: item[0])
+		for boundary, color in segments_sorted:
+			ratio = (boundary - min_val) / span
+			ratio = float(np.clip(ratio, 0.0, 1.0))
+			color_segments.append([ratio, color])
+		if color_segments and color_segments[-1][0] < 1.0:
+			color_segments.append([1.0, color_segments[-1][1]])
+	else:
+		color_segments = [[0.5, "#38bdf8"], [1.0, "#2563eb"]]
+	detail_formatter = formatter
+	if unit:
+		detail_formatter = f"{formatter} {unit}"
+	opt = {
+		"title": {"text": title, "left": "center"},
+		"series": [
+			{
+				"type": "gauge",
+				"startAngle": 210,
+				"endAngle": -30,
+				"min": float(min_val),
+				"max": float(max_val),
+				"center": ["50%", "60%"],
+				"pointer": {"show": True, "length": "70%", "width": 6},
+				"progress": {"show": True, "roundCap": True, "width": 10},
+				"axisLine": {"roundCap": True, "lineStyle": {"width": 10, "color": color_segments}},
+				"axisTick": {"show": False},
+				"splitLine": {"show": False},
+				"axisLabel": {"distance": -32, "color": "#475569", "fontSize": 11},
+				"title": {"offsetCenter": [0, "72%"], "color": "#1f2937", "fontSize": 13},
+				"detail": {
+					"valueAnimation": True,
+					"offsetCenter": [0, "10%"],
+					"formatter": detail_formatter,
+					"color": "#0f172a",
+					"fontSize": 20,
+				},
+				"data": [{"value": value_clamped}],
+			}
+		],
+	}
+	render_echarts(opt, height_px=height_px, width="100%", config=EChartsConfig())
 
 
 def _scan_lag_correlations_generic(
