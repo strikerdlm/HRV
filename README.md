@@ -40,3 +40,28 @@ streamlit run app/app.py
 - P‑values require SciPy; otherwise they display as NaN.
 - Correlations are sensitive to timing; use lags to align HRV window times to storm arrival.
 - Interpret results cautiously; literature shows effects are modest and variable.
+
+## SpaceWeatherLive agent (scrape with OpenAI fallback)
+- New: Fetch a concise snapshot from `https://www.spaceweatherlive.com/` (Kp forecast, solar wind speed/density, IMF Bt/Bz, sunspot number, F10.7, flare probabilities). The Streamlit Space Weather tab includes an expander to pull these values and display them alongside NOAA SWPC data.
+
+### CLI
+```bash
+python -m app.swl_fetch --output data/spaceweatherlive_snapshot.json
+```
+This writes a JSON snapshot with the parsed fields. The command first tries a direct scrape; if that fails, it falls back to OpenAI-assisted extraction from the HTML.
+
+### Environment and security
+- Add your OpenAI key to `.env`:
+```
+OPENAI_API_KEY=sk-...
+```
+- Do not commit secrets. Ensure `.env` is ignored by Git. Never hard‑code API keys in code or notebooks.
+
+### Libraries used
+- requests (HTTP with timeouts)
+- beautifulsoup4 (robust HTML parsing)
+- openai (Responses API for fallback extraction)
+
+### Sources
+- SpaceWeatherLive home and Solar activity pages (`https://www.spaceweatherlive.com/`)  
+  See help pages for context: Kp Index and IMF sections.
