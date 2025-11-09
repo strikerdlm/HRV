@@ -16,7 +16,9 @@ from uuid import uuid4
 from dotenv import load_dotenv
 
 # Load .env variables early (e.g., NASA_API_KEY, ACCUWEATHER_API_KEY)
-load_dotenv()
+load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+NASA_API_KEY = os.getenv("NASA_API_KEY", "")
+ACCUWEATHER_API_KEY = os.getenv("ACCUWEATHER_API_KEY", "")
 
 # Windows console safety to mitigate Colorama/Click re-entrancy during shutdown
 if os.name == "nt":
