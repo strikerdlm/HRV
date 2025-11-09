@@ -707,7 +707,7 @@ def main() -> None:
 		"""
 		<style>
 		.block-container { max-width: 100% !important; padding-left: 0; padding-right: 0; }
-		iframe { width: 100% !important; }
+		div[data-testid="stIFrame"] > iframe { width: 100% !important; }
 		</style>
 		""",
 		unsafe_allow_html=True,
