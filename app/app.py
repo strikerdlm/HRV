@@ -860,7 +860,9 @@ def _scan_lag_correlations(
 		return pd.DataFrame()
 	for lag in lags_hours:
 		k_shift = k.copy()
-		k_shift["time_tag"] = k_shift["time_tag"] + pd.to_timedelta(int(lag), unit="h")
+		time_idx = pd.DatetimeIndex(k_shift["time_tag"].to_list())
+		time_idx = time_idx + pd.to_timedelta(int(lag), unit="h")
+		k_shift["time_tag"] = time_idx
 		merged = pd.merge_asof(
 			w.sort_values("start"),
 			k_shift[["time_tag", "kp_index"]].sort_values("time_tag"),
@@ -1174,6 +1176,11 @@ def main() -> None:
 		txt_win.text("Computing windowed metrics... " + f"{min(100, int(done_win * 100 / total_win))}%")
 	if windowed_all:
 		windowed_df = pd.concat(windowed_all, ignore_index=True)
+		if not windowed_df.empty:
+			windowed_df["start"] = pd.to_datetime(windowed_df["start"], errors="coerce", utc=True)
+			if "end" in windowed_df.columns:
+				windowed_df["end"] = pd.to_datetime(windowed_df["end"], errors="coerce", utc=True)
+			windowed_df = windowed_df.dropna(subset=["start"])
 		if apply_dev:
 			windowed_df = _compute_deviation_scores(windowed_df, metrics=dev_metrics, z_warn=float(z_warn), z_alert=float(z_alert))
 	else:
@@ -1197,6 +1204,12 @@ def main() -> None:
 		else:
 			windowed_df = ml_result.windowed_with_clusters
 			ml_summary_df = ml_result.cluster_summary
+
+	if not windowed_df.empty:
+		windowed_df["start"] = pd.to_datetime(windowed_df["start"], errors="coerce", utc=True)
+		if "end" in windowed_df.columns:
+			windowed_df["end"] = pd.to_datetime(windowed_df["end"], errors="coerce", utc=True)
+		windowed_df = windowed_df.dropna(subset=["start"])
 
 	# Aggregate anomaly episodes (contiguous yellow/red windows)
 	def _episodes(df: pd.DataFrame, min_len: int) -> pd.DataFrame:
@@ -1878,6 +1891,8 @@ def main() -> None:
 						st.caption("Positive lags shift Kp forward in time; significant peaks may indicate biological response delays.")
 
 					# Partial correlation on the best metric-lag (if covariates available)
+					merged_best = pd.DataFrame()
+					cov_cols: List[str] = []
 					if use_weather and not cov_df.empty:
 						st.markdown("#### Partial correlation with weather covariates")
 						row = best_rows.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False).iloc[0]
@@ -1886,33 +1901,36 @@ def main() -> None:
 						k_shift = kp_df.copy()
 						k_shift["time_tag"] = pd.to_datetime(k_shift["time_tag"], errors="coerce", utc=True)
 						k_shift = k_shift.dropna(subset=["time_tag"])
-						k_shift["time_tag"] = k_shift["time_tag"] + pd.to_timedelta(best_lag, unit="h")
-						merged_best = pd.merge_asof(
-							windowed_df.sort_values("start"),
-							k_shift.sort_values("time_tag")[
-								["time_tag", "kp_index"]
-							],
-							left_on="start",
-							right_on="time_tag",
-							direction="nearest",
-							tolerance=pd.Timedelta(minutes=int(merge_tol)),
-						)
-						merged_best = merged_best.dropna(subset=["kp_index", best_metric])
-						cov_cols = [c for c in ["temp_c", "rh_pct", "pressure_hpa", "wind_ms", "precip_mm", "cloudcover_pct"] if c in merged_best.columns]
-						if cov_cols:
-							cov_mat = merged_best[cov_cols].to_numpy(dtype=float)
-							rp, pp, n = partial_pearson_r_p(
-								merged_best["kp_index"].to_numpy(dtype=float),
-								merged_best[best_metric].to_numpy(dtype=float),
-								cov_mat,
+						if not k_shift.empty:
+							time_idx = pd.DatetimeIndex(k_shift["time_tag"].to_list())
+							time_idx = time_idx + pd.to_timedelta(best_lag, unit="h")
+							k_shift["time_tag"] = time_idx
+							merged_best = pd.merge_asof(
+								windowed_df.sort_values("start"),
+								k_shift.sort_values("time_tag")[
+									["time_tag", "kp_index"]
+								],
+								left_on="start",
+								right_on="time_tag",
+								direction="nearest",
+								tolerance=pd.Timedelta(minutes=int(merge_tol)),
 							)
-							st.write(f"Partial r (Kp vs {best_metric} | weather): {rp:.3f} (p={pp:.3g}, n={n})")
-						else:
-							st.info("Weather covariates were not aligned; partial correlation skipped.")
+							merged_best = merged_best.dropna(subset=["kp_index", best_metric])
+							cov_cols = [c for c in ["temp_c", "rh_pct", "pressure_hpa", "wind_ms", "precip_mm", "cloudcover_pct"] if c in merged_best.columns]
+							if cov_cols:
+								cov_mat = merged_best[cov_cols].to_numpy(dtype=float)
+								rp, pp, n = partial_pearson_r_p(
+									merged_best["kp_index"].to_numpy(dtype=float),
+									merged_best[best_metric].to_numpy(dtype=float),
+									cov_mat,
+								)
+								st.write(f"Partial r (Kp vs {best_metric} | weather): {rp:.3f} (p={pp:.3g}, n={n})")
+							else:
+								st.info("Weather covariates were not aligned; partial correlation skipped.")
 
 					# Residual diagnostics for OLS model (best setting)
 					st.markdown("#### Residual diagnostics (OLS)")
-					if not cov_df.empty and cov_cols:
+					if not merged_best.empty and cov_cols:
 						X = np.column_stack([
 							np.ones(merged_best.shape[0]),
 							merged_best["kp_index"].to_numpy(dtype=float),
@@ -1929,6 +1947,8 @@ def main() -> None:
 							stat, p_norm = _scipy_stats.normaltest(resid)
 							st.write(f"Residual normality (D'Agostino): p={p_norm:.3g}")
 						st.line_chart(pd.DataFrame({"residuals": resid}))
+					elif use_weather and not cov_df.empty:
+						st.info("Insufficient aligned data for residual diagnostics with weather covariates.")
 
 		st.markdown("#### Database summary")
 		db_df = _load_jsonl()
@@ -2230,6 +2250,50 @@ def _echarts_time_with_ci(time_vals: List[pd.Timestamp], y_vals: List[float], ci
 		],
 	}
 	render_echarts(opt, height_px=340, width="100%", config=EChartsConfig())
+
+
+def _scan_lag_correlations_generic(
+	windowed_df: pd.DataFrame,
+	predictor_df: pd.DataFrame,
+	predictor_time_col: str,
+	predictor_value_col: str,
+	metrics: List[str],
+	lags_hours: List[int],
+	merge_tolerance_minutes: int = 90,
+) -> pd.DataFrame:
+	if windowed_df.empty or predictor_df.empty:
+		return pd.DataFrame()
+	w = windowed_df.copy()
+	w["start"] = pd.to_datetime(w.get("start"), errors="coerce", utc=True)
+	w = w.dropna(subset=["start"]).sort_values("start")
+	if w.empty:
+		return pd.DataFrame()
+	pred = predictor_df.copy()
+	pred[predictor_time_col] = pd.to_datetime(pred[predictor_time_col], errors="coerce", utc=True)
+	pred = pred.dropna(subset=[predictor_time_col, predictor_value_col]).sort_values(predictor_time_col)
+	if pred.empty:
+		return pd.DataFrame()
+	rows: List[pd.DataFrame] = []
+	for lag in lags_hours:
+		shifted = pred.copy()
+		time_idx = pd.DatetimeIndex(shifted[predictor_time_col].to_list())
+		time_idx = time_idx + pd.to_timedelta(int(lag), unit="h")
+		shifted[predictor_time_col] = time_idx
+		merged = pd.merge_asof(
+			w,
+			shifted[[predictor_time_col, predictor_value_col]].sort_values(predictor_time_col),
+			left_on="start",
+			right_on=predictor_time_col,
+			direction="nearest",
+			tolerance=pd.Timedelta(minutes=int(merge_tolerance_minutes)),
+		)
+		merged = merged.dropna(subset=[predictor_value_col])
+		if merged.empty:
+			continue
+		corr_df = _corr_table(merged, predictor_value_col, metrics)
+		corr_df["lag_hours"] = int(lag)
+		rows.append(corr_df)
+	return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
 
 
 if __name__ == "__main__":
