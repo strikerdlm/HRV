@@ -3614,7 +3614,11 @@ def _echarts_gauge(
 		if color_segments and color_segments[-1][0] < 1.0:
 			color_segments.append([1.0, color_segments[-1][1]])
 	else:
-		color_segments = [[0.5, "#38bdf8"], [1.0, "#2563eb"]]
+		color_segments = [
+			[0.33, "#22c55e"],
+			[0.66, "#facc15"],
+			[1.0, "#ef4444"],
+		]
 	unit_suffix = f" {unit}" if unit else ""
 	if formatter is None:
 		detail_text = f"{display_numeric}{unit_suffix}"
@@ -3632,7 +3636,12 @@ def _echarts_gauge(
 			detail_text = python_formatted
 	detail_text = str(detail_text)
 	opt = {
-		"title": {"text": title, "left": "center"},
+		"title": {
+			"text": title,
+			"left": "center",
+			"top": "4%",
+			"textStyle": {"fontSize": 16, "fontWeight": 600, "color": "#0f172a"},
+		},
 		"series": [
 			{
 				"type": "gauge",
@@ -3641,22 +3650,72 @@ def _echarts_gauge(
 				"min": float(min_val),
 				"max": float(max_val),
 				"center": ["50%", "60%"],
-				"pointer": {"show": True, "length": "74%", "width": 6},
-				"progress": {"show": True, "roundCap": True, "width": 12},
-				"axisLine": {"roundCap": True, "lineStyle": {"width": 12, "color": color_segments}},
-				"axisTick": {"show": False},
-				"splitLine": {"show": False},
-				"axisLabel": {"distance": -32, "color": "#475569", "fontSize": 12},
-				"title": {"offsetCenter": [0, "78%"], "color": "#1f2937", "fontSize": 14},
+				"radius": "88%",
+				"splitNumber": 8,
+				"progress": {"show": False},
+				"axisLine": {
+					"roundCap": True,
+					"lineStyle": {"width": 14, "color": color_segments},
+				},
+				"axisTick": {
+					"distance": -18,
+					"length": 10,
+					"lineStyle": {"color": "rgba(15,23,42,0.35)", "width": 1},
+				},
+				"splitLine": {
+					"distance": -26,
+					"length": 20,
+					"lineStyle": {"color": "rgba(15,23,42,0.45)", "width": 2},
+				},
+				"axisLabel": {"distance": -36, "color": "#475569", "fontSize": 12},
+				"pointer": {
+					"show": True,
+					"length": "62%",
+					"width": 6,
+					"itemStyle": {"color": "#2563eb"},
+				},
+				"anchor": {
+					"show": True,
+					"size": 10,
+					"itemStyle": {"borderColor": "#2563eb", "borderWidth": 2},
+				},
+				"title": {"show": False},
 				"detail": {
+					"show": True,
 					"valueAnimation": True,
-					"offsetCenter": [0, "10%"],
+					"offsetCenter": [0, "46%"],
 					"formatter": detail_text,
 					"color": "#0f172a",
-					"fontSize": 26,
+					"fontSize": 24,
+					"fontWeight": 600,
 				},
 				"data": [{"value": value_clamped}],
-			}
+			},
+			{
+				"type": "gauge",
+				"startAngle": 210,
+				"endAngle": -30,
+				"min": float(min_val),
+				"max": float(max_val),
+				"radius": "72%",
+				"center": ["50%", "60%"],
+				"pointer": {"show": False},
+				"progress": {"show": False},
+				"axisLine": {"show": False},
+				"axisTick": {
+					"distance": 0,
+					"length": 6,
+					"lineStyle": {"color": "rgba(148,163,184,0.35)", "width": 1},
+				},
+				"splitLine": {
+					"distance": 0,
+					"length": 10,
+					"lineStyle": {"color": "rgba(148,163,184,0.45)", "width": 1.5},
+				},
+				"axisLabel": {"show": False},
+				"detail": {"show": False},
+				"data": [{"value": value_clamped}],
+			},
 		],
 	}
 	render_echarts(opt, height_px=height_px, width="100%", config=EChartsConfig())
