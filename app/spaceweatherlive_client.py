@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Dict, List, Mapping, Optional, Tuple
 
 import re
 import requests
 from bs4 import BeautifulSoup
+from statistics import mean, median
 
 
 DEFAULT_TIMEOUT_S: float = 12.0
@@ -56,6 +57,75 @@ def _parse_int(text: str) -> Optional[int]:
 	return int(val) if val is not None else None
 
 
+def _parse_utc_timestamp(text: str) -> Optional[datetime]:
+	"""
+	Parse timestamps of the form 'YYYY/MM/DD HH:MM' into UTC datetimes.
+	"""
+	if not isinstance(text, str):
+		return None
+	candidate = text.strip()
+	if not candidate:
+		return None
+	for pattern in ("%Y/%m/%d %H:%M", "%Y-%m-%d %H:%M", "%d %b %Y %H:%M"):
+		try:
+			parsed = datetime.strptime(candidate, pattern)
+		except ValueError:
+			continue
+		return parsed.replace(tzinfo=timezone.utc)
+	return None
+
+
+def _normalise_header_name(text: str) -> str:
+	"""
+	Normalise table header labels for dictionary lookups.
+	"""
+	if not isinstance(text, str):
+		return ""
+	return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+@dataclass(slots=True, frozen=True)
+class CMERecord:
+	cactus_id: str
+	onset_time_utc: Optional[datetime]
+	duration_hours: Optional[float]
+	position_angle_deg: Optional[float]
+	angular_width_deg: Optional[float]
+	velocity_kms: Optional[float]
+	velocity_variation_kms: Optional[float]
+	velocity_min_kms: Optional[float]
+	velocity_max_kms: Optional[float]
+	halo_class: Optional[str]
+
+	def to_dict(self) -> Dict[str, object]:
+		return {
+			"cactus_id": self.cactus_id,
+			"onset_time_utc": self.onset_time_utc.isoformat() if self.onset_time_utc else None,
+			"duration_hours": self.duration_hours,
+			"position_angle_deg": self.position_angle_deg,
+			"angular_width_deg": self.angular_width_deg,
+			"velocity_kms": self.velocity_kms,
+			"velocity_variation_kms": self.velocity_variation_kms,
+			"velocity_min_kms": self.velocity_min_kms,
+			"velocity_max_kms": self.velocity_max_kms,
+			"halo_class": self.halo_class,
+		}
+
+
+@dataclass(slots=True, frozen=True)
+class SIDCUrsigramReport:
+	issued_utc: Optional[datetime]
+	bulletin_excerpt: Optional[str]
+	cme_highlights: Optional[str]
+
+	def to_dict(self) -> Dict[str, Optional[str]]:
+		return {
+			"issued_utc": self.issued_utc.isoformat() if self.issued_utc else None,
+			"bulletin_excerpt": self.bulletin_excerpt,
+			"cme_highlights": self.cme_highlights,
+		}
+
+
 @dataclass(slots=True, frozen=True)
 class KpForecastEntry:
 	day_label: str
@@ -81,6 +151,8 @@ class SpaceWeatherSnapshot:
 	sunspot_number: Optional[int]
 	f107_flux: Optional[float]
 	flare_probabilities: FlareProbabilities
+	cme_records: List[CMERecord] = field(default_factory=list)
+	sidc_report: Optional[SIDCUrsigramReport] = None
 
 	def to_dict(self) -> Dict[str, object]:
 		return {
@@ -99,6 +171,25 @@ class SpaceWeatherSnapshot:
 				"M": self.flare_probabilities.m_class_pct,
 				"X": self.flare_probabilities.x_class_pct,
 			},
+			"cmes": [entry.to_dict() for entry in self.cme_records],
+			"sidc_report": self.sidc_report.to_dict() if self.sidc_report else None,
+			"cme_velocity_stats": self.cme_velocity_stats(),
+		}
+
+	def cme_velocity_stats(self) -> Dict[str, Optional[float]]:
+		"""
+		Compute summary statistics for CME velocities.
+		"""
+		if not self.cme_records:
+			return {"count": 0, "mean": None, "median": None, "max": None}
+		speeds = [entry.velocity_kms for entry in self.cme_records if entry.velocity_kms is not None]
+		if not speeds:
+			return {"count": len(self.cme_records), "mean": None, "median": None, "max": None}
+		return {
+			"count": len(speeds),
+			"mean": float(mean(speeds)),
+			"median": float(median(speeds)),
+			"max": float(max(speeds)),
 		}
 
 
@@ -191,6 +282,85 @@ def _extract_flare_probabilities(soup: BeautifulSoup) -> FlareProbabilities:
 	return FlareProbabilities(c_class_pct=c_val, m_class_pct=m_val, x_class_pct=x_val)
 
 
+def _extract_latest_cmes(soup: BeautifulSoup) -> List[CMERecord]:
+	"""
+	Parse the CACTus latest CME table into CMERecord entries.
+	"""
+	target_heading = soup.find(
+		lambda tag: tag.name in ("h2", "h3", "h4") and "latest cmes" in tag.get_text(strip=True).lower()
+	)
+	table = target_heading.find_next("table") if target_heading else soup.find("table")
+	if not table:
+		return []
+	header_map: Dict[str, int] = {}
+	header_rows = table.find_all("tr")
+	for tr in header_rows[:2]:
+		cells = tr.find_all(["th", "td"])
+		for idx, cell in enumerate(cells):
+			name = _normalise_header_name(cell.get_text(" ", strip=True))
+			if name and name not in header_map:
+				header_map[name] = idx
+
+	def _cell(cells: List[str], *keys: str) -> Optional[str]:
+		for key in keys:
+			idx = header_map.get(key)
+			if idx is not None and idx < len(cells):
+				return cells[idx]
+		return None
+
+	results: List[CMERecord] = []
+	for tr in table.find_all("tr"):
+		cells = [td.get_text(" ", strip=True) for td in tr.find_all(("td", "th"))]
+		if not cells:
+			continue
+		cme_id_raw = _cell(cells, "cme")
+		if not cme_id_raw or not re.match(r"^\d+$", cme_id_raw.strip()):
+			continue
+		onset_text = _cell(cells, "onset time")
+		duration_text = _cell(cells, "duration")
+		angle_text = _cell(cells, "angle")
+		width_text = _cell(cells, "angular width", "width")
+		velocity_text = _cell(cells, "velocity")
+		variation_text = _cell(cells, "variation")
+		min_text = _cell(cells, "min", "min.")
+		max_text = _cell(cells, "max", "max.")
+		halo_text = _cell(cells, "halo", "halo?")
+		record = CMERecord(
+			cactus_id=cme_id_raw.strip(),
+			onset_time_utc=_parse_utc_timestamp(onset_text or ""),
+			duration_hours=_parse_float(duration_text or ""),
+			position_angle_deg=_parse_float(angle_text or ""),
+			angular_width_deg=_parse_float(width_text or ""),
+			velocity_kms=_parse_float(velocity_text or ""),
+			velocity_variation_kms=_parse_float(variation_text or ""),
+			velocity_min_kms=_parse_float(min_text or ""),
+			velocity_max_kms=_parse_float(max_text or ""),
+			halo_class=halo_text.strip() if halo_text else None,
+		)
+		results.append(record)
+	return results
+
+
+def _extract_sidc_ursigram(soup: BeautifulSoup) -> SIDCUrsigramReport:
+	"""
+	Extract CME-related commentary from the SIDC Ursigram bulletin.
+	"""
+	target = soup.find(
+		lambda tag: tag.name in ("article", "div", "section")
+		and "ursigram" in tag.get_text(strip=True).lower()
+	)
+	text_block = target.get_text("\n", strip=True) if target else soup.get_text("\n", strip=True)
+	if not text_block:
+		return SIDCUrsigramReport(issued_utc=None, bulletin_excerpt=None, cme_highlights=None)
+	lines = [line.strip() for line in text_block.splitlines() if line.strip()]
+	issued_candidate = next((line for line in lines if re.search(r"\b\d{4}/\d{2}/\d{2}\b", line)), None)
+	issued_dt = _parse_utc_timestamp(issued_candidate or "")
+	cme_lines = [line for line in lines if "cme" in line.lower()]
+	cme_excerpt = " ".join(cme_lines[:3]) if cme_lines else None
+	excerpt = " ".join(lines[:6]) if lines else None
+	return SIDCUrsigramReport(issued_utc=issued_dt, bulletin_excerpt=excerpt, cme_highlights=cme_excerpt)
+
+
 def _extract_todays_sun_metrics(soup: BeautifulSoup) -> Tuple[Optional[int], Optional[float]]:
 	"""
 	Parse Today's Sun panel for Sunspot number and 10.7 cm flux.
@@ -245,8 +415,20 @@ def fetch_spaceweatherlive_snapshot(timeout_s: float = DEFAULT_TIMEOUT_S) -> Spa
 	flare_probs = _extract_flare_probabilities(solar_soup)
 	sunspot_number, f107 = _extract_todays_sun_metrics(solar_soup)
 
+	# CACTus CME detections
+	cme_html = _fetch_html(session, "/en/solar-activity/latest-cmes.html", timeout_s)
+	cme_soup = BeautifulSoup(cme_html, "html.parser")
+	cme_records = _extract_latest_cmes(cme_soup)
+
+	# SIDC Ursigram bulletin
+	ursigram_html = _fetch_html(session, "/en/reports/sidc-ursigram.html", timeout_s)
+	ursigram_soup = BeautifulSoup(ursigram_html, "html.parser")
+	sidc_report = _extract_sidc_ursigram(ursigram_soup)
+
 	# Basic sanity: allow partial data, but require at least one core section
-	if not kp_forecast and all(v is None for v in (speed, density, bt, bz, sunspot_number, f107)):
+	if not kp_forecast and all(
+		v is None for v in (speed, density, bt, bz, sunspot_number, f107)
+	) and not cme_records:
 		raise ValueError("Failed to parse any SpaceWeatherLive metrics; page structure may have changed.")
 
 	return SpaceWeatherSnapshot(
@@ -259,6 +441,8 @@ def fetch_spaceweatherlive_snapshot(timeout_s: float = DEFAULT_TIMEOUT_S) -> Spa
 		sunspot_number=sunspot_number,
 		f107_flux=f107,
 		flare_probabilities=flare_probs,
+		cme_records=cme_records,
+		sidc_report=sidc_report,
 	)
 
 
