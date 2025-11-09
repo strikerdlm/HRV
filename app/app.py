@@ -1039,6 +1039,33 @@ def _compute_feature_correlations(
 	return result_df.sort_values("abs_r", ascending=False, ignore_index=True)
 
 
+def _rank_top_predictors(
+	matrix_df: pd.DataFrame,
+	metric_columns: Sequence[str],
+	feature_columns: Sequence[str],
+	*,
+	min_samples: int = 12,
+	top_n: int = 5,
+) -> pd.DataFrame:
+	"""
+	Return the strongest predictors per HRV metric based on Pearson correlation.
+	"""
+	if top_n < 1:
+		raise ValueError("top_n must be at least 1.")
+	corr_df = _compute_feature_correlations(matrix_df, metric_columns, feature_columns)
+	corr_df = corr_df[corr_df["samples"] >= int(min_samples)]
+	if corr_df.empty:
+		raise ValueError("No metric-feature pairs met the minimum sample requirement.")
+	top_rows: List[pd.DataFrame] = []
+	for metric, group in corr_df.groupby("metric", sort=False):
+		top_rows.append(group.head(top_n))
+	if not top_rows:
+		raise ValueError("Unable to compute predictor rankings; check input data.")
+	return pd.concat(top_rows, ignore_index=True).sort_values(
+		["metric", "abs_r"], ascending=[True, False]
+	)
+
+
 def _fit_linear_response_model(
 	matrix_df: pd.DataFrame,
 	target_column: str,
@@ -4031,6 +4058,44 @@ def main() -> None:
 										mime="text/csv",
 										key="btn_download_feature_corr",
 									)
+							with st.expander("Auto-rank top predictors"):
+								top_k = st.slider(
+									"Top predictors per metric",
+									min_value=1,
+									max_value=10,
+									value=5,
+									step=1,
+									key="rank_top_k",
+								)
+								min_samples = st.slider(
+									"Minimum overlapping samples",
+									min_value=6,
+									max_value=60,
+									value=18,
+									step=2,
+									key="rank_min_samples",
+								)
+								if st.button("Rank predictors", key="btn_rank_predictors"):
+									try:
+										rank_df = _rank_top_predictors(
+											feature_matrix_cached,
+											current_metrics,
+											selected_corr_features if selected_corr_features else available_features,
+											min_samples=int(min_samples),
+											top_n=int(top_k),
+										)
+									except ValueError as exc:
+										st.warning(str(exc))
+									else:
+										st.dataframe(rank_df)
+										rank_csv = rank_df.to_csv(index=False).encode("utf-8")
+										st.download_button(
+											"Download predictor rankings (CSV)",
+											data=rank_csv,
+											file_name=f"hrv_spaceweather_rankings_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+											mime="text/csv",
+											key="btn_download_rankings",
+										)
 							with st.expander("Train linear response model (experimental)"):
 								target_metric = st.selectbox(
 									"Target HRV metric",
