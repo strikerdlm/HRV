@@ -82,10 +82,46 @@ def render_echarts(
 				}}
 				const el = document.getElementById("{container_id}");
 				if (!el) return;
+				if (el.__echartsInstance) {{
+					if (typeof el.__echartsInstance.dispose === 'function') {{
+						el.__echartsInstance.dispose();
+					}}
+					delete el.__echartsInstance;
+				}}
+				if (el.__resizeObserver && typeof el.__resizeObserver.disconnect === 'function') {{
+					el.__resizeObserver.disconnect();
+					delete el.__resizeObserver;
+				}}
+				if (el.__resizeHandler) {{
+					window.removeEventListener('resize', el.__resizeHandler);
+					delete el.__resizeHandler;
+				}}
+				if (el.__fallbackInterval) {{
+					window.clearInterval(el.__fallbackInterval);
+					delete el.__fallbackInterval;
+				}}
 				const inst = echarts.init(el, {theme_snippet});
 				const option = {option_json};
 				inst.setOption(option, true);
-				window.addEventListener('resize', () => inst.resize());
+				const resizeHandler = () => inst.resize();
+				el.__resizeHandler = resizeHandler;
+				window.addEventListener('resize', resizeHandler);
+				if (window.ResizeObserver) {{
+					const observer = new ResizeObserver((entries) => {{
+						for (const entry of entries) {{
+							if (entry.target === el) {{
+								inst.resize();
+							}}
+						}}
+					}});
+					observer.observe(el);
+					el.__resizeObserver = observer;
+				}} else {{
+					// Fallback for browsers without ResizeObserver support
+					const fallback = () => inst.resize();
+					el.__fallbackInterval = window.setInterval(fallback, 500);
+				}}
+				el.__echartsInstance = inst;
 			}}
 			if (document.readyState === 'loading') {{
 				document.addEventListener('DOMContentLoaded', mountChart);
