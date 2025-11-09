@@ -514,6 +514,11 @@ def _space_weather_state() -> Dict[str, Any]:
 			"flux_df": pd.DataFrame(),
 			"flux_error": "",
 			"last_updated": None,
+			"swl_loaded": False,
+			"swl_cme_df": pd.DataFrame(),
+			"swl_snapshots": [],
+			"swl_last_updated": None,
+			"swl_cme_daily": pd.DataFrame(),
 		},
 	)
 	return state
@@ -686,6 +691,305 @@ def _donki_daily_counts(datasets: Mapping[str, pd.DataFrame]) -> Dict[str, pd.Se
 		series = ts_df.set_index("time_tag")["event_count"].astype(float)
 		out[DONKI_ENDPOINTS.get(code, {}).get("title", code)] = series
 	return out
+
+
+def _update_spaceweatherlive_state(state: Dict[str, Any], snapshot: Any) -> None:
+	if snapshot is None:
+		return
+	snapshots: List[Dict[str, Any]] = state.setdefault("swl_snapshots", [])
+	snapshot_payload: Dict[str, Any] = {}
+	if hasattr(snapshot, "to_dict"):
+		try:
+			snapshot_payload = snapshot.to_dict()
+		except Exception:
+			snapshot_payload = {}
+	if snapshot_payload:
+		snapshots.append(snapshot_payload)
+		if len(snapshots) > 200:
+			del snapshots[:-200]
+
+	cme_records = getattr(snapshot, "cme_records", []) or []
+	cme_rows: List[Dict[str, Any]] = []
+	for record in cme_records:
+		cactus_id = str(getattr(record, "cactus_id", "") or "").strip()
+		if not cactus_id:
+			continue
+		time_val = getattr(record, "onset_time_utc", None)
+		time_tag = pd.to_datetime(time_val, errors="coerce", utc=True)
+		if pd.isna(time_tag):
+			continue
+		row = {
+			"cactus_id": cactus_id,
+			"time_tag": time_tag,
+			"duration_hours": getattr(record, "duration_hours", None),
+			"position_angle_deg": getattr(record, "position_angle_deg", None),
+			"angular_width_deg": getattr(record, "angular_width_deg", None),
+			"velocity_kms": getattr(record, "velocity_kms", None),
+			"velocity_variation_kms": getattr(record, "velocity_variation_kms", None),
+			"velocity_min_kms": getattr(record, "velocity_min_kms", None),
+			"velocity_max_kms": getattr(record, "velocity_max_kms", None),
+			"halo_class": (getattr(record, "halo_class", None) or None),
+			"snapshot_timestamp": pd.to_datetime(
+				getattr(snapshot, "timestamp_utc", None), errors="coerce", utc=True
+			),
+		}
+		row["halo_flag"] = float(1.0 if row["halo_class"] else 0.0)
+		cme_rows.append(row)
+
+	if cme_rows:
+		new_df = pd.DataFrame(cme_rows)
+		numeric_cols = [
+			"duration_hours",
+			"position_angle_deg",
+			"angular_width_deg",
+			"velocity_kms",
+			"velocity_variation_kms",
+			"velocity_min_kms",
+			"velocity_max_kms",
+			"halo_flag",
+		]
+		for col in numeric_cols:
+			if col in new_df.columns:
+				new_df[col] = pd.to_numeric(new_df[col], errors="coerce")
+		existing = state.get("swl_cme_df", pd.DataFrame())
+		combined = (
+			pd.concat([existing, new_df], ignore_index=True)
+			if not existing.empty
+			else new_df.copy()
+		)
+		if not combined.empty:
+			combined["time_tag"] = pd.to_datetime(combined["time_tag"], errors="coerce", utc=True)
+			combined = combined.dropna(subset=["time_tag"])
+			combined = combined.drop_duplicates(subset=["cactus_id"], keep="last")
+			combined = combined.sort_values("time_tag").reset_index(drop=True)
+			state["swl_cme_df"] = combined
+			indexed = combined.set_index("time_tag").sort_index()
+			agg_spec: Dict[str, str] = {"cactus_id": "count"}
+			if "velocity_kms" in indexed.columns:
+				agg_spec["velocity_kms"] = "median"
+			if "velocity_max_kms" in indexed.columns:
+				agg_spec["velocity_max_kms"] = "max"
+			if "angular_width_deg" in indexed.columns:
+				agg_spec["angular_width_deg"] = "median"
+			if "halo_flag" in indexed.columns:
+				agg_spec["halo_flag"] = "mean"
+			if "duration_hours" in indexed.columns:
+				agg_spec["duration_hours"] = "median"
+			daily_features = indexed.resample("D").agg(agg_spec)
+			rename_map = {
+				"cactus_id": "cme_daily_count",
+				"velocity_kms": "cme_velocity_median",
+				"velocity_max_kms": "cme_velocity_max",
+				"angular_width_deg": "cme_width_median",
+				"halo_flag": "cme_halo_rate",
+				"duration_hours": "cme_duration_median",
+			}
+			daily_features = daily_features.rename(columns={k: v for k, v in rename_map.items() if k in daily_features.columns})
+			state["swl_cme_daily"] = daily_features.reset_index()
+		else:
+			state["swl_cme_df"] = pd.DataFrame(columns=new_df.columns)
+
+	stats_payload: Dict[str, Any] = {}
+	if hasattr(snapshot, "cme_velocity_stats"):
+		try:
+			stats_payload = snapshot.cme_velocity_stats()
+		except Exception:
+			stats_payload = {}
+	if stats_payload:
+		state["swl_velocity_stats"] = stats_payload
+
+	last_updated = pd.to_datetime(getattr(snapshot, "timestamp_utc", None), errors="coerce", utc=True)
+	if pd.notna(last_updated):
+		state["swl_last_updated"] = last_updated
+	state["swl_loaded"] = True
+
+
+def _build_cme_predictor_series(cme_df: pd.DataFrame) -> List[Tuple[str, pd.DataFrame, str, str]]:
+	"""
+	Construct predictor time series derived from CACTus CME detections.
+	"""
+	if cme_df.empty or "time_tag" not in cme_df.columns:
+		return []
+	df = cme_df.copy()
+	df["time_tag"] = pd.to_datetime(df["time_tag"], errors="coerce", utc=True)
+	df = df.dropna(subset=["time_tag"])
+	if df.empty:
+		return []
+
+	predictors: List[Tuple[str, pd.DataFrame, str, str]] = []
+	numeric_event_columns: List[Tuple[str, str]] = [
+		("velocity_kms", "CME velocity (km/s)"),
+		("velocity_max_kms", "CME peak velocity (km/s)"),
+		("angular_width_deg", "CME angular width (°)"),
+		("duration_hours", "CME duration (h)"),
+		("position_angle_deg", "CME position angle (°)"),
+		("halo_flag", "CME halo rate (event-level)"),
+	]
+	for column, title in numeric_event_columns:
+		if column not in df.columns:
+			continue
+		event_subset = df[["time_tag", column]].dropna()
+		if event_subset.empty:
+			continue
+		predictors.append((title, event_subset, "time_tag", column))
+
+	indexed = df.set_index("time_tag").sort_index()
+	daily_resampled = indexed.resample("D")
+
+	daily_count = daily_resampled["cactus_id"].count().rename("cme_daily_count")
+	if not daily_count.empty:
+		predictors.append(
+			("Daily CME count", daily_count.reset_index(), "time_tag", "cme_daily_count")
+		)
+
+	if "velocity_kms" in indexed.columns:
+		daily_velocity_median = daily_resampled["velocity_kms"].median().dropna().rename("cme_velocity_median")
+		if not daily_velocity_median.empty:
+			predictors.append(
+				("Daily median CME velocity (km/s)", daily_velocity_median.reset_index(), "time_tag", "cme_velocity_median")
+			)
+
+	if "velocity_max_kms" in indexed.columns:
+		daily_velocity_max = daily_resampled["velocity_max_kms"].max().dropna().rename("cme_velocity_max")
+		if not daily_velocity_max.empty:
+			predictors.append(
+				("Daily max CME velocity (km/s)", daily_velocity_max.reset_index(), "time_tag", "cme_velocity_max")
+			)
+
+	if "angular_width_deg" in indexed.columns:
+		daily_width = daily_resampled["angular_width_deg"].median().dropna().rename("cme_width_median")
+		if not daily_width.empty:
+			predictors.append(
+				("Daily median CME width (°)", daily_width.reset_index(), "time_tag", "cme_width_median")
+			)
+
+	if "halo_flag" in indexed.columns:
+		daily_halo_rate = daily_resampled["halo_flag"].mean().dropna().rename("cme_halo_rate")
+		if not daily_halo_rate.empty:
+			predictors.append(
+				("Daily halo CME rate", daily_halo_rate.reset_index(), "time_tag", "cme_halo_rate")
+			)
+
+	return predictors
+
+
+def _render_lag_scan_summary(title: str, res: pd.DataFrame, *, lags: Sequence[int]) -> None:
+	if res.empty:
+		st.info(f"No aligned samples for {title}.")
+		return
+	result_table = res.copy()
+	if "p_value" in result_table.columns and result_table["p_value"].notna().any():
+		result_table["q_value"], _ = fdr_bh(result_table["p_value"].fillna(1.0).to_numpy(), alpha=0.05)
+	res_sorted = result_table.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False)
+	st.write(title)
+	st.dataframe(res_sorted.head(20))
+	best_res = res_sorted.iloc[0]
+	r_val = float(best_res.get("pearson_r", 0.0))
+	abs_r_val = float(abs(r_val))
+	lag_best = int(best_res.get("lag_hours", 0))
+	n_best = int(best_res.get("n", 0))
+	p_best = float(best_res.get("p_value", np.nan)) if "p_value" in best_res else float("nan")
+	q_best = float(best_res.get("q_value", np.nan)) if "q_value" in best_res else float("nan")
+	metric_best = str(best_res.get("metric", "HRV metric"))
+	if "lag_hours" in res_sorted.columns and res_sorted["lag_hours"].notna().any():
+		lag_span_ds = float(np.nanmax(np.abs(res_sorted["lag_hours"].to_numpy(dtype=float))))
+	else:
+		lag_span_ds = float(max(abs(val) for val in lags)) if lags else 1.0
+	if lag_best > 0:
+		lag_desc = "Predictor changes lead HRV changes"
+	elif lag_best < 0:
+		lag_desc = "HRV changes lead the predictor metric"
+	else:
+		lag_desc = "Simultaneous variability"
+	col_1, col_2, col_3, col_4 = st.columns(4)
+	with col_1:
+		_echarts_gauge(
+			abs_r_val,
+			min_val=0.0,
+			max_val=1.0,
+			title=f"|r| — {metric_best}",
+			formatter="{value:.2f}",
+			thresholds=[
+				(0.2, "#f97316"),
+				(0.4, "#facc15"),
+				(0.6, "#4ade80"),
+				(1.0, "#16a34a"),
+			],
+		)
+	with col_2:
+		if np.isfinite(q_best):
+			_echarts_gauge(
+				q_best,
+				min_val=0.0,
+				max_val=0.1,
+				title="FDR q-value",
+				formatter="{value:.3f}",
+				thresholds=[
+					(0.01, "#22c55e"),
+					(0.05, "#facc15"),
+					(0.1, "#ef4444"),
+				],
+			)
+		elif np.isfinite(p_best):
+			_echarts_gauge(
+				p_best,
+				min_val=0.0,
+				max_val=0.1,
+				title="p-value",
+				formatter="{value:.3f}",
+				thresholds=[
+					(0.01, "#22c55e"),
+					(0.05, "#facc15"),
+					(0.1, "#ef4444"),
+				],
+			)
+		else:
+			st.info("Significance metrics unavailable.")
+	with col_3:
+		_echarts_gauge(
+			float(abs(lag_best)),
+			min_val=0.0,
+			max_val=max(1.0, lag_span_ds),
+			title="Lag (h)",
+			formatter="{value:.0f}",
+			thresholds=[
+				(max(1.0, lag_span_ds * 0.25), "#38bdf8"),
+				(max(3.0, lag_span_ds * 0.5), "#2563eb"),
+				(max(6.0, lag_span_ds), "#1d4ed8"),
+			],
+		)
+	with col_4:
+		max_n_ds = float(max(n_best, 10)) * 1.1
+		_echarts_gauge(
+			float(n_best),
+			min_val=0.0,
+			max_val=max_n_ds,
+			title="Samples (n)",
+			formatter="{value:.0f}",
+			thresholds=[
+				(max_n_ds * 0.25, "#f87171"),
+				(max_n_ds * 0.5, "#facc15"),
+				(max_n_ds * 0.75, "#22c55e"),
+			],
+		)
+	sig_line: str
+	if np.isfinite(q_best):
+		sig_line = f"- q = {q_best:.3f} after FDR control."
+	elif np.isfinite(p_best):
+		sig_line = f"- p = {p_best:.3f}."
+	else:
+		sig_line = "- Significance metric unavailable."
+	st.markdown(
+		f"**{title} insight**\n"
+		f"- Metric `{metric_best}` correlates with HRV at |r| = {abs_r_val:.2f} ({'positive' if r_val >= 0 else 'negative'}).\n"
+		f"- Optimal lag: {lag_best} h ({lag_desc}).\n"
+		f"{sig_line}\n"
+		f"- Samples contributing to this correlation: n = {n_best}."
+	)
+	st.caption(
+		"Interpret these lagged correlations as exploratory evidence linking external space-weather drivers to HRV dynamics. "
+		"Use them to prioritise further analysis, physiological validation, or mechanistic modelling."
+	)
 
 
 def _fetch_donki_datasets(
@@ -2446,6 +2750,14 @@ def main() -> None:
 					st.success(f"DONKI datasets updated at {last_donki.strftime('%Y-%m-%d %H:%M UTC')}.")
 				else:
 					st.success("DONKI datasets updated.")
+
+		if space_state.get("swl_loaded"):
+			last_swl = space_state.get("swl_last_updated")
+			if isinstance(last_swl, pd.Timestamp):
+				st.caption(f"Latest SpaceWeatherLive CME snapshot: {last_swl.strftime('%Y-%m-%d %H:%M UTC')}")
+			else:
+				st.caption("SpaceWeatherLive CME snapshot: loaded.")
+
 		kp_df = pd.DataFrame()
 		flux_df = pd.DataFrame()
 		kp_error = False
@@ -2810,6 +3122,8 @@ def main() -> None:
 							snap = None
 							st.error(f"OpenAI fallback failed: {e2}")
 					if snap:
+						_update_spaceweatherlive_state(space_state, snap)
+						st.caption("SpaceWeatherLive snapshot stored for correlation and modeling pipelines.")
 						col_a, col_b, col_c, col_d = st.columns(4)
 						with col_a:
 							val = snap.solar_wind_speed_kms
@@ -3360,124 +3674,31 @@ def main() -> None:
 								lags,
 								merge_tolerance_minutes=int(merge_tol),
 							)
-							if res.empty:
-								st.info(f"No aligned samples for {title}.")
-								continue
-							if "p_value" in res.columns and res["p_value"].notna().any():
-								res["q_value"], _ = fdr_bh(res["p_value"].fillna(1.0).to_numpy(), alpha=0.05)
-							st.write(title)
-							st.dataframe(res.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False).head(20))
+							_render_lag_scan_summary(title, res, lags=lags)
 
-							res_sorted = res.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False)
-							if not res_sorted.empty:
-								best_res = res_sorted.iloc[0]
-								r_val = float(best_res.get("pearson_r", 0.0))
-								abs_r_val = float(abs(r_val))
-								lag_best = int(best_res.get("lag_hours", 0))
-								n_best = int(best_res.get("n", 0))
-								p_best = float(best_res.get("p_value", np.nan)) if "p_value" in best_res else float("nan")
-								q_best = float(best_res.get("q_value", np.nan)) if "q_value" in best_res else float("nan")
-								metric_best = str(best_res.get("metric", ""))
-								if "lag_hours" in res_sorted.columns and res_sorted["lag_hours"].notna().any():
-									lag_span_ds = float(np.nanmax(np.abs(res_sorted["lag_hours"].to_numpy(dtype=float))))
-								else:
-									lag_span_ds = float(max(abs(val) for val in lags)) if lags else 1.0
-								donki_desc = (
-									"Space-weather intensity leads HRV changes" if lag_best > 0 else (
-										"HRV changes lead the space-weather metric" if lag_best < 0 else "Simultaneous variability"
-									)
+				cme_df_state = space_state.get("swl_cme_df", pd.DataFrame())
+				if cme_df_state.empty:
+					st.info("Fetch SpaceWeatherLive data to enable CME correlations.")
+				else:
+					if not metric_list:
+						st.info("Run the HRV window analysis to expose metrics before scanning CME correlations.")
+					else:
+						cme_predictors = _build_cme_predictor_series(cme_df_state)
+						if not cme_predictors:
+							st.info("No numeric CME predictors available for correlation (insufficient data).")
+						else:
+							st.markdown("#### SpaceWeatherLive CME correlations (lag scan)")
+							for title, s_df, tcol, vcol in cme_predictors:
+								res = _scan_lag_correlations_generic(
+									windowed_df,
+									s_df.rename(columns={tcol: "time_tag"}),
+									"time_tag",
+									vcol,
+									metric_list,
+									lags,
+									merge_tolerance_minutes=int(merge_tol),
 								)
-								col_d1, col_d2, col_d3, col_d4 = st.columns(4)
-								with col_d1:
-									_echarts_gauge(
-										abs_r_val,
-										min_val=0.0,
-										max_val=1.0,
-										title=f"|r| — {metric_best}",
-										formatter="{value:.2f}",
-										thresholds=[
-											(0.2, "#f97316"),
-											(0.4, "#facc15"),
-											(0.6, "#4ade80"),
-											(1.0, "#16a34a"),
-										],
-									)
-								with col_d2:
-									if np.isfinite(q_best):
-										_echarts_gauge(
-											q_best,
-											min_val=0.0,
-											max_val=0.1,
-											title="FDR q-value",
-											formatter="{value:.3f}",
-											thresholds=[
-												(0.01, "#22c55e"),
-												(0.05, "#facc15"),
-												(0.1, "#ef4444"),
-											],
-										)
-									elif np.isfinite(p_best):
-										_echarts_gauge(
-											p_best,
-											min_val=0.0,
-											max_val=0.1,
-											title="p-value",
-											formatter="{value:.3f}",
-											thresholds=[
-												(0.01, "#22c55e"),
-												(0.05, "#facc15"),
-												(0.1, "#ef4444"),
-											],
-										)
-									else:
-										st.info("Significance metrics unavailable.")
-								with col_d3:
-									_echarts_gauge(
-										float(abs(lag_best)),
-										min_val=0.0,
-										max_val=max(1.0, lag_span_ds),
-										title="Lag (h)",
-										formatter="{value:.0f}",
-										thresholds=[
-											(max(1.0, lag_span_ds * 0.25), "#38bdf8"),
-											(max(3.0, lag_span_ds * 0.5), "#2563eb"),
-											(max(6.0, lag_span_ds), "#1d4ed8"),
-										],
-									)
-								with col_d4:
-									max_n_ds = float(max(n_best, 10)) * 1.1
-									_echarts_gauge(
-										float(n_best),
-										min_val=0.0,
-										max_val=max_n_ds,
-										title="Samples (n)",
-										formatter="{value:.0f}",
-										thresholds=[
-											(max_n_ds * 0.25, "#f87171"),
-											(max_n_ds * 0.5, "#facc15"),
-											(max_n_ds * 0.75, "#22c55e"),
-										],
-									)
-								st.markdown(
-									f"**{title} insight**" "\n"
-									f"- Metric `{metric_best}` correlates with HRV at |r| = {abs_r_val:.2f} ({'positive' if r_val >= 0 else 'negative'}).\n"
-									f"- Optimal lag: {lag_best} h ({donki_desc}).\n"
-									+ (
-										f"- q = {q_best:.3f} after FDR control."
-										if np.isfinite(q_best)
-										else (
-											f"- p = {p_best:.3f}."
-											if np.isfinite(p_best)
-											else "- Significance metric unavailable."
-										)
-									)
-									+ "\n"
-									f"- Samples contributing to this correlation: n = {n_best}.\n"
-									f"- Clinical takeaway: {title} episodes are followed by {'stronger' if r_val >= 0 else 'weaker'} `{metric_best}` responses after ~{abs(lag_best)} hour(s), suggesting a potential physiological timing window."
-								)
-								st.caption(
-									"Interpret DONKI correlations as exploratory links between specific solar/geomagnetic drivers and HRV metrics; the lag points to the most likely propagation delay from solar activity to physiological response."
-								)
+								_render_lag_scan_summary(title, res, lags=lags)
 
 
 def _fisher_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
