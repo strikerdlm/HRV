@@ -71,7 +71,7 @@ def render_echarts(
 
 	html = textwrap.dedent(
 		f"""
-		<div id="{container_id}" style="width:{width};height:{height_px}px;"></div>
+		<div id="{container_id}" style="width:{width};height:{height_px}px;margin:0 auto;"></div>
 		{script_loader}
 		<script>
 		(function() {{
@@ -82,6 +82,22 @@ def render_echarts(
 				}}
 				const el = document.getElementById("{container_id}");
 				if (!el) return;
+				if (window.frameElement) {{
+					const frame = window.frameElement;
+					frame.style.width = '100%';
+					frame.style.minWidth = '100%';
+					frame.style.border = 'none';
+					const parent = frame.parentElement;
+					if (parent) {{
+						parent.style.width = '100%';
+						parent.style.minWidth = '100%';
+						parent.style.flex = '1 1 auto';
+						parent.style.display = 'block';
+					}}
+				}}
+				document.documentElement.style.width = '100%';
+				document.body.style.width = '100%';
+				document.body.style.margin = '0';
 				if (el.__echartsInstance) {{
 					if (typeof el.__echartsInstance.dispose === 'function') {{
 						el.__echartsInstance.dispose();
@@ -121,6 +137,7 @@ def render_echarts(
 					const fallback = () => inst.resize();
 					el.__fallbackInterval = window.setInterval(fallback, 500);
 				}}
+				requestAnimationFrame(() => inst.resize());
 				el.__echartsInstance = inst;
 			}}
 			if (document.readyState === 'loading') {{
@@ -134,18 +151,6 @@ def render_echarts(
 	).strip()
 
 	# Extra 20px to accommodate padding
-	if isinstance(width, (int, float)):
-		iframe_width = int(width)
-	elif isinstance(width, str):
-		width = width.strip()
-		if width.endswith("px") and width[:-2].isdigit():
-			iframe_width = int(float(width[:-2]))
-		elif width.endswith("%"):
-			iframe_width = 0  # let Streamlit auto-expand
-		else:
-			iframe_width = 0
-	else:
-		iframe_width = 0
-	components.html(html, height=height_px + 20, width=iframe_width, scrolling=False)
+	components.html(html, height=height_px + 20, scrolling=False)
 
 
