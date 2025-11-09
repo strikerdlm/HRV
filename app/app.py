@@ -1953,10 +1953,16 @@ def main() -> None:
 						lag_hours_top = int(top_row.get("lag_hours", 0))
 						p_val_top = float(top_row.get("p_value", np.nan)) if "p_value" in top_row else float("nan")
 						q_val_top = float(top_row.get("q_value", np.nan)) if "q_value" in top_row else float("nan")
+						n_top = int(top_row.get("n", 0))
 						metric_name = str(top_row.get("metric", ""))
 						sign_dir = "positive" if float(top_row.get("pearson_r", 0.0)) >= 0 else "negative"
-						lag_description = "Geomagnetic activity (Kp) leads HRV" if lag_hours_top > 0 else ("HRV leads geomagnetic changes" if lag_hours_top < 0 else "Simultaneous response")
-						col_g1, col_g2, col_g3 = st.columns(3)
+						lag_description = (
+							"Geomagnetic activity (Kp) precedes HRV changes" if lag_hours_top > 0 else (
+								"HRV changes precede geomagnetic activity" if lag_hours_top < 0 else "Simultaneous relationship"
+							)
+						)
+						lag_span = max(1.0, float(max(abs(val) for val in lags)) if lags else 1.0)
+						col_g1, col_g2, col_g3, col_g4 = st.columns(4)
 						with col_g1:
 							_echarts_gauge(
 								abs_r,
@@ -1998,32 +2004,56 @@ def main() -> None:
 										(0.1, "#ef4444"),
 									],
 								)
+							else:
+								st.info("Significance metrics unavailable for this correlation.")
 						with col_g3:
 							_echarts_gauge(
 								float(abs(lag_hours_top)),
 								min_val=0.0,
-								max_val=max(1.0, float(max(abs(lags)) if lags else 1.0)),
+								max_val=lag_span,
 								title="Lag magnitude (h)",
 								formatter="{value:.0f}",
 								thresholds=[
-									(1.0, "#38bdf8"),
-									(3.0, "#2563eb"),
-									(6.0, "#1d4ed8"),
+									(max(1.0, lag_span * 0.25), "#38bdf8"),
+									(max(3.0, lag_span * 0.5), "#2563eb"),
+									(lag_span, "#1d4ed8"),
+								],
+							)
+						with col_g4:
+							max_n = float(max(n_top, 10)) * 1.1
+							_echarts_gauge(
+								float(n_top),
+								min_val=0.0,
+								max_val=max_n,
+								title="Sample size (n)",
+								formatter="{value:.0f}",
+								thresholds=[
+									(max_n * 0.25, "#f87171"),
+									(max_n * 0.5, "#facc15"),
+									(max_n * 0.75, "#22c55e"),
 								],
 							)
 						st.markdown(
-							f"**What it means:** The strongest association is for `{metric_name}` with a "
-							f"{sign_dir} correlation (|r| = {abs_r:.2f}) when the planetary K-index is shifted by "
-							f"{lag_hours_top} hour(s). {lag_description}." + (
-								f" An FDR-adjusted q-value of {q_val_top:.3f} indicates the effect {'remains' if np.isfinite(q_val_top) and q_val_top <= 0.05 else 'does not remain'} significant after multiple comparisons."
+							"**Interpretation summary**" "\n"
+							f"- **Metric:** `{metric_name}` shows a {sign_dir} Pearson correlation with Kp (|r| = {abs_r:.2f}).\n"
+							f"- **Lag interpretation:** {lag_description}; the maximum |lag| tested was ±{int(lag_span)} h.\n"
+							f"- **Significance:** "
+							+ (
+								f"q = {q_val_top:.3f} (FDR-adjusted){' ✔' if np.isfinite(q_val_top) and q_val_top <= 0.05 else ''}"
 								if np.isfinite(q_val_top)
 								else (
-									f" A p-value of {p_val_top:.3f} {'meets' if np.isfinite(p_val_top) and p_val_top <= 0.05 else 'does not meet'} the 0.05 threshold."
+									f"p = {p_val_top:.3f}{' ✔' if np.isfinite(p_val_top) and p_val_top <= 0.05 else ''}"
 									if np.isfinite(p_val_top)
-									else ""
+									else "Significance unavailable"
 								)
+							)
+							+ "\n"
+							f"- **Sample size:** n = {n_top}; larger n increases confidence in stability."
 						)
-						st.caption("Use the gauges above to gauge effect size (|r|), statistical significance (q or p), and the required lead/lag alignment between geomagnetic activity and HRV windows.")
+						st.caption(
+							"Effect sizes |r|≈0.1/0.3/0.5 are conventionally considered small/moderate/large."
+							" Multiple-comparison control uses Benjamini–Hochberg FDR when available."
+						)
 
 					# Partial correlation on the best metric-lag (if covariates available)
 					merged_best = pd.DataFrame()
@@ -2059,8 +2089,7 @@ def main() -> None:
 									merged_best[best_metric].to_numpy(dtype=float),
 									cov_mat,
 								)
-								st.write(f"Partial r (Kp vs {best_metric} | weather): {rp:.3f} (p={pp:.3g}, n={n})")
-								col_pc1, col_pc2 = st.columns(2)
+								col_pc1, col_pc2, col_pc3 = st.columns(3)
 								with col_pc1:
 									_echarts_gauge(
 										float(abs(rp)),
@@ -2088,15 +2117,33 @@ def main() -> None:
 												(0.1, "#ef4444"),
 											],
 										)
+									else:
+										st.info("Partial p-value unavailable; check sample alignment.")
+								with col_pc3:
+									max_n_pc = float(max(n, 10)) * 1.1
+									_echarts_gauge(
+										float(n),
+										min_val=0.0,
+										max_val=max_n_pc,
+										title="Partial n",
+										formatter="{value:.0f}",
+										thresholds=[
+											(max_n_pc * 0.25, "#f87171"),
+											(max_n_pc * 0.5, "#facc15"),
+											(max_n_pc * 0.75, "#22c55e"),
+										],
+									)
 								st.markdown(
-									f"**Partial correlation interpretation:** Controlling for {', '.join(cov_cols)} yields a |r| of {abs(rp):.2f} (n = {int(n)}). "
+									"**Partial-correlation insight**" "\n"
+									f"- Controlling for {', '.join(cov_cols)}, the HRV metric retains a |partial r| of {abs(rp):.2f}.\n"
+									f"- Sample size for the partial model: n = {int(n)} (after removing NaNs across covariates).\n"
 									+ (
-										f"The partial p-value of {pp:.3f} "
-										f"{'meets' if np.isfinite(pp) and pp <= 0.05 else 'does not meet'} the conventional 0.05 criterion."
+										f"- The partial p-value of {pp:.3f} {'meets' if np.isfinite(pp) and pp <= 0.05 else 'does not meet'} the 0.05 criterion for residual association."
 										if np.isfinite(pp)
 										else ""
 									)
 								)
+								st.caption("Partial correlations help distinguish whether geomagnetic effects persist after accounting for local environmental covariates (temperature, humidity, pressure, wind, precipitation, cloud cover).")
 							else:
 								st.info("Weather covariates were not aligned; partial correlation skipped.")
 
@@ -2119,7 +2166,11 @@ def main() -> None:
 							stat, p_norm = _scipy_stats.normaltest(resid)
 							st.write(f"Residual normality (D'Agostino): p={p_norm:.3g}")
 						st.line_chart(pd.DataFrame({"residuals": resid}))
-						st.caption("R² quantifies the variance in the HRV metric explained by Kp plus weather covariates; Durbin–Watson checks autocorrelation (≈2 is ideal); residual normality highlights whether Gaussian assumptions hold.")
+						st.caption(
+							"R² indicates how much variance in the HRV metric is explained by Kp plus weather covariates; higher values show better fit. "
+							"Durbin–Watson ≈2 signals uncorrelated residuals (values <2 imply positive autocorrelation). "
+							"The D'Agostino test assesses whether residuals follow a Gaussian distribution—a key assumption for parametric inferences."
+						)
 					elif use_weather and not cov_df.empty:
 						st.info("Insufficient aligned data for residual diagnostics with weather covariates.")
 
@@ -2302,31 +2353,115 @@ def main() -> None:
 						st.write(title)
 						st.dataframe(res.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False).head(20))
 
-						# Optional: CI band for correlation vs lag using Fisher z (95%)
-						agg = res.groupby("lag_hours").apply(lambda g: pd.Series({"r_mean": g["pearson_r"].mean(), "n_min": g["n"].min(), "p_min": g["p_value"].min() if "p_value" in g.columns else np.nan, "q_min": g["q_value"].min() if "q_value" in g.columns else np.nan})).reset_index()
-						if not agg.empty:
-							ci = agg.apply(lambda row: _fisher_ci(row["r_mean"], int(row["n_min"]) if np.isfinite(row["n_min"]) else 0), axis=1)
-							agg["ci_low"], agg["ci_high"] = zip(*ci)
-							sig_mask = []
-							for _, rowa in agg.iterrows():
-								q = rowa.get("q_min")
-								p = rowa.get("p_min")
-								sig_mask.append(bool(np.isfinite(q) and q <= 0.05) or bool(np.isfinite(p) and p <= 0.05))
-							_echarts_line_with_ci(agg["lag_hours"].astype(float).tolist(), agg["r_mean"].astype(float).tolist(), agg["ci_low"].astype(float).tolist(), agg["ci_high"].astype(float).tolist(), sig_mask, title=f"{title}: r vs lag (95% CI)", x_name="Lag (h)", y_name="Pearson r")
-
-				# Explanatory panels
-				desc = {
-					"FLR (Solar Flares)": "Solar flares are bursts of electromagnetic radiation. Here we correlate hourly flare counts with HRV. Flares can precede CMEs but may impact HF/LF via radio flux and ionospheric effects.",
-					"CME": "Coronal Mass Ejections are eruptions of plasma and magnetic field. Arrival at Earth can drive geomagnetic storms (Kp increases), potentially affecting HRV time-domain and frequency metrics with a lag.",
-					"GST (Geomagnetic Storm)": "DONKI GST marks periods of geomagnetic storms. We use hourly storm occurrence counts as a predictor aligned to HRV windows.",
-					"IPS": "Interplanetary shocks are abrupt changes in solar wind conditions that can herald storm onsets. Counts may correlate with short-lag HRV changes.",
-					"HSS": "High Speed Streams from coronal holes can modulate geomagnetic activity and HRV over multi-day scales. Counts are a coarse proxy for exposure.",
-					"RBE": "Radiation Belt Enhancements reflect energetic particle dynamics in the magnetosphere; potential indirect effects on human physiology are explored here.",
-					"SEP": "Solar Energetic Particle events involve high-energy protons/electrons. We examine whether hourly SEP occurrences align with HRV fluctuations across lags.",
-				}
-				with st.expander("About the selected DONKI predictors"):
-					for lab in selected:
-						st.markdown(f"**{lab}** — {desc.get(lab, 'Event type used as hourly predictor aligned to HRV windows.')}\n")
+						res_sorted = res.sort_values("pearson_r", key=lambda s: s.abs(), ascending=False)
+						if not res_sorted.empty:
+							best_res = res_sorted.iloc[0]
+							r_val = float(best_res.get("pearson_r", 0.0))
+							abs_r_val = float(abs(r_val))
+							lag_best = int(best_res.get("lag_hours", 0))
+							n_best = int(best_res.get("n", 0))
+							p_best = float(best_res.get("p_value", np.nan)) if "p_value" in best_res else float("nan")
+							q_best = float(best_res.get("q_value", np.nan)) if "q_value" in best_res else float("nan")
+							metric_best = str(best_res.get("metric", ""))
+							if "lag_hours" in res_sorted.columns and res_sorted["lag_hours"].notna().any():
+								lag_span_ds = float(np.nanmax(np.abs(res_sorted["lag_hours"].to_numpy(dtype=float))))
+							else:
+								lag_span_ds = float(max(abs(val) for val in lags)) if lags else 1.0
+							donki_desc = (
+								"Space-weather intensity leads HRV changes" if lag_best > 0 else (
+									"HRV changes lead the space-weather metric" if lag_best < 0 else "Simultaneous variability"
+								)
+							)
+							col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+							with col_d1:
+								_echarts_gauge(
+									abs_r_val,
+									min_val=0.0,
+									max_val=1.0,
+									title=f"|r| — {metric_best}",
+									formatter="{value:.2f}",
+									thresholds=[
+										(0.2, "#f97316"),
+										(0.4, "#facc15"),
+										(0.6, "#4ade80"),
+										(1.0, "#16a34a"),
+									],
+								)
+							with col_d2:
+								if np.isfinite(q_best):
+									_echarts_gauge(
+										q_best,
+										min_val=0.0,
+										max_val=0.1,
+										title="FDR q-value",
+										formatter="{value:.3f}",
+										thresholds=[
+											(0.01, "#22c55e"),
+											(0.05, "#facc15"),
+											(0.1, "#ef4444"),
+										],
+									)
+								elif np.isfinite(p_best):
+									_echarts_gauge(
+										p_best,
+										min_val=0.0,
+										max_val=0.1,
+										title="p-value",
+										formatter="{value:.3f}",
+										thresholds=[
+											(0.01, "#22c55e"),
+											(0.05, "#facc15"),
+											(0.1, "#ef4444"),
+										],
+									)
+								else:
+									st.info("Significance metrics unavailable.")
+							with col_d3:
+								_echarts_gauge(
+									float(abs(lag_best)),
+									min_val=0.0,
+									max_val=max(1.0, lag_span_ds),
+									title="Lag (h)",
+									formatter="{value:.0f}",
+									thresholds=[
+										(max(1.0, lag_span_ds * 0.25), "#38bdf8"),
+										(max(3.0, lag_span_ds * 0.5), "#2563eb"),
+										(max(6.0, lag_span_ds), "#1d4ed8"),
+									],
+								)
+							with col_d4:
+								max_n_ds = float(max(n_best, 10)) * 1.1
+								_echarts_gauge(
+									float(n_best),
+									min_val=0.0,
+									max_val=max_n_ds,
+									title="Samples (n)",
+									formatter="{value:.0f}",
+									thresholds=[
+										(max_n_ds * 0.25, "#f87171"),
+										(max_n_ds * 0.5, "#facc15"),
+										(max_n_ds * 0.75, "#22c55e"),
+									],
+								)
+							st.markdown(
+								f"**{title} insight**" "\n"
+								f"- Metric `{metric_best}` correlates with HRV at |r| = {abs_r_val:.2f} ({'positive' if r_val >= 0 else 'negative'}).\n"
+								f"- Optimal lag: {lag_best} h ({donki_desc}).\n"
+								+ (
+									f"- q = {q_best:.3f} after FDR control."
+									if np.isfinite(q_best)
+									else (
+										f"- p = {p_best:.3f}."
+										if np.isfinite(p_best)
+										else "- Significance metric unavailable."
+									)
+								)
+								+ "\n"
+								f"- Samples contributing to this correlation: n = {n_best}."
+							)
+							st.caption(
+								"Interpret DONKI correlations as exploratory links between specific solar/geomagnetic drivers and HRV metrics; the lag points to the most likely propagation delay from solar activity to physiological response."
+							)
 
 
 def _fisher_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
