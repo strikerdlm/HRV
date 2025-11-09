@@ -1014,12 +1014,46 @@ def main() -> None:
 			padding: 2rem 1.25rem 2.2rem;
 		}
 		.stTabs [data-baseweb="tab-list"] {
-			gap: 0.5rem;
+			display: flex;
+			flex-wrap: wrap;
+			justify-content: center;
+			gap: 0.5rem 0.65rem;
 			padding: 0.75rem 0;
+			overflow: visible !important;
 		}
 		.stTabs [data-baseweb="tab"] {
 			border-radius: 999px;
-			padding: 0.5rem 1rem;
+			padding: 0.5rem 1.15rem;
+			border: 1px solid rgba(17, 24, 39, 0.08);
+			background: rgba(255, 255, 255, 0.72);
+			box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+			transition: all 0.2s ease;
+			flex: 0 0 auto;
+		}
+		.stTabs [data-baseweb="tab"]:hover {
+			background: rgba(37, 99, 235, 0.12);
+			border-color: rgba(37, 99, 235, 0.35);
+		}
+		.stTabs [data-baseweb="tab"][aria-selected="true"] {
+			background: linear-gradient(135deg, rgba(37, 99, 235, 0.18), rgba(14, 165, 233, 0.18));
+			border-color: rgba(37, 99, 235, 0.4);
+			color: #0f172a !important;
+			box-shadow: 0 4px 12px rgba(37, 99, 235, 0.18);
+		}
+		@media (max-width: 640px) {
+			.stTabs [data-baseweb="tab-list"] {
+				flex-wrap: nowrap;
+				overflow-x: auto !important;
+				justify-content: flex-start;
+				scrollbar-width: thin;
+			}
+			.stTabs [data-baseweb="tab-list"]::-webkit-scrollbar {
+				height: 6px;
+			}
+			.stTabs [data-baseweb="tab-list"]::-webkit-scrollbar-thumb {
+				background: rgba(15, 23, 42, 0.25);
+				border-radius: 999px;
+			}
 		}
 		</style>
 		""",
