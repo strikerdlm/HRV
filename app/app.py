@@ -1884,6 +1884,8 @@ def main() -> None:
 						best_metric = str(row["metric"]) if "metric" in row else metric_list[0]
 						best_lag = int(row.get("lag_hours", 0))
 						k_shift = kp_df.copy()
+						k_shift["time_tag"] = pd.to_datetime(k_shift["time_tag"], errors="coerce", utc=True)
+						k_shift = k_shift.dropna(subset=["time_tag"])
 						k_shift["time_tag"] = k_shift["time_tag"] + pd.to_timedelta(best_lag, unit="h")
 						merged_best = pd.merge_asof(
 							windowed_df.sort_values("start"),
