@@ -1491,7 +1491,7 @@ def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
 def _request_interpretation_with_progress(
     container: st.delta_generator.DeltaGenerator,
     analysis_payload: str,
-    timeout: float = 50.0,
+    timeout: float = 300.0,
 ) -> InterpretationResult:
     progress_slot = container.container()
     progress_bar = progress_slot.progress(
