@@ -19,6 +19,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sys
 import time
 
@@ -648,7 +649,8 @@ def _safe_feature_name(text: str) -> str:
     """
     if not isinstance(text, str) or not text:
         return "feature"
-    normalised = re.sub(r"[^a-z0-9]+", "_", text.lower()).strip("_")
+    lowered = text.lower()
+    normalised = re.sub(r"[^a-z0-9]+", "_", lowered).strip("_")
     return normalised or "feature"
 
 
