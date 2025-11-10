@@ -9,19 +9,19 @@ import os
 from openai import OpenAI
 
 try:
-from spaceweatherlive_client import (
-	CMERecord,
+	from spaceweatherlive_client import (
+		CMERecord,
 		FlareProbabilities,
 		KpForecastEntry,
-	SIDCUrsigramReport,
+		SIDCUrsigramReport,
 		SpaceWeatherSnapshot,
 	)
 except ImportError:
 	from .spaceweatherlive_client import (  # type: ignore
-	CMERecord,
+		CMERecord,
 		FlareProbabilities,
 		KpForecastEntry,
-	SIDCUrsigramReport,
+		SIDCUrsigramReport,
 		SpaceWeatherSnapshot,
 	)
 from datetime import datetime, timezone
