@@ -10,6 +10,8 @@ This application extends the HRV analysis with a Space Weather tab that fetches 
 - Partial correlations controlling for temperature, humidity, pressure.
 - OLS residual diagnostics (R², Durbin–Watson, normality test, residual plots).
 - Local JSONL database for correlation summaries keyed by Cedula.
+- SpaceWeatherLive CACTus CME ingestion (direct scrape + OpenAI fallback) covering counts, velocity statistics, angular width, halo rate, and SIDC Ursigram commentary.
+- Interactive feature-matrix builder that aligns HRV metrics with DONKI and SpaceWeatherLive predictors, includes correlation/ranking utilities, and offers an experimental linear response model with downloadable coefficients.
 
 ## Quick Start
 ```bash
@@ -31,6 +33,11 @@ streamlit run app/app.py
 3. (Optional) Enable weather covariates.
 4. Enter your Cedula to save best results to the JSONL database.
 5. Inspect correlation tables, FDR‑adjusted results, residual diagnostics.
+6. Expand the SpaceWeatherLive snapshot to pull CACTus CME metrics (velocity distribution, angular width, halo incidence) and SIDC narrative highlights.
+7. Use the **HRV ↔ space-weather feature matrix (beta)** tools to:
+   - Generate a lagged feature matrix combining HRV metrics with DONKI/SWL predictors.
+   - Rank the strongest predictors per HRV metric with minimum-sample guardrails.
+   - Train a quick linear response model and download correlations, rankings, feature matrix, and coefficient tables.
 
 ## Local Database
 - JSON Lines file: `data/hrv_solar_db.jsonl` (created on first save).
@@ -43,6 +50,7 @@ streamlit run app/app.py
 
 ## SpaceWeatherLive agent (scrape with OpenAI fallback)
 - New: Fetch a concise snapshot from `https://www.spaceweatherlive.com/` (Kp forecast, solar wind speed/density, IMF Bt/Bz, sunspot number, F10.7, flare probabilities). The Streamlit Space Weather tab includes an expander to pull these values and display them alongside NOAA SWPC data.
+- New: Parse the CACTus “Latest CMEs” table and SIDC Ursigram bulletin to capture CME counts, velocity statistics, halo status, and narrative highlights for downstream HRV correlation, ranking, and modelling workflows.
 
 ### CLI
 ```bash
