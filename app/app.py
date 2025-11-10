@@ -5160,7 +5160,13 @@ def main() -> None:
                                         mime="text/csv",
                                         key="btn_download_feature_corr",
                                     )
-                            with st.expander("Auto-rank top predictors"):
+                            rank_tab, model_tab = st.tabs(
+                                [
+                                    "Auto-rank top predictors",
+                                    "Train linear response model (experimental)",
+                                ]
+                            )
+                            with rank_tab:
                                 top_k = st.slider(
                                     "Top predictors per metric",
                                     min_value=1,
@@ -5178,7 +5184,9 @@ def main() -> None:
                                     key="rank_min_samples",
                                 )
                                 if st.button(
-                                        "Rank predictors", key="btn_rank_predictors"):
+                                    "Rank predictors",
+                                    key="btn_rank_predictors",
+                                ):
                                     try:
                                         rank_df = _rank_top_predictors(
                                             feature_matrix_cached,
@@ -5205,9 +5213,7 @@ def main() -> None:
                                             mime="text/csv",
                                             key="btn_download_rankings",
                                         )
-                            with st.expander(
-                                "Train linear response model (experimental)"
-                            ):
+                            with model_tab:
                                 target_metric = st.selectbox(
                                     "Target HRV metric",
                                     options=current_metrics,
@@ -5233,7 +5239,8 @@ def main() -> None:
                                 )
                                 if st.button(
                                     "Fit linear model",
-                                        key="btn_fit_linear_model"):
+                                    key="btn_fit_linear_model",
+                                ):
                                     try:
                                         model_out = _fit_linear_response_model(
                                             feature_matrix_cached,
