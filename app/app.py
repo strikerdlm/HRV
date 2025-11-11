@@ -3892,27 +3892,63 @@ def main() -> None:
                                     "Std dev", f"{
                                         flux_numeric[value_col].std(
                                             ddof=1):.1f}", )
-                                series_candidates: Dict[str, pd.Series] = {}
-                                for col in numeric_flux_cols:
-                                    series = flux_numeric.set_index(
-                                        "time_tag")[col].astype(float)
-                                    if series.notna().any():
-                                        friendly = (
-                                            col.replace("_", " ")
-                                            .replace("[", "")
-                                            .replace("]", "")
-                                            .title()
+                                chart_df = (
+                                    flux_numeric.set_index("time_tag")
+                                    .sort_index()
+                                )
+                                if chart_df.empty:
+                                    st.info(
+                                        "F10.7 component comparison unavailable."
+                                    )
+                                else:
+                                    observed_series = pd.to_numeric(
+                                        chart_df[value_col],
+                                        errors="coerce",
+                                    )
+                                    ninety_series_list: Optional[
+                                        List[Optional[float]]
+                                    ] = None
+                                    ninety_col = next(
+                                        (
+                                            col
+                                            for col in numeric_flux_cols
+                                            if "ninety" in col.lower()
+                                        ),
+                                        None,
+                                    )
+                                    if (
+                                        ninety_col
+                                        and ninety_col in chart_df.columns
+                                    ):
+                                        ninety_series = pd.to_numeric(
+                                            chart_df[ninety_col],
+                                            errors="coerce",
                                         )
-                                        series_candidates[friendly] = series.dropna(
-                                        )
-                                if len(series_candidates) > 1:
-                                    _echarts_multi_time_series(
-                                        series_candidates,
+                                        if ninety_series.notna().any():
+                                            ninety_filled = (
+                                                ninety_series.ffill().bfill()
+                                            )
+                                            ninety_series_list = []
+                                            for val in ninety_filled.tolist():
+                                                if val is None:
+                                                    ninety_series_list.append(
+                                                        None
+                                                    )
+                                                    continue
+                                                val_float = float(val)
+                                                ninety_series_list.append(
+                                                    val_float
+                                                    if np.isfinite(val_float)
+                                                    else None
+                                                )
+                                    _echarts_flux_component_comparison(
+                                        list(chart_df.index),
+                                        observed_series.tolist(),
+                                        ninety_series_list,
                                         title="F10.7 component comparison",
-                                        y_name="Solar flux (sfu)",
                                     )
                                     st.caption(
-                                        "Comparison of observed, adjusted, and predicted solar radio flux where provided by NOAA."
+                                        "Observed F10.7 flux (orange) with the dashed 90-day mean and bars indicating deviations."
                                     )
                                 if (
                                     "time_tag" in flux_numeric.columns
@@ -5492,6 +5528,204 @@ def _echarts_multi_time_series(
         },
         "series": series,
     }
+    render_echarts(
+        opt,
+        height_px=height_px,
+        width="100%",
+        config=EChartsConfig())
+
+
+def _echarts_flux_component_comparison(
+    timestamps: Sequence[pd.Timestamp],
+    observed_flux: Sequence[float],
+    ninety_day_mean: Optional[Sequence[Optional[float]]] = None,
+    *,
+    title: str,
+    height_px: int = 360,
+) -> None:
+    """
+    Render a dual-axis ECharts view highlighting deviations of observed
+    F10.7 flux from its 90-day mean baseline.
+
+    Parameters
+    ----------
+    timestamps :
+            Sequence of timestamps corresponding to the flux samples.
+    observed_flux :
+            Sequence of observed F10.7 flux values in solar flux units (sfu).
+    ninety_day_mean :
+            Optional sequence with the same length as ``timestamps`` containing
+            90-day mean flux baselines. When provided, an anomaly bar series is
+            rendered on a secondary axis. Missing entries are tolerated.
+    title :
+            Title to display at the top of the chart.
+    height_px :
+            Height of the rendered chart container in pixels.
+
+    Raises
+    ------
+    ValueError
+            If ``timestamps`` and ``observed_flux`` lengths differ.
+    """
+    if len(timestamps) != len(observed_flux):
+        raise ValueError("timestamps and observed_flux must have the same length")
+    if len(timestamps) == 0:
+        st.info(f"{title}: no data to display.")
+        return
+
+    coerced_times = [
+        pd.to_datetime(ts, utc=True, errors="coerce") for ts in timestamps
+    ]
+    valid_indices = [
+        idx for idx, ts in enumerate(coerced_times) if pd.notna(ts)
+    ]
+    if not valid_indices:
+        st.info(f"{title}: no valid timestamps to display.")
+        return
+
+    obs_points: List[List[Optional[float]]] = []
+    mean_points: List[List[Optional[float]]] = []
+    anomaly_points: List[Dict[str, Any]] = []
+    diff_values: List[float] = []
+
+    for idx in valid_indices:
+        ts = coerced_times[idx]
+        iso_ts = ts.isoformat()
+
+        obs_raw = observed_flux[idx]
+        obs_numeric: Optional[float]
+        if obs_raw is None:
+            obs_numeric = None
+        else:
+            obs_val = float(obs_raw)
+            obs_numeric = obs_val if np.isfinite(obs_val) else None
+        obs_points.append([iso_ts, obs_numeric])
+
+        mean_numeric: Optional[float] = None
+        if ninety_day_mean is not None:
+            mean_raw = ninety_day_mean[idx]
+            if mean_raw is not None:
+                mean_val = float(mean_raw)
+                if np.isfinite(mean_val):
+                    mean_numeric = mean_val
+        mean_points.append([iso_ts, mean_numeric])
+
+        if mean_numeric is not None and obs_numeric is not None:
+            diff_val = obs_numeric - mean_numeric
+            diff_values.append(diff_val)
+            anomaly_points.append(
+                {
+                    "value": [iso_ts, diff_val],
+                    "itemStyle": {
+                        "color": "#dc2626" if diff_val >= 0.0 else "#16a34a"
+                    },
+                }
+            )
+        else:
+            anomaly_points.append({"value": [iso_ts, None]})
+
+    if not any(point[1] is not None for point in obs_points):
+        st.info(f"{title}: no observed flux values to display.")
+        return
+
+    has_mean_series = any(point[1] is not None for point in mean_points)
+    has_anomaly_series = bool(diff_values)
+
+    anomaly_axis: Optional[Dict[str, Any]] = None
+    if has_anomaly_series:
+        diff_span = max(abs(val) for val in diff_values)
+        padding = max(5.0, diff_span * 0.15)
+        axis_extent = diff_span + padding
+        anomaly_axis = {
+            "type": "value",
+            "name": "Δ vs 90d mean (sfu)",
+            "position": "right",
+            "axisLabel": {"color": "#475569"},
+            "splitLine": {"show": False},
+            "min": -axis_extent,
+            "max": axis_extent,
+        }
+
+    series: List[Dict[str, Any]] = [
+        {
+            "name": "Observed flux",
+            "type": "line",
+            "showSymbol": False,
+            "smooth": True,
+            "yAxisIndex": 0,
+            "lineStyle": {"width": 3, "color": "#f97316"},
+            "data": obs_points,
+        }
+    ]
+
+    if has_mean_series:
+        series.append(
+            {
+                "name": "90-day mean",
+                "type": "line",
+                "showSymbol": False,
+                "smooth": True,
+                "yAxisIndex": 0,
+                "lineStyle": {"width": 2, "type": "dashed", "color": "#6366f1"},
+                "data": mean_points,
+            }
+        )
+
+    if has_anomaly_series and anomaly_axis is not None:
+        series.append(
+            {
+                "name": "Δ vs 90d mean",
+                "type": "bar",
+                "yAxisIndex": 1,
+                "barWidth": "65%",
+                "itemStyle": {"opacity": 0.8},
+                "emphasis": {"focus": "series"},
+                "data": anomaly_points,
+            }
+        )
+
+    y_axes: List[Dict[str, Any]] = [
+        {
+            "type": "value",
+            "name": "Flux (sfu)",
+            "axisLabel": {"color": "#475569"},
+            "splitLine": {"lineStyle": {"color": "rgba(148,163,184,0.25)"}},
+        }
+    ]
+    if anomaly_axis is not None:
+        y_axes.append(anomaly_axis)
+
+    opt = {
+        "title": {"text": title, "left": "center"},
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "cross"},
+            "valueFormatter": (
+                "function(value){if(value===null||isNaN(value)){return'—';}"
+                "return value.toFixed(1)+' sfu';}"
+            ),
+        },
+        "legend": {"top": 24},
+        "grid": {
+            "left": 48,
+            "right": 32,
+            "top": 56,
+            "bottom": 48,
+            "containLabel": True,
+        },
+        "dataZoom": [
+            {"type": "inside"},
+            {"type": "slider", "bottom": 12, "height": 18},
+        ],
+        "xAxis": {
+            "type": "time",
+            "axisLabel": {"color": "#475569"},
+            "axisLine": {"lineStyle": {"color": "#cbd5f5"}},
+        },
+        "yAxis": y_axes,
+        "series": series,
+    }
+
     render_echarts(
         opt,
         height_px=height_px,
