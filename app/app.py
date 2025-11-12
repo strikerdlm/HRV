@@ -573,6 +573,8 @@ def _noaa_space_state() -> Dict[str, Any]:
             "errors": {},
             "last_updated": None,
             "loading": False,
+            "correlations": {},
+            "corr_params": {},
         },
     )
     return state
@@ -595,10 +597,14 @@ def _load_noaa_space_datasets(
         state["bundles"] = {}
         state["errors"] = {"__global__": str(exc)}
         state["last_updated"] = pd.Timestamp.utcnow()
+        state["correlations"] = {}
+        state["corr_params"] = {}
     else:
         state["bundles"] = bundles
         state["errors"] = errors
         state["last_updated"] = pd.Timestamp.utcnow()
+        state["correlations"] = {}
+        state["corr_params"] = {}
     finally:
         state["loading"] = False
 
@@ -3415,6 +3421,7 @@ def main() -> None:
         tab_gauges,
         tab_science,
         tab_space_weather,
+        tab_noaa_space,
         tab_export,
         tab_refs,
         tab_about,
@@ -3432,6 +3439,7 @@ def main() -> None:
             "Gauges",
             "Science",
             "Space Weather",
+            "NOAA Space",
             "Export",
             "References",
             "About",
@@ -5096,6 +5104,218 @@ def main() -> None:
                     "created_utc",
                     ascending=False).head(200))
 
+    with tab_noaa_space:
+        st.subheader("NOAA Space Dashboard")
+        noaa_state = _noaa_space_state()
+        col_fetch_noaa, col_refresh_noaa = st.columns(2)
+        with col_fetch_noaa:
+            fetch_noaa_clicked = st.button(
+                "Fetch NOAA feeds", key="fetch_noaa_space_data"
+            )
+        with col_refresh_noaa:
+            refresh_noaa_clicked = st.button(
+                "Force refresh NOAA feeds", key="refresh_noaa_space_data"
+            )
+        if fetch_noaa_clicked:
+            with st.spinner("Fetching NOAA JSON feeds…"):
+                _load_noaa_space_datasets(noaa_state)
+        if refresh_noaa_clicked:
+            with st.spinner("Refreshing NOAA JSON feeds…"):
+                _load_noaa_space_datasets(noaa_state, use_cache=False)
+        if (
+            not noaa_state.get("bundles")
+            and not noaa_state.get("loading")
+            and not fetch_noaa_clicked
+            and not refresh_noaa_clicked
+            and not noaa_state.get("errors")
+        ):
+            with st.spinner("Loading NOAA JSON feeds…"):
+                _load_noaa_space_datasets(noaa_state)
+        if noaa_state.get("loading"):
+            st.info("NOAA feeds are loading…")
+        errors = noaa_state.get("errors", {})
+        for key, message in errors.items():
+            label = "General" if key == "__global__" else key
+            st.error(f"{label}: {message}")
+        bundles = noaa_state.get("bundles", {})
+        if not bundles:
+            st.info("Click “Fetch NOAA feeds” to populate the NOAA Space dashboard.")
+        else:
+            option_labels = {
+                key: bundle.spec.title for key, bundle in bundles.items()
+            }
+            dataset_options = sorted(option_labels.keys(), key=lambda k: option_labels[k])
+            selected_dataset = st.selectbox(
+                "Dataset",
+                options=dataset_options,
+                format_func=lambda k: option_labels.get(k, k),
+                key="noaa_dataset_select",
+            )
+            bundle: NOAADataBundle = bundles[selected_dataset]
+            if bundle.spec.description:
+                st.caption(bundle.spec.description)
+            cadence_minutes = bundle.spec.cadence_minutes or 60
+            default_history = 72 if cadence_minutes <= 60 else 336
+            history_hours = st.slider(
+                "History window (hours)",
+                min_value=6,
+                max_value=720,
+                value=int(default_history),
+                step=6,
+                key=f"noaa_history_{selected_dataset}",
+            )
+            history_df = _prepare_noaa_history(bundle, int(history_hours))
+            selected_value_column: Optional[str] = None
+            if bundle.spec.key == "solar_radio_multifrequency":
+                _render_noaa_multifrequency_panel(bundle, history_df)
+                if "flux_sfu" in history_df.columns:
+                    selected_value_column = "flux_sfu"
+            else:
+                value_columns = list(bundle.value_columns)
+                if not value_columns:
+                    value_columns = [
+                        col
+                        for col in history_df.columns
+                        if col != bundle.time_column
+                        and pd.api.types.is_numeric_dtype(history_df[col])
+                    ]
+                if not value_columns:
+                    st.info("No numeric columns available for this dataset.")
+                else:
+                    default_index = 0
+                    if bundle.spec.key == "f107_flux" and "flux" in value_columns:
+                        default_index = value_columns.index("flux")
+                    value_column = st.selectbox(
+                        "Primary metric",
+                        options=value_columns,
+                        index=default_index,
+                        key=f"noaa_value_column_{selected_dataset}",
+                    )
+                    selected_value_column = value_column
+                    overlay_candidates = [
+                        col for col in value_columns if col != value_column
+                    ]
+                    default_overlays: List[str] = []
+                    if (
+                        bundle.spec.key == "f107_flux"
+                        and "ninety_day_mean" in overlay_candidates
+                    ):
+                        default_overlays = ["ninety_day_mean"]
+                    overlay_selection = st.multiselect(
+                        "Additional overlays",
+                        options=overlay_candidates,
+                        default=default_overlays,
+                        key=f"noaa_overlay_{selected_dataset}",
+                    )
+                    y_label = bundle.units.get(value_column) if bundle.units else None
+                    _render_noaa_metric_panel(
+                        bundle,
+                        history_df,
+                        value_column,
+                        overlay_columns=overlay_selection,
+                        line_title=f"{bundle.spec.title} trends",
+                        y_label=y_label or "Value",
+                    )
+            st.divider()
+            st.markdown("##### HRV correlation analysis")
+            if windowed_df.empty:
+                st.info("Run the HRV window analysis to enable correlations.")
+            else:
+                metrics_available = [
+                    metric
+                    for metric in metric_list
+                    if metric in windowed_df.columns
+                    and pd.api.types.is_numeric_dtype(windowed_df[metric])
+                ]
+                if not metrics_available:
+                    st.info("No numeric HRV metrics available for correlation.")
+                else:
+                    default_metrics = metrics_available[: min(4, len(metrics_available))]
+                    selected_metrics = st.multiselect(
+                        "HRV metrics",
+                        options=metrics_available,
+                        default=default_metrics,
+                        key=f"noaa_metric_select_{selected_dataset}",
+                    )
+                    lag_min, lag_max = st.slider(
+                        "Lag window (hours)",
+                        min_value=-72,
+                        max_value=72,
+                        value=(-24, 24),
+                        step=1,
+                        key=f"noaa_lag_range_{selected_dataset}",
+                    )
+                    lag_step = st.number_input(
+                        "Lag step (hours)",
+                        min_value=1,
+                        max_value=24,
+                        value=3,
+                        step=1,
+                        key=f"noaa_lag_step_{selected_dataset}",
+                    )
+                    merge_tolerance = st.number_input(
+                        "Merge tolerance (minutes)",
+                        min_value=15,
+                        max_value=240,
+                        value=90,
+                        step=15,
+                        key=f"noaa_merge_tolerance_{selected_dataset}",
+                    )
+                    compute_corr = st.button(
+                        "Compute correlations",
+                        key=f"noaa_compute_corr_{selected_dataset}",
+                    )
+                    if compute_corr:
+                        if not selected_metrics:
+                            st.warning("Select at least one HRV metric to continue.")
+                        else:
+                            lag_start, lag_end = int(lag_min), int(lag_max)
+                            lag_step_int = max(int(lag_step), 1)
+                            if lag_start > lag_end:
+                                st.warning(
+                                    "Lag start must be less than or equal to lag end."
+                                )
+                            else:
+                                lags = list(range(lag_start, lag_end + 1, lag_step_int))
+                                if not lags:
+                                    st.warning(
+                                        "Lag configuration results in an empty set."
+                                    )
+                                else:
+                                    with st.spinner("Computing Pearson correlations…"):
+                                        corr_df = _build_noaa_correlations(
+                                            windowed_df,
+                                            {selected_dataset: bundle},
+                                            selected_metrics,
+                                            lags,
+                                            merge_tolerance_minutes=int(
+                                                merge_tolerance
+                                            ),
+                                        )
+                                    noaa_state["correlations"][selected_dataset] = corr_df
+                                    noaa_state["corr_params"][selected_dataset] = {
+                                        "metrics": selected_metrics,
+                                        "lags": lags,
+                                        "merge_tolerance": int(merge_tolerance),
+                                    }
+                                    if corr_df.empty:
+                                        st.info(
+                                            "No correlations satisfied the selected configuration."
+                                        )
+                                    else:
+                                        st.success("Correlation scan completed.")
+                    corr_df = noaa_state["correlations"].get(selected_dataset)
+                    if selected_value_column is None:
+                        st.info(
+                            "Select a primary NOAA metric above to view correlation results."
+                        )
+                    else:
+                        _render_noaa_correlation_summary(
+                            corr_df,
+                            selected_dataset,
+                            selected_value_column,
+                        )
+
     with tab_export:
         st.subheader("Export report")
         if not meta_rows and multi_results_df.empty:
@@ -5759,6 +5979,430 @@ def _echarts_sparkline(
         height_px=height_px,
         width="100%",
         config=EChartsConfig())
+
+
+NOAA_GAUGE_PRESETS: Dict[Tuple[str, str], Dict[str, Any]] = {
+    (
+        "f107_flux",
+        "flux",
+    ): {
+        "min": 60.0,
+        "max": 260.0,
+        "thresholds": [
+            (90.0, "#22c55e"),
+            (130.0, "#facc15"),
+            (180.0, "#ef4444"),
+        ],
+    },
+    (
+        "f107_flux",
+        "ninety_day_mean",
+    ): {
+        "min": 60.0,
+        "max": 260.0,
+        "thresholds": [
+            (90.0, "#22c55e"),
+            (130.0, "#facc15"),
+            (180.0, "#ef4444"),
+        ],
+    },
+    (
+        "planetary_k_index_1m",
+        "kp_index",
+    ): {
+        "min": 0.0,
+        "max": 9.0,
+        "thresholds": [
+            (3.0, "#22c55e"),
+            (5.0, "#f97316"),
+            (7.0, "#ef4444"),
+        ],
+    },
+    (
+        "planetary_k_index_1m",
+        "estimated_kp",
+    ): {
+        "min": 0.0,
+        "max": 9.0,
+        "thresholds": [
+            (3.0, "#22c55e"),
+            (5.0, "#f97316"),
+            (7.0, "#ef4444"),
+        ],
+    },
+    (
+        "solar_wind_wind",
+        "proton_speed",
+    ): {
+        "min": 250.0,
+        "max": 900.0,
+        "thresholds": [
+            (450.0, "#22c55e"),
+            (650.0, "#facc15"),
+            (900.0, "#ef4444"),
+        ],
+    },
+}
+
+
+def _infer_precision(max_abs_value: float) -> int:
+    """
+    Infer a reasonable number of decimal places for numeric displays.
+    """
+
+    max_abs = float(abs(max_abs_value))
+    if max_abs >= 1000.0:
+        return 0
+    if max_abs >= 100.0:
+        return 1
+    if max_abs >= 10.0:
+        return 2
+    return 3
+
+
+def _format_with_precision(value: float, precision: int) -> str:
+    """
+    Format a numeric value respecting finite checks and precision bounds.
+    """
+
+    if not np.isfinite(value):
+        return "n/a"
+    bounded_precision = max(0, min(int(precision), 4))
+    return f"{value:.{bounded_precision}f}"
+
+
+def _resolve_noaa_gauge_config(
+    dataset_key: str,
+    value_column: str,
+    values: np.ndarray,
+) -> Tuple[float, float, List[Tuple[float, str]]]:
+    """
+    Determine gauge bounds and thresholds for a NOAA metric.
+    """
+
+    preset = NOAA_GAUGE_PRESETS.get((dataset_key, value_column))
+    if preset is not None:
+        thresholds = list(preset["thresholds"])
+        return float(preset["min"]), float(preset["max"]), thresholds
+    numeric = np.asarray(values, dtype=float)
+    numeric = numeric[np.isfinite(numeric)]
+    if numeric.size == 0:
+        return 0.0, 1.0, [
+            (0.33, "#22c55e"),
+            (0.66, "#f97316"),
+            (1.0, "#ef4444"),
+        ]
+    min_val = float(np.min(numeric))
+    max_val = float(np.max(numeric))
+    if not np.isfinite(min_val):
+        min_val = 0.0
+    if not np.isfinite(max_val):
+        max_val = 1.0
+    if np.isclose(min_val, max_val):
+        padding = max(abs(max_val) * 0.2, 1.0)
+        min_val -= padding
+        max_val += padding
+    if min_val > max_val:
+        min_val, max_val = max_val, min_val
+    span = max_val - min_val
+    if span <= 0.0:
+        span = max(abs(max_val), 1.0)
+        min_val = max_val - span
+    thresholds = [
+        (min_val + span * 0.33, "#22c55e"),
+        (min_val + span * 0.66, "#f97316"),
+        (max_val, "#ef4444"),
+    ]
+    return min_val, max_val, thresholds
+
+
+def _format_noaa_series_label(value_column: str, unit: Optional[str]) -> str:
+    """
+    Construct a readable label for NOAA time-series lines.
+    """
+
+    base = value_column.replace("_", " ").title()
+    return f"{base} ({unit})" if unit else base
+
+
+def _prepare_noaa_history(
+    bundle: NOAADataBundle,
+    history_hours: int,
+) -> pd.DataFrame:
+    """
+    Slice a NOAA bundle to the requested trailing history window.
+    """
+
+    df = bundle.frame.copy()
+    time_col = bundle.time_column
+    if history_hours > 0:
+        cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(hours=int(history_hours))
+        df = df[df[time_col] >= cutoff]
+        if df.empty:
+            tail_len = min(len(bundle.frame), max(120, int(history_hours)))
+            df = bundle.frame.tail(tail_len).copy()
+    return df
+
+
+def _render_noaa_metric_panel(
+    bundle: NOAADataBundle,
+    df: pd.DataFrame,
+    value_column: str,
+    *,
+    overlay_columns: Sequence[str] = (),
+    line_title: Optional[str] = None,
+    y_label: Optional[str] = None,
+) -> None:
+    """
+    Render gauge and multi-series line chart for a NOAA metric.
+    """
+
+    time_col = bundle.time_column
+    if value_column not in df.columns:
+        st.info(f"No data available for `{value_column}`.")
+        return
+    panel_df = df[[time_col, value_column]].dropna()
+    panel_df = panel_df.sort_values(time_col)
+    panel_df[value_column] = pd.to_numeric(panel_df[value_column], errors="coerce")
+    panel_df = panel_df.dropna(subset=[value_column])
+    if panel_df.empty:
+        st.info(f"No numeric samples available for `{value_column}` in the selected window.")
+        return
+    values = panel_df[value_column].to_numpy(dtype=float)
+    min_val, max_val, thresholds = _resolve_noaa_gauge_config(
+        bundle.spec.key, value_column, values
+    )
+    latest_value = float(values[-1])
+    latest_time = panel_df[time_col].iloc[-1]
+    max_abs = max(abs(min_val), abs(max_val), abs(latest_value))
+    precision = _infer_precision(max_abs)
+    unit = bundle.units.get(value_column) if bundle.units else None
+    gauge_title = f"{bundle.spec.title} — {value_column.replace('_', ' ').title()}"
+    col_gauge, col_chart = st.columns([1, 2])
+    with col_gauge:
+        _echarts_gauge(
+            latest_value,
+            min_val=min_val,
+            max_val=max_val,
+            title=gauge_title,
+            unit=unit or "",
+            precision=precision,
+            thresholds=thresholds,
+            height_px=280,
+        )
+        if isinstance(latest_time, pd.Timestamp):
+            st.caption(f"UTC timestamp: {latest_time.strftime('%Y-%m-%d %H:%M')}")
+        stats_cols = st.columns(3)
+        stats_cols[0].metric(
+            "Window mean",
+            _format_with_precision(float(np.nanmean(values)), precision),
+        )
+        stats_cols[1].metric(
+            "Window max",
+            _format_with_precision(float(np.nanmax(values)), precision),
+        )
+        stats_cols[2].metric(
+            "Window min",
+            _format_with_precision(float(np.nanmin(values)), precision),
+        )
+    series_map: Dict[str, pd.Series] = {}
+    core_series = panel_df.set_index(time_col)[value_column].astype(float)
+    if core_series.shape[0] > 1500:
+        core_series = core_series.iloc[-1500:]
+    series_map[_format_noaa_series_label(value_column, unit)] = core_series
+    for column in overlay_columns:
+        if column == value_column or column not in df.columns:
+            continue
+        overlay_df = df[[time_col, column]].dropna()
+        overlay_df[column] = pd.to_numeric(overlay_df[column], errors="coerce")
+        overlay_df = overlay_df.dropna(subset=[column]).sort_values(time_col)
+        if overlay_df.empty:
+            continue
+        overlay_series = overlay_df.set_index(time_col)[column].astype(float)
+        if overlay_series.shape[0] > 1500:
+            overlay_series = overlay_series.iloc[-1500:]
+        overlay_unit = bundle.units.get(column) if bundle.units else None
+        series_map[_format_noaa_series_label(column, overlay_unit)] = overlay_series
+    with col_chart:
+        if not series_map:
+            st.info("No time-series data available for plotting.")
+        else:
+            _echarts_multi_time_series(
+                series_map,
+                title=line_title or bundle.spec.title,
+                y_name=y_label or (unit or "Value"),
+                height_px=340,
+            )
+
+
+def _render_noaa_multifrequency_panel(
+    bundle: NOAADataBundle,
+    df: pd.DataFrame,
+) -> None:
+    """
+    Render a multifrequency solar radio flux view.
+    """
+
+    required_cols = {bundle.time_column, "frequency_mhz", "flux_sfu"}
+    if not required_cols.issubset(df.columns):
+        st.info("Multifrequency dataset missing required columns.")
+        return
+    filtered = df.dropna(subset=[bundle.time_column, "frequency_mhz", "flux_sfu"])
+    if filtered.empty:
+        st.info("No multifrequency samples available in the selected window.")
+        return
+    pivot = (
+        filtered.pivot_table(
+            index=bundle.time_column,
+            columns="frequency_mhz",
+            values="flux_sfu",
+            aggfunc="mean",
+        )
+        .sort_index()
+    )
+    if pivot.empty:
+        st.info("Unable to build multifrequency time series.")
+        return
+    series_map: Dict[str, pd.Series] = {}
+    for freq in sorted(pivot.columns):
+        series = pivot[freq].dropna()
+        if series.empty:
+            continue
+        if series.shape[0] > 1500:
+            series = series.iloc[-1500:]
+        label = f"{float(freq):g} MHz"
+        series_map[label] = series.astype(float)
+    if not series_map:
+        st.info("Insufficient multifrequency data for plotting.")
+        return
+    _echarts_multi_time_series(
+        series_map,
+        title="Solar radio flux (multifrequency network)",
+        y_name="Flux (sfu)",
+        height_px=360,
+    )
+    latest_time = filtered[bundle.time_column].max()
+    if isinstance(latest_time, pd.Timestamp):
+        st.caption(f"Latest snapshot: {latest_time.strftime('%Y-%m-%d %H:%M UTC')}")
+    snapshot = filtered[filtered[bundle.time_column] == latest_time]
+    if not snapshot.empty:
+        display_cols = [
+            "frequency_mhz",
+            "flux_sfu",
+            "quality_flag",
+            "common_name",
+        ]
+        available_cols = [col for col in display_cols if col in snapshot.columns]
+        st.dataframe(
+            snapshot[available_cols]
+            .sort_values("frequency_mhz")
+            .reset_index(drop=True),
+            use_container_width=True,
+        )
+
+
+def _format_ci_text(low: float, high: float) -> str:
+    """
+    Format a confidence interval for display.
+    """
+
+    if not np.isfinite(low) or not np.isfinite(high):
+        return "CI95% n/a"
+    return f"CI95% [{low:.3f}, {high:.3f}]"
+
+
+def _format_p_value(value: float) -> str:
+    """
+    Format a p-value for display with scientific notation fallback.
+    """
+
+    if not np.isfinite(value):
+        return "p = n/a"
+    if value < 1e-3:
+        return f"p = {value:.2e}"
+    return f"p = {value:.3f}"
+
+
+def _render_noaa_correlation_summary(
+    corr_df: Optional[pd.DataFrame],
+    dataset_key: str,
+    value_column: str,
+) -> None:
+    """
+    Display correlation summaries for a NOAA dataset/value column pair.
+    """
+
+    if corr_df is None or corr_df.empty:
+        st.info("Run the correlation scan to populate HRV ↔ NOAA metrics.")
+        return
+    subset = corr_df[
+        (corr_df["predictor_key"] == dataset_key)
+        & (corr_df["value_column"] == value_column)
+    ].copy()
+    if subset.empty:
+        st.info("No correlations available for the selected metric yet.")
+        return
+    subset = subset.assign(abs_r=subset["pearson_r"].abs()).sort_values(
+        "abs_r", ascending=False
+    )
+    subset = subset.drop(columns=["abs_r"])
+    display_df = subset[
+        [
+            "test_name",
+            "metric",
+            "pearson_r",
+            "p_value",
+            "ci_low",
+            "ci_high",
+            "direction",
+            "lag_hours",
+            "n",
+        ]
+    ].rename(
+        columns={
+            "pearson_r": "test_result",
+            "direction": "directionality",
+            "ci_low": "ci95_low",
+            "ci_high": "ci95_high",
+        }
+    )
+    formatted = display_df.copy()
+    formatted["test_result"] = formatted["test_result"].apply(
+        lambda v: _format_with_precision(float(v), 3)
+    )
+    formatted["p_value"] = formatted["p_value"].apply(
+        lambda v: f"{float(v):.2e}" if np.isfinite(v) else "n/a"
+    )
+    formatted["ci95_low"] = formatted["ci95_low"].apply(
+        lambda v: _format_with_precision(float(v), 3)
+    )
+    formatted["ci95_high"] = formatted["ci95_high"].apply(
+        lambda v: _format_with_precision(float(v), 3)
+    )
+    formatted["lag_hours"] = formatted["lag_hours"].astype(int)
+    formatted["n"] = formatted["n"].astype(int)
+    st.dataframe(formatted, use_container_width=True)
+    commentary_lines: List[str] = []
+    for row in subset.itertuples():
+        test_name = getattr(row, "test_name", "Pearson r")
+        metric = getattr(row, "metric", "")
+        r_val = getattr(row, "pearson_r", float("nan"))
+        p_val = getattr(row, "p_value", float("nan"))
+        ci_low = getattr(row, "ci_low", float("nan"))
+        ci_high = getattr(row, "ci_high", float("nan"))
+        direction = getattr(row, "direction", "neutral")
+        lag = getattr(row, "lag_hours", 0)
+        sample_n = getattr(row, "n", 0)
+        if np.isfinite(r_val):
+            r_text = f"r = {r_val:.3f}"
+        else:
+            r_text = "r undefined"
+        commentary_lines.append(
+            f"- **{metric}** ({test_name}) shows a {direction} association at lag {lag} h: "
+            f"{r_text}, {_format_p_value(p_val)}, {_format_ci_text(ci_low, ci_high)}, n = {sample_n}."
+        )
+    st.markdown("\n".join(commentary_lines))
+
 
 
 def _echarts_multi_time_series(
