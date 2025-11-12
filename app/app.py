@@ -22,6 +22,7 @@ from hrv_core import (
 from ml_enhancements import run_windowed_kmeans
 from export_utils import ExportConfiguration, ExportScope, build_markdown_report
 from echarts_component import EChartsConfig, render_echarts
+from noaa_space import load_noaa_space_data
 
 from dataclasses import dataclass
 from datetime import timezone
@@ -558,6 +559,48 @@ def _space_weather_state() -> Dict[str, Any]:
         },
     )
     return state
+
+
+def _noaa_space_state() -> Dict[str, Any]:
+    """
+    Persist NOAA datasets for the dedicated NOAA Space tab.
+    """
+
+    state = st.session_state.setdefault(
+        "noaa_space_state",
+        {
+            "bundles": {},
+            "errors": {},
+            "last_updated": None,
+            "loading": False,
+        },
+    )
+    return state
+
+
+def _load_noaa_space_datasets(
+    state: Dict[str, Any],
+    *,
+    keys: Optional[Sequence[str]] = None,
+    use_cache: bool = True,
+) -> None:
+    """
+    Populate the NOAA space datasets in session state.
+    """
+
+    state["loading"] = True
+    try:
+        bundles, errors = load_noaa_space_data(keys=keys, use_cache=use_cache)
+    except requests.RequestException as exc:
+        state["bundles"] = {}
+        state["errors"] = {"__global__": str(exc)}
+        state["last_updated"] = pd.Timestamp.utcnow()
+    else:
+        state["bundles"] = bundles
+        state["errors"] = errors
+        state["last_updated"] = pd.Timestamp.utcnow()
+    finally:
+        state["loading"] = False
 
 
 def _donki_state() -> Dict[str, Any]:
