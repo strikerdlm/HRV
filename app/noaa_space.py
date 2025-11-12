@@ -177,6 +177,16 @@ NOAA_SOURCES: Dict[str, NOAASourceSpec] = {
         cadence_minutes=5,
         split_by_column="energy",
     ),
+    "geospace_pred_kp": NOAASourceSpec(
+        key="geospace_pred_kp",
+        path="geospace/geospace_pred_est_kp_1_hour.json",
+        title="Predicted Kp (1 h model)",
+        description="Short-term model forecast of planetary K index (1-hour cadence).",
+        value_columns=("k",),
+        preferred_time_columns=("model_prediction_time", "time_tag", "time"),
+        units={"k": "Kp"},
+        cadence_minutes=60,
+    ),
     "geospace_dst": NOAASourceSpec(
         key="geospace_dst",
         path="geospace/geospace_dst_1_hour.json",

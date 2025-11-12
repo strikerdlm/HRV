@@ -575,6 +575,8 @@ def _noaa_space_state() -> Dict[str, Any]:
             "loading": False,
             "correlations": {},
             "corr_params": {},
+            "global_corr": pd.DataFrame(),
+            "global_corr_labels": {},
         },
     )
     return state
@@ -599,12 +601,16 @@ def _load_noaa_space_datasets(
         state["last_updated"] = pd.Timestamp.utcnow()
         state["correlations"] = {}
         state["corr_params"] = {}
+        state["global_corr"] = pd.DataFrame()
+        state["global_corr_labels"] = {}
     else:
         state["bundles"] = bundles
         state["errors"] = errors
         state["last_updated"] = pd.Timestamp.utcnow()
         state["correlations"] = {}
         state["corr_params"] = {}
+        state["global_corr"] = pd.DataFrame()
+        state["global_corr_labels"] = {}
     finally:
         state["loading"] = False
 
@@ -5138,6 +5144,14 @@ def main() -> None:
             label = "General" if key == "__global__" else key
             st.error(f"{label}: {message}")
         bundles = noaa_state.get("bundles", {})
+        metrics_available: List[str] = []
+        if not windowed_df.empty:
+            metrics_available = [
+                metric
+                for metric in metric_list
+                if metric in windowed_df.columns
+                and pd.api.types.is_numeric_dtype(windowed_df[metric])
+            ]
         if not bundles:
             st.info("Click “Fetch NOAA feeds” to populate the NOAA Space dashboard.")
         else:
@@ -5327,6 +5341,156 @@ def main() -> None:
                             selected_value_column,
                             label_map=current_label_map,
                         )
+        st.divider()
+        st.markdown("##### Batch NOAA correlation scan")
+        if windowed_df.empty:
+            st.info("Run the HRV window analysis to enable batch correlations.")
+        elif not metrics_available:
+            st.info("No numeric HRV metrics available for correlation.")
+        else:
+            default_batch_metrics = metrics_available[: min(6, len(metrics_available))]
+            batch_metrics = st.multiselect(
+                "HRV metrics (batch)",
+                options=metrics_available,
+                default=default_batch_metrics,
+                key="noaa_batch_metrics",
+            )
+            batch_dataset_selection = st.multiselect(
+                "NOAA datasets",
+                options=dataset_options,
+                default=dataset_options,
+                format_func=lambda k: option_labels.get(k, k),
+                key="noaa_batch_datasets",
+            )
+            batch_lag_min, batch_lag_max = st.slider(
+                "Lag window (hours) — batch",
+                min_value=-72,
+                max_value=72,
+                value=(-24, 24),
+                step=1,
+                key="noaa_batch_lag_range",
+            )
+            batch_lag_step = st.number_input(
+                "Lag step (hours) — batch",
+                min_value=1,
+                max_value=24,
+                value=3,
+                step=1,
+                key="noaa_batch_lag_step",
+            )
+            batch_merge_tol = st.number_input(
+                "Merge tolerance (minutes) — batch",
+                min_value=15,
+                max_value=240,
+                value=90,
+                step=15,
+                key="noaa_batch_merge_tol",
+            )
+            if st.button("Run NOAA batch correlation", key="noaa_run_batch_corr"):
+                if not batch_metrics:
+                    st.warning("Select at least one HRV metric for the batch scan.")
+                elif not batch_dataset_selection:
+                    st.warning("Select at least one NOAA dataset for the batch scan.")
+                else:
+                    lag_start, lag_end = int(batch_lag_min), int(batch_lag_max)
+                    lag_step_int = max(int(batch_lag_step), 1)
+                    if lag_start > lag_end:
+                        st.warning("Lag start must be less than or equal to lag end.")
+                    else:
+                        lag_values = list(range(lag_start, lag_end + 1, lag_step_int))
+                        if not lag_values:
+                            st.warning("Lag configuration results in an empty set.")
+                        else:
+                            subset_bundles = {
+                                key: bundles[key]
+                                for key in batch_dataset_selection
+                                if key in bundles
+                            }
+                            if not subset_bundles:
+                                st.warning("Selected NOAA datasets are unavailable.")
+                            else:
+                                label_lookup: Dict[Tuple[str, str], str] = {}
+                                for key, bundle in subset_bundles.items():
+                                    for column in bundle.value_columns:
+                                        label_lookup[(key, column)] = bundle.split_labels.get(
+                                            column, column.replace("_", " ").title()
+                                        )
+                                with st.spinner("Computing NOAA batch correlations…"):
+                                    batch_corr_df = _build_noaa_correlations(
+                                        windowed_df,
+                                        subset_bundles,
+                                        batch_metrics,
+                                        lag_values,
+                                        merge_tolerance_minutes=int(batch_merge_tol),
+                                    )
+                                noaa_state["global_corr"] = batch_corr_df
+                                noaa_state["global_corr_labels"] = label_lookup
+                                if batch_corr_df.empty:
+                                    st.info(
+                                        "No correlations satisfied the selected batch configuration."
+                                    )
+                                else:
+                                    st.success("Batch correlation scan completed.")
+            global_corr_df = noaa_state.get("global_corr", pd.DataFrame())
+            if global_corr_df is not None and not global_corr_df.empty:
+                label_lookup: Dict[Tuple[str, str], str] = noaa_state.get(
+                    "global_corr_labels", {}
+                )
+                display_df = global_corr_df.copy()
+                display_df["abs_r"] = display_df["pearson_r"].abs()
+                display_df = display_df.sort_values("abs_r", ascending=False)
+                display_df["predictor_metric"] = [
+                    f"{row.predictor_title} — {label_lookup.get((row.predictor_key, row.value_column), row.value_column.replace('_', ' ').title())}"
+                    for row in display_df.itertuples()
+                ]
+                formatted = display_df[
+                    [
+                        "predictor_metric",
+                        "metric",
+                        "pearson_r",
+                        "p_value",
+                        "ci_low",
+                        "ci_high",
+                        "direction",
+                        "lag_hours",
+                        "n",
+                    ]
+                ].copy()
+                formatted["pearson_r"] = formatted["pearson_r"].apply(
+                    lambda v: _format_with_precision(float(v), 3)
+                )
+                formatted["p_value"] = formatted["p_value"].apply(
+                    lambda v: f"{float(v):.2e}" if np.isfinite(v) else "n/a"
+                )
+                formatted["ci_low"] = formatted["ci_low"].apply(
+                    lambda v: _format_with_precision(float(v), 3)
+                )
+                formatted["ci_high"] = formatted["ci_high"].apply(
+                    lambda v: _format_with_precision(float(v), 3)
+                )
+                formatted["lag_hours"] = formatted["lag_hours"].astype(int)
+                formatted["n"] = formatted["n"].astype(int)
+                top_n = min(25, formatted.shape[0])
+                st.dataframe(formatted.head(top_n), use_container_width=True)
+                csv_bytes = display_df.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "Download batch correlations (CSV)",
+                    data=csv_bytes,
+                    file_name=f"noaa_batch_correlations_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                    mime="text/csv",
+                    key="download_noaa_batch_csv",
+                )
+                summary_lines = []
+                for row in display_df.head(5).itertuples():
+                    predictor_label = label_lookup.get(
+                        (row.predictor_key, row.value_column),
+                        row.value_column.replace("_", " ").title(),
+                    )
+                    summary_lines.append(
+                        f\"- **{row.metric}** vs {row.predictor_title} — {predictor_label}: r = {row.pearson_r:.3f}, {_format_p_value(row.p_value)}, {_format_ci_text(row.ci_low, row.ci_high)}, lag {int(row.lag_hours)} h (n = {int(row.n)}).\"  # noqa: E501
+                    )
+                if summary_lines:
+                    st.markdown("\n".join(summary_lines))
 
     with tab_export:
         st.subheader("Export report")
@@ -6064,6 +6228,18 @@ NOAA_GAUGE_PRESETS: Dict[Tuple[str, str], Dict[str, Any]] = {
             (450.0, "#22c55e"),
             (650.0, "#facc15"),
             (900.0, "#ef4444"),
+        ],
+    },
+    (
+        "geospace_pred_kp",
+        "k",
+    ): {
+        "min": 0.0,
+        "max": 9.0,
+        "thresholds": [
+            (3.0, "#22c55e"),
+            (5.0, "#f97316"),
+            (7.0, "#ef4444"),
         ],
     },
 }
