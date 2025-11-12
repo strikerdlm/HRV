@@ -22,7 +22,7 @@ from hrv_core import (
 from ml_enhancements import run_windowed_kmeans
 from export_utils import ExportConfiguration, ExportScope, build_markdown_report
 from echarts_component import EChartsConfig, render_echarts
-from noaa_space import NOAADataBundle, load_noaa_space_data
+from noaa_space import NOAADataBundle, load_noaa_space_data, get_noaa_metric_explanations, explain_noaa_metric
 
 from dataclasses import asdict, dataclass
 from datetime import timezone
@@ -3397,6 +3397,15 @@ def main() -> None:
             if np.isfinite(val):
                 pns_mapping[src] = val
 
+    # Enrich meta_rows with NOAA explanations so GPT/export can include them
+    try:
+        _noaa_rows = get_noaa_metric_explanations()
+    except Exception:
+        _noaa_rows = []
+    if _noaa_rows:
+        # Do not duplicate entries across reruns; keep minimal payload
+        meta_rows.extend(_noaa_rows)
+
     ai_section = st.container()
     _render_gpt_high_interpretation(
         ai_section,
@@ -5241,6 +5250,22 @@ def main() -> None:
                         line_title=f"{bundle.spec.title} trends",
                         y_label=y_label or "Value",
                     )
+            # Show concise scientific interpretation for the selected metric
+            try:
+                if selected_dataset and selected_value_column:
+                    info = explain_noaa_metric(selected_dataset, selected_value_column)
+                    if info:
+                        with st.expander("What this metric means (science-based)", expanded=True):
+                            st.markdown(
+                                f"**{info.get('title','')}**  \n"
+                                f"- **What it measures**: {info.get('what','')}  \n"
+                                f"- **Why it matters for space weather**: {info.get('why','')}  \n"
+                                f"- **What studies suggest for physiology/HRV**: {info.get('physiology','')}  \n"
+                                f"- **Most probable HRV relationship**: {info.get('likely_effect','')}  \n"
+                                f"- **Key references**: {info.get('refs','')}"
+                            )
+            except Exception:
+                pass
             st.divider()
             st.markdown("##### HRV correlation analysis")
             if windowed_df.empty:
@@ -5521,6 +5546,46 @@ def main() -> None:
                 value=(enable_ml and not ml_summary_df.empty),
                 disabled=ml_summary_df.empty,
             )
+            # Compose NOAA notes block for export (explanations + top correlations if available)
+            noaa_notes_lines: List[str] = []
+            try:
+                exp_rows = get_noaa_metric_explanations()
+            except Exception:
+                exp_rows = []
+            if exp_rows:
+                noaa_notes_lines.append("### NOAA metric explanations (concise)")
+                for row in exp_rows:
+                    title = row.get("title") or f"{row.get('dataset')}.{row.get('value_column')}"
+                    noaa_notes_lines.append(
+                        f"- **{title}** — {row.get('what','')}. "
+                        f"Why it matters: {row.get('why','')}. "
+                        f"Physiology: {row.get('physiology','')}. "
+                        f"Likely HRV: {row.get('likely_effect','')} "
+                        f"(Refs: {row.get('references','')})."
+                    )
+            # Add top batch correlations if computed
+            global_corr_df = st.session_state.get("noaa_space_state", {}).get("global_corr", pd.DataFrame())
+            label_lookup: Dict[Tuple[str, str], str] = st.session_state.get("noaa_space_state", {}).get(
+                "global_corr_labels", {}
+            )
+            if isinstance(global_corr_df, pd.DataFrame) and not global_corr_df.empty:
+                top = global_corr_df.copy()
+                top["abs_r"] = top["pearson_r"].abs()
+                top = top.sort_values("abs_r", ascending=False).head(10)
+                noaa_notes_lines.append("### Top NOAA↔HRV correlations (session)")
+                for row in top.itertuples():
+                    label = label_lookup.get(
+                        (row.predictor_key, row.value_column),
+                        row.value_column.replace("_", " ").title(),
+                    )
+                    noaa_notes_lines.append(
+                        f"- {row.metric} vs {row.predictor_title} — {label}: "
+                        f"r={row.pearson_r:.3f}, p={row.p_value if np.isfinite(row.p_value) else 'n/a'}, "
+                        f"CI95% [{row.ci_low:.3f}, {row.ci_high:.3f}], lag {int(row.lag_hours)} h (n={int(row.n)})."
+                    )
+            notes_text = notes_input
+            if noaa_notes_lines:
+                notes_text = (notes_text + "\n\n" if notes_text.strip() else "") + "\n".join(noaa_notes_lines)
             available_sources: List[str] = []
             if ordered_sources:
                 available_sources = ordered_sources
@@ -5560,7 +5625,7 @@ def main() -> None:
                     ml_summary_df=ml_summary_df if include_ml_opt else None,
                     config=export_config,
                     selected_sources=selected_sources,
-                    additional_notes=notes_input,
+                    additional_notes=notes_text,
                 )
             except ValueError as exc:
                 logger.warning(
