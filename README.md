@@ -13,6 +13,32 @@ This application extends the HRV analysis with a Space Weather tab that fetches 
 - SpaceWeatherLive CACTus CME ingestion (direct scrape + OpenAI fallback) covering counts, velocity statistics, angular width, halo rate, and SIDC Ursigram commentary.
 - Interactive feature-matrix builder that aligns HRV metrics with DONKI and SpaceWeatherLive predictors, includes correlation/ranking utilities, and offers an experimental linear response model with downloadable coefficients.
 
+## NOAA Space Tab Build Plan
+1. **Dataset audit and ingestion**
+   - Catalogue priority NOAA feeds from `docs/NOAA json.md` and define fetch cadence, caching, and schema normalization.
+   - Implement typed ingestion helpers with bounded retries/timeout (≤10s) and deterministic caching in `app/data_cache/space_weather/`.
+   - Add validation tests to guarantee units, timestamp alignment (UTC), and numeric ranges before the UI consumes each feed.
+2. **Backend correlation scaffolding**
+   - Extend the data model to expose harmonized time-series frames for each NOAA metric (e.g., F10.7, Kp, solar wind) with metadata describing sampling cadence and physical meaning.
+   - Build reusable correlation pipelines that pair each NOAA metric with HRV windows, compute Pearson/Spearman correlations, p-values, 95% CIs, and directionality flags, and persist the summary for UI rendering.
+   - Introduce strict typing and unit tests (pytest + Hypothesis) covering lag handling, missing-data imputation, and edge-case sample sizes.
+3. **ECharts visualization layer**
+   - Design gauge components mirroring the existing HRV style (double-ring gauge, responsive layout) for headline NOAA metrics; add secondary sparkline/context charts as needed.
+   - Create comparison dashboards (dual-axis or multi-series) that highlight anomalies, threshold breaches, and rolling statistics suitable for scientific reporting.
+   - Integrate tooltips, legends, and color semantics consistent with the Space Weather tab to ensure interpretability.
+4. **Streamlit NOAA Space tab**
+   - Add a dedicated tab/section that surfaces each NOAA metric with its gauge + contextual chart, followed immediately by the correlated HRV test results (test name, statistic, p-value, CI95%, directionality).
+   - Provide controls for history window, lag selection, and cohort filters to let researchers explore HRV relationships dynamically.
+   - Ensure accessibility (contrast, font sizes), responsive layout, and loading states/spinners for long-running fetches.
+5. **Correlation narratives and export**
+   - Generate below-chart summaries that interpret correlation direction/strength and note statistical significance thresholds.
+   - Offer export (CSV/JSON) of correlation tables and chart imagery for publications.
+   - Document methodology in `Docs/Manual.md`, referencing NOAA data sources and correlation assumptions.
+6. **Quality assurance**
+   - Run end-to-end validation: data fetch mocks, caching behavior, chart rendering, correlation accuracy, and Streamlit interaction tests.
+   - Verify linting (Ruff), typing (mypy strict), security (Bandit), formatting (Black/isort), and reproducibility (requirements lockfile updates if dependencies change).
+   - Capture before/after screenshots for the scientific dashboard review and note integration steps in `CHANGELOG.md`.
+
 ## Quick Start
 ```bash
 pip install -r requirements.txt
