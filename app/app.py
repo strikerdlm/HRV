@@ -5247,6 +5247,8 @@ def main() -> None:
                         and "ninety_day_mean" in overlay_candidates
                     ):
                         default_overlays = ["ninety_day_mean"]
+                elif overlay_candidates:
+                    default_overlays = overlay_candidates[: min(4, len(overlay_candidates))]
                     overlay_selection = st.multiselect(
                         "Additional overlays",
                         options=overlay_candidates,
@@ -6420,6 +6422,41 @@ for column in _SOLAR_PROB_COLUMNS:
                 (20.0, "#22c55e"),
                 (50.0, "#f97316"),
                 (80.0, "#ef4444"),
+            ],
+        },
+    )
+
+for column in ("afred_1_day", "afred_2_day", "afred_3_day"):
+    NOAA_GAUGE_PRESETS.setdefault(
+        ("predicted_fredericksburg", column),
+        {
+            "min": 0.0,
+            "max": 100.0,
+            "thresholds": [
+                (30.0, "#22c55e"),
+                (50.0, "#f97316"),
+                (70.0, "#ef4444"),
+            ],
+        },
+    )
+
+for column in (
+    "ssn_predicted",
+    "ssn_high",
+    "ssn_low",
+    "flux_predicted",
+    "flux_high",
+    "flux_low",
+):
+    NOAA_GAUGE_PRESETS.setdefault(
+        ("predicted_monthly_ssn", column),
+        {
+            "min": 0.0,
+            "max": 350.0 if column.startswith("ssn") else 260.0,
+            "thresholds": [
+                (100.0 if column.startswith("ssn") else 90.0, "#22c55e"),
+                (200.0 if column.startswith("ssn") else 130.0, "#f97316"),
+                (300.0 if column.startswith("ssn") else 180.0, "#ef4444"),
             ],
         },
     )
