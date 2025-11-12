@@ -6440,6 +6440,8 @@ def _render_noaa_metric_panel(
     panel_df = panel_df.sort_values(time_col)
     panel_df[value_column] = pd.to_numeric(panel_df[value_column], errors="coerce")
     panel_df = panel_df.dropna(subset=[value_column])
+    # Round series to one decimal for NOAA plots
+    panel_df[value_column] = panel_df[value_column].astype(float).round(1)
     if panel_df.empty:
         st.info(f"No numeric samples available for `{value_column}` in the selected window.")
         return
@@ -6450,7 +6452,8 @@ def _render_noaa_metric_panel(
     latest_value = float(values[-1])
     latest_time = panel_df[time_col].iloc[-1]
     max_abs = max(abs(min_val), abs(max_val), abs(latest_value))
-    precision = _infer_precision(max_abs)
+    # NOAA request: single-decimal display across plots
+    precision = 1
     unit = bundle.units.get(value_column) if bundle.units else None
     friendly_label = bundle.split_labels.get(
         value_column, value_column.replace("_", " ").title()
@@ -6496,7 +6499,8 @@ def _render_noaa_metric_panel(
         overlay_df = overlay_df.dropna(subset=[column]).sort_values(time_col)
         if overlay_df.empty:
             continue
-        overlay_series = overlay_df.set_index(time_col)[column].astype(float)
+        # Round overlay to one decimal as well
+        overlay_series = overlay_df.set_index(time_col)[column].astype(float).round(1)
         if overlay_series.shape[0] > 1500:
             overlay_series = overlay_series.iloc[-1500:]
         series_map[_format_noaa_series_label(bundle, column)] = overlay_series
@@ -6542,7 +6546,7 @@ def _render_noaa_multifrequency_panel(
         return
     series_map: Dict[str, pd.Series] = {}
     for freq in sorted(pivot.columns):
-        series = pivot[freq].dropna()
+        series = pivot[freq].dropna().astype(float).round(1)
         if series.empty:
             continue
         if series.shape[0] > 1500:
