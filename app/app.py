@@ -5486,9 +5486,13 @@ def main() -> None:
                         (row.predictor_key, row.value_column),
                         row.value_column.replace("_", " ").title(),
                     )
-                    summary_lines.append(
-                        f\"- **{row.metric}** vs {row.predictor_title} — {predictor_label}: r = {row.pearson_r:.3f}, {_format_p_value(row.p_value)}, {_format_ci_text(row.ci_low, row.ci_high)}, lag {int(row.lag_hours)} h (n = {int(row.n)}).\"  # noqa: E501
+                    msg = (
+                        f"- **{row.metric}** vs {row.predictor_title} — {predictor_label}: "
+                        f"r = {row.pearson_r:.3f}, {_format_p_value(row.p_value)}, "
+                        f"{_format_ci_text(row.ci_low, row.ci_high)}, lag {int(row.lag_hours)} h "
+                        f"(n = {int(row.n)})."
                     )
+                    summary_lines.append(msg)
                 if summary_lines:
                     st.markdown("\n".join(summary_lines))
 
