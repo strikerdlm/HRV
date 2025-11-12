@@ -5546,6 +5546,31 @@ def main() -> None:
                 value=(enable_ml and not ml_summary_df.empty),
                 disabled=ml_summary_df.empty,
             )
+            available_sources: List[str] = []
+            if ordered_sources:
+                available_sources = ordered_sources
+            elif meta_rows:
+                meta_sources = {
+                    str(row.get("source", row.get("name", "")))
+                    for row in meta_rows
+                    if row.get("source") or row.get("name")
+                }
+                available_sources = sorted(
+                    [src for src in meta_sources if src])
+            elif not multi_results_df.empty and "source" in multi_results_df.columns:
+                available_sources = sorted(
+                    multi_results_df["source"].astype(str).unique().tolist()
+                )
+            selected_sources = st.multiselect(
+                "Datasets to include",
+                options=available_sources,
+                default=available_sources,
+            )
+            notes_input = st.text_area(
+                "Additional notes (optional)",
+                placeholder="Add protocol notes, observations, or follow-up actions.",
+                height=120,
+            )
             # Compose NOAA notes block for export (explanations + top correlations if available)
             noaa_notes_lines: List[str] = []
             try:
@@ -5586,31 +5611,6 @@ def main() -> None:
             notes_text = notes_input
             if noaa_notes_lines:
                 notes_text = (notes_text + "\n\n" if notes_text.strip() else "") + "\n".join(noaa_notes_lines)
-            available_sources: List[str] = []
-            if ordered_sources:
-                available_sources = ordered_sources
-            elif meta_rows:
-                meta_sources = {
-                    str(row.get("source", row.get("name", "")))
-                    for row in meta_rows
-                    if row.get("source") or row.get("name")
-                }
-                available_sources = sorted(
-                    [src for src in meta_sources if src])
-            elif not multi_results_df.empty and "source" in multi_results_df.columns:
-                available_sources = sorted(
-                    multi_results_df["source"].astype(str).unique().tolist()
-                )
-            selected_sources = st.multiselect(
-                "Datasets to include",
-                options=available_sources,
-                default=available_sources,
-            )
-            notes_input = st.text_area(
-                "Additional notes (optional)",
-                placeholder="Add protocol notes, observations, or follow-up actions.",
-                height=120,
-            )
             export_config = ExportConfiguration(
                 scope=scope_choice,
                 include_windowed=include_windowed_opt,
