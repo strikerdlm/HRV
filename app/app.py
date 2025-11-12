@@ -5166,10 +5166,12 @@ def main() -> None:
             )
             history_df = _prepare_noaa_history(bundle, int(history_hours))
             selected_value_column: Optional[str] = None
+            current_label_map: Dict[str, str] = {}
             if bundle.spec.key == "solar_radio_multifrequency":
                 _render_noaa_multifrequency_panel(bundle, history_df)
                 if "flux_sfu" in history_df.columns:
                     selected_value_column = "flux_sfu"
+                    current_label_map = {"flux_sfu": "Flux (sfu)"}
             else:
                 value_columns = list(bundle.value_columns)
                 if not value_columns:
@@ -5185,13 +5187,21 @@ def main() -> None:
                     default_index = 0
                     if bundle.spec.key == "f107_flux" and "flux" in value_columns:
                         default_index = value_columns.index("flux")
+                    label_map = {
+                        col: bundle.split_labels.get(
+                            col, col.replace("_", " ").title()
+                        )
+                        for col in value_columns
+                    }
                     value_column = st.selectbox(
                         "Primary metric",
                         options=value_columns,
                         index=default_index,
+                        format_func=lambda col: label_map.get(col, col),
                         key=f"noaa_value_column_{selected_dataset}",
                     )
                     selected_value_column = value_column
+                    current_label_map = label_map
                     overlay_candidates = [
                         col for col in value_columns if col != value_column
                     ]
@@ -5205,6 +5215,7 @@ def main() -> None:
                         "Additional overlays",
                         options=overlay_candidates,
                         default=default_overlays,
+                        format_func=lambda col: label_map.get(col, col),
                         key=f"noaa_overlay_{selected_dataset}",
                     )
                     y_label = bundle.units.get(value_column) if bundle.units else None
@@ -5314,6 +5325,7 @@ def main() -> None:
                             corr_df,
                             selected_dataset,
                             selected_value_column,
+                            label_map=current_label_map,
                         )
 
     with tab_export:
@@ -6031,6 +6043,18 @@ NOAA_GAUGE_PRESETS: Dict[Tuple[str, str], Dict[str, Any]] = {
         ],
     },
     (
+        "geospace_dst",
+        "dst",
+    ): {
+        "min": -250.0,
+        "max": 50.0,
+        "thresholds": [
+            (-100.0, "#22c55e"),
+            (-150.0, "#f97316"),
+            (-200.0, "#ef4444"),
+        ],
+    },
+    (
         "solar_wind_wind",
         "proton_speed",
     ): {
@@ -6116,12 +6140,18 @@ def _resolve_noaa_gauge_config(
     return min_val, max_val, thresholds
 
 
-def _format_noaa_series_label(value_column: str, unit: Optional[str]) -> str:
+def _format_noaa_series_label(
+    bundle: NOAADataBundle,
+    value_column: str,
+) -> str:
     """
     Construct a readable label for NOAA time-series lines.
     """
 
-    base = value_column.replace("_", " ").title()
+    base = bundle.split_labels.get(
+        value_column, value_column.replace("_", " ").title()
+    )
+    unit = bundle.units.get(value_column)
     return f"{base} ({unit})" if unit else base
 
 
@@ -6177,7 +6207,10 @@ def _render_noaa_metric_panel(
     max_abs = max(abs(min_val), abs(max_val), abs(latest_value))
     precision = _infer_precision(max_abs)
     unit = bundle.units.get(value_column) if bundle.units else None
-    gauge_title = f"{bundle.spec.title} — {value_column.replace('_', ' ').title()}"
+    friendly_label = bundle.split_labels.get(
+        value_column, value_column.replace("_", " ").title()
+    )
+    gauge_title = f"{bundle.spec.title} — {friendly_label}"
     col_gauge, col_chart = st.columns([1, 2])
     with col_gauge:
         _echarts_gauge(
@@ -6209,7 +6242,7 @@ def _render_noaa_metric_panel(
     core_series = panel_df.set_index(time_col)[value_column].astype(float)
     if core_series.shape[0] > 1500:
         core_series = core_series.iloc[-1500:]
-    series_map[_format_noaa_series_label(value_column, unit)] = core_series
+    series_map[_format_noaa_series_label(bundle, value_column)] = core_series
     for column in overlay_columns:
         if column == value_column or column not in df.columns:
             continue
@@ -6221,8 +6254,7 @@ def _render_noaa_metric_panel(
         overlay_series = overlay_df.set_index(time_col)[column].astype(float)
         if overlay_series.shape[0] > 1500:
             overlay_series = overlay_series.iloc[-1500:]
-        overlay_unit = bundle.units.get(column) if bundle.units else None
-        series_map[_format_noaa_series_label(column, overlay_unit)] = overlay_series
+        series_map[_format_noaa_series_label(bundle, column)] = overlay_series
     with col_chart:
         if not series_map:
             st.info("No time-series data available for plotting.")
@@ -6327,6 +6359,8 @@ def _render_noaa_correlation_summary(
     corr_df: Optional[pd.DataFrame],
     dataset_key: str,
     value_column: str,
+    *,
+    label_map: Optional[Mapping[str, str]] = None,
 ) -> None:
     """
     Display correlation summaries for a NOAA dataset/value column pair.
@@ -6346,6 +6380,10 @@ def _render_noaa_correlation_summary(
         "abs_r", ascending=False
     )
     subset = subset.drop(columns=["abs_r"])
+    label_map = label_map or {}
+    friendly_name = label_map.get(
+        value_column, value_column.replace("_", " ").title()
+    )
     display_df = subset[
         [
             "test_name",
@@ -6366,6 +6404,7 @@ def _render_noaa_correlation_summary(
             "ci_high": "ci95_high",
         }
     )
+    display_df.insert(0, "predictor", friendly_name)
     formatted = display_df.copy()
     formatted["test_result"] = formatted["test_result"].apply(
         lambda v: _format_with_precision(float(v), 3)
@@ -6398,7 +6437,7 @@ def _render_noaa_correlation_summary(
         else:
             r_text = "r undefined"
         commentary_lines.append(
-            f"- **{metric}** ({test_name}) shows a {direction} association at lag {lag} h: "
+            f"- **{metric}** ({test_name}, {friendly_name}) shows a {direction} association at lag {lag} h: "
             f"{r_text}, {_format_p_value(p_val)}, {_format_ci_text(ci_low, ci_high)}, n = {sample_n}."
         )
     st.markdown("\n".join(commentary_lines))
