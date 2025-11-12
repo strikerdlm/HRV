@@ -22,9 +22,9 @@ from hrv_core import (
 from ml_enhancements import run_windowed_kmeans
 from export_utils import ExportConfiguration, ExportScope, build_markdown_report
 from echarts_component import EChartsConfig, render_echarts
-from noaa_space import load_noaa_space_data
+from noaa_space import NOAADataBundle, load_noaa_space_data
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from datetime import timezone
 from typing import (
     Any,
@@ -2432,6 +2432,246 @@ def _pearson_r_p(x: np.ndarray, y: np.ndarray) -> Tuple[float, float, int]:
     # Fallback: only r, approximate p as NaN
     r = float(np.corrcoef(xv, yv)[0, 1])
     return r, float("nan"), n
+
+
+FISHER_Z_CRIT = 1.959963984540054
+
+
+@dataclass(frozen=True, slots=True)
+class NOAACorrelationSummary:
+    """
+    Summary statistics for a NOAA predictor ↔ HRV metric correlation.
+
+    Attributes
+    ----------
+    predictor_key :
+        Identifier of the NOAA dataset (e.g., 'solar_wind_wind').
+    predictor_title :
+        Human-readable dataset title.
+    value_column :
+        Predictor column used in the correlation.
+    unit :
+        Unit string for the predictor value (if available).
+    metric :
+        HRV metric column name.
+    lag_hours :
+        Lag applied to the predictor prior to merging (hours).
+    pearson_r :
+        Pearson correlation coefficient.
+    p_value :
+        Two-tailed p-value associated with the correlation.
+    ci_low :
+        Lower bound of the 95% confidence interval for r.
+    ci_high :
+        Upper bound of the 95% confidence interval for r.
+    n :
+        Sample count contributing to the correlation.
+    direction :
+        Qualitative direction ('positive', 'negative', 'neutral', or 'insufficient').
+    test_name :
+        Name of the statistical test. Defaults to 'Pearson r'.
+    """
+
+    predictor_key: str
+    predictor_title: str
+    value_column: str
+    unit: Optional[str]
+    metric: str
+    lag_hours: int
+    pearson_r: float
+    p_value: float
+    ci_low: float
+    ci_high: float
+    n: int
+    direction: str
+    test_name: str = "Pearson r"
+
+
+def _pearson_ci95(r: float, n: int) -> Tuple[float, float]:
+    """
+    Compute the 95% confidence interval for a Pearson correlation coefficient.
+    """
+
+    if not np.isfinite(r) or n < 4:
+        return float("nan"), float("nan")
+    r_clamped = float(np.clip(r, -0.999999, 0.999999))
+    z_score = float(np.arctanh(r_clamped))
+    se = 1.0 / float(np.sqrt(max(n - 3, 1)))
+    delta = FISHER_Z_CRIT * se
+    low = float(np.tanh(z_score - delta))
+    high = float(np.tanh(z_score + delta))
+    if low > high:
+        low, high = high, low
+    return low, high
+
+
+def _correlation_direction(r: float, n: int) -> str:
+    """
+    Determine qualitative directionality for a Pearson correlation.
+    """
+
+    if not np.isfinite(r) or n < 3:
+        return "insufficient"
+    if abs(r) < 1e-9:
+        return "neutral"
+    return "positive" if r > 0 else "negative"
+
+
+def _compute_noaa_correlations(
+    windowed_df: pd.DataFrame,
+    bundle: NOAADataBundle,
+    metrics: Sequence[str],
+    lags_hours: Sequence[int],
+    *,
+    merge_tolerance_minutes: int = 90,
+) -> List[NOAACorrelationSummary]:
+    """
+    Compute Pearson correlations between HRV metrics and a NOAA predictor bundle.
+    """
+
+    if merge_tolerance_minutes <= 0:
+        raise ValueError("merge_tolerance_minutes must be positive.")
+    if windowed_df.empty or not metrics:
+        return []
+    if not bundle.value_columns:
+        return []
+    if "start" not in windowed_df.columns:
+        return []
+
+    hrv = windowed_df.copy()
+    hrv["start"] = pd.to_datetime(hrv["start"], errors="coerce", utc=True)
+    hrv = hrv.dropna(subset=["start"]).sort_values("start")
+    if hrv.empty:
+        return []
+
+    metric_columns = [
+        col
+        for col in metrics
+        if col in hrv.columns and pd.api.types.is_numeric_dtype(hrv[col])
+    ]
+    if not metric_columns:
+        return []
+
+    tolerance = pd.Timedelta(minutes=int(merge_tolerance_minutes))
+    lag_values = list(lags_hours) if lags_hours else [0]
+    results: List[NOAACorrelationSummary] = []
+
+    for value_column in bundle.value_columns:
+        if value_column not in bundle.frame.columns:
+            continue
+        predictor = bundle.frame[[bundle.time_column, value_column]].copy()
+        predictor[bundle.time_column] = pd.to_datetime(
+            predictor[bundle.time_column], errors="coerce", utc=True
+        )
+        predictor[value_column] = pd.to_numeric(
+            predictor[value_column], errors="coerce"
+        )
+        predictor = predictor.dropna(subset=[bundle.time_column, value_column])
+        predictor = predictor.sort_values(bundle.time_column)
+        if predictor.empty:
+            continue
+
+        for lag in lag_values:
+            lag_int = int(lag)
+            shifted = predictor.copy()
+            shifted[bundle.time_column] = shifted[bundle.time_column] + pd.to_timedelta(
+                lag_int, unit="h"
+            )
+            merged = pd.merge_asof(
+                hrv.sort_values("start"),
+                shifted[[bundle.time_column, value_column]].sort_values(
+                    bundle.time_column
+                ),
+                left_on="start",
+                right_on=bundle.time_column,
+                direction="nearest",
+                tolerance=tolerance,
+            )
+            merged = merged.dropna(subset=[value_column])
+            if merged.empty:
+                continue
+
+            corr_df = _corr_table(merged, value_column, list(metric_columns))
+            if corr_df.empty:
+                continue
+
+            unit = bundle.units.get(value_column) if bundle.units else None
+            for row in corr_df.to_dict(orient="records"):
+                r = float(row.get("pearson_r", float("nan")))
+                p = float(row.get("p_value", float("nan")))
+                n = int(row.get("n", 0))
+                ci_low, ci_high = _pearson_ci95(r, n)
+                results.append(
+                    NOAACorrelationSummary(
+                        predictor_key=bundle.spec.key,
+                        predictor_title=bundle.spec.title,
+                        value_column=value_column,
+                        unit=unit,
+                        metric=str(row.get("metric", "")),
+                        lag_hours=lag_int,
+                        pearson_r=r,
+                        p_value=p,
+                        ci_low=ci_low,
+                        ci_high=ci_high,
+                        n=n,
+                        direction=_correlation_direction(r, n),
+                    )
+                )
+    return results
+
+
+def _noaa_correlations_to_frame(
+    results: Sequence[NOAACorrelationSummary],
+) -> pd.DataFrame:
+    """
+    Convert NOAA correlation summaries into a DataFrame for downstream use.
+    """
+
+    if not results:
+        return pd.DataFrame(
+            columns=[
+                "predictor_key",
+                "predictor_title",
+                "value_column",
+                "unit",
+                "metric",
+                "lag_hours",
+                "pearson_r",
+                "p_value",
+                "ci_low",
+                "ci_high",
+                "n",
+                "direction",
+                "test_name",
+            ]
+        )
+    return pd.DataFrame([asdict(item) for item in results])
+
+
+def _build_noaa_correlations(
+    windowed_df: pd.DataFrame,
+    bundles: Mapping[str, NOAADataBundle],
+    metrics: Sequence[str],
+    lags_hours: Sequence[int],
+    *,
+    merge_tolerance_minutes: int = 90,
+) -> pd.DataFrame:
+    """
+    Compute correlations for multiple NOAA bundles and aggregate the results.
+    """
+
+    summaries: List[NOAACorrelationSummary] = []
+    for bundle in bundles.values():
+        summaries.extend(
+            _compute_noaa_correlations(
+                windowed_df,
+                bundle,
+                metrics,
+                lags_hours,
+                merge_tolerance_minutes=merge_tolerance_minutes,
+            )
+        )
+    return _noaa_correlations_to_frame(summaries)
 
 
 def _corr_table(
