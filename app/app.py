@@ -3402,15 +3402,13 @@ def main() -> None:
         _noaa_rows = get_noaa_metric_explanations()
     except Exception:
         _noaa_rows = []
-    if _noaa_rows:
-        # Do not duplicate entries across reruns; keep minimal payload
-        meta_rows.extend(_noaa_rows)
+    meta_rows_for_context = meta_rows + _noaa_rows if _noaa_rows else meta_rows
 
     ai_section = st.container()
     _render_gpt_high_interpretation(
         ai_section,
         enabled=gpt_high_enabled,
-        meta_rows=meta_rows,
+        meta_rows=meta_rows_for_context,
         multi_results_df=multi_results_df,
         windowed_df=windowed_df,
         episodes_df=episodes_df,
@@ -5178,13 +5176,28 @@ def main() -> None:
             if bundle.spec.description:
                 st.caption(bundle.spec.description)
             cadence_minutes = bundle.spec.cadence_minutes or 60
-            default_history = 72 if cadence_minutes <= 60 else 336
+            if cadence_minutes <= 60:
+                min_hours = 6
+                max_hours = 720
+                step_hours = 6
+                default_hours = 72
+            elif cadence_minutes <= 1440:
+                min_hours = 24
+                max_hours = 24 * 365 * 2  # up to two years
+                step_hours = 24
+                default_hours = 24 * 90
+            else:
+                min_hours = 24 * 30
+                max_hours = min(24 * 30 * 60, 24 * 365 * 30)  # up to ~30 years
+                step_hours = 24 * 30
+                default_hours = 24 * 30 * 12
+            default_hours = int(np.clip(default_hours, min_hours, max_hours))
             history_hours = st.slider(
                 "History window (hours)",
-                min_value=6,
-                max_value=720,
-                value=int(default_history),
-                step=6,
+                min_value=int(min_hours),
+                max_value=int(max_hours),
+                value=int(default_hours),
+                step=int(step_hours),
                 key=f"noaa_history_{selected_dataset}",
             )
             history_df = _prepare_noaa_history(bundle, int(history_hours))
@@ -6313,6 +6326,104 @@ NOAA_GAUGE_PRESETS: Dict[Tuple[str, str], Dict[str, Any]] = {
     },
 }
 
+for column in ("k_index",):
+    NOAA_GAUGE_PRESETS.setdefault(
+        ("boulder_k_1m", column),
+        {
+            "min": 0.0,
+            "max": 9.0,
+            "thresholds": [
+                (3.0, "#22c55e"),
+                (5.0, "#f97316"),
+                (7.0, "#ef4444"),
+            ],
+        },
+    )
+
+for key in ("f107_smoothed",):
+    for column in ("f10.7", "smoothed_f10.7"):
+        NOAA_GAUGE_PRESETS.setdefault(
+            (key, column),
+            {
+                "min": 60.0,
+                "max": 260.0,
+                "thresholds": [
+                    (90.0, "#22c55e"),
+                    (130.0, "#facc15"),
+                    (180.0, "#ef4444"),
+                ],
+            },
+        )
+
+for column in ("tencmfcst_1_day", "tencmfcst_2_day", "tencmfcst_3_day"):
+    NOAA_GAUGE_PRESETS.setdefault(
+        ("predicted_f107", column),
+        {
+            "min": 60.0,
+            "max": 260.0,
+            "thresholds": [
+                (90.0, "#22c55e"),
+                (130.0, "#facc15"),
+                (180.0, "#ef4444"),
+            ],
+        },
+    )
+
+NOAA_GAUGE_PRESETS.setdefault(
+    ("geospace_dst_7d", "dst"),
+    {
+        "min": -250.0,
+        "max": 50.0,
+        "thresholds": [
+            (-100.0, "#22c55e"),
+            (-150.0, "#f97316"),
+            (-200.0, "#ef4444"),
+        ],
+    },
+)
+
+NOAA_GAUGE_PRESETS.setdefault(
+    ("sunspots_monthly", "ssn"),
+    {
+        "min": 0.0,
+        "max": 350.0,
+        "thresholds": [
+            (100.0, "#22c55e"),
+            (200.0, "#f97316"),
+            (300.0, "#ef4444"),
+        ],
+    },
+)
+
+_SOLAR_PROB_COLUMNS = [
+    "c_class_1_day",
+    "c_class_2_day",
+    "c_class_3_day",
+    "m_class_1_day",
+    "m_class_2_day",
+    "m_class_3_day",
+    "x_class_1_day",
+    "x_class_2_day",
+    "x_class_3_day",
+    "10mev_protons_1_day",
+    "10mev_protons_2_day",
+    "10mev_protons_3_day",
+]
+
+for column in _SOLAR_PROB_COLUMNS:
+    NOAA_GAUGE_PRESETS.setdefault(
+        ("solar_probabilities", column),
+        {
+            "min": 0.0,
+            "max": 100.0,
+            "thresholds": [
+                (20.0, "#22c55e"),
+                (50.0, "#f97316"),
+                (80.0, "#ef4444"),
+            ],
+        },
+    )
+
 
 def _infer_precision(max_abs_value: float) -> int:
     """
@@ -6700,8 +6811,17 @@ def _echarts_multi_time_series(
     y_name: str,
     height_px: int = 320,
 ) -> None:
+    palette = [
+        "#38bdf8",
+        "#f97316",
+        "#22c55e",
+        "#a855f7",
+        "#e11d48",
+        "#facc15",
+        "#6366f1",
+    ]
     series: List[Dict[str, Any]] = []
-    for name, series_data in series_map.items():
+    for idx, (name, series_data) in enumerate(series_map.items()):
         if series_data.empty:
             continue
         points = [
@@ -6717,15 +6837,25 @@ def _echarts_multi_time_series(
                 "type": "line",
                 "showSymbol": False,
                 "smooth": True,
+                "lineStyle": {"width": 3 if idx == 0 else 2},
+                "areaStyle": {"opacity": 0.14} if idx == 0 else None,
                 "data": points,
             }
         )
     if not series:
         st.info(f"{title}: no data to display.")
         return
+    # Clean up None values for series options
+    for item in series:
+        if item.get("areaStyle") is None:
+            item.pop("areaStyle", None)
     opt = {
         "title": {"text": title, "left": "center"},
-        "tooltip": {"trigger": "axis"},
+        "color": palette,
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "cross"},
+        },
         "legend": {"top": 24},
         "grid": {
             "left": 36,

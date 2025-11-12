@@ -11,6 +11,7 @@ import numpy as np
 import pandas as pd
 import requests
 import re
+from pandas.api.types import is_datetime64_any_dtype
 
 SWPC_BASE_URL = "https://services.swpc.noaa.gov/json/"
 REQUEST_TIMEOUT = 10.0
@@ -196,6 +197,98 @@ NOAA_SOURCES: Dict[str, NOAASourceSpec] = {
         units={"dst": "nT"},
         cadence_minutes=60,
     ),
+    "geospace_dst_7d": NOAASourceSpec(
+        key="geospace_dst_7d",
+        path="geospace/geospace_dst_7_day.json",
+        title="Geomagnetic Dst (7 d)",
+        description="Seven-day history/forecast of the Dst index.",
+        value_columns=("dst",),
+        units={"dst": "nT"},
+        cadence_minutes=60,
+    ),
+    "boulder_k_1m": NOAASourceSpec(
+        key="boulder_k_1m",
+        path="boulder_k_index_1m.json",
+        title="Boulder K index (1 min)",
+        description="Local geomagnetic K index recorded at Boulder, Colorado (1-minute cadence).",
+        value_columns=("k_index",),
+        units={"k_index": "K"},
+        cadence_minutes=1,
+    ),
+    "sunspots_monthly": NOAASourceSpec(
+        key="sunspots_monthly",
+        path="solar-cycle/sunspots.json",
+        title="Sunspot number (monthly)",
+        description="Observed monthly sunspot numbers across the historical record.",
+        value_columns=("ssn",),
+        preferred_time_columns=("time-tag", "time_tag"),
+        units={"ssn": "sunspot number"},
+        cadence_minutes=43200,
+    ),
+    "f107_smoothed": NOAASourceSpec(
+        key="f107_smoothed",
+        path="solar-cycle/f10-7cm-flux-smoothed.json",
+        title="F10.7 cm flux (monthly)",
+        description="Monthly 10.7 cm solar radio flux with smoothed series.",
+        value_columns=("f10.7", "smoothed_f10.7"),
+        preferred_time_columns=("time-tag", "time_tag"),
+        units={"f10.7": "sfu", "smoothed_f10.7": "sfu"},
+        cadence_minutes=43200,
+    ),
+    "predicted_f107": NOAASourceSpec(
+        key="predicted_f107",
+        path="predicted_f107cm_flux.json",
+        title="Predicted F10.7 flux",
+        description="Three-day NOAA forecast of the 10.7 cm solar radio flux.",
+        value_columns=("tencmfcst_1_day", "tencmfcst_2_day", "tencmfcst_3_day"),
+        preferred_time_columns=("date", "time-tag", "time_tag"),
+        units={
+            "tencmfcst_1_day": "sfu",
+            "tencmfcst_2_day": "sfu",
+            "tencmfcst_3_day": "sfu",
+        },
+        cadence_minutes=1440,
+    ),
+    "solar_probabilities": NOAASourceSpec(
+        key="solar_probabilities",
+        path="solar_probabilities.json",
+        title="Solar flare & proton probabilities",
+        description="Probabilistic NOAA forecast of flare classes and proton events (1–3 day outlook).",
+        value_columns=(
+            "c_class_1_day",
+            "c_class_2_day",
+            "c_class_3_day",
+            "m_class_1_day",
+            "m_class_2_day",
+            "m_class_3_day",
+            "x_class_1_day",
+            "x_class_2_day",
+            "x_class_3_day",
+            "10mev_protons_1_day",
+            "10mev_protons_2_day",
+            "10mev_protons_3_day",
+        ),
+        metadata_columns=("polar_cap_absorption",),
+        units={col: "%" for col in (
+            "c_class_1_day",
+            "c_class_2_day",
+            "c_class_3_day",
+            "m_class_1_day",
+            "m_class_2_day",
+            "m_class_3_day",
+            "x_class_1_day",
+            "x_class_2_day",
+            "x_class_3_day",
+            "10mev_protons_1_day",
+            "10mev_protons_2_day",
+            "10mev_protons_3_day",
+        )},
+        cadence_minutes=1440,
+    ),
+}
+
+_NEGATIVE_TO_NAN: Dict[Tuple[str, str], float] = {
+    ("f107_smoothed", "smoothed_f10.7"): 0.0,
 }
 
 
@@ -280,7 +373,7 @@ def _detect_time_column(df: pd.DataFrame, candidates: Sequence[str]) -> str:
         if column in df.columns:
             return column
     for column in df.columns:
-        if np.issubdtype(df[column].dtype, np.datetime64):
+        if is_datetime64_any_dtype(df[column]):
             return column
     raise ValueError("No timestamp column detected in NOAA dataset.")
 
@@ -380,6 +473,9 @@ def _prepare_frame(spec: NOAASourceSpec, raw_df: pd.DataFrame) -> NOAADataBundle
                     )
     for column in numeric_columns:
         df[column] = pd.to_numeric(df[column], errors="coerce")
+        sentinel_threshold = _NEGATIVE_TO_NAN.get((spec.key, column))
+        if sentinel_threshold is not None:
+            df[column] = df[column].mask(df[column] < sentinel_threshold)
     return NOAADataBundle(
         spec=spec,
         frame=df.reset_index(drop=True),
@@ -502,12 +598,28 @@ _NOAA_METRIC_EXPLANATIONS: Dict[Tuple[str, str], Dict[str, str]] = {
         "likely_effect": "Negative correlation with vagal/total HRV is most probable.",
         "refs": "As Kp.",
     },
+    ("boulder_k_1m", "k_index"): {
+        "title": "Boulder K index",
+        "what": "Local geomagnetic K index recorded at Boulder, Colorado (0–9 scale).",
+        "why": "Highlights local disturbances that may differ from global Kp.",
+        "physiology": "Spatial variations of geomagnetic activity can modulate local HRV responses similarly to Kp.",
+        "likely_effect": "Most probable HRV correlation: negative (higher local K → lower HRV).",
+        "refs": "Vieira 2022; Papailiou 2023.",
+    },
     ("geospace_dst", "dst"): {
         "title": "Dst (storm-time disturbance)",
         "what": "Hourly nT index of ring current; more negative values indicate stronger geomagnetic storms.",
         "why": "Captures global storm intensity driven by magnetospheric currents.",
         "physiology": "Storm periods linked to HRV decreases and cardiovascular events in population data.",
         "likely_effect": "Most probable HRV correlation: positive with |Dst| (more negative Dst → lower HRV).",
+        "refs": "Vieira 2022; Gaisenok 2025.",
+    },
+    ("geospace_dst_7d", "dst"): {
+        "title": "Dst (7-day)",
+        "what": "Seven-day history/forecast of the Dst geomagnetic storm index.",
+        "why": "Shows storm evolution and near-term expectations.",
+        "physiology": "Same implications as hourly Dst; track multi-day storm phases versus HRV recovery.",
+        "likely_effect": "More negative Dst intervals likely align with lower HRV.",
         "refs": "Vieira 2022; Gaisenok 2025.",
     },
     # Solar wind / IMF
@@ -552,6 +664,22 @@ _NOAA_METRIC_EXPLANATIONS: Dict[Tuple[str, str], Dict[str, str]] = {
         "likely_effect": "Small positive HRV correlation is plausible (context‑dependent).",
         "refs": "Alabdulgader 2018.",
     },
+    ("f107_smoothed", "f10.7"): {
+        "title": "F10.7 flux (monthly)",
+        "what": "Monthly mean 10.7 cm solar radio flux.",
+        "why": "Background solar cycle driver for ionospheric conditions.",
+        "physiology": "Slow changes may track shifts in HRV baseline via solar-cycle modulation.",
+        "likely_effect": "Small positive HRV correlation plausible; interpret with long-term context.",
+        "refs": "Alabdulgader 2018.",
+    },
+    ("f107_smoothed", "smoothed_f10.7"): {
+        "title": "F10.7 smoothed flux",
+        "what": "Smoothed monthly 10.7 cm solar flux highlighting solar-cycle trend.",
+        "why": "Provides cleaner solar-cycle signal for long-term analysis.",
+        "physiology": "As above; use for trend-level analyses alongside HRV baselines.",
+        "likely_effect": "Small positive HRV correlation plausible.",
+        "refs": "Alabdulgader 2018.",
+    },
     ("goes_integral_protons", "flux"): {
         "title": "GOES integral proton flux",
         "what": "Particle flux above energy thresholds; used to define radiation storms (S‑scale).",
@@ -576,7 +704,55 @@ _NOAA_METRIC_EXPLANATIONS: Dict[Tuple[str, str], Dict[str, str]] = {
         "likely_effect": "Expected negative HRV correlation if predictions verify.",
         "refs": "As Kp.",
     },
+    ("predicted_f107", "tencmfcst_1_day"): {
+        "title": "F10.7 forecast (1 day)",
+        "what": "NOAA 1-day forecast of the 10.7 cm solar radio flux.",
+        "why": "Anticipates short-term solar EUV output changes.",
+        "physiology": "Use alongside Kp/Dst forecasts for expected HRV shifts.",
+        "likely_effect": "Small positive HRV correlation expected if values rise (contextual).",
+        "refs": "Operational forecast context.",
+    },
+    ("sunspots_monthly", "ssn"): {
+        "title": "Sunspot number",
+        "what": "Observed monthly international sunspot number (dimensionless).",
+        "why": "Proxy for solar magnetic activity and solar-cycle phase.",
+        "physiology": "Solar-cycle background may modulate baseline HRV over long periods (via F10.7, cosmic rays).",
+        "likely_effect": "Slow positive HRV correlation plausible with higher sunspot activity (contextual).",
+        "refs": "Alabdulgader 2018; McCraty 2017.",
+    },
 }
+
+for column in ("tencmfcst_1_day", "tencmfcst_2_day", "tencmfcst_3_day"):
+    if column != "tencmfcst_1_day":
+        _NOAA_METRIC_EXPLANATIONS[("predicted_f107", column)] = _NOAA_METRIC_EXPLANATIONS[
+            ("predicted_f107", "tencmfcst_1_day")
+        ].copy()
+
+for column in (
+    "c_class_1_day",
+    "c_class_2_day",
+    "c_class_3_day",
+    "m_class_1_day",
+    "m_class_2_day",
+    "m_class_3_day",
+    "x_class_1_day",
+    "x_class_2_day",
+    "x_class_3_day",
+    "10mev_protons_1_day",
+    "10mev_protons_2_day",
+    "10mev_protons_3_day",
+):
+    _NOAA_METRIC_EXPLANATIONS.setdefault(
+        ("solar_probabilities", column),
+        {
+            "title": f"Solar probabilities ({column.replace('_', ' ')})",
+            "what": "NOAA probabilistic forecast (% chance) for flare classes or >10 MeV proton events over 1–3 days.",
+            "why": "Higher probabilities indicate elevated risk of radiation storms and geomagnetic impacts.",
+            "physiology": "Anticipate potential HRV reductions if elevated probabilities lead to storms (via increased geomagnetic activity).",
+            "likely_effect": "Indirect: higher probabilities may precede periods of lower HRV should storms materialize.",
+            "refs": "Gaisenok 2025; operational NOAA guidance.",
+        },
+    )
 
 
 def get_noaa_metric_explanations() -> List[Dict[str, str]]:
