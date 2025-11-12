@@ -5241,14 +5241,14 @@ def main() -> None:
                     overlay_candidates = [
                         col for col in value_columns if col != value_column
                     ]
-                    default_overlays: List[str] = []
+                    default_overlays: List[str]
                     if (
                         bundle.spec.key == "f107_flux"
                         and "ninety_day_mean" in overlay_candidates
                     ):
                         default_overlays = ["ninety_day_mean"]
-                elif overlay_candidates:
-                    default_overlays = overlay_candidates[: min(4, len(overlay_candidates))]
+                    else:
+                        default_overlays = overlay_candidates[: min(4, len(overlay_candidates))]
                     overlay_selection = st.multiselect(
                         "Additional overlays",
                         options=overlay_candidates,
