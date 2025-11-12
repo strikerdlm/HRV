@@ -5,7 +5,7 @@ import logging
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
+from typing import Any, Dict, Mapping, Optional, Sequence, Tuple, List
 
 import numpy as np
 import pandas as pd
@@ -480,5 +480,131 @@ def _sanitize_split_value(text: str) -> str:
     base = re.sub(r"[^0-9a-zA-Z_]+", "_", base)
     base = re.sub(r"_+", "_", base).strip("_")
     return base or "category"
+
+
+# --- Human-readable explanations and likely HRV effects (concise) ---
+
+_NOAA_METRIC_EXPLANATIONS: Dict[Tuple[str, str], Dict[str, str]] = {
+    # Geomagnetic activity
+    ("planetary_k_index_1m", "kp_index"): {
+        "title": "Planetary K index (Kp)",
+        "what": "Global 0–9 index of geomagnetic disturbance strength from ground magnetometers.",
+        "why": "Higher Kp indicates stronger storms driven by solar-wind coupling (often with southward IMF Bz).",
+        "physiology": "Studies associate higher geomagnetic activity with small reductions in HRV (lower SDNN/RMSSD, HF) and higher cardiovascular risk in populations.",
+        "likely_effect": "Most probable HRV correlation: negative (higher Kp → lower vagal/total HRV), with lags from 0 to ~72 h.",
+        "refs": "Vieira 2022; Gaisenok 2025; McCraty 2017; Papailiou 2023.",
+    },
+    ("planetary_k_index_1m", "estimated_kp"): {
+        "title": "Estimated Kp (nowcast)",
+        "what": "Near-real-time estimate of Kp prior to final processing.",
+        "why": "Operational nowcast of geomagnetic variability.",
+        "physiology": "As for Kp.",
+        "likely_effect": "Negative correlation with vagal/total HRV is most probable.",
+        "refs": "As Kp.",
+    },
+    ("geospace_dst", "dst"): {
+        "title": "Dst (storm-time disturbance)",
+        "what": "Hourly nT index of ring current; more negative values indicate stronger geomagnetic storms.",
+        "why": "Captures global storm intensity driven by magnetospheric currents.",
+        "physiology": "Storm periods linked to HRV decreases and cardiovascular events in population data.",
+        "likely_effect": "Most probable HRV correlation: positive with |Dst| (more negative Dst → lower HRV).",
+        "refs": "Vieira 2022; Gaisenok 2025.",
+    },
+    # Solar wind / IMF
+    ("solar_wind_wind", "proton_speed"): {
+        "title": "Solar-wind speed",
+        "what": "Flow speed of the solar wind near Earth (km/s).",
+        "why": "Higher speeds increase energy input to the magnetosphere and storm potential.",
+        "physiology": "Higher speed associated with increased heart rate and HRV changes consistent with stress responses.",
+        "likely_effect": "Most probable HRV correlation: negative (higher speed → lower HRV) with short lags (0–72 h).",
+        "refs": "Alabdulgader 2018; Vencloviene 2020.",
+    },
+    ("solar_wind_wind", "proton_density"): {
+        "title": "Solar-wind proton density",
+        "what": "Particle number density (1/cm³).",
+        "why": "Contributes to dynamic pressure; can precede sudden impulses and substorms.",
+        "physiology": "Less consistent alone; consider with speed/IMF and Kp/Dst.",
+        "likely_effect": "Possible negative HRV correlation when coincident with other drivers.",
+        "refs": "Vencloviene 2020 (pressure).",
+    },
+    ("solar_wind_mag", "bt"): {
+        "title": "IMF total field (Bt)",
+        "what": "Magnitude (nT) of the interplanetary magnetic field.",
+        "why": "Stronger Bt with southward Bz increases coupling and storm strength.",
+        "physiology": "Context for Kp/Dst; not a direct HRV driver by itself.",
+        "likely_effect": "Indirect; effects mediated via geomagnetic activity indices.",
+        "refs": "Space weather coupling context.",
+    },
+    ("solar_wind_mag", "bz_gse"): {
+        "title": "IMF Bz (GSE)",
+        "what": "North–south IMF component; Bz < 0 (southward) favors strong coupling.",
+        "why": "Southward Bz is a key trigger for storms.",
+        "physiology": "Indirect driver; HRV effects via subsequent geomagnetic activity.",
+        "likely_effect": "Negative HRV correlation when Bz is sustained southward and followed by elevated Kp/Dst.",
+        "refs": "Space weather coupling context.",
+    },
+    # Solar radio / flares / protons
+    ("f107_flux", "flux"): {
+        "title": "F10.7 cm flux",
+        "what": "Solar 2.8 GHz radio flux (sfu), a proxy for EUV output and solar activity.",
+        "why": "Higher F10.7 indicates more active Sun / ionospheric changes.",
+        "physiology": "Reports vary; some show small increases in HRV/parasympathetic indices with higher background activity.",
+        "likely_effect": "Small positive HRV correlation is plausible (context‑dependent).",
+        "refs": "Alabdulgader 2018.",
+    },
+    ("goes_integral_protons", "flux"): {
+        "title": "GOES integral proton flux",
+        "what": "Particle flux above energy thresholds; used to define radiation storms (S‑scale).",
+        "why": "Often accompanies CME‑driven storms impacting geomagnetic activity.",
+        "physiology": "Ground‑level HRV links are uncertain; treat as context with Kp/Dst and solar‑wind changes.",
+        "likely_effect": "Indirect; monitor alongside geomagnetic indices.",
+        "refs": "Operational/aviation context.",
+    },
+    ("goes_xray_flux", "observed_flux"): {
+        "title": "GOES x‑ray flux",
+        "what": "Soft x‑ray irradiance (0.05–0.4/0.1–0.8 nm) used for flare classification.",
+        "why": "Flares indicate active regions; not all cause storms without CME/IMF coupling.",
+        "physiology": "Direct HRV effects not established; use as solar context.",
+        "likely_effect": "Indirect via subsequent solar‑wind/geomagnetic changes.",
+        "refs": "Operational flare context.",
+    },
+    ("geospace_pred_kp", "k"): {
+        "title": "Predicted Kp (model)",
+        "what": "Short‑term model forecast of Kp at 1‑hour cadence.",
+        "why": "Provides anticipation for geomagnetic variability.",
+        "physiology": "As for Kp; enables pre‑registration of analysis windows.",
+        "likely_effect": "Expected negative HRV correlation if predictions verify.",
+        "refs": "As Kp.",
+    },
+}
+
+
+def get_noaa_metric_explanations() -> List[Dict[str, str]]:
+    """
+    Return a compact list of NOAA metric explanations for use in GPT/export.
+    """
+    rows: List[Dict[str, str]] = []
+    for (dataset_key, value_col), info in _NOAA_METRIC_EXPLANATIONS.items():
+        rows.append(
+            {
+                "metric_group": "NOAA",
+                "dataset": dataset_key,
+                "value_column": value_col,
+                "title": info.get("title", f"{dataset_key}.{value_col}"),
+                "what": info.get("what", ""),
+                "why": info.get("why", ""),
+                "physiology": info.get("physiology", ""),
+                "likely_effect": info.get("likely_effect", ""),
+                "references": info.get("refs", ""),
+            }
+        )
+    return rows
+
+
+def explain_noaa_metric(dataset_key: str, value_column: str) -> Optional[Dict[str, str]]:
+    """
+    Look up a concise explanation for a specific NOAA dataset/value column.
+    """
+    return _NOAA_METRIC_EXPLANATIONS.get((dataset_key, value_column))
 
 
