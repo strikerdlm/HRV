@@ -198,6 +198,65 @@ Clinical emphasis:
 ## References (selected)
 
 - Task Force of the ESC/NASPE (1996). Heart rate variability: standards of measurement, physiological interpretation and clinical use. [ESC PDF](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf)
+
+## NOAA space‑weather metrics and physiology
+
+The Space tab integrates NOAA SWPC feeds commonly used in space‑weather operations. Below are plain‑language definitions, typical scientific uses, and what current evidence suggests about potential links to human physiology (especially HRV). Evidence is correlational unless experimental designs are specified; individual sensitivity varies and confounding (seasonality, behavior, environment) must be considered.
+
+### Planetary K index (Kp)
+- What it is: A quasi‑logarithmic global index (0–9) of geomagnetic storm intensity from magnetometer stations (3‑hour cadence operationally; we also use 1‑min products and model forecasts). Higher Kp reflects stronger geomagnetic disturbances.
+- Why it matters physically: Southward interplanetary magnetic field (IMF Bz < 0) and elevated solar wind speed/pressure couple into Earth’s magnetosphere, increasing auroral electrojets and variability detected by magnetometers—captured by Kp.
+- Physiology: Multiple human studies associate higher geomagnetic activity with HRV changes (often reduced vagal indices/total power) and increased cardiovascular event risk.
+  - Geomagnetic disturbances reduced HRV in the Normative Aging Study (panel of older men), consistent with a stressor effect [Vieira 2022, Sci Total Environ, PubMed 35644403].
+  - A long‑term study found HR increases with solar wind intensity (stress response) and HRV changes with solar/geomagnetic activity [Alabdulgader 2018, Sci Rep, PubMed 29422633].
+  - Population studies reported increased acute coronary events around storms and with higher solar‑wind variables [Vencloviene 2020, PubMed 32291532]. A recent systematic review suggests elevated risks of MI/ACS and stroke during storms (RR ≈1.3–1.6) [Gaisenok 2025, PubMed 40256184].
+- Interpretation for HRV: Expect small effect sizes; reductions in SDNN/RMSSD or HF can appear around higher Kp. Test lags from 0–72 h; both anticipatory and delayed effects are reported.
+
+### Dst index (storm‑time disturbance)
+- What it is: Hourly index (nT) of the symmetric ring current strength; more negative Dst indicates stronger global storms (e.g., −50 to −100 nT moderate; < −200 nT severe).
+- Physiology: Not all HRV studies use Dst directly, but Dst codifies storm intensity. Findings linking storms to HRV decreases and higher CVD risks likely extend to periods of strongly negative Dst, in line with Kp‑based results [Vieira 2022; Gaisenok 2025].
+- Interpretation for HRV: Consider Dst as a complementary metric to Kp; scan similar lags and inspect directionality per metric.
+
+### Solar wind speed/density/temperature (ACE/DSCOVR) and IMF Bt/Bz
+- What these are: In‑situ solar‑wind plasma parameters (km/s, cm⁻³, K) and interplanetary magnetic field magnitude/orientation (nT). Bz < 0 (southward) enhances magnetospheric coupling; higher speed/dynamic pressure often precede or co‑occur with geomagnetic activity.
+- Physiology: Increases in solar‑wind intensity have been associated with higher heart rate and HRV changes consistent with stress responses [Alabdulgader 2018, Sci Rep]. Links to AMI risk have been reported for higher solar‑wind speed/pressure at short lags in population data [Vencloviene 2020].
+- Interpretation for HRV: Examine lags (0–72 h). IMF Bz southward intervals may precede Kp/Dst rises; alignment with HRV changes can clarify causal ordering.
+
+### F10.7 cm solar radio flux (2.8 GHz)
+- What it is: Daily 10.7‑cm solar flux (sfu) proxy for solar EUV output and overall solar activity.
+- Physiology: Long‑term data showed associations between F10.7, cosmic rays, and HRV measures (e.g., higher HRV/parasympathetic activity with higher F10.7 and Schumann resonance power) [Alabdulgader 2018]. Other cohorts report mixed findings depending on covariates and timing.
+- Interpretation for HRV: Consider F10.7 as a background driver of ionospheric state and solar cycle; effects are typically smaller and slower than storm indices but may be detectable in well‑controlled longitudinal data.
+
+### GOES integral proton flux (≥1–≥500 MeV)
+- What it is: Particle flux thresholds used to classify solar radiation storms (S‑scale). Large events often accompany CME‑driven storms.
+- Physiology: Direct HRV evidence is limited; however, radiation storms frequently co‑occur with geomagnetic disturbances linked to HRV and CVD risk (see Kp/Dst). Aviation/spaceflight literature discusses radiation exposure risks; clinical correlations at ground level remain uncertain for HRV.
+- Interpretation for HRV: Treat increases as context for concurrent geomagnetic activity; look for coincident Kp/Dst/solar‑wind changes when evaluating HRV.
+
+### GOES x‑ray flux (flares, 0.05–0.4 nm and 0.1–0.8 nm)
+- What it is: Soft x‑ray irradiance measured by GOES; used for flare class (A/B/C/M/X). Flares may not by themselves drive geomagnetic storms (CME/IMF coupling is key).
+- Physiology: Direct HRV links are sparse. Use primarily as context; any HRV response is more likely mediated by subsequent solar‑wind/IMF changes and resulting geomagnetic activity.
+
+### Predicted Kp (model products)
+- What it is: Short‑horizon model estimates of Kp (e.g., 1‑h cadence). Useful for anticipation and planning.
+- Physiology: As with observed Kp; use forecasts to pre‑specify HRV analysis windows and test anticipatory/lagged responses.
+
+### Solar radio flux (multifrequency network)
+- What it is: Discrete‑frequency flux from NOAA’s solar radio telescope network; tracks broad‑band emission and bursts.
+- Physiology: Not a direct driver; best treated as solar context and cross‑check with F10.7 and flare activity.
+
+### Practical guidance for analysis
+- Use multiple metrics jointly: Kp/Dst (disturbances), solar‑wind speed/pressure/IMF (drivers), and F10.7 (background activity). Proton/x‑ray flux provide event context.
+- Always scan lags (e.g., −24 to +72 h) and check both signs of correlation; report sample sizes and CIs.
+- Adjust for time‑of‑day, weekday/season, temperature, and behavior (sleep/exercise). Treat findings as exploratory unless replicated prospectively.
+
+### Key scientific sources
+- Vieira CLZ et al. Geomagnetic disturbances reduce HRV (Normative Aging Study). Sci Total Environ 2022. [PubMed 35644403](https://pubmed.ncbi.nlm.nih.gov/35644403/).
+- Alabdulgader A et al. Long‑term HRV responses to solar/geomagnetic activity. Sci Rep 2018. [PubMed 29422633](https://pubmed.ncbi.nlm.nih.gov/29422633/).
+- Vencloviene J et al. Solar‑wind and geomagnetic activity associated with AMI risk. 2020. [PubMed 32291532](https://pubmed.ncbi.nlm.nih.gov/32291532/).
+- Poskotinova L et al. Baroreflex/HRV sensitivity to local geomagnetic variations. Life 2022. [PubMed 35888190](https://pubmed.ncbi.nlm.nih.gov/35888190/).
+- Papailiou M et al. Space‑weather phenomena and heart rate changes in Greece. 2023. [PubMed 36227358](https://pubmed.ncbi.nlm.nih.gov/36227358/).
+- McCraty R et al. Synchronization of autonomic rhythms with geomagnetic activity. IJERPH 2017. [PubMed 28703754](https://pubmed.ncbi.nlm.nih.gov/28703754/).
+- Gaisenok O et al. Systematic review: geomagnetic storms and MI/ACS/stroke risks. 2025. [PubMed 40256184](https://pubmed.ncbi.nlm.nih.gov/40256184/).
 - Shaffer, F., & Ginsberg, J. (2017). An overview of HRV metrics and norms. [Frontiers in Public Health](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full)
 - Quigley, K. S., et al. (2024). Publication guidelines for HR and HRV studies in Psychophysiology—Part 1. [Wiley link](https://onlinelibrary.wiley.com/doi/10.1111/psyp.14604)
 - Nunan, D., et al. (2010). Normal values for short-term HRV in healthy adults. [PubMed](https://pubmed.ncbi.nlm.nih.gov/20663071/)
