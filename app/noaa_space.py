@@ -3,13 +3,14 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
 import requests
+import re
 
 SWPC_BASE_URL = "https://services.swpc.noaa.gov/json/"
 REQUEST_TIMEOUT = 10.0
@@ -46,6 +47,9 @@ class NOAASourceSpec:
         Mapping from column name to unit string (e.g., {"flux": "sfu"}).
     cadence_minutes :
         Sampling cadence in minutes, if known. Used for labelling only.
+    split_by_column :
+        Optional categorical column used to pivot a single value column into
+        multiple metric columns (e.g., proton flux per energy threshold).
     """
 
     key: str
@@ -59,6 +63,7 @@ class NOAASourceSpec:
     flatten_rename: Optional[Mapping[str, str]] = None
     units: Optional[Mapping[str, str]] = None
     cadence_minutes: Optional[int] = None
+    split_by_column: Optional[str] = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,6 +83,8 @@ class NOAADataBundle:
         Tuple of numeric columns available for plotting and correlation.
     units :
         Mapping from each value column to its unit label (empty if unknown).
+    split_labels :
+        Optional mapping from pivoted column name to a human-readable label.
     """
 
     spec: NOAASourceSpec
@@ -85,6 +92,7 @@ class NOAADataBundle:
     time_column: str
     value_columns: Tuple[str, ...]
     units: Mapping[str, str]
+    split_labels: Mapping[str, str] = field(default_factory=dict)
 
 
 NOAA_SOURCES: Dict[str, NOAASourceSpec] = {
@@ -157,6 +165,26 @@ NOAA_SOURCES: Dict[str, NOAASourceSpec] = {
         metadata_columns=("satellite", "energy"),
         units={"observed_flux": "W/m²", "flux": "W/m²"},
         cadence_minutes=1,
+    ),
+    "goes_integral_protons": NOAASourceSpec(
+        key="goes_integral_protons",
+        path="goes/primary/integral-protons-1-day.json",
+        title="GOES integral proton flux",
+        description="GOES primary integral proton flux (≥1–≥500 MeV thresholds, 5-minute averages).",
+        value_columns=("flux",),
+        metadata_columns=("satellite", "energy"),
+        units={"flux": "pfu"},
+        cadence_minutes=5,
+        split_by_column="energy",
+    ),
+    "geospace_dst": NOAASourceSpec(
+        key="geospace_dst",
+        path="geospace/geospace_dst_1_hour.json",
+        title="Geomagnetic Dst (1 h)",
+        description="Geomagnetic disturbance storm-time (Dst) index derived from low-latitude magnetometers.",
+        value_columns=("dst",),
+        units={"dst": "nT"},
+        cadence_minutes=60,
     ),
 }
 
@@ -266,6 +294,7 @@ def _flatten_nested_column(df: pd.DataFrame, column: str, rename_map: Optional[M
 
 
 def _prepare_frame(spec: NOAASourceSpec, raw_df: pd.DataFrame) -> NOAADataBundle:
+    split_labels: Dict[str, str] = {}
     if raw_df.empty:
         empty_df = pd.DataFrame(columns=["time_tag"])
         return NOAADataBundle(
@@ -274,6 +303,7 @@ def _prepare_frame(spec: NOAASourceSpec, raw_df: pd.DataFrame) -> NOAADataBundle
             time_column="time_tag",
             value_columns=tuple(spec.value_columns),
             units=spec.units or {},
+            split_labels={},
         )
     df = raw_df.copy()
     if spec.explode_column:
@@ -291,15 +321,62 @@ def _prepare_frame(spec: NOAASourceSpec, raw_df: pd.DataFrame) -> NOAADataBundle
     existing_columns = [col for col in selected_columns if col in df.columns]
     df = df[existing_columns].copy()
     numeric_columns = [col for col in spec.value_columns if col in df.columns]
+    unit_mapping: Dict[str, str] = dict(spec.units or {})
+    split_column = spec.split_by_column
+    if split_column and numeric_columns:
+        base_value = numeric_columns[0]
+        if split_column in df.columns:
+            subset = df[[time_column, split_column, base_value]].dropna(subset=[time_column, split_column])
+            if not subset.empty:
+                pivot = (
+                    subset.pivot_table(
+                        index=time_column,
+                        columns=split_column,
+                        values=base_value,
+                        aggfunc="mean",
+                    )
+                    .sort_index()
+                    .dropna(how="all", axis=1)
+                )
+                if not pivot.empty:
+                    sanitized_columns: Dict[str, str] = {}
+                    new_columns: list[str] = []
+                    unit_value = spec.units.get(base_value) if spec.units else None
+                    for cat in pivot.columns:
+                        label = str(cat).strip()
+                        sanitized = _sanitize_split_value(label)
+                        col_name = f"{base_value}_{sanitized}" if sanitized else f"{base_value}_category"
+                        if col_name in new_columns:
+                            suffix = 1
+                            candidate = f"{col_name}_{suffix}"
+                            while candidate in new_columns:
+                                suffix += 1
+                                candidate = f"{col_name}_{suffix}"
+                            col_name = candidate
+                        new_columns.append(col_name)
+                        split_labels[col_name] = label
+                        if unit_value:
+                            unit_mapping[col_name] = unit_value
+                    pivot.columns = new_columns
+                    df = pivot.reset_index().rename(columns={"index": time_column})
+                    numeric_columns = new_columns
+                    return NOAADataBundle(
+                        spec=spec,
+                        frame=df.reset_index(drop=True),
+                        time_column=time_column,
+                        value_columns=tuple(numeric_columns),
+                        units=unit_mapping,
+                        split_labels=split_labels,
+                    )
     for column in numeric_columns:
         df[column] = pd.to_numeric(df[column], errors="coerce")
-    unit_mapping: Dict[str, str] = dict(spec.units or {})
     return NOAADataBundle(
         spec=spec,
         frame=df.reset_index(drop=True),
         time_column=time_column,
         value_columns=tuple(numeric_columns),
         units=unit_mapping,
+        split_labels=split_labels,
     )
 
 
@@ -371,5 +448,27 @@ def load_noaa_space_data(
         except (requests.RequestException, ValueError) as exc:
             errors[key] = str(exc)
     return bundles, errors
+
+
+def _sanitize_split_value(text: str) -> str:
+    """
+    Sanitize a categorical label for use as a DataFrame column suffix.
+    """
+
+    base = text.strip().lower()
+    replacements = {
+        ">=": "ge_",
+        "<=": "le_",
+        ">": "gt_",
+        "<": "lt_",
+        "±": "_pm_",
+        "%": "_pct",
+        "/": "_",
+    }
+    for key, value in replacements.items():
+        base = base.replace(key, value)
+    base = re.sub(r"[^0-9a-zA-Z_]+", "_", base)
+    base = re.sub(r"_+", "_", base).strip("_")
+    return base or "category"
 
 
