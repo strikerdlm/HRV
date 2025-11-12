@@ -249,6 +249,44 @@ NOAA_SOURCES: Dict[str, NOAASourceSpec] = {
         },
         cadence_minutes=1440,
     ),
+    "predicted_fredericksburg": NOAASourceSpec(
+        key="predicted_fredericksburg",
+        path="predicted_fredericksburg_a_index.json",
+        title="Predicted Fredericksburg a-index",
+        description="Three-day NOAA forecast of the Fredericksburg a-index (geomagnetic activity).",
+        value_columns=("afred_1_day", "afred_2_day", "afred_3_day"),
+        preferred_time_columns=("date", "time-tag", "time_tag"),
+        units={
+            "afred_1_day": "a-index",
+            "afred_2_day": "a-index",
+            "afred_3_day": "a-index",
+        },
+        cadence_minutes=1440,
+    ),
+    "predicted_monthly_ssn": NOAASourceSpec(
+        key="predicted_monthly_ssn",
+        path="predicted_monthly_sunspot_number.json",
+        title="Predicted monthly sunspot & flux",
+        description="Monthly prediction of sunspot number and 10.7 cm flux (central/high/low).",
+        value_columns=(
+            "ssn_predicted",
+            "ssn_high",
+            "ssn_low",
+            "flux_predicted",
+            "flux_high",
+            "flux_low",
+        ),
+        preferred_time_columns=("date", "time-tag", "time_tag"),
+        units={
+            "ssn_predicted": "sunspot number",
+            "ssn_high": "sunspot number",
+            "ssn_low": "sunspot number",
+            "flux_predicted": "sfu",
+            "flux_high": "sfu",
+            "flux_low": "sfu",
+        },
+        cadence_minutes=43200,
+    ),
     "solar_probabilities": NOAASourceSpec(
         key="solar_probabilities",
         path="solar_probabilities.json",
@@ -712,6 +750,30 @@ _NOAA_METRIC_EXPLANATIONS: Dict[Tuple[str, str], Dict[str, str]] = {
         "likely_effect": "Small positive HRV correlation expected if values rise (contextual).",
         "refs": "Operational forecast context.",
     },
+    ("predicted_fredericksburg", "afred_1_day"): {
+        "title": "Fredericksburg a-index forecast (1 day)",
+        "what": "NOAA 1-day forecast of the Fredericksburg geomagnetic a-index.",
+        "why": "Higher a-index reflects stronger geomagnetic agitation at mid-latitudes.",
+        "physiology": "Similar to Kp/Dst, elevated forecasts may precede HRV reductions if storms occur.",
+        "likely_effect": "Most probable HRV correlation: negative (higher forecasted a-index → lower HRV).",
+        "refs": "Gaisenok 2025; Vencloviene 2020.",
+    },
+    ("predicted_monthly_ssn", "ssn_predicted"): {
+        "title": "Predicted sunspot number (monthly)",
+        "what": "NOAA prediction of monthly international sunspot number.",
+        "why": "Tracks expected solar-cycle strength and background solar activity.",
+        "physiology": "Long-term shifts in solar activity may modulate HRV baselines via geomagnetic coupling.",
+        "likely_effect": "Slow positive HRV correlation plausible with higher sunspot forecasts.",
+        "refs": "Alabdulgader 2018; McCraty 2017.",
+    },
+    ("predicted_monthly_ssn", "flux_predicted"): {
+        "title": "Predicted 10.7 cm flux (monthly)",
+        "what": "Forecast of monthly 10.7 cm solar radio flux.",
+        "why": "Indicates expected EUV output for ionospheric state changes.",
+        "physiology": "Use for trend context alongside observed F10.7 and HRV baselines.",
+        "likely_effect": "Small positive HRV correlation plausible.",
+        "refs": "Alabdulgader 2018.",
+    },
     ("sunspots_monthly", "ssn"): {
         "title": "Sunspot number",
         "what": "Observed monthly international sunspot number (dimensionless).",
@@ -727,6 +789,21 @@ for column in ("tencmfcst_1_day", "tencmfcst_2_day", "tencmfcst_3_day"):
         _NOAA_METRIC_EXPLANATIONS[("predicted_f107", column)] = _NOAA_METRIC_EXPLANATIONS[
             ("predicted_f107", "tencmfcst_1_day")
         ].copy()
+
+for column in ("afred_2_day", "afred_3_day"):
+    _NOAA_METRIC_EXPLANATIONS[("predicted_fredericksburg", column)] = _NOAA_METRIC_EXPLANATIONS[
+        ("predicted_fredericksburg", "afred_1_day")
+    ].copy()
+
+for column in ("ssn_high", "ssn_low"):
+    _NOAA_METRIC_EXPLANATIONS[("predicted_monthly_ssn", column)] = _NOAA_METRIC_EXPLANATIONS[
+        ("predicted_monthly_ssn", "ssn_predicted")
+    ].copy()
+
+for column in ("flux_high", "flux_low"):
+    _NOAA_METRIC_EXPLANATIONS[("predicted_monthly_ssn", column)] = _NOAA_METRIC_EXPLANATIONS[
+        ("predicted_monthly_ssn", "flux_predicted")
+    ].copy()
 
 for column in (
     "c_class_1_day",
