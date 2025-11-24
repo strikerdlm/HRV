@@ -1,0 +1,806 @@
+predictor_key,predictor_title,value_column,unit,metric,lag_hours,pearson_r,p_value,ci_low,ci_high,n,direction,test_name,abs_r,predictor_metric
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn50,18,-0.4809457845755211,1.5692119555513066e-08,-0.6058841819000029,-0.3328548469174794,124,negative,Pearson r,0.4809457845755211,GOES x-ray flux — Flux
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,sdnn,21,-0.4730870884952012,2.8808791477847165e-08,-0.5994054235962389,-0.32377779591644346,124,negative,Pearson r,0.4730870884952012,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,sdnn,21,-0.47308708849520115,2.8808791477847165e-08,-0.5994054235962389,-0.32377779591644335,124,negative,Pearson r,0.47308708849520115,RSTE solar radio flux — Flux Sfu
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn50,18,-0.4625850723985138,6.337532775130211e-08,-0.5907215810439358,-0.3116903800913445,124,negative,Pearson r,0.4625850723985138,GOES x-ray flux — Observed Flux
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,pnn50,-6,-0.46139219792714525,6.919734393074428e-08,-0.5897333434685174,-0.310320509278425,124,negative,Pearson r,0.46139219792714525,Planetary K index (1m) — Estimated Kp
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn50,-6,0.460616707591564,7.325299513349607e-08,0.3094302896213906,0.5890906818125523,124,positive,Pearson r,0.460616707591564,GOES x-ray flux — Observed Flux
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn50,-6,0.46040144087165363,7.441850268768667e-08,0.30918322241351187,0.5889122579010103,124,positive,Pearson r,0.46040144087165363,GOES x-ray flux — Flux
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn50,9,-0.4457873118730644,2.1195132199329785e-07,-0.5767699675788164,-0.29245780382019576,124,negative,Pearson r,0.4457873118730644,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn50,9,-0.4457873118730644,2.1195132199329785e-07,-0.5767699675788164,-0.29245780382019576,124,negative,Pearson r,0.4457873118730644,RSTE solar radio flux — Frequency Mhz
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,sdnn,18,-0.44437798479834634,2.3386184282723846e-07,-0.5755959467464813,-0.29084981681965283,124,negative,Pearson r,0.44437798479834634,GOES x-ray flux — Observed Flux
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn50,21,-0.4416177518643177,2.8319067562247943e-07,-0.5732950037845916,-0.2877030098974311,124,negative,Pearson r,0.4416177518643177,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn50,21,-0.4416177518643177,2.8319067562247943e-07,-0.5732950037845916,-0.2877030098974311,124,negative,Pearson r,0.4416177518643177,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn50,3,-0.43859186258280425,5.0130238939391515e-06,-0.5846443928644515,-0.26500306695159787,100,negative,Pearson r,0.43859186258280425,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn50,3,-0.4385918625828042,5.0130238939391515e-06,-0.5846443928644515,-0.26500306695159775,100,negative,Pearson r,0.4385918625828042,RSTE solar radio flux — Frequency Mhz
+goes_xray_flux,GOES x-ray flux,flux,W/m²,sdnn,18,-0.43412284278763236,4.721787673543332e-07,-0.56703671912241,-0.27917516016767935,124,negative,Pearson r,0.43412284278763236,GOES x-ray flux — Flux
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,rmssd,3,-0.42614084841563105,9.847115761398574e-06,-0.5744744316968107,-0.25070738603445497,100,negative,Pearson r,0.42614084841563105,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,rmssd,3,-0.426140848415631,9.847115761398574e-06,-0.5744744316968107,-0.25070738603445486,100,negative,Pearson r,0.426140848415631,RSTE solar radio flux — Frequency Mhz
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,6,-0.4183539748102479,1.3310050190868206e-06,-0.5538193410500656,-0.2613124987084429,124,negative,Pearson r,0.4183539748102479,Geomagnetic Dst (7 d) — Dst
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,pnn50,-6,-0.41652721494858547,1.4957553530157149e-06,-0.552283735684856,-0.2592501100041929,124,negative,Pearson r,0.41652721494858547,Planetary K index (1m) — Kp Index
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,24,0.41486492850208806,1.66234093901567e-06,0.25737465531498105,0.5508855884436848,124,positive,Pearson r,0.41486492850208806,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn50,6,0.3967175043587297,5.077976113798782e-06,0.23697693405633397,0.5355719829284453,124,positive,Pearson r,0.3967175043587297,Interplanetary magnetic field — Bt
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn50,3,0.3899320866467112,7.582675077571928e-06,0.229386121699929,0.5298225929910209,124,positive,Pearson r,0.3899320866467112,Interplanetary magnetic field — Bz Gsm
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn50,15,0.38466822498365494,1.0286812564187644e-05,0.22351088698221164,0.5253535674582729,124,positive,Pearson r,0.38466822498365494,Boulder K index (1 min) — K Index
+boulder_k_1m,Boulder K index (1 min),k_index,K,sdnn,3,0.374897619458686,1.7872283031964254e-05,0.2126364255339339,0.517037684511017,124,positive,Pearson r,0.374897619458686,Boulder K index (1 min) — K Index
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn50,3,0.37315895819367384,1.9681983618216733e-05,0.2107055385281426,0.5155550709148462,124,positive,Pearson r,0.37315895819367384,Boulder K index (1 min) — K Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,sdnn,3,-0.37243547950035716,2.0484662011494003e-05,-0.5149378855403975,-0.20990244561218954,124,negative,Pearson r,0.37243547950035716,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,sdnn,3,-0.3714753613245941,0.00014171766825129853,-0.5292751844491431,-0.1888355321750902,100,negative,Pearson r,0.3714753613245941,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,sdnn,3,-0.3714753613245941,0.00014171766825129853,-0.5292751844491431,-0.1888355321750902,100,negative,Pearson r,0.3714753613245941,RSTE solar radio flux — Flux Sfu
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,18,0.365808023536505,2.94131270091637e-05,0.2025558727627714,0.5092772500520093,124,positive,Pearson r,0.365808023536505,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,mean_hr,12,-0.36394650590425587,3.2512839019104664e-05,-0.5076850563707304,-0.20049567014125688,124,negative,Pearson r,0.36394650590425587,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn50,3,0.36162714331554197,3.680411220276592e-05,0.19793077657874464,0.5056998839177551,124,positive,Pearson r,0.36162714331554197,Interplanetary magnetic field — Bz Gse
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,sdnn,9,-0.3601856680910258,3.973289440359665e-05,-0.5044653373577999,-0.19633783347352268,124,negative,Pearson r,0.3601856680910258,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,sdnn,9,-0.3601856680910258,3.973289440359665e-05,-0.5044653373577999,-0.19633783347352268,124,negative,Pearson r,0.3601856680910258,RSTE solar radio flux — Frequency Mhz
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,-6,-0.35825386726541686,4.400137176923248e-05,-0.5028099275378759,-0.19420439745539483,124,negative,Pearson r,0.35825386726541686,Geomagnetic Dst (7 d) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,0,0.3521327095842409,6.0536315268581e-05,0.18745456670937038,0.4975575376847427,124,positive,Pearson r,0.3521327095842409,Geomagnetic Dst (7 d) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,12,-0.35076225319426224,6.496044023011689e-05,-0.49638012552356964,-0.1859454854336449,124,negative,Pearson r,0.35076225319426224,Geomagnetic Dst (7 d) — Dst
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,mean_hr,6,0.35060622238491174,6.54828700716175e-05,0.18577372103088938,0.49624603943336393,124,positive,Pearson r,0.35060622238491174,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn50,15,0.3479730006317865,7.491384253473755e-05,0.18287649329582473,0.4939821146716927,124,positive,Pearson r,0.3479730006317865,Solar wind (ACE/DSCOVR) — Proton Speed
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,3,-0.34693848794379767,7.895471278324423e-05,-0.4930921455115746,-0.18173904472755156,124,negative,Pearson r,0.34693848794379767,Geomagnetic Dst (7 d) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,18,0.34691752197545556,7.903867262151611e-05,0.18171599717696993,0.493074105773909,124,positive,Pearson r,0.34691752197545556,Geomagnetic Dst (7 d) — Dst
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,pnn50,-6,-0.34134955343921775,0.00010453810641350914,-0.4882788083911236,-0.175601637047641,124,negative,Pearson r,0.34134955343921775,Geomagnetic Dst (1 h) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn20,12,0.332131026380393,0.00016419461376187454,0.16550651838568597,0.4803199897773185,124,positive,Pearson r,0.332131026380393,Solar wind (ACE/DSCOVR) — Proton Speed
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn50,3,0.3317410708884446,0.00016730872984634814,0.16508025034947527,0.4799827827210406,124,positive,Pearson r,0.3317410708884446,GOES x-ray flux — Observed Flux
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn20,3,-0.32960047423008854,0.0008120509492878057,-0.49403501004020267,-0.1424013493805788,100,negative,Pearson r,0.32960047423008854,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn20,3,-0.3296004742300885,0.000812050949287816,-0.49403501004020256,-0.1424013493805787,100,negative,Pearson r,0.3296004742300885,RSTE solar radio flux — Frequency Mhz
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn50,18,-0.329011943640742,0.0001906870361971817,-0.4776215919190073,-0.16209872921867355,124,negative,Pearson r,0.329011943640742,Solar wind (ACE/DSCOVR) — Proton Density
+boulder_k_1m,Boulder K index (1 min),k_index,K,mean_hr,6,-0.32865865767071106,0.00019392577740661013,-0.47731577836279326,-0.16171299348289597,124,negative,Pearson r,0.32865865767071106,Boulder K index (1 min) — K Index
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn50,-6,0.3268519404723386,0.0002113018210863509,0.15974112423411294,0.47575127363799885,124,positive,Pearson r,0.3268519404723386,Interplanetary magnetic field — Bt
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,6,-0.3266923649219955,0.00021290396810529658,-0.4756130458389061,-0.1595670259508731,124,negative,Pearson r,0.3266923649219955,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bt,nT,rmssd,6,0.32656415948201656,0.00021419931116142897,0.15942716025583042,0.4755019861809092,124,positive,Pearson r,0.32656415948201656,Interplanetary magnetic field — Bt
+solar_wind_mag,Interplanetary magnetic field,bt,nT,mean_hr,3,-0.323896304055524,0.00024286968304913008,-0.4731898433473124,-0.15651818575253906,124,negative,Pearson r,0.323896304055524,Interplanetary magnetic field — Bt
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,mean_hr,6,-0.3225384640638574,0.0002587902767824427,-0.4720122576027302,-0.15503873931041007,124,negative,Pearson r,0.3225384640638574,Interplanetary magnetic field — Bz Gsm
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,-6,-0.3193705447123267,0.0002997647135375733,-0.46926280640572987,-0.15159002370412017,124,negative,Pearson r,0.3193705447123267,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn50,-3,-0.3136463424482062,0.0003893655776201542,-0.464287365082183,-0.14536878479076806,124,negative,Pearson r,0.3136463424482062,Interplanetary magnetic field — Bt
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn50,9,0.3123979417924528,0.0004119347547052527,0.14401374986044901,0.46320099856089697,124,positive,Pearson r,0.3123979417924528,Interplanetary magnetic field — Bt
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,rmssd,-6,0.31194899626251593,0.0004203417333050178,0.14352661120138302,0.46281021236435543,124,positive,Pearson r,0.31194899626251593,GOES x-ray flux — Observed Flux
+goes_xray_flux,GOES x-ray flux,flux,W/m²,rmssd,-6,0.3116366792978032,0.0004262832177742463,0.1431877726363381,0.46253832038815357,124,positive,Pearson r,0.3116366792978032,GOES x-ray flux — Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,mean_hr,6,-0.30731266258165646,0.0005169058012187096,-0.45877106709217325,-0.13850061993510251,124,negative,Pearson r,0.30731266258165646,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn20,12,0.3064712691607151,0.0005364800697975788,0.13758944341038065,0.45803737867567074,124,positive,Pearson r,0.3064712691607151,Interplanetary magnetic field — Bz Gsm
+boulder_k_1m,Boulder K index (1 min),k_index,K,rmssd,3,0.3048869050910009,0.0005752017153895535,0.13587445160169453,0.4566552649744043,124,positive,Pearson r,0.3048869050910009,Boulder K index (1 min) — K Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,rmssd,15,0.3047048194651675,0.0005798127855263145,0.13567741824217164,0.4564963763525703,124,positive,Pearson r,0.3047048194651675,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_mag,Interplanetary magnetic field,bt,nT,sdnn,0,-0.30387015910313936,0.0006013875834889885,-0.4557679245631828,-0.1347744102009088,124,negative,Pearson r,0.30387015910313936,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,sdnn,15,0.30302968177746786,0.0006238562000998632,0.13386539258891575,0.45503419034248316,124,positive,Pearson r,0.30302968177746786,Solar wind (ACE/DSCOVR) — Proton Speed
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,sdnn,-6,-0.30238738472382315,0.0006415439759892834,-0.4544733277393288,-0.13317090854209337,124,negative,Pearson r,0.30238738472382315,Geomagnetic Dst (1 h) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn50,18,0.3017351936143664,0.0006599745471471335,0.13246589653634655,0.45390370209369263,124,positive,Pearson r,0.3017351936143664,Solar wind (ACE/DSCOVR) — Proton Temperature
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,sdnn,-6,-0.29879325954104224,0.0007493103025691385,-0.4513326613561185,-0.12928782288169174,124,negative,Pearson r,0.29879325954104224,Planetary K index (1m) — Estimated Kp
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn50,6,-0.2985325985263715,0.0007577378685123632,-0.4511047400046385,-0.12900640728232632,124,negative,Pearson r,0.2985325985263715,Boulder K index (1 min) — K Index
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn50,3,0.2982262534280183,0.0007677535331014026,0.12867570500002515,0.450836847160889,124,positive,Pearson r,0.2982262534280183,GOES x-ray flux — Flux
+goes_xray_flux,GOES x-ray flux,flux,W/m²,rmssd,18,-0.2980098794912946,0.0007749006624176969,-0.4506476157838156,-0.1284421501152827,124,negative,Pearson r,0.2980098794912946,GOES x-ray flux — Flux
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn50,12,-0.29558192749028783,0.000859389124179226,-0.4485232919969456,-0.1258226981757671,124,negative,Pearson r,0.29558192749028783,GOES x-ray flux — Observed Flux
+boulder_k_1m,Boulder K index (1 min),k_index,K,sdnn,6,-0.29472669721471884,0.000891104125418059,-0.4477746010158042,-0.12490057669502182,124,negative,Pearson r,0.29472669721471884,Boulder K index (1 min) — K Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn50,18,0.29240544424888887,0.000982661243877866,0.12239924657657274,0.4457414330730868,124,positive,Pearson r,0.29240544424888887,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,sdnn,3,0.2884498648373908,0.0011587075199453283,0.11814177300426423,0.44227312213619163,124,positive,Pearson r,0.2884498648373908,Interplanetary magnetic field — Bz Gsm
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn50,-3,-0.2867745603991303,0.0012415934859746282,-0.44080280206385714,-0.11634049304842192,124,negative,Pearson r,0.2867745603991303,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn50,-3,-0.2867745603991303,0.0012415934859746282,-0.44080280206385714,-0.11634049304842192,124,negative,Pearson r,0.2867745603991303,RSTE solar radio flux — Flux Sfu
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,sdnn,18,0.28478291812439654,0.0013471466547868994,0.1142005457495658,0.4390537740471442,124,positive,Pearson r,0.28478291812439654,Solar wind (ACE/DSCOVR) — Proton Temperature
+boulder_k_1m,Boulder K index (1 min),k_index,K,mean_hr,-6,-0.28434396353969466,0.0013714829861145902,-0.43866813392048654,-0.11372911778073495,124,negative,Pearson r,0.28434396353969466,Boulder K index (1 min) — K Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn20,9,0.2829996353985148,0.001448526856096993,0.11228581549925806,0.437486731217986,124,positive,Pearson r,0.2829996353985148,Solar wind (ACE/DSCOVR) — Proton Speed
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,15,-0.2793297613129112,0.0016793251842222665,-0.4342589089633872,-0.10834941624904224,124,negative,Pearson r,0.2793297613129112,Geomagnetic Dst (7 d) — Dst
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,rmssd,9,-0.27908130000081544,0.0016960976363927724,-0.4340402319687966,-0.10808310404538353,124,negative,Pearson r,0.27908130000081544,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,rmssd,9,-0.27908130000081544,0.0016960976363927724,-0.4340402319687966,-0.10808310404538353,124,negative,Pearson r,0.27908130000081544,RSTE solar radio flux — Flux Sfu
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,pnn50,0,0.2773011931770324,0.0018207847221081708,0.10617582161184289,0.43247298133044876,124,positive,Pearson r,0.2773011931770324,Planetary K index (1m) — Estimated Kp
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,rmssd,12,0.2770105183362568,0.00184191733519158,0.10586449973059911,0.4322169748317421,124,positive,Pearson r,0.2770105183362568,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn20,12,0.27427323085340455,0.002052115955523191,0.1029344236138977,0.4298049317099591,124,positive,Pearson r,0.27427323085340455,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bt,nT,sdnn,-3,-0.2727403355459359,0.0021791029392150144,-0.4284532046172823,-0.10129486348221699,124,negative,Pearson r,0.2727403355459359,Interplanetary magnetic field — Bt
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,rmssd,21,-0.2724707307447758,0.002202159107009868,-0.42821539149096816,-0.10100659479962236,124,negative,Pearson r,0.2724707307447758,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,rmssd,21,-0.2724707307447758,0.002202159107009868,-0.42821539149096816,-0.10100659479962236,124,negative,Pearson r,0.2724707307447758,RSTE solar radio flux — Frequency Mhz
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn50,12,-0.2721936827802903,0.0022260816292752885,-0.4279709904202184,-0.10071039767809102,124,negative,Pearson r,0.2721936827802903,GOES x-ray flux — Flux
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,15,-0.26885633132702247,0.0025333137015661118,-0.42502511589374287,-0.09714476026745907,124,negative,Pearson r,0.26885633132702247,Geomagnetic Dst (7 d) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,12,-0.26878829954853645,0.0025399567304970868,-0.4249650299320402,-0.09707212070202692,124,negative,Pearson r,0.26878829954853645,Geomagnetic Dst (7 d) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,3,-0.2687766100477767,0.002541099745899715,-0.42495470557573767,-0.09705963965647649,124,negative,Pearson r,0.2687766100477767,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,mean_hr,15,-0.2686416316703753,0.0025543318138902117,-0.4248354875442852,-0.09691552524307266,124,negative,Pearson r,0.2686416316703753,Interplanetary magnetic field — Bz Gse
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,rmssd,-6,-0.2684550732794087,0.0025727227728719088,-0.42467070316574235,-0.09671635146685352,124,negative,Pearson r,0.2684550732794087,Planetary K index (1m) — Estimated Kp
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn50,9,-0.267911222171035,0.002627020134933196,-0.4241902681277604,-0.09613580273438355,124,negative,Pearson r,0.267911222171035,Interplanetary magnetic field — Bz Gsm
+boulder_k_1m,Boulder K index (1 min),k_index,K,mean_hr,12,-0.2662576011058459,0.002798529564313317,-0.422728927886422,-0.09437131734302157,124,negative,Pearson r,0.2662576011058459,Boulder K index (1 min) — K Index
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn20,-6,0.2658824935762924,0.0028388132540898598,0.09397121155408825,0.4223973240898096,124,positive,Pearson r,0.2658824935762924,GOES x-ray flux — Observed Flux
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn20,-6,0.26551747763632244,0.0028785144017372017,0.09358192319062687,0.42207460126789825,124,positive,Pearson r,0.26551747763632244,GOES x-ray flux — Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,sdnn,3,0.26428740080092306,0.003016017003726683,0.09227043706147267,0.4209867568791482,124,positive,Pearson r,0.26428740080092306,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,sdnn,6,-0.26384397455749825,0.0030670177724600447,-0.4205944929623272,-0.09179781016235504,124,negative,Pearson r,0.26384397455749825,Interplanetary magnetic field — Bz Gsm
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn20,18,-0.2628701806188144,0.003181754549485021,-0.4197328492228187,-0.09076016157416823,124,negative,Pearson r,0.2628701806188144,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,rmssd,3,0.26185714612416616,0.0033052013949759038,0.08968109575804682,0.41883618404713746,124,positive,Pearson r,0.26185714612416616,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,rmssd,3,0.26167675997732603,0.0033276294528145236,0.08948899412009961,0.4186764871064718,124,positive,Pearson r,0.26167675997732603,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,sdnn,6,-0.26039884948819486,0.0034904762200277275,-0.4175448671415092,-0.08812845427600065,124,negative,Pearson r,0.26039884948819486,Interplanetary magnetic field — Bz Gse
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,18,0.25969038606790124,0.0035838110478429875,0.08737445864343293,0.416917295924246,124,positive,Pearson r,0.25969038606790124,Geomagnetic Dst (7 d) — Dst
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,rmssd,18,-0.2588360951680791,0.0036993355111614367,-0.41616034836474514,-0.08646552584878844,124,negative,Pearson r,0.2588360951680791,GOES x-ray flux — Observed Flux
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,sdnn,-6,0.2586103135827824,0.00373042102700216,0.08622535082274962,0.4159602573337931,124,positive,Pearson r,0.2586103135827824,GOES x-ray flux — Observed Flux
+goes_xray_flux,GOES x-ray flux,flux,W/m²,sdnn,-6,0.258357129102201,0.0037655581132435005,0.08595604981318503,0.41573586332266843,124,positive,Pearson r,0.258357129102201,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn20,15,0.25594903015376913,0.004114901873462856,0.08339592132954093,0.4136006392901325,124,positive,Pearson r,0.25594903015376913,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,mean_hr,6,0.25574741342782153,0.004145428443869617,0.08318167930196392,0.41342179015304237,124,positive,Pearson r,0.25574741342782153,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn50,6,-0.25466698586163355,0.004312498554619774,-0.41246316264045885,-0.082033866748292,124,negative,Pearson r,0.25466698586163355,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn50,12,0.2528813028763825,0.004601875037852226,0.08013781623201303,0.41087801892822345,124,positive,Pearson r,0.2528813028763825,Interplanetary magnetic field — Bz Gsm
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn50,-6,-0.25230646843604265,0.004698656960464551,-0.41036753734104336,-0.0795277189156266,124,negative,Pearson r,0.25230646843604265,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,sdnn,18,-0.25119989718952984,0.004890102035993911,-0.40938456803814816,-0.07835363002950746,124,negative,Pearson r,0.25119989718952984,Solar wind (ACE/DSCOVR) — Proton Density
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,24,0.2504265208493482,0.005028008539305793,0.0775333505489722,0.4086973583072586,124,positive,Pearson r,0.2504265208493482,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn50,9,-0.25031752160579895,0.005047721679007757,-0.4086004889075555,-0.07741775961891366,124,negative,Pearson r,0.25031752160579895,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,rmssd,12,0.24983033982893318,0.005136677386327733,0.07690117252544987,0.40816747895074484,124,positive,Pearson r,0.24983033982893318,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,mean_hr,15,-0.24955667403009338,0.0051872580869812964,-0.407924211964674,-0.07661102952681456,124,negative,Pearson r,0.24955667403009338,Interplanetary magnetic field — Bz Gsm
+goes_xray_flux,GOES x-ray flux,flux,W/m²,mean_hr,6,0.24898161128605548,0.005294995685168523,0.07600143813864192,0.4074129539442386,124,positive,Pearson r,0.24898161128605548,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,sdnn,12,-0.2482008816113837,0.005444458252411568,-0.40671868931162564,-0.075174037798493,124,negative,Pearson r,0.2482008816113837,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,mean_hr,3,-0.24741724606383106,0.00559824808550168,-0.4060216564557204,-0.07434379739187995,124,negative,Pearson r,0.24741724606383106,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn50,3,-0.24728149901475321,0.005625278529411089,-0.4059008925994245,-0.07420000148657308,124,negative,Pearson r,0.24728149901475321,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn50,12,0.24632103706678515,0.005819874267599831,0.07318279639582295,0.405046284159026,124,positive,Pearson r,0.24632103706678515,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bt,nT,sdnn,6,0.24625298437380228,0.00583388689377732,0.0731107368802798,0.40498572110000863,124,positive,Pearson r,0.24625298437380228,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,rmssd,18,-0.24386696511708042,0.006344572219280715,-0.40286141760370475,-0.07058537533652944,124,negative,Pearson r,0.24386696511708042,Solar wind (ACE/DSCOVR) — Proton Density
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,12,-0.24382403512494835,0.006354113566394587,-0.40282318078796453,-0.07053995858832246,124,negative,Pearson r,0.24382403512494835,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bt,nT,sdnn,15,-0.24259355690268236,0.006633069366265735,-0.40172698446645044,-0.06923850920916594,124,negative,Pearson r,0.24259355690268236,Interplanetary magnetic field — Bt
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn50,9,0.24208394650976126,0.006751749648156873,0.0686996784026555,0.4012728541908097,124,positive,Pearson r,0.24208394650976126,Boulder K index (1 min) — K Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,rmssd,9,0.24153635175995047,0.006881373220966311,0.06812079799103611,0.4007847875830612,124,positive,Pearson r,0.24153635175995047,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_mag,Interplanetary magnetic field,bt,nT,mean_hr,0,-0.23702533507042867,0.008035992446927265,-0.39676071402735047,-0.06335649278386742,124,negative,Pearson r,0.23702533507042867,Interplanetary magnetic field — Bt
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,15,-0.23695831642630352,0.008054365738324219,-0.3967008834105148,-0.06328577074310335,124,negative,Pearson r,0.23695831642630352,Geomagnetic Dst (7 d) — Dst
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,sdnn,6,0.23610487678013392,0.008291606919895932,0.06238532321418701,0.39593885999349343,124,positive,Pearson r,0.23610487678013392,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,sdnn,6,0.2360714601106863,0.008301020490293139,0.06235007169039696,0.3959090182730786,124,positive,Pearson r,0.2360714601106863,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,mean_hr,6,0.23445360948509378,0.008768219859036632,0.060643905868986894,0.3944638429996571,124,positive,Pearson r,0.23445360948509378,Solar wind (ACE/DSCOVR) — Proton Speed
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,12,-0.23431022126611056,0.008810725621230827,-0.3943357205995724,-0.06049273935828886,124,negative,Pearson r,0.23431022126611056,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,rmssd,12,0.23412192105264287,0.008866821121671697,0.0602942366494704,0.39416745830832933,124,positive,Pearson r,0.23412192105264287,Solar wind (ACE/DSCOVR) — Proton Speed
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,rmssd,-6,-0.23300644930276962,0.009205632325158156,-0.3931704691262732,-0.05911860822654397,124,negative,Pearson r,0.23300644930276962,Planetary K index (1m) — Kp Index
+boulder_k_1m,Boulder K index (1 min),k_index,K,mean_hr,3,0.2298631379890898,0.010222523615600486,0.05580837281857788,0.3903590049123359,124,positive,Pearson r,0.2298631379890898,Boulder K index (1 min) — K Index
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,rmssd,0,0.2297057316243869,0.010275946781415737,0.05564270800440217,0.390218137578714,124,positive,Pearson r,0.2297057316243869,Planetary K index (1m) — Estimated Kp
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn50,0,0.2287672515747241,0.010599586366449571,0.05465518872776354,0.3893781096902943,124,positive,Pearson r,0.2287672515747241,Interplanetary magnetic field — Bz Gsm
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,sdnn,-6,-0.2276880454796992,0.010982794037072828,-0.3884117883697467,-0.05352001081108601,124,negative,Pearson r,0.2276880454796992,Planetary K index (1m) — Kp Index
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn20,18,-0.22705983650348793,0.011211413972406738,-0.38784912712657094,-0.052859427700422706,124,negative,Pearson r,0.22705983650348793,GOES x-ray flux — Flux
+goes_xray_flux,GOES x-ray flux,flux,W/m²,mean_hr,3,-0.22694036408223722,0.011255362064807551,-0.38774210697163286,-0.05273381563677599,124,negative,Pearson r,0.22694036408223722,GOES x-ray flux — Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,rmssd,0,0.22500982010243434,0.011986754314977133,0.050704825701690395,0.3860121768124703,124,positive,Pearson r,0.22500982010243434,Interplanetary magnetic field — Bz Gsm
+boulder_k_1m,Boulder K index (1 min),k_index,K,rmssd,15,0.2237836767918047,0.012472598115406932,0.049416903274312966,0.3849128607239288,124,positive,Pearson r,0.2237836767918047,Boulder K index (1 min) — K Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn50,15,-0.22336181473746514,0.012643692835628344,-0.38453452860845316,-0.04897391977519497,124,negative,Pearson r,0.22336181473746514,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,sdnn,0,0.22175639922454043,0.01331370479709128,0.047288752723359286,0.3830942730191934,124,positive,Pearson r,0.22175639922454043,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,rmssd,18,0.221340962685408,0.013492053934955952,0.046852840408642356,0.3827214474312885,124,positive,Pearson r,0.221340962685408,Solar wind (ACE/DSCOVR) — Proton Speed
+boulder_k_1m,Boulder K index (1 min),k_index,K,mean_hr,-3,-0.22099655600689005,0.013641486731046053,-0.3824123263796988,-0.04649150920813844,124,negative,Pearson r,0.22099655600689005,Boulder K index (1 min) — K Index
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn50,15,0.21985218016691951,0.014148432264855359,0.04529122535039462,0.38138493615051244,124,positive,Pearson r,0.21985218016691951,GOES x-ray flux — Flux
+boulder_k_1m,Boulder K index (1 min),k_index,K,rmssd,6,-0.21930102926091347,0.014398389606310121,-0.3808899850921421,-0.04471332795712024,124,negative,Pearson r,0.21930102926091347,Boulder K index (1 min) — K Index
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn50,3,0.21914769995227032,0.014468607629957058,0.044552578590236175,0.3807522740250645,124,positive,Pearson r,0.21914769995227032,Interplanetary magnetic field — Bt
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,0,0.21897637371218895,0.014547420074176464,0.044372972061819296,0.3805983907271622,124,positive,Pearson r,0.21897637371218895,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn50,-6,-0.21676946159607866,0.015596544740187493,-0.3786153665444969,-0.042060407395340095,124,negative,Pearson r,0.21676946159607866,Solar wind (ACE/DSCOVR) — Proton Temperature
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,mean_hr,18,-0.21414765549428905,0.016927819118141,-0.37625760601410313,-0.0393155171314673,124,negative,Pearson r,0.21414765549428905,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,sdnn,6,0.2139021193312064,0.017057396502646694,0.039058589002189,0.37603669054927746,124,positive,Pearson r,0.2139021193312064,Solar wind (ACE/DSCOVR) — Proton Speed
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,6,-0.21317313490994094,0.01744718197736992,-0.37538069511823413,-0.038295918598114785,124,negative,Pearson r,0.21317313490994094,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn20,6,0.21298646418772707,0.01754822596955923,0.03810065468095097,0.37521268851677675,124,positive,Pearson r,0.21298646418772707,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,sdnn,-3,0.2126738544802333,0.017718574966585784,0.03777368421447483,0.37493131096455,124,positive,Pearson r,0.2126738544802333,Solar wind (ACE/DSCOVR) — Proton Speed
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn50,12,0.21264253836902527,0.017735718522649182,0.03774093155792001,0.3749031219303225,124,positive,Pearson r,0.21264253836902527,Boulder K index (1 min) — K Index
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,mean_hr,3,-0.21202723374276428,0.018075482206270567,-0.37434919780871684,-0.03709747764662802,124,negative,Pearson r,0.21202723374276428,GOES x-ray flux — Observed Flux
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn50,0,0.21122060385716093,0.018529410987317474,0.036254165288834454,0.3736228588049194,124,positive,Pearson r,0.21122060385716093,Boulder K index (1 min) — K Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn50,15,0.2108500994674167,0.018741191840012737,0.03586689526143664,0.3732891671752853,124,positive,Pearson r,0.2108500994674167,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,mean_hr,21,-0.21015939822133986,0.01914158467795762,-0.3726669807321114,-0.035145079480549984,124,negative,Pearson r,0.21015939822133986,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,mean_hr,21,-0.21015939822133986,0.01914158467795762,-0.3726669807321114,-0.035145079480549984,124,negative,Pearson r,0.21015939822133986,RSTE solar radio flux — Frequency Mhz
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn50,-3,-0.2072427247705251,0.020914840975725914,-0.37003801743920617,-0.03209902868006212,124,negative,Pearson r,0.2072427247705251,Interplanetary magnetic field — Bz Gsm
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn20,9,-0.2069620751379347,0.02109269687955594,-0.3697849144130187,-0.031806101524058786,124,negative,Pearson r,0.2069620751379347,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn50,-3,-0.20573759746075665,0.021883991372466324,-0.3686803401091949,-0.03052840879901335,124,negative,Pearson r,0.20573759746075665,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,sdnn,18,0.20544393659691035,0.022077512647112253,0.030222070718328137,0.36841536669210706,124,positive,Pearson r,0.20544393659691035,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn50,15,-0.20489650888981548,0.022442191814999228,-0.36792134597243537,-0.02965109864686853,124,negative,Pearson r,0.20489650888981548,Interplanetary magnetic field — Bt
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,rmssd,0,0.20263952862771845,0.024000848079383647,0.027298254852183776,0.3658835840819545,124,positive,Pearson r,0.20263952862771845,Interplanetary magnetic field — Bz Gse
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,3,-0.20259220009723677,0.02403450111519944,-0.36584083576460696,-0.02724893686641678,124,negative,Pearson r,0.20259220009723677,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bt,nT,rmssd,3,0.20173578067554346,0.024650477650197948,0.02635666529298972,0.3650671772081232,124,positive,Pearson r,0.20173578067554346,Interplanetary magnetic field — Bt
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,15,-0.19855136213733748,0.027060742425086354,-0.36218850761244736,-0.023041387465059772,124,negative,Pearson r,0.19855136213733748,Geomagnetic Dst (7 d) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,24,-0.19782069271436614,0.02764127666475712,-0.3615275521419749,-0.022281236270674777,124,negative,Pearson r,0.19782069271436614,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn50,0,-0.19771571041683186,0.02772555293347679,-0.36143257279707725,-0.02217203471710729,124,negative,Pearson r,0.19771571041683186,Interplanetary magnetic field — Bt
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn20,3,0.19549305666423233,0.029561864916870472,0.019861034852280007,0.3594209007943832,124,positive,Pearson r,0.19549305666423233,Boulder K index (1 min) — K Index
+boulder_k_1m,Boulder K index (1 min),k_index,K,sdnn,15,0.19508448972312256,0.029910417811495088,0.01943643227938969,0.35905095054916486,124,positive,Pearson r,0.19508448972312256,Boulder K index (1 min) — K Index
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,6,-0.1948486016830939,0.030113240691440078,-0.3588373345756521,-0.01919131483866408,124,negative,Pearson r,0.1948486016830939,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn50,18,-0.19481800918477626,0.030139630261359077,-0.35880962930004107,-0.019159526919146515,124,negative,Pearson r,0.19481800918477626,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,rmssd,9,-0.1947439378494217,0.030203606666589326,-0.35874254738495814,-0.01908256267039162,124,negative,Pearson r,0.1947439378494217,Solar wind (ACE/DSCOVR) — Proton Temperature
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,24,-0.19450857013824635,0.030407662380967728,-0.358529377882791,-0.018838016307737973,124,negative,Pearson r,0.19450857013824635,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn50,0,0.1939194665725736,0.030923528351618566,0.01822603155443977,0.35799575938085537,124,positive,Pearson r,0.1939194665725736,Interplanetary magnetic field — Bz Gse
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,sdnn,0,0.1920230387167682,0.03263486042108542,0.01625683876349299,0.35627721953000635,124,positive,Pearson r,0.1920230387167682,Planetary K index (1m) — Estimated Kp
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,sdnn,3,-0.19197706743479662,0.03267731974650564,-0.3562355466285793,-0.016209120508677777,124,negative,Pearson r,0.19197706743479662,Solar wind (ACE/DSCOVR) — Proton Density
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,18,0.19159522363283119,0.03303180186922379,0.015812797052233173,0.35588938051112967,124,positive,Pearson r,0.19159522363283119,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,rmssd,9,-0.19062137378668648,0.033950615189104555,-0.35500631843441743,-0.01480226847972414,124,negative,Pearson r,0.19062137378668648,Interplanetary magnetic field — Bz Gsm
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,-3,-0.18993891658865558,0.034607286028372895,-0.3543873088765028,-0.014094321435267539,124,negative,Pearson r,0.18993891658865558,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn50,0,0.18823885908960197,0.03628984369778404,0.012331532874608957,0.35284467776076683,124,positive,Pearson r,0.18823885908960197,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn20,0,0.1877452944055399,0.03679103624410463,0.011819960679157464,0.3523966498043458,124,positive,Pearson r,0.1877452944055399,Interplanetary magnetic field — Bz Gsm
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,rmssd,3,0.18675699860498596,0.037812121501925144,0.010795884051588656,0.35149930815229674,124,positive,Pearson r,0.18675699860498596,GOES x-ray flux — Observed Flux
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn50,15,0.18642381258801885,0.03816168414112697,0.010450718353989849,0.3511967174336897,124,positive,Pearson r,0.18642381258801885,GOES x-ray flux — Observed Flux
+goes_xray_flux,GOES x-ray flux,flux,W/m²,mean_hr,18,-0.18459083838049972,0.04013363498811022,-0.34953144304850714,-0.008552589319979865,124,negative,Pearson r,0.18459083838049972,GOES x-ray flux — Flux
+solar_wind_mag,Interplanetary magnetic field,bt,nT,sdnn,9,0.18330555184799135,0.04156670495356999,0.007222372256000031,0.3483631261902121,124,positive,Pearson r,0.18330555184799135,Interplanetary magnetic field — Bt
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn20,12,-0.18278262386967598,0.042161882844954715,-0.34788764134185274,-0.006681342264037609,124,negative,Pearson r,0.18278262386967598,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,rmssd,-6,-0.18161662632504355,0.04351465404734208,-0.34682712409556016,-0.005475352913909944,124,negative,Pearson r,0.18161662632504355,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,mean_hr,-3,0.1815283798968007,0.04361849352539364,0.005384100629660797,0.3467468435548209,124,positive,Pearson r,0.1815283798968007,Solar wind (ACE/DSCOVR) — Proton Temperature
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,mean_hr,-3,-0.1808146998066419,0.04446589897262395,-0.3460974974513831,-0.004646218901095604,124,negative,Pearson r,0.1808146998066419,Planetary K index (1m) — Estimated Kp
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn20,3,0.17892601177147632,0.04677488777825372,0.0026944086607899103,0.3443782989600426,124,positive,Pearson r,0.17892601177147632,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,sdnn,9,0.1780369281417826,0.04789583478646263,0.0017760753772638345,0.3435686167697053,124,positive,Pearson r,0.1780369281417826,Solar wind (ACE/DSCOVR) — Proton Density
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,21,0.17799701864323414,0.04794667064767294,0.0017348598808567955,0.3435322656987848,124,positive,Pearson r,0.17799701864323414,Geomagnetic Dst (7 d) — Dst
+goes_xray_flux,GOES x-ray flux,flux,W/m²,rmssd,3,0.17732217398607386,0.04881307575939739,0.0010380222803983577,0.3429175167124118,124,positive,Pearson r,0.17732217398607386,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn20,12,0.177185702385488,0.04898985460271301,0.0008971239280562856,0.3427931808154932,124,positive,Pearson r,0.177185702385488,Solar wind (ACE/DSCOVR) — Proton Temperature
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,pnn20,0,0.1769626807911061,0.04927988831892198,0.0006668832102491792,0.34258997887238646,124,positive,Pearson r,0.1769626807911061,Planetary K index (1m) — Estimated Kp
+goes_xray_flux,GOES x-ray flux,flux,W/m²,sdnn,6,0.1768748553792725,0.04939449278139068,0.0005762200527998647,0.34250995414241375,124,positive,Pearson r,0.1768748553792725,GOES x-ray flux — Flux
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn20,18,-0.1768161483013498,0.04947122344827344,-0.3424564601061317,-0.0005156176941153305,124,negative,Pearson r,0.1768161483013498,GOES x-ray flux — Observed Flux
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,0,0.1762416791723995,0.05022728363424502,-7.732908763809562e-05,0.341932945721235,124,positive,Pearson r,0.1762416791723995,Geomagnetic Dst (7 d) — Dst
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,mean_hr,-3,-0.17530652565203583,0.05147848481348738,-0.34108051919918864,0.0010422964702462634,124,negative,Pearson r,0.17530652565203583,Planetary K index (1m) — Kp Index
+solar_wind_mag,Interplanetary magnetic field,bt,nT,mean_hr,15,-0.17519791734254606,0.05162545433408758,-0.34098150109273057,0.0011543460661962441,124,negative,Pearson r,0.17519791734254606,Interplanetary magnetic field — Bt
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn20,9,-0.17483956686837238,0.05211283845460572,-0.3406547671657926,0.0015240195743535293,124,negative,Pearson r,0.17483956686837238,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn20,9,-0.17483956686837238,0.05211283845460572,-0.3406547671657926,0.0015240195743535293,124,negative,Pearson r,0.17483956686837238,RSTE solar radio flux — Frequency Mhz
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,mean_hr,18,0.17467912996056043,0.052332273434330064,-0.0016895102918461221,0.34050847230546616,124,positive,Pearson r,0.17467912996056043,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn20,0,0.17435881606038647,0.05277266033978062,-0.002019885279116928,0.34021636912585745,124,positive,Pearson r,0.17435881606038647,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,mean_hr,-6,0.17429128413120154,0.05286589668827856,-0.0020895334778450216,0.34015478079026784,124,positive,Pearson r,0.17429128413120154,Interplanetary magnetic field — Bz Gsm
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,rmssd,6,-0.17420970218018766,0.05297871214888681,-0.3400803771000228,0.002173669706197355,124,negative,Pearson r,0.17420970218018766,Solar wind (ACE/DSCOVR) — Proton Density
+boulder_k_1m,Boulder K index (1 min),k_index,K,mean_hr,9,-0.17316298168507938,0.05444387614462506,-0.3391255715234892,0.0032529408171639933,124,negative,Pearson r,0.17316298168507938,Boulder K index (1 min) — K Index
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,12,-0.17262017945904637,0.05521672047487533,-0.3386302993331637,0.0038124611722360315,124,negative,Pearson r,0.17262017945904637,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,rmssd,18,0.17146581975369304,0.056890347235012365,-0.005002007607257706,0.33757671426514596,124,positive,Pearson r,0.17146581975369304,Solar wind (ACE/DSCOVR) — Proton Temperature
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn20,3,0.1714287551434142,0.056944767813929514,-0.005040193732635929,0.3375428784664893,124,positive,Pearson r,0.1714287551434142,GOES x-ray flux — Observed Flux
+solar_wind_mag,Interplanetary magnetic field,bt,nT,rmssd,9,0.17129133650762582,0.05714690785509737,-0.005181765942715757,0.33741742704240724,124,positive,Pearson r,0.17129133650762582,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn50,9,-0.16936185928021102,0.06004789160771583,-0.3356553565731681,0.007168816260945013,124,negative,Pearson r,0.16936185928021102,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn50,-6,-0.16935838591384156,0.06005322058682401,-0.3356521835159199,0.0071723920114416025,124,negative,Pearson r,0.16935838591384156,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn20,3,0.16859057384663434,0.061240769973904985,-0.007962726024027584,0.334950664258563,124,positive,Pearson r,0.16859057384663434,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,rmssd,9,-0.16821252013898397,0.06183251155249682,-0.3346051838912925,0.008351788016644844,124,negative,Pearson r,0.16821252013898397,Interplanetary magnetic field — Bz Gse
+boulder_k_1m,Boulder K index (1 min),k_index,K,sdnn,-6,-0.1677570754872632,0.06255158603004164,-0.33418892122349764,0.0088204234664213,124,negative,Pearson r,0.1677570754872632,Boulder K index (1 min) — K Index
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,pnn20,-6,-0.16714202117512872,0.0635334842505971,-0.3336266770776168,0.009453168186349573,124,negative,Pearson r,0.16714202117512872,Planetary K index (1m) — Estimated Kp
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,mean_hr,-6,0.1668571180605495,0.0639925585381307,-0.009746217866511833,0.33336619634200443,124,positive,Pearson r,0.1668571180605495,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn20,-3,0.16594924225374763,0.06547352587140315,-0.010679851308978852,0.3325359755888032,124,positive,Pearson r,0.16594924225374763,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn20,9,-0.1640689044987086,0.06862960528472158,-0.3308156507530728,0.012612557794889514,124,negative,Pearson r,0.1640689044987086,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bt,nT,rmssd,-6,0.1639039004569337,0.068912353353836,-0.012782094333030122,0.33066463530755213,124,positive,Pearson r,0.1639039004569337,Interplanetary magnetic field — Bt
+goes_xray_flux,GOES x-ray flux,flux,W/m²,mean_hr,9,0.16275561800424268,0.0709063064411591,-0.013961637694111786,0.32961346457480234,124,positive,Pearson r,0.16275561800424268,GOES x-ray flux — Flux
+solar_wind_mag,Interplanetary magnetic field,bt,nT,rmssd,15,-0.16229330330979416,0.07172217958178329,-0.3291901315876274,0.014436399638080967,124,negative,Pearson r,0.16229330330979416,Interplanetary magnetic field — Bt
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,-6,-0.16204459399554583,0.07216422364662185,-0.3289623653260709,0.014691772181300194,124,negative,Pearson r,0.16204459399554583,Geomagnetic Dst (7 d) — Dst
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,mean_hr,-6,-0.16083973931662643,0.07433696614663568,-0.32785869279574575,0.01592858008570714,124,negative,Pearson r,0.16083973931662643,Planetary K index (1m) — Estimated Kp
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,rmssd,9,0.16047410866243075,0.07500665951035178,-0.01630380045498433,0.3275236771444362,124,positive,Pearson r,0.16047410866243075,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,rmssd,-3,-0.16018912341685537,0.07553200911066531,-0.3272625251649038,0.016596225733491666,124,negative,Pearson r,0.16018912341685537,Interplanetary magnetic field — Bz Gsm
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,mean_hr,0,0.1600811908097303,0.07573174778074164,-0.01670696821267068,0.32716361227882895,124,positive,Pearson r,0.1600811908097303,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,rmssd,-3,-0.15894381252084866,0.0778625472487019,-0.3261210598886082,0.0178736929067739,124,negative,Pearson r,0.15894381252084866,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn20,6,-0.1588727365929364,0.07799728771664718,-0.3260558962243753,0.017946586738805424,124,negative,Pearson r,0.1588727365929364,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,sdnn,6,-0.15749394555626775,0.08064839232086726,-0.3247914818670944,0.019360271211166975,124,negative,Pearson r,0.15749394555626775,Solar wind (ACE/DSCOVR) — Proton Density
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,9,0.15646596128289528,0.08267162272545547,-0.020413811000482316,0.3238483840322928,124,positive,Pearson r,0.15646596128289528,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn50,9,0.15611853999042158,0.08336451574046028,-0.020769780337180164,0.32352957604416327,124,positive,Pearson r,0.15611853999042158,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bt,nT,sdnn,3,-0.15604824730673117,0.0835052701248589,-0.32346506797904856,0.020841797065918134,124,negative,Pearson r,0.15604824730673117,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,sdnn,-6,-0.1554729288116147,0.08466444778260766,-0.32293703585836714,0.02143115721758027,124,negative,Pearson r,0.1554729288116147,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bt,nT,rmssd,-3,-0.1554477775461755,0.08471541551578575,-0.32291394943807417,0.02145691953905175,124,negative,Pearson r,0.1554477775461755,Interplanetary magnetic field — Bt
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn20,3,0.15533954446054407,0.0849350240199752,-0.021567779492809257,0.3228145996972669,124,positive,Pearson r,0.15533954446054407,Interplanetary magnetic field — Bz Gsm
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,rmssd,-6,-0.15430370832211643,0.08705984662041379,-0.3218635941862528,0.022628535859774142,124,negative,Pearson r,0.15430370832211643,Geomagnetic Dst (1 h) — Dst
+solar_wind_mag,Interplanetary magnetic field,bt,nT,rmssd,12,-0.15076968983080655,0.09462972564156372,-0.31861645035149244,0.02624458040638194,124,negative,Pearson r,0.15076968983080655,Interplanetary magnetic field — Bt
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,pnn20,-6,-0.15037993881350545,0.09549552588726341,-0.3182580960984468,0.026643094295918376,124,negative,Pearson r,0.15037993881350545,Planetary K index (1m) — Kp Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn50,9,0.15032278621878442,0.0956230107424762,-0.02670152713706229,0.3182055434516684,124,positive,Pearson r,0.15032278621878442,Solar wind (ACE/DSCOVR) — Proton Speed
+boulder_k_1m,Boulder K index (1 min),k_index,K,mean_hr,0,-0.14980837421245433,0.09677652649395727,-0.31773248764643347,0.027227407787299533,124,negative,Pearson r,0.14980837421245433,Boulder K index (1 min) — K Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,sdnn,0,0.1495764785764269,0.09730010991262152,-0.02746444141949697,0.31751920794155103,124,positive,Pearson r,0.1495764785764269,Solar wind (ACE/DSCOVR) — Proton Speed
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn50,9,-0.14785966608895082,0.1012462805808735,-0.3159396876037942,0.02921867337835698,124,negative,Pearson r,0.14785966608895082,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,mean_hr,0,0.14646298305706335,0.10454859103381212,-0.030644994168839694,0.31465400856757186,124,positive,Pearson r,0.14646298305706335,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,sdnn,-6,0.14489687951528335,0.10835130656562399,-0.03224347321099119,0.3132116397005574,124,positive,Pearson r,0.14489687951528335,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,mean_hr,12,-0.14407834669756317,0.11038138261702014,-0.3124574683963343,0.03307856684246716,124,negative,Pearson r,0.14407834669756317,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn20,15,-0.14374031140647162,0.11122836512214804,-0.3121459509922004,0.03342336921375445,124,negative,Pearson r,0.14374031140647162,Interplanetary magnetic field — Bt
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn20,15,0.14279593294190898,0.11362146200065293,-0.03438642962147955,0.3112754643254995,124,positive,Pearson r,0.14279593294190898,Boulder K index (1 min) — K Index
+goes_xray_flux,GOES x-ray flux,flux,W/m²,rmssd,15,0.14258013714025014,0.11417387905018524,-0.034606448175592386,0.3110765135250522,124,positive,Pearson r,0.14258013714025014,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn20,-6,-0.14143120749728558,0.11715025862869735,-0.3100170205503692,0.03577757131610358,124,negative,Pearson r,0.14143120749728558,Solar wind (ACE/DSCOVR) — Proton Density
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn50,0,-0.14098043927712817,0.11833430349590739,-0.3096012272919529,0.03623691397818606,124,negative,Pearson r,0.14098043927712817,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn20,9,0.14055221409297136,0.11946769959632873,-0.036673215446396665,0.30920616822554,124,positive,Pearson r,0.14055221409297136,Solar wind (ACE/DSCOVR) — Proton Density
+boulder_k_1m,Boulder K index (1 min),k_index,K,sdnn,18,-0.1402415284905515,0.1202952448282575,-0.3089195088382488,0.036989718262336664,124,negative,Pearson r,0.1402415284905515,Boulder K index (1 min) — K Index
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn50,6,0.1402297527621958,0.1203266977357803,-0.03700171377767645,0.30890864315815186,124,positive,Pearson r,0.1402297527621958,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn20,3,0.13999878823484552,0.12094488901708013,-0.03723697879648425,0.3086955190597636,124,positive,Pearson r,0.13999878823484552,Interplanetary magnetic field — Bt
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,rmssd,12,-0.1397888979828578,0.12150879967690847,-0.3085018267007611,0.03745076010463168,124,negative,Pearson r,0.1397888979828578,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn50,-3,0.13969405666421114,0.12176427436977491,-0.03754735432036557,0.30841429999645853,124,positive,Pearson r,0.13969405666421114,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,mean_hr,18,0.13960694645355978,0.12199928898733621,-0.03763607162045053,0.3083339056231708,124,positive,Pearson r,0.13960694645355978,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bt,nT,sdnn,-6,0.13959457225518618,0.12203270172155861,-0.0376486738828026,0.30832248522886346,124,positive,Pearson r,0.13959457225518618,Interplanetary magnetic field — Bt
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn50,18,-0.1391952968307918,0.12311461893877716,-0.3079539598765564,0.03805527793899551,124,negative,Pearson r,0.1391952968307918,Boulder K index (1 min) — K Index
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn20,-3,-0.13901000309575814,0.12361921617431922,-0.3077829192750967,0.038243952771405895,124,negative,Pearson r,0.13901000309575814,Boulder K index (1 min) — K Index
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,sdnn,18,0.13858358391819967,0.1247865087553808,-0.03867810491404935,0.3073892596007616,124,positive,Pearson r,0.13858358391819967,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn50,6,0.13811671807048545,0.12607423609741653,-0.03915336047934656,0.3069581942884957,124,positive,Pearson r,0.13811671807048545,Interplanetary magnetic field — Bz Gse
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,21,0.13750046125284293,0.1277896418018453,-0.039780568834931467,0.30638908761834793,124,positive,Pearson r,0.13750046125284293,Geomagnetic Dst (7 d) — Dst
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,mean_hr,9,0.13559701841759186,0.13320133765999786,-0.04171695612900101,0.3046305155411811,124,positive,Pearson r,0.13559701841759186,GOES x-ray flux — Observed Flux
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,9,0.134719447487782,0.13575461405292386,-0.04260926749846132,0.30381934807515426,124,positive,Pearson r,0.134719447487782,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,mean_hr,12,-0.13441958076447758,0.13663557472862234,-0.3035421152609991,0.042914106207219874,124,negative,Pearson r,0.13441958076447758,Interplanetary magnetic field — Bz Gse
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn50,6,0.13396889214045002,0.13796781228192284,-0.04337220544422725,0.303125390699671,124,positive,Pearson r,0.13396889214045002,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,sdnn,-3,0.13373140366764172,0.13867379572191285,-0.04361356891106431,0.3029057734159232,124,positive,Pearson r,0.13373140366764172,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,mean_hr,12,-0.13350337501784648,0.13935424092058593,-0.3026948871864986,0.043845298723002454,124,negative,Pearson r,0.13350337501784648,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn20,9,-0.1330704915937371,0.14065295932926677,-0.3022945008876423,0.044285155839049926,124,negative,Pearson r,0.1330704915937371,Interplanetary magnetic field — Bz Gse
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,pnn20,-3,-0.13306857670632824,0.14065872464301118,-0.30229272962067133,0.04428710142228129,124,negative,Pearson r,0.13306857670632824,Planetary K index (1m) — Estimated Kp
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,18,0.13024939041324274,0.14934285361385632,-0.047150021282138146,0.29968372002576515,124,positive,Pearson r,0.13024939041324274,Geomagnetic Dst (7 d) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,9,0.1291724269375573,0.1527648958161143,-0.048242922699477386,0.29868637718241786,124,positive,Pearson r,0.1291724269375573,Geomagnetic Dst (7 d) — Dst
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn50,0,-0.12874274309884237,0.1541465367995875,-0.2982883567989539,0.04867884688919153,124,negative,Pearson r,0.12874274309884237,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,sdnn,15,-0.12770344926456997,0.15752711829721425,-0.2973254048002869,0.0497329551325934,124,negative,Pearson r,0.12770344926456997,Solar wind (ACE/DSCOVR) — Proton Density
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,9,0.12757251287342675,0.15795692887312576,-0.04986572989885651,0.29720406192453985,124,positive,Pearson r,0.12757251287342675,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,mean_hr,3,-0.12733734179234946,0.15873110117552677,-0.29698610772084993,0.0501041870853645,124,negative,Pearson r,0.12733734179234946,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn50,12,0.12725070201696131,0.15901702916020205,-0.050192032401317074,0.29690580638824077,124,positive,Pearson r,0.12725070201696131,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,mean_hr,-6,0.12690231752339245,0.16017065198155098,-0.05054523674268045,0.29658288498404245,124,positive,Pearson r,0.12690231752339245,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn20,-6,0.12493224516239783,0.1668120739209923,-0.05254172989990781,0.2947560729457972,124,positive,Pearson r,0.12493224516239783,Interplanetary magnetic field — Bz Gse
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn20,9,0.12445285537456796,0.16845866534480447,-0.05302733429889943,0.2943113557092948,124,positive,Pearson r,0.12445285537456796,GOES x-ray flux — Observed Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,sdnn,15,-0.12375946202813824,0.17086158140364932,-0.2936679828572882,0.05372956803087425,124,negative,Pearson r,0.12375946202813824,Interplanetary magnetic field — Bz Gse
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,rmssd,15,0.1219096263887829,0.1773959917060536,-0.055602129541407495,0.29195083849818054,124,positive,Pearson r,0.1219096263887829,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,sdnn,0,0.12185532543851828,0.1775905447290832,-0.05565707873796586,0.29190041606364836,124,positive,Pearson r,0.12185532543851828,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,rmssd,-3,0.12164966355411581,0.17832882634870834,-0.05586518607151761,0.29170943527627274,124,positive,Pearson r,0.12164966355411581,Solar wind (ACE/DSCOVR) — Proton Speed
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,6,-0.12101227549641609,0.18063123724149396,-0.2911174607852008,0.05651005511367193,124,negative,Pearson r,0.12101227549641609,Geomagnetic Dst (7 d) — Dst
+goes_xray_flux,GOES x-ray flux,flux,W/m²,rmssd,12,-0.1209805086839269,0.18074655495677802,-0.2910879539333226,0.05654219089670149,124,negative,Pearson r,0.1209805086839269,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn50,-3,0.12056678811932314,0.18225334890117006,-0.05696068322492298,0.2907036367994862,124,positive,Pearson r,0.12056678811932314,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,sdnn,-6,0.12006385675577806,0.18409741873426436,-0.057469331290189406,0.2902363752030684,124,positive,Pearson r,0.12006385675577806,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,mean_hr,18,0.11968011193549075,0.18551362440479682,-0.05785737606409014,0.2898797924097149,124,positive,Pearson r,0.11968011193549075,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,rmssd,12,0.11911583801420994,0.18761049832631863,-0.05842787538912483,0.2893553727922849,124,positive,Pearson r,0.11911583801420994,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn50,12,-0.11889083008943235,0.18845144150678741,-0.2891462285286304,0.05865533339825825,124,negative,Pearson r,0.11889083008943235,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,rmssd,6,0.11804205979268124,0.1916483465727777,-0.059513179957256426,0.2883571524914954,124,positive,Pearson r,0.11804205979268124,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn20,18,0.1173217347605296,0.19439221763371148,-0.06024100206293345,0.28768730661350334,124,positive,Pearson r,0.1173217347605296,Solar wind (ACE/DSCOVR) — Proton Speed
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,sdnn,-3,0.1166237735744387,0.19707795172984102,-0.06094604750543357,0.2870380983253859,124,positive,Pearson r,0.1166237735744387,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,rmssd,0,0.11620644973592927,0.19869656328140978,-0.061367522520349556,0.2866498499426746,124,positive,Pearson r,0.11620644973592927,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,mean_hr,9,0.1160880387159235,0.19915756960266273,-0.061487099858428165,0.28653967856443335,124,positive,Pearson r,0.1160880387159235,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,sdnn,18,0.11469590686347178,0.20463549828519945,-0.0628925616994077,0.2852440802019595,124,positive,Pearson r,0.11469590686347178,Interplanetary magnetic field — Bz Gse
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,mean_hr,-3,0.11467849227600349,0.20470470188455286,-0.06291013857603071,0.28522786923231136,124,positive,Pearson r,0.11467849227600349,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,mean_hr,-3,0.11467849227600349,0.20470470188455286,-0.06291013857603071,0.28522786923231136,124,positive,Pearson r,0.11467849227600349,RSTE solar radio flux — Flux Sfu
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn20,15,0.11390323218019127,0.20780254824070762,-0.06369251183430778,0.2845060927440534,124,positive,Pearson r,0.11390323218019127,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,rmssd,-3,0.11233217256802222,0.21418298096761107,-0.06527731706823624,0.2830428239697937,124,positive,Pearson r,0.11233217256802222,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn20,-6,0.11227823114069896,0.21440450001172967,-0.06533171453847363,0.2829925693636291,124,positive,Pearson r,0.11227823114069896,Interplanetary magnetic field — Bz Gsm
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn50,-6,-0.11214387492616278,0.21495696434555484,-0.2828673921333833,0.06546720206638529,124,negative,Pearson r,0.11214387492616278,Boulder K index (1 min) — K Index
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,sdnn,0,0.11137565129142102,0.21813531653030624,-0.06624176858495685,0.2821515405001488,124,positive,Pearson r,0.11137565129142102,Interplanetary magnetic field — Bz Gsm
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,21,-0.11069686607601241,0.22097127381918014,-0.28151887172937295,0.06692598014530124,124,negative,Pearson r,0.11069686607601241,Geomagnetic Dst (7 d) — Dst
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,mean_hr,-3,0.11051760179808483,0.2217245760766387,-0.06710664961706918,0.2813517618127392,124,positive,Pearson r,0.11051760179808483,GOES x-ray flux — Observed Flux
+solar_wind_mag,Interplanetary magnetic field,bt,nT,rmssd,18,-0.11026832913770562,0.22277508407277677,-0.28111937295425016,0.06735785688542335,124,negative,Pearson r,0.11026832913770562,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn50,6,0.11005480423777864,0.22367773425861143,-0.06757302104846924,0.2809202946453521,124,positive,Pearson r,0.11005480423777864,Solar wind (ACE/DSCOVR) — Proton Speed
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,3,-0.10964393428828281,0.22542189774223123,-0.2805371818144419,0.0679869988300792,124,negative,Pearson r,0.10964393428828281,Geomagnetic Dst (7 d) — Dst
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,pnn20,-3,-0.10834050532574423,0.23101842606176087,-0.2793214480585193,0.06929988228277072,124,negative,Pearson r,0.10834050532574423,Planetary K index (1m) — Kp Index
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn20,21,-0.10807325256796092,0.23217787032703138,-0.2790721084281846,0.0695689975751745,124,negative,Pearson r,0.10807325256796092,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn20,21,-0.10807325256796091,0.23217787032703138,-0.27907210842818453,0.06956899757517453,124,negative,Pearson r,0.10807325256796091,RSTE solar radio flux — Flux Sfu
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,mean_hr,0,0.10757893428680929,0.23433314867881963,-0.07006669272241946,0.2786108620014989,124,positive,Pearson r,0.10757893428680929,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bt,nT,mean_hr,-3,-0.1075759728565954,0.23434610285985258,-0.27860809846494494,0.07006967411674649,124,negative,Pearson r,0.1075759728565954,Interplanetary magnetic field — Bt
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,rmssd,-6,0.10681368578766244,0.23769725242300643,-0.07083699451582348,0.2778966560166429,124,positive,Pearson r,0.10681368578766244,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,mean_hr,0,0.10653883661341117,0.23891369799156473,-0.07111360694013026,0.2776400932658192,124,positive,Pearson r,0.10653883661341117,Interplanetary magnetic field — Bz Gse
+goes_xray_flux,GOES x-ray flux,flux,W/m²,sdnn,-3,0.10596608780174953,0.2414625287965434,-0.07168994234436134,0.2771053724731822,124,positive,Pearson r,0.10596608780174953,GOES x-ray flux — Flux
+boulder_k_1m,Boulder K index (1 min),k_index,K,rmssd,12,0.10581695806260351,0.242129272317337,-0.07183998648112162,0.27696612690095784,124,positive,Pearson r,0.10581695806260351,Boulder K index (1 min) — K Index
+boulder_k_1m,Boulder K index (1 min),k_index,K,rmssd,0,0.10392287233124634,0.2507089356930324,-0.0737449865606392,0.2751969535788352,124,positive,Pearson r,0.10392287233124634,Boulder K index (1 min) — K Index
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn20,6,0.10308996567311393,0.2545473308269258,-0.07458228246474442,0.27441860861099127,124,positive,Pearson r,0.10308996567311393,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn20,9,0.10266756421670344,0.2565092912193355,-0.07500681417339482,0.2740237918340131,124,positive,Pearson r,0.10266756421670344,Interplanetary magnetic field — Bt
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn20,15,0.10221051267225334,0.25864384775538396,-0.07546609818115747,0.2735965227021523,124,positive,Pearson r,0.10221051267225334,GOES x-ray flux — Observed Flux
+solar_wind_mag,Interplanetary magnetic field,bt,nT,sdnn,18,-0.10215725003083663,0.2588933876321835,-0.2735467263624345,0.07551961607922107,124,negative,Pearson r,0.10215725003083663,Interplanetary magnetic field — Bt
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,sdnn,15,-0.10175474478745888,0.26078448483366523,-0.2731703862188739,0.07592401720065382,124,negative,Pearson r,0.10175474478745888,Interplanetary magnetic field — Bz Gsm
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,mean_hr,0,0.10171205729071858,0.26098559626859297,-0.07596690233580547,0.2731304705712612,124,positive,Pearson r,0.10171205729071858,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,sdnn,9,-0.10029837536766051,0.2677056940677667,-0.27180825044338675,0.07738675819628668,124,negative,Pearson r,0.10029837536766051,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn20,-6,0.09960438013265772,0.2710472928008027,-0.0780835206410622,0.2711589179658359,124,positive,Pearson r,0.09960438013265772,Interplanetary magnetic field — Bt
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,15,-0.09924061855397742,0.2728100386590089,-0.27081850424339465,0.07844866334348867,124,negative,Pearson r,0.09924061855397742,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn20,6,-0.09916499015480418,0.2731774953332466,-0.2707477246266726,0.07852457290130427,124,negative,Pearson r,0.09916499015480418,Solar wind (ACE/DSCOVR) — Proton Density
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn20,12,0.09883242498722279,0.2747972997467479,-0.07885834997397573,0.2704364592758424,124,positive,Pearson r,0.09883242498722279,Boulder K index (1 min) — K Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn20,-3,0.0988096291264791,0.2749085668329659,-0.07888122744649413,0.2704151221087224,124,positive,Pearson r,0.0988096291264791,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,sdnn,9,-0.09873592734897357,0.2752685146612871,-0.2703461353106476,0.07895519180398959,124,negative,Pearson r,0.09873592734897357,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,rmssd,15,-0.09830760002711918,0.27736668426263467,-0.2699451748120775,0.07938500642302251,124,negative,Pearson r,0.09830760002711918,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,mean_hr,-3,0.0959794399003258,0.28895910327988544,-0.08172009571405858,0.2677647246231721,124,positive,Pearson r,0.0959794399003258,Interplanetary magnetic field — Bz Gse
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,mean_hr,9,-0.09568100429870197,0.2904680583388713,-0.26748509595193404,0.08201927853251578,124,negative,Pearson r,0.09568100429870197,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,mean_hr,9,-0.09568100429870197,0.2904680583388713,-0.26748509595193404,0.08201927853251578,124,negative,Pearson r,0.09568100429870197,RSTE solar radio flux — Flux Sfu
+goes_xray_flux,GOES x-ray flux,flux,W/m²,mean_hr,-3,0.09565842855503064,0.29058241884346,-0.08204190949790928,0.2674639417178284,124,positive,Pearson r,0.09565842855503064,GOES x-ray flux — Flux
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,pnn50,-3,0.09521807274439416,0.29281908437993925,-0.08248330580109915,0.26705128033068193,124,positive,Pearson r,0.09521807274439416,Planetary K index (1m) — Kp Index
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn20,-3,-0.09503263208151407,0.2937643856288442,-0.26687748336074824,0.08266916377246712,124,negative,Pearson r,0.09503263208151407,Interplanetary magnetic field — Bz Gsm
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn20,3,0.09491364261627355,0.29437200924462126,-0.08278841449678417,0.2667659592756676,124,positive,Pearson r,0.09491364261627355,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,mean_hr,9,0.09455507855592091,0.2962080570131608,-0.08314773506728497,0.26642986363444654,124,positive,Pearson r,0.09455507855592091,Interplanetary magnetic field — Bz Gse
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,-3,0.09415506796327917,0.2982652470113917,-0.08354853509622501,0.26605486926284444,124,positive,Pearson r,0.09415506796327917,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bt,nT,sdnn,12,-0.09379370770866355,0.30013174784706814,-0.26571606334351294,0.08391055908630764,124,negative,Pearson r,0.09379370770866355,Interplanetary magnetic field — Bt
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn20,-3,-0.09362182850582935,0.3010222328882464,-0.26555489709252594,0.08408273753029023,124,negative,Pearson r,0.09362182850582935,Interplanetary magnetic field — Bz Gse
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,0,0.09316920965964944,0.30337550283620124,-0.08453609362628522,0.2651304432686544,124,positive,Pearson r,0.09316920965964944,Geomagnetic Dst (7 d) — Dst
+boulder_k_1m,Boulder K index (1 min),k_index,K,sdnn,-3,-0.09285798811678679,0.30500060304943627,-0.26483854937319096,0.08484777942177316,124,negative,Pearson r,0.09285798811678679,Boulder K index (1 min) — K Index
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,rmssd,-3,-0.09246445880508554,0.3070636413286803,-0.2644694141029877,0.08524184598126486,124,negative,Pearson r,0.09246445880508554,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,rmssd,-3,-0.09246445880508554,0.3070636413286803,-0.2644694141029877,0.08524184598126486,124,negative,Pearson r,0.09246445880508554,RSTE solar radio flux — Flux Sfu
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn50,15,0.09233009361718564,0.30777012276285287,-0.08537638187448776,0.26434336638299616,124,positive,Pearson r,0.09233009361718564,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,mean_hr,-3,0.0917064956174382,0.3110628480520376,-0.08600068731341232,0.26375829338325457,124,positive,Pearson r,0.0917064956174382,Interplanetary magnetic field — Bz Gsm
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn50,9,-0.09153045682218017,0.31199650777217997,-0.26359310709867484,0.0861769005601252,124,negative,Pearson r,0.09153045682218017,GOES x-ray flux — Observed Flux
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn20,18,-0.0911622240108422,0.31395540256333215,-0.26324754261814637,0.08654546233392611,124,negative,Pearson r,0.0911622240108422,Boulder K index (1 min) — K Index
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,sdnn,0,0.09029859710548868,0.3185809321070916,-0.08740966998181707,0.2624369071234377,124,positive,Pearson r,0.09029859710548868,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn50,15,0.08948427892232294,0.3229825320910897,-0.08822429080777315,0.26167233218886354,124,positive,Pearson r,0.08948427892232294,Interplanetary magnetic field — Bz Gsm
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,mean_hr,3,-0.08885165228026738,0.37935462266885234,-0.2803766164222723,0.10947706731402713,100,negative,Pearson r,0.08885165228026738,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,mean_hr,3,-0.08885165228026737,0.37935462266885234,-0.2803766164222723,0.10947706731402715,100,negative,Pearson r,0.08885165228026737,RSTE solar radio flux — Frequency Mhz
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn20,6,-0.0885517286722118,0.328071074455073,-0.2607964819476026,0.0891568957504818,124,negative,Pearson r,0.0885517286722118,Boulder K index (1 min) — K Index
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,-3,0.08848249250410421,0.3284509050080814,-0.08922612355534673,0.26073144410001364,124,positive,Pearson r,0.08848249250410421,Geomagnetic Dst (7 d) — Dst
+boulder_k_1m,Boulder K index (1 min),k_index,K,rmssd,-3,-0.08843464085383286,0.3287135843397381,-0.26068649314901343,0.08927396842207407,124,negative,Pearson r,0.08843464085383286,Boulder K index (1 min) — K Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,rmssd,3,0.08648488045553968,0.33953100515611767,-0.09122275515411153,0.25885428905320534,124,positive,Pearson r,0.08648488045553968,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn20,6,0.08619411045661118,0.3411633235420596,-0.09151326336813628,0.25858094403507886,124,positive,Pearson r,0.08619411045661118,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn20,0,-0.08494311837305873,0.3482425906611361,-0.2574046052135721,0.09276278423613413,124,negative,Pearson r,0.08494311837305873,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,mean_hr,18,0.08464664181750504,0.3499337496403422,-0.09305883010270614,0.25712574602362887,124,positive,Pearson r,0.08464664181750504,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn50,3,0.08291709750918001,0.3599017128124001,-0.09478523583126348,0.2554984027454961,124,positive,Pearson r,0.08291709750918001,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,rmssd,-6,0.08287527439714022,0.3601449140636367,-0.09482696981558805,0.25545903890233834,124,positive,Pearson r,0.08287527439714022,Interplanetary magnetic field — Bz Gsm
+goes_xray_flux,GOES x-ray flux,flux,W/m²,sdnn,0,0.0825888138776318,0.3618134190593878,-0.0951128030794624,0.25518940735820866,124,positive,Pearson r,0.0825888138776318,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,rmssd,3,-0.08226707247111714,0.363693114218166,-0.2548865355967015,0.09543380504318655,124,negative,Pearson r,0.08226707247111714,Solar wind (ACE/DSCOVR) — Proton Speed
+boulder_k_1m,Boulder K index (1 min),k_index,K,rmssd,9,0.08219031776763448,0.3641424243661191,-0.09551037788540492,0.25481427743594826,124,positive,Pearson r,0.08219031776763448,Boulder K index (1 min) — K Index
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,sdnn,0,0.08173783621366261,0.366798141812852,-0.09596174459905661,0.2543882645539341,124,positive,Pearson r,0.08173783621366261,GOES x-ray flux — Observed Flux
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,21,0.08156388232792203,0.3678222823946026,-0.09613525044527299,0.25422446856124786,124,positive,Pearson r,0.08156388232792203,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,sdnn,-6,-0.08026085491460519,0.3755495730425131,-0.25299721529802244,0.09743457843802313,124,negative,Pearson r,0.08026085491460519,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bt,nT,mean_hr,-6,-0.07969047934586204,0.3789629781966694,-0.252459833440995,0.09800314411116007,124,negative,Pearson r,0.07969047934586204,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,mean_hr,-3,0.07915648381065779,0.38217569739806373,-0.09853534007441594,0.2519566305770776,124,positive,Pearson r,0.07915648381065779,Solar wind (ACE/DSCOVR) — Proton Speed
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn20,9,0.07887950304606943,0.3838485957121714,-0.09881134738187612,0.25169558500492667,124,positive,Pearson r,0.07887950304606943,GOES x-ray flux — Flux
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,pnn50,-3,0.0780411361565768,0.3889390481357412,-0.09964660122484467,0.25090529756860314,124,positive,Pearson r,0.0780411361565768,Planetary K index (1m) — Estimated Kp
+goes_xray_flux,GOES x-ray flux,flux,W/m²,sdnn,15,0.07789356321832108,0.38983927334830887,-0.09979360027692165,0.25076616392717177,124,positive,Pearson r,0.07789356321832108,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn20,3,0.07763844028921778,0.3913985241542532,-0.1000477127819202,0.2505256139400073,124,positive,Pearson r,0.07763844028921778,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn20,18,0.0773018698579674,0.39346127319363366,-0.10038291475609026,0.25020823617227644,124,positive,Pearson r,0.0773018698579674,Interplanetary magnetic field — Bz Gsm
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn20,0,0.07710528210364227,0.39466910882572,-0.1005786845482861,0.25002284148705706,124,positive,Pearson r,0.07710528210364227,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bt,nT,mean_hr,6,0.07703059944329413,0.39512853918290886,-0.10065305286294854,0.249952407691645,124,positive,Pearson r,0.07703059944329413,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,rmssd,6,-0.07654737667213413,0.3981089228327231,-0.2494966323210995,0.10113419372709805,124,negative,Pearson r,0.07654737667213413,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn50,3,-0.07644640382890919,0.39873338067575165,-0.24940138512860116,0.10123472104378484,124,negative,Pearson r,0.07644640382890919,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn20,18,0.07624527990157161,0.39997894849125065,-0.10143494673306062,0.24921165593369693,124,positive,Pearson r,0.07624527990157161,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,rmssd,15,0.07606428288106926,0.40110184245170527,-0.10161512309902009,0.24904090199866594,124,positive,Pearson r,0.07606428288106926,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,sdnn,-3,0.07580864204827703,0.40269100302946903,-0.1018695849793541,0.24879971021386982,124,positive,Pearson r,0.07580864204827703,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bt,nT,mean_hr,9,-0.07573053507669729,0.403177288044852,-0.24872601363872013,0.10194732710390371,124,negative,Pearson r,0.07573053507669729,Interplanetary magnetic field — Bt
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn20,0,0.07511789171898473,0.4070035708895929,-0.10255703346844838,0.24814789438407298,124,positive,Pearson r,0.07511789171898473,Boulder K index (1 min) — K Index
+goes_xray_flux,GOES x-ray flux,flux,W/m²,rmssd,6,0.07484650652877788,0.40870532932339054,-0.10282707498580239,0.24789176308332014,124,positive,Pearson r,0.07484650652877788,GOES x-ray flux — Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,rmssd,6,0.07448958406364757,0.410949818743511,-0.10318219040081783,0.24755486551200862,124,positive,Pearson r,0.07448958406364757,Interplanetary magnetic field — Bz Gsm
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,rmssd,9,0.07440066304794231,0.41151011690214423,-0.10327065417435918,0.24747092683738306,124,positive,Pearson r,0.07440066304794231,GOES x-ray flux — Observed Flux
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,rmssd,-3,-0.07391035530690093,0.4146076147977451,-0.24700804491133585,0.1037583902219442,124,negative,Pearson r,0.07391035530690093,Planetary K index (1m) — Estimated Kp
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,mean_hr,-6,-0.07268067221334742,0.42243572293947235,-0.2458467976705998,0.10498124777719961,124,negative,Pearson r,0.07268067221334742,Planetary K index (1m) — Kp Index
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn20,6,0.07236421400071662,0.4244640324019706,-0.105295862541913,0.24554787094174335,124,positive,Pearson r,0.07236421400071662,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,mean_hr,9,0.07149052070231117,0.4300929891908331,-0.1061642817615304,0.24472240839422704,124,positive,Pearson r,0.07149052070231117,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,sdnn,9,-0.07131794885616359,0.4312098611863651,-0.24455933337891342,0.10633577982616997,124,negative,Pearson r,0.07131794885616359,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn20,-3,0.07090356023288188,0.43389852553596564,-0.10674754687049352,0.24416770902192717,124,positive,Pearson r,0.07090356023288188,Solar wind (ACE/DSCOVR) — Proton Temperature
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn50,6,0.06969129724599821,0.44181873024885593,-0.10795179084143841,0.24302171660142707,124,positive,Pearson r,0.06969129724599821,GOES x-ray flux — Observed Flux
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,sdnn,12,-0.06927912655511514,0.44453011273352006,-0.24263196772135753,0.10836111633746724,124,negative,Pearson r,0.06927912655511514,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn20,3,0.068714906439186,0.4482568798382736,-0.10892134402330045,0.2420983500543354,124,positive,Pearson r,0.068714906439186,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,rmssd,-6,-0.06806109238219184,0.4525972663541953,-0.24147986666422186,0.10957039056940342,124,negative,Pearson r,0.06806109238219184,Solar wind (ACE/DSCOVR) — Proton Speed
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn50,-3,-0.06751667975194033,0.4562292032346997,-0.24096476536814165,0.11011071787356462,124,negative,Pearson r,0.06751667975194033,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn50,-3,-0.06583934066122851,0.4675203597406881,-0.23937712014522392,0.11177481025073403,124,negative,Pearson r,0.06583934066122851,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn20,0,0.06497665831549784,0.4733866144236199,-0.1126302918581465,0.23856020724276264,124,positive,Pearson r,0.06497665831549784,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,rmssd,0,0.06481950896926336,0.4744595215789006,-0.11278610114613345,0.23841136896840337,124,positive,Pearson r,0.06481950896926336,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,sdnn,-3,-0.06466504114209383,0.4755154054675059,-0.23826506244956086,0.11293924326950532,124,negative,Pearson r,0.06466504114209383,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,sdnn,-3,-0.06466504114209383,0.4755154054675059,-0.23826506244956086,0.11293924326950532,124,negative,Pearson r,0.06466504114209383,RSTE solar radio flux — Frequency Mhz
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn50,-3,-0.06374021417593866,0.48186372046506754,-0.23738893387899596,0.11385595654088161,124,negative,Pearson r,0.06374021417593866,GOES x-ray flux — Flux
+boulder_k_1m,Boulder K index (1 min),k_index,K,sdnn,0,0.063541812006354,0.4832315245507332,-0.11405257869902086,0.23720094211476436,124,positive,Pearson r,0.063541812006354,Boulder K index (1 min) — K Index
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,-6,-0.06312886491271236,0.48608508596764854,-0.23680962114986046,0.1144617763321048,124,negative,Pearson r,0.06312886491271236,Geomagnetic Dst (7 d) — Dst
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn20,-6,0.06251379155905433,0.4903520203100769,-0.1150711532618791,0.23622665482490543,124,positive,Pearson r,0.06251379155905433,Boulder K index (1 min) — K Index
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,rmssd,6,0.06139839839567123,0.49814027609431993,-0.11617587549716012,0.2351691664482075,124,positive,Pearson r,0.06139839839567123,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,rmssd,0,-0.06075831387293984,0.5026388540182744,-0.23456212558323075,0.11680963800491148,124,negative,Pearson r,0.06075831387293984,Solar wind (ACE/DSCOVR) — Proton Density
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,sdnn,15,0.05963287406776398,0.5105996967116639,-0.11792361145143875,0.23349445657051113,124,positive,Pearson r,0.05963287406776398,GOES x-ray flux — Observed Flux
+goes_xray_flux,GOES x-ray flux,flux,W/m²,sdnn,12,-0.059401503815503805,0.5122443321712504,-0.23327491099293454,0.11815256905965138,124,negative,Pearson r,0.059401503815503805,GOES x-ray flux — Flux
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn20,-3,-0.05931831440049788,0.512836328734801,-0.23319596881927543,0.11823488639197459,124,negative,Pearson r,0.05931831440049788,GOES x-ray flux — Observed Flux
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn20,18,-0.0588548854311008,0.5161406369463155,-0.2327561582993539,0.11869341253114182,124,negative,Pearson r,0.0588548854311008,Interplanetary magnetic field — Bt
+boulder_k_1m,Boulder K index (1 min),k_index,K,rmssd,18,-0.058476585153652394,0.5188460275249476,-0.23239708518703572,0.11906765446571722,124,negative,Pearson r,0.058476585153652394,Boulder K index (1 min) — K Index
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn20,12,-0.05811790638873619,0.5214177608142778,-0.23205659253133426,0.11942243879943225,124,negative,Pearson r,0.05811790638873619,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,mean_hr,15,-0.057792345606613324,0.5237576336611617,-0.23174750176648967,0.11974442548585959,124,negative,Pearson r,0.057792345606613324,Solar wind (ACE/DSCOVR) — Proton Temperature
+boulder_k_1m,Boulder K index (1 min),k_index,K,mean_hr,15,-0.0577295170735182,0.5242098067884111,-0.23168784766541997,0.11980655997106981,124,negative,Pearson r,0.0577295170735182,Boulder K index (1 min) — K Index
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn50,-3,0.05717269530858064,0.528225836021738,-0.12035716991766976,0.23115910231569206,124,positive,Pearson r,0.05717269530858064,Boulder K index (1 min) — K Index
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,sdnn,-3,-0.056746394434229325,0.5313109225188507,-0.2307542271763474,0.12077864123527338,124,negative,Pearson r,0.056746394434229325,Interplanetary magnetic field — Bz Gsm
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn20,18,0.05576634607002431,0.5384374620705884,-0.12174734399683808,0.22982320715080182,124,positive,Pearson r,0.05576634607002431,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,mean_hr,-6,0.05547458114911483,0.5405681757961741,-0.12203566597222221,0.22954597664174298,124,positive,Pearson r,0.05547458114911483,Solar wind (ACE/DSCOVR) — Proton Temperature
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,sdnn,-3,-0.0553543064637314,0.5414477333800044,-0.2294316852761235,0.12215451264719242,124,negative,Pearson r,0.0553543064637314,Planetary K index (1m) — Estimated Kp
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,9,0.055002233721453075,0.544026458129838,-0.12250237600462087,0.22909709954514576,124,positive,Pearson r,0.055002233721453075,Geomagnetic Dst (7 d) — Dst
+goes_xray_flux,GOES x-ray flux,flux,W/m²,mean_hr,15,-0.05453900068714064,0.5474285297334334,-0.22865681203391347,0.12296000418731577,124,negative,Pearson r,0.05453900068714064,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,sdnn,12,-0.053920527494972656,0.5519868551402956,-0.22806886288472006,0.1235708765636008,124,negative,Pearson r,0.053920527494972656,Solar wind (ACE/DSCOVR) — Proton Density
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,-3,0.053675247325404636,0.5537997249141935,-0.12381310507884803,0.22783565306155032,124,positive,Pearson r,0.053675247325404636,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,rmssd,-6,-0.05348734845153458,0.5551904335883912,-0.22765698725757202,0.12399865190057445,124,negative,Pearson r,0.05348734845153458,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,sdnn,-3,-0.053138500847548814,0.5577768430341986,-0.22732525040321921,0.1243430998436367,124,negative,Pearson r,0.053138500847548814,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,sdnn,9,0.05291037940639162,0.5594712954179252,-0.12456832109077343,0.22710829630701765,124,positive,Pearson r,0.05291037940639162,Solar wind (ACE/DSCOVR) — Proton Speed
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn20,-3,-0.05277063728498738,0.5605104961890233,-0.22697538651219873,0.1247062775852727,124,negative,Pearson r,0.05277063728498738,GOES x-ray flux — Flux
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,mean_hr,15,-0.052528203977303095,0.5623155538898096,-0.22674479095403494,0.12494559679843296,124,negative,Pearson r,0.052528203977303095,GOES x-ray flux — Observed Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,rmssd,6,0.05249799544483475,0.5625406682030618,-0.12497541585057859,0.22671605610211396,124,positive,Pearson r,0.05249799544483475,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn50,0,0.050860654241061926,0.5748059788067087,-0.12659116722250666,0.2251581364230468,124,positive,Pearson r,0.050860654241061926,Solar wind (ACE/DSCOVR) — Proton Speed
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,rmssd,-3,-0.04977554703691624,0.5830027256420561,-0.22412517257278886,0.12766144775374028,124,negative,Pearson r,0.04977554703691624,Planetary K index (1m) — Kp Index
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn20,-3,-0.048876105368846415,0.5898375169782645,-0.22326865531396697,0.12854828652236924,124,negative,Pearson r,0.048876105368846415,Interplanetary magnetic field — Bt
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,sdnn,-3,-0.047891815385629026,0.5973585737065289,-0.22233103028250314,0.12951845963918282,124,negative,Pearson r,0.047891815385629026,Planetary K index (1m) — Kp Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,mean_hr,15,-0.047891091169796014,0.5973641233331872,-0.2223303402827575,0.12951917334315077,124,negative,Pearson r,0.047891091169796014,Solar wind (ACE/DSCOVR) — Proton Density
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,mean_hr,0,0.04725253394317019,0.6022663328055948,-0.1301483904974928,0.22172188413383676,124,positive,Pearson r,0.04725253394317019,GOES x-ray flux — Observed Flux
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,rmssd,-3,-0.04610309422788385,0.6111353855099197,-0.22062628558950545,0.1312806575547833,124,negative,Pearson r,0.04610309422788385,GOES x-ray flux — Observed Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,rmssd,18,0.04598428203441033,0.6120553892184891,-0.1313976683060733,0.22051301358549705,124,positive,Pearson r,0.04598428203441033,Interplanetary magnetic field — Bz Gsm
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,-3,-0.04586224978214875,0.6130009563912713,-0.22039666677259995,0.13151784514818488,124,negative,Pearson r,0.04586224978214875,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,sdnn,15,0.04570821117874693,0.6141954336262695,-0.13166953426458228,0.22024979768162853,124,positive,Pearson r,0.04570821117874693,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bt,nT,rmssd,0,-0.04556208967971871,0.6153294535819158,-0.22011046988989857,0.13181341935598054,124,negative,Pearson r,0.04556208967971871,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,sdnn,3,-0.04547365127232739,0.616016247848173,-0.2200261398383307,0.13190050057193867,124,negative,Pearson r,0.04547365127232739,Solar wind (ACE/DSCOVR) — Proton Temperature
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,pnn20,-6,-0.044699933482035895,0.6220388919376023,-0.2192882533930997,0.13266222802245856,124,negative,Pearson r,0.044699933482035895,Geomagnetic Dst (1 h) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn50,12,0.04463184033909414,0.6225701375492003,-0.1327292558938297,0.2192233041219059,124,positive,Pearson r,0.04463184033909414,Solar wind (ACE/DSCOVR) — Proton Temperature
+boulder_k_1m,Boulder K index (1 min),k_index,K,mean_hr,18,-0.04448054787950336,0.6237511779763271,-0.2190789913218075,0.13287817567814406,124,negative,Pearson r,0.04448054787950336,Boulder K index (1 min) — K Index
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,mean_hr,-6,-0.0442121445555397,0.6258487765682711,-0.21882295159938048,0.1331423500077082,124,negative,Pearson r,0.0442121445555397,Geomagnetic Dst (1 h) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,-6,-0.04293557377077528,0.6358660598631021,-0.21760485492378856,0.13439846211731882,124,negative,Pearson r,0.04293557377077528,Geomagnetic Dst (7 d) — Dst
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn20,12,-0.04252686587511045,0.6390872703361727,-0.21721475312515592,0.13480049954660916,124,negative,Pearson r,0.04252686587511045,GOES x-ray flux — Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,mean_hr,3,0.04204020858931155,0.6429316185942506,-0.13527913802659985,0.21675017772902253,124,positive,Pearson r,0.04204020858931155,Interplanetary magnetic field — Bz Gsm
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,pnn20,-6,-0.04141512342068136,0.6478833542066893,-0.21615333944196757,0.13589380207360444,124,negative,Pearson r,0.04141512342068136,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,mean_hr,9,-0.040516044625650977,0.6550325997898953,-0.21529465992640362,0.13677765256034588,124,negative,Pearson r,0.040516044625650977,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn20,15,-0.0403937205518592,0.6560077266003085,-0.21517781148173853,0.13689788293661104,124,negative,Pearson r,0.0403937205518592,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,rmssd,18,0.04014759137382998,0.6579715405419152,-0.13713978354228207,0.2149426846912391,124,positive,Pearson r,0.04014759137382998,Interplanetary magnetic field — Bz Gse
+goes_xray_flux,GOES x-ray flux,flux,W/m²,mean_hr,0,0.04002408602713844,0.6589578443079901,-0.1372611590633333,0.21482469260543788,124,positive,Pearson r,0.04002408602713844,GOES x-ray flux — Flux
+planetary_k_index_1m,Planetary K index (1m),estimated_kp,Kp,mean_hr,0,0.03986848894805283,0.6602012643132426,-0.13741406532288528,0.21467603409343192,124,positive,Pearson r,0.03986848894805283,Planetary K index (1m) — Estimated Kp
+goes_xray_flux,GOES x-ray flux,flux,W/m²,rmssd,-3,-0.039545804745960145,0.6627828771830341,-0.2143677135848435,0.1377311422539363,124,negative,Pearson r,0.039545804745960145,GOES x-ray flux — Flux
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,24,0.03916875977204521,0.6658044177724072,-0.13810158930472283,0.2140074079321559,124,positive,Pearson r,0.03916875977204521,Geomagnetic Dst (7 d) — Dst
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,sdnn,-6,-0.03796348024981161,0.6754990112510396,-0.21285531890789708,0.13928544499552464,124,negative,Pearson r,0.03796348024981161,Solar wind (ACE/DSCOVR) — Proton Speed
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn20,0,0.03708447271935277,0.6826030432529356,-0.14014850879915774,0.21201479631415143,124,positive,Pearson r,0.03708447271935277,GOES x-ray flux — Observed Flux
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn20,0,0.035372592186428235,0.696517773229727,-0.14182856603181235,0.21037712263851874,124,positive,Pearson r,0.035372592186428235,GOES x-ray flux — Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,mean_hr,9,-0.03507922038883907,0.6989127104195844,-0.21009636934805317,0.1421163817138007,124,negative,Pearson r,0.03507922038883907,Solar wind (ACE/DSCOVR) — Proton Temperature
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,mean_hr,12,0.03498853678274302,0.6996536054678673,-0.1422053418176546,0.21000958038450782,124,positive,Pearson r,0.03498853678274302,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn50,0,-0.0348811908067793,0.7005309989832061,-0.2099068410945798,0.14231064391235565,124,negative,Pearson r,0.0348811908067793,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,mean_hr,12,0.03426993787417245,0.7055345750894495,-0.14291018207652767,0.20932174602521705,124,positive,Pearson r,0.03426993787417245,Solar wind (ACE/DSCOVR) — Proton Temperature
+boulder_k_1m,Boulder K index (1 min),k_index,K,rmssd,-6,-0.033676585118368504,0.7104036859966598,-0.2087536651969643,0.14349203877744143,124,negative,Pearson r,0.033676585118368504,Boulder K index (1 min) — K Index
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,rmssd,0,-0.033474505028383,0.7120646555039968,-0.20856016507503952,0.1436901756611553,124,negative,Pearson r,0.033474505028383,GOES x-ray flux — Observed Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn50,-6,0.0317234808531959,0.7265127406196903,-0.14540643739991638,0.2068829121539921,124,positive,Pearson r,0.0317234808531959,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,rmssd,12,0.03157330829707586,0.7277564175654594,-0.14555357901916702,0.2067390184676503,124,positive,Pearson r,0.03157330829707586,Solar wind (ACE/DSCOVR) — Proton Density
+goes_xray_flux,GOES x-ray flux,flux,W/m²,rmssd,0,-0.03069612527381078,0.7350350030544471,-0.20589835994342348,0.1464129013000645,124,negative,Pearson r,0.03069612527381078,GOES x-ray flux — Flux
+solar_wind_mag,Interplanetary magnetic field,bt,nT,mean_hr,12,-0.028562143198785583,0.7528393576806773,-0.20385215311649327,0.14850231682799406,124,negative,Pearson r,0.028562143198785583,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,mean_hr,-3,-0.02759617301345424,0.7609422288363104,-0.20292541154617766,0.14944759400672955,124,negative,Pearson r,0.02759617301345424,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn20,15,-0.02734296643515759,0.7630705391519131,-0.2026824358667257,0.14969532287386036,124,negative,Pearson r,0.02734296643515759,Interplanetary magnetic field — Bz Gse
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn20,15,-0.02604295584757283,0.7740252391572139,-0.20143461258216927,0.1509668599304263,124,negative,Pearson r,0.02604295584757283,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,sdnn,12,-0.025889697318768695,0.7753196714302594,-0.2012874689032509,0.15111672312222033,124,negative,Pearson r,0.025889697318768695,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_speed,km/s,mean_hr,15,0.025429393687699933,0.7792111234098247,-0.1515667801314917,0.20084548329427046,124,positive,Pearson r,0.025429393687699933,Solar wind (ACE/DSCOVR) — Proton Speed
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,mean_hr,18,-0.025347604387412858,0.7799031534673636,-0.20076694136874734,0.1516467410775153,124,negative,Pearson r,0.025347604387412858,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,mean_hr,3,-0.024695580172483626,0.785426135265535,-0.20014072456150755,0.15228410681817908,124,negative,Pearson r,0.024695580172483626,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn50,12,0.024304525712009334,0.7887437129012188,-0.15266629918732424,0.19976507943176824,124,positive,Pearson r,0.024304525712009334,Solar wind (ACE/DSCOVR) — Proton Density
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,pnn20,6,0.02412877747415366,0.7902359404448228,-0.1528380473727923,0.199596239676557,124,positive,Pearson r,0.02412877747415366,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,pnn20,12,0.02292342000638712,0.80049049099051,-0.15401568274795274,0.1984379827265046,124,positive,Pearson r,0.02292342000638712,Solar wind (ACE/DSCOVR) — Proton Density
+goes_xray_flux,GOES x-ray flux,flux,W/m²,mean_hr,-6,-0.02188112148560201,0.8093853549566853,-0.19743601764047192,0.15503360425428764,124,negative,Pearson r,0.02188112148560201,GOES x-ray flux — Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,mean_hr,3,0.021797591565840192,0.8100992604499084,-0.1551151643418291,0.1973557041684433,124,positive,Pearson r,0.021797591565840192,Interplanetary magnetic field — Bz Gse
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn50,6,0.021622632644556043,0.8115950876948782,-0.15528598950406325,0.19718747467114944,124,positive,Pearson r,0.021622632644556043,Solar wind (ACE/DSCOVR) — Proton Temperature
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,mean_hr,-6,-0.02158213000841435,0.8119414657275157,-0.19714852840915786,0.15532553367529484,124,negative,Pearson r,0.02158213000841435,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,sdnn,12,0.02158015765107906,0.8119583342312765,-0.1553274593437768,0.19714663182844272,124,positive,Pearson r,0.02158015765107906,Solar wind (ACE/DSCOVR) — Proton Temperature
+goes_xray_flux,GOES x-ray flux,flux,W/m²,mean_hr,12,0.021422461544074328,0.8133073019277696,-0.15548141818082642,0.1969949900451717,124,positive,Pearson r,0.021422461544074328,GOES x-ray flux — Flux
+goes_xray_flux,GOES x-ray flux,flux,W/m²,rmssd,9,0.021158309975776224,0.8155681374983031,-0.155739290317532,0.1967409610529271,124,positive,Pearson r,0.021158309975776224,GOES x-ray flux — Flux
+solar_wind_mag,Interplanetary magnetic field,bt,nT,pnn20,0,0.020705592926543843,0.8194463971893189,-0.156181189275958,0.19630553778594115,124,positive,Pearson r,0.020705592926543843,Interplanetary magnetic field — Bt
+boulder_k_1m,Boulder K index (1 min),k_index,K,sdnn,12,-0.020531025735338944,0.8209430213346559,-0.19613762055523107,0.1563515661090213,124,negative,Pearson r,0.020531025735338944,Boulder K index (1 min) — K Index
+goes_xray_flux,GOES x-ray flux,flux,W/m²,sdnn,3,-0.02001127256551741,0.825402836118081,-0.19563760586720041,0.15685878066214332,124,negative,Pearson r,0.02001127256551741,GOES x-ray flux — Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn50,-6,-0.01950068471119118,0.8297894329362481,-0.19514631949850256,0.15735696017424974,124,negative,Pearson r,0.01950068471119118,Interplanetary magnetic field — Bz Gsm
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,pnn50,18,-0.016923149434939347,0.8520111036471898,-0.192664875075507,0.15987048257841888,124,negative,Pearson r,0.016923149434939347,Interplanetary magnetic field — Bz Gse
+boulder_k_1m,Boulder K index (1 min),k_index,K,pnn20,9,0.015868579769125358,0.8611374531551418,-0.16089820167270233,0.1916489715493879,124,positive,Pearson r,0.015868579769125358,Boulder K index (1 min) — K Index
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn20,-3,-0.0149504808223309,0.8690977548200441,-0.19076422818813984,0.1617926127314541,124,negative,Pearson r,0.0149504808223309,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn20,-3,-0.0149504808223309,0.8690977548200441,-0.19076422818813984,0.1617926127314541,124,negative,Pearson r,0.0149504808223309,RSTE solar radio flux — Frequency Mhz
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,rmssd,-3,0.013004907499216213,0.8860090967840195,-0.16368702908185728,0.18888839528086995,124,positive,Pearson r,0.013004907499216213,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn20,15,-0.012933171137819124,0.88663367410279,-0.18881920581378978,0.1637568543034314,124,negative,Pearson r,0.012933171137819124,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_mag,Interplanetary magnetic field,bt,nT,mean_hr,18,-0.012622268729017148,0.8893413653047013,-0.1885193213535132,0.1640594534497286,124,negative,Pearson r,0.012622268729017148,Interplanetary magnetic field — Bt
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_temperature,K,pnn20,-6,0.01193018952130853,0.8953733118105773,-0.16473292994478003,0.18785165066560633,124,positive,Pearson r,0.01193018952130853,Solar wind (ACE/DSCOVR) — Proton Temperature
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,mean_hr,-6,0.011882663067714537,0.8957877608792255,-0.1647791728694048,0.18780579442694698,124,positive,Pearson r,0.011882663067714537,Solar wind (ACE/DSCOVR) — Proton Density
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,sdnn,3,0.011605449947747828,0.8982057228132488,-0.16504888392402278,0.18753830808220726,124,positive,Pearson r,0.011605449947747828,GOES x-ray flux — Observed Flux
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,mean_hr,6,0.0114250065441285,0.8997801243004115,-0.16522442989263353,0.18736418200420676,124,positive,Pearson r,0.0114250065441285,Solar wind (ACE/DSCOVR) — Proton Density
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,21,0.011166417243222523,0.9020370406206208,-0.16547598127960872,0.18711462663935258,124,positive,Pearson r,0.011166417243222523,Geomagnetic Dst (7 d) — Dst
+goes_xray_flux,GOES x-ray flux,flux,W/m²,sdnn,9,-0.008569432308688611,0.9247433984552924,-0.1846071086068302,0.16800101130939668,124,negative,Pearson r,0.008569432308688611,GOES x-ray flux — Flux
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,0,0.008548175402878704,0.9249295305267938,-0.1680216696925878,0.18458657454702948,124,positive,Pearson r,0.008548175402878704,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bz_gse,nT,rmssd,15,-0.0074070669100339825,0.9349271302293226,-0.18348404409651795,0.16913042085114116,124,negative,Pearson r,0.0074070669100339825,Interplanetary magnetic field — Bz Gse
+goes_xray_flux,GOES x-ray flux,flux,W/m²,pnn20,6,-0.006325014630119189,0.9444167170182706,-0.18243816396784143,0.1701813778218296,124,negative,Pearson r,0.006325014630119189,GOES x-ray flux — Flux
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,3,-0.006198673250527871,0.9455252633782881,-0.1823160200905509,0.17030406231233688,124,negative,Pearson r,0.006198673250527871,Geomagnetic Dst (7 d) — Dst
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,rmssd,15,-0.005623487718324459,0.9505733498268693,-0.18175987551912895,0.17086253022775968,124,negative,Pearson r,0.005623487718324459,Interplanetary magnetic field — Bz Gsm
+boulder_k_1m,Boulder K index (1 min),k_index,K,sdnn,9,-0.005293190047460344,0.9534730891261107,-0.18144046109383713,0.17118317663560415,124,negative,Pearson r,0.005293190047460344,Boulder K index (1 min) — K Index
+solar_wind_wind,Solar wind (ACE/DSCOVR),proton_density,1/cm³,rmssd,3,0.003104235117521061,0.9727038778257834,-0.17330722612435,0.1793226920617085,124,positive,Pearson r,0.003104235117521061,Solar wind (ACE/DSCOVR) — Proton Density
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,pnn50,18,0.00034781949337021976,0.9969409758441622,-0.17597957800232863,0.17665359128308564,124,positive,Pearson r,0.00034781949337021976,Interplanetary magnetic field — Bz Gsm
+goes_xray_flux,GOES x-ray flux,observed_flux,W/m²,sdnn,9,0.00030202313896327514,0.9973437468421672,-0.17602395574506316,0.17660922370861618,124,positive,Pearson r,0.00030202313896327514,GOES x-ray flux — Observed Flux
+solar_wind_mag,Interplanetary magnetic field,bz_gsm,nT,sdnn,12,-0.0002645188794731181,0.9976735908053118,-0.17657288899408485,0.17606029771932455,124,negative,Pearson r,0.0002645188794731181,Interplanetary magnetic field — Bz Gsm
+f107_flux,F10.7 cm flux,flux,sfu,rmssd,-3,,,,,116,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,sdnn,-3,,,,,116,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,mean_hr,-3,,,,,116,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,pnn50,-3,,,,,116,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,pnn20,-3,,,,,116,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,rmssd,0,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,sdnn,0,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,mean_hr,0,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,pnn50,0,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,pnn20,0,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,rmssd,3,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,sdnn,3,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,mean_hr,3,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,pnn50,3,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,pnn20,3,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,rmssd,21,,,,,116,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,sdnn,21,,,,,116,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,mean_hr,21,,,,,116,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,pnn50,21,,,,,116,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,pnn20,21,,,,,116,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,rmssd,24,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,sdnn,24,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,mean_hr,24,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,pnn50,24,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,flux,sfu,pnn20,24,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Flux
+f107_flux,F10.7 cm flux,ninety_day_mean,sfu,rmssd,0,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Ninety Day Mean
+f107_flux,F10.7 cm flux,ninety_day_mean,sfu,sdnn,0,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Ninety Day Mean
+f107_flux,F10.7 cm flux,ninety_day_mean,sfu,mean_hr,0,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Ninety Day Mean
+f107_flux,F10.7 cm flux,ninety_day_mean,sfu,pnn50,0,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Ninety Day Mean
+f107_flux,F10.7 cm flux,ninety_day_mean,sfu,pnn20,0,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Ninety Day Mean
+f107_flux,F10.7 cm flux,ninety_day_mean,sfu,rmssd,24,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Ninety Day Mean
+f107_flux,F10.7 cm flux,ninety_day_mean,sfu,sdnn,24,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Ninety Day Mean
+f107_flux,F10.7 cm flux,ninety_day_mean,sfu,mean_hr,24,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Ninety Day Mean
+f107_flux,F10.7 cm flux,ninety_day_mean,sfu,pnn50,24,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Ninety Day Mean
+f107_flux,F10.7 cm flux,ninety_day_mean,sfu,pnn20,24,,,,,124,insufficient,Pearson r,,F10.7 cm flux — Ninety Day Mean
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,rmssd,-9,,,,,2,insufficient,Pearson r,,Geomagnetic Dst (1 h) — Dst
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,sdnn,-9,,,,,2,insufficient,Pearson r,,Geomagnetic Dst (1 h) — Dst
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,mean_hr,-9,,,,,2,insufficient,Pearson r,,Geomagnetic Dst (1 h) — Dst
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,pnn50,-9,,,,,2,insufficient,Pearson r,,Geomagnetic Dst (1 h) — Dst
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,pnn20,-9,,,,,2,insufficient,Pearson r,,Geomagnetic Dst (1 h) — Dst
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,rmssd,-3,,,,,30,insufficient,Pearson r,,Geomagnetic Dst (1 h) — Dst
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,sdnn,-3,,,,,30,insufficient,Pearson r,,Geomagnetic Dst (1 h) — Dst
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,mean_hr,-3,,,,,30,insufficient,Pearson r,,Geomagnetic Dst (1 h) — Dst
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,pnn50,-3,,,,,30,insufficient,Pearson r,,Geomagnetic Dst (1 h) — Dst
+geospace_dst,Geomagnetic Dst (1 h),dst,nT,pnn20,-3,,,,,30,insufficient,Pearson r,,Geomagnetic Dst (1 h) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,rmssd,-9,,,,,2,insufficient,Pearson r,,Geomagnetic Dst (7 d) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,sdnn,-9,,,,,2,insufficient,Pearson r,,Geomagnetic Dst (7 d) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,mean_hr,-9,,,,,2,insufficient,Pearson r,,Geomagnetic Dst (7 d) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn50,-9,,,,,2,insufficient,Pearson r,,Geomagnetic Dst (7 d) — Dst
+geospace_dst_7d,Geomagnetic Dst (7 d),dst,nT,pnn20,-9,,,,,2,insufficient,Pearson r,,Geomagnetic Dst (7 d) — Dst
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,rmssd,0,,,,,124,insufficient,Pearson r,,Planetary K index (1m) — Kp Index
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,sdnn,0,,,,,124,insufficient,Pearson r,,Planetary K index (1m) — Kp Index
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,mean_hr,0,,,,,124,insufficient,Pearson r,,Planetary K index (1m) — Kp Index
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,pnn50,0,,,,,124,insufficient,Pearson r,,Planetary K index (1m) — Kp Index
+planetary_k_index_1m,Planetary K index (1m),kp_index,Kp,pnn20,0,,,,,124,insufficient,Pearson r,,Planetary K index (1m) — Kp Index
+predicted_f107,Predicted F10.7 flux,tencmfcst_1_day,sfu,rmssd,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 1 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_1_day,sfu,sdnn,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 1 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_1_day,sfu,mean_hr,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 1 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_1_day,sfu,pnn50,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 1 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_1_day,sfu,pnn20,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 1 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_1_day,sfu,rmssd,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 1 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_1_day,sfu,sdnn,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 1 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_1_day,sfu,mean_hr,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 1 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_1_day,sfu,pnn50,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 1 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_1_day,sfu,pnn20,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 1 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_2_day,sfu,rmssd,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 2 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_2_day,sfu,sdnn,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 2 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_2_day,sfu,mean_hr,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 2 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_2_day,sfu,pnn50,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 2 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_2_day,sfu,pnn20,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 2 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_2_day,sfu,rmssd,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 2 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_2_day,sfu,sdnn,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 2 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_2_day,sfu,mean_hr,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 2 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_2_day,sfu,pnn50,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 2 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_2_day,sfu,pnn20,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 2 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_3_day,sfu,rmssd,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 3 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_3_day,sfu,sdnn,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 3 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_3_day,sfu,mean_hr,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 3 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_3_day,sfu,pnn50,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 3 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_3_day,sfu,pnn20,18,,,,,56,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 3 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_3_day,sfu,rmssd,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 3 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_3_day,sfu,sdnn,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 3 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_3_day,sfu,mean_hr,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 3 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_3_day,sfu,pnn50,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 3 Day
+predicted_f107,Predicted F10.7 flux,tencmfcst_3_day,sfu,pnn20,21,,,,,68,insufficient,Pearson r,,Predicted F10.7 flux — Tencmfcst 3 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_1_day,a-index,rmssd,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 1 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_1_day,a-index,sdnn,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 1 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_1_day,a-index,mean_hr,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 1 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_1_day,a-index,pnn50,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 1 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_1_day,a-index,pnn20,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 1 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_1_day,a-index,rmssd,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 1 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_1_day,a-index,sdnn,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 1 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_1_day,a-index,mean_hr,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 1 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_1_day,a-index,pnn50,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 1 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_1_day,a-index,pnn20,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 1 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_2_day,a-index,rmssd,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 2 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_2_day,a-index,sdnn,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 2 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_2_day,a-index,mean_hr,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 2 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_2_day,a-index,pnn50,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 2 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_2_day,a-index,pnn20,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 2 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_2_day,a-index,rmssd,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 2 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_2_day,a-index,sdnn,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 2 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_2_day,a-index,mean_hr,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 2 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_2_day,a-index,pnn50,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 2 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_2_day,a-index,pnn20,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 2 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_3_day,a-index,rmssd,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 3 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_3_day,a-index,sdnn,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 3 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_3_day,a-index,mean_hr,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 3 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_3_day,a-index,pnn50,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 3 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_3_day,a-index,pnn20,18,,,,,56,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 3 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_3_day,a-index,rmssd,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 3 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_3_day,a-index,sdnn,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 3 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_3_day,a-index,mean_hr,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 3 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_3_day,a-index,pnn50,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 3 Day
+predicted_fredericksburg,Predicted Fredericksburg a-index,afred_3_day,a-index,pnn20,21,,,,,68,insufficient,Pearson r,,Predicted Fredericksburg a-index — Afred 3 Day
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,rmssd,0,,,,,24,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,sdnn,0,,,,,24,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,mean_hr,0,,,,,24,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn50,0,,,,,24,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn20,0,,,,,24,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,rmssd,15,,,,,81,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,sdnn,15,,,,,81,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,mean_hr,15,,,,,81,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn50,15,,,,,81,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn20,15,,,,,81,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,rmssd,18,,,,,43,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,sdnn,18,,,,,43,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,mean_hr,18,,,,,43,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn50,18,,,,,43,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn20,18,,,,,43,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,rmssd,24,,,,,18,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,sdnn,24,,,,,18,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,mean_hr,24,,,,,18,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn50,24,,,,,18,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,frequency_mhz,MHz,pnn20,24,,,,,18,insufficient,Pearson r,,RSTE solar radio flux — Frequency Mhz
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,rmssd,0,,,,,24,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,sdnn,0,,,,,24,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,mean_hr,0,,,,,24,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn50,0,,,,,24,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn20,0,,,,,24,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,rmssd,15,,,,,81,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,sdnn,15,,,,,81,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,mean_hr,15,,,,,81,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn50,15,,,,,81,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn20,15,,,,,81,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,rmssd,18,,,,,43,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,sdnn,18,,,,,43,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,mean_hr,18,,,,,43,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn50,18,,,,,43,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn20,18,,,,,43,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,rmssd,24,,,,,18,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,sdnn,24,,,,,18,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,mean_hr,24,,,,,18,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn50,24,,,,,18,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_radio_multifrequency,RSTE solar radio flux,flux_sfu,sfu,pnn20,24,,,,,18,insufficient,Pearson r,,RSTE solar radio flux — Flux Sfu
+solar_probabilities,Solar flare & proton probabilities,c_class_1_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_1_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_1_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_1_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_1_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_1_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_1_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_1_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_1_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_1_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_2_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_2_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_2_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_2_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_2_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_2_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_2_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_2_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_2_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_2_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_3_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_3_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_3_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_3_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_3_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_3_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_3_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_3_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_3_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,c_class_3_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — C Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_1_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_1_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_1_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_1_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_1_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_1_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_1_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_1_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_1_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_1_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_2_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_2_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_2_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_2_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_2_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_2_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_2_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_2_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_2_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_2_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_3_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_3_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_3_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_3_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_3_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_3_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_3_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_3_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_3_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,m_class_3_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — M Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_1_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_1_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_1_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_1_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_1_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_1_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_1_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_1_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_1_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_1_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 1 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_2_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_2_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_2_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_2_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_2_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_2_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_2_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_2_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_2_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_2_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 2 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_3_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_3_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_3_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_3_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_3_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_3_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_3_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_3_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_3_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,x_class_3_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — X Class 3 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_1_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 1 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_1_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 1 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_1_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 1 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_1_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 1 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_1_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 1 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_1_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 1 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_1_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 1 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_1_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 1 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_1_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 1 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_1_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 1 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_2_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 2 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_2_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 2 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_2_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 2 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_2_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 2 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_2_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 2 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_2_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 2 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_2_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 2 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_2_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 2 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_2_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 2 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_2_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 2 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_3_day,%,rmssd,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 3 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_3_day,%,sdnn,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 3 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_3_day,%,mean_hr,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 3 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_3_day,%,pnn50,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 3 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_3_day,%,pnn20,18,,,,,56,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 3 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_3_day,%,rmssd,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 3 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_3_day,%,sdnn,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 3 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_3_day,%,mean_hr,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 3 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_3_day,%,pnn50,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 3 Day
+solar_probabilities,Solar flare & proton probabilities,10mev_protons_3_day,%,pnn20,21,,,,,68,insufficient,Pearson r,,Solar flare & proton probabilities — 10Mev Protons 3 Day
