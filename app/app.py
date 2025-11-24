@@ -25,7 +25,7 @@ from echarts_component import EChartsConfig, render_echarts
 from noaa_space import NOAADataBundle, load_noaa_space_data, get_noaa_metric_explanations, explain_noaa_metric
 
 from dataclasses import asdict, dataclass
-from datetime import timezone
+from datetime import timezone, timedelta
 from typing import (
     Any,
     Dict,
@@ -146,6 +146,7 @@ _RR_FILENAME_TS_PATTERN = re.compile(
     r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})[ _T-]"
     r"(?P<hour>\d{2})[-_:](?P<minute>\d{2})[-_:](?P<second>\d{2})"
 )
+_RR_FILENAME_TZ = timezone(timedelta(hours=-5))
 
 
 def _infer_recording_start(name: str) -> Tuple[pd.Timestamp, bool]:
@@ -154,7 +155,8 @@ def _infer_recording_start(name: str) -> Tuple[pd.Timestamp, bool]:
 
     The expected filename format is `YYYY-MM-DD HH-MM-SS.ext`, where the
     separators between time components may be `-` or `:` and the separator
-    between date and time may be a space, underscore, hyphen, or `T`.
+    between date and time may be a space, underscore, hyphen, or `T`. Filenames
+    are interpreted as GMT-5 (UTC-5) and converted to UTC for downstream work.
 
     Returns
     -------
@@ -177,11 +179,11 @@ def _infer_recording_start(name: str) -> Tuple[pd.Timestamp, bool]:
             hour=int(match.group("hour")),
             minute=int(match.group("minute")),
             second=int(match.group("second")),
-            tz=timezone.utc,
+            tz=_RR_FILENAME_TZ,
         )
     except (TypeError, ValueError):
         return fallback, False
-    return start_ts, True
+    return start_ts.tz_convert(timezone.utc), True
 
 
 def _kp_to_numeric(value: Any) -> Optional[float]:
