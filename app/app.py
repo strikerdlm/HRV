@@ -142,6 +142,47 @@ SWPC_EXTRA_DATASETS = {
 _KP_SUFFIX_OFFSETS: Dict[str, float] = {
     "-": -1.0 / 3.0, "o": 0.0, "+": 1.0 / 3.0}
 
+_RR_FILENAME_TS_PATTERN = re.compile(
+    r"(?P<year>\d{4})-(?P<month>\d{2})-(?P<day>\d{2})[ _T-]"
+    r"(?P<hour>\d{2})[-_:](?P<minute>\d{2})[-_:](?P<second>\d{2})"
+)
+
+
+def _infer_recording_start(name: str) -> Tuple[pd.Timestamp, bool]:
+    """
+    Infer the start timestamp of an RR recording from its filename.
+
+    The expected filename format is `YYYY-MM-DD HH-MM-SS.ext`, where the
+    separators between time components may be `-` or `:` and the separator
+    between date and time may be a space, underscore, hyphen, or `T`.
+
+    Returns
+    -------
+    Tuple[pd.Timestamp, bool]
+        The inferred timezone-aware UTC timestamp and a flag indicating whether
+        the value was parsed from the filename (True) or generated as a fallback
+        (False).
+    """
+
+    fallback = pd.Timestamp.now(tz=timezone.utc).normalize()
+    stem = Path(name).stem
+    match = _RR_FILENAME_TS_PATTERN.search(stem)
+    if not match:
+        return fallback, False
+    try:
+        start_ts = pd.Timestamp(
+            year=int(match.group("year")),
+            month=int(match.group("month")),
+            day=int(match.group("day")),
+            hour=int(match.group("hour")),
+            minute=int(match.group("minute")),
+            second=int(match.group("second")),
+            tz=timezone.utc,
+        )
+    except (TypeError, ValueError):
+        return fallback, False
+    return start_ts, True
+
 
 def _kp_to_numeric(value: Any) -> Optional[float]:
     if value is None:
@@ -1670,17 +1711,27 @@ class UploadedRR:
     name: str
     rr_ms: np.ndarray
     df: pd.DataFrame
+    recording_start_utc: Optional[pd.Timestamp] = None
     rr_ms_clean: Optional[np.ndarray] = None
     artifact_valid_mask: Optional[np.ndarray] = None
     qc_summary: Optional[Dict] = None
 
 
-def _to_dataframe(name: str, rr_ms: np.ndarray) -> pd.DataFrame:
+def _to_dataframe(
+    name: str, rr_ms: np.ndarray, *, start_ts: Optional[pd.Timestamp] = None
+) -> pd.DataFrame:
     if rr_ms.size == 0:
         return pd.DataFrame()
+    if start_ts is None:
+        start_ts, _ = _infer_recording_start(name)
+    if not isinstance(start_ts, pd.Timestamp):
+        raise TypeError("start_ts must be a pandas.Timestamp when provided.")
+    if start_ts.tzinfo is None or start_ts.tzinfo.utcoffset(start_ts) is None:
+        start_ts = start_ts.tz_localize(timezone.utc)
+    else:
+        start_ts = start_ts.tz_convert(timezone.utc)
     hr = 60000.0 / rr_ms
     rr_cum_s = np.cumsum(rr_ms) / 1000.0
-    start_ts = pd.Timestamp.now().normalize()
     timestamps = start_ts + pd.to_timedelta(rr_cum_s, unit="s")
     df = pd.DataFrame(
         {
@@ -1707,8 +1758,19 @@ def _upload_section() -> Dict[str, UploadedRR]:
     for f in files:
         content = f.getvalue().decode("utf-8", errors="ignore")
         rr = load_rr_intervals_from_text(f.name, content)
-        df = _to_dataframe(f.name, rr)
-        out[f.name] = UploadedRR(name=f.name, rr_ms=rr, df=df)
+        start_ts, precise = _infer_recording_start(f.name)
+        df = _to_dataframe(f.name, rr, start_ts=start_ts)
+        out[f.name] = UploadedRR(
+            name=f.name,
+            rr_ms=rr,
+            df=df,
+            recording_start_utc=start_ts,
+        )
+        if not precise:
+            st.sidebar.warning(
+                f"'{f.name}' does not encode a recording start timestamp. "
+                f"Defaulting to {start_ts.strftime('%Y-%m-%d %H:%M UTC')}."
+            )
     return out
 
 
@@ -3130,19 +3192,28 @@ def main() -> None:
                     up.df.loc[: n - 1, "artifact_flag"] = ~valid_mask[:n]
                 else:
                     up.df["artifact_flag"] = False
-        meta_rows.append(
-            {
-                "source": name,
-                "beats": int(up.rr_ms.size),
-                "duration_min": float(up.rr_ms.sum() / (1000.0 * 60.0)),
-                "mean_hr": float(np.mean(60000.0 / up.rr_ms)),
-                "flagged_pct": (
-                    float(up.qc_summary.get("flagged_pct", 0.0))
-                    if (apply_clean and up.qc_summary)
-                    else 0.0
-                ),
-            }
-        )
+        start_iso = ""
+        if isinstance(up.recording_start_utc, pd.Timestamp):
+            start_ts = up.recording_start_utc
+            if start_ts.tzinfo is None or start_ts.tzinfo.utcoffset(start_ts) is None:
+                start_ts = start_ts.tz_localize(timezone.utc)
+            else:
+                start_ts = start_ts.tz_convert(timezone.utc)
+            start_iso = start_ts.isoformat()
+        meta_entry = {
+            "source": name,
+            "beats": int(up.rr_ms.size),
+            "duration_min": float(up.rr_ms.sum() / (1000.0 * 60.0)),
+            "mean_hr": float(np.mean(60000.0 / up.rr_ms)),
+            "flagged_pct": (
+                float(up.qc_summary.get("flagged_pct", 0.0))
+                if (apply_clean and up.qc_summary)
+                else 0.0
+            ),
+        }
+        if start_iso:
+            meta_entry["recording_start_utc"] = start_iso
+        meta_rows.append(meta_entry)
         completed += 1
         txt_clean.text(
             ("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
