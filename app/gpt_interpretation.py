@@ -152,7 +152,7 @@ def request_interpretation(
 	try:
 		client = OpenAI(timeout=timeout)
 		response = client.responses.create(
-			model="gpt-5",
+			model="gpt-5.1",
 			input=build_messages(analysis_payload),
 			text={"format": {"type": "text"}, "verbosity": "high"},
 			reasoning={"effort": "high", "summary": "detailed"},
