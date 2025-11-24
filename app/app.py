@@ -5224,6 +5224,8 @@ def main() -> None:
             label = "General" if key == "__global__" else key
             st.error(f"{label}: {message}")
         bundles = noaa_state.get("bundles", {})
+        option_labels: Dict[str, str] = {}
+        dataset_options: List[str] = []
         metrics_available: List[str] = []
         if not windowed_df.empty:
             metrics_available = [
@@ -5460,6 +5462,8 @@ def main() -> None:
             st.info("Run the HRV window analysis to enable batch correlations.")
         elif not metrics_available:
             st.info("No numeric HRV metrics available for correlation.")
+        elif not dataset_options:
+            st.info("Fetch NOAA feeds to enable batch correlations.")
         else:
             default_batch_metrics = metrics_available[: min(6, len(metrics_available))]
             batch_metrics = st.multiselect(
