@@ -1,16 +1,20 @@
-# HRV Analysis Suite — Space Weather Integration & Advanced Physiological Monitoring
+# Physiological Laboratory — HRV Analysis Suite
 
 ## Author
 
-**Dr. Diego Malpica, MD**  
+**Dr. Diego Leonel Malpica Hincapié, MD**  
 *Aerospace Medicine Specialist*  
 National University of Colombia  
 Physiology Instructor, Colombian Aerospace Force  
-Researcher
+Contributing to **AsterPhysiology** Research Initiative
+
+[![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
+[![Version](https://img.shields.io/badge/Version-1.6.0-green)](CHANGELOG.md)
+[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 
 ---
 
-A comprehensive, research-grade Heart Rate Variability (HRV) analysis platform that integrates real-time space weather data from NOAA SWPC, NASA DONKI, and SpaceWeatherLive to explore solar-physiology correlations. Built for clinicians, researchers, and biohackers who need transparent, reproducible HRV metrics with publication-ready exports.
+A comprehensive, research-grade Heart Rate Variability (HRV) analysis platform integrating circadian rhythm simulation, blood pressure variability, population norms comparison, and real-time space weather data from NOAA SWPC and NASA DONKI. Built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
 
 ## 🚀 Quick Start
 
@@ -65,6 +69,9 @@ The app will open in your default browser at `http://localhost:8501`.
 | **Nonlinear Metrics** | Poincaré SD1/SD2, DFA α1/α2, Sample/Approximate Entropy |
 | **Heart Rate Fragmentation** | PIP, IALS, PSS per PROOF-AF methodology |
 | **Geometric Metrics** | HRV Triangular Index, TINN, Baevsky Stress Index |
+| **Population Norms** | Age/sex-stratified comparison against Nunan et al., Ortega et al., MESA Study data |
+| **Blood Pressure Variability** | BPV metrics (SD, CV, ARV, SV) with HRV-BPV correlation analysis |
+| **Circadian Physiology** | Forger99, Jewett99, Hannay19 models with ESRI and light schedule simulation |
 | **Sliding Window Analysis** | Configurable windows with deviation detection and anomaly episodes |
 | **Autonomic Function Tests** | Valsalva ratio, Deep breathing E:I response, 30:15 standing ratio |
 | **Readiness Scoring** | Kubios-style parasympathetic index with historical baseline comparison |
@@ -72,9 +79,9 @@ The app will open in your default browser at `http://localhost:8501`.
 | **NASA DONKI Integration** | Flares, CMEs, geomagnetic storms, radiation belt enhancements |
 | **Fatigue Prediction** | SAFTE biomathematical model for cognitive performance |
 | **HRV Biofeedback** | Real-time coherence training with paced breathing |
-| **Garmin Integration** | Import sleep, HRV, HR, stress, SpO2, respiration data |
-| **ActiGraph GT3X Import** | Activity counts, sleep/wake classification, accelerometer data |
-| **Somfit Pro Import** | EDF sleep studies, staging, SpO2, stage-specific HRV |
+| **User Profiles** | Biometric data with validated clinical scales (ESS, KSS, PSQI, Samn-Perelli) |
+| **Multi-Device Import** | Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, Somfit Pro |
+| **Docker Deployment** | Containerized with PostgreSQL/TimescaleDB for production environments |
 | **AI Interpretation** | GPT-5.1 high-reasoning analysis with scientific citations |
 | **Publication Export** | APA 7th edition formatted reports, LaTeX tables, CSV/JSON data |
 
@@ -214,6 +221,34 @@ project/
 - LaTeX tables for publications
 - GPT-5.1 AI interpretation (requires API key)
 
+### Circadian Physiology Tab
+- Multiple mathematical models: Forger99, Jewett99, Hannay19, Hannay19TP
+- Light schedule generation (Regular, Shift Work, Slam Shift, Social Jetlag)
+- Entrainment Signal Regularity Index (ESRI) calculation
+- Phase and amplitude trajectory visualization
+- Based on Arcascope circadian package (Tavella, Hannay, Walch)
+
+### Population Norms Tab
+- Compare HRV metrics against published population norms
+- Age and sex-stratified reference values
+- Sources: Nunan et al. (2010), Ortega et al. (2024), MESA Study, Task Force 1996
+- Percentile rankings and deviation categories
+- Full scientific citations with PMID links
+
+### BPV Analysis Tab
+- Blood Pressure Variability metrics: SD, CV, ARV, SV
+- Pulse pressure and MAP calculations
+- Risk assessment based on clinical literature
+- HRV-BPV correlation for autonomic assessment
+- References: Parati et al. (2018), Rothwell et al. (2010), Saren et al. (2024)
+
+### About Tab
+- Author information and professional profiles
+- Contributing authors (Circadian: Arcascope; SAFTE: IBR/USAF)
+- Version history and changelog
+- Complete user manual (docs/Manual.md)
+- Scientific references and citations
+
 ---
 
 ## ⚙️ Configuration
@@ -324,20 +359,36 @@ The NOAA Space tab includes an advanced feature matrix builder:
 
 ### Core HRV Standards
 
-- Task Force of ESC/NASPE (1996). Heart rate variability standards. *Eur Heart J*.
-- Shaffer, F., & Ginsberg, J. P. (2017). An overview of HRV metrics and norms. *Front Public Health*.
-- Nunan, D., et al. (2010). Normal values for short-term HRV. *Pacing Clin Electrophysiol*.
-- Quigley, K. S., et al. (2024). Publication guidelines for HR and HRV. *Psychophysiology*.
+- Task Force of ESC/NASPE (1996). Heart rate variability standards. *Circulation, 93*(5), 1043-1065. [PMID: 8598068](https://pubmed.ncbi.nlm.nih.gov/8598068/)
+- Shaffer, F., & Ginsberg, J. P. (2017). An overview of HRV metrics and norms. *Front Public Health, 5*, 258. [PMID: 29034226](https://pubmed.ncbi.nlm.nih.gov/29034226/)
+- Nunan, D., et al. (2010). Normal values for short-term HRV in healthy adults. *Pacing Clin Electrophysiol, 33*(11), 1407-1417. [PMID: 20663071](https://pubmed.ncbi.nlm.nih.gov/20663071/)
+- Quigley, K. S., et al. (2024). Publication guidelines for HR and HRV. *Psychophysiology, 61*(4), e14604.
+
+### Population Norms
+
+- Ortega, E., et al. (2024). The Pulse of Singapore: Short-Term HRV Norms. *J Gen Intern Med, 39*(1), 101-108. [PMID: 37755550](https://pubmed.ncbi.nlm.nih.gov/37755550/)
+- O'Neal, W. T., et al. (2016). MESA Study HRV normative values. *Am J Cardiol*. [PMID: 27396499](https://pubmed.ncbi.nlm.nih.gov/27396499/)
+
+### Blood Pressure Variability
+
+- Parati, G., et al. (2018). BPV: clinical relevance and application. *J Clin Hypertens, 20*(7), 1133-1137. [PMID: 29927042](https://pubmed.ncbi.nlm.nih.gov/29927042/)
+- Rothwell, P. M., et al. (2010). Visit-to-visit variability of blood pressure and stroke risk. *Lancet, 375*(9718), 895-905. [PMID: 20226988](https://pubmed.ncbi.nlm.nih.gov/20226988/)
+- Saren, J., et al. (2024). Blood pressure variability and health outcomes in adults 65+. *Age and Ageing*. [DOI: 10.1093/ageing/afae262](https://doi.org/10.1093/ageing/afae262)
+
+### Circadian Physiology
+
+- Tavella, F., Hannay, K., & Walch, O. (2023). Arcascope/circadian. Zenodo. [DOI: 10.5281/zenodo.8206871](https://doi.org/10.5281/zenodo.8206871)
+- Forger, D. B., et al. (1999). A simpler model of the human circadian pacemaker. *J Biol Rhythms, 14*(6), 532-537.
 
 ### Space Weather & Physiology
 
-- Vieira, C. L. Z., et al. (2022). Geomagnetic disturbances reduce HRV. *Sci Total Environ*.
-- Alabdulgader, A., et al. (2018). Long-term HRV responses to solar activity. *Sci Rep*.
-- Vencloviene, J., et al. (2020). Solar wind and AMI risk. *Int J Environ Res Public Health*.
+- Vieira, C. L. Z., et al. (2022). Geomagnetic disturbances reduce HRV. *Sci Total Environ, 839*, 156312.
+- Alabdulgader, A., et al. (2018). Long-term HRV responses to solar activity. *Sci Rep, 8*(1), 2663.
+- Vencloviene, J., et al. (2020). Solar wind and AMI risk. *Int J Environ Res Public Health, 17*(9), 3153.
 
 ### Fragmentation & Arrhythmia Risk
 
-- PROOF-AF Study (2025). HRF and DFA α1 predict atrial fibrillation. *EHJ Open*.
+- PROOF-AF Study (2025). HRF and DFA α1 predict atrial fibrillation. *EHJ Open, 5*(1), oeaf030.
 
 ---
 
@@ -350,22 +401,69 @@ HRV/
 ├── app/
 │   ├── app.py                      # Main Streamlit application
 │   ├── hrv_core.py                 # Core HRV computation functions
+│   ├── circadian/                  # Circadian rhythm simulation module
+│   │   ├── __init__.py             # Module exports
+│   │   ├── models.py               # Forger99, Jewett99, Hannay19 models
+│   │   ├── lights.py               # Light schedule generation
+│   │   ├── metrics.py              # ESRI and phase coherence
+│   │   └── plots.py                # Actogram and visualization
+│   ├── about_tab.py                # About tab with author info
+│   ├── bpv_analysis.py             # Blood Pressure Variability analysis
+│   ├── circadian_tab.py            # Circadian physiology UI
+│   ├── device_imports.py           # Multi-device data import
+│   ├── population_norms.py         # Population norms comparison
+│   ├── user_profile.py             # User biometric profiles
+│   ├── profile_ui.py               # Profile management UI
+│   ├── ui_state_manager.py         # Centralized UI state
+│   ├── welcome_header.py           # Professional welcome page
 │   ├── gauge_builder.py            # Gauge visualization builder
 │   ├── gpt_interpretation.py       # GPT-5.1 AI interpretation
 │   ├── noaa_space.py               # NOAA space weather data
+│   ├── space_weather_persistence.py # NOAA/NASA data persistence
 │   ├── garmin_import.py            # Garmin data import
 │   ├── actigraph_import.py         # ActiGraph GT3X/GT3X+ import
 │   ├── somfit_import.py            # Compumedics Somfit/Somfit Pro import
 │   ├── fatigue_integration.py      # SAFTE fatigue model
 │   ├── realtime_hrv.py             # Real-time HRV streaming
 │   ├── ml_analytics.py             # ML anomaly/trend detection
-│   ├── statistical_analysis.py     # Statistical tests
+│   ├── ml_predictions.py           # AF/SCD/Apnea risk models
 │   └── publication_export.py       # Export utilities
+├── db/
+│   └── init/                       # Database initialization scripts
+│       ├── 01_schema.sql           # User profiles schema
+│       └── 02_space_weather_schema.sql  # Space weather tables
 ├── docs/
 │   └── Manual.md                   # Comprehensive user manual
+├── Dockerfile                      # Container image definition
+├── docker-compose.yml              # Multi-service orchestration
 ├── requirements.txt
 ├── README.md
 └── CHANGELOG.md
+```
+
+### Docker Deployment
+
+For production deployment with persistent data storage:
+
+```bash
+# Start all services (PostgreSQL, Redis, App)
+docker-compose up -d
+
+# View logs
+docker-compose logs -f app
+
+# Stop services
+docker-compose down
+
+# Include pgAdmin for database management
+docker-compose --profile admin up -d
+```
+
+**Environment Variables** (create `.env` file):
+```env
+POSTGRES_PASSWORD=your_secure_password
+OPENAI_API_KEY=sk-your-key
+APP_PORT=8501
 ```
 
 ### Running Tests
@@ -389,6 +487,7 @@ mypy app/ --strict
 
 # Security
 bandit -r app/
+pip-audit
 ```
 
 ---
