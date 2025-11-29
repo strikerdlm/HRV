@@ -20,7 +20,7 @@ Citation:
     }
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 # Core model classes
 from .models import (
