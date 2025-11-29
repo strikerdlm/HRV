@@ -538,8 +538,8 @@ def _calculate_sample_entropy(rr: NDArray, m: int = 2, r_factor: float = 0.2) ->
     
     def count_matches(template_length: int) -> int:
         count = 0
-        for i in range(n - template_length):
-            for j in range(i + 1, n - template_length):
+        for i in range(n - template_length + 1):
+            for j in range(i + 1, n - template_length + 1):
                 # Check if templates match within tolerance r
                 template_i = rr[i:i + template_length]
                 template_j = rr[j:j + template_length]
