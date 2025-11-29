@@ -933,6 +933,55 @@ def fuse_hrv_data(hrv_records: list[UnifiedHRVData]) -> UnifiedHRVData | None:
     )
 
 
+def _compute_fusion_confidence(
+    sleep_records: list[UnifiedSleepData],
+    tst_values: list[float],
+    efficiency_values: list[float],
+) -> float:
+    """Compute confidence score for fused sleep data based on source agreement.
+    
+    Confidence is based on the coefficient of variation (CV) of averaged metrics.
+    Low CV (high agreement) yields high confidence; high CV yields lower confidence.
+    
+    Args:
+        sleep_records: Input sleep records being fused.
+        tst_values: Total sleep time values from all sources.
+        efficiency_values: Sleep efficiency values from all sources.
+        
+    Returns:
+        Confidence score between 0.0 and 1.0.
+    """
+    if len(sleep_records) <= 1:
+        # Single source: use its confidence if available, otherwise moderate default
+        return sleep_records[0].confidence if sleep_records else 0.5
+    
+    cv_scores: list[float] = []
+    
+    # Compute CV for total sleep time
+    if len(tst_values) >= 2:
+        tst_mean = float(np.mean(tst_values))
+        tst_std = float(np.std(tst_values, ddof=1))
+        if tst_mean > 0:
+            cv_tst = tst_std / tst_mean
+            # Convert CV to confidence: CV=0 → 1.0, CV≥0.5 → 0.0
+            cv_scores.append(max(0.0, 1.0 - 2.0 * cv_tst))
+    
+    # Compute CV for sleep efficiency
+    if len(efficiency_values) >= 2:
+        eff_mean = float(np.mean(efficiency_values))
+        eff_std = float(np.std(efficiency_values, ddof=1))
+        if eff_mean > 0:
+            cv_eff = eff_std / eff_mean
+            cv_scores.append(max(0.0, 1.0 - 2.0 * cv_eff))
+    
+    if cv_scores:
+        # Average agreement-based confidence
+        return float(np.mean(cv_scores))
+    
+    # Fallback: moderate confidence for fused data with insufficient metrics
+    return 0.6
+
+
 def fuse_sleep_data(sleep_records: list[UnifiedSleepData]) -> UnifiedSleepData | None:
     """Fuse sleep data from multiple sources.
     
@@ -998,7 +1047,7 @@ def fuse_sleep_data(sleep_records: list[UnifiedSleepData]) -> UnifiedSleepData |
         spo2_minimum=base.spo2_minimum,
         stages=base.stages,
         source=DataSource.UNKNOWN,  # Indicates fused
-        confidence=min(1.0, len(sleep_records) * 0.5),
+        confidence=_compute_fusion_confidence(sleep_records, tst_values, efficiency_values),
     )
 
 
