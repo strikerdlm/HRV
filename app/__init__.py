@@ -7,13 +7,15 @@ including:
 - Machine learning features (anomaly detection, trend analysis)
 - AI-powered interpretation (GPT integration with fallback)
 - Publication-ready exports (statistical tables, LaTeX)
-- Wearable device integration (Garmin, sleep metrics)
+- Wearable device integration (Garmin, Oura, Whoop, Apple Watch, Fitbit)
 - Space weather correlation analysis (NOAA SWPC)
 - Comprehensive statistical analysis for publications
 - Multi-day longitudinal tracking
 - Solar-physiology correlation analysis
 - Scientific publication-ready visualizations
 - SAFTE fatigue prediction and performance modeling
+- Real-time HRV streaming and biofeedback
+- Multi-sensor wearable data fusion
 """
 
 from __future__ import annotations
@@ -38,6 +40,9 @@ __all__ = [
     "scientific_charts",
     # Device integration
     "garmin_import",
+    "wearable_fusion",
+    # Real-time streaming
+    "realtime_hrv",
     # External data
     "noaa_space",
     # Statistical analysis
