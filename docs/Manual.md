@@ -1,16 +1,19 @@
-## HRV Analysis Suite — Complete User Manual
+## Physiological Laboratory — Complete User Manual
 
 ### Author
 
-**Dr. Diego Malpica, MD**  
+**Dr. Diego Leonel Malpica Hincapié, MD**  
 *Aerospace Medicine Specialist*  
 National University of Colombia  
 Physiology Instructor, Colombian Aerospace Force  
-Researcher
+Contributing to **AsterPhysiology** Research Initiative
+
+**GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
+**Version:** 1.6.0
 
 ---
 
-This manual provides step-by-step instructions for all features of the HRV Analysis Suite with practical examples, interpretation guidance, and clinical/research best practices.
+This manual provides step-by-step instructions for all features of the Physiological Laboratory (HRV Analysis Suite) with practical examples, interpretation guidance, and clinical/research best practices.
 
 ---
 
@@ -22,26 +25,29 @@ This manual provides step-by-step instructions for all features of the HRV Analy
 4. [Sidebar Configuration](#sidebar-configuration)
 5. [Tab-by-Tab Guide](#tab-by-tab-guide)
 6. [User Profiles and Clinical Scales](#user-profiles-and-clinical-scales)
-7. [Autonomic Function Tests](#autonomic-function-tests)
-8. [Space Weather Correlation](#space-weather-correlation)
-9. [Fatigue Prediction (SAFTE Model)](#fatigue-prediction-safte-model)
-10. [Biofeedback and Real-Time HRV](#biofeedback-and-real-time-hrv)
-11. [Garmin Integration](#garmin-integration)
-12. [ActiGraph GT3X Integration](#actigraph-gt3x-integration)
-13. [Somfit Pro Integration](#somfit-pro-integration)
-14. [AI-Powered Interpretation](#ai-powered-interpretation)
-15. [Export and Publication](#export-and-publication)
-16. [Metric Reference Tables](#metric-reference-tables)
-17. [Troubleshooting](#troubleshooting)
-18. [Scientific References](#scientific-references)
-19. [Advanced ECG R-Peak Detection](#advanced-ecg-r-peak-detection)
-20. [Multi-Modal Sensor Fusion](#multi-modal-sensor-fusion)
-21. [Long-Term HRV Trending Analysis](#long-term-hrv-trending-analysis)
-22. [Exercise HRV Analysis](#exercise-hrv-analysis)
-23. [Machine Learning Predictions](#machine-learning-predictions)
-24. [Real-Time BLE Integration](#real-time-ble-integration)
-25. [Docker Deployment](#docker-deployment)
-26. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
+7. [Population Norms Comparison](#population-norms-comparison)
+8. [Blood Pressure Variability Analysis](#blood-pressure-variability-analysis)
+9. [Circadian Physiology Module](#circadian-physiology-module)
+10. [Autonomic Function Tests](#autonomic-function-tests)
+11. [Space Weather Correlation](#space-weather-correlation)
+12. [Fatigue Prediction (SAFTE Model)](#fatigue-prediction-safte-model)
+13. [Biofeedback and Real-Time HRV](#biofeedback-and-real-time-hrv)
+14. [Garmin Integration](#garmin-integration)
+15. [ActiGraph GT3X Integration](#actigraph-gt3x-integration)
+16. [Somfit Pro Integration](#somfit-pro-integration)
+17. [AI-Powered Interpretation](#ai-powered-interpretation)
+18. [Export and Publication](#export-and-publication)
+19. [Metric Reference Tables](#metric-reference-tables)
+20. [Troubleshooting](#troubleshooting)
+21. [Scientific References](#scientific-references)
+22. [Advanced ECG R-Peak Detection](#advanced-ecg-r-peak-detection)
+23. [Multi-Modal Sensor Fusion](#multi-modal-sensor-fusion)
+24. [Long-Term HRV Trending Analysis](#long-term-hrv-trending-analysis)
+25. [Exercise HRV Analysis](#exercise-hrv-analysis)
+26. [Machine Learning Predictions](#machine-learning-predictions)
+27. [Real-Time BLE Integration](#real-time-ble-integration)
+28. [Docker Deployment](#docker-deployment)
+29. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
 
 ---
 
@@ -668,6 +674,250 @@ User profiles and assessments are stored in:
 - **Docker mode:** PostgreSQL database with TimescaleDB for time-series optimization
 
 All data remains under user control. No data is transmitted externally unless explicitly exported.
+
+---
+
+## Population Norms Comparison
+
+The Population Norms tab enables comparison of your HRV metrics against scientifically validated reference values from large-scale studies.
+
+### Scientific Sources
+
+The platform integrates normative data from multiple peer-reviewed sources:
+
+| Source | Sample Size | Population | Metrics |
+|--------|-------------|------------|---------|
+| Nunan et al. (2010) | n=21,438 | Meta-analysis of 44 studies | SDNN, RMSSD, pNN50, LF, HF, LF/HF |
+| Ortega et al. (2024) | n=2,143 | Singapore multiethnic adults | RMSSD, SDNN stratified by age/sex |
+| MESA Study (2016) | n=5,966 | Multi-ethnic US adults | Time and frequency domain |
+| Task Force (1996) | - | ESC/NASPE guidelines | All standard metrics |
+
+**References:**
+- Nunan D, et al. *Pacing Clin Electrophysiol.* 2010;33(11):1407-1417. [PMID: 20663071](https://pubmed.ncbi.nlm.nih.gov/20663071/)
+- Ortega E, et al. *J Gen Intern Med.* 2024;39(1):101-108. [PMID: 37755550](https://pubmed.ncbi.nlm.nih.gov/37755550/)
+- O'Neal WT, et al. *Am J Cardiol.* 2016. [PMID: 27396499](https://pubmed.ncbi.nlm.nih.gov/27396499/)
+
+### Age and Sex Stratification
+
+HRV values are stratified by demographic factors:
+
+**RMSSD Reference Values (ms) by Age and Sex:**
+
+| Age Group | Male Mean±SD | Female Mean±SD |
+|-----------|--------------|----------------|
+| 18-25 | 42.0±15.0 | 45.0±18.0 |
+| 26-35 | 38.0±14.0 | 42.0±16.0 |
+| 36-45 | 32.0±12.0 | 36.0±14.0 |
+| 46-55 | 26.0±10.0 | 30.0±12.0 |
+| 56-65 | 22.0±9.0 | 25.0±10.0 |
+| 65+ | 18.0±8.0 | 21.0±9.0 |
+
+### Deviation Categories
+
+Your values are classified relative to population norms:
+
+| Category | Definition | Interpretation |
+|----------|------------|----------------|
+| Very Low | <5th percentile | Significantly below normal |
+| Low | 5th-25th percentile | Below average |
+| Normal | 25th-75th percentile | Within normal range |
+| High | 75th-95th percentile | Above average |
+| Very High | >95th percentile | Significantly elevated |
+
+### Using the Population Norms Tab
+
+1. **Upload and process HRV data** in any analysis tab
+2. **Navigate to Population Norms tab**
+3. **Enter demographics** (age, sex)
+4. **Review comparison table** showing:
+   - Your value for each metric
+   - Population mean and standard deviation
+   - Deviation in standard deviations
+   - Percentile ranking
+   - Category classification
+
+### Clinical Interpretation Guidelines
+
+- **Normal range:** Values within one standard deviation of the mean
+- **Above/Below Average:** Values 1-2 SD from the mean may warrant monitoring
+- **Very High/Low:** Values beyond 2 SD should be interpreted in clinical context
+
+⚠️ **Important:** HRV varies significantly with posture, time of day, hydration, and measurement protocol. Compare within-subject trends for training decisions; use population norms for general health context.
+
+---
+
+## Blood Pressure Variability Analysis
+
+Blood Pressure Variability (BPV) is an emerging biomarker for cardiovascular risk independent of mean blood pressure values. The BPV module complements HRV analysis for comprehensive autonomic assessment.
+
+### Scientific Background
+
+BPV reflects the beat-to-beat and visit-to-visit fluctuations in blood pressure mediated by:
+- Baroreflex sensitivity
+- Arterial stiffness
+- Autonomic nervous system function
+- End-organ damage
+
+**Key References:**
+- Parati G, et al. *J Clin Hypertens.* 2018;20(7):1133-1137. [PMID: 29927042](https://pubmed.ncbi.nlm.nih.gov/29927042/)
+- Rothwell PM, et al. *Lancet.* 2010;375(9718):895-905. [PMID: 20226988](https://pubmed.ncbi.nlm.nih.gov/20226988/)
+- Saren J, et al. *Age and Ageing.* 2024. [DOI: 10.1093/ageing/afae262](https://doi.org/10.1093/ageing/afae262)
+
+### BPV Metrics
+
+| Metric | Definition | Clinical Significance |
+|--------|------------|----------------------|
+| **SD** | Standard deviation of BP readings | Overall variability magnitude |
+| **CV** | Coefficient of variation (SD/mean × 100) | Normalized variability |
+| **ARV** | Average Real Variability (mean of absolute successive differences) | Short-term fluctuations |
+| **SV** | Successive Variation (RMS of successive differences) | Beat-to-beat variability |
+| **Pulse Pressure** | Systolic - Diastolic | Arterial stiffness indicator |
+| **MAP** | Mean Arterial Pressure | Organ perfusion pressure |
+
+### Risk Stratification
+
+Based on clinical literature, elevated BPV is associated with:
+
+| BPV Level | Systolic CV | Risk Implication |
+|-----------|-------------|------------------|
+| Low | <5% | Normal variability |
+| Moderate | 5-10% | Monitoring recommended |
+| High | 10-15% | Increased CV risk |
+| Very High | >15% | Significant risk factor |
+
+### HRV-BPV Correlation
+
+The module calculates correlation between HRV and BPV metrics to assess autonomic coherence:
+
+- **High correlation:** Synchronized autonomic regulation
+- **Low correlation:** Autonomic dysregulation or baroreflex impairment
+- **Inverse correlation:** May indicate specific pathophysiology
+
+### Using the BPV Tab
+
+1. **Import BP data** with systolic, diastolic, and timestamp columns
+2. **Select analysis type:**
+   - Short-term (beat-to-beat, 24-hour ambulatory)
+   - Long-term (visit-to-visit, week-to-week)
+3. **Click "Compute BPV Metrics"**
+4. **Review results** including:
+   - All BPV metrics with interpretations
+   - Risk category assessment
+   - HRV-BPV correlation analysis
+   - Time series visualization
+
+### Data Requirements
+
+BPV analysis requires blood pressure data in one of these formats:
+- CSV with columns: `timestamp`, `systolic`, `diastolic`
+- Continuous BP monitor export (Finapres, Portapres)
+- Home BP log with timestamps
+
+### Limitations
+
+⚠️ **Important Considerations:**
+- BPV from office measurements less reliable than ambulatory monitoring
+- White-coat effect can artificially increase BPV
+- Irregular measurement intervals affect time-domain metrics
+- Standard cuff measurements lack beat-to-beat resolution
+
+---
+
+## Circadian Physiology Module
+
+The Circadian Physiology tab provides mathematical modeling of human circadian rhythms, enabling simulation of light exposure effects on the biological clock and prediction of circadian disruption.
+
+### Scientific Foundation
+
+The module implements validated mathematical models of the human circadian pacemaker:
+
+| Model | Description | Best For |
+|-------|-------------|----------|
+| **Forger99** | Two-process model with direct light input | General circadian simulation |
+| **Jewett99** | Modified Kronauer model with melatonin suppression | Light sensitivity studies |
+| **Hannay19** | Amplitude-phase model with limit cycle | Phase shift prediction |
+| **Hannay19TP** | Two-population extension | Split-sleep schedules |
+
+**Citation:**
+```
+@software{franco_tavella_2023_8206871,
+  author = {Franco Tavella and Kevin Hannay and Olivia Walch},
+  title = {Arcascope/circadian},
+  year = 2023,
+  publisher = {Zenodo},
+  doi = {10.5281/zenodo.8206871}
+}
+```
+
+### Light Schedule Types
+
+The module generates various light exposure patterns:
+
+| Schedule | Description | Use Case |
+|----------|-------------|----------|
+| **Regular** | Fixed wake/sleep with ambient light | Baseline simulation |
+| **Shift Work** | Rotating or fixed shift patterns | Occupational health |
+| **Slam Shift** | Abrupt schedule change | Jet lag simulation |
+| **Social Jetlag** | Weekend delay pattern | Lifestyle assessment |
+| **Custom Pulse** | User-defined light pulses | Light therapy planning |
+
+### Key Metrics
+
+**Entrainment Signal Regularity Index (ESRI):**
+- Quantifies how well a light schedule promotes stable circadian entrainment
+- Range: 0 (irregular) to 1 (perfectly regular)
+- Higher ESRI indicates more circadian-friendly schedules
+
+**Phase Coherence:**
+- Measures stability of circadian timing across days
+- Based on circular statistics of phase markers (e.g., DLMO times)
+
+**Social Jetlag Index:**
+- Difference between weekend and weekday sleep midpoints
+- >1 hour associated with adverse health outcomes
+
+### Using the Circadian Tab
+
+**Step 1: Select Model**
+1. Navigate to Circadian Physiology tab
+2. Choose mathematical model from dropdown
+3. Review model parameters (adjustable for advanced users)
+
+**Step 2: Configure Light Schedule**
+1. Select schedule type
+2. Enter parameters:
+   - Wake time (hours, 24h format)
+   - Sleep duration (hours)
+   - Light intensity during wake (lux)
+   - Simulation duration (days)
+
+**Step 3: Run Simulation**
+1. Click "Generate Light Schedule"
+2. Click "Run Circadian Model"
+3. Review trajectory plots:
+   - Phase over time
+   - Amplitude over time
+   - Core body temperature prediction
+
+**Step 4: Analyze Results**
+- View ESRI score for schedule regularity
+- Examine phase deviation from target
+- Compare different schedules
+
+### Clinical Applications
+
+1. **Jet Lag Prediction:** Simulate travel across time zones
+2. **Shift Work Assessment:** Evaluate rotation schedules
+3. **Light Therapy Planning:** Optimize timing and duration
+4. **Sleep Disorder Analysis:** Identify circadian misalignment
+5. **Performance Forecasting:** Predict alertness windows
+
+### Integration with HRV
+
+Circadian phase affects HRV metrics:
+- HRV typically peaks during sleep (parasympathetic dominance)
+- Circadian disruption correlates with reduced HRV
+- Use circadian simulation to contextualize HRV measurements
 
 ---
 
@@ -2588,9 +2838,123 @@ For full BLE functionality, consider the desktop version which provides:
 
 ---
 
+## Docker Deployment
+
+The HRV Analysis Suite supports containerized deployment for production environments with persistent data storage.
+
+### Prerequisites
+
+- Docker Engine 20.10+
+- Docker Compose 2.0+
+- 4GB RAM minimum (8GB recommended)
+- 10GB disk space
+
+### Quick Start
+
+```bash
+# Clone repository
+git clone https://github.com/strikerdlm/HRV.git
+cd HRV
+
+# Create environment file
+cp .env.example .env
+# Edit .env with your settings
+
+# Start all services
+docker-compose up -d
+
+# View logs
+docker-compose logs -f app
+```
+
+The application will be available at `http://localhost:8501`.
+
+### Services
+
+| Service | Port | Description |
+|---------|------|-------------|
+| **app** | 8501 | Streamlit application |
+| **db** | 5432 | PostgreSQL with TimescaleDB |
+| **redis** | 6379 | Session caching |
+| **pgadmin** | 5050 | Database administration (optional) |
+
+### Environment Variables
+
+Create a `.env` file with:
+
+```env
+# Database credentials
+POSTGRES_DB=hrv_platform
+POSTGRES_USER=hrv_admin
+POSTGRES_PASSWORD=your_secure_password
+
+# Application settings
+APP_PORT=8501
+LOG_LEVEL=INFO
+
+# API keys (optional)
+OPENAI_API_KEY=sk-your-key
+NASA_API_KEY=DEMO_KEY
+```
+
+⚠️ **Security:** Never commit `.env` files to version control.
+
+### Data Persistence
+
+Docker volumes ensure data persistence:
+
+| Volume | Purpose |
+|--------|---------|
+| `hrv_postgres_data` | User profiles, HRV data, correlations |
+| `hrv_redis_data` | Session cache |
+| `hrv_app_data` | Uploaded files, exports |
+
+### Database Schema
+
+The PostgreSQL database includes:
+
+- **user_profiles:** Biometric data and clinical scales
+- **noaa_kp_index:** Geomagnetic storm indices
+- **noaa_f107_index:** Solar radio flux
+- **noaa_solar_wind:** Real-time solar wind parameters
+- **hrv_sw_correlations:** HRV-space weather correlation results
+- **ml_predictions:** Machine learning prediction history
+
+### Production Considerations
+
+1. **SSL/TLS:** Configure reverse proxy (nginx, Traefik) for HTTPS
+2. **Backups:** Schedule regular PostgreSQL backups
+3. **Monitoring:** Add health check endpoints to monitoring system
+4. **Scaling:** Use Docker Swarm or Kubernetes for high availability
+
+### Useful Commands
+
+```bash
+# Stop services
+docker-compose down
+
+# Stop and remove volumes (CAUTION: deletes data)
+docker-compose down -v
+
+# Rebuild after code changes
+docker-compose build --no-cache app
+docker-compose up -d
+
+# Database backup
+docker exec hrv_database pg_dump -U hrv_admin hrv_platform > backup.sql
+
+# Access database shell
+docker exec -it hrv_database psql -U hrv_admin -d hrv_platform
+
+# Include pgAdmin for database management
+docker-compose --profile admin up -d
+```
+
+---
+
 ## Pending Developments and Roadmap
 
-This section outlines remaining planned enhancements and features under development for the HRV Analysis Suite.
+This section outlines completed features and remaining planned enhancements for the HRV Analysis Suite.
 
 ### Completed Features (Q4 2025)
 
@@ -2600,39 +2964,14 @@ This section outlines remaining planned enhancements and features under developm
 ✅ **Exercise HRV Analysis** - HRR, parasympathetic reactivation, TRIMP  
 ✅ **ML Predictions** - AF risk, SCD stratification, sleep apnea screening  
 ✅ **Real-Time BLE Integration** - Polar H10/H9, Garmin, Wahoo support  
+✅ **Population Norms Comparison** - Age/sex-stratified reference values from Nunan, Ortega, MESA  
+✅ **Blood Pressure Variability** - BPV metrics with HRV-BPV correlation analysis  
+✅ **Circadian Physiology Module** - Forger99, Jewett99, Hannay19 models with ESRI  
+✅ **User Profiles System** - Biometrics and validated clinical scales (ESS, KSS, PSQI)  
+✅ **Docker Deployment** - Full containerization with PostgreSQL/TimescaleDB  
+✅ **Professional Welcome Page** - Laboratory branding with quick access grid  
 
-### Medium Priority Enhancements
-
-#### Blood Pressure Variability (BPV) Integration
-**Status:** Planned  
-**Description:** Add support for continuous blood pressure monitoring data to analyze baroreflex sensitivity and BPV metrics.
-
-- Import BP waveform data (Finapres, Portapres)
-- Compute systolic/diastolic BPV
-- Baroreflex sensitivity (sequence method, spectral)
-- Cross-spectral HRV-BPV coherence
-
-**Clinical relevance:** BPV complements HRV for comprehensive autonomic assessment.
-
-#### Population Normative Database
-**Status:** Planned  
-**Description:** Expand reference ranges with age/sex/fitness-stratified normative data.
-
-- Integrate published normative datasets
-- Age-decade specific reference ranges
-- Fitness-level adjustments (VO2max correlation)
-- Disease-specific reference ranges
-- Percentile rankings
-
-#### Circadian Rhythm Analysis
-**Status:** Planned  
-**Description:** Tools for analyzing circadian patterns in HRV and physiology.
-
-- Cosinor analysis for circadian rhythms
-- Mesor, amplitude, acrophase extraction
-- Circadian disruption indices
-- Shift work impact assessment
-- Jet lag recovery tracking
+### Remaining Enhancements
 
 #### Advanced Nonlinear Dynamics
 **Status:** Partially implemented  
@@ -2645,6 +2984,15 @@ This section outlines remaining planned enhancements and features under developm
 - Lyapunov exponents
 
 **Current state:** DFA, SampEn, ApEn implemented; advanced methods pending.
+
+#### Baroreflex Sensitivity from HRV-BPV
+**Status:** Planned  
+**Description:** Cross-spectral analysis of HRV and BPV for baroreflex assessment.
+
+- Sequence method (spontaneous baroreflex)
+- Spectral (α coefficient in LF band)
+- Transfer function analysis
+- Coherence thresholding
 
 ### Infrastructure Improvements
 
@@ -2731,11 +3079,15 @@ If you're interested in contributing to any of these developments:
 | Exercise HRV | Q4 2025 | ✅ Completed |
 | ML predictions | Q4 2025 | ✅ Completed |
 | Real-time BLE | Q4 2025 | ✅ Completed |
-| BPV integration | Q1 2026 | Planned |
-| Circadian analysis | Q1 2026 | Planned |
-| Population norms | Q2 2026 | Planned |
+| Population norms | Q4 2025 | ✅ Completed |
+| BPV integration | Q4 2025 | ✅ Completed |
+| Circadian analysis | Q4 2025 | ✅ Completed |
+| User profiles | Q4 2025 | ✅ Completed |
+| Docker deployment | Q4 2025 | ✅ Completed |
+| Baroreflex sensitivity | Q1 2026 | Planned |
+| Advanced nonlinear | Q1 2026 | Planned |
 | Mobile app | Q4 2026 | Conceptual |
 
 ---
 
-*Last updated: November 2025*
+*Last updated: November 29, 2025*
