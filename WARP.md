@@ -3,7 +3,7 @@
 This file provides guidance to WARP (warp.dev) when working with code in this repository.
 
 ## Overview
-HRV (Heart Rate Variability) Analysis application with Space Weather Integration. This is a Streamlit-based scientific application that analyzes heart rate variability metrics from Polar RR-interval recordings and correlates them with space weather data from NOAA SWPC feeds and other sources. The application is designed for aerospace medicine and psychophysiology research.
+HRV (Heart Rate Variability) Analysis application with Space Weather and NOAA Integration. This is a Streamlit-based scientific application that analyzes heart rate variability metrics from Polar RR-interval recordings and correlates them with space weather data from NOAA SWPC feeds, NASA DONKI, and SpaceWeatherLive snapshots. The application is designed for aerospace medicine and psychophysiology research.
 
 ## Running the Application
 
@@ -53,10 +53,10 @@ The application follows a modular architecture with strict separation of concern
    - All timestamps normalized to UTC timezone-aware format
 
 3. **`app/app.py`** — Main Streamlit application
-   - Multi-tab interface: Overview, Time Series, Frequency, Nonlinear, Spectrogram, Windowed, Metrics, Gauges, ANS Function Tests, Readiness, Space Weather, Science
+   - Multi-tab interface: Overview, Time Series, Frequency, Nonlinear, Spectrogram, Windowed, Metrics, ANS Function Tests, Readiness, Gauges, Science, Space Weather, NOAA Space, Export, References, About
    - Manages Streamlit session state for uploaded files and computed metrics
-   - Integrates HRV core, NOAA space data, SpaceWeatherLive scraping, ECharts visualizations
-   - Correlation workflows for HRV↔space-weather analysis with lag scanning, FDR-adjusted p-values, partial correlations
+   - Integrates HRV core, NOAA space data, NASA DONKI events, SpaceWeatherLive scraping, ECharts visualizations, and optional GPT‑5 interpretation
+   - Correlation workflows for HRV↔space-weather analysis with lag scanning, FDR-adjusted p-values, partial correlations, and simple linear response models
 
 4. **`app/spaceweatherlive_client.py`** — SpaceWeatherLive scraper
    - Direct HTML parsing of https://www.spaceweatherlive.com/ for Kp forecast, solar wind, IMF, sunspot number
@@ -72,10 +72,10 @@ The application follows a modular architecture with strict separation of concern
    - No random sampling; bounded by `max_iterations` with early convergence exit
    - Returns enriched dataframe with cluster labels, scores, and summary
 
-7. **`app/gpt_interpretation.py`** — GPT-5.1 interpretation
+7. **`app/gpt_interpretation.py`** — GPT-5 high-reasoning interpretation
    - Builds JSON payload from HRV analysis (datasets overview, metrics tables, windowed results, episodes, ML clusters)
-   - Requests doctoral-level markdown report from OpenAI GPT-5.1
-   - Includes reasoning summary and web search sources
+   - Requests doctoral-level markdown report from OpenAI GPT-5 (high reasoning)
+   - Includes reasoning summary and source listing; UI surfaces the markdown only (reasoning is never logged)
 
 8. **`app/echarts_component.py`** — ECharts visualization wrapper
    - Streamlit component for rendering Apache ECharts (gauge, line, scatter, heatmap)
@@ -108,10 +108,13 @@ This codebase adheres to strict deterministic, analyzable, reliable Python stand
 - **Zero-warnings policy**: ruff/pylint, Black/isort formatting, Bandit security checks
 
 ### Testing
-- No existing test suite; when adding tests, use **pytest + Hypothesis** for core logic
-- Property-based tests recommended for artifact detection, interpolation, PSD computation
-- Target ≥90% coverage on critical modules (`hrv_core.py`, `noaa_space.py`)
-- Treat warnings as errors during test runs
+- Test suite lives under `tests/`:
+  - `tests/test_comprehensive_modules.py` — end-to-end checks for core HRV and app wiring
+  - `tests/test_new_modules.py` — coverage for recently added modules and utilities
+  - `tests/test_noaa_cache.py` — NOAA caching and cache invalidation behavior
+- Run tests with `pytest` from the project root (`HRV`).
+- For new core logic, prefer **pytest + Hypothesis** property-based tests (artifact detection, interpolation, PSD, correlations).
+- Target ≥90% coverage on critical modules (`app/hrv_core.py`, `app/noaa_space.py`) and treat warnings as errors during CI.
 
 ### Caching Strategy
 - NOAA space data cached in `app/data_cache/noaa_space/` with 6-hour TTL
@@ -152,7 +155,7 @@ This codebase adheres to strict deterministic, analyzable, reliable Python stand
 
 ### Available NOAA Feeds (see `docs/NOAA json.md` for full list)
 - F10.7 cm solar radio flux (3 daily slots)
-- Planetary K-index (1-minute cadence)
+- Planetary K-index (3-hour cadence)
 - Solar wind proton speed/density/temperature (ACE/DSCOVR)
 - Interplanetary magnetic field (Bt, Bz GSE/GSM)
 - GOES x-ray flux (0.05–0.4 nm)
