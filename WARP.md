@@ -96,6 +96,17 @@ The application follows a modular architecture with strict separation of concern
 8. Best correlations persisted to `data/hrv_solar_db.jsonl` (keyed by Cedula)
 9. ECharts gauges/charts render metrics against short-term anchors
 
+### Extended Modules and New Features
+- **Multi-source device imports**: `actigraph_import.py`, `garmin_import.py`, `somfit_import.py`, `ecg_rpeak_detection.py` handle ActiGraph, Garmin, Somfit and ECG R-peak data, normalising into a common RR/HRV schema.
+- **Real‑time monitoring**: `realtime_ble.py`, `realtime_hrv.py` stream BLE heart‑rate / RR data for near‑real‑time HRV and quality control.
+- **Fatigue and operational performance**: `fatigue_calculator/`, `fatigue_integration.py`, `fatigue_integration.py`, and `exercise_hrv.py` connect HRV, workload and circadian factors to fatigue and performance risk indices.
+- **Sleep & long‑term tracking**: `sleep_analysis.py`, `sleep_metrics.py`, `sleep_tab.py`, `multiday_tracker.py`, `longterm_trending.py` support multi‑night / multi‑day trends, sleep staging metrics, and readiness trajectories.
+- **Multimodal & wearable fusion**: `wearable_fusion.py`, `multimodal_fusion.py`, `user_data_manager.py` integrate multiple devices (e.g. wearables + RR files) into unified profiles.
+- **Advanced analytics and predictions**: `ml_analytics.py`, `ml_predictions.py`, `solar_physiology_correlation.py`, `scientific_charts.py` implement clustering, regression and scientific visualisations for HRV↔environment relationships.
+- **Publication export**: `publication_export.py` supports exporting results and figures in a form aligned with journal-style reporting.
+
+These modules extend the original single‑session HRV app into a broader platform for multiday tracking, multi‑device ingestion, fatigue/sleep analytics, and research‑grade HRV↔space‑weather studies.
+
 ### Key Design Principles (From Global Python Rule)
 This codebase adheres to strict deterministic, analyzable, reliable Python standards:
 - **No recursion**; loops must be bounded with explicit counters or finite iterables
@@ -232,6 +243,41 @@ This codebase adheres to strict deterministic, analyzable, reliable Python stand
 - Sacha (2016): Heart rate contribution to HRV (Frontiers)
 
 See `docs/Manual.md` for full references and metric-specific citations.
+
+## AI Agent / Cursor / MCP Rules
+
+These rules apply to AI agents operating in Warp, Cursor, or any MCP-enabled environment for this repository.
+
+### Evidence and scientific literature
+- For any non-trivial change to metrics, thresholds, interpretations, or new integrations (e.g., space-weather↔HRV models), agents **must**:
+  - Search peer‑reviewed scientific publications using Model Context Protocol (MCP) or the configured literature tools.
+  - Prefer consensus/guideline documents and high‑quality reviews (e.g., Task Force 1996 HRV standards, Shaffer & Ginsberg 2017, Nunan et al. 2010). citeturn0search11turn0search1turn0search8
+  - Include at least one verifiable reference per new concept, linking to an abstract or (where legally available) full‑text PDF.
+- Citations in AI responses should be precise enough that a reader can reach the abstract/PDF from the link in one click (publisher site, PubMed, or equivalent).
+
+### Coding, testing, and security standards
+- Follow the **Global Python Rule** already encoded in this repo (deterministic, analyzable, no recursion, strict typing, bounded I/O timeouts, no dynamic `eval/exec`, explicit validation and error handling).
+- Apply industry best practices:
+  - Lint/format: ruff or pylint + Black + isort; zero new lint errors.
+  - Types: mypy/pyright in strict mode; no implicit `Any` in new code.
+  - Security: use HTTPS endpoints only; no secrets in code; respect `.env`; run `bandit -r app/` and `pip-audit`/`pip install --upgrade --dry-run` workflow before major releases.
+  - Dependencies: pin versions in `requirements.txt` and keep them updated with security advisories.
+- For new features, extend or add tests under `tests/` rather than only manual verification; prefer pytest + Hypothesis for algorithmic code.
+
+### Documentation and change discipline
+- Whenever a feature, workflow, or integration meaningfully changes, agents should:
+  - Update **README.md** (high‑level behavior) and `docs/Manual.md` (clinician/researcher details) as part of the same change.
+  - Keep **WARP.md** aligned with actual module layout, tabs, and major data flows.
+  - Add concise entries to `CHANGELOG.md` for user‑visible changes.
+- Documentation of scientific context should reference primary sources (guidelines, trials, or cohort studies) with verifiable links as above.
+
+### Per-response obligations for agents
+- For any substantial programming or analysis response (non‑trivial diff, new feature, or analytics workflow), agents should:
+  - Include a short **“Upgrade / Bug‑fix Opportunities”** paragraph summarizing obvious next steps (refactors, tests, robustness, performance, or security).
+  - Flag any assumptions or limitations (e.g., lack of validated clinical cut‑offs, small sample simulation) and, where possible, cite literature clarifying them. citeturn0search0turn0search5turn1search1
+  - Where the answer relies on scientific claims (e.g., normative HRV values, effects of geomagnetic storms on HRV), cite at least one peer‑reviewed study and point to its abstract or open‑access full text. citeturn1search3turn1search4turn1search7
+
+These rules are additive to any project‑specific rules already present; if they conflict, follow the stricter constraint.
 
 ## Troubleshooting
 
