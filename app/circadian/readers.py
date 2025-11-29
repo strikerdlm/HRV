@@ -55,7 +55,7 @@ class WearableData:
     def _validate_columns(obj: pd.DataFrame) -> None:
         """Validate that DataFrame has required columns."""
         if "datetime" not in obj.columns:
-            if "start" not in obj.columns and "end" not in obj.columns:
+            if "start" not in obj.columns or "end" not in obj.columns:
                 raise AttributeError(
                     "DataFrame must have 'datetime' column or 'start' and 'end' columns"
                 )
@@ -152,8 +152,8 @@ def load_json(
     with open(filepath, "r", encoding="utf-8") as f:
         jdict = json.load(f)
     
-    # Check valid keys
-    if not np.all([key in VALID_WEARABLE_STREAMS for key in jdict.keys()]):
+    # Check valid keys - require at least one valid key, warn about invalid ones
+    if not any(key in VALID_WEARABLE_STREAMS for key in jdict.keys()):
         raise AttributeError(
             "Invalid keys in JSON file. At least one key must be steps, heartrate, wake, light_estimate, or activity."
         )
@@ -307,8 +307,8 @@ def interval_fraction(
     """
     max_starts = starts.apply(lambda x: max(x, ref_start))
     min_ends = stops.apply(lambda x: min(x, ref_stop))
-    contained_intervals = (min_ends - max_starts).apply(lambda x: x.seconds)
-    full_intervals = (stops - starts).apply(lambda x: x.seconds)
+    contained_intervals = (min_ends - max_starts).apply(lambda x: x.total_seconds())
+    full_intervals = (stops - starts).apply(lambda x: x.total_seconds())
     return contained_intervals / full_intervals
 
 
