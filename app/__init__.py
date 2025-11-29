@@ -9,6 +9,10 @@ including:
 - Publication-ready exports (statistical tables, LaTeX)
 - Wearable device integration (Garmin, sleep metrics)
 - Space weather correlation analysis (NOAA SWPC)
+- Comprehensive statistical analysis for publications
+- Multi-day longitudinal tracking
+- Solar-physiology correlation analysis
+- Scientific publication-ready visualizations
 """
 
 from __future__ import annotations
@@ -30,9 +34,16 @@ __all__ = [
     "publication_export",
     # Visualization
     "gauge_builder",
+    "scientific_charts",
     # Device integration
     "garmin_import",
     # External data
     "noaa_space",
+    # Statistical analysis
+    "statistical_analysis",
+    # Multi-day tracking
+    "multiday_tracker",
+    # Solar-physiology correlation
+    "solar_physiology_correlation",
 ]
 
