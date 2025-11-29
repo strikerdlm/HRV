@@ -4439,29 +4439,39 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
                     
                     if run_ml and ml_metric in multi_results_df.columns:
                         with st.spinner("Running ML analysis..."):
-                            values = multi_results_df[ml_metric].dropna().values
+                            # Get non-NaN mask and values while preserving index alignment
+                            metric_series = multi_results_df[ml_metric]
+                            valid_mask = metric_series.notna()
+                            values = metric_series[valid_mask].values
+                            # Store the valid indices for timestamp alignment
+                            valid_indices = np.where(valid_mask)[0]
                             
-                            # Anomaly detection
-                            if anomaly_method == "Z-score":
-                                anomaly_result = detect_anomalies_zscore(values, threshold=2.5)
-                            elif anomaly_method == "MAD (Robust)":
-                                anomaly_result = detect_anomalies_mad(values, threshold=3.0)
+                            if len(values) < 5:
+                                st.warning("Insufficient data points for ML analysis (need at least 5).")
                             else:
-                                anomaly_result = detect_anomalies_iqr(values, k=1.5)
-                            
-                            # Trend analysis
-                            trend_result = analyze_trend(values)
-                            
-                            # Store results
-                            st.session_state["ml_anomaly_result"] = anomaly_result
-                            st.session_state["ml_trend_result"] = trend_result
-                            st.session_state["ml_metric_name"] = ml_metric
+                                # Anomaly detection
+                                if anomaly_method == "Z-score":
+                                    anomaly_result = detect_anomalies_zscore(values, threshold=2.5)
+                                elif anomaly_method == "MAD (Robust)":
+                                    anomaly_result = detect_anomalies_mad(values, threshold=3.0)
+                                else:
+                                    anomaly_result = detect_anomalies_iqr(values, k=1.5)
+                                
+                                # Trend analysis
+                                trend_result = analyze_trend(values)
+                                
+                                # Store results along with valid indices for proper alignment
+                                st.session_state["ml_anomaly_result"] = anomaly_result
+                                st.session_state["ml_trend_result"] = trend_result
+                                st.session_state["ml_metric_name"] = ml_metric
+                                st.session_state["ml_valid_indices"] = valid_indices
                     
                     # Display ML results
                     if "ml_anomaly_result" in st.session_state:
                         anomaly_result = st.session_state["ml_anomaly_result"]
                         trend_result = st.session_state["ml_trend_result"]
                         ml_metric_name = st.session_state.get("ml_metric_name", "Metric")
+                        valid_indices = st.session_state.get("ml_valid_indices", None)
                         
                         with col_ml2:
                             # Summary metrics
@@ -4476,18 +4486,32 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
                                 st.metric("R²", f"{trend_result.r_squared:.3f}")
                         
                         # ML Pattern chart
-                        if ml_metric_name in multi_results_df.columns:
-                            values = multi_results_df[ml_metric_name].dropna().values
+                        if ml_metric_name in multi_results_df.columns and valid_indices is not None:
+                            # Get values using valid indices for proper alignment
+                            metric_series = multi_results_df[ml_metric_name]
+                            valid_mask = metric_series.notna()
+                            values = metric_series[valid_mask].values
+                            
+                            # Use valid indices to get correctly aligned timestamps
+                            aligned_timestamps = [timestamps[i] for i in valid_indices if i < len(timestamps)]
+                            
+                            # Ensure lengths match
+                            min_len = min(len(aligned_timestamps), len(values))
+                            aligned_timestamps = aligned_timestamps[:min_len]
+                            values = values[:min_len]
                             
                             # Compute trend line
                             x = np.arange(len(values))
                             trend_line = trend_result.slope * x + (np.mean(values) - trend_result.slope * np.mean(x))
                             
+                            # Ensure anomaly mask matches
+                            anomaly_mask = anomaly_result.is_anomaly[:min_len] if len(anomaly_result.is_anomaly) > min_len else anomaly_result.is_anomaly
+                            
                             ml_chart = build_ml_pattern_chart(
-                                timestamps=list(timestamps[:len(values)]),
+                                timestamps=list(aligned_timestamps),
                                 values=values,
-                                anomaly_mask=anomaly_result.is_anomaly,
-                                trend_line=trend_line,
+                                anomaly_mask=anomaly_mask,
+                                trend_line=trend_line[:min_len],
                                 change_points=list(trend_result.change_points) if len(trend_result.change_points) > 0 else None,
                                 title=f"ML Pattern Analysis: {ml_metric_name}",
                                 metric_name=ml_metric_name,
@@ -4529,36 +4553,50 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
                 st.markdown("#### 🔗 Metric Correlations")
                 
                 if STATISTICAL_ANALYSIS_AVAILABLE and len(selected_metrics) >= 2:
-                    # Compute correlation matrix
-                    corr_df = multi_results_df[selected_metrics].corr()
+                    # Validate that selected metrics exist in the dataframe
+                    available_metrics = [m for m in selected_metrics if m in multi_results_df.columns]
                     
-                    if SCIENTIFIC_CHARTS_AVAILABLE:
-                        corr_chart = build_physiology_correlation_matrix(
-                            correlation_df=corr_df,
-                            title="Physiological Metrics Correlation Matrix",
-                        )
-                        
-                        render_echarts(
-                            EChartsConfig(
-                                option=corr_chart,
-                                height=400,
-                                key="unified_corr_matrix"
-                            )
-                        )
+                    if len(available_metrics) < 2:
+                        st.warning("Not enough valid metrics available for correlation analysis.")
                     else:
-                        st.dataframe(corr_df.style.background_gradient(cmap="RdYlGn", vmin=-1, vmax=1))
-                    
-                    # Highlight significant correlations
-                    st.markdown("**Significant Correlations (|r| > 0.5):**")
-                    sig_corrs = []
-                    for i, m1 in enumerate(selected_metrics):
-                        for j, m2 in enumerate(selected_metrics):
-                            if i < j:
-                                r = corr_df.loc[m1, m2]
-                                if abs(r) > 0.5:
-                                    direction = "positive" if r > 0 else "negative"
-                                    strength = "strong" if abs(r) > 0.7 else "moderate"
-                                    sig_corrs.append(f"- **{m1}** ↔ **{m2}**: r = {r:.3f} ({strength} {direction})")
+                        try:
+                            # Compute correlation matrix only with available metrics
+                            corr_df = multi_results_df[available_metrics].corr()
+                            
+                            # Validate correlation computation succeeded
+                            if corr_df.empty or corr_df.isnull().all().all():
+                                st.warning("Could not compute correlations - insufficient data.")
+                            else:
+                                if SCIENTIFIC_CHARTS_AVAILABLE:
+                                    corr_chart = build_physiology_correlation_matrix(
+                                        correlation_df=corr_df,
+                                        title="Physiological Metrics Correlation Matrix",
+                                    )
+                                    
+                                    render_echarts(
+                                        EChartsConfig(
+                                            option=corr_chart,
+                                            height=400,
+                                            key="unified_corr_matrix"
+                                        )
+                                    )
+                                else:
+                                    st.dataframe(corr_df.style.background_gradient(cmap="RdYlGn", vmin=-1, vmax=1))
+                                
+                                # Highlight significant correlations
+                                st.markdown("**Significant Correlations (|r| > 0.5):**")
+                                sig_corrs = []
+                                for i, m1 in enumerate(available_metrics):
+                                    for j, m2 in enumerate(available_metrics):
+                                        if i < j and m1 in corr_df.index and m2 in corr_df.columns:
+                                            r = corr_df.loc[m1, m2]
+                                            if pd.notna(r) and abs(r) > 0.5:
+                                                direction = "positive" if r > 0 else "negative"
+                                                strength = "strong" if abs(r) > 0.7 else "moderate"
+                                                sig_corrs.append(f"- **{m1}** ↔ **{m2}**: r = {r:.3f} ({strength} {direction})")
+                        except Exception as e:
+                            logger.warning(f"Correlation computation failed: {e}")
+                            st.warning(f"Could not compute correlations: {e}")
                     
                     if sig_corrs:
                         st.markdown("\n".join(sig_corrs))
