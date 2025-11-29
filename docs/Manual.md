@@ -33,7 +33,13 @@ This manual provides step-by-step instructions for all features of the HRV Analy
 15. [Metric Reference Tables](#metric-reference-tables)
 16. [Troubleshooting](#troubleshooting)
 17. [Scientific References](#scientific-references)
-18. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
+18. [Advanced ECG R-Peak Detection](#advanced-ecg-r-peak-detection)
+19. [Multi-Modal Sensor Fusion](#multi-modal-sensor-fusion)
+20. [Long-Term HRV Trending Analysis](#long-term-hrv-trending-analysis)
+21. [Exercise HRV Analysis](#exercise-hrv-analysis)
+22. [Machine Learning Predictions](#machine-learning-predictions)
+23. [Real-Time BLE Integration](#real-time-ble-integration)
+24. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
 
 ---
 
@@ -1409,24 +1415,1006 @@ Solutions:
 
 ---
 
+## Advanced ECG R-Peak Detection
+
+### Overview
+
+The ECG R-Peak Detection module provides robust algorithms for identifying R-peaks (the highest amplitude deflection in the QRS complex) from raw electrocardiogram signals. Accurate R-peak detection is the foundation of true beat-to-beat HRV analysis, as RR intervals derived from heart rate approximations lack the precision needed for detailed autonomic assessment.
+
+### Scientific Background
+
+The QRS complex represents ventricular depolarization and is the most prominent feature of the ECG waveform. The R-peak, typically the largest deflection, serves as the fiducial point for measuring RR intervals. The precision of R-peak localization directly impacts the accuracy of all subsequent HRV metrics, particularly high-frequency components and nonlinear measures (Zhai et al., 2023).
+
+**Why R-Peak Detection Matters:**
+
+- **True beat-to-beat timing**: Heart rate monitors report averaged HR, losing beat-to-beat variability information
+- **Artifact identification**: Raw ECG allows detection of ectopic beats, noise, and motion artifacts
+- **High-frequency HRV**: Accurate timing is critical for respiratory sinus arrhythmia quantification
+- **Research applications**: Publications require beat-to-beat RR intervals from validated detection algorithms
+
+### Pan-Tompkins Algorithm
+
+The Pan-Tompkins algorithm (Pan & Tompkins, 1985) is the gold-standard method for QRS detection, implemented in our module with enhancements for improved accuracy.
+
+**Algorithm Pipeline:**
+
+1. **Bandpass filtering (5-15 Hz)**: Removes baseline wander and high-frequency noise while preserving QRS energy
+2. **Derivative filter**: Emphasizes the steep slopes of the QRS complex
+3. **Squaring**: Amplifies differences and makes all values positive
+4. **Moving window integration**: Smooths the signal to create QRS envelope
+5. **Adaptive thresholding**: Dynamically adjusts detection threshold based on signal and noise levels
+6. **Search-back**: Recovers missed beats during low-amplitude periods
+
+**Performance Characteristics:**
+
+| Metric | Value | Database |
+|--------|-------|----------|
+| Sensitivity | 99.78% | MIT-BIH Arrhythmia |
+| Positive Predictive Value | 99.78% | MIT-BIH Arrhythmia |
+| Detection Error Rate | 0.44% | MIT-BIH Arrhythmia |
+| Localization Error | 8.35 ms | MIT-BIH Arrhythmia |
+
+*Based on Zhai et al. (2023) validation study*
+
+### Template Matching
+
+Template matching provides an additional layer of accuracy by comparing detected beats against a learned QRS template, enabling:
+
+- **Ectopic beat identification**: Premature ventricular contractions (PVCs) and premature atrial contractions (PACs) have different morphologies
+- **Noise rejection**: Non-cardiac artifacts that pass initial detection are filtered
+- **Beat classification**: Normal sinus beats vs. aberrant conduction
+
+**How Template Matching Works:**
+
+1. **Template generation**: Average of initial 10-20 high-quality beats
+2. **Cross-correlation**: Each candidate beat is correlated with the template
+3. **Similarity threshold**: Beats with correlation < 0.8 are flagged for review
+4. **Adaptive updating**: Template evolves with signal changes
+
+### Using ECG R-Peak Detection
+
+**Step 1: Prepare ECG Data**
+
+Supported formats:
+- EDF/EDF+ (European Data Format)
+- CSV with time and voltage columns
+- Raw binary with header specification
+
+**Step 2: Configure Detection Parameters**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| Sampling rate | Auto-detect | ECG sampling frequency (Hz) |
+| Filter order | 2 | Butterworth filter order |
+| Integration window | 150 ms | Moving average window |
+| Refractory period | 200 ms | Minimum RR interval |
+| Template correlation | 0.8 | Minimum similarity threshold |
+
+**Step 3: Run Detection**
+
+1. Upload ECG file in sidebar
+2. Select "ECG R-Peak Detection" analysis mode
+3. Review detected peaks overlaid on ECG trace
+4. Manually correct any missed or false detections
+5. Export RR intervals for HRV analysis
+
+### Quality Assessment
+
+The module provides automatic quality metrics:
+
+| Metric | Good | Acceptable | Poor |
+|--------|------|------------|------|
+| Signal-to-Noise Ratio | >20 dB | 10-20 dB | <10 dB |
+| Baseline Wander | <0.5 mV | 0.5-1.0 mV | >1.0 mV |
+| Detection Confidence | >95% | 85-95% | <85% |
+| Ectopic Beat Rate | <5% | 5-10% | >10% |
+
+### Clinical Applications
+
+1. **Research HRV studies**: Publications require validated R-peak detection
+2. **Holter analysis**: Process 24-hour ECG recordings
+3. **Wearable ECG**: Analyze data from Polar H10, Apple Watch ECG, KardiaMobile
+4. **Sleep studies**: Extract RR intervals from overnight PSG recordings
+5. **Exercise testing**: High-precision timing during stress tests
+
+### References
+
+- Pan, J., & Tompkins, W. J. (1985). A real-time QRS detection algorithm. *IEEE Transactions on Biomedical Engineering, 32*(3), 230-236.
+- Zhai, D., Bao, X., Long, X., et al. (2023). Precise detection and localization of R-peaks from ECG signals. *Mathematical Biosciences and Engineering, 20*(10), 19191-19210.
+- Farzaneh, N., Ghanbari, H., Liu, M., et al. (2023). A comprehensive comparison of six publicly available algorithms for localization of QRS complex. *IEEE EMBC*, 1-4.
+
+---
+
+## Multi-Modal Sensor Fusion
+
+### Overview
+
+The Multi-Modal Sensor Fusion module integrates physiological data from multiple wearable devices and platforms, enabling comprehensive health assessment that leverages the strengths of different sensors while compensating for individual device limitations.
+
+### Scientific Background
+
+Modern wearable devices use different sensing technologies with varying accuracy profiles. Photoplethysmography (PPG)-based wrist devices excel at continuous monitoring but may struggle during movement, while chest straps provide excellent beat-to-beat accuracy but are less convenient for 24/7 wear. Sensor fusion combines these complementary data sources to provide more robust and complete physiological insights (Dial et al., 2025; Schaffarczyk et al., 2022).
+
+**Validation Studies Summary:**
+
+| Device | RHR Accuracy (CCC) | HRV Accuracy (MAPE) | Best Use Case |
+|--------|-------------------|---------------------|---------------|
+| Oura Gen 4 | 0.98 | 5.96% | Nocturnal HRV |
+| Oura Gen 3 | 0.97 | 7.15% | Sleep tracking |
+| WHOOP 4.0 | 0.91 | 8.17% | Recovery monitoring |
+| Polar H10 | >0.99 | <5% | Research/clinical |
+| Garmin Fenix | 0.87* | 10.52% | Activity tracking |
+
+*Dial et al., 2025; Schaffarczyk et al., 2022*
+
+### Supported Platforms
+
+#### Oura Ring Integration
+
+**Data Available:**
+- Nocturnal HRV (RMSSD, 5-minute epochs)
+- Resting heart rate
+- Sleep stages and duration
+- Body temperature deviation
+- Respiratory rate
+- Activity and step counts
+- Readiness score
+
+**Import Method:**
+1. Export data from Oura web dashboard (JSON format)
+2. Upload to HRV Suite via sidebar
+3. Automatic parsing and alignment with other data sources
+
+#### WHOOP Integration
+
+**Data Available:**
+- HRV (RMSSD during slow-wave sleep)
+- Resting heart rate
+- Respiratory rate
+- Sleep performance metrics
+- Strain score (daily load)
+- Recovery percentage
+
+**Import Method:**
+1. Request data export from WHOOP app
+2. Upload CSV files to HRV Suite
+3. Strain and recovery metrics correlated with HRV trends
+
+#### Apple Health Integration
+
+**Data Available:**
+- Heart rate samples (continuous)
+- HRV measurements (SDNN)
+- Resting heart rate
+- Walking heart rate
+- Heart rate recovery
+- Sleep analysis
+- Activity and workouts
+
+**Import Method:**
+1. Export Health data from iPhone (Settings → Health → Export)
+2. Upload the export.zip file
+3. Automatic extraction of relevant health records
+
+#### Fitbit Integration
+
+**Data Available:**
+- Heart rate (continuous PPG)
+- HRV (SpO2 app, limited)
+- Sleep stages
+- Active zone minutes
+- Resting heart rate trends
+
+**Import Method:**
+1. Request data download from Fitbit account
+2. Upload JSON export files
+3. Parse and integrate with existing datasets
+
+### Fusion Algorithms
+
+**Weighted Averaging:**
+
+When multiple devices provide overlapping measurements, the fusion algorithm applies quality-weighted averaging:
+
+```
+HRV_fused = Σ(w_i × HRV_i) / Σ(w_i)
+
+where w_i = quality_score × device_accuracy × temporal_proximity
+```
+
+**Conflict Resolution:**
+
+When devices disagree significantly:
+1. Flag the discrepancy for user review
+2. Apply device-specific accuracy priors
+3. Consider context (activity level, time of day)
+4. Default to highest-accuracy device for that metric
+
+**Gap Filling:**
+
+Missing data from one device can be estimated using:
+- Correlated data from other devices
+- Historical patterns for that individual
+- Circadian rhythm models
+
+### Cross-Device Validation
+
+The module automatically validates data quality by:
+
+1. **Temporal alignment**: Synchronizing timestamps across devices
+2. **Correlation analysis**: Checking agreement between overlapping measurements
+3. **Outlier detection**: Flagging values inconsistent across devices
+4. **Quality scoring**: Assigning confidence levels to fused metrics
+
+### Practical Workflow
+
+**Step 1: Configure Data Sources**
+
+1. Expand "Multi-Modal Fusion" in sidebar
+2. Select active data sources
+3. Set primary device for each metric type
+4. Configure fusion preferences
+
+**Step 2: Upload Data**
+
+1. Upload exports from each platform
+2. Review automatic timestamp alignment
+3. Resolve any detected conflicts
+4. Verify data coverage timeline
+
+**Step 3: Review Fused Results**
+
+1. View unified dashboard with all metrics
+2. Compare device-specific vs. fused values
+3. Identify periods of poor agreement
+4. Export comprehensive dataset
+
+### Limitations and Considerations
+
+⚠️ **Important Caveats:**
+
+- **PPG limitations**: Wrist-based devices less accurate during movement
+- **Algorithm differences**: Each device uses proprietary HRV calculations
+- **Sampling differences**: Continuous vs. spot-check measurements
+- **Timestamp accuracy**: Device clock synchronization may vary
+
+### References
+
+- Dial, M. B., Hollander, M. E., Vatne, E., et al. (2025). Validation of nocturnal resting heart rate and heart rate variability in consumer wearables. *Physiological Reports, 13*(8), e70527.
+- Schaffarczyk, M., Rogers, B., Reer, R., & Gronwald, T. (2022). Validity of the Polar H10 sensor for heart rate variability analysis. *Sensors, 22*(17), 6536.
+- Sinichi, M., Gevonden, M. J., & Krabbendam, L. (2025). Quality in question: Assessing the accuracy of four heart rate wearables. *Psychophysiology, 62*(1), e70004.
+
+---
+
+## Long-Term HRV Trending Analysis
+
+### Overview
+
+The Long-Term Trending module provides tools for tracking HRV changes over extended periods (weeks to months), enabling detection of gradual physiological changes, training adaptations, and early warning signs of health issues that may not be apparent in single-session analyses.
+
+### Scientific Background
+
+Single HRV measurements provide a snapshot of autonomic function at one moment, but significant biological information is contained in how HRV changes over time. Day-to-day variability in HRV is normal and can be substantial (CV of 10-30% for RMSSD), making trend detection challenging without appropriate statistical methods.
+
+**Key Concepts:**
+
+- **Baseline establishment**: Individual reference values account for personal variation
+- **Meaningful change detection**: Distinguishing true physiological changes from normal fluctuation
+- **Circadian and ultradian rhythms**: HRV varies predictably throughout the day
+- **Seasonal patterns**: Some individuals show seasonal HRV variation
+
+### Baseline Calculation Methods
+
+#### Rolling Average Baseline
+
+The default method uses a rolling window (typically 7-14 days) to establish current baseline:
+
+```
+Baseline_t = mean(HRV_{t-n} ... HRV_{t-1})
+
+where n = window size (days)
+```
+
+**Advantages:**
+- Adapts to gradual changes
+- Robust to single outliers
+- Intuitive interpretation
+
+**Limitations:**
+- Slow to detect rapid changes
+- May miss acute deviations
+
+#### Exponentially Weighted Moving Average (EWMA)
+
+EWMA provides faster response to recent changes:
+
+```
+Baseline_t = α × HRV_t + (1-α) × Baseline_{t-1}
+
+where α = smoothing factor (0.1-0.3 typical)
+```
+
+#### Coefficient of Variation (CV) Baseline
+
+For individuals with high day-to-day variability, CV-based methods normalize for individual variation:
+
+```
+Z_score = (HRV_t - Baseline_t) / SD_baseline
+```
+
+### Trend Detection Algorithms
+
+#### Linear Regression Trend
+
+Fits a linear model to detect gradual changes:
+
+```
+HRV = β₀ + β₁ × time + ε
+```
+
+- **Positive β₁**: Improving trend (increasing HRV)
+- **Negative β₁**: Declining trend (decreasing HRV)
+- **p-value**: Statistical significance of trend
+
+#### Change Point Detection
+
+Identifies sudden shifts in HRV baseline using:
+
+- **CUSUM (Cumulative Sum)**: Detects sustained shifts from baseline
+- **Bayesian Change Point**: Probabilistic detection of regime changes
+- **PELT Algorithm**: Optimal partitioning for multiple change points
+
+#### Seasonal Decomposition
+
+Separates HRV time series into components:
+
+```
+HRV_t = Trend_t + Seasonal_t + Residual_t
+```
+
+Useful for identifying:
+- Long-term trends independent of seasonal effects
+- Weekly patterns (e.g., weekend recovery)
+- Annual cycles
+
+### Clinical Applications
+
+#### Training Load Monitoring
+
+For athletes and fitness enthusiasts:
+
+| Trend Pattern | Interpretation | Recommendation |
+|--------------|----------------|----------------|
+| Stable baseline, normal variability | Appropriate training load | Continue current program |
+| Declining trend (>2 weeks) | Accumulated fatigue | Increase recovery, reduce volume |
+| Increasing trend | Positive adaptation | May increase training stimulus |
+| Increased variability | Inconsistent recovery | Improve sleep/nutrition consistency |
+| Sudden drop (>2 SD) | Acute stressor | Investigate cause, rest if needed |
+
+#### Health Monitoring
+
+| Pattern | Possible Causes | Action |
+|---------|-----------------|--------|
+| Gradual decline over months | Deconditioning, aging, chronic stress | Medical evaluation, lifestyle assessment |
+| Sudden sustained drop | Illness onset, medication change | Medical consultation |
+| Increased morning HRV | Improved fitness, reduced stress | Positive indicator |
+| Loss of circadian pattern | Sleep disorder, shift work | Sleep assessment |
+
+### Using the Trending Module
+
+**Step 1: Accumulate Data**
+
+- Minimum 14 days recommended for baseline
+- 30+ days ideal for trend detection
+- Consistent measurement timing improves accuracy
+
+**Step 2: Configure Analysis**
+
+| Setting | Options | Recommendation |
+|---------|---------|----------------|
+| Baseline window | 7, 14, 30 days | 14 days for most users |
+| Trend window | 7, 14, 30 days | Match to monitoring goals |
+| Alert threshold | 1.5, 2.0, 2.5 SD | 2.0 SD for general use |
+| Metrics tracked | RMSSD, SDNN, HF, LF/HF | RMSSD primary, others secondary |
+
+**Step 3: Interpret Results**
+
+The dashboard displays:
+- Current value vs. baseline
+- Z-score (standard deviations from baseline)
+- Trend direction and significance
+- Alert status (normal/caution/alert)
+
+### Visualization Options
+
+1. **Time series plot**: Daily values with baseline and confidence bands
+2. **Z-score chart**: Standardized deviations over time
+3. **Trend decomposition**: Separated trend, seasonal, residual components
+4. **Calendar heatmap**: Color-coded daily values for pattern recognition
+5. **Correlation matrix**: Relationships between HRV and lifestyle factors
+
+### Correlation with External Factors
+
+The module can correlate HRV trends with:
+
+- **Sleep metrics**: Duration, quality, timing
+- **Activity data**: Steps, exercise sessions, strain
+- **Subjective ratings**: Stress, mood, energy
+- **Environmental factors**: Temperature, altitude
+- **Menstrual cycle**: For female users (optional tracking)
+
+### Limitations
+
+⚠️ **Important Considerations:**
+
+- **Measurement consistency**: Time of day, posture, and conditions affect HRV
+- **Individual variation**: "Normal" ranges vary widely between individuals
+- **Confounding factors**: Many variables influence HRV simultaneously
+- **Statistical power**: Short time series limit trend detection sensitivity
+
+### References
+
+- Liu, J., & Zhang, F. (2024). Autonomic nervous system and sarcopenia in elderly patients: Insights from long-term heart rate variability monitoring. *International Journal of General Medicine, 17*, 3823-3833.
+- Mooren, F., et al. (2023). Autonomic dysregulation in long-term patients suffering from Post-COVID-19 Syndrome. *Scientific Reports, 13*, 15814.
+- Mehrabanian, M., et al. (2024). The predictive value of heart rate variability for long-term outcomes in patients undergoing CABG. *Journal of Tehran Heart Center, 19*(4), 255-263.
+
+---
+
+## Exercise HRV Analysis
+
+### Overview
+
+The Exercise HRV Analysis module provides specialized tools for analyzing heart rate variability patterns during and after physical exercise, including heart rate recovery (HRR), parasympathetic reactivation, and training load quantification. These metrics are essential for athletes, coaches, and exercise physiologists optimizing performance and preventing overtraining.
+
+### Scientific Background
+
+Exercise induces a characteristic autonomic response: sympathetic activation during exertion followed by parasympathetic reactivation during recovery. The speed and magnitude of this recovery provides valuable information about fitness, fatigue, and cardiovascular health.
+
+**Key Physiological Concepts:**
+
+- **Vagal withdrawal**: During exercise, parasympathetic activity decreases, allowing HR to rise
+- **Sympathetic activation**: Catecholamine release increases HR and contractility
+- **Parasympathetic reactivation**: Post-exercise vagal activity returns, slowing HR
+- **Heart rate recovery (HRR)**: Rate of HR decline after exercise cessation
+
+### Heart Rate Recovery (HRR) Analysis
+
+HRR is the decrease in heart rate from peak exercise to a specified time point post-exercise.
+
+**Standard HRR Metrics:**
+
+| Metric | Definition | Normal Values | Clinical Significance |
+|--------|------------|---------------|----------------------|
+| HRR1 | HR_peak - HR_1min | >12 bpm | Abnormal if <12 bpm |
+| HRR2 | HR_peak - HR_2min | >22 bpm | Mortality predictor |
+| HRR3 | HR_peak - HR_3min | >32 bpm | Recovery capacity |
+| T30 | Time to 30 bpm drop | <60 sec | Fitness indicator |
+
+**Prognostic Value:**
+
+Abnormal HRR (HRR1 <12 bpm) is associated with:
+- 2-4× increased mortality risk
+- Increased cardiovascular event risk
+- Autonomic dysfunction
+- Reduced fitness level
+
+### Parasympathetic Reactivation
+
+Post-exercise parasympathetic reactivation can be quantified using time-varying HRV analysis:
+
+**Short-term HRV Recovery:**
+
+| Time Window | Primary Metric | Interpretation |
+|-------------|----------------|----------------|
+| 0-30 sec | HR decay rate | Immediate vagal reactivation |
+| 30-60 sec | RMSSD30s | Early parasympathetic return |
+| 1-5 min | RMSSD, HF power | Sustained recovery |
+| 5-30 min | Return to baseline | Complete recovery |
+
+**Parasympathetic Reactivation Index (PRI):**
+
+```
+PRI = (RMSSD_recovery - RMSSD_exercise) / RMSSD_baseline × 100
+```
+
+Higher PRI indicates faster autonomic recovery.
+
+### Training Load Quantification
+
+#### TRIMP (Training Impulse)
+
+Banister's TRIMP quantifies training load using HR and duration:
+
+```
+TRIMP = Duration × ΔHR_ratio × e^(b × ΔHR_ratio)
+
+where:
+ΔHR_ratio = (HR_exercise - HR_rest) / (HR_max - HR_rest)
+b = 1.92 (males) or 1.67 (females)
+```
+
+#### Session RPE
+
+Combines duration with perceived exertion:
+
+```
+sRPE = Duration (min) × RPE (0-10 scale)
+```
+
+#### HRV-Guided Training
+
+Using morning HRV to guide training decisions:
+
+| HRV Status | Recommendation |
+|------------|----------------|
+| Above baseline (+1 SD) | Green light for high intensity |
+| Within baseline (±1 SD) | Normal training |
+| Below baseline (-1 SD) | Consider reduced intensity |
+| Significantly below (-2 SD) | Recovery day recommended |
+
+### Exercise Protocol Analysis
+
+**Pre-Exercise Assessment:**
+- 5-minute resting HRV measurement
+- Baseline establishment
+- Readiness score calculation
+
+**During Exercise:**
+- Real-time HR monitoring
+- DFA α1 for intensity threshold detection
+- Accumulated load calculation
+
+**Post-Exercise Recovery:**
+- Immediate HRR (0-3 min)
+- Short-term recovery (3-30 min)
+- Next-day HRV comparison
+
+### DFA α1 for Exercise Intensity
+
+Detrended Fluctuation Analysis alpha 1 (DFA α1) provides objective intensity zone boundaries:
+
+| DFA α1 Value | Intensity Zone | Physiological State |
+|--------------|----------------|---------------------|
+| >1.0 | Zone 1 (Recovery) | Aerobic, low intensity |
+| 0.75-1.0 | Zone 2 (Aerobic) | Moderate, sustainable |
+| 0.5-0.75 | Zone 3 (Threshold) | Ventilatory threshold |
+| <0.5 | Zone 4-5 (Anaerobic) | High intensity, unsustainable |
+
+### Practical Workflow
+
+**Step 1: Record Exercise Session**
+
+1. Start HRV recording before exercise (5-min baseline)
+2. Continue recording throughout exercise
+3. Record recovery for at least 5 minutes post-exercise
+4. Note exercise type, intensity, and duration
+
+**Step 2: Upload and Analyze**
+
+1. Upload RR interval file
+2. Mark exercise start and end times
+3. Select analysis type (HRR, recovery HRV, TRIMP)
+4. Review automated metrics
+
+**Step 3: Interpret Results**
+
+1. Compare HRR to personal baseline and norms
+2. Assess parasympathetic reactivation rate
+3. Review training load vs. recovery capacity
+4. Make training decisions based on trends
+
+### Overtraining Detection
+
+Chronic overtraining (overreaching) manifests in HRV patterns:
+
+| Indicator | Pattern | Action |
+|-----------|---------|--------|
+| Declining resting HRV | 7+ day trend | Reduce training volume |
+| Elevated resting HR | >5 bpm above baseline | Increase recovery |
+| Reduced HRR | <baseline HRR | Deload week |
+| Increased HRV variability | Erratic day-to-day | Improve sleep/nutrition |
+| Parasympathetic saturation | Very high resting HRV | May indicate deep fatigue |
+
+### References
+
+- Gronwald, T., et al. (2025). Recovery of linear and nonlinear heart rate variability metrics after exercise. *European Journal of Sport Science, 25*(3), e70077.
+- Sabino-Carvalho, J. L., et al. (2025). Aerobic cycling exercise training and vagal reactivation in CKD patients. *Medicine & Science in Sports & Exercise*.
+- Porzio, E., et al. (2025). Heart rate variability and parasympathetic reactivation in endurance horses. *Veterinary Sciences, 12*(11), 1028.
+
+---
+
+## Machine Learning Predictions
+
+### Overview
+
+The Machine Learning Predictions module leverages advanced algorithms to predict clinical outcomes and detect patterns from HRV data. These models provide risk stratification for conditions including atrial fibrillation (AF), sudden cardiac death (SCD), and sleep apnea, offering clinicians and researchers powerful tools for early detection and prevention.
+
+### Scientific Background
+
+HRV contains rich information about autonomic function and cardiovascular health that can be extracted using machine learning techniques. Recent advances have demonstrated that ML models can identify subtle patterns in HRV data that predict clinical events with accuracy comparable to or exceeding traditional risk scores.
+
+**Evidence Base:**
+
+| Application | Accuracy | Key Features | Reference |
+|-------------|----------|--------------|-----------|
+| AF prediction | AUC 0.85-0.92 | RMSSD, entropy, fragmentation | Grégoire et al., 2025 |
+| SCD risk | AUC 0.75-0.85 | SDNN, DFA α1, VLF | Sessa et al., 2018 |
+| Sleep apnea | AUC 0.80-0.90 | Time/frequency domain | Hao et al., 2025 |
+
+### Atrial Fibrillation Risk Prediction
+
+#### Overview
+
+Atrial fibrillation is the most common sustained cardiac arrhythmia, affecting 2-3% of adults. Early detection enables stroke prevention through anticoagulation. HRV-based ML models can identify individuals at elevated AF risk before clinical presentation.
+
+#### Model Features
+
+The AF prediction model uses:
+
+**Time-Domain Features:**
+- RMSSD (reduced in AF-prone individuals)
+- pNN50 (parasympathetic marker)
+- SDNN (total variability)
+- Heart rate fragmentation indices
+
+**Frequency-Domain Features:**
+- LF/HF ratio (autonomic balance)
+- HF power (vagal activity)
+- Spectral entropy
+
+**Nonlinear Features:**
+- DFA α1 (fractal dynamics)
+- Sample entropy (complexity)
+- Poincaré SD1/SD2 ratio
+
+#### Risk Stratification
+
+| Risk Level | Probability | Recommendation |
+|------------|-------------|----------------|
+| Low | <10% | Routine monitoring |
+| Moderate | 10-30% | Enhanced surveillance, lifestyle modification |
+| High | >30% | Cardiology referral, consider extended monitoring |
+
+#### Interpretation
+
+The model outputs:
+- **Risk probability**: 0-100% likelihood of AF development
+- **Contributing factors**: Which HRV features drove the prediction
+- **Confidence interval**: Uncertainty in the estimate
+- **Comparison to population**: Percentile ranking
+
+### Sudden Cardiac Death Risk Stratification
+
+#### Overview
+
+Sudden cardiac death (SCD) accounts for 15-20% of all deaths. Identifying high-risk individuals enables preventive interventions including implantable defibrillators. HRV provides prognostic information about SCD risk, particularly in post-myocardial infarction patients.
+
+#### Risk Factors from HRV
+
+| HRV Metric | High Risk Threshold | Relative Risk |
+|------------|---------------------|---------------|
+| SDNN <70 ms | 24-hour recording | 2-4× |
+| SDNN <50 ms | 24-hour recording | 5-10× |
+| DFA α1 <0.65 | Short-term | 2-3× |
+| VLF power reduced | 24-hour | 2-3× |
+| Low HRV + Low LVEF | Combined | 10×+ |
+
+#### Model Architecture
+
+The SCD risk model combines:
+1. **HRV features**: Time, frequency, nonlinear domains
+2. **Clinical variables**: Age, LVEF, prior MI, medications
+3. **ECG features**: QT interval, T-wave alternans (if available)
+
+#### Output Interpretation
+
+- **Risk score**: 0-100 scale
+- **Risk category**: Low/Moderate/High/Very High
+- **Key contributors**: Which factors elevate risk
+- **Actionable recommendations**: Based on modifiable factors
+
+### Sleep Apnea Screening
+
+#### Overview
+
+Obstructive sleep apnea (OSA) affects 10-30% of adults and is associated with cardiovascular disease, hypertension, and cognitive impairment. HRV-based screening can identify individuals who should undergo formal polysomnography.
+
+#### Physiological Basis
+
+OSA causes characteristic HRV patterns:
+- **Cyclic variation**: Alternating sympathetic/parasympathetic activity
+- **Reduced HRV**: Overall autonomic dysfunction
+- **Increased LF/HF**: Sympathetic predominance
+- **Desaturation-related changes**: Hypoxia affects autonomic tone
+
+#### Screening Model
+
+**Input Features:**
+- Nocturnal HRV metrics (SDNN, RMSSD, LF, HF)
+- Heart rate patterns during sleep
+- Respiratory-related HRV changes
+- Demographic factors (age, BMI, sex)
+
+**Output:**
+- **OSA probability**: Likelihood of AHI ≥5
+- **Severity estimate**: Mild/Moderate/Severe
+- **Recommendation**: PSG referral if indicated
+
+#### Validation
+
+Recent meta-analysis (Hao et al., 2025) of ML-based OSA detection:
+- Pooled sensitivity: 85%
+- Pooled specificity: 82%
+- Suitable for screening, not diagnosis
+
+### Model Transparency and Limitations
+
+#### Explainable AI
+
+All predictions include:
+- **Feature importance**: Which HRV metrics contributed most
+- **SHAP values**: Direction and magnitude of each feature's effect
+- **Uncertainty quantification**: Confidence in predictions
+- **Comparison cases**: Similar profiles from training data
+
+#### Limitations
+
+⚠️ **Important Caveats:**
+
+1. **Screening, not diagnosis**: ML predictions support clinical decision-making but don't replace diagnostic testing
+2. **Population-specific**: Models trained on specific populations may not generalize
+3. **Data quality dependent**: Predictions only as good as input data
+4. **Temporal validity**: Models may need retraining as populations change
+5. **Regulatory status**: Research tools, not FDA-cleared diagnostics
+
+### Using ML Predictions
+
+**Step 1: Ensure Data Quality**
+
+- Minimum 5-minute recording (24-hour preferred for SCD)
+- <5% artifact rate
+- Appropriate measurement conditions
+
+**Step 2: Select Prediction Model**
+
+1. Go to "ML Predictions" tab
+2. Select target condition (AF, SCD, Sleep Apnea)
+3. Review required data and input clinical variables
+4. Run prediction
+
+**Step 3: Interpret Results**
+
+1. Review risk probability and category
+2. Examine contributing factors
+3. Consider clinical context
+4. Discuss with healthcare provider if elevated risk
+
+### References
+
+- Grégoire, J. M., et al. (2025). Short-term atrial fibrillation onset prediction using machine learning. *European Heart Journal - Digital Health*.
+- Hao, Y., et al. (2025). ECG heart rate variability for machine learning diagnosis of obstructive sleep apnoea: A Bayesian meta-analysis. *Sleep and Breathing*.
+- Sessa, F., et al. (2018). Heart rate variability as predictive factor for sudden cardiac death. *Aging, 10*(2), 166-177.
+- Attar, E. T. (2025). Detailed evaluation of sleep apnea using heart rate variability. *Frontiers in Neurology, 16*, 1636983.
+
+---
+
+## Real-Time BLE Integration
+
+### Overview
+
+The Real-Time BLE (Bluetooth Low Energy) Integration module enables direct connection to compatible heart rate monitors for live HRV streaming, biofeedback sessions, and continuous monitoring. This provides immediate feedback during training, meditation, or clinical assessments without the delay of post-hoc analysis.
+
+### Scientific Background
+
+BLE heart rate monitors transmit RR intervals in real-time, enabling immediate computation of HRV metrics. The Bluetooth SIG Heart Rate Service specification defines a standardized protocol for HR and RR interval transmission, ensuring interoperability across devices.
+
+**Device Accuracy:**
+
+| Device | RR Accuracy | HRV Agreement | Best For |
+|--------|-------------|---------------|----------|
+| Polar H10 | <1 ms error | Excellent | Research, clinical |
+| Polar H9 | <2 ms error | Very good | Training, biofeedback |
+| Garmin HRM-Pro | <3 ms error | Good | Sports training |
+| Wahoo TICKR | <3 ms error | Good | Fitness applications |
+
+*Based on Schaffarczyk et al., 2022; Schweizer & Gilgen-Ammann, 2024*
+
+### Supported Devices
+
+#### Polar H10/H9
+
+**Features:**
+- True ECG-quality RR intervals
+- 1ms timing resolution
+- Memory for offline recording
+- Dual connectivity (BLE + ANT+)
+- Firmware-based artifact detection
+
+**Special Capabilities:**
+- Polar Measurement Data (PMD) service for raw ECG
+- Accelerometer data for motion detection
+- Extended memory (up to 65 hours)
+
+#### Garmin HRM-Pro/HRM-Dual
+
+**Features:**
+- Running dynamics (HRM-Pro)
+- Dual transmission (ANT+ and BLE)
+- Pool swimming compatible
+- Long battery life
+
+#### Wahoo TICKR/TICKR X
+
+**Features:**
+- Dual-band transmission
+- Workout memory (TICKR X)
+- Calorie tracking
+- Comfortable fit
+
+#### Generic BLE HR Devices
+
+Any device implementing the standard Bluetooth Heart Rate Service (UUID: 0x180D) can connect, though RR interval availability varies.
+
+### Connection Process
+
+**Step 1: Enable Bluetooth**
+
+Ensure system Bluetooth is enabled and the HRV Suite has permission to access Bluetooth devices.
+
+**Step 2: Scan for Devices**
+
+1. Go to "Real-Time BLE" tab
+2. Click "Scan for Devices"
+3. Wait for device discovery (10-30 seconds)
+4. Devices appear in list with signal strength
+
+**Step 3: Connect**
+
+1. Select your device from the list
+2. Click "Connect"
+3. Wait for connection confirmation
+4. Verify RR interval streaming begins
+
+**Step 4: Start Session**
+
+1. Configure session parameters (duration, metrics)
+2. Click "Start Recording"
+3. Monitor real-time HRV display
+4. End session and save data
+
+### Real-Time HRV Computation
+
+The module computes HRV metrics in real-time using sliding windows:
+
+| Metric | Window Size | Update Rate | Latency |
+|--------|-------------|-------------|---------|
+| Heart Rate | 5 beats | Per beat | <1 sec |
+| RMSSD | 30-60 beats | Every 5 beats | ~30 sec |
+| SDNN | 60-120 beats | Every 10 beats | ~60 sec |
+| Coherence | 60 beats | Every 5 beats | ~30 sec |
+| Respiratory Rate | 60 beats | Every 10 beats | ~60 sec |
+
+### Coherence Biofeedback
+
+The coherence score provides real-time feedback on HRV patterns optimal for stress reduction and emotional regulation.
+
+**Coherence Calculation:**
+
+Coherence reflects the presence of a dominant frequency in the 0.04-0.26 Hz range (resonance frequency), indicating synchronized heart-brain activity.
+
+```
+Coherence = (Power in coherence band) / (Total power) × Peak sharpness factor
+```
+
+**Coherence Levels:**
+
+| Level | Score | Visual Feedback | Interpretation |
+|-------|-------|-----------------|----------------|
+| Low | 0-33 | Red | Scattered, irregular pattern |
+| Medium | 34-66 | Yellow | Developing coherence |
+| High | 67-100 | Green | Optimal coherent state |
+
+### Biofeedback Session Protocol
+
+**Preparation:**
+1. Quiet environment, comfortable position
+2. Wet electrodes for good contact
+3. Allow 2-3 minutes for signal stabilization
+
+**Session Structure:**
+1. **Baseline** (2 min): Relaxed breathing, establish baseline
+2. **Paced breathing** (5-15 min): Follow breathing guide (typically 6 breaths/min)
+3. **Free practice** (optional): Maintain coherence without guide
+4. **Recovery** (2 min): Return to normal breathing
+
+**Breathing Guide:**
+
+The visual breathing guide displays:
+- Inhale/exhale timing (adjustable ratio)
+- Target breathing rate (4-7 breaths/min)
+- Real-time coherence feedback
+- Session progress
+
+### Session Recording and Export
+
+**Recorded Data:**
+- All RR intervals with timestamps
+- Computed HRV metrics (per-window)
+- Coherence scores
+- Session markers and notes
+- Device information
+
+**Export Formats:**
+- CSV (RR intervals + metrics)
+- JSON (complete session data)
+- HRV Suite format (for re-analysis)
+
+### Technical Considerations
+
+#### Signal Quality
+
+**Electrode Contact:**
+- Wet chest strap electrodes before use
+- Ensure snug but comfortable fit
+- Position below pectoral muscles
+
+**Motion Artifacts:**
+- Minimize movement during sessions
+- Some devices have motion compensation
+- Review data for artifact periods
+
+#### Connectivity Issues
+
+| Issue | Possible Cause | Solution |
+|-------|----------------|----------|
+| Device not found | Bluetooth off, device not advertising | Enable Bluetooth, wake device |
+| Connection drops | Distance, interference | Move closer, reduce interference |
+| No RR intervals | Device limitation, firmware | Check device specs, update firmware |
+| Erratic data | Poor electrode contact | Rewet electrodes, adjust fit |
+
+### Platform Limitations
+
+⚠️ **Web Browser Limitations:**
+
+The Web Bluetooth API has restrictions:
+- Requires HTTPS or localhost
+- User gesture required to initiate scan
+- Limited to specific browsers (Chrome, Edge)
+- Some features require desktop app
+
+**Desktop Application:**
+
+For full BLE functionality, consider the desktop version which provides:
+- Background connections
+- Multiple device support
+- Extended recording sessions
+- System-level Bluetooth access
+
+### References
+
+- Schaffarczyk, M., Rogers, B., Reer, R., & Gronwald, T. (2022). Validity of the Polar H10 sensor for heart rate variability analysis. *Sensors, 22*(17), 6536.
+- Schweizer, T., & Gilgen-Ammann, R. (2024). Wrist-worn and arm-worn wearables for monitoring heart rate. *JMIR mHealth and uHealth*.
+- Martini, C., et al. (2022). Commercially available heart rate monitor repurposed for automatic arrhythmia detection. *Diagnostics, 12*(3), 712.
+- Gilgen-Ammann, R., et al. (2019). RR interval signal quality of a heart rate monitor and an ECG Holter. *Sensors, 19*(21), 4717.
+
+---
+
 ## Pending Developments and Roadmap
 
-This section outlines planned enhancements and features under development for the HRV Analysis Suite. These represent opportunities for comprehensive advancements in the physiology platform.
+This section outlines remaining planned enhancements and features under development for the HRV Analysis Suite.
 
-### High Priority Enhancements
+### Completed Features (Q4 2025)
 
-#### 1. Advanced ECG R-Peak Detection
-**Status:** Planned  
-**Description:** Implement robust R-peak detection algorithms for true beat-to-beat HRV analysis from raw ECG signals.
+✅ **ECG R-Peak Detection** - Pan-Tompkins algorithm with template matching  
+✅ **Multi-Modal Sensor Fusion** - Oura, WHOOP, Apple Health, Fitbit integration  
+✅ **Long-Term Trending** - Baseline establishment, trend detection, alerts  
+✅ **Exercise HRV Analysis** - HRR, parasympathetic reactivation, TRIMP  
+✅ **ML Predictions** - AF risk, SCD stratification, sleep apnea screening  
+✅ **Real-Time BLE Integration** - Polar H10/H9, Garmin, Wahoo support  
 
-- Pan-Tompkins algorithm for QRS detection
-- Template matching for artifact rejection
-- Multi-lead ECG support
-- Real-time R-peak detection for biofeedback
+### Medium Priority Enhancements
 
-**Scientific basis:** Current RR derivation from HR is an approximation; true beat-to-beat analysis requires R-peak detection.
-
-#### 2. Blood Pressure Variability (BPV) Integration
+#### Blood Pressure Variability (BPV) Integration
 **Status:** Planned  
 **Description:** Add support for continuous blood pressure monitoring data to analyze baroreflex sensitivity and BPV metrics.
 
@@ -1437,44 +2425,7 @@ This section outlines planned enhancements and features under development for th
 
 **Clinical relevance:** BPV complements HRV for comprehensive autonomic assessment.
 
-#### 3. Respiratory Signal Analysis
-**Status:** Partially implemented  
-**Description:** Enhanced respiratory signal processing for accurate breathing rate extraction and RSA analysis.
-
-- Import respiratory belt/thermistor data
-- EDR (ECG-derived respiration) algorithms
-- Respiratory sinus arrhythmia quantification
-- Paced breathing protocol automation
-
-**Current gap:** Breathing rate estimated from HF peak; direct measurement improves accuracy.
-
-#### 4. Multi-Modal Sensor Fusion
-**Status:** In development  
-**Description:** Integrate data from multiple wearable sensors for comprehensive physiological assessment.
-
-- Oura Ring integration (sleep, HRV, temperature)
-- WHOOP integration (strain, recovery, sleep)
-- Apple Watch Health export parsing
-- Fitbit integration
-- Polar Vantage/Verity integration
-
-**Benefit:** Combines strengths of different sensors for robust analysis.
-
-### Medium Priority Enhancements
-
-#### 5. Long-Term HRV Trending
-**Status:** Planned  
-**Description:** Longitudinal analysis tools for tracking HRV changes over weeks/months.
-
-- Baseline establishment (rolling 7-day average)
-- Trend detection with statistical significance
-- Seasonal/circadian pattern analysis
-- Training load correlation (for athletes)
-- Medication effect tracking
-
-**Use case:** Monitoring recovery, training adaptation, disease progression.
-
-#### 6. Population Normative Database
+#### Population Normative Database
 **Status:** Planned  
 **Description:** Expand reference ranges with age/sex/fitness-stratified normative data.
 
@@ -1484,35 +2435,17 @@ This section outlines planned enhancements and features under development for th
 - Disease-specific reference ranges
 - Percentile rankings
 
-**Current limitation:** Generic reference ranges; individual variation not fully captured.
-
-#### 7. Automated Report Generation
-**Status:** Partially implemented  
-**Description:** One-click comprehensive report generation with clinical interpretation.
-
-- Customizable report templates
-- Multi-language support
-- Institution branding options
-- HIPAA-compliant formatting
-- Direct EMR integration (FHIR)
-
-**Enhancement needed:** More template options, PDF export quality.
-
-#### 8. Exercise HRV Analysis
+#### Circadian Rhythm Analysis
 **Status:** Planned  
-**Description:** Specialized analysis for exercise and recovery HRV patterns.
+**Description:** Tools for analyzing circadian patterns in HRV and physiology.
 
-- Pre/during/post exercise HRV comparison
-- Heart rate recovery (HRR) analysis
-- Parasympathetic reactivation curves
-- Training load quantification (TRIMP)
-- Overtraining risk indicators
+- Cosinor analysis for circadian rhythms
+- Mesor, amplitude, acrophase extraction
+- Circadian disruption indices
+- Shift work impact assessment
+- Jet lag recovery tracking
 
-**Target users:** Athletes, sports scientists, exercise physiologists.
-
-### Lower Priority / Research Features
-
-#### 9. Advanced Nonlinear Dynamics
+#### Advanced Nonlinear Dynamics
 **Status:** Partially implemented  
 **Description:** Additional nonlinear analysis methods for research applications.
 
@@ -1524,45 +2457,9 @@ This section outlines planned enhancements and features under development for th
 
 **Current state:** DFA, SampEn, ApEn implemented; advanced methods pending.
 
-#### 10. Machine Learning Predictions
-**Status:** In development  
-**Description:** ML models for clinical outcome prediction and pattern recognition.
-
-- Atrial fibrillation risk prediction
-- Sudden cardiac death risk stratification
-- Sleep apnea screening from HRV
-- Stress/anxiety detection
-- Personalized baseline modeling
-
-**Requirement:** Validated training datasets, clinical validation studies.
-
-#### 11. Real-Time Bluetooth Integration
-**Status:** Planned  
-**Description:** Direct connection to Bluetooth heart rate monitors for live streaming.
-
-- Polar H10/H9 BLE connection
-- Garmin HRM-Pro support
-- Real-time artifact detection
-- Live biofeedback visualization
-- Session recording and export
-
-**Technical challenge:** Browser BLE API limitations; may require desktop app.
-
-#### 12. Circadian Rhythm Analysis
-**Status:** Planned  
-**Description:** Tools for analyzing circadian patterns in HRV and physiology.
-
-- Cosinor analysis for circadian rhythms
-- Mesor, amplitude, acrophase extraction
-- Circadian disruption indices
-- Shift work impact assessment
-- Jet lag recovery tracking
-
-**Integration:** Combines with sleep data from Somfit/actigraphy.
-
 ### Infrastructure Improvements
 
-#### 13. Database Backend
+#### Database Backend
 **Status:** Planned  
 **Description:** Persistent storage for longitudinal data and multi-user support.
 
@@ -1637,15 +2534,18 @@ If you're interested in contributing to any of these developments:
 
 ### Development Timeline
 
-| Feature | Target Quarter | Priority |
-|---------|----------------|----------|
-| ECG R-peak detection | Q1 2026 | High |
-| Multi-modal fusion | Q1 2026 | High |
-| Long-term trending | Q2 2026 | Medium |
-| Exercise HRV | Q2 2026 | Medium |
-| ML predictions | Q3 2026 | Medium |
-| Real-time BLE | Q3 2026 | Medium |
-| Mobile app | Q4 2026 | Low |
+| Feature | Target Quarter | Status |
+|---------|----------------|--------|
+| ECG R-peak detection | Q4 2025 | ✅ Completed |
+| Multi-modal fusion | Q4 2025 | ✅ Completed |
+| Long-term trending | Q4 2025 | ✅ Completed |
+| Exercise HRV | Q4 2025 | ✅ Completed |
+| ML predictions | Q4 2025 | ✅ Completed |
+| Real-time BLE | Q4 2025 | ✅ Completed |
+| BPV integration | Q1 2026 | Planned |
+| Circadian analysis | Q1 2026 | Planned |
+| Population norms | Q2 2026 | Planned |
+| Mobile app | Q4 2026 | Conceptual |
 
 ---
 
