@@ -85,6 +85,24 @@ except ImportError:
         extract_spaceweather_with_openai,
     )  # type: ignore
 
+# Fatigue Calculator Integration (SAFTE model)
+try:
+    from fatigue_integration import (
+        UserProfile as FatigueUserProfile,
+        SleepScheduleInput,
+        WorkScheduleInput,
+        FatigueAnalysisResult,
+        run_integrated_fatigue_analysis,
+        build_fatigue_dataframe,
+        compute_fatigue_analysis,
+        compute_risk_assessment,
+        generate_recommendations,
+        enhanced_circadian_process,
+    )
+    FATIGUE_AVAILABLE = True
+except ImportError:
+    FATIGUE_AVAILABLE = False
+
 
 def setup_console_logging(level: int = logging.INFO) -> logging.Logger:
     """
@@ -3568,6 +3586,7 @@ def main() -> None:
         tab_ans,
         tab_readiness,
         tab_gauges,
+        tab_fatigue,
         tab_science,
         tab_space_weather,
         tab_noaa_space,
@@ -3586,6 +3605,7 @@ def main() -> None:
             "ANS Function Tests",
             "Readiness",
             "Gauges",
+            "🧠 Fatigue",
             "Science",
             "Space Weather",
             "NOAA Space",
@@ -4200,6 +4220,477 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
         st.caption(
             "References: [Nunan et al., 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/); "
             "[Sammito & Böckelmann, 2016](https://pubmed.ncbi.nlm.nih.gov/27986557/).")
+
+    # =========================================================================
+    # FATIGUE TAB - SAFTE Model Integration
+    # =========================================================================
+    with tab_fatigue:
+        st.markdown("### 🧠 SAFTE Fatigue & Performance Prediction")
+        st.markdown("*Biomathematical model for cognitive performance and fatigue risk assessment*")
+        
+        if not FATIGUE_AVAILABLE:
+            st.error(
+                "⚠️ Fatigue module not available. Please ensure `fatigue_integration.py` "
+                "and the `fatigue_calculator` package are properly installed."
+            )
+        else:
+            # Scientific explanation expander
+            with st.expander("📖 **Understanding the SAFTE Model**", expanded=False):
+                st.markdown("""
+**SAFTE (Sleep, Activity, Fatigue, and Task Effectiveness)** is a validated biomathematical model
+that predicts cognitive performance based on:
+
+| Component | Description | Impact on Performance |
+|-----------|-------------|----------------------|
+| **Homeostatic Process (S)** | Sleep pressure accumulation during wake | ↓ Performance as wake extends |
+| **Circadian Process (C)** | 24h + 12h biological rhythms | Peak ~14:00-18:00, trough ~02:00-06:00 |
+| **Sleep Inertia** | Post-sleep grogginess | ↓ 5-15% for 15-60 min after waking |
+| **Sleep Debt** | Cumulative sleep deficit | ↓ 0.56% accuracy per hour of debt |
+
+**Performance Zones:**
+- 🟢 **Optimal (≥80%):** Full cognitive capacity
+- 🟡 **Moderate (60-79%):** Reduced but functional
+- 🟠 **Poor (50-59%):** Significant impairment
+- 🔴 **Critical (<50%):** High accident risk
+
+**Scientific References:**
+- Hursh et al. (2004). Fatigue models for applied research. *Aviation, Space, and Environmental Medicine*
+- Van Dongen et al. (2003). Cumulative cost of additional wakefulness. *Sleep*
+- Borbély (1982). Two-process model of sleep regulation. *Human Neurobiology*
+                """)
+            
+            st.markdown("---")
+            
+            # Fatigue simulation settings in columns
+            col_profile, col_sleep, col_work = st.columns(3)
+            
+            with col_profile:
+                st.markdown("#### 👤 User Profile")
+                fatigue_age = st.number_input(
+                    "Age (years)", min_value=16, max_value=90, value=30, step=1,
+                    key="fatigue_age"
+                )
+                fatigue_sex = st.selectbox(
+                    "Sex", options=["male", "female", "other"], index=2,
+                    key="fatigue_sex"
+                )
+                fatigue_chronotype = st.slider(
+                    "Chronotype offset (hours)",
+                    min_value=-2.5, max_value=2.5, value=0.0, step=0.5,
+                    help="Negative = morning person, Positive = evening person",
+                    key="fatigue_chronotype"
+                )
+            
+            with col_sleep:
+                st.markdown("#### 😴 Sleep Schedule")
+                fatigue_sleep_quality = st.slider(
+                    "Sleep quality (0-1)",
+                    min_value=0.0, max_value=1.0, value=0.8, step=0.05,
+                    key="fatigue_sleep_quality"
+                )
+                fatigue_sleep_duration = st.slider(
+                    "Sleep duration (hours)",
+                    min_value=4.0, max_value=10.0, value=7.0, step=0.5,
+                    key="fatigue_sleep_duration"
+                )
+                fatigue_bedtime = st.slider(
+                    "Bedtime (hour)", min_value=0, max_value=23, value=23,
+                    key="fatigue_bedtime"
+                )
+                fatigue_waketime = st.slider(
+                    "Wake time (hour)", min_value=0, max_value=23, value=7,
+                    key="fatigue_waketime"
+                )
+                fatigue_sleep_debt = st.slider(
+                    "Current sleep debt (hours)",
+                    min_value=0.0, max_value=50.0, value=0.0, step=0.5,
+                    key="fatigue_sleep_debt"
+                )
+            
+            with col_work:
+                st.markdown("#### 💼 Work Schedule")
+                fatigue_has_work = st.checkbox(
+                    "Include work schedule", value=True,
+                    key="fatigue_has_work"
+                )
+                fatigue_work_start = st.slider(
+                    "Work start (hour)", min_value=0, max_value=23, value=9,
+                    disabled=not fatigue_has_work,
+                    key="fatigue_work_start"
+                )
+                fatigue_work_end = st.slider(
+                    "Work end (hour)", min_value=0, max_value=23, value=17,
+                    disabled=not fatigue_has_work,
+                    key="fatigue_work_end"
+                )
+                fatigue_cognitive_load = st.slider(
+                    "Cognitive load (0-3)",
+                    min_value=0, max_value=3, value=1,
+                    disabled=not fatigue_has_work,
+                    help="0=low, 1=moderate, 2=high, 3=very high",
+                    key="fatigue_cognitive_load"
+                )
+            
+            # Simulation settings
+            st.markdown("---")
+            col_sim1, col_sim2, col_sim3 = st.columns([1, 1, 2])
+            
+            with col_sim1:
+                fatigue_days = st.number_input(
+                    "Prediction days", min_value=1, max_value=14, value=3, step=1,
+                    key="fatigue_days"
+                )
+            
+            with col_sim2:
+                fatigue_model = st.selectbox(
+                    "Model type",
+                    options=["Advanced SAFTE", "Classic SAFTE"],
+                    index=0,
+                    key="fatigue_model"
+                )
+            
+            with col_sim3:
+                run_fatigue = st.button(
+                    "🚀 Run Fatigue Prediction",
+                    type="primary",
+                    key="run_fatigue_btn"
+                )
+            
+            # Run simulation
+            if run_fatigue:
+                with st.spinner("Running SAFTE simulation..."):
+                    try:
+                        # Build inputs
+                        user_profile = FatigueUserProfile(
+                            age=int(fatigue_age),
+                            sex=str(fatigue_sex),
+                            chronotype_offset=float(fatigue_chronotype),
+                            genetic_profile=tuple(),
+                        )
+                        
+                        sleep_schedule = SleepScheduleInput(
+                            quality=float(fatigue_sleep_quality),
+                            duration=float(fatigue_sleep_duration),
+                            bedtime=int(fatigue_bedtime),
+                            waketime=int(fatigue_waketime),
+                            total_sleep_debt=float(fatigue_sleep_debt),
+                        )
+                        
+                        # Calculate work hours
+                        if fatigue_has_work:
+                            if fatigue_work_start <= fatigue_work_end:
+                                work_hours = fatigue_work_end - fatigue_work_start
+                            else:
+                                work_hours = (24 - fatigue_work_start) + fatigue_work_end
+                        else:
+                            work_hours = 0
+                        
+                        work_schedule = WorkScheduleInput(
+                            has_work=bool(fatigue_has_work),
+                            work_start=int(fatigue_work_start),
+                            work_end=int(fatigue_work_end),
+                            work_hours=int(work_hours),
+                            cognitive_load=int(fatigue_cognitive_load),
+                        )
+                        
+                        # Run analysis
+                        model_type = "classic" if "Classic" in fatigue_model else "advanced"
+                        result = run_integrated_fatigue_analysis(
+                            user_profile=user_profile,
+                            sleep_schedule=sleep_schedule,
+                            work_schedule=work_schedule,
+                            prediction_days=int(fatigue_days),
+                            model_type=model_type,
+                        )
+                        
+                        # Store in session state
+                        st.session_state["fatigue_result"] = result
+                        st.success("✅ Fatigue prediction completed!")
+                        
+                    except Exception as e:
+                        st.error(f"Error running fatigue simulation: {e}")
+                        _LOGGER.exception("Fatigue simulation failed")
+            
+            # Display results if available
+            if "fatigue_result" in st.session_state:
+                result = st.session_state["fatigue_result"]
+                
+                st.markdown("---")
+                st.markdown("### 📊 Fatigue Prediction Results")
+                
+                # Build DataFrame for plotting
+                df_fatigue = build_fatigue_dataframe(
+                    result.time_points,
+                    result.performances,
+                    result.circadian_values,
+                )
+                
+                # Performance chart using ECharts
+                st.markdown("#### 📈 Cognitive Performance Prediction")
+                
+                # Prepare data for ECharts
+                perf_data = df_fatigue[["DateTime", "Performance"]].dropna()
+                if not perf_data.empty:
+                    x_data = [dt.strftime("%Y-%m-%d %H:%M") for dt in perf_data["DateTime"]]
+                    y_data = [round(float(p), 1) for p in perf_data["Performance"]]
+                    
+                    # Create ECharts config for performance chart
+                    perf_chart_config = {
+                        "tooltip": {
+                            "trigger": "axis",
+                            "formatter": "{b}<br/>Performance: {c}%"
+                        },
+                        "xAxis": {
+                            "type": "category",
+                            "data": x_data,
+                            "axisLabel": {"rotate": 45, "fontSize": 10}
+                        },
+                        "yAxis": {
+                            "type": "value",
+                            "min": 0,
+                            "max": 100,
+                            "name": "Effectiveness (%)",
+                            "axisLabel": {"formatter": "{value}%"}
+                        },
+                        "visualMap": {
+                            "show": False,
+                            "pieces": [
+                                {"gt": 80, "lte": 100, "color": "#28a745"},
+                                {"gt": 60, "lte": 80, "color": "#ffc107"},
+                                {"gt": 50, "lte": 60, "color": "#fd7e14"},
+                                {"gt": 0, "lte": 50, "color": "#dc3545"},
+                            ]
+                        },
+                        "series": [{
+                            "type": "line",
+                            "data": y_data,
+                            "smooth": True,
+                            "lineStyle": {"width": 3},
+                            "areaStyle": {"opacity": 0.3},
+                            "markLine": {
+                                "data": [
+                                    {"yAxis": 80, "name": "Optimal", "lineStyle": {"color": "#28a745", "type": "dashed"}},
+                                    {"yAxis": 60, "name": "Moderate", "lineStyle": {"color": "#ffc107", "type": "dashed"}},
+                                    {"yAxis": 50, "name": "Poor", "lineStyle": {"color": "#fd7e14", "type": "dashed"}},
+                                ]
+                            }
+                        }],
+                        "grid": {"left": "10%", "right": "5%", "bottom": "15%", "top": "10%"},
+                        "dataZoom": [{"type": "inside"}, {"type": "slider"}]
+                    }
+                    
+                    render_echarts(
+                        EChartsConfig(
+                            option=perf_chart_config,
+                            height=400,
+                            key="fatigue_perf_chart"
+                        )
+                    )
+                
+                # Analysis metrics
+                st.markdown("#### 📋 Performance Analysis")
+                
+                col_metrics1, col_metrics2, col_metrics3, col_metrics4 = st.columns(4)
+                
+                analysis = result.analysis
+                with col_metrics1:
+                    st.metric(
+                        "Average Performance",
+                        f"{analysis['avg']:.1f}%",
+                        help="Mean cognitive effectiveness across prediction period"
+                    )
+                with col_metrics2:
+                    st.metric(
+                        "Minimum",
+                        f"{analysis['min']:.1f}%",
+                        help="Lowest predicted performance"
+                    )
+                with col_metrics3:
+                    st.metric(
+                        "Maximum",
+                        f"{analysis['max']:.1f}%",
+                        help="Highest predicted performance"
+                    )
+                with col_metrics4:
+                    st.metric(
+                        "Risk Score",
+                        f"{analysis['risk']:.1f}%",
+                        help="Percentage of time in poor/critical zones"
+                    )
+                
+                # Performance zone distribution
+                st.markdown("#### 🎯 Performance Zone Distribution")
+                
+                zones = analysis["zones"]
+                zone_labels = ["Optimal (≥80%)", "Moderate (60-79%)", "Poor (50-59%)", "Critical (<50%)"]
+                zone_colors = ["#28a745", "#ffc107", "#fd7e14", "#dc3545"]
+                
+                # ECharts pie chart for zones
+                zone_chart_config = {
+                    "tooltip": {"trigger": "item", "formatter": "{b}: {c} hours ({d}%)"},
+                    "legend": {"orient": "horizontal", "bottom": "0%"},
+                    "series": [{
+                        "type": "pie",
+                        "radius": ["40%", "70%"],
+                        "avoidLabelOverlap": True,
+                        "itemStyle": {"borderRadius": 10, "borderColor": "#fff", "borderWidth": 2},
+                        "label": {"show": True, "formatter": "{b}: {c}h"},
+                        "emphasis": {"label": {"show": True, "fontSize": 14, "fontWeight": "bold"}},
+                        "data": [
+                            {"value": zones[0], "name": zone_labels[0], "itemStyle": {"color": zone_colors[0]}},
+                            {"value": zones[1], "name": zone_labels[1], "itemStyle": {"color": zone_colors[1]}},
+                            {"value": zones[2], "name": zone_labels[2], "itemStyle": {"color": zone_colors[2]}},
+                            {"value": zones[3], "name": zone_labels[3], "itemStyle": {"color": zone_colors[3]}},
+                        ]
+                    }]
+                }
+                
+                render_echarts(
+                    EChartsConfig(
+                        option=zone_chart_config,
+                        height=350,
+                        key="fatigue_zone_chart"
+                    )
+                )
+                
+                # Risk assessment
+                st.markdown("#### ⚠️ Risk Assessment")
+                
+                risk = result.risk_assessment
+                risk_level = risk["risk_level"]
+                total_risk = risk["total_risk"]
+                
+                # Risk level indicator
+                risk_colors = {
+                    "Very Low": "#28a745",
+                    "Low": "#17a2b8",
+                    "Moderate": "#ffc107",
+                    "High": "#fd7e14",
+                    "Critical": "#dc3545",
+                }
+                risk_color = risk_colors.get(risk_level, "#6c757d")
+                
+                st.markdown(
+                    f"""
+                    <div style="background: linear-gradient(135deg, {risk_color}22 0%, {risk_color}11 100%); 
+                                padding: 1.5rem; border-radius: 10px; border-left: 5px solid {risk_color};
+                                margin: 1rem 0;">
+                        <h3 style="margin: 0; color: {risk_color};">Risk Level: {risk_level}</h3>
+                        <p style="font-size: 2rem; margin: 0.5rem 0; font-weight: bold;">{total_risk:.1f}/100</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                
+                # Risk factors breakdown
+                factors = risk["factors"]
+                risk_factor_data = [
+                    {"Factor": "Sleep Debt", "Score": factors.get("sleep_debt", 0)},
+                    {"Factor": "Sleep Quality", "Score": factors.get("sleep_quality", 0)},
+                    {"Factor": "Circadian Misalignment", "Score": factors.get("circadian_misalignment", 0)},
+                    {"Factor": "Work Hours", "Score": factors.get("work_hours", 0)},
+                    {"Factor": "Cognitive Load", "Score": factors.get("cognitive_load", 0)},
+                    {"Factor": "Age", "Score": factors.get("age", 0)},
+                ]
+                
+                # ECharts bar chart for risk factors
+                risk_bar_config = {
+                    "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
+                    "xAxis": {"type": "value", "max": 25, "name": "Risk Score"},
+                    "yAxis": {
+                        "type": "category",
+                        "data": [d["Factor"] for d in risk_factor_data],
+                        "axisLabel": {"fontSize": 11}
+                    },
+                    "series": [{
+                        "type": "bar",
+                        "data": [
+                            {
+                                "value": round(d["Score"], 1),
+                                "itemStyle": {
+                                    "color": "#28a745" if d["Score"] < 5 else 
+                                             "#ffc107" if d["Score"] < 10 else 
+                                             "#fd7e14" if d["Score"] < 15 else "#dc3545"
+                                }
+                            }
+                            for d in risk_factor_data
+                        ],
+                        "label": {"show": True, "position": "right", "formatter": "{c}"}
+                    }],
+                    "grid": {"left": "25%", "right": "15%", "top": "5%", "bottom": "5%"}
+                }
+                
+                render_echarts(
+                    EChartsConfig(
+                        option=risk_bar_config,
+                        height=250,
+                        key="fatigue_risk_bar"
+                    )
+                )
+                
+                # Recommendations
+                st.markdown("#### 💡 Recommendations")
+                
+                for i, rec in enumerate(result.recommendations, 1):
+                    st.markdown(f"{i}. {rec}")
+                
+                # Circadian rhythm visualization
+                if result.circadian_values:
+                    st.markdown("#### 🌙 Circadian Rhythm Pattern")
+                    
+                    circ_data = df_fatigue[["DateTime", "Circadian"]].dropna()
+                    if not circ_data.empty:
+                        x_circ = [dt.strftime("%Y-%m-%d %H:%M") for dt in circ_data["DateTime"]]
+                        y_circ = [round(float(c), 3) for c in circ_data["Circadian"]]
+                        
+                        circ_chart_config = {
+                            "tooltip": {"trigger": "axis"},
+                            "xAxis": {
+                                "type": "category",
+                                "data": x_circ,
+                                "axisLabel": {"rotate": 45, "fontSize": 10}
+                            },
+                            "yAxis": {
+                                "type": "value",
+                                "name": "Circadian Drive",
+                            },
+                            "series": [{
+                                "type": "line",
+                                "data": y_circ,
+                                "smooth": True,
+                                "lineStyle": {"color": "#8A2BE2", "width": 2},
+                                "areaStyle": {"color": "#8A2BE222"},
+                            }],
+                            "grid": {"left": "10%", "right": "5%", "bottom": "15%", "top": "10%"},
+                            "dataZoom": [{"type": "inside"}, {"type": "slider"}]
+                        }
+                        
+                        render_echarts(
+                            EChartsConfig(
+                                option=circ_chart_config,
+                                height=300,
+                                key="fatigue_circ_chart"
+                            )
+                        )
+                
+                # Export option
+                st.markdown("---")
+                st.markdown("#### 📥 Export Results")
+                
+                csv_export = df_fatigue.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "Download Fatigue Predictions (CSV)",
+                    csv_export,
+                    file_name="fatigue_predictions.csv",
+                    mime="text/csv",
+                    key="fatigue_csv_download"
+                )
+                
+                st.caption(
+                    f"Model: {result.model_used.upper()} SAFTE | "
+                    f"Generated: {result.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
+                )
+
     with tab_science:
         st.markdown("## 📚 Scientific Reference Guide")
         st.markdown("*Comprehensive explanations of HRV metrics and their physiological significance*")
