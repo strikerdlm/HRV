@@ -1195,33 +1195,45 @@ def build_unified_physiology_timeline(
     }
 
     # Build Y-axes based on metric groups
-    y_axes: list[dict[str, Any]] = []
-    used_indices: set[int] = set()
+    # Use a dict to map yAxisIndex -> axis config for proper ordering
+    y_axis_configs: dict[int, dict[str, Any]] = {}
 
     for metric_name in metrics:
         cfg = final_configs.get(metric_name, {"unit": "", "yAxisIndex": 0})
         idx = cfg.get("yAxisIndex", 0)
-        if idx not in used_indices:
-            used_indices.add(idx)
-            y_axes.append({
+        if idx not in y_axis_configs:
+            y_axis_configs[idx] = {
                 "type": "value",
                 "position": "left" if idx % 2 == 0 else "right",
                 "offset": (idx // 2) * 60,
                 "axisLine": {"show": True, "lineStyle": {"color": cfg.get("color", "#333")}},
                 "axisLabel": {"formatter": f"{{value}} {cfg.get('unit', '')}"},
                 "splitLine": {"show": idx == 0},
-            })
+                "_original_index": idx,  # Store original index for mapping
+            }
 
-    # Sort y-axes by index
-    y_axes_sorted = sorted(enumerate(y_axes), key=lambda x: list(used_indices)[x[0]] if x[0] < len(used_indices) else 999)
-    options["yAxis"] = [ya for _, ya in y_axes_sorted] if y_axes else [{"type": "value"}]
+    # Sort y-axes by their original yAxisIndex values
+    sorted_indices = sorted(y_axis_configs.keys())
+    y_axes = [y_axis_configs[idx] for idx in sorted_indices]
+    
+    # Create mapping from original yAxisIndex to actual position in sorted array
+    index_mapping = {orig_idx: pos for pos, orig_idx in enumerate(sorted_indices)}
+    
+    # Remove internal tracking field before setting
+    for ya in y_axes:
+        ya.pop("_original_index", None)
+    
+    options["yAxis"] = y_axes if y_axes else [{"type": "value"}]
 
     # Build series
     series: list[dict[str, Any]] = []
     for metric_name, values in metrics.items():
         cfg = final_configs.get(metric_name, {"color": "#333", "yAxisIndex": 0})
         color = cfg.get("color", "#333")
-        y_idx = cfg.get("yAxisIndex", 0)
+        original_y_idx = cfg.get("yAxisIndex", 0)
+        
+        # Map original yAxisIndex to actual position in sorted y-axes array
+        actual_y_idx = index_mapping.get(original_y_idx, 0)
 
         # Convert values to list and handle NaN
         val_list = [float(v) if not np.isnan(v) else None for v in values]
@@ -1230,7 +1242,7 @@ def build_unified_physiology_timeline(
             "name": metric_name,
             "type": "line",
             "data": val_list,
-            "yAxisIndex": min(y_idx, len(options["yAxis"]) - 1),
+            "yAxisIndex": min(actual_y_idx, len(options["yAxis"]) - 1),
             "smooth": True,
             "lineStyle": {"color": color, "width": 2},
             "itemStyle": {"color": color},
