@@ -36,6 +36,20 @@ try:
 except ImportError:
     SCIENTIFIC_CHARTS_AVAILABLE = False
 
+# About tab module
+try:
+    from about_tab import render_about_tab, get_app_version, get_app_metadata
+    ABOUT_TAB_AVAILABLE = True
+except ImportError:
+    ABOUT_TAB_AVAILABLE = False
+
+# Circadian physiology module
+try:
+    from circadian_tab import render_circadian_tab
+    CIRCADIAN_TAB_AVAILABLE = True
+except ImportError:
+    CIRCADIAN_TAB_AVAILABLE = False
+
 # ML analytics for pattern detection
 try:
     from ml_analytics import (
@@ -3905,6 +3919,7 @@ def main() -> None:
         tab_biofeedback,
         tab_fatigue,
         tab_science,
+        tab_circadian,
         tab_space_weather,
         tab_noaa_space,
         tab_export,
@@ -3926,11 +3941,12 @@ def main() -> None:
             "🧠 Fatigue",
             "Science",
             "🫀 Biofeedback",
+            "🌙 Circadian",
             "Space Weather",
             "NOAA Space",
             "Export",
             "References",
-            "About",
+            "ℹ️ About",
         ]
     )
     with tab_overview:
@@ -5817,6 +5833,54 @@ that predicts cognitive performance based on:
 - [Laborde et al. 2017](https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2017.00213/full) — HRV guidelines for psychophysiology
 - [Quigley et al. 2024](https://onlinelibrary.wiley.com/doi/10.1111/psyp.14604) — Updated publication guidelines
         """)
+
+    # ==================== CIRCADIAN PHYSIOLOGY TAB ====================
+    with tab_circadian:
+        if CIRCADIAN_TAB_AVAILABLE:
+            # Pass user profile if available for personalized simulations
+            user_profile_data = None
+            if "current_user_id" in st.session_state:
+                user_profile_data = {"user_id": st.session_state.get("current_user_id")}
+            render_circadian_tab(user_profile=user_profile_data)
+        else:
+            st.markdown("""
+            <div style="
+                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                border-radius: 16px;
+                padding: 2rem;
+                text-align: center;
+                border: 1px solid rgba(102, 126, 234, 0.2);
+            ">
+                <h2 style="color: #667eea; margin-bottom: 1rem;">🌙 Circadian Physiology</h2>
+                <p style="color: #a0a0a0;">
+                    The Circadian Physiology module provides simulation and visualization of
+                    circadian rhythm dynamics using validated mathematical models.
+                </p>
+                <p style="color: #888; margin-top: 1rem;">
+                    ⚠️ Module not available. Please ensure <code>app/circadian/</code> package is installed.
+                </p>
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Show brief documentation even if module unavailable
+            with st.expander("📖 About Circadian Models"):
+                st.markdown("""
+                **Available Models:**
+                - **Forger99**: 3-state limit cycle pacemaker (Forger et al., 1999)
+                - **Jewett99**: Revised limit cycle oscillator (Kronauer et al., 1999)
+                - **Hannay19**: Macroscopic amplitude-phase model (Hannay et al., 2019)
+                - **Hannay19TP**: Two-population SCN model
+                
+                **Features:**
+                - Light schedule simulation (Regular, ShiftWork, SlamShift, SocialJetlag)
+                - Phase response curve analysis
+                - DLMO and CBT marker prediction
+                - ESRI (Entrainment Signal Regularity Index) computation
+                - Double-plotted actogram visualization
+                
+                **Original Package:** [Arcascope/circadian](https://github.com/Arcascope/circadian)
+                """)
+
     with tab_space_weather:
         st.subheader("Space Weather (NOAA SWPC)")
         space_state = _space_weather_state()
@@ -7558,25 +7622,30 @@ that predicts cognitive performance based on:
                 "GPT-5 interpretation is enabled; trigger the analysis to populate this section."
             )
     with tab_about:
-        st.markdown(
-            "### About the Author\n"
-            "**Dr. Diego Leonel Malpica Hincapié** — Aerospace Medicine (Colombia)\n\n"
-            "- Professional service within Colombian Military Health / Fuerza Aérea Colombiana (public record).\n"
-            "- Focus areas: aerospace medicine, operational performance, fatigue, psychophysiology, and HRV.\n"
-            "- This app and analysis workflow were authored and curated by Dr. Malpica.\n\n"
-            "Professional Profiles & Academic References:\n"
-            "- **CVLAC** (Colciencias Research Profile): "
-            "[https://scienti.minciencias.gov.co/cvlac/](https://scienti.minciencias.gov.co/cvlac/)\n"
-            "- **LinkedIn**: [linkedin.com/in/diegoleonelmalpica](https://www.linkedin.com/in/diegoleonelmalpica)\n"
-            "- **Universidad Nacional de Colombia** (Academic Reference): "
-            "[UNAL Profile](https://medicina.bogota.unal.edu.co/formacion/especialidades-medicas/medicina-aeroespacial)\n\n"
-            "Project links:\n"
-            "- GitHub repository: https://github.com/strikerdlm/HRV\n"
-            "- HRV Normative review in this project: `docs/Normative.md`\n"
-            "- Charting: [Apache ECharts](https://echarts.apache.org/handbook/en/get-started/)\n\n"
-            "Notes:\n"
-            "- HRV interpretation is protocol- and cohort-dependent. Use within-subject trends and documented context "
-            "(posture, time-of-day, respiration) for decisions.\n")
+        # Use the professional About tab module if available
+        if ABOUT_TAB_AVAILABLE:
+            render_about_tab()
+        else:
+            # Fallback to basic About content
+            st.markdown(
+                "### About the Author\n"
+                "**Dr. Diego Leonel Malpica Hincapié** — Aerospace Medicine (Colombia)\n\n"
+                "- Professional service within Colombian Military Health / Fuerza Aérea Colombiana (public record).\n"
+                "- Focus areas: aerospace medicine, operational performance, fatigue, psychophysiology, and HRV.\n"
+                "- This app and analysis workflow were authored and curated by Dr. Malpica.\n\n"
+                "Professional Profiles & Academic References:\n"
+                "- **CVLAC** (Colciencias Research Profile): "
+                "[https://scienti.minciencias.gov.co/cvlac/](https://scienti.minciencias.gov.co/cvlac/)\n"
+                "- **LinkedIn**: [linkedin.com/in/diegoleonelmalpica](https://www.linkedin.com/in/diegoleonelmalpica)\n"
+                "- **Universidad Nacional de Colombia** (Academic Reference): "
+                "[UNAL Profile](https://medicina.bogota.unal.edu.co/formacion/especialidades-medicas/medicina-aeroespacial)\n\n"
+                "Project links:\n"
+                "- GitHub repository: https://github.com/strikerdlm/HRV\n"
+                "- HRV Normative review in this project: `docs/Normative.md`\n"
+                "- Charting: [Apache ECharts](https://echarts.apache.org/handbook/en/get-started/)\n\n"
+                "Notes:\n"
+                "- HRV interpretation is protocol- and cohort-dependent. Use within-subject trends and documented context "
+                "(posture, time-of-day, respiration) for decisions.\n")
     with tab_refs:
         st.markdown(
             "**Selected references (APA format)**  \n"
