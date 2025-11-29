@@ -20,7 +20,7 @@ Citation:
     }
 """
 
-__version__ = "1.0.3"
+__version__ = "1.1.0"
 
 # Core model classes
 from .models import (
@@ -36,7 +36,12 @@ from .models import (
 from .lights import LightSchedule
 
 # Metrics and analysis
-from .metrics import esri, circadian_phase_coherence, phase_deviation, social_jetlag_index
+from .metrics import (
+    esri,
+    circadian_phase_coherence,
+    phase_deviation,
+    social_jetlag_index,
+)
 
 # Wearable data readers
 from .readers import (
@@ -55,6 +60,47 @@ from .utils import (
     phase_coherence,
     phase_coherence_clock,
     times_to_angle,
+    convert_binary,
+)
+
+# Phase extraction tools
+from .phasetools import (
+    cosinor,
+    cosinor_phase,
+    cosinor_goals,
+    cosinor_amplitude,
+    cosinor_fit,
+)
+
+# Phase Response Curve tools
+from .prc import (
+    make_pulse,
+    get_pulse,
+    heaviside,
+    PRCFinder,
+    PhaseResponseCurveLight,
+    IntensityResponseCurveLight,
+    DosageResponseCurve,
+    compute_prc,
+)
+
+# Sleep regulation models
+from .sleep import (
+    TwoProcessModel,
+    sleep_midpoint,
+    cluster_sleep_periods,
+    detect_sleep_periods,
+    sleep_efficiency,
+    total_sleep_time,
+)
+
+# Synthetic data generation
+from .synthetic_data import (
+    generate_activity_from_light,
+    generate_synthetic_wearable_data,
+    generate_heart_rate_from_activity,
+    generate_sleep_wake,
+    add_missing_data,
 )
 
 __all__ = [
@@ -87,4 +133,33 @@ __all__ = [
     "phase_coherence",
     "phase_coherence_clock",
     "times_to_angle",
+    "convert_binary",
+    # Phase tools
+    "cosinor",
+    "cosinor_phase",
+    "cosinor_goals",
+    "cosinor_amplitude",
+    "cosinor_fit",
+    # PRC tools
+    "make_pulse",
+    "get_pulse",
+    "heaviside",
+    "PRCFinder",
+    "PhaseResponseCurveLight",
+    "IntensityResponseCurveLight",
+    "DosageResponseCurve",
+    "compute_prc",
+    # Sleep models
+    "TwoProcessModel",
+    "sleep_midpoint",
+    "cluster_sleep_periods",
+    "detect_sleep_periods",
+    "sleep_efficiency",
+    "total_sleep_time",
+    # Synthetic data
+    "generate_activity_from_light",
+    "generate_synthetic_wearable_data",
+    "generate_heart_rate_from_activity",
+    "generate_sleep_wake",
+    "add_missing_data",
 ]
