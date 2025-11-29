@@ -39,6 +39,7 @@ from typing import (
 )
 
 import concurrent.futures
+import io
 import hashlib
 import json
 import logging
@@ -369,7 +370,7 @@ def _read_dataframe_cache(
     if not isinstance(data_json, str):
         return None
     try:
-        df = pd.read_json(data_json, orient="table", convert_dates=True)
+        df = pd.read_json(io.StringIO(data_json), orient="table", convert_dates=True)
     except ValueError:
         return None
     return df
