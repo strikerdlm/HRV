@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import json
 import logging
 from collections.abc import Iterable
@@ -347,6 +348,8 @@ def _read_cache(spec: NOAASourceSpec) -> Optional[pd.DataFrame]:
             payload = json.load(handle)
     except (OSError, json.JSONDecodeError):
         return None
+    if payload.get("stored_kind") != "raw":
+        return None
     stored_at_raw = payload.get("stored_at")
     stored_at = pd.to_datetime(stored_at_raw, utc=True, errors="coerce")
     if pd.isna(stored_at) or stored_at + CACHE_TTL < pd.Timestamp.now(tz="UTC"):
@@ -355,7 +358,7 @@ def _read_cache(spec: NOAASourceSpec) -> Optional[pd.DataFrame]:
     if not isinstance(data_json, str):
         return None
     try:
-        df = pd.read_json(data_json, orient="table", convert_dates=True)
+        df = pd.read_json(io.StringIO(data_json), orient="table", convert_dates=True)
     except ValueError:
         return None
     return df
@@ -364,6 +367,7 @@ def _read_cache(spec: NOAASourceSpec) -> Optional[pd.DataFrame]:
 def _write_cache(spec: NOAASourceSpec, df: pd.DataFrame) -> None:
     payload = {
         "stored_at": pd.Timestamp.now(tz="UTC").isoformat(),
+        "stored_kind": "raw",
         "data": df.to_json(orient="table", date_format="iso"),
     }
     try:
@@ -554,7 +558,7 @@ def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADa
             return _prepare_frame(spec, cached)
     raw_df = _download_dataset(spec)
     bundle = _prepare_frame(spec, raw_df)
-    _write_cache(spec, bundle.frame)
+    _write_cache(spec, raw_df)
     return bundle
 
 
