@@ -21,7 +21,7 @@ from typing import Optional
 import streamlit as st
 
 # Application metadata
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.1"
 APP_NAME = "HRV Analysis Suite"
 APP_RELEASE_DATE = "2025-11-29"
 APP_AUTHOR = "Dr. Diego Leonel Malpica Hincapié, MD"
