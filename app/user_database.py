@@ -805,9 +805,18 @@ class UserDatabase:
         if df.empty or metric not in df.columns:
             return {}
         
-        # Filter periods
-        mask1 = (df['measurement_date'] >= period1_start) & (df['measurement_date'] <= period1_end)
-        mask2 = (df['measurement_date'] >= period2_start) & (df['measurement_date'] <= period2_end)
+        # Convert string date parameters to datetime for reliable comparison
+        try:
+            p1_start = pd.to_datetime(period1_start)
+            p1_end = pd.to_datetime(period1_end)
+            p2_start = pd.to_datetime(period2_start)
+            p2_end = pd.to_datetime(period2_end)
+        except (ValueError, TypeError) as e:
+            return {"error": f"Invalid date format: {e}"}
+        
+        # Filter periods using datetime comparisons
+        mask1 = (df['measurement_date'] >= p1_start) & (df['measurement_date'] <= p1_end)
+        mask2 = (df['measurement_date'] >= p2_start) & (df['measurement_date'] <= p2_end)
         
         period1 = df.loc[mask1, metric].dropna()
         period2 = df.loc[mask2, metric].dropna()
