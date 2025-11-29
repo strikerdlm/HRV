@@ -84,6 +84,38 @@ try:
 except ImportError:
     SPACE_WEATHER_PERSISTENCE_AVAILABLE = False
 
+# Population norms for comparison
+try:
+    from population_norms import (
+        compare_to_population,
+        generate_population_comparison_report,
+        render_population_comparison_ui,
+        get_hrv_norm,
+        get_age_group,
+        get_available_metrics,
+        get_metric_info,
+        AgeGroup,
+        Sex,
+    )
+    POPULATION_NORMS_AVAILABLE = True
+except ImportError:
+    POPULATION_NORMS_AVAILABLE = False
+
+# UI State Manager for conditional buttons
+try:
+    from ui_state_manager import (
+        UIStateManager,
+        DataType,
+        get_state_manager,
+        render_data_status_badge,
+        render_conditional_compute_button,
+        render_tab_header,
+        update_data_status_from_session,
+    )
+    UI_STATE_MANAGER_AVAILABLE = True
+except ImportError:
+    UI_STATE_MANAGER_AVAILABLE = False
+
 # ML analytics for pattern detection
 try:
     from ml_analytics import (
@@ -3387,6 +3419,10 @@ def main() -> None:
         st.title("🧬 Physiological Laboratory")
         st.caption("Dr. Diego L. Malpica, MD — Aerospace Medicine Specialist")
         st.caption("Contributing to AsterPhysiology Research Initiative")
+    
+    # Initialize UI state manager for tracking data availability
+    if UI_STATE_MANAGER_AVAILABLE:
+        update_data_status_from_session()
 
     # Initialize uploads dictionary
     uploads: Dict[str, UploadedRR] = {}
@@ -3954,6 +3990,20 @@ def main() -> None:
         exclude=("kp_index",),
     )
 
+    # Track data availability for conditional UI elements
+    has_hrv_data = bool(uploads) and any(u.rr_ms is not None and len(u.rr_ms) > 0 for u in uploads.values())
+    total_rr_count = sum(len(u.rr_ms) for u in uploads.values() if u.rr_ms is not None)
+    
+    # Update state manager if available
+    if UI_STATE_MANAGER_AVAILABLE and has_hrv_data:
+        state_mgr = get_state_manager()
+        state_mgr.set_data_available(
+            DataType.RR_INTERVALS,
+            is_available=True,
+            record_count=total_rr_count,
+            source="Uploaded Files",
+        )
+    
     # Tabs
     (
         tab_overview,
@@ -3967,6 +4017,7 @@ def main() -> None:
         tab_readiness,
         tab_gauges,
         tab_unified,
+        tab_pop_norms,
         tab_biofeedback,
         tab_fatigue,
         tab_science,
@@ -3989,20 +4040,46 @@ def main() -> None:
             "Readiness",
             "Gauges",
             "📈 Unified Timeline",
-            "🧠 Fatigue",
-            "Science",
+            "📊 Population Norms",
             "🫀 Biofeedback",
-            "🌙 Circadian",
-            "Space Weather",
-            "NOAA Space",
-            "Export",
-            "References",
+            "😴 SAFTE/Fatigue",
+            "Science",
+            "☀️ Circadian",
+            "🌍 Space Weather",
+            "🛰️ NOAA Space",
+            "📄 Export",
+            "📚 References",
             "ℹ️ About",
         ]
     )
     with tab_overview:
         st.markdown("### 📊 Analysis Overview")
         st.markdown("*Summary of uploaded datasets and computed metrics*")
+        
+        # Data status panel
+        if WELCOME_HEADER_AVAILABLE:
+            from welcome_header import render_data_status_panel, render_getting_started_guide, render_quick_access_grid
+            render_data_status_panel(
+                has_rr_data=has_hrv_data,
+                rr_count=total_rr_count,
+                has_profile="current_user_profile" in st.session_state and st.session_state.get("current_user_profile"),
+                has_space_weather="space_weather_data" in st.session_state and st.session_state.get("space_weather_data"),
+            )
+        
+        # Quick start guide for new users
+        if not has_hrv_data:
+            if WELCOME_HEADER_AVAILABLE:
+                render_getting_started_guide()
+                st.divider()
+                render_quick_access_grid(has_data=False)
+            else:
+                st.info(
+                    "👋 **Welcome!** Upload RR interval data using the sidebar to begin HRV analysis.\n\n"
+                    "**Available without data:**\n"
+                    "- ☀️ Circadian Physiology - Simulate circadian rhythms\n"
+                    "- 🌍 Space Weather - View current solar activity\n"
+                    "- 😴 SAFTE Model - Model fatigue scenarios"
+                )
         
         if meta_rows:
             st.dataframe(pd.DataFrame(meta_rows))
@@ -4921,6 +4998,184 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
             "single-metric analysis may miss. Cross-domain correlations can reveal compensatory mechanisms "
             "and early warning signs of physiological stress."
         )
+
+    # =========================================================================
+    # POPULATION NORMS TAB - Compare against reference values
+    # =========================================================================
+    with tab_pop_norms:
+        st.markdown("### 📊 Population Norms Comparison")
+        st.markdown("*Compare your HRV metrics against scientifically validated reference values*")
+        
+        if not POPULATION_NORMS_AVAILABLE:
+            st.error("Population norms module not available. Please check installation.")
+        else:
+            # Explanation section
+            with st.expander("📖 **Understanding Population Norms**", expanded=False):
+                st.markdown("""
+**Why Compare to Population Norms?**
+
+Heart Rate Variability (HRV) metrics vary significantly across individuals based on:
+- **Age**: HRV naturally decreases with aging
+- **Sex**: Women typically have higher RMSSD (vagal tone)
+- **Fitness**: Athletes often have higher HRV
+- **Health status**: Various conditions affect HRV
+
+**Data Sources:**
+
+| Source | Sample Size | Population |
+|--------|-------------|------------|
+| Nunan et al. 2010 | n=21,438 | Meta-analysis of 44 studies |
+| Ortega et al. 2024 | n=2,143 | Singapore (ages 10-89) |
+| O'Neal et al. 2016 (MESA) | n=5,966 | Multi-ethnic US population |
+| Task Force 1996 | Guidelines | European/NA consensus |
+
+**Interpretation:**
+- **Percentile < 5%**: Significantly below norms - consider clinical evaluation
+- **Percentile 5-25%**: Below average - may warrant attention
+- **Percentile 25-75%**: Normal range
+- **Percentile 75-95%**: Above average - typically favorable
+- **Percentile > 95%**: Significantly above norms
+
+*Note: Population norms are reference guides, not diagnostic criteria. 
+Context (posture, time of day, medications) strongly affects interpretation.*
+                """)
+            
+            st.divider()
+            
+            # User input for demographics
+            col_demo1, col_demo2 = st.columns(2)
+            with col_demo1:
+                user_age = st.number_input(
+                    "Your Age (years)",
+                    min_value=10,
+                    max_value=100,
+                    value=st.session_state.get("user_age", 35),
+                    help="Age affects normative ranges - HRV typically decreases with age"
+                )
+                st.session_state["user_age"] = user_age
+            
+            with col_demo2:
+                user_sex = st.selectbox(
+                    "Biological Sex",
+                    options=["All (combined)", "Male", "Female"],
+                    index=0,
+                    help="Sex affects some HRV norms, particularly vagal metrics"
+                )
+                sex_value = None if user_sex == "All (combined)" else user_sex.lower()
+            
+            # Show age group
+            age_group = get_age_group(user_age)
+            st.info(f"**Reference Group**: Age {age_group.value}, Sex: {user_sex}")
+            
+            st.divider()
+            
+            # Check for available HRV data
+            if has_hrv_data and not windowed_df.empty:
+                st.success(f"✓ HRV data available ({total_rr_count:,} RR intervals)")
+                
+                # Extract latest/mean metrics from windowed analysis
+                hrv_metrics_for_comparison = {}
+                
+                # Map windowed_df columns to population norm metric names
+                metric_mapping = {
+                    "sdnn": "sdnn",
+                    "rmssd": "rmssd",
+                    "pnn50": "pnn50",
+                    "lf_power": "lf_power",
+                    "hf_power": "hf_power",
+                    "lf_hf_ratio": "lf_hf_ratio",
+                    "sd1": "sd1",
+                    "sd2": "sd2",
+                    "mean_hr": "mean_hr",
+                }
+                
+                # Use mean values from windowed analysis
+                for col, norm_name in metric_mapping.items():
+                    if col in windowed_df.columns:
+                        valid_vals = windowed_df[col].dropna()
+                        if len(valid_vals) > 0:
+                            hrv_metrics_for_comparison[norm_name] = float(valid_vals.mean())
+                
+                if hrv_metrics_for_comparison:
+                    # Render population comparison UI
+                    render_population_comparison_ui(
+                        hrv_metrics=hrv_metrics_for_comparison,
+                        age=user_age,
+                        sex=sex_value,
+                    )
+                    
+                    # Additional export option
+                    st.divider()
+                    if st.button("📥 Export Comparison Report", key="export_pop_norms"):
+                        report = generate_population_comparison_report(
+                            hrv_metrics=hrv_metrics_for_comparison,
+                            age=user_age,
+                            sex=sex_value,
+                        )
+                        st.json(report)
+                        st.download_button(
+                            label="Download JSON Report",
+                            data=json.dumps(report, indent=2),
+                            file_name="hrv_population_comparison.json",
+                            mime="application/json",
+                        )
+                else:
+                    st.warning("Could not extract HRV metrics from the analysis. Ensure data has been processed.")
+            else:
+                st.warning(
+                    "⚠️ **No HRV data loaded**\n\n"
+                    "Upload RR interval data using the sidebar to compare your metrics against population norms.\n\n"
+                    "**Available metrics for comparison:**\n"
+                    "- Time domain: SDNN, RMSSD, pNN50\n"
+                    "- Frequency domain: LF Power, HF Power, LF/HF Ratio\n"
+                    "- Nonlinear: SD1, SD2\n"
+                    "- Heart rate: Mean HR"
+                )
+                
+                # Show example with simulated data
+                with st.expander("📋 View Example Comparison (Simulated Data)"):
+                    example_metrics = {
+                        "sdnn": 45.2,
+                        "rmssd": 38.5,
+                        "pnn50": 15.3,
+                        "lf_power": 980.0,
+                        "hf_power": 720.0,
+                        "lf_hf_ratio": 1.36,
+                        "mean_hr": 68.0,
+                    }
+                    st.markdown("**Example metrics for a 35-year-old:**")
+                    render_population_comparison_ui(
+                        hrv_metrics=example_metrics,
+                        age=35,
+                        sex=None,
+                    )
+            
+            # Reference information
+            st.divider()
+            with st.expander("📚 **References and Citations**"):
+                st.markdown("""
+**Primary References for Normative Data:**
+
+1. **Nunan D, Sandercock GR, Brodie DA** (2010). A quantitative systematic review of 
+   normal values for short-term heart rate variability in healthy adults. 
+   *Pacing Clin Electrophysiol*, 33(11):1407-17. [PMID: 20663071](https://pubmed.ncbi.nlm.nih.gov/20663071/)
+
+2. **Ortega E, Bryan CYX, Christine NSC** (2024). The Pulse of Singapore: Short-Term 
+   HRV Norms. *Appl Psychophysiol Biofeedback*, 49(1):31-40. 
+   [PMID: 37755550](https://pubmed.ncbi.nlm.nih.gov/37755550/)
+
+3. **O'Neal WT, Chen LY, Nazarian S, Soliman EZ** (2016). Reference ranges for short-term 
+   heart rate variability measures in individuals free of cardiovascular disease: 
+   The Multi-Ethnic Study of Atherosclerosis (MESA). *J Electrocardiol*, 49(5):686-90. 
+   [PMID: 27396499](https://pubmed.ncbi.nlm.nih.gov/27396499/)
+
+4. **Task Force of ESC and NASPE** (1996). Heart rate variability: standards of measurement, 
+   physiological interpretation and clinical use. *Circulation*, 93(5):1043-65. 
+   [PMID: 8598068](https://pubmed.ncbi.nlm.nih.gov/8598068/)
+
+5. **Shaffer F, Ginsberg JP** (2017). An Overview of Heart Rate Variability Metrics and Norms. 
+   *Front Public Health*, 5:258. [PMID: 29034226](https://pubmed.ncbi.nlm.nih.gov/29034226/)
+                """)
 
     # =========================================================================
     # BIOFEEDBACK TAB - Real-time HRV and Coherence Training
