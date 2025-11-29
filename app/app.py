@@ -7345,6 +7345,8 @@ that predicts cognitive performance based on:
         st.markdown("### NASA DONKI events")
         if not NASA_API_KEY:
             st.info("Set NASA_API_KEY in your environment to enable DONKI events.")
+        elif windowed_df.empty or "start" not in windowed_df.columns:
+            st.info("Load HRV data to define the date range for DONKI queries.")
         else:
             span = pd.to_datetime(
                 windowed_df["start"], errors="coerce", utc=True
