@@ -28,11 +28,11 @@ import numpy as np
 import streamlit as st
 from numpy.typing import NDArray
 
-# Try to import circadian module components
+# Try to import circadian module components from app.circadian
 try:
-    from circadian.lights import LightSchedule
-    from circadian.models import Forger99, Hannay19, Hannay19TP, Jewett99
-    from circadian.metrics import esri
+    from app.circadian.lights import LightSchedule
+    from app.circadian.models import Forger99, Hannay19, Hannay19TP, Jewett99
+    from app.circadian.metrics import esri
     CIRCADIAN_AVAILABLE = True
 except ImportError:
     CIRCADIAN_AVAILABLE = False
