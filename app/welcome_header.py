@@ -18,6 +18,7 @@ GITHUB_REPO = "https://github.com/strikerdlm/HRV"
 def render_welcome_header() -> None:
     """Render the professional welcome header with laboratory branding."""
     
+    # Inject custom CSS
     st.markdown("""
     <style>
     .welcome-container {
@@ -75,15 +76,21 @@ def render_welcome_header() -> None:
         align-items: center;
         gap: 6px;
         background: rgba(255,255,255,0.1);
-        color: #fff;
+        color: #fff !important;
         padding: 6px 14px;
         border-radius: 8px;
         text-decoration: none;
         font-size: 0.85rem;
         margin-left: 10px;
     }
+    .github-link:hover {
+        background: rgba(255,255,255,0.2);
+    }
     </style>
+    """, unsafe_allow_html=True)
     
+    # Render the welcome container using f-string
+    html_content = f'''
     <div class="welcome-container">
         <div style="display: flex; align-items: center; justify-content: center; gap: 15px; margin-bottom: 0.5rem;">
             <span style="font-size: 2.5rem;">🧬</span>
@@ -98,8 +105,8 @@ def render_welcome_header() -> None:
         </p>
         
         <div style="text-align: center; margin: 1rem 0;">
-            <span class="version-badge">v""" + APP_VERSION + """</span>
-            <a href=\"""" + GITHUB_REPO + """\" target="_blank" class="github-link">
+            <span class="version-badge">v{APP_VERSION}</span>
+            <a href="{GITHUB_REPO}" target="_blank" class="github-link">
                 <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                     <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
                 </svg>
@@ -109,7 +116,7 @@ def render_welcome_header() -> None:
         
         <div class="contributor-section">
             <div style="color: #888; font-size: 0.85rem; margin-bottom: 0.5rem;">
-                <strong>🔬 Contributing Modules & Authors:</strong>
+                <strong>🔬 Contributing Modules &amp; Authors:</strong>
             </div>
             <div style="display: flex; flex-wrap: wrap; justify-content: center;">
                 <span class="contributor-badge">
@@ -119,7 +126,7 @@ def render_welcome_header() -> None:
                     😴 <strong>SAFTE Model:</strong> S. Hursh et al. (IBR/USAF)
                 </span>
                 <span class="contributor-badge">
-                    🫀 <strong>HRV Core:</strong> Task Force 1996, Shaffer & Ginsberg
+                    🫀 <strong>HRV Core:</strong> Task Force 1996, Shaffer &amp; Ginsberg
                 </span>
                 <span class="contributor-badge">
                     📊 <strong>ECharts:</strong> Apache Foundation
@@ -127,7 +134,9 @@ def render_welcome_header() -> None:
             </div>
         </div>
     </div>
-    """, unsafe_allow_html=True)
+    '''
+    
+    st.markdown(html_content, unsafe_allow_html=True)
 
 
 def render_device_import_header() -> None:
@@ -148,4 +157,3 @@ def render_device_import_header() -> None:
         </p>
     </div>
     """, unsafe_allow_html=True)
-
