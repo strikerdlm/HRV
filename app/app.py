@@ -50,6 +50,25 @@ try:
 except ImportError:
     CIRCADIAN_TAB_AVAILABLE = False
 
+# Welcome header module
+try:
+    from welcome_header import render_welcome_header, render_device_import_header
+    WELCOME_HEADER_AVAILABLE = True
+except ImportError:
+    WELCOME_HEADER_AVAILABLE = False
+
+# Device imports module
+try:
+    from device_imports import (
+        render_all_device_imports,
+        render_polar_import_section,
+        render_garmin_import_section,
+        ImportedRRData,
+    )
+    DEVICE_IMPORTS_AVAILABLE = True
+except ImportError:
+    DEVICE_IMPORTS_AVAILABLE = False
+
 # ML analytics for pattern detection
 try:
     from ml_analytics import (
@@ -3346,11 +3365,35 @@ def main() -> None:
 		""",
         unsafe_allow_html=True,
     )
-    st.title("Heart Rate Variability Analysis")
-    st.caption("Developed by Dr Diego Malpica")
+    # Professional welcome header
+    if WELCOME_HEADER_AVAILABLE:
+        render_welcome_header()
+    else:
+        st.title("🧬 Physiological Laboratory")
+        st.caption("Dr. Diego L. Malpica, MD — Aerospace Medicine Specialist")
+        st.caption("Contributing to AsterPhysiology Research Initiative")
 
     # Standard RR file uploads
     uploads = _upload_section()
+    
+    # Enhanced device imports (Polar, Garmin, etc.)
+    if DEVICE_IMPORTS_AVAILABLE:
+        imported_devices = render_all_device_imports()
+        # Convert ImportedRRData to UploadedRR format for compatibility
+        for device_name, data in imported_devices.items():
+            if data.sample_count > 0:
+                start_ts = data.recording_start or pd.Timestamp.now(tz=timezone.utc)
+                df = _to_dataframe(
+                    f"{device_name}_{data.filename}",
+                    data.rr_intervals_ms,
+                    start_ts=start_ts,
+                )
+                uploads[f"{device_name}_{data.filename}"] = UploadedRR(
+                    name=f"{device_name}_{data.filename}",
+                    rr_ms=data.rr_intervals_ms,
+                    df=df,
+                    recording_start_utc=start_ts,
+                )
     
     # Device-specific imports (ActiGraph GT3X, Somfit Pro)
     device_uploads = _device_import_section()
