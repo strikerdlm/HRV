@@ -1124,3 +1124,317 @@ def build_significance_table_chart(
         "rows": rows,
     }
 
+
+# ---------------------------------------------------------------------------
+# Unified Physiological Timeline
+# ---------------------------------------------------------------------------
+
+
+def build_unified_physiology_timeline(
+    timestamps: list[datetime] | pd.DatetimeIndex,
+    metrics: dict[str, list[float] | np.ndarray],
+    metric_configs: dict[str, dict[str, Any]] | None = None,
+    title: str = "Unified Physiological Timeline",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build unified timeline showing multiple physiological metrics.
+
+    This creates a synchronized multi-axis chart showing HRV, HR, SpO2, stress,
+    and other metrics on aligned time axes for comprehensive analysis.
+
+    Args:
+        timestamps: Common time points for all metrics.
+        metrics: Dict mapping metric names to value arrays.
+            Example: {"RMSSD": [...], "HR": [...], "SpO2": [...]}
+        metric_configs: Optional per-metric configuration.
+            Example: {"RMSSD": {"unit": "ms", "color": "#2E86AB", "yAxisIndex": 0}}
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    options = _base_chart_options(title, subtitle="Time-synchronized physiology", config=config)
+
+    # Format timestamps
+    time_labels = [
+        t.strftime("%Y-%m-%d %H:%M") if isinstance(t, datetime) else str(t)
+        for t in timestamps
+    ]
+
+    # Default metric configurations
+    default_configs: dict[str, dict[str, Any]] = {
+        "RMSSD": {"unit": "ms", "color": COLORS["hrv"], "yAxisIndex": 0, "group": "HRV"},
+        "SDNN": {"unit": "ms", "color": "#5DADE2", "yAxisIndex": 0, "group": "HRV"},
+        "HR": {"unit": "bpm", "color": COLORS["danger"], "yAxisIndex": 1, "group": "Cardiac"},
+        "Mean HR": {"unit": "bpm", "color": COLORS["danger"], "yAxisIndex": 1, "group": "Cardiac"},
+        "SpO2": {"unit": "%", "color": "#9B59B6", "yAxisIndex": 2, "group": "Respiratory"},
+        "Stress": {"unit": "", "color": COLORS["warning"], "yAxisIndex": 3, "group": "Stress"},
+        "Body Battery": {"unit": "", "color": COLORS["success"], "yAxisIndex": 3, "group": "Energy"},
+        "Respiration": {"unit": "br/min", "color": "#1ABC9C", "yAxisIndex": 2, "group": "Respiratory"},
+        "LF/HF": {"unit": "", "color": COLORS["secondary"], "yAxisIndex": 0, "group": "HRV"},
+        "HF Power": {"unit": "ms²", "color": COLORS["ans_parasympathetic"], "yAxisIndex": 0, "group": "HRV"},
+        "LF Power": {"unit": "ms²", "color": COLORS["ans_sympathetic"], "yAxisIndex": 0, "group": "HRV"},
+    }
+
+    # Merge with provided configs
+    final_configs = default_configs.copy()
+    if metric_configs:
+        for k, v in metric_configs.items():
+            if k in final_configs:
+                final_configs[k].update(v)
+            else:
+                final_configs[k] = v
+
+    # X-axis configuration
+    options["xAxis"] = {
+        "type": "category",
+        "data": time_labels,
+        "axisLabel": {"rotate": 45, "fontSize": 10},
+        "boundaryGap": False,
+    }
+
+    # Build Y-axes based on metric groups
+    y_axes: list[dict[str, Any]] = []
+    used_indices: set[int] = set()
+
+    for metric_name in metrics:
+        cfg = final_configs.get(metric_name, {"unit": "", "yAxisIndex": 0})
+        idx = cfg.get("yAxisIndex", 0)
+        if idx not in used_indices:
+            used_indices.add(idx)
+            y_axes.append({
+                "type": "value",
+                "position": "left" if idx % 2 == 0 else "right",
+                "offset": (idx // 2) * 60,
+                "axisLine": {"show": True, "lineStyle": {"color": cfg.get("color", "#333")}},
+                "axisLabel": {"formatter": f"{{value}} {cfg.get('unit', '')}"},
+                "splitLine": {"show": idx == 0},
+            })
+
+    # Sort y-axes by index
+    y_axes_sorted = sorted(enumerate(y_axes), key=lambda x: list(used_indices)[x[0]] if x[0] < len(used_indices) else 999)
+    options["yAxis"] = [ya for _, ya in y_axes_sorted] if y_axes else [{"type": "value"}]
+
+    # Build series
+    series: list[dict[str, Any]] = []
+    for metric_name, values in metrics.items():
+        cfg = final_configs.get(metric_name, {"color": "#333", "yAxisIndex": 0})
+        color = cfg.get("color", "#333")
+        y_idx = cfg.get("yAxisIndex", 0)
+
+        # Convert values to list and handle NaN
+        val_list = [float(v) if not np.isnan(v) else None for v in values]
+
+        series.append({
+            "name": metric_name,
+            "type": "line",
+            "data": val_list,
+            "yAxisIndex": min(y_idx, len(options["yAxis"]) - 1),
+            "smooth": True,
+            "lineStyle": {"color": color, "width": 2},
+            "itemStyle": {"color": color},
+            "symbol": "circle",
+            "symbolSize": 4,
+            "connectNulls": True,
+        })
+
+    options["series"] = series
+
+    # Legend
+    options["legend"] = {
+        "data": list(metrics.keys()),
+        "top": "5%",
+        "type": "scroll",
+    }
+
+    # Data zoom for interactivity
+    options["dataZoom"] = [
+        {"type": "inside", "xAxisIndex": 0},
+        {"type": "slider", "xAxisIndex": 0, "bottom": "5%"},
+    ]
+
+    # Grid adjustment
+    options["grid"] = {
+        "left": "15%",
+        "right": "15%",
+        "top": "20%",
+        "bottom": "20%",
+        "containLabel": True,
+    }
+
+    return options
+
+
+def build_physiology_correlation_matrix(
+    correlation_df: pd.DataFrame,
+    title: str = "Physiological Metrics Correlation Matrix",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build correlation matrix heatmap for physiological metrics.
+
+    Args:
+        correlation_df: Square correlation matrix DataFrame.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    variables = list(correlation_df.columns)
+    n_vars = len(variables)
+
+    # Build data array for heatmap
+    data = []
+    for i, row_name in enumerate(variables):
+        for j, col_name in enumerate(variables):
+            val = correlation_df.loc[row_name, col_name]
+            data.append([j, i, round(float(val), 3) if not np.isnan(val) else None])
+
+    options = _base_chart_options(title, config=config)
+
+    options["tooltip"] = {
+        "position": "top",
+        "formatter": "{c}",
+    }
+
+    options["xAxis"] = {
+        "type": "category",
+        "data": variables,
+        "splitArea": {"show": True},
+        "axisLabel": {"rotate": 45, "fontSize": 10},
+    }
+
+    options["yAxis"] = {
+        "type": "category",
+        "data": variables,
+        "splitArea": {"show": True},
+    }
+
+    options["visualMap"] = {
+        "min": -1,
+        "max": 1,
+        "calculable": True,
+        "orient": "horizontal",
+        "left": "center",
+        "bottom": "0%",
+        "inRange": {
+            "color": ["#D32F2F", "#FFCDD2", "#FFFFFF", "#C8E6C9", "#2E7D32"],
+        },
+    }
+
+    options["series"] = [{
+        "name": "Correlation",
+        "type": "heatmap",
+        "data": data,
+        "label": {"show": n_vars <= 10, "fontSize": 10},
+        "emphasis": {
+            "itemStyle": {"shadowBlur": 10, "shadowColor": "rgba(0, 0, 0, 0.5)"},
+        },
+    }]
+
+    options["grid"] = {
+        "left": "15%",
+        "right": "10%",
+        "top": "10%",
+        "bottom": "20%",
+        "containLabel": True,
+    }
+
+    return options
+
+
+def build_ml_pattern_chart(
+    timestamps: list[datetime] | pd.DatetimeIndex,
+    values: list[float] | np.ndarray,
+    anomaly_mask: list[bool] | np.ndarray,
+    trend_line: list[float] | np.ndarray | None = None,
+    change_points: list[int] | None = None,
+    title: str = "ML Pattern Detection",
+    metric_name: str = "Metric",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build chart showing ML-detected patterns, anomalies, and trends.
+
+    Args:
+        timestamps: Time points.
+        values: Metric values.
+        anomaly_mask: Boolean mask for anomalies.
+        trend_line: Optional fitted trend line.
+        change_points: Optional indices of change points.
+        title: Chart title.
+        metric_name: Name of the metric.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    options = _base_chart_options(title, subtitle="Anomalies, trends, and change points", config=config)
+
+    time_labels = [
+        t.strftime("%Y-%m-%d %H:%M") if isinstance(t, datetime) else str(t)
+        for t in timestamps
+    ]
+
+    options["xAxis"] = {
+        "type": "category",
+        "data": time_labels,
+        "axisLabel": {"rotate": 45, "fontSize": 10},
+    }
+
+    options["yAxis"] = {"type": "value", "name": metric_name}
+
+    # Main series
+    series: list[dict[str, Any]] = [{
+        "name": metric_name,
+        "type": "line",
+        "data": list(values),
+        "smooth": True,
+        "lineStyle": {"color": COLORS["primary"], "width": 2},
+        "itemStyle": {"color": COLORS["primary"]},
+    }]
+
+    # Anomaly markers
+    anomaly_indices = np.where(anomaly_mask)[0]
+    if len(anomaly_indices) > 0:
+        anomaly_data = [
+            {"value": [time_labels[i], float(values[i])], "symbol": "circle", "symbolSize": 12}
+            for i in anomaly_indices
+        ]
+        series.append({
+            "name": "Anomalies",
+            "type": "scatter",
+            "data": anomaly_data,
+            "itemStyle": {"color": COLORS["danger"]},
+            "symbolSize": 12,
+            "z": 10,
+        })
+
+    # Trend line
+    if trend_line is not None:
+        series.append({
+            "name": "Trend",
+            "type": "line",
+            "data": list(trend_line),
+            "smooth": True,
+            "lineStyle": {"color": COLORS["success"], "width": 2, "type": "dashed"},
+            "itemStyle": {"color": COLORS["success"]},
+            "symbol": "none",
+        })
+
+    # Change point markers
+    if change_points:
+        mark_lines = [{"xAxis": time_labels[cp]} for cp in change_points if cp < len(time_labels)]
+        if mark_lines:
+            series[0]["markLine"] = {
+                "data": mark_lines,
+                "lineStyle": {"color": COLORS["warning"], "type": "dashed", "width": 2},
+                "label": {"formatter": "Change Point"},
+            }
+
+    options["series"] = series
+    options["legend"] = {"data": [s["name"] for s in series], "top": "5%"}
+    options["dataZoom"] = [{"type": "inside"}, {"type": "slider", "bottom": "5%"}]
+
+    return options
+
