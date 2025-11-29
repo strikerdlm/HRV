@@ -444,6 +444,88 @@ Sleep quality, quantity, and staging are tightly coupled with HRV and autonomic 
 
 ---
 
+## Implemented Features (Nov 2025)
+
+### Comprehensive Gauge System (`app/gauge_builder.py`)
+The app now includes a unified gauge visualization system with 30+ metrics across all HRV domains:
+
+| Domain | Metrics |
+|--------|---------|
+| **Time-domain** | SDNN, RMSSD, pNN50, Mean HR, Mean NN |
+| **Frequency-domain** | LF/HF ratio, HF power, LF power, Total power, HF nu, LF nu |
+| **Nonlinear** | SD1, SD2, DFA α1, DFA α2 |
+| **Entropy** | Sample Entropy, Approximate Entropy |
+| **Fragmentation** | PIP, IALS, W3 |
+| **Autonomic indices** | Parasympathetic index, Sympathetic index, ANS balance, Stress index |
+| **Sleep** | Sleep efficiency, TST, WASO, SOL |
+
+Each gauge uses:
+- Modern two-ring design with lowered center detail
+- Color-coded zones (green/yellow/red) based on published clinical thresholds
+- Reference bands from peer-reviewed normative data (Nunan 2010, Shaffer 2017, PROOF-AF 2025)
+
+### AI-Powered Interpretation (`app/gpt_interpretation.py`)
+The GPT interpretation module now features:
+- **Multi-model fallback**: GPT-5.1 → GPT-4o → GPT-4-turbo → GPT-3.5-turbo
+- **Robust error handling**: Automatic retries with exponential backoff
+- **Rate limiting**: Respects API limits with graceful degradation
+- **Local fallback**: Rule-based interpretation when API unavailable
+- **Confidence scoring**: Reports model used and confidence level
+
+### Publication-Ready Exports (`app/publication_export.py`)
+Export utilities for Q1 journal submissions:
+- **Statistical summaries**: Mean ± SD, Median [IQR], 95% CI (APA 7th edition format)
+- **Effect size calculations**: Cohen's d, Hedges' g with interpretation
+- **Correlation matrices**: Pearson r with p-values and significance markers
+- **Normality testing**: Shapiro-Wilk with skewness/kurtosis
+- **LaTeX table generation**: Publication-ready table code
+- **Reproducibility metadata**: Software versions, parameters, data hashes
+
+### ML Analytics (`app/ml_analytics.py`)
+Machine learning features for advanced analysis:
+
+**Anomaly Detection**:
+- Z-score method (parametric)
+- IQR method (non-parametric)
+- MAD method (robust to outliers)
+- Isolation Forest (multivariate)
+- Local Outlier Factor (density-based)
+
+**Trend Analysis**:
+- Linear trend detection with significance testing
+- Change point detection using PELT-like algorithm
+- Segment classification with per-segment statistics
+- Rolling statistics (mean, std, min, max)
+
+**Predictive Modeling**:
+- Feature importance ranking (correlation-based)
+- Readiness prediction from historical data
+- HRV state classification (optimal/normal/suboptimal/concerning)
+
+### Heart Rate Fragmentation (`app/hrv_fragmentation.py`)
+Complete HRF metrics per PROOF-AF study methodology:
+- PIP, PIP_H, PIP_S (inflection point percentages)
+- W0–W3 (word distributions)
+- IALS (Inverse Average Length of Segments)
+- PSS, PAS (Short/Alternating Segment percentages)
+
+### Sleep Metrics (`app/sleep_metrics.py`)
+Sleep analysis from actigraphy/wearable data:
+- TST, TIB, Sleep Efficiency
+- SOL, WASO, Number of Awakenings
+- Sleep stage percentages (N1, N2, N3, REM)
+- Quality interpretation based on clinical thresholds
+
+### Garmin Integration (`app/garmin_import.py`)
+Support for Garmin Vivosmart 5 and compatible devices:
+- Authentication via `garminconnect` library
+- Fetch sleep, HRV, HR, and stress data
+- Parse wellness export ZIP files
+- Parse individual FIT files
+- Quality checks and timestamp validation
+
+---
+
 ## Notes on App Implementation
 
 - QC heuristics are transparent and bounded; they are not a substitute for full ECG beat annotation or clinical-grade editing. For high-stakes analyses, consider manual review.
@@ -451,5 +533,7 @@ Sleep quality, quantity, and staging are tightly coupled with HRV and autonomic 
 - Entropy defaults (m=2, r=0.2·SD) follow common practice for short-term HRV but should be adjusted for specific study aims and lengths when needed.
 - Deviation detection relies on robust statistics within the current session. Review flagged windows alongside qualitative notes rather than treating them as automated diagnoses.
 - Readiness scoring mirrors Kubios percentile categories for familiarity but should complement—never replace—clinical evaluation or longitudinal decision-making.
+- AI interpretation uses GPT models when available; local rule-based fallback ensures functionality without API access.
+- Publication exports follow APA 7th edition guidelines and include all statistical details required for peer review.
 
 
