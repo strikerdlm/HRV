@@ -13,7 +13,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 
-__all__ = ["cosinor", "cosinor_phase", "cosinor_goals"]
+__all__ = ["cosinor", "cosinor_phase", "cosinor_goals", "cosinor_amplitude", "cosinor_fit"]
 
 
 def cosinor(
