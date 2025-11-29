@@ -28,16 +28,38 @@ import numpy as np
 import streamlit as st
 from numpy.typing import NDArray
 
-# Try to import circadian module components from app.circadian
+# Try to import circadian module components - use multiple import strategies for portability
 CIRCADIAN_IMPORT_ERROR: Optional[str] = None
+CIRCADIAN_AVAILABLE = False
+
+# Strategy 1: Try relative import (works when run as part of app package)
 try:
-    from app.circadian.lights import LightSchedule
-    from app.circadian.models import Forger99, Hannay19, Hannay19TP, Jewett99
-    from app.circadian.metrics import esri
+    from .circadian.lights import LightSchedule
+    from .circadian.models import Forger99, Hannay19, Hannay19TP, Jewett99
+    from .circadian.metrics import esri
     CIRCADIAN_AVAILABLE = True
-except Exception as _circadian_err:
-    CIRCADIAN_AVAILABLE = False
-    CIRCADIAN_IMPORT_ERROR = f"{type(_circadian_err).__name__}: {_circadian_err}"
+except ImportError:
+    pass
+
+# Strategy 2: Try absolute import (works when run from project root)
+if not CIRCADIAN_AVAILABLE:
+    try:
+        from app.circadian.lights import LightSchedule
+        from app.circadian.models import Forger99, Hannay19, Hannay19TP, Jewett99
+        from app.circadian.metrics import esri
+        CIRCADIAN_AVAILABLE = True
+    except ImportError:
+        pass
+
+# Strategy 3: Try direct import (works when circadian is in sys.path)
+if not CIRCADIAN_AVAILABLE:
+    try:
+        from circadian.lights import LightSchedule
+        from circadian.models import Forger99, Hannay19, Hannay19TP, Jewett99
+        from circadian.metrics import esri
+        CIRCADIAN_AVAILABLE = True
+    except Exception as _circadian_err:
+        CIRCADIAN_IMPORT_ERROR = f"{type(_circadian_err).__name__}: {_circadian_err}"
 
 # Color scheme
 PRIMARY_COLOR = "#667eea"
