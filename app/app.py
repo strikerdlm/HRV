@@ -3433,7 +3433,11 @@ def main() -> None:
         # Convert ImportedRRData to UploadedRR format for compatibility
         for device_name, data in imported_devices.items():
             if data.sample_count > 0:
-                start_ts = data.recording_start or pd.Timestamp.now(tz=timezone.utc)
+                # Convert datetime to pd.Timestamp if needed
+                if data.recording_start is not None:
+                    start_ts = pd.Timestamp(data.recording_start)
+                else:
+                    start_ts = pd.Timestamp.now(tz=timezone.utc)
                 df = _to_dataframe(
                     device_name,
                     data.rr_intervals_ms,
