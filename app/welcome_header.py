@@ -12,7 +12,7 @@ from __future__ import annotations
 import streamlit as st
 
 # Application metadata
-APP_VERSION = "1.5.0"
+APP_VERSION = "1.6.1"
 GITHUB_REPO = "https://github.com/strikerdlm/HRV"
 
 
