@@ -8,7 +8,7 @@ beautifulsoup4>=4.12,<5
 openai>=1.55,<2
 
 # Optional: ActiGraph GT3X support
-# pygt3x>=0.4  # Uncomment for ActiGraph GT3X file support
+pygt3x>=0.4  # Uncomment for ActiGraph GT3X file support
 
 # Optional: Somfit Pro EDF support
-# pyedflib>=0.1.30  # Uncomment for EDF file support (Somfit, PSG)
+pyedflib>=0.1.30  # Uncomment for EDF file support (Somfit, PSG)
