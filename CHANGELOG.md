@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.1] - 2025-11-29
+
+### Added
+- **Complete Circadian Module Integration**: All circadian files now in `app/circadian/`
+  - **phasetools.py**: Cosinor analysis for phase extraction from time series data
+  - **prc.py**: Phase Response Curves (PRC), Intensity Response Curves (IRC), Dosage Response Curves (DRC)
+  - **sleep.py**: Two-Process Model of sleep regulation with clustering algorithms
+  - **synthetic_data.py**: Generate synthetic wearable data from light schedules
+  - **readers.py**: Actiwatch and generic wearable data loading with timestamp alignment
+  - **plots.py**: Actogram visualization and stroboscopic plots
+- **Removed Future_integrations folder**: All models fully integrated into main app
+
+### Changed
+- Circadian module version updated to 1.0.3
+- All circadian imports now use `app.circadian.*` namespace
+- Cross-platform compatibility verified for Windows and Linux
+
+---
+
 ## [1.6.0] - 2025-11-29
 
 ### Added
