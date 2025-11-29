@@ -220,6 +220,12 @@ plots_output/
 *.jpg
 *.pdf
 
+# User data directory (contains sensitive physiological data)
+data/
+
+# Downloaded papers
+downloads/
+
 # OS specific
 .DS_Store
 Thumbs.db
