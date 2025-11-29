@@ -22,6 +22,7 @@ Citation:
 
 __version__ = "1.0.2"
 
+# Core model classes
 from .models import (
     CircadianModel,
     DynamicalTrajectory,
@@ -30,30 +31,12 @@ from .models import (
     Hannay19TP,
     Jewett99,
 )
-from .lights import LightSchedule
-from .metrics import esri
-from .plots import Actogram
 
-__all__ = [
-    "CircadianModel",
-    "DynamicalTrajectory",
-    "Forger99",
-    "Hannay19",
-    "Hannay19TP",
-    "Jewett99",
-    "LightSchedule",
-    "esri",
-    "Actogram",
-] esri
-from .plots import Actogram, plot_actogram, plot_mae, plot_torus, Stroboscopic
-from .readers import load_csv, load_json, load_actiwatch, WearableData
-from .utils import (
-    phase_difference,
-    amplitude_percent_change,
-    sleep_midpoint_and_duration,
-    phase_ic_guess,
-    phase_coherence,
-)
+# Light schedule utilities
+from .lights import LightSchedule
+
+# Metrics and analysis
+from .metrics import esri, circadian_phase_coherence, phase_deviation, social_jetlag_index
 
 __all__ = [
     # Version
@@ -69,22 +52,7 @@ __all__ = [
     "LightSchedule",
     # Metrics
     "esri",
-    # Plots
-    "Actogram",
-    "plot_actogram",
-    "plot_mae",
-    "plot_torus",
-    "Stroboscopic",
-    # Readers
-    "load_csv",
-    "load_json",
-    "load_actiwatch",
-    "WearableData",
-    # Utils
-    "phase_difference",
-    "amplitude_percent_change",
-    "sleep_midpoint_and_duration",
-    "phase_ic_guess",
-    "phase_coherence",
+    "circadian_phase_coherence",
+    "phase_deviation",
+    "social_jetlag_index",
 ]
-
