@@ -566,9 +566,9 @@ def calculate_training_load(
     acute_sessions = [s for s in sessions if acute_start <= s.date <= target_date]
     chronic_sessions = [s for s in sessions if chronic_start <= s.date <= target_date]
     
-    # Calculate loads
-    acute_load = sum(s.trimp for s in acute_sessions)
-    chronic_load = sum(s.trimp for s in chronic_sessions) / (chronic_window / acute_window) if chronic_sessions else 0
+    # Calculate loads as daily averages for proper normalization
+    acute_load = sum(s.trimp for s in acute_sessions) / acute_window if acute_sessions else 0.0
+    chronic_load = sum(s.trimp for s in chronic_sessions) / chronic_window if chronic_sessions else 0.0
     
     # Acute:Chronic Workload Ratio
     acwr = acute_load / chronic_load if chronic_load > 0 else 1.0
