@@ -186,3 +186,176 @@ def render_sidebar_branding() -> None:
         """,
         unsafe_allow_html=True
     )
+
+
+def render_quick_access_grid(has_data: bool = False) -> None:
+    """
+    Render quick access grid for navigating to different analysis modules.
+    
+    Args:
+        has_data: Whether physiological data is loaded
+    """
+    st.markdown("### 🔬 Analysis Modules")
+    st.markdown("Select a tab above to explore each module. Modules marked with ✓ are available without data.")
+    
+    # Module definitions
+    modules = [
+        {"icon": "📊", "name": "Overview", "desc": "Summary statistics and key HRV metrics", "no_data": False, "color": "#667eea"},
+        {"icon": "📈", "name": "Time Series", "desc": "RR interval time-domain analysis", "no_data": False, "color": "#4ecdc4"},
+        {"icon": "🌊", "name": "Frequency", "desc": "Power spectral density (LF, HF, VLF)", "no_data": False, "color": "#ff6b6b"},
+        {"icon": "🔀", "name": "Nonlinear", "desc": "Poincaré, entropy, DFA analysis", "no_data": False, "color": "#f7b731"},
+        {"icon": "📉", "name": "Spectrogram", "desc": "Time-frequency analysis", "no_data": False, "color": "#a55eea"},
+        {"icon": "🪟", "name": "Windowed", "desc": "Segmented HRV analysis", "no_data": False, "color": "#26de81"},
+        {"icon": "☀️", "name": "Circadian", "desc": "Circadian rhythm simulation", "no_data": True, "color": "#fd9644"},
+        {"icon": "🌍", "name": "Space Weather", "desc": "Solar activity & correlations", "no_data": True, "color": "#9b59b6"},
+        {"icon": "😴", "name": "SAFTE Model", "desc": "Fatigue & performance prediction", "no_data": True, "color": "#3498db"},
+        {"icon": "📋", "name": "Population Norms", "desc": "Compare against reference values", "no_data": False, "color": "#1abc9c"},
+        {"icon": "🫀", "name": "Biofeedback", "desc": "Real-time coherence training", "no_data": True, "color": "#e74c3c"},
+        {"icon": "📄", "name": "Export", "desc": "Generate reports & export data", "no_data": False, "color": "#95a5a6"},
+    ]
+    
+    # Render in 4-column grid
+    cols = st.columns(4)
+    for i, mod in enumerate(modules):
+        with cols[i % 4]:
+            # Determine availability
+            available = mod["no_data"] or has_data
+            status = "✓" if available else "○"
+            status_color = "#90EE90" if available else "#666"
+            opacity = "1" if available else "0.6"
+            
+            st.markdown(
+                f"""
+                <div style="
+                    background: linear-gradient(135deg, {mod['color']}22 0%, {mod['color']}11 100%);
+                    border: 1px solid {mod['color']}44;
+                    border-radius: 10px;
+                    padding: 0.75rem;
+                    margin-bottom: 0.5rem;
+                    min-height: 95px;
+                    opacity: {opacity};
+                ">
+                    <div style="font-size: 1.4rem; margin-bottom: 0.2rem;">{mod['icon']}</div>
+                    <div style="color: {mod['color']}; font-weight: 600; font-size: 0.85rem;">
+                        {mod['name']} 
+                        <span style="color: {status_color}; font-size: 0.7rem;">{status}</span>
+                    </div>
+                    <div style="color: #888; font-size: 0.7rem; line-height: 1.3;">{mod['desc']}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+def render_data_status_panel(
+    has_rr_data: bool = False,
+    rr_count: int = 0,
+    has_profile: bool = False,
+    has_space_weather: bool = False,
+) -> None:
+    """
+    Render a data status panel showing what data is loaded.
+    
+    Args:
+        has_rr_data: Whether RR interval data is loaded
+        rr_count: Number of RR intervals
+        has_profile: Whether user profile is set
+        has_space_weather: Whether space weather data is fetched
+    """
+    if has_rr_data or has_profile or has_space_weather:
+        # Data loaded state
+        items = []
+        if has_rr_data:
+            items.append(f"🫀 RR Intervals: {rr_count:,}")
+        if has_profile:
+            items.append("👤 Profile Set")
+        if has_space_weather:
+            items.append("☀️ Space Weather")
+        
+        st.markdown(
+            f"""
+            <div style="
+                background: linear-gradient(135deg, #1a472a 0%, #2d5a3f 100%);
+                border: 1px solid rgba(46, 204, 113, 0.3);
+                border-radius: 12px;
+                padding: 1rem;
+                margin: 1rem 0;
+            ">
+                <div style="color: #2ecc71; font-weight: 600; margin-bottom: 0.5rem;">
+                    ✓ Data Loaded
+                </div>
+                <div style="color: #90EE90; font-size: 0.9rem;">
+                    {' | '.join(items)}
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        # No data state
+        st.markdown(
+            """
+            <div style="
+                background: linear-gradient(135deg, #4a3728 0%, #5a4838 100%);
+                border: 1px solid rgba(243, 156, 18, 0.3);
+                border-radius: 12px;
+                padding: 1rem;
+                margin: 1rem 0;
+            ">
+                <div style="color: #f39c12; font-weight: 600; margin-bottom: 0.5rem;">
+                    ⚠️ No Physiological Data Loaded
+                </div>
+                <div style="color: #FFB347; font-size: 0.9rem;">
+                    Use the sidebar to import RR interval data from your device (Polar, Garmin, ActiGraph) 
+                    or upload a text file. Some modules like Circadian and Space Weather work without data.
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
+def render_getting_started_guide() -> None:
+    """Render a getting started guide for new users."""
+    with st.expander("🚀 Getting Started Guide", expanded=False):
+        st.markdown(
+            """
+            ### Welcome to the Physiological Laboratory!
+            
+            This platform provides comprehensive tools for **Heart Rate Variability (HRV)** analysis, 
+            **circadian rhythm** modeling, **fatigue prediction**, and **space weather correlations**.
+            
+            #### Quick Start Steps:
+            
+            1. **📱 Import Data** (Sidebar)
+               - Select your device type (Polar H10, Garmin, ActiGraph, or generic file)
+               - Upload your RR interval or HRV data file
+               - Data will be automatically validated and cleaned
+            
+            2. **👤 Set Your Profile** (Optional but recommended)
+               - Enter your age and sex for accurate population comparisons
+               - Add clinical scale scores (ESS, KSS, PSQI) for fatigue correlation
+               - Profile data enhances interpretation accuracy
+            
+            3. **🔬 Explore Analysis Modules**
+               - **Time/Frequency/Nonlinear**: Core HRV analysis
+               - **Circadian**: Simulate circadian rhythms with different light schedules
+               - **Space Weather**: Explore correlations with solar activity
+               - **SAFTE**: Model fatigue and performance
+               - **Population Norms**: Compare your metrics to reference populations
+            
+            4. **📄 Export Results**
+               - Generate publication-ready reports
+               - Export data in multiple formats (CSV, JSON, PDF)
+            
+            #### Modules Available Without Data:
+            - ☀️ **Circadian Physiology** - Simulate circadian rhythms
+            - 🌍 **Space Weather** - View current solar activity
+            - 😴 **SAFTE Model** - Model fatigue scenarios
+            - ℹ️ **About** - Documentation and references
+            
+            #### Need Help?
+            - Check the **About** tab for documentation
+            - Visit our [GitHub repository](https://github.com/strikerdlm/HRV) for issues and updates
+            """
+        )
