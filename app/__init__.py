@@ -13,6 +13,7 @@ including:
 - Multi-day longitudinal tracking
 - Solar-physiology correlation analysis
 - Scientific publication-ready visualizations
+- SAFTE fatigue prediction and performance modeling
 """
 
 from __future__ import annotations
@@ -45,5 +46,8 @@ __all__ = [
     "multiday_tracker",
     # Solar-physiology correlation
     "solar_physiology_correlation",
+    # Fatigue prediction (SAFTE model)
+    "fatigue_integration",
+    "fatigue_calculator",
 ]
 
