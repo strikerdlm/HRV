@@ -1,5 +1,15 @@
 # HRV Analysis Suite — Space Weather Integration & Advanced Physiological Monitoring
 
+## Author
+
+**Dr. Diego Malpica, MD**  
+*Aerospace Medicine Specialist*  
+National University of Colombia  
+Physiology Instructor, Colombian Aerospace Force  
+Researcher
+
+---
+
 A comprehensive, research-grade Heart Rate Variability (HRV) analysis platform that integrates real-time space weather data from NOAA SWPC, NASA DONKI, and SpaceWeatherLive to explore solar-physiology correlations. Built for clinicians, researchers, and biohackers who need transparent, reproducible HRV metrics with publication-ready exports.
 
 ## 🚀 Quick Start
@@ -63,6 +73,8 @@ The app will open in your default browser at `http://localhost:8501`.
 | **Fatigue Prediction** | SAFTE biomathematical model for cognitive performance |
 | **HRV Biofeedback** | Real-time coherence training with paced breathing |
 | **Garmin Integration** | Import sleep, HRV, HR, stress, SpO2, respiration data |
+| **ActiGraph GT3X Import** | Activity counts, sleep/wake classification, accelerometer data |
+| **Somfit Pro Import** | EDF sleep studies, staging, SpO2, stage-specific HRV |
 | **AI Interpretation** | GPT-5.1 high-reasoning analysis with scientific citations |
 | **Publication Export** | APA 7th edition formatted reports, LaTeX tables, CSV/JSON data |
 
@@ -91,6 +103,18 @@ The app accepts text files with one RR interval per line in **milliseconds**:
 1. **Wellness Export ZIP**: Download from Garmin Connect → Account Settings → Export Wellness Data
 2. **FIT Files**: Export individual activities from Garmin Connect web
 3. **API Access**: Configure `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env`
+
+### ActiGraph GT3X Files
+
+1. **GT3X Binary**: Native format from ActiGraph devices (GT3X, GT3X+, GT9X Link)
+2. **AGD Database**: ActiLife processed epoch data
+3. **CSV Export**: Activity counts or raw acceleration from ActiLife
+
+### Somfit Pro Files
+
+1. **EDF/EDF+**: European Data Format from Compumedics Profusion Nexus360
+2. **XML Annotations**: Sleep staging scores from Profusion
+3. **CSV Export**: Summary data exports
 
 ### Sample Data Structure
 
@@ -330,6 +354,8 @@ HRV/
 │   ├── gpt_interpretation.py       # GPT-5.1 AI interpretation
 │   ├── noaa_space.py               # NOAA space weather data
 │   ├── garmin_import.py            # Garmin data import
+│   ├── actigraph_import.py         # ActiGraph GT3X/GT3X+ import
+│   ├── somfit_import.py            # Compumedics Somfit/Somfit Pro import
 │   ├── fatigue_integration.py      # SAFTE fatigue model
 │   ├── realtime_hrv.py             # Real-time HRV streaming
 │   ├── ml_analytics.py             # ML anomaly/trend detection
