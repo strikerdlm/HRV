@@ -3012,7 +3012,69 @@ def main() -> None:
 
     uploads = _upload_section()
     if not uploads:
-        st.info("Upload one or more RR .txt files to begin.")
+        st.info("👋 **Welcome to the HRV Analysis Suite!**")
+        st.markdown("""
+        ### Getting Started
+        
+        To begin your analysis, please upload your RR interval data files using the sidebar.
+        
+        #### Supported File Formats:
+        - **Polar H10/H9 RR Export** (.txt) - One RR interval (ms) per line
+        - **Kubios HRV Export** (.txt) - Standard RR interval format
+        - **Elite HRV Export** (.txt) - Compatible RR format
+        
+        #### How to Export Your Data:
+        
+        1. **From Polar Sensor Logger App:**
+           - Record a session with your Polar H10/H9 chest strap
+           - Export the RR data as a .txt file
+           - Upload the file here
+        
+        2. **From Garmin Devices (Vivosmart 5, etc.):**
+           - Export your wellness data from Garmin Connect
+           - Download the ZIP file from Account Settings → Export Your Data
+           - Extract and upload the relevant .txt files
+        
+        3. **From Other HRV Apps:**
+           - Export RR intervals in milliseconds
+           - Ensure one value per line in the .txt file
+        
+        #### File Naming Convention (Recommended):
+        Name your files with the recording timestamp for automatic time alignment:
+        ```
+        YYYY-MM-DD HH-MM-SS.txt
+        Example: 2025-01-15 08-30-00.txt
+        ```
+        
+        #### What You'll Get:
+        - 📊 **Time-domain metrics** (SDNN, RMSSD, pNN50)
+        - 📈 **Frequency-domain analysis** (LF, HF, LF/HF ratio)
+        - 🔬 **Nonlinear analysis** (Poincaré, DFA, Entropy)
+        - 🌡️ **Autonomic function tests** (Valsalva, deep breathing)
+        - 🌍 **Space weather correlation** (Solar activity vs HRV)
+        - 🤖 **AI-powered interpretation** (GPT-5.1 analysis)
+        - 📑 **Publication-ready exports** (Tables, statistics)
+        
+        ---
+        
+        💡 **Tip:** For best results, record 5-minute sessions in a relaxed, seated position 
+        at the same time each day (e.g., morning upon waking).
+        """)
+        
+        # Show sample data format
+        with st.expander("📄 Sample RR Data Format"):
+            st.code("""
+# Example RR interval file content (one value per line in milliseconds):
+823
+845
+812
+867
+834
+821
+856
+...
+            """, language="text")
+        
         return
 
     # Controls
@@ -3115,9 +3177,9 @@ def main() -> None:
     st.sidebar.markdown("---")
     st.sidebar.subheader("AI interpretation")
     gpt_high_enabled = st.sidebar.toggle(
-        "gpt-5-high interpretation",
+        "GPT-5.1 High Reasoning Interpretation",
         value=False,
-        help="Send analysis outputs to OpenAI GPT-5 (high reasoning) to obtain a doctoral-level markdown report. Requires OPENAI_API_KEY in the .env file.",
+        help="Send analysis outputs to OpenAI GPT-5.1 with high reasoning effort to obtain a doctoral-level markdown report. Requires OPENAI_API_KEY in the .env file.",
     )
 
     st.sidebar.markdown("---")
@@ -3533,6 +3595,9 @@ def main() -> None:
         ]
     )
     with tab_overview:
+        st.markdown("### 📊 Analysis Overview")
+        st.markdown("*Summary of uploaded datasets and computed metrics*")
+        
         if meta_rows:
             st.dataframe(pd.DataFrame(meta_rows))
         # Deviation summary per dataset
@@ -3648,6 +3713,9 @@ def main() -> None:
         else:
             st.info("No windowed metrics to display.")
     with tab_metrics:
+        st.markdown("### 📋 Comprehensive Metrics Table")
+        st.markdown("*All computed HRV metrics across time, frequency, nonlinear, and advanced domains*")
+        
         if not multi_results_df.empty:
             st.dataframe(multi_results_df)
             novel_columns = [
@@ -3693,10 +3761,41 @@ def main() -> None:
         else:
             st.info("No metrics to display.")
     with tab_ans:
-        st.subheader("Autonomic Function Tests")
+        st.markdown("### 🫀 Autonomic Function Tests")
+        st.markdown("*Clinical-grade autonomic reflex assessments*")
+        
+        with st.expander("📖 **Understanding Autonomic Tests**", expanded=False):
+            st.markdown("""
+**These bedside tests evaluate autonomic nervous system integrity:**
+
+**1. Valsalva Maneuver Ratio**
+- **Protocol:** Exhale against closed glottis for 15s (strain), then release
+- **Physiology:** Tests baroreflex-mediated vagal response
+- **Normal:** Ratio ≥1.2 (longest RR after release ÷ shortest RR during strain)
+- **Abnormal:** <1.2 suggests impaired parasympathetic response
+
+**2. Deep Breathing (E:I Ratio)**
+- **Protocol:** 6 breaths/min (5s inhale, 5s exhale) for 1 minute
+- **Physiology:** Maximal respiratory sinus arrhythmia
+- **Normal:** E:I difference ≥15 bpm (young adults), ≥10 bpm (elderly)
+- **Abnormal:** Reduced difference indicates vagal impairment
+
+**3. 30:15 Ratio (Orthostatic Test)**
+- **Protocol:** Stand from supine position
+- **Physiology:** Tests initial tachycardia and subsequent bradycardia
+- **Normal:** Ratio ≥1.04 (RR at beat 30 ÷ RR at beat 15)
+- **Abnormal:** <1.04 suggests impaired baroreceptor function
+
+**Clinical Applications:**
+- Diabetic autonomic neuropathy screening
+- Parkinson's disease assessment
+- Postural orthostatic tachycardia syndrome (POTS)
+- Medication effects on autonomic function
+            """)
+        
         st.markdown(
-            "Configure time windows relative to the recording start to derive classical autonomic function ratios. "
-            "Windows are specified in seconds as `start end` (e.g., `15 25`).")
+            "*Configure time windows relative to recording start. "
+            "Windows specified in seconds as `start end` (e.g., `15 25`).*")
         if not datasets:
             st.info("Upload a dataset to compute autonomic function metrics.")
         else:
@@ -3864,10 +3963,38 @@ def main() -> None:
                             f"{ratio_30_15_result['rr_30_max_ms']:.1f}",
                         )
     with tab_readiness:
+        st.markdown("### 🏃 Readiness & Recovery Assessment")
+        st.markdown("*Parasympathetic index compared to your personal baseline*")
+        
+        with st.expander("📖 **Understanding Readiness Scoring**", expanded=False):
+            st.markdown("""
+**What is Readiness?**
+Readiness reflects your autonomic nervous system's recovery state, primarily driven by **parasympathetic (vagal) activity**. Higher vagal tone generally indicates better recovery and adaptation capacity.
+
+**The Parasympathetic Index (PNS) combines:**
+- **HF Power** — Respiratory-linked vagal activity
+- **RMSSD** — Beat-to-beat vagal modulation
+- **pNN50** — High-frequency variability percentage
+- **SD1** — Poincaré short-term dispersion
+
+**Readiness Categories (Kubios-style):**
+| Category | Percentile | Interpretation |
+|----------|------------|----------------|
+| 🔴 **VERY LOW** | <10th | Poor recovery; consider rest |
+| 🟠 **LOW** | 10–30th | Below baseline; moderate activity |
+| 🟢 **NORMAL** | 30–70th | Typical state; proceed as planned |
+| 🔵 **HIGH** | >70th | Excellent recovery; ready for intensity |
+
+**Best Practices:**
+- Record at the **same time daily** (morning, upon waking)
+- Use **consistent posture** (seated or supine)
+- Allow **5+ minutes** of quiet rest before recording
+- Build baseline from **≥7 comparable sessions**
+            """)
+        
         st.markdown(
-            "**Readiness index (PNS percentile)**  \n"
-            "Compares the current parasympathetic index with your historical baseline. "
-            "Categories follow the Kubios readiness definitions (VERY LOW, LOW, NORMAL, HIGH).")
+            "*Compares current parasympathetic index with your historical baseline. "
+            "Categories follow Kubios readiness definitions.*")
         if not pns_mapping:
             st.info(
                 "Upload multiple sessions with successful metric computation to enable readiness analysis."
@@ -4044,25 +4171,154 @@ def main() -> None:
                                 "Baseline uses the selected historical sessions (last-in-first-out capped at the chosen window). "
                                 "Consistent daily morning recordings (1–5 minutes, relaxed breathing) improve reliability.")
     with tab_gauges:
+        st.markdown("### 🎯 HRV Metric Gauges")
+        st.markdown("*Visual comparison against population reference ranges*")
+        
         if skip_gauges:
             st.info("Gauges disabled (Performance & display).")
         else:
             _render_normogram_gauges(multi_results_df)
-        st.markdown(
-            "**Scientific notes (normogram gauges)**  \n"
-            "- Gauges compare observed values to short-term (∼5 min) population references (mean ± SD).  \n"
-            "- Cohort, age, posture, and breathing materially shift distributions; use within-subject trends for decisions.  \n"
+        
+        with st.expander("📖 **Understanding the Gauges**", expanded=False):
+            st.markdown("""
+**Color Zones:**
+- 🟢 **Green zone:** Within normal range (mean ± 1 SD)
+- 🟡 **Yellow zone:** Borderline (1-2 SD from mean)
+- 🔴 **Red zone:** Outside typical range (>2 SD from mean)
+
+**Key Metrics Displayed:**
+| Gauge | What it measures | Optimal direction |
+|-------|------------------|-------------------|
+| **SDNN** | Total variability | ↑ Higher is generally better |
+| **RMSSD** | Vagal (parasympathetic) tone | ↑ Higher indicates good recovery |
+| **LF/HF** | Autonomic "balance" | → Context-dependent (breathing matters) |
+| **HF Power** | Parasympathetic activity | ↑ Higher during rest/recovery |
+
+⚠️ **Important:** Reference ranges are population averages. Your personal baseline may differ. Track **trends over time** rather than single readings.
+            """)
+        
+        st.caption(
             "References: [Nunan et al., 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/); "
             "[Sammito & Böckelmann, 2016](https://pubmed.ncbi.nlm.nih.gov/27986557/).")
     with tab_science:
-        st.markdown(
-            "- **Time-domain (SDNN, RMSSD)**: Short-term SDNN (~5 min) ≈ 50±16 ms; RMSSD ≈ 42±15 ms in healthy adults; both decrease with age. RMSSD reflects vagal (parasympathetic) activity.\n"
-            "- **Frequency-domain (LF/HF)**: LF (0.04–0.15 Hz), HF (0.15–0.40 Hz). LF/HF (~2.8±2.6) has limitations as a sympathovagal balance index; interpret with breathing context.\n"
-            "- **Nonlinear (Poincaré, DFA)**: SD1≈RMSSD; SD2 relates to longer-term variability. DFA α1 in 0.75–1.25 is typical at rest.\n\n"
-            "Key references: "
-            "[Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf), "
-            "[Shaffer & Ginsberg 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full), "
-            "[Nunan et al. 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/).")
+        st.markdown("## 📚 Scientific Reference Guide")
+        st.markdown("*Comprehensive explanations of HRV metrics and their physiological significance*")
+        
+        # Time-domain metrics
+        with st.expander("🕐 **Time-Domain Metrics** — Beat-to-beat variability measures", expanded=True):
+            st.markdown("""
+| Metric | Definition | Physiology | Clinical Interpretation |
+|--------|------------|------------|------------------------|
+| **SDNN** | Standard deviation of all NN intervals | Reflects **total variability** from all cyclic components | Normal: 50±16 ms (5-min). ↓ with age, stress, disease. Overall autonomic health marker |
+| **RMSSD** | Root mean square of successive differences | **Vagal (parasympathetic) modulation** — rapid beat-to-beat changes | Normal: 42±15 ms. ↑ = good vagal tone. ↓ = stress, fatigue, illness |
+| **pNN50** | % of successive differences >50 ms | High-frequency vagal activity | Normal: 5-25%. ↑ = strong vagal influence. Very sensitive to artifacts |
+| **Mean HR** | Average heart rate (bpm) | Sympathovagal balance at sinoatrial node | 60-100 bpm normal. <60 = bradycardia (may be athletic). >100 = tachycardia |
+| **CVNN** | Coefficient of variation (SDNN/Mean NN) | Normalized variability independent of HR | Unitless. Useful for comparing across different heart rates |
+
+**Key insight:** RMSSD is the most reliable short-term vagal marker. Use it for recovery monitoring and stress assessment.
+            """)
+        
+        # Frequency-domain metrics
+        with st.expander("📊 **Frequency-Domain Metrics** — Spectral power analysis", expanded=False):
+            st.markdown("""
+| Metric | Frequency Band | Physiology | Clinical Interpretation |
+|--------|---------------|------------|------------------------|
+| **VLF** | 0.0033–0.04 Hz | Thermoregulation, RAAS, slow metabolic rhythms | Requires long recordings (>5 min). ↓ predicts mortality in some cohorts |
+| **LF Power** | 0.04–0.15 Hz | **Baroreflex activity** + mixed sympathetic/vagal | NOT purely sympathetic! Reflects blood pressure regulation |
+| **HF Power** | 0.15–0.40 Hz | **Respiratory sinus arrhythmia** — pure vagal | ↑ with slow deep breathing. Best parasympathetic marker in frequency domain |
+| **LF/HF Ratio** | LF ÷ HF | Historically "sympathovagal balance" | ⚠️ **Controversial!** Highly breathing-dependent. Use with caution |
+| **LF nu / HF nu** | Normalized units | Relative contributions within LF+HF | Useful for within-subject comparisons; less affected by total power |
+
+**Critical note:** LF/HF ratio is NOT a reliable "stress index." Slow breathing (6/min) dramatically increases LF without sympathetic activation.
+            """)
+        
+        # Nonlinear metrics
+        with st.expander("🔄 **Nonlinear Metrics** — Complexity and fractal dynamics", expanded=False):
+            st.markdown("""
+| Metric | Definition | Physiology | Clinical Interpretation |
+|--------|------------|------------|------------------------|
+| **SD1** | Poincaré plot short-axis | Short-term vagal modulation (≈ RMSSD/√2) | Reflects beat-to-beat parasympathetic control |
+| **SD2** | Poincaré plot long-axis | Long-term variability + sympathetic influences | Combined autonomic and non-autonomic factors |
+| **SD1/SD2** | Ratio of axes | Balance of short vs long-term dynamics | ↓ ratio may indicate reduced vagal relative to overall variability |
+| **DFA α1** | Detrended fluctuation (4-16 beats) | **Fractal correlation** in short-term | 0.75–1.25 = healthy. <0.75 = uncorrelated (exercise). >1.25 = rigid control |
+| **DFA α2** | Detrended fluctuation (16-64 beats) | Long-range fractal correlations | Less studied; reflects longer-term regulatory dynamics |
+| **SampEn** | Sample entropy | **Complexity/irregularity** of RR series | ↓ entropy = more regular (rigid, less adaptive). ↑ = healthy complexity |
+| **ApEn** | Approximate entropy | Similar to SampEn, less bias-corrected | Sensitive to data length and parameters |
+
+**Key insight:** DFA α1 near 1.0 indicates healthy, fractal-like heart rate dynamics. Loss of complexity (↓ entropy, extreme α1) is associated with disease and aging.
+            """)
+        
+        # Heart Rate Fragmentation
+        with st.expander("⚡ **Heart Rate Fragmentation (HRF)** — Arrhythmia risk markers", expanded=False):
+            st.markdown("""
+| Metric | Definition | Physiology | Clinical Interpretation |
+|--------|------------|------------|------------------------|
+| **PIP** | % of inflection points | Frequency of direction changes | ↑ PIP = more fragmented rhythm. PROOF-AF: predicts atrial fibrillation |
+| **PIP_H / PIP_S** | Hard/soft inflection points | Abrupt vs gradual direction changes | Distinguishes sudden vs smooth rhythm alterations |
+| **IALS** | Inverse average length of segments | How often acceleration/deceleration runs are interrupted | ↑ IALS = shorter runs = more fragmentation |
+| **W0–W3** | Word distributions (4-beat patterns) | Count of patterns by inflection count | ↑ W3 = highly fragmented. ↑ W0 = very regular |
+| **PSS / PAS** | Short/alternating segment % | Rhythm pattern classification | Elevated values indicate ANS disorganization |
+
+**Research evidence:** The PROOF-AF study (n=1011, 18-year follow-up) found PIP and reduced DFA α1 independently predicted atrial fibrillation in adults ≥65.
+            """)
+        
+        # Autonomic Function Tests
+        with st.expander("🫀 **Autonomic Function Tests** — Clinical assessment ratios", expanded=False):
+            st.markdown("""
+| Test | Protocol | Normal Values | Clinical Significance |
+|------|----------|---------------|----------------------|
+| **Valsalva Ratio** | Strain for 15s → release | ≥1.2 (age-dependent) | ↓ ratio = impaired parasympathetic response. Sensitive to autonomic neuropathy |
+| **Deep Breathing E:I** | 6 breaths/min, 5s in/5s out | E:I diff ≥15 bpm (young) | ↓ response = reduced vagal modulation. Declines with age |
+| **30:15 Ratio** | Stand from supine | ≥1.04 | ↓ ratio = impaired reflex tachycardia. Tests baroreceptor function |
+
+**Clinical context:** These bedside tests are gold standards for diagnosing autonomic neuropathy (diabetic, Parkinson's, etc.). Requires standardized protocols.
+            """)
+        
+        # Solar-Physiology correlations
+        with st.expander("🌞 **Solar Activity & HRV** — Space weather correlations", expanded=False):
+            st.markdown("""
+| Solar Metric | Definition | Physiological Link | Evidence Level |
+|--------------|------------|-------------------|----------------|
+| **Kp Index** | Global geomagnetic disturbance (0-9) | ↑ Kp → ↓ HRV, ↑ HR | **Moderate** — Multiple cohort studies show reduced vagal tone during storms |
+| **Dst Index** | Ring current intensity (nT) | More negative = stronger storm | **Moderate** — Correlates with Kp; similar HRV associations |
+| **Solar Wind Speed** | km/s from ACE/DSCOVR | Drives magnetospheric coupling | **Emerging** — Higher speeds associated with ↑ HR, stress responses |
+| **IMF Bz** | Interplanetary magnetic field z-component | Southward (<0) enhances coupling | **Emerging** — Precedes geomagnetic activity by hours |
+| **F10.7 Flux** | 10.7 cm solar radio emission (sfu) | Solar cycle proxy | **Weak** — Long-term associations; confounded by seasonality |
+
+**Key studies:**
+- Vieira et al. 2022: Geomagnetic disturbances reduced HRV in older men (Normative Aging Study)
+- Alabdulgader et al. 2018: Long-term HR/HRV changes with solar activity (Sci Rep)
+- Gaisenok et al. 2025: Systematic review — MI/stroke risk ↑ during storms (RR ≈1.3–1.6)
+
+⚠️ **Caution:** Effect sizes are small. Always control for time-of-day, season, temperature, and behavior. Treat as exploratory.
+            """)
+        
+        # Reference values table
+        with st.expander("📋 **Reference Values** — Short-term (5-min) healthy adult norms", expanded=False):
+            st.markdown("""
+| Metric | Mean ± SD | Typical Range | Age Effect | Source |
+|--------|-----------|---------------|------------|--------|
+| SDNN | 50 ± 16 ms | 32–93 ms | ↓ with age | Nunan 2010 |
+| RMSSD | 42 ± 15 ms | 19–75 ms | ↓ with age | Nunan 2010 |
+| pNN50 | 15 ± 12% | 1–50% | ↓ with age | Shaffer 2017 |
+| LF Power | 519 ± 291 ms² | 193–1009 ms² | ↓ with age | Nunan 2010 |
+| HF Power | 657 ± 777 ms² | 83–3630 ms² | ↓ with age | Nunan 2010 |
+| LF/HF | 2.8 ± 2.6 | 0.5–11.6 | Variable | Nunan 2010 |
+| DFA α1 | 1.0 ± 0.15 | 0.75–1.25 | Slight ↓ | Shaffer 2017 |
+| SampEn | 1.5 ± 0.3 | 0.8–2.2 | ↓ with age | Literature |
+
+**Important:** These are population averages. Individual baselines vary widely. **Always prioritize within-subject trends over absolute comparisons.**
+            """)
+        
+        st.markdown("---")
+        st.markdown("""
+**📖 Key References:**
+- [Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf) — Original HRV standards
+- [Shaffer & Ginsberg 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full) — Comprehensive HRV overview
+- [Nunan et al. 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/) — Short-term normative values
+- [Laborde et al. 2017](https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2017.00213/full) — HRV guidelines for psychophysiology
+- [Quigley et al. 2024](https://onlinelibrary.wiley.com/doi/10.1111/psyp.14604) — Updated publication guidelines
+        """)
     with tab_space_weather:
         st.subheader("Space Weather (NOAA SWPC)")
         space_state = _space_weather_state()
@@ -5204,7 +5460,32 @@ def main() -> None:
                     ascending=False).head(200))
 
     with tab_noaa_space:
-        st.subheader("NOAA Space Dashboard")
+        st.markdown("### 🌍 NOAA Space Weather Dashboard")
+        st.markdown("*Real-time solar and geomagnetic data for physiology correlation analysis*")
+        
+        with st.expander("🌞 **Understanding Space Weather Metrics**", expanded=False):
+            st.markdown("""
+**Solar Activity Indices:**
+| Metric | Definition | HRV Relevance |
+|--------|------------|---------------|
+| **Kp Index** | Global geomagnetic disturbance (0-9 scale) | ↑ Kp associated with ↓ HRV in multiple studies |
+| **Dst Index** | Ring current strength (nT) | More negative = stronger storm; similar HRV effects as Kp |
+| **F10.7 Flux** | 10.7 cm solar radio emission (sfu) | Proxy for overall solar activity; long-term associations |
+
+**Solar Wind Parameters:**
+| Metric | Definition | Physiological Link |
+|--------|------------|-------------------|
+| **Speed** | Solar wind velocity (km/s) | Higher speeds may increase stress responses |
+| **Density** | Proton density (cm⁻³) | Contributes to magnetospheric pressure |
+| **IMF Bz** | Interplanetary magnetic field z-component | Southward (negative) enhances geomagnetic coupling |
+
+**Interpretation Tips:**
+- Correlations are typically **small** (r ≈ 0.1–0.3) but consistent across studies
+- Test **multiple lag times** (0–72 hours) — effects may be delayed
+- Always control for **time-of-day, season, and behavior**
+- Treat findings as **exploratory** unless replicated
+            """)
+        
         noaa_state = _noaa_space_state()
         col_fetch_noaa, col_refresh_noaa = st.columns(2)
         with col_fetch_noaa:
