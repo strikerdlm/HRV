@@ -1,101 +1,390 @@
-# HRV Analysis — Space Weather Integration
+# HRV Analysis Suite — Space Weather Integration & Advanced Physiological Monitoring
 
-This application extends the HRV analysis with a Space Weather tab that fetches real‑time NOAA SWPC feeds and correlates them with your HRV window metrics.
+A comprehensive, research-grade Heart Rate Variability (HRV) analysis platform that integrates real-time space weather data from NOAA SWPC, NASA DONKI, and SpaceWeatherLive to explore solar-physiology correlations. Built for clinicians, researchers, and biohackers who need transparent, reproducible HRV metrics with publication-ready exports.
 
-## Features
-- NOAA SWPC JSON feeds (no API key) for planetary K‑index and F10.7 solar radio flux.
-- Optional weather covariates for Bogotá, Colombia via Open‑Meteo Archive (no API key).
-- Lag‑aware correlations (scan a user‑defined lag range).
-- Pearson r and p‑values (SciPy if available), Benjamini–Hochberg FDR q‑values.
-- Partial correlations controlling for temperature, humidity, pressure.
-- OLS residual diagnostics (R², Durbin–Watson, normality test, residual plots).
-- Local JSONL database for correlation summaries keyed by Cedula.
-- SpaceWeatherLive CACTus CME ingestion (direct scrape + OpenAI fallback) covering counts, velocity statistics, angular width, halo rate, and SIDC Ursigram commentary.
-- Interactive feature-matrix builder that aligns HRV metrics with DONKI and SpaceWeatherLive predictors, includes correlation/ranking utilities, and offers an experimental linear response model with downloadable coefficients.
+## 🚀 Quick Start
 
-## NOAA Space Tab Build Plan
-1. **Dataset audit and ingestion**
-   - Catalogue priority NOAA feeds from `docs/NOAA json.md` and define fetch cadence, caching, and schema normalization.
-   - Implement typed ingestion helpers with bounded retries/timeout (≤10s) and deterministic caching in `app/data_cache/space_weather/`.
-   - Add validation tests to guarantee units, timestamp alignment (UTC), and numeric ranges before the UI consumes each feed.
-2. **Backend correlation scaffolding**
-   - Extend the data model to expose harmonized time-series frames for each NOAA metric (e.g., F10.7, Kp, solar wind) with metadata describing sampling cadence and physical meaning.
-   - Build reusable correlation pipelines that pair each NOAA metric with HRV windows, compute Pearson/Spearman correlations, p-values, 95% CIs, and directionality flags, and persist the summary for UI rendering.
-   - Introduce strict typing and unit tests (pytest + Hypothesis) covering lag handling, missing-data imputation, and edge-case sample sizes.
-3. **ECharts visualization layer**
-   - Design gauge components mirroring the existing HRV style (double-ring gauge, responsive layout) for headline NOAA metrics; add secondary sparkline/context charts as needed.
-   - Create comparison dashboards (dual-axis or multi-series) that highlight anomalies, threshold breaches, and rolling statistics suitable for scientific reporting.
-   - Integrate tooltips, legends, and color semantics consistent with the Space Weather tab to ensure interpretability.
-4. **Streamlit NOAA Space tab**
-   - Add a dedicated tab/section that surfaces each NOAA metric with its gauge + contextual chart, followed immediately by the correlated HRV test results (test name, statistic, p-value, CI95%, directionality).
-   - Provide controls for history window, lag selection, and cohort filters to let researchers explore HRV relationships dynamically.
-   - Ensure accessibility (contrast, font sizes), responsive layout, and loading states/spinners for long-running fetches.
-5. **Correlation narratives and export**
-   - Generate below-chart summaries that interpret correlation direction/strength and note statistical significance thresholds.
-   - Offer export (CSV/JSON) of correlation tables and chart imagery for publications.
-   - Document methodology in `Docs/Manual.md`, referencing NOAA data sources and correlation assumptions.
-6. **Quality assurance**
-   - Run end-to-end validation: data fetch mocks, caching behavior, chart rendering, correlation accuracy, and Streamlit interaction tests.
-   - Verify linting (Ruff), typing (mypy strict), security (Bandit), formatting (Black/isort), and reproducibility (requirements lockfile updates if dependencies change).
-   - Capture before/after screenshots for the scientific dashboard review and note integration steps in `CHANGELOG.md`.
+### Prerequisites
 
-## Quick Start
+- Python 3.10 or later
+- pip package manager
+
+### Installation
+
 ```bash
+# Clone the repository
+git clone https://github.com/yourusername/hrv-space-weather.git
+cd hrv-space-weather
+
+# Install dependencies
 pip install -r requirements.txt
+
+# Run the application
 streamlit run app/app.py
 ```
 
-## Requirements
-- Python 3.10+
-- Packages: streamlit, requests, pandas, numpy, scipy (optional but recommended).
+The app will open in your default browser at `http://localhost:8501`.
 
-## Data Sources
-- NOAA SWPC JSON feeds: `https://services.swpc.noaa.gov/json/` (e.g., `planetary_k_index_1m.json`, `solar_radio_flux.json`).
-- Open‑Meteo Archive: `https://archive-api.open-meteo.com/v1/era5` (hourly temperature, humidity, pressure for Bogotá).
+### Your First Analysis (5 Minutes)
 
-## Using the Space Weather Tab
-1. Review live K‑index and solar flux charts.
-2. Configure lag range, step, and merge tolerance.
-3. (Optional) Enable weather covariates.
-4. Enter your Cedula to save best results to the JSONL database.
-5. Inspect correlation tables, FDR‑adjusted results, residual diagnostics.
-6. Expand the SpaceWeatherLive snapshot to pull CACTus CME metrics (velocity distribution, angular width, halo incidence) and SIDC narrative highlights.
-7. Use the **HRV ↔ space-weather feature matrix (beta)** tools to:
-   - Generate a lagged feature matrix combining HRV metrics with DONKI/SWL predictors.
-   - Rank the strongest predictors per HRV metric with minimum-sample guardrails.
-   - Train a quick linear response model and download correlations, rankings, feature matrix, and coefficient tables.
+1. **Prepare your data**: Create a text file with one RR interval (in milliseconds) per line:
+   ```
+   1027
+   1007
+   991
+   1010
+   1020
+   ...
+   ```
+   Name it with a timestamp for automatic time alignment: `2025-11-06 00-43-42.txt`
 
-## Local Database
-- JSON Lines file: `data/hrv_solar_db.jsonl` (created on first save).
-- Fields: `cedula`, `session_id`, `created_utc`, `metric`, `pearson_r`, `p_value`, `n`, `lag_hours`, (optionally `q_value`).
+2. **Upload**: Click "Browse files" in the sidebar and select your RR file(s)
 
-## Notes
-- P‑values require SciPy; otherwise they display as NaN.
-- Correlations are sensitive to timing; use lags to align HRV window times to storm arrival.
-- Interpret results cautiously; literature shows effects are modest and variable.
+3. **Explore tabs**: Start with **Overview** for summary statistics, then explore **Gauges** for visual benchmarks
 
-## SpaceWeatherLive agent (scrape with OpenAI fallback)
-- New: Fetch a concise snapshot from `https://www.spaceweatherlive.com/` (Kp forecast, solar wind speed/density, IMF Bt/Bz, sunspot number, F10.7, flare probabilities). The Streamlit Space Weather tab includes an expander to pull these values and display them alongside NOAA SWPC data.
-- New: Parse the CACTus “Latest CMEs” table and SIDC Ursigram bulletin to capture CME counts, velocity statistics, halo status, and narrative highlights for downstream HRV correlation, ranking, and modelling workflows.
+4. **Export**: Go to **Export** tab to download a comprehensive Markdown report
 
-### CLI
-```bash
-python -m app.swl_fetch --output data/spaceweatherlive_snapshot.json
+---
+
+## 📋 Features Overview
+
+| Feature | Description |
+|---------|-------------|
+| **Time-Domain Metrics** | SDNN, RMSSD, pNN50, Mean HR, CVNN, and more |
+| **Frequency-Domain Analysis** | VLF/LF/HF power, normalized units, LF/HF ratio via Welch, Periodogram, or AR methods |
+| **Nonlinear Metrics** | Poincaré SD1/SD2, DFA α1/α2, Sample/Approximate Entropy |
+| **Heart Rate Fragmentation** | PIP, IALS, PSS per PROOF-AF methodology |
+| **Geometric Metrics** | HRV Triangular Index, TINN, Baevsky Stress Index |
+| **Sliding Window Analysis** | Configurable windows with deviation detection and anomaly episodes |
+| **Autonomic Function Tests** | Valsalva ratio, Deep breathing E:I response, 30:15 standing ratio |
+| **Readiness Scoring** | Kubios-style parasympathetic index with historical baseline comparison |
+| **Space Weather Correlation** | NOAA Kp, Dst, F10.7, solar wind, X-ray flux with lag-aware correlations |
+| **NASA DONKI Integration** | Flares, CMEs, geomagnetic storms, radiation belt enhancements |
+| **Fatigue Prediction** | SAFTE biomathematical model for cognitive performance |
+| **HRV Biofeedback** | Real-time coherence training with paced breathing |
+| **Garmin Integration** | Import sleep, HRV, HR, stress, SpO2, respiration data |
+| **AI Interpretation** | GPT-5.1 high-reasoning analysis with scientific citations |
+| **Publication Export** | APA 7th edition formatted reports, LaTeX tables, CSV/JSON data |
+
+---
+
+## 📁 Input Data Format
+
+### Polar-Style RR Text Files
+
+The app accepts text files with one RR interval per line in **milliseconds**:
+
 ```
-This writes a JSON snapshot with the parsed fields. The command first tries a direct scrape; if that fails, it falls back to OpenAI-assisted extraction from the HTML.
-
-### Environment and security
-- Add your OpenAI key to `.env`:
+1027
+1007
+991
+1010
 ```
+
+**Filename convention**: `YYYY-MM-DD HH-MM-SS.txt` (e.g., `2025-11-06 00-43-42.txt`)
+- The timestamp is parsed to align HRV windows with space weather data
+- Timezone is assumed GMT-5 (adjustable)
+- Values outside 300–2000 ms are automatically filtered
+
+### Garmin Data Sources
+
+1. **Wellness Export ZIP**: Download from Garmin Connect → Account Settings → Export Wellness Data
+2. **FIT Files**: Export individual activities from Garmin Connect web
+3. **API Access**: Configure `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env`
+
+### Sample Data Structure
+
+```
+project/
+├── 2025-11-06 00-43-42.txt    # Morning recording
+├── 2025-11-06 18-30-00.txt    # Evening recording
+├── garmin_export.zip          # Optional Garmin data
+└── .env                       # API keys (not committed)
+```
+
+---
+
+## 🖥️ Application Tabs
+
+### Overview Tab
+- Dataset metadata: beat count, duration, mean HR, artifact percentage
+- Respiratory rate estimate from HF spectral peak
+- Summary table with green/yellow/red deviation flags
+
+### Time Series Tab
+- RR intervals and heart rate over time
+- QC overlays: cleaned series (green), flagged artifacts (red)
+- Interactive zoom and pan
+
+### Frequency Tab
+- Power Spectral Density (PSD) with VLF/LF/HF band highlighting
+- Methods: Welch (default), Periodogram, AR (Yule-Walker)
+- Band power comparison across datasets
+
+### Nonlinear Tab
+- Poincaré plot with SD1/SD2 ellipse
+- DFA scaling exponents (α1: short-term, α2: long-term)
+- Entropy metrics visualization
+
+### Spectrogram Tab
+- Time-frequency heatmap showing spectral dynamics
+- Track HF (breathing) and LF (baroreflex) power evolution
+- Useful for identifying non-stationary segments
+
+### Windowed Tab
+- Sliding-window metrics (default: 5-min window, 1-min step)
+- Deviation detection with configurable z-score thresholds
+- Anomaly episode timeline with contiguous run detection
+
+### Metrics Tab
+- Complete table of all computed metrics across domains
+- Advanced analytics: fragmentation, PRSA, symbolic dynamics, multifractal DFA
+- Covariate-adjusted values when patient profile is configured
+
+### ANS Function Tests Tab
+- **Valsalva Ratio**: Phase II (strain) vs Phase IV (recovery)
+- **Deep Breathing**: E:I difference and ratio across paced breathing cycles
+- **30:15 Ratio**: Orthostatic response after standing
+
+### Readiness Tab
+- Parasympathetic index from HF, RMSSD, pNN50, SD1
+- Historical baseline comparison (requires ≥7 sessions)
+- Kubios-style categories: VERY LOW / LOW / NORMAL / HIGH
+
+### Gauges Tab
+- 30+ metric gauges with clinical reference ranges
+- Two-ring design with color-coded zones (green/yellow/red)
+- Based on published normative data (Nunan 2010, Shaffer 2017, PROOF-AF 2025)
+
+### Unified Timeline Tab
+- Time-synchronized view of all physiological metrics
+- ML pattern detection: anomalies, trends, change points
+- Correlation matrix heatmap
+
+### Biofeedback Tab
+- Real-time HRV streaming (simulated or from device)
+- Paced breathing guide with configurable breath rate
+- Coherence score tracking
+
+### Fatigue Tab
+- SAFTE model for cognitive performance prediction
+- Sleep schedule and work schedule inputs
+- Risk assessment with factor breakdown
+- Recommendations based on fatigue level
+
+### Space Weather Tab
+- Live Kp index, solar flux, solar wind parameters
+- SpaceWeatherLive snapshot with CME/flare data
+- Lag-aware correlations (0–72h) with HRV metrics
+- Partial correlations controlling for weather covariates
+
+### NOAA Space Tab
+- Comprehensive NOAA SWPC data feeds
+- Interactive gauges for all space weather metrics
+- Batch correlation analysis across multiple parameters
+- Feature matrix builder for predictive modeling
+
+### Export Tab
+- Markdown report with all metrics and interpretations
+- CSV/JSON data export
+- LaTeX tables for publications
+- GPT-5.1 AI interpretation (requires API key)
+
+---
+
+## ⚙️ Configuration
+
+### Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+# OpenAI API (for GPT interpretation)
 OPENAI_API_KEY=sk-...
+
+# NASA DONKI (optional, has generous free tier)
+NASA_API_KEY=DEMO_KEY
+
+# Garmin Connect (for API access)
+GARMIN_EMAIL=your.email@example.com
+GARMIN_PASSWORD=your_password
+
+# AccuWeather (for weather covariates)
+ACCUWEATHER_API_KEY=your_key
 ```
-- Do not commit secrets. Ensure `.env` is ignored by Git. Never hard‑code API keys in code or notebooks.
 
-### Libraries used
-- requests (HTTP with timeouts)
-- beautifulsoup4 (robust HTML parsing)
-- openai (Responses API for fallback extraction)
+⚠️ **Security**: Never commit `.env` to version control. Ensure `.gitignore` includes `.env`.
 
-### Sources
-- SpaceWeatherLive home and Solar activity pages (`https://www.spaceweatherlive.com/`)  
-  See help pages for context: Kp Index and IMF sections.
+### Sidebar Settings
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Window size** | 5 min | Sliding window duration for windowed analysis |
+| **Step size** | 1 min | Window overlap/step |
+| **Min RR count** | 60 | Minimum beats per window |
+| **QC method** | threshold_median | Artifact detection algorithm |
+| **Max deviation** | 0.2 | Artifact threshold (20% deviation) |
+| **Median window** | 11 | Rolling median window for QC |
+| **PSD method** | Welch | Spectral estimation method |
+
+---
+
+## 📊 Example Workflow
+
+### Clinical Autonomic Assessment
+
+```
+1. Patient preparation: 5-min rest, supine position, quiet room
+2. Record: Start Polar H10 recording, save RR intervals
+3. Upload: Load file into app
+4. QC Review: Check Time Series tab for artifacts (<5% acceptable)
+5. Metrics: Review Metrics tab for comprehensive values
+6. Autonomic Tests: Perform Valsalva, deep breathing protocols
+7. Export: Generate report for clinical documentation
+```
+
+### Research Protocol
+
+```
+1. Define cohort: Age, sex, health status
+2. Standardize: Same time-of-day, posture, breathing instructions
+3. Record: ≥5 min per session, label files with subject ID
+4. Process: Upload batch of files
+5. Analyze: Use windowed metrics for time-varying analysis
+6. Correlate: Enable space weather correlation if studying solar effects
+7. Statistics: Export CSV for external statistical packages
+8. Publish: Use LaTeX export for manuscript tables
+```
+
+### Personal Tracking
+
+```
+1. Morning routine: 1-5 min HRV recording immediately upon waking
+2. Consistent setup: Same position, before coffee/exercise
+3. Upload daily: Build 7+ day baseline
+4. Check Readiness: Monitor parasympathetic index trend
+5. Adjust training: Reduce intensity when readiness is LOW
+```
+
+---
+
+## 🔬 Space Weather Correlation Analysis
+
+### Scientific Background
+
+Geomagnetic storms and solar activity have been associated with cardiovascular effects in epidemiological studies:
+
+- **Kp Index**: Higher geomagnetic activity correlates with reduced HRV in some cohorts
+- **Solar Wind**: Speed/pressure variations may precede autonomic changes
+- **F10.7 Flux**: Proxy for overall solar activity with long-term health correlations
+
+### Using the Correlation Tools
+
+1. **Configure lag range**: Start with 0–72h, step 6h
+2. **Enable weather covariates**: Control for temperature, humidity, pressure
+3. **Review FDR-adjusted q-values**: Multiple comparison correction
+4. **Interpret cautiously**: Effect sizes are typically small (r = 0.1–0.3)
+
+### Feature Matrix Builder
+
+The NOAA Space tab includes an advanced feature matrix builder:
+
+1. Generate a lagged feature matrix combining HRV metrics with solar predictors
+2. Rank predictors by correlation strength with minimum sample guardrails
+3. Train quick linear models to explore relationships
+4. Download correlations, rankings, and coefficients for further analysis
+
+---
+
+## 📚 References
+
+### Core HRV Standards
+
+- Task Force of ESC/NASPE (1996). Heart rate variability standards. *Eur Heart J*.
+- Shaffer, F., & Ginsberg, J. P. (2017). An overview of HRV metrics and norms. *Front Public Health*.
+- Nunan, D., et al. (2010). Normal values for short-term HRV. *Pacing Clin Electrophysiol*.
+- Quigley, K. S., et al. (2024). Publication guidelines for HR and HRV. *Psychophysiology*.
+
+### Space Weather & Physiology
+
+- Vieira, C. L. Z., et al. (2022). Geomagnetic disturbances reduce HRV. *Sci Total Environ*.
+- Alabdulgader, A., et al. (2018). Long-term HRV responses to solar activity. *Sci Rep*.
+- Vencloviene, J., et al. (2020). Solar wind and AMI risk. *Int J Environ Res Public Health*.
+
+### Fragmentation & Arrhythmia Risk
+
+- PROOF-AF Study (2025). HRF and DFA α1 predict atrial fibrillation. *EHJ Open*.
+
+---
+
+## 🛠️ Development
+
+### Project Structure
+
+```
+HRV/
+├── app/
+│   ├── app.py                      # Main Streamlit application
+│   ├── hrv_core.py                 # Core HRV computation functions
+│   ├── gauge_builder.py            # Gauge visualization builder
+│   ├── gpt_interpretation.py       # GPT-5.1 AI interpretation
+│   ├── noaa_space.py               # NOAA space weather data
+│   ├── garmin_import.py            # Garmin data import
+│   ├── fatigue_integration.py      # SAFTE fatigue model
+│   ├── realtime_hrv.py             # Real-time HRV streaming
+│   ├── ml_analytics.py             # ML anomaly/trend detection
+│   ├── statistical_analysis.py     # Statistical tests
+│   └── publication_export.py       # Export utilities
+├── docs/
+│   └── Manual.md                   # Comprehensive user manual
+├── requirements.txt
+├── README.md
+└── CHANGELOG.md
+```
+
+### Running Tests
+
+```bash
+pytest tests/ -v --cov=app
+```
+
+### Code Quality
+
+```bash
+# Format
+black app/ tests/
+isort app/ tests/
+
+# Lint
+ruff check app/ tests/
+
+# Type check
+mypy app/ --strict
+
+# Security
+bandit -r app/
+```
+
+---
+
+## 📄 License
+
+MIT License — See [LICENSE](LICENSE) for details.
+
+---
+
+## 🤝 Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit changes (`git commit -m 'Add amazing feature'`)
+4. Push to branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+---
+
+## 📞 Support
+
+- **Documentation**: See `docs/Manual.md` for comprehensive usage guide
+- **Issues**: Open a GitHub issue for bugs or feature requests
+- **Discussions**: Use GitHub Discussions for questions
