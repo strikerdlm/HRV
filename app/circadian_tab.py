@@ -29,13 +29,15 @@ import streamlit as st
 from numpy.typing import NDArray
 
 # Try to import circadian module components from app.circadian
+CIRCADIAN_IMPORT_ERROR: Optional[str] = None
 try:
     from app.circadian.lights import LightSchedule
     from app.circadian.models import Forger99, Hannay19, Hannay19TP, Jewett99
     from app.circadian.metrics import esri
     CIRCADIAN_AVAILABLE = True
-except ImportError:
+except Exception as _circadian_err:
     CIRCADIAN_AVAILABLE = False
+    CIRCADIAN_IMPORT_ERROR = f"{type(_circadian_err).__name__}: {_circadian_err}"
 
 # Color scheme
 PRIMARY_COLOR = "#667eea"
@@ -432,12 +434,13 @@ def render_circadian_tab(user_profile: Optional[Dict] = None) -> None:
     """Render the complete Circadian Physiology tab."""
     
     if not CIRCADIAN_AVAILABLE:
-        st.error("""
-        ⚠️ **Circadian Module Not Available**
-        
-        The circadian simulation module could not be loaded. Please ensure the 
-        `app/circadian/` package is properly installed with all dependencies.
-        """)
+        st.error("⚠️ **Circadian Module Not Available**")
+        st.warning(
+            "The circadian simulation module could not be loaded. "
+            "Please ensure the `app/circadian/` package is properly installed."
+        )
+        if CIRCADIAN_IMPORT_ERROR:
+            st.code(CIRCADIAN_IMPORT_ERROR, language="text")
         return
     
     # Header
