@@ -139,6 +139,37 @@ try:
 except ImportError:
     FATIGUE_AVAILABLE = False
 
+# Real-time HRV and Biofeedback
+try:
+    from realtime_hrv import (
+        RealtimeHRVEngine,
+        BiofeedbackSession,
+        PacedBreathingGuide,
+        SimulatedHRGenerator,
+        CoherenceLevel,
+        SessionState,
+    )
+    REALTIME_HRV_AVAILABLE = True
+except ImportError:
+    REALTIME_HRV_AVAILABLE = False
+
+# Wearable Data Fusion
+try:
+    from wearable_fusion import (
+        WearableDataFusion,
+        WearablePlatform,
+        SignalSource,
+        QualityLevel,
+        assess_signal_quality,
+        import_oura_data,
+        import_whoop_data,
+        import_apple_health_data,
+        import_fitbit_data,
+    )
+    WEARABLE_FUSION_AVAILABLE = True
+except ImportError:
+    WEARABLE_FUSION_AVAILABLE = False
+
 
 def setup_console_logging(level: int = logging.INFO) -> logging.Logger:
     """
@@ -3623,6 +3654,7 @@ def main() -> None:
         tab_readiness,
         tab_gauges,
         tab_unified,
+        tab_biofeedback,
         tab_fatigue,
         tab_science,
         tab_space_weather,
@@ -3645,6 +3677,7 @@ def main() -> None:
             "📈 Unified Timeline",
             "🧠 Fatigue",
             "Science",
+            "🫀 Biofeedback",
             "Space Weather",
             "NOAA Space",
             "Export",
@@ -4540,6 +4573,393 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
             "**Scientific basis:** Multi-metric analysis enables detection of autonomic patterns that "
             "single-metric analysis may miss. Cross-domain correlations can reveal compensatory mechanisms "
             "and early warning signs of physiological stress."
+        )
+
+    # =========================================================================
+    # BIOFEEDBACK TAB - Real-time HRV and Coherence Training
+    # =========================================================================
+    with tab_biofeedback:
+        st.markdown("### 🫀 HRV Biofeedback & Coherence Training")
+        st.markdown("*Real-time heart rate variability monitoring with paced breathing guidance*")
+        
+        with st.expander("📖 **Understanding HRV Biofeedback**", expanded=False):
+            st.markdown("""
+**What is HRV Biofeedback?**
+
+HRV biofeedback is a technique that trains you to increase heart rate variability through 
+controlled breathing, typically at your "resonance frequency" (~6 breaths/min for most adults).
+
+| Concept | Description | Benefit |
+|---------|-------------|---------|
+| **Coherence** | Synchronization between heart rhythm and breathing | Reflects autonomic balance |
+| **Resonance Frequency** | Breathing rate that maximizes HRV amplitude | Individual-specific (4-7 br/min) |
+| **RSA** | Respiratory Sinus Arrhythmia | Natural HR increase on inhale |
+
+**Scientific Evidence:**
+- 10×20 min sessions significantly increase resting vmHRV [Appl Psychophysiol Biofeedback 2024]
+- Effects strongest in those with higher baseline RMSSD
+- Improves stress resilience and emotional regulation
+
+**How to Use:**
+1. Connect a heart rate monitor (or use simulation mode)
+2. Set your target breathing rate (default: 6 breaths/min)
+3. Follow the breathing guide while watching coherence score
+4. Aim for 70%+ time in "high coherence" zone
+            """)
+        
+        if not REALTIME_HRV_AVAILABLE:
+            st.warning(
+                "⚠️ Real-time HRV module not available. Install dependencies: `pip install bleak`"
+            )
+        else:
+            st.markdown("---")
+            
+            # Session settings
+            col_mode, col_settings = st.columns([1, 2])
+            
+            with col_mode:
+                st.markdown("#### 🎯 Mode Selection")
+                biofeedback_mode = st.radio(
+                    "Data source",
+                    options=["Simulation", "BLE Heart Rate Monitor"],
+                    index=0,
+                    key="biofeedback_mode",
+                    help="Simulation mode generates realistic HRV data for testing"
+                )
+                
+                if biofeedback_mode == "BLE Heart Rate Monitor":
+                    st.info(
+                        "🔵 Bluetooth support requires the `bleak` library and a compatible "
+                        "heart rate monitor (Polar H10, etc.)"
+                    )
+            
+            with col_settings:
+                st.markdown("#### ⚙️ Session Settings")
+                
+                col_s1, col_s2, col_s3 = st.columns(3)
+                
+                with col_s1:
+                    breathing_rate = st.slider(
+                        "Breathing rate (br/min)",
+                        min_value=4.0, max_value=10.0, value=6.0, step=0.5,
+                        key="biofeedback_breathing_rate",
+                        help="6 breaths/min is the typical resonance frequency"
+                    )
+                
+                with col_s2:
+                    session_duration = st.selectbox(
+                        "Session duration",
+                        options=[5, 10, 15, 20, 30],
+                        index=1,
+                        key="biofeedback_duration",
+                        format_func=lambda x: f"{x} minutes"
+                    )
+                
+                with col_s3:
+                    inhale_ratio = st.slider(
+                        "Inhale ratio",
+                        min_value=0.3, max_value=0.5, value=0.4, step=0.05,
+                        key="biofeedback_inhale_ratio",
+                        help="Fraction of breath cycle for inhale"
+                    )
+            
+            st.markdown("---")
+            
+            # Session control
+            col_ctrl1, col_ctrl2, col_ctrl3 = st.columns([1, 1, 2])
+            
+            with col_ctrl1:
+                start_session = st.button(
+                    "▶️ Start Session",
+                    type="primary",
+                    key="start_biofeedback",
+                    disabled="biofeedback_running" in st.session_state and st.session_state.get("biofeedback_running", False)
+                )
+            
+            with col_ctrl2:
+                stop_session = st.button(
+                    "⏹️ Stop Session",
+                    key="stop_biofeedback",
+                    disabled="biofeedback_running" not in st.session_state or not st.session_state.get("biofeedback_running", False)
+                )
+            
+            # Initialize session state
+            if "biofeedback_engine" not in st.session_state:
+                st.session_state["biofeedback_engine"] = RealtimeHRVEngine(window_size_sec=60)
+                st.session_state["biofeedback_running"] = False
+                st.session_state["biofeedback_coherence_history"] = []
+                st.session_state["biofeedback_hrv_history"] = []
+            
+            engine = st.session_state["biofeedback_engine"]
+            
+            # Handle session start
+            if start_session:
+                st.session_state["biofeedback_running"] = True
+                st.session_state["biofeedback_coherence_history"] = []
+                st.session_state["biofeedback_hrv_history"] = []
+                engine.clear_buffer()
+                engine.start_session(
+                    duration_sec=session_duration * 60,
+                    breathing_rate=breathing_rate,
+                )
+                st.rerun()
+            
+            # Handle session stop
+            if stop_session:
+                st.session_state["biofeedback_running"] = False
+                session_result = engine.end_session()
+                if session_result:
+                    st.session_state["biofeedback_last_session"] = session_result
+                st.rerun()
+            
+            # Display area
+            st.markdown("---")
+            
+            if st.session_state.get("biofeedback_running", False):
+                st.markdown("#### 🟢 Session Active")
+                
+                # Breathing guide visualization
+                st.markdown("##### 🌬️ Breathing Guide")
+                
+                cycle_duration = 60.0 / breathing_rate
+                inhale_duration = cycle_duration * inhale_ratio
+                exhale_duration = cycle_duration * (1 - inhale_ratio)
+                
+                # Create breathing animation data
+                breath_phases = []
+                phase_time = 0
+                for i in range(int(breathing_rate * 2)):  # Show 2 minutes
+                    breath_phases.append({"phase": "Inhale", "start": phase_time, "duration": inhale_duration})
+                    phase_time += inhale_duration
+                    breath_phases.append({"phase": "Exhale", "start": phase_time, "duration": exhale_duration})
+                    phase_time += exhale_duration
+                
+                # Display current breathing instruction
+                import time as time_module
+                current_time = time_module.time() % cycle_duration
+                if current_time < inhale_duration:
+                    phase = "INHALE"
+                    progress = current_time / inhale_duration
+                    color = "#28a745"
+                else:
+                    phase = "EXHALE"
+                    progress = (current_time - inhale_duration) / exhale_duration
+                    color = "#17a2b8"
+                
+                st.markdown(
+                    f"""
+                    <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, {color}22 0%, {color}11 100%); 
+                                border-radius: 15px; margin: 1rem 0;">
+                        <h1 style="color: {color}; margin: 0; font-size: 3rem;">{phase}</h1>
+                        <div style="width: 100%; height: 20px; background: #e0e0e0; border-radius: 10px; margin-top: 1rem;">
+                            <div style="width: {progress * 100}%; height: 100%; background: {color}; border-radius: 10px; transition: width 0.1s;"></div>
+                        </div>
+                        <p style="margin-top: 1rem; font-size: 1.2rem;">Cycle: {inhale_duration:.1f}s in / {exhale_duration:.1f}s out</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                
+                # Simulate data in simulation mode
+                if biofeedback_mode == "Simulation":
+                    # Generate simulated RR intervals
+                    import random
+                    for _ in range(3):  # Add a few samples
+                        base_rr = 857  # ~70 bpm
+                        # Add respiratory modulation
+                        rsa_amplitude = 50
+                        rsa = rsa_amplitude * np.sin(2 * np.pi * (breathing_rate / 60) * time_module.time())
+                        noise = random.gauss(0, 15)
+                        rr_ms = int(base_rr + rsa + noise)
+                        engine.add_rr_sample(rr_ms)
+                
+                # Compute current HRV
+                metrics = engine.compute_hrv()
+                
+                if metrics:
+                    # Store in history
+                    st.session_state["biofeedback_coherence_history"].append(metrics.coherence)
+                    st.session_state["biofeedback_hrv_history"].append({
+                        "rmssd": metrics.rmssd,
+                        "coherence": metrics.coherence,
+                        "hr": metrics.mean_hr,
+                    })
+                    
+                    # Display metrics
+                    st.markdown("##### 📊 Real-time Metrics")
+                    
+                    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                    
+                    with col_m1:
+                        coherence_color = "#28a745" if metrics.coherence >= 70 else "#ffc107" if metrics.coherence >= 40 else "#dc3545"
+                        st.metric(
+                            "Coherence",
+                            f"{metrics.coherence:.0f}%",
+                            help="Target: 70%+ for high coherence"
+                        )
+                    
+                    with col_m2:
+                        st.metric(
+                            "RMSSD",
+                            f"{metrics.rmssd:.1f} ms",
+                            help="Higher = better vagal tone"
+                        )
+                    
+                    with col_m3:
+                        st.metric(
+                            "Heart Rate",
+                            f"{metrics.mean_hr:.0f} bpm"
+                        )
+                    
+                    with col_m4:
+                        st.metric(
+                            "Resp Rate",
+                            f"{metrics.respiratory_rate:.1f} br/min" if metrics.respiratory_rate > 0 else "—"
+                        )
+                    
+                    # Coherence gauge
+                    coherence_gauge = {
+                        "series": [{
+                            "type": "gauge",
+                            "startAngle": 180,
+                            "endAngle": 0,
+                            "min": 0,
+                            "max": 100,
+                            "splitNumber": 5,
+                            "radius": "90%",
+                            "center": ["50%", "70%"],
+                            "axisLine": {
+                                "lineStyle": {
+                                    "width": 20,
+                                    "color": [
+                                        [0.4, "#dc3545"],
+                                        [0.7, "#ffc107"],
+                                        [1, "#28a745"]
+                                    ]
+                                }
+                            },
+                            "pointer": {"length": "60%", "width": 6},
+                            "axisTick": {"show": False},
+                            "splitLine": {"show": False},
+                            "axisLabel": {"show": False},
+                            "title": {"show": True, "offsetCenter": [0, "30%"], "fontSize": 14},
+                            "detail": {
+                                "valueAnimation": True,
+                                "fontSize": 28,
+                                "offsetCenter": [0, "0%"],
+                                "formatter": "{value}%"
+                            },
+                            "data": [{"value": round(metrics.coherence), "name": "Coherence"}]
+                        }]
+                    }
+                    
+                    render_echarts(
+                        EChartsConfig(
+                            option=coherence_gauge,
+                            height=250,
+                            key="biofeedback_coherence_gauge"
+                        )
+                    )
+                    
+                    # Coherence history chart
+                    if len(st.session_state["biofeedback_coherence_history"]) > 5:
+                        history = st.session_state["biofeedback_coherence_history"][-60:]  # Last 60 samples
+                        
+                        history_chart = {
+                            "xAxis": {"type": "category", "data": list(range(len(history)))},
+                            "yAxis": {"type": "value", "min": 0, "max": 100, "name": "Coherence %"},
+                            "series": [{
+                                "type": "line",
+                                "data": history,
+                                "smooth": True,
+                                "areaStyle": {"opacity": 0.3},
+                                "markLine": {
+                                    "data": [
+                                        {"yAxis": 70, "name": "High", "lineStyle": {"color": "#28a745", "type": "dashed"}},
+                                        {"yAxis": 40, "name": "Medium", "lineStyle": {"color": "#ffc107", "type": "dashed"}},
+                                    ]
+                                }
+                            }],
+                            "visualMap": {
+                                "show": False,
+                                "pieces": [
+                                    {"gt": 70, "lte": 100, "color": "#28a745"},
+                                    {"gt": 40, "lte": 70, "color": "#ffc107"},
+                                    {"gt": 0, "lte": 40, "color": "#dc3545"},
+                                ]
+                            }
+                        }
+                        
+                        render_echarts(
+                            EChartsConfig(
+                                option=history_chart,
+                                height=200,
+                                key="biofeedback_history_chart"
+                            )
+                        )
+                
+                # Auto-refresh
+                import time as time_module
+                time_module.sleep(1)
+                st.rerun()
+            
+            else:
+                # Show session summary if available
+                if "biofeedback_last_session" in st.session_state:
+                    session = st.session_state["biofeedback_last_session"]
+                    
+                    st.markdown("#### 📋 Last Session Summary")
+                    
+                    col_sum1, col_sum2, col_sum3 = st.columns(3)
+                    
+                    with col_sum1:
+                        duration = (session.end_time - session.start_time).total_seconds() / 60
+                        st.metric("Duration", f"{duration:.1f} min")
+                    
+                    with col_sum2:
+                        st.metric("Achievement", f"{session.achievement_pct:.1f}%", help="Time in high coherence")
+                    
+                    with col_sum3:
+                        st.metric("Total Beats", f"{len(session.rr_samples)}")
+                    
+                    if session.coherence_scores:
+                        scores = [s[1] for s in session.coherence_scores]
+                        
+                        st.markdown("**Coherence Distribution:**")
+                        high_pct = 100 * sum(1 for s in scores if s >= 70) / len(scores)
+                        med_pct = 100 * sum(1 for s in scores if 40 <= s < 70) / len(scores)
+                        low_pct = 100 * sum(1 for s in scores if s < 40) / len(scores)
+                        
+                        zone_chart = {
+                            "tooltip": {"trigger": "item"},
+                            "series": [{
+                                "type": "pie",
+                                "radius": ["40%", "70%"],
+                                "data": [
+                                    {"value": high_pct, "name": "High (≥70%)", "itemStyle": {"color": "#28a745"}},
+                                    {"value": med_pct, "name": "Medium (40-69%)", "itemStyle": {"color": "#ffc107"}},
+                                    {"value": low_pct, "name": "Low (<40%)", "itemStyle": {"color": "#dc3545"}},
+                                ],
+                                "label": {"formatter": "{b}: {d}%"}
+                            }]
+                        }
+                        
+                        render_echarts(
+                            EChartsConfig(
+                                option=zone_chart,
+                                height=250,
+                                key="biofeedback_zone_chart"
+                            )
+                        )
+                else:
+                    st.info(
+                        "👆 Click **Start Session** to begin HRV biofeedback training. "
+                        "Follow the breathing guide and watch your coherence score increase!"
+                    )
+        
+        st.caption(
+            "**Scientific references:** Lehrer & Gevirtz (2014). Heart rate variability biofeedback. "
+            "Front Public Health; Applied Psychophysiology & Biofeedback 2024."
         )
 
     # =========================================================================
