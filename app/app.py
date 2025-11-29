@@ -1541,9 +1541,9 @@ def _fetch_donki_datasets(
                 start_to_use = max(adjust_start, start_date)
                 end_to_use = end_date if end_date else adjust_end
             cache_file = (
-                DONKI_CACHE_DIR /
-                f"{code}_{start_to_use}_{
-                    end_to_use or 'auto'}.json")
+                DONKI_CACHE_DIR
+                / f"{code}_{start_to_use}_{end_to_use or 'auto'}.json"
+            )
             cached_df = _read_dataframe_cache(
                 cache_file, max_age=DONKI_CACHE_TTL)
             if cached_df is not None:
@@ -1827,8 +1827,8 @@ def _prepare_rr_series(
     mask = timestamps.notna() & rr_ms.notna()
     if not mask.any():
         raise ValueError(
-            f"No valid RR samples found for dataset '{
-                upload.name}'.")
+            f"No valid RR samples found for dataset '{upload.name}'."
+        )
     return timestamps.loc[mask], rr_ms.loc[mask]
 
 
@@ -3818,8 +3818,9 @@ def main() -> None:
                         st.markdown("### Valsalva Ratio")
                         cols = st.columns(3)
                         cols[0].metric(
-                            "Valsalva ratio", f"{
-                                valsalva_result['valsalva_ratio']:.2f}")
+                            "Valsalva ratio",
+                            f"{valsalva_result['valsalva_ratio']:.2f}",
+                        )
                         cols[1].metric(
                             "Phase II min RR (ms)",
                             f"{valsalva_result['phase_ii_min_rr_ms']:.1f}",
@@ -3832,27 +3833,27 @@ def main() -> None:
                         st.markdown("### Deep Breathing (E:I Response)")
                         col_db1, col_db2, col_db3 = st.columns(3)
                         col_db1.metric(
-                            "Mean E–I difference (ms)", f"{
-                                deep_breathing_result['ei_mean_difference_ms']:.1f}", )
+                            "Mean E–I difference (ms)",
+                            f"{deep_breathing_result['ei_mean_difference_ms']:.1f}",
+                        )
                         col_db2.metric(
                             "Mean E–I ratio",
                             f"{deep_breathing_result['ei_mean_ratio']:.3f}",
                         )
                         col_db3.metric(
-                            "Mean HR difference (bpm)", f"{
-                                deep_breathing_result['hr_mean_difference_bpm']:.1f}", )
+                            "Mean HR difference (bpm)",
+                            f"{deep_breathing_result['hr_mean_difference_bpm']:.1f}",
+                        )
                         details_df = pd.DataFrame(
                             list(deep_breathing_result["cycle_details"])
-                        )
-                        st.dataframe(
-                            details_df.rename(columns={"cycle_index": "cycle"})
                         )
                     if ratio_30_15_result is not None:
                         st.markdown("### 30:15 Ratio")
                         col_30a, col_30b, col_30c = st.columns(3)
                         col_30a.metric(
-                            "30:15 ratio", f"{
-                                ratio_30_15_result['ratio_30_15']:.2f}")
+                            "30:15 ratio",
+                            f"{ratio_30_15_result['ratio_30_15']:.2f}",
+                        )
                         col_30b.metric(
                             "15th-beat min RR (ms)",
                             f"{ratio_30_15_result['rr_15_min_ms']:.1f}",
@@ -3934,9 +3935,8 @@ def main() -> None:
                     # available
                     if len(history_values) < int(min_hist):
                         st.info(
-                            f"Readiness baseline needs at least {
-                                int(min_hist)} samples; currently {
-                                len(history_values)}.")
+                            f"Readiness baseline needs at least {int(min_hist)} samples; currently {len(history_values)}."
+                        )
                         baseline = None
                     else:
                         try:
@@ -3972,8 +3972,9 @@ def main() -> None:
                             col_b.metric(
                                 "Category", readiness["readiness_category"])
                             col_c.metric(
-                                "PNS index", f"{
-                                    readiness['pns_index']:.3f}")
+                                "PNS index",
+                                f"{readiness['pns_index']:.3f}",
+                            )
                             details_df = pd.DataFrame(
                                 {
                                     "baseline_mean": [
@@ -4091,8 +4092,7 @@ def main() -> None:
             last_fetch = space_state.get("last_updated")
             if isinstance(last_fetch, pd.Timestamp):
                 st.success(
-                    f"Space weather datasets updated at {
-                        last_fetch.strftime('%Y-%m-%d %H:%M UTC')}.")
+                    f"Space weather datasets updated at {last_fetch.strftime('%Y-%m-%d %H:%M UTC')}.")
             else:
                 st.success("Space weather datasets updated.")
         if fetch_donki_clicked:
@@ -4108,8 +4108,7 @@ def main() -> None:
                 last_donki = donki_state.get("last_updated")
                 if isinstance(last_donki, pd.Timestamp):
                     st.success(
-                        f"DONKI datasets updated at {
-                            last_donki.strftime('%Y-%m-%d %H:%M UTC')}.")
+                        f"DONKI datasets updated at {last_donki.strftime('%Y-%m-%d %H:%M UTC')}.")
                 else:
                     st.success("DONKI datasets updated.")
 
@@ -4117,8 +4116,7 @@ def main() -> None:
             last_swl = space_state.get("swl_last_updated")
             if isinstance(last_swl, pd.Timestamp):
                 st.caption(
-                    f"Latest SpaceWeatherLive CME snapshot: {
-                        last_swl.strftime('%Y-%m-%d %H:%M UTC')}")
+                    f"Latest SpaceWeatherLive CME snapshot: {last_swl.strftime('%Y-%m-%d %H:%M UTC')}")
             else:
                 st.caption("SpaceWeatherLive CME snapshot: loaded.")
 
@@ -4131,8 +4129,7 @@ def main() -> None:
             last_fetch = space_state.get("last_updated")
             if isinstance(last_fetch, pd.Timestamp):
                 st.caption(
-                    f"Last fetched: {
-                        last_fetch.strftime('%Y-%m-%d %H:%M UTC')}")
+                    f"Last fetched: {last_fetch.strftime('%Y-%m-%d %H:%M UTC')}")
             kp_df_full = space_state.get("kp_df", pd.DataFrame())
             kp_error_msg = space_state.get("kp_error", "")
             flux_df_full = space_state.get("flux_df", pd.DataFrame())
@@ -4204,8 +4201,7 @@ def main() -> None:
                                     else latest_flux
                                 )
                                 delta_flux = latest_flux - prev_flux
-                                col_flux_gauge, col_flux_chart = st.columns([
-                                                                            1, 2])
+                                col_flux_gauge, col_flux_chart = st.columns([1, 2])
                                 with col_flux_gauge:
                                     _echarts_gauge(
                                         latest_flux,
@@ -4223,8 +4219,8 @@ def main() -> None:
                                     )
                                     if latest_time is not None:
                                         st.caption(
-                                            f"UTC timestamp: {
-                                                latest_time.strftime('%Y-%m-%d %H:%M')}")
+                                            f"UTC timestamp: {latest_time.strftime('%Y-%m-%d %H:%M')}"
+                                        )
                                     st.caption(
                                         "Quiet solar output ≲90 sfu • enhanced 90–130 sfu • high ≥180 sfu."
                                     )
@@ -4243,8 +4239,9 @@ def main() -> None:
                                         ),
                                     )
                                     st.metric(
-                                        "Δ since previous point", f"{
-                                            delta_flux:+.1f}")
+                                        "Δ since previous point",
+                                        f"{delta_flux:+.1f}",
+                                    )
                                     st.caption(
                                         "Three-hour cadence view of F10.7 solar radio flux over the selected history window."
                                     )
@@ -4266,9 +4263,9 @@ def main() -> None:
                                     f"{flux_numeric[value_col].max():.1f}",
                                 )
                                 stats_cols[2].metric(
-                                    "Std dev", f"{
-                                        flux_numeric[value_col].std(
-                                            ddof=1):.1f}", )
+                                    "Std dev",
+                                    f"{flux_numeric[value_col].std(ddof=1):.1f}",
+                                )
                                 chart_df = (
                                     flux_numeric.set_index("time_tag")
                                     .sort_index()
@@ -4448,11 +4445,10 @@ def main() -> None:
                                 )
                                 if latest_time is not None:
                                     st.caption(
-                                        f"UTC timestamp: {
-                                            latest_time.strftime('%Y-%m-%d %H:%M')}")
+                                        f"UTC timestamp: {latest_time.strftime('%Y-%m-%d %H:%M')}"
+                                    )
                                 st.caption(
-                                    "Geomagnetic categories: quiet ≤3 • unsettled 4 • storm ≥5."
-                                )
+                                    "Geomagnetic categories: quiet ≤3 • unsettled 4 • storm ≥5.")
                             with col_kp_chart:
                                 kp_recent = kp_numeric.tail(
                                     min(120, kp_numeric.shape[0])
@@ -4468,8 +4464,9 @@ def main() -> None:
                                     ),
                                 )
                                 st.metric(
-                                    "Δ since previous point", f"{
-                                        delta_kp:+.2f}")
+                                    "Δ since previous point",
+                                    f"{delta_kp:+.2f}",
+                                )
                                 st.caption(
                                     "Recent 3-hour cadence progression of Kp highlighting short-term geomagnetic swings."
                                 )
@@ -4488,8 +4485,9 @@ def main() -> None:
                             stats_cols[0].metric(
                                 "24 h mean", f"{mean_24h:.2f}")
                             stats_cols[1].metric(
-                                "Peak (window)", f"{
-                                    kp_numeric['kp_index'].max():.2f}")
+                                "Peak (window)",
+                                f"{kp_numeric['kp_index'].max():.2f}",
+                            )
                             stats_cols[2].metric(
                                 "Storm counts (Kp≥5)",
                                 f"{int((kp_numeric['kp_index'] >= 5.0).sum())}",
@@ -4601,8 +4599,8 @@ def main() -> None:
                                 ],
                             )
                             st.caption(
-                                f"{event_title}: {
-                                    int(event_count)} events in the selected DONKI period.")
+                                f"{event_title}: {int(event_count)} events in the selected DONKI period."
+                            )
             daily_counts = donki_state.get("daily_counts", {})
             if daily_counts:
                 _echarts_multi_time_series(
@@ -4661,12 +4659,12 @@ def main() -> None:
                         )
                     except requests.RequestException as exc:
                         st.error(
-                            f"Failed to retrieve {
-                                selected_dataset.lower()}: {exc}")
+                            f"Failed to retrieve {selected_dataset.lower()}: {exc}"
+                        )
                     except ValueError as exc:
                         st.error(
-                            f"Unexpected response for {
-                                selected_dataset.lower()}: {exc}")
+                            f"Unexpected response for {selected_dataset.lower()}: {exc}"
+                        )
                     else:
                         if extra_df.empty:
                             st.info("No data returned for this feed.")
@@ -4718,16 +4716,18 @@ def main() -> None:
                             val = snap.solar_wind_speed_kms
                             if val is not None:
                                 st.metric(
-                                    "Solar wind speed", f"{
-                                        val:.0f} km/s")
+                                    "Solar wind speed",
+                                    f"{val:.0f} km/s",
+                                )
                             else:
                                 st.caption("Solar wind speed: n/a")
                         with col_b:
                             val = snap.solar_wind_density_pcc
                             if val is not None:
                                 st.metric(
-                                    "Solar wind density", f"{
-                                        val:.1f} p/cm³")
+                                    "Solar wind density",
+                                    f"{val:.1f} p/cm³",
+                                )
                             else:
                                 st.caption("Solar wind density: n/a")
                         with col_c:
@@ -4753,8 +4753,9 @@ def main() -> None:
                         with col_f:
                             if snap.f107_flux is not None:
                                 st.metric(
-                                    "F10.7 cm flux", f"{
-                                        snap.f107_flux:.1f} sfu")
+                                    "F10.7 cm flux",
+                                    f"{snap.f107_flux:.1f} sfu",
+                                )
                             else:
                                 st.caption("F10.7 cm flux: n/a")
                         with col_g:
@@ -4802,8 +4803,8 @@ def main() -> None:
                                     ],
                                 )
                                 st.caption(
-                                    f"Detections parsed: {
-                                        int(count_val)} (latest table).")
+                                    f"Detections parsed: {int(count_val)} (latest table)."
+                                )
                             with cme_cols[1]:
                                 if isinstance(median_val, (int, float)):
                                     _echarts_gauge(
@@ -4819,8 +4820,8 @@ def main() -> None:
                                         ],
                                     )
                                     st.caption(
-                                        f"Median speed across detections: {
-                                            median_val:.0f} km/s.")
+                                        f"Median speed across detections: {median_val:.0f} km/s."
+                                    )
                                 else:
                                     st.caption("Median CME speed: n/a")
                             with cme_cols[2]:
@@ -4838,8 +4839,8 @@ def main() -> None:
                                         ],
                                     )
                                     st.caption(
-                                        f"Peak speed among listed CMEs: {
-                                            max_val:.0f} km/s.")
+                                        f"Peak speed among listed CMEs: {max_val:.0f} km/s."
+                                    )
                                 else:
                                     st.caption("Peak CME speed: n/a")
                             cme_rows: List[Dict[str, object]] = []
@@ -4872,8 +4873,8 @@ def main() -> None:
                             with st.expander("SIDC Ursigram highlights (CME context)"):
                                 if snap.sidc_report.issued_utc:
                                     st.caption(
-                                        f"Issued: {
-                                            snap.sidc_report.issued_utc.strftime('%Y-%m-%d %H:%M UTC')}")
+                                        f"Issued: {snap.sidc_report.issued_utc.strftime('%Y-%m-%d %H:%M UTC')}"
+                                    )
                                 if snap.sidc_report.cme_highlights:
                                     st.markdown(
                                         f"**CME highlights:** {snap.sidc_report.cme_highlights}"
@@ -5153,10 +5154,21 @@ def main() -> None:
                                 (max_n * 0.75, "#22c55e"),
                             ],
                         )
-                    clinical_text = (
-                        f"- **Clinical takeaway:** When geomagnetic activity {
-                            'rises' if sign_dir == 'positive' else 'falls'}, `{metric_name}` tends to {
-                            'increase' if sign_dir == 'positive' else 'decrease'} about {lag_hours_top} hour(s) later." if lag_hours_top != 0 else f"- **Clinical takeaway:** `{metric_name}` shifts in step with geomagnetic activity.")
+                    if lag_hours_top != 0:
+                        activity_trend = (
+                            "rises" if sign_dir == "positive" else "falls"
+                        )
+                        metric_trend = (
+                            "increase" if sign_dir == "positive" else "decrease"
+                        )
+                        clinical_text = (
+                            f"- **Clinical takeaway:** When geomagnetic activity {activity_trend}, "
+                            f"`{metric_name}` tends to {metric_trend} about {lag_hours_top} hour(s) later."
+                        )
+                    else:
+                        clinical_text = (
+                            f"- **Clinical takeaway:** `{metric_name}` shifts in step with geomagnetic activity."
+                        )
                     st.markdown(
                         "**Interpretation summary**"
                         "\n"
@@ -5753,8 +5765,8 @@ def main() -> None:
                 gpt_report_md,
                 height=360)
             gpt_file_name = (
-                f"hrv_gpt5_high_{
-                    pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.md")
+                f"hrv_gpt5_high_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.md"
+            )
             st.download_button(
                 label="Download GPT-5 interpretation",
                 data=gpt_report_md.encode("utf-8"),
@@ -5942,13 +5954,11 @@ def main() -> None:
                             "Fetch DONKI or SpaceWeatherLive datasets first to provide predictor series."
                         )
                     else:
-                        feature_lags = sorted({int(lag)
-                                              for lag in lags}) or [0]
+                        feature_lags = sorted({int(lag) for lag in lags}) or [0]
                         st.caption(
-                            f"Lags applied to each predictor: {
-                                ', '.join(
-                                    str(lag) for lag in feature_lags)} hour(s); " f"merge tolerance {
-                                int(merge_tol)} minutes.")
+                            f"Lags applied to each predictor: {', '.join(str(lag) for lag in feature_lags)} hour(s); "
+                            f"merge tolerance {int(merge_tol)} minutes."
+                        )
                         if st.button(
                             "Generate feature matrix",
                             key="btn_build_spaceweather_matrix",
@@ -5975,8 +5985,7 @@ def main() -> None:
                                 st.download_button(
                                     "Download feature matrix (CSV)",
                                     data=csv_bytes,
-                                    file_name=f"hrv_spaceweather_features_{
-                                        pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                                    file_name=f"hrv_spaceweather_features_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
                                     mime="text/csv",
                                     key="btn_download_spaceweather_matrix",
                                 )
@@ -6031,8 +6040,7 @@ def main() -> None:
                                     st.download_button(
                                         "Download correlations (CSV)",
                                         data=corr_csv,
-                                        file_name=f"hrv_spaceweather_correlations_{
-                                            pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                                        file_name=f"hrv_spaceweather_correlations_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
                                         mime="text/csv",
                                         key="btn_download_feature_corr",
                                     )
@@ -6084,8 +6092,7 @@ def main() -> None:
                                         st.download_button(
                                             "Download predictor rankings (CSV)",
                                             data=rank_csv,
-                                            file_name=f"hrv_spaceweather_rankings_{
-                                                pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                                            file_name=f"hrv_spaceweather_rankings_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
                                             mime="text/csv",
                                             key="btn_download_rankings",
                                         )
@@ -6145,10 +6152,10 @@ def main() -> None:
                                             f"{metrics_view['test_rmse']:.3f}",
                                         )
                                         st.caption(
-                                            f"Train samples: {
-                                                metrics_view['train_samples']} • " f"Test samples: {
-                                                metrics_view['test_samples']} • " f"Test MAE: {
-                                                metrics_view['test_mae']:.3f}")
+                                            f"Train samples: {metrics_view['train_samples']} • "
+                                            f"Test samples: {metrics_view['test_samples']} • "
+                                            f"Test MAE: {metrics_view['test_mae']:.3f}"
+                                        )
                                         coef_df = model_out["coefficients"]
                                         st.dataframe(coef_df)
                                         coef_csv = coef_df.to_csv(
@@ -6156,8 +6163,7 @@ def main() -> None:
                                         st.download_button(
                                             "Download coefficients (CSV)",
                                             data=coef_csv,
-                                            file_name=f"hrv_linear_model_coefficients_{
-                                                pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                                            file_name=f"hrv_linear_model_coefficients_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
                                             mime="text/csv",
                                             key="btn_download_model_coeffs",
                                         )
