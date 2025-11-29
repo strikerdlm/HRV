@@ -24,6 +24,42 @@ from export_utils import ExportConfiguration, ExportScope, build_markdown_report
 from echarts_component import EChartsConfig, render_echarts
 from noaa_space import NOAADataBundle, load_noaa_space_data, get_noaa_metric_explanations, explain_noaa_metric
 
+# Scientific charts for unified timeline and ML pattern visualization
+try:
+    from scientific_charts import (
+        build_unified_physiology_timeline,
+        build_physiology_correlation_matrix,
+        build_ml_pattern_chart,
+        COLORS as SCIENTIFIC_COLORS,
+    )
+    SCIENTIFIC_CHARTS_AVAILABLE = True
+except ImportError:
+    SCIENTIFIC_CHARTS_AVAILABLE = False
+
+# ML analytics for pattern detection
+try:
+    from ml_analytics import (
+        detect_anomalies_zscore,
+        detect_anomalies_mad,
+        detect_anomalies_iqr,
+        analyze_trend,
+        TrendDirection,
+    )
+    ML_ANALYTICS_AVAILABLE = True
+except ImportError:
+    ML_ANALYTICS_AVAILABLE = False
+
+# Statistical analysis for correlations
+try:
+    from statistical_analysis import (
+        compute_descriptive_stats,
+        compute_correlation,
+        compute_correlation_matrix,
+    )
+    STATISTICAL_ANALYSIS_AVAILABLE = True
+except ImportError:
+    STATISTICAL_ANALYSIS_AVAILABLE = False
+
 from dataclasses import asdict, dataclass
 from datetime import timezone, timedelta
 from typing import (
@@ -3586,6 +3622,7 @@ def main() -> None:
         tab_ans,
         tab_readiness,
         tab_gauges,
+        tab_unified,
         tab_fatigue,
         tab_science,
         tab_space_weather,
@@ -3605,6 +3642,7 @@ def main() -> None:
             "ANS Function Tests",
             "Readiness",
             "Gauges",
+            "📈 Unified Timeline",
             "🧠 Fatigue",
             "Science",
             "Space Weather",
@@ -4220,6 +4258,289 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
         st.caption(
             "References: [Nunan et al., 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/); "
             "[Sammito & Böckelmann, 2016](https://pubmed.ncbi.nlm.nih.gov/27986557/).")
+
+    # =========================================================================
+    # UNIFIED TIMELINE TAB - Multi-metric synchronized visualization
+    # =========================================================================
+    with tab_unified:
+        st.markdown("### 📈 Unified Physiological Timeline")
+        st.markdown("*Time-synchronized view of all physiological metrics with ML pattern detection*")
+        
+        with st.expander("📖 **Understanding the Unified Timeline**", expanded=False):
+            st.markdown("""
+**Purpose:**
+The Unified Timeline provides a synchronized view of multiple physiological metrics, enabling:
+- **Cross-domain analysis** — See how HRV, HR, stress, and other metrics co-vary
+- **Pattern detection** — ML algorithms identify anomalies and trends
+- **Temporal relationships** — Observe how changes in one metric precede/follow others
+
+**Available Metrics:**
+| Domain | Metrics | Physiological Significance |
+|--------|---------|---------------------------|
+| **HRV** | RMSSD, SDNN, LF/HF | Autonomic nervous system balance |
+| **Cardiac** | Mean HR, Resting HR | Cardiovascular load and recovery |
+| **Respiratory** | SpO2, Respiration Rate | Oxygenation and breathing patterns |
+| **Stress/Energy** | Stress Score, Body Battery | Allostatic load and recovery capacity |
+
+**ML Features:**
+- **Anomaly Detection** — Z-score, MAD, IQR methods to flag unusual values
+- **Trend Analysis** — Linear regression with change point detection
+- **Correlation Matrix** — Identify relationships between metrics
+            """)
+        
+        if not SCIENTIFIC_CHARTS_AVAILABLE:
+            st.warning("Scientific charts module not available. Some visualizations disabled.")
+        
+        # Check if we have data to display
+        if multi_results_df.empty:
+            st.info("📁 Upload HRV data files to see the unified timeline visualization.")
+        else:
+            st.markdown("---")
+            
+            # Metric selection
+            st.markdown("#### 📊 Select Metrics to Display")
+            
+            # Get available numeric columns from results
+            available_metrics = [
+                col for col in multi_results_df.columns
+                if col not in ["source", "timestamp", "start", "end", "label"]
+                and pd.api.types.is_numeric_dtype(multi_results_df[col])
+            ]
+            
+            # Group metrics by domain
+            hrv_metrics = [m for m in available_metrics if any(x in m.lower() for x in ["rmssd", "sdnn", "pnn", "lf", "hf", "entropy"])]
+            cardiac_metrics = [m for m in available_metrics if any(x in m.lower() for x in ["hr", "heart", "bpm"])]
+            other_metrics = [m for m in available_metrics if m not in hrv_metrics and m not in cardiac_metrics]
+            
+            col_hrv, col_cardiac, col_other = st.columns(3)
+            
+            with col_hrv:
+                st.markdown("**HRV Metrics**")
+                selected_hrv = st.multiselect(
+                    "Select HRV metrics",
+                    options=hrv_metrics,
+                    default=hrv_metrics[:3] if len(hrv_metrics) >= 3 else hrv_metrics,
+                    key="unified_hrv_metrics",
+                    label_visibility="collapsed"
+                )
+            
+            with col_cardiac:
+                st.markdown("**Cardiac Metrics**")
+                selected_cardiac = st.multiselect(
+                    "Select Cardiac metrics",
+                    options=cardiac_metrics,
+                    default=cardiac_metrics[:2] if len(cardiac_metrics) >= 2 else cardiac_metrics,
+                    key="unified_cardiac_metrics",
+                    label_visibility="collapsed"
+                )
+            
+            with col_other:
+                st.markdown("**Other Metrics**")
+                selected_other = st.multiselect(
+                    "Select Other metrics",
+                    options=other_metrics,
+                    default=[],
+                    key="unified_other_metrics",
+                    label_visibility="collapsed"
+                )
+            
+            selected_metrics = selected_hrv + selected_cardiac + selected_other
+            
+            if selected_metrics and SCIENTIFIC_CHARTS_AVAILABLE:
+                st.markdown("---")
+                st.markdown("#### 📈 Synchronized Timeline")
+                
+                # Prepare data for unified timeline
+                # Use timestamp if available, otherwise use index
+                if "timestamp" in multi_results_df.columns:
+                    timestamps = pd.to_datetime(multi_results_df["timestamp"])
+                elif "start" in multi_results_df.columns:
+                    timestamps = pd.to_datetime(multi_results_df["start"])
+                else:
+                    timestamps = pd.to_datetime(multi_results_df.index)
+                
+                # Build metrics dict
+                metrics_dict = {}
+                for metric in selected_metrics:
+                    if metric in multi_results_df.columns:
+                        values = multi_results_df[metric].values
+                        metrics_dict[metric] = values
+                
+                if metrics_dict:
+                    # Build unified timeline chart
+                    unified_chart = build_unified_physiology_timeline(
+                        timestamps=list(timestamps),
+                        metrics=metrics_dict,
+                        title="Unified Physiological Timeline",
+                    )
+                    
+                    render_echarts(
+                        EChartsConfig(
+                            option=unified_chart,
+                            height=500,
+                            key="unified_timeline_chart"
+                        )
+                    )
+                
+                # ML Pattern Detection
+                st.markdown("---")
+                st.markdown("#### 🔍 ML Pattern Detection")
+                
+                if ML_ANALYTICS_AVAILABLE:
+                    col_ml1, col_ml2 = st.columns([1, 2])
+                    
+                    with col_ml1:
+                        ml_metric = st.selectbox(
+                            "Select metric for analysis",
+                            options=selected_metrics,
+                            key="ml_pattern_metric"
+                        )
+                        
+                        anomaly_method = st.selectbox(
+                            "Anomaly detection method",
+                            options=["Z-score", "MAD (Robust)", "IQR"],
+                            key="ml_anomaly_method"
+                        )
+                        
+                        run_ml = st.button("🔬 Run ML Analysis", key="run_ml_btn")
+                    
+                    if run_ml and ml_metric in multi_results_df.columns:
+                        with st.spinner("Running ML analysis..."):
+                            values = multi_results_df[ml_metric].dropna().values
+                            
+                            # Anomaly detection
+                            if anomaly_method == "Z-score":
+                                anomaly_result = detect_anomalies_zscore(values, threshold=2.5)
+                            elif anomaly_method == "MAD (Robust)":
+                                anomaly_result = detect_anomalies_mad(values, threshold=3.0)
+                            else:
+                                anomaly_result = detect_anomalies_iqr(values, k=1.5)
+                            
+                            # Trend analysis
+                            trend_result = analyze_trend(values)
+                            
+                            # Store results
+                            st.session_state["ml_anomaly_result"] = anomaly_result
+                            st.session_state["ml_trend_result"] = trend_result
+                            st.session_state["ml_metric_name"] = ml_metric
+                    
+                    # Display ML results
+                    if "ml_anomaly_result" in st.session_state:
+                        anomaly_result = st.session_state["ml_anomaly_result"]
+                        trend_result = st.session_state["ml_trend_result"]
+                        ml_metric_name = st.session_state.get("ml_metric_name", "Metric")
+                        
+                        with col_ml2:
+                            # Summary metrics
+                            col_a, col_b, col_c, col_d = st.columns(4)
+                            with col_a:
+                                st.metric("Anomalies", f"{anomaly_result.n_anomalies}")
+                            with col_b:
+                                st.metric("Trend", trend_result.direction.value.title())
+                            with col_c:
+                                st.metric("Slope", f"{trend_result.slope:.4f}")
+                            with col_d:
+                                st.metric("R²", f"{trend_result.r_squared:.3f}")
+                        
+                        # ML Pattern chart
+                        if ml_metric_name in multi_results_df.columns:
+                            values = multi_results_df[ml_metric_name].dropna().values
+                            
+                            # Compute trend line
+                            x = np.arange(len(values))
+                            trend_line = trend_result.slope * x + (np.mean(values) - trend_result.slope * np.mean(x))
+                            
+                            ml_chart = build_ml_pattern_chart(
+                                timestamps=list(timestamps[:len(values)]),
+                                values=values,
+                                anomaly_mask=anomaly_result.is_anomaly,
+                                trend_line=trend_line,
+                                change_points=list(trend_result.change_points) if len(trend_result.change_points) > 0 else None,
+                                title=f"ML Pattern Analysis: {ml_metric_name}",
+                                metric_name=ml_metric_name,
+                            )
+                            
+                            render_echarts(
+                                EChartsConfig(
+                                    option=ml_chart,
+                                    height=400,
+                                    key="ml_pattern_chart"
+                                )
+                            )
+                        
+                        # Interpretation
+                        st.markdown("**Interpretation:**")
+                        interp_parts = []
+                        
+                        if anomaly_result.n_anomalies > 0:
+                            pct = 100 * anomaly_result.n_anomalies / len(anomaly_result.is_anomaly)
+                            interp_parts.append(f"- **{anomaly_result.n_anomalies} anomalies** detected ({pct:.1f}% of data)")
+                        else:
+                            interp_parts.append("- No significant anomalies detected")
+                        
+                        if trend_result.p_value < 0.05:
+                            direction = "increasing" if trend_result.slope > 0 else "decreasing"
+                            interp_parts.append(f"- **Significant {direction} trend** (p={trend_result.p_value:.4f})")
+                        else:
+                            interp_parts.append("- No significant trend detected")
+                        
+                        if len(trend_result.change_points) > 0:
+                            interp_parts.append(f"- **{len(trend_result.change_points)} change points** detected")
+                        
+                        st.markdown("\n".join(interp_parts))
+                else:
+                    st.info("ML analytics module not available.")
+                
+                # Correlation Matrix
+                st.markdown("---")
+                st.markdown("#### 🔗 Metric Correlations")
+                
+                if STATISTICAL_ANALYSIS_AVAILABLE and len(selected_metrics) >= 2:
+                    # Compute correlation matrix
+                    corr_df = multi_results_df[selected_metrics].corr()
+                    
+                    if SCIENTIFIC_CHARTS_AVAILABLE:
+                        corr_chart = build_physiology_correlation_matrix(
+                            correlation_df=corr_df,
+                            title="Physiological Metrics Correlation Matrix",
+                        )
+                        
+                        render_echarts(
+                            EChartsConfig(
+                                option=corr_chart,
+                                height=400,
+                                key="unified_corr_matrix"
+                            )
+                        )
+                    else:
+                        st.dataframe(corr_df.style.background_gradient(cmap="RdYlGn", vmin=-1, vmax=1))
+                    
+                    # Highlight significant correlations
+                    st.markdown("**Significant Correlations (|r| > 0.5):**")
+                    sig_corrs = []
+                    for i, m1 in enumerate(selected_metrics):
+                        for j, m2 in enumerate(selected_metrics):
+                            if i < j:
+                                r = corr_df.loc[m1, m2]
+                                if abs(r) > 0.5:
+                                    direction = "positive" if r > 0 else "negative"
+                                    strength = "strong" if abs(r) > 0.7 else "moderate"
+                                    sig_corrs.append(f"- **{m1}** ↔ **{m2}**: r = {r:.3f} ({strength} {direction})")
+                    
+                    if sig_corrs:
+                        st.markdown("\n".join(sig_corrs))
+                    else:
+                        st.info("No correlations with |r| > 0.5 found among selected metrics.")
+                elif len(selected_metrics) < 2:
+                    st.info("Select at least 2 metrics to compute correlations.")
+            elif not selected_metrics:
+                st.info("Select at least one metric to display the timeline.")
+        
+        st.caption(
+            "**Scientific basis:** Multi-metric analysis enables detection of autonomic patterns that "
+            "single-metric analysis may miss. Cross-domain correlations can reveal compensatory mechanisms "
+            "and early warning signs of physiological stress."
+        )
 
     # =========================================================================
     # FATIGUE TAB - SAFTE Model Integration
