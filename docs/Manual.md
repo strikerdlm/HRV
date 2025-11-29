@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.6.0
+**Version:** 1.6.1
 
 ---
 
@@ -918,6 +918,141 @@ Circadian phase affects HRV metrics:
 - HRV typically peaks during sleep (parasympathetic dominance)
 - Circadian disruption correlates with reduced HRV
 - Use circadian simulation to contextualize HRV measurements
+
+### Advanced Circadian Analysis Tools
+
+#### Cosinor Analysis (phasetools.py)
+
+Cosinor analysis fits a cosine function to time-series data to extract circadian parameters:
+
+```
+y(t) = M + A × cos(2πt/τ + φ)
+```
+
+Where:
+- **M (MESOR)**: Midline Estimating Statistic of Rhythm - baseline level
+- **A (Amplitude)**: Peak-to-trough difference / 2
+- **φ (Acrophase)**: Time of peak value
+- **τ (Period)**: Fixed at 24h for circadian analysis
+
+**Available Functions:**
+| Function | Description |
+|----------|-------------|
+| `cosinor()` | Fit cosinor model to data, return MESOR, amplitude, acrophase |
+| `cosinor_phase()` | Extract phase only from time series |
+| `cosinor_goals()` | Compare actual vs target phase for intervention planning |
+
+**Clinical Applications:**
+- Quantify circadian amplitude (reduced in aging, depression, dementia)
+- Track phase shifts in jet lag recovery
+- Monitor phase stability in shift workers
+
+#### Phase Response Curves (prc.py)
+
+Phase Response Curves (PRCs) describe how light pulses at different circadian phases shift the biological clock:
+
+| Component | Description |
+|-----------|-------------|
+| **PhaseResponseCurveLight** | Full PRC computation for light stimuli |
+| **IntensityResponseCurveLight** | How pulse intensity affects phase shift magnitude |
+| **DosageResponseCurve** | Relationship between light duration and effect |
+| **PRCFinder** | Automated optimal light timing recommendations |
+
+**Light Pulse Parameters:**
+- `RimmerLightPulseLight`: Standard Rimmer protocol light pulses
+- `make_pulse()`: Generate custom light pulses
+- `get_pulse()`: Retrieve preset pulse configurations
+
+**Use Cases:**
+1. **Jet Lag Optimization**: Find optimal light exposure windows post-travel
+2. **Shift Work Adaptation**: Plan light exposure for night shift workers
+3. **Delayed Sleep Phase**: Determine morning light therapy timing
+4. **Advanced Sleep Phase**: Plan evening light exposure
+
+#### Two-Process Model of Sleep (sleep.py)
+
+The Two-Process Model (Borbély, 1982) describes sleep-wake regulation:
+
+**Process S (Homeostatic):**
+- Sleep pressure accumulates during wakefulness
+- Dissipates exponentially during sleep
+- $$S(t) = S_0 \times e^{-t/\tau_d}$$ (sleep decay)
+- $$S(t) = S_{max} - (S_{max} - S_0) \times e^{-t/\tau_r}$$ (wake rise)
+
+**Process C (Circadian):**
+- 24-hour oscillation in sleep propensity
+- Interacts with Process S to determine alertness
+
+**Available Functions:**
+| Function | Description |
+|----------|-------------|
+| `TwoProcessModel` | Complete model with customizable parameters |
+| `sleep_midpoint()` | Calculate sleep midpoint from wake/sleep times |
+| `cluster_sleep_periods_scipy()` | Detect sleep bouts from actigraphy data |
+
+**Parameters:**
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `tau_d` | 18.18 h | Process S decay time constant |
+| `tau_r` | 4.2 h | Process S rise time constant |
+| `S_0` | 0.35 | Initial sleep pressure |
+| `S_max` | 0.75 | Maximum sleep pressure |
+| `circadian_amplitude` | 0.12 | Process C amplitude |
+
+#### Synthetic Data Generation (synthetic_data.py)
+
+Generate realistic wearable data for testing and validation:
+
+| Function | Description |
+|----------|-------------|
+| `generate_activity_from_light()` | Create activity patterns from light schedules |
+
+**Use Cases:**
+- Algorithm validation without real patient data
+- Training machine learning models
+- Protocol development and testing
+- Educational demonstrations
+
+#### Wearable Data Readers (readers.py)
+
+Load data from various wearable devices:
+
+| Function | Input Format | Output |
+|----------|--------------|--------|
+| `load_json()` | Standard JSON with timestamps | WearableData object |
+| `load_csv()` | CSV with time/activity columns | WearableData object |
+| `load_actiwatch()` | Actiwatch CSV export | WearableData object |
+| `resample_df()` | Any DataFrame | Resampled to target frequency |
+| `combine_wearable_dataframes()` | Multiple DataFrames | Merged time series |
+
+**WearableData Class:**
+```python
+@dataclass
+class WearableData:
+    time_total: NDArray[np.float64]  # Hours since start
+    steps: NDArray[np.float64]       # Step counts
+    light_estimate: NDArray[np.float64]  # Estimated light exposure
+```
+
+### Circadian-HRV Integration Research
+
+Recent research highlights important connections:
+
+1. **DLMO-HRV Correlation**: Dim Light Melatonin Onset (DLMO) timing correlates with nocturnal HRV patterns (Scheer et al., 2009)
+
+2. **Social Jetlag and HRV**: >2h social jetlag associated with 15-20% reduction in RMSSD (Rutters et al., 2014)
+
+3. **Shift Work and Autonomic Dysfunction**: Night shift workers show reduced HRV compared to day workers, partially mediated by circadian misalignment (Boudreau et al., 2013)
+
+4. **Light Therapy for HRV**: Morning bright light therapy (10,000 lux) improves both circadian alignment and vagal tone (Gronfier et al., 2004)
+
+**Recommended Protocols:**
+| Assessment | Protocol |
+|------------|----------|
+| Circadian HRV Profile | 24-48h Holter + DLMO measurement |
+| Shift Work Assessment | Pre/post shift HRV + light exposure logging |
+| Jet Lag Recovery | Daily morning HRV + circadian simulation |
+| Light Therapy Monitoring | Weekly HRV + subjective sleepiness |
 
 ---
 
@@ -2966,7 +3101,14 @@ This section outlines completed features and remaining planned enhancements for 
 ✅ **Real-Time BLE Integration** - Polar H10/H9, Garmin, Wahoo support  
 ✅ **Population Norms Comparison** - Age/sex-stratified reference values from Nunan, Ortega, MESA  
 ✅ **Blood Pressure Variability** - BPV metrics with HRV-BPV correlation analysis  
-✅ **Circadian Physiology Module** - Forger99, Jewett99, Hannay19 models with ESRI  
+✅ **Circadian Physiology Module** - Complete integration with all advanced tools
+  - Forger99, Jewett99, Hannay19, Hannay19TP models
+  - ESRI (Entrainment Signal Regularity Index)
+  - Cosinor analysis for phase extraction
+  - Phase Response Curves (PRC), Intensity Response Curves (IRC)
+  - Two-Process Model of sleep regulation
+  - Synthetic data generation
+  - Actiwatch and wearable data readers
 ✅ **User Profiles System** - Biometrics and validated clinical scales (ESS, KSS, PSQI)  
 ✅ **Docker Deployment** - Full containerization with PostgreSQL/TimescaleDB  
 ✅ **Professional Welcome Page** - Laboratory branding with quick access grid  
@@ -3058,6 +3200,74 @@ This section outlines completed features and remaining planned enhancements for 
 - Motion sickness susceptibility
 - Vestibular-autonomic coupling
 - Simulator sickness prediction
+
+### Research-Based Feature Ideas (2025-2026)
+
+Based on recent scientific literature, the following features are under consideration:
+
+#### 1. HRV-Based Mental Health Monitoring
+
+**Scientific Basis:** Gu & Hu (2025) demonstrated 97% accuracy in predicting emotional states from HRV using Bi-LSTM networks.
+
+**Planned Features:**
+- Real-time emotional state classification (neutral, anxious, depressed)
+- Long-term mood trajectory tracking
+- Integration with digital phenotyping data
+- Intervention effectiveness monitoring
+
+**Reference:** Gu X, Hu X. (2025). Research on mood monitoring and intervention for anxiety disorder patients based on deep learning wearable devices. *Technol Health Care*. [PMID: 40105160]
+
+#### 2. Transcutaneous Vagus Nerve Stimulation (taVNS) Response Prediction
+
+**Scientific Basis:** Li et al. (2025) showed that autonomic response to taVNS predicts changes in consciousness, with 86% classification accuracy using SVM on HRV features.
+
+**Planned Features:**
+- Pre-taVNS HRV baseline assessment
+- Response prediction scoring
+- Optimal stimulation parameter recommendations
+- Treatment outcome tracking
+
+**Reference:** Li Y, et al. (2025). The autonomic response following taVNS predicts changes in level of consciousness in DoC patients. *Sci Rep, 15*(1). [PMID: 40025051]
+
+#### 3. Circadian-HRV Coupled Analysis
+
+**Scientific Basis:** Emerging research shows bidirectional coupling between circadian rhythms and autonomic function.
+
+**Planned Features:**
+- Joint circadian-HRV state estimation
+- Chrono-autonomic profile generation
+- Light exposure optimization based on HRV response
+- Personalized circadian intervention timing
+
+#### 4. Deep Learning for Continuous HRV Prediction
+
+**Scientific Basis:** Recent advances in transformer architectures for physiological time series.
+
+**Planned Features:**
+- Predictive HRV modeling (1-24h horizon)
+- Anomaly detection with uncertainty quantification
+- Transfer learning from large HRV databases
+- Federated learning for privacy-preserving model updates
+
+#### 5. Aerospace-Specific Fatigue Biomarkers
+
+**Scientific Basis:** Integration of HRV, circadian models, and cognitive performance testing for aviation applications.
+
+**Planned Features:**
+- G-LOC risk prediction from pre-flight HRV
+- Hypoxia susceptibility assessment
+- Fatigue-related accident risk scoring
+- Crew scheduling optimization
+
+#### 6. Baroreflex-Circadian Interaction Analysis
+
+**Scientific Basis:** Baroreflex sensitivity shows circadian variation that may be disrupted in cardiovascular disease.
+
+**Planned Features:**
+- Time-of-day baroreflex assessment
+- HRV-BPV coherence analysis by circadian phase
+- Nocturnal blood pressure dipping prediction
+- Cardiovascular risk stratification
 
 ### How to Contribute
 
