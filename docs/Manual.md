@@ -375,6 +375,75 @@ Sleep quality, quantity, and staging are tightly coupled with HRV and autonomic 
 
 ---
 
+## Consumer Smartwatch & Wearable Integration (Nov 2025)
+
+### Garmin Vivosmart 5 — Device Profile
+
+| Attribute | Value |
+|-----------|-------|
+| **Sensors** | Garmin Elevate optical HR (PPG), 3-axis accelerometer, ambient light, pulse oximeter (SpO₂) |
+| **HRV capability** | 24/7 HR tracking; overnight HRV RMSSD (5-min intervals) during configured sleep window; no beat-to-beat RR export via Connect app |
+| **Sleep tracking** | Automatic sleep detection via actigraphy + PPG; stages (light, deep, REM) shown in Garmin Connect; ~70% accuracy vs PSG per Garmin validation study |
+| **Body Battery / Stress** | Proprietary composite score derived from HRV, stress, activity, and sleep |
+| **Data export options** | (1) Per-activity .FIT file via Garmin Connect web ("Export Original"); (2) Bulk wellness export (JSON) via Account Settings → Export Wellness Data; (3) Unofficial API via `garminconnect` Python library |
+| **Limitations** | Optical HR sensor less accurate than chest strap for beat-level HRV; no raw RR intervals in standard export; requires workaround for continuous HRV data |
+
+### Data access pathways
+
+#### 1. Garmin Connect Wellness Export (official)
+- Navigate to **Account Settings → Account Information → Export Wellness Data**.
+- Garmin emails a ZIP containing JSON files under `DI_CONNECT/DI-Connect-Wellness/`:
+  - `*_sleepData.json` — nightly sleep stages, duration, scores.
+  - `*_hrvData.json` — overnight HRV RMSSD summaries (5-min epochs).
+  - `*_stressData.json` — stress level time series.
+  - `*_heartRateData.json` — minute-level HR.
+- **Pros:** official, no API keys; **Cons:** manual, no real-time, limited granularity.
+
+#### 2. FIT file export (per activity)
+- In Garmin Connect web, open an activity → gear icon → **Export Original** → `.FIT` file.
+- Parse with **fitparse** or **fitdecode** Python libraries.
+- FIT files from some devices include `hrv` records with beat-to-beat RR intervals during activities.
+- **Vivosmart 5 limitation:** wellness/sleep FIT files typically lack raw RR; activity FIT files may include HR but not beat-level HRV.
+
+#### 3. Unofficial `garminconnect` Python library
+- GitHub: [cyberjunky/python-garminconnect](https://github.com/cyberjunky/python-garminconnect)
+- Provides programmatic access to Garmin Connect data (sleep, HR, HRV, stress, activities).
+- Requires Garmin Connect credentials (stored securely via `.env` or keyring).
+- Example endpoints:
+  - `get_sleep_data(date)` — sleep stages, scores.
+  - `get_hrv_data(date)` — overnight HRV RMSSD.
+  - `get_heart_rates(date)` — minute-level HR.
+  - `download_activity(activity_id)` — raw FIT bytes.
+- **Caution:** unofficial API; may break with Garmin updates; use rate limiting.
+
+### Recommended Python libraries
+
+| Library | Purpose | Install |
+|---------|---------|---------|
+| **garminconnect** | Unofficial Garmin Connect API wrapper | `pip install garminconnect` |
+| **fitparse** | Parse ANT/Garmin .FIT files | `pip install fitparse` |
+| **fitdecode** | Alternative FIT parser (handles edge cases) | `pip install fitdecode` |
+| **gpxpy** | Parse GPX exports (activity routes) | `pip install gpxpy` |
+| **tcxreader** | Parse TCX exports | `pip install tcxreader` |
+
+### Proposed Garmin import module (`app/garmin_import.py`)
+
+**Scope:**
+1. Authenticate to Garmin Connect via `garminconnect` (credentials from `.env`).
+2. Fetch sleep, HRV, HR, and stress data for a date range.
+3. Parse bulk wellness JSON export if user provides ZIP.
+4. Parse individual FIT files for activity-level HRV (if available).
+5. Return standardised DataFrames: `sleep_df`, `hrv_df`, `hr_df`, `stress_df`.
+6. Integrate with existing HRV analysis pipeline (feed overnight RR/RMSSD into `hrv_core.py`).
+
+**Quality controls:**
+- Validate timestamps and handle timezone conversions.
+- Flag nights with missing or sparse HRV data.
+- Cross-check HR vs HRV consistency.
+- Warn user about optical-sensor limitations for beat-level analysis.
+
+---
+
 ## Notes on App Implementation
 
 - QC heuristics are transparent and bounded; they are not a substitute for full ECG beat annotation or clinical-grade editing. For high-stakes analyses, consider manual review.
