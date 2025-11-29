@@ -446,6 +446,25 @@ Sleep quality, quantity, and staging are tightly coupled with HRV and autonomic 
 
 ## Implemented Features (Nov 2025)
 
+### Module Integration Status
+
+| Module | Status | Description |
+|--------|--------|-------------|
+| `hrv_core.py` | ✅ Complete | Core HRV computation (time, frequency, nonlinear, entropy) |
+| `gauge_builder.py` | ✅ Complete | 30+ metric gauges with clinical thresholds |
+| `gpt_interpretation.py` | ✅ Complete | GPT-5.1 high-reasoning interpretation |
+| `publication_export.py` | ✅ Complete | APA-formatted statistical exports |
+| `ml_analytics.py` | ✅ Complete | Anomaly detection, trend analysis, ML classification |
+| `statistical_analysis.py` | ✅ Complete | Comprehensive inferential statistics |
+| `multiday_tracker.py` | ✅ Complete | Longitudinal tracking with rolling statistics |
+| `solar_physiology_correlation.py` | ✅ Complete | Solar-HRV correlation with lag analysis |
+| `scientific_charts.py` | ✅ Complete | Publication-ready ECharts visualizations |
+| `hrv_fragmentation.py` | ✅ Complete | HRF metrics (PIP, IALS, W0-W3) |
+| `sleep_metrics.py` | ✅ Complete | Sleep staging and quality metrics |
+| `garmin_import.py` | ✅ Complete | Garmin wellness data import (HR, HRV, SpO2, stress) |
+| `fatigue_integration.py` | ✅ Complete | SAFTE model for fatigue prediction |
+| `noaa_space.py` | ✅ Complete | NOAA space weather data integration |
+
 ### Comprehensive Gauge System (`app/gauge_builder.py`)
 The app now includes a unified gauge visualization system with 30+ metrics across all HRV domains:
 
@@ -466,7 +485,7 @@ Each gauge uses:
 
 ### AI-Powered Interpretation (`app/gpt_interpretation.py`)
 The GPT interpretation module now features:
-- **Multi-model fallback**: GPT-5.1 → GPT-4o → GPT-4-turbo → GPT-3.5-turbo
+- **GPT-5.1 High Reasoning**: Single model with maximum reasoning effort
 - **Robust error handling**: Automatic retries with exponential backoff
 - **Rate limiting**: Respects API limits with graceful degradation
 - **Local fallback**: Rule-based interpretation when API unavailable
@@ -480,6 +499,16 @@ Export utilities for Q1 journal submissions:
 - **Normality testing**: Shapiro-Wilk with skewness/kurtosis
 - **LaTeX table generation**: Publication-ready table code
 - **Reproducibility metadata**: Software versions, parameters, data hashes
+
+### Statistical Analysis (`app/statistical_analysis.py`)
+Comprehensive inferential statistics for publication:
+- **Descriptive statistics**: Mean, SD, SEM, median, IQR, percentiles, skewness, kurtosis
+- **Normality testing**: Shapiro-Wilk with automatic test selection
+- **Group comparisons**: Independent/paired t-tests, Mann-Whitney U, Wilcoxon, ANOVA, Kruskal-Wallis
+- **Effect sizes**: Cohen's d, Hedges' g, η², ω² with verbal interpretation
+- **Multiple comparison corrections**: Bonferroni, FDR (Benjamini-Hochberg)
+- **Correlation analysis**: Pearson, Spearman with 95% CI
+- **Regression**: Linear regression with AIC/BIC model selection
 
 ### ML Analytics (`app/ml_analytics.py`)
 Machine learning features for advanced analysis:
@@ -502,6 +531,43 @@ Machine learning features for advanced analysis:
 - Readiness prediction from historical data
 - HRV state classification (optimal/normal/suboptimal/concerning)
 
+### Multi-day Longitudinal Tracking (`app/multiday_tracker.py`)
+Track HRV, sleep, and activity across multiple days:
+- **Daily records**: HRV, sleep, and activity metrics per day
+- **Rolling statistics**: 7-day rolling mean, SD, min, max
+- **Trend analysis**: Linear trend with significance testing
+- **Intervention analysis**: Pre/post comparison with effect sizes
+- **Alert system**: Configurable thresholds for attention/warning/critical
+- **Recommendations**: Automated suggestions based on trends
+
+### Solar-Physiology Correlation (`app/solar_physiology_correlation.py`)
+Analyze relationships between space weather and physiology:
+- **Solar metrics**: Kp index, Dst, F10.7 flux, solar wind, X-ray flux
+- **Physiological metrics**: HRV, sleep, activity, ANS balance
+- **Lag analysis**: Test correlations at 0-7 day lags
+- **Significance classification**: Marginal, significant, highly significant
+- **Correlation strength**: Negligible, weak, moderate, strong, very strong
+- **Comprehensive reports**: Publication-ready correlation summaries
+
+### Scientific Charts (`app/scientific_charts.py`)
+Publication-ready visualizations using ECharts:
+- **HRV time series**: Multi-metric synchronized timeline
+- **Frequency domain**: PSD with band highlighting
+- **Poincaré plot**: SD1/SD2 ellipse with scatter
+- **Hypnogram**: Sleep stage visualization
+- **Sleep architecture**: Stage distribution pie/bar charts
+- **ANS balance gauge**: Sympathovagal balance indicator
+- **Multi-day trends**: Rolling statistics with confidence bands
+- **Correlation heatmap**: Inter-metric correlation matrix
+- **ML pattern chart**: Anomalies, trends, change points
+
+### Unified Physiological Timeline (`app/app.py`)
+New tab for synchronized multi-metric visualization:
+- **Cross-domain analysis**: HRV, cardiac, respiratory, stress metrics
+- **ML pattern detection**: Real-time anomaly and trend detection
+- **Correlation matrix**: Interactive heatmap of metric relationships
+- **Automated interpretation**: Significant findings highlighted
+
 ### Heart Rate Fragmentation (`app/hrv_fragmentation.py`)
 Complete HRF metrics per PROOF-AF study methodology:
 - PIP, PIP_H, PIP_S (inflection point percentages)
@@ -519,10 +585,135 @@ Sleep analysis from actigraphy/wearable data:
 ### Garmin Integration (`app/garmin_import.py`)
 Support for Garmin Vivosmart 5 and compatible devices:
 - Authentication via `garminconnect` library
-- Fetch sleep, HRV, HR, and stress data
+- Fetch sleep, HRV, HR, stress, SpO2, respiration, body battery data
 - Parse wellness export ZIP files
 - Parse individual FIT files
+- Time-synchronized physiological data structure
 - Quality checks and timestamp validation
+
+### SAFTE Fatigue Prediction (`app/fatigue_integration.py`)
+Biomathematical model for cognitive performance prediction:
+- **Homeostatic process**: Sleep pressure accumulation during wakefulness
+- **Circadian process**: 24h + 12h biological rhythms
+- **Sleep inertia**: Post-sleep grogginess modeling
+- **Performance prediction**: Hourly effectiveness estimates
+- **Risk assessment**: Fatigue risk scoring with factor breakdown
+- **Recommendations**: Automated sleep/work schedule suggestions
+
+---
+
+## Suggested Future Implementations (Science-Based Roadmap)
+
+### 1. Real-Time HRV Streaming & Biofeedback
+**Scientific basis:** A 2024 systematic review showed HRV biofeedback (10×20 min sessions) significantly increased resting vagally-mediated HRV in healthy adults, with stronger effects in those with higher baseline RMSSD [Appl Psychophysiol Biofeedback 2024; PubMed 38888656].
+
+**Proposed features:**
+- Live RR interval streaming via Polar H10 SDK or BLE heart rate monitors
+- Real-time coherence gauge with paced breathing guide
+- Session tracking with adherence metrics
+- Pre/post vmHRV comparison dashboard
+
+**Implementation priority:** High — enables active intervention rather than passive monitoring
+
+### 2. Wearable Data Fusion (Multi-Sensor)
+**Scientific basis:** Ring-shaped devices combining ECG, PPG, galvanic skin response, and accelerometry achieve robust HRV estimation in daily life [Biosensors 2024; PubMed 38667198]. Multi-modal fusion improves signal quality and enables comprehensive stress assessment.
+
+**Proposed features:**
+- Import from Oura Ring, Whoop, Apple Watch, Fitbit
+- Cross-validate RR intervals from ECG vs PPG sources
+- Skin conductance integration for sympathetic arousal proxy
+- Signal quality scoring per modality
+
+**Implementation priority:** High — expands user base and data richness
+
+### 3. Circadian & Chronotype-Aware Analysis
+**Scientific basis:** The CRIC study (n=458) demonstrated significant time-of-day effects on HRV, with diabetes and proteinuria modulating diurnal patterns [npj Digital Medicine 2025]. Menstrual phase tracking in Oura Ring users showed RMSSD dips in late-luteal phase [Chronobiol Int 2024; PubMed 39108015].
+
+**Proposed features:**
+- Diurnal baseline engine with hourly HRV norms
+- Chronotype questionnaire (MEQ) integration
+- Menstrual phase tracking with phase-matched baselines
+- Shift-work pattern detection and alerting
+
+**Implementation priority:** Medium — improves baseline accuracy
+
+### 4. Cognitive Load & Mental Health Monitoring
+**Scientific basis:** A Unity-based mental arithmetic paradigm showed graded anticipatory SDNN suppression paralleling NASA-TLX workload scores [J Physiol Anthropol 2025]. Wearable HRV correlated negatively with PHQ-9 depression and GAD-7 anxiety scores over 4 weeks [Front Psychiatry 2024; DOI 10.3389/fpsyt.2024.1371946].
+
+**Proposed features:**
+- Cognitive challenge tab with standardized tasks (N-back, arithmetic)
+- PRE/ANTICIPATION/TASK/RECOVERY automatic segmentation
+- Optional mood/symptom diary with rolling HRV correlations
+- Workload estimation from HRV patterns
+
+**Implementation priority:** Medium — valuable for occupational health
+
+### 5. Advanced Entropy & Complexity Metrics
+**Scientific basis:** Recent systematic reviews confirm entropy measures capture complexity lost in linear HRV analysis [Front Neurol 2025; DOI 10.3389/fneur.2025.1636983]. Multiscale entropy shows sex differences at coarse scales [IEEE ESGCO 2024].
+
+**Proposed features:**
+- Multiscale Entropy (MSE) with configurable scale range
+- Fuzzy Entropy for improved noise robustness
+- Recurrence Quantification Analysis (RQA) expansion
+- Symbolic dynamics with customizable word length
+
+**Implementation priority:** Medium — enhances nonlinear analysis depth
+
+### 6. Exercise Training Response Tracking
+**Scientific basis:** A 2024 network meta-analysis (16 RCTs, n=623) found HIIT most effective for SDNN/RMSSD improvement, resistance training best for HF power, combined training best for LF power [Rev Cardiovasc Med 2024; DOI 10.31083/j.rcm2501009].
+
+**Proposed features:**
+- Training type tagging (HIIT, resistance, endurance, combined)
+- Modality-specific HRV response curves
+- Training load estimation from HRV suppression/recovery
+- Overtraining risk alerts based on chronic HRV trends
+
+**Implementation priority:** Medium — valuable for athletes and coaches
+
+### 7. Age-Stratified Reference Values
+**Scientific basis:** A 2024 systematic review found wide variability in HRV reference values for older adults due to non-standardized methods [Psychophysiology 2024; DOI 10.1111/psyp.14661]. Pediatric normative data were published in 2024 [Clin Auton Res 2024; DOI 10.1007/s10286-024-01056-x].
+
+**Proposed features:**
+- Age bracket selection (pediatric, young adult, middle-aged, older adult)
+- Sex-stratified percentile bands from published norms
+- Automatic flagging when values deviate from age-matched norms
+- Longitudinal aging trajectory visualization
+
+**Implementation priority:** Medium — improves clinical interpretation
+
+### 8. Neuromodulation Session Monitoring
+**Scientific basis:** TMS + peripheral nerve stimulation protocols in SCI patients used continuous HRV to verify autonomic safety [Sci Rep 2025; DOI 10.1038/s41598-025-25802-x].
+
+**Proposed features:**
+- PRE/STIM/POST window bookmarking
+- Stimulation parameter logging
+- Autonomic safety threshold monitoring
+- Cross-session trajectory comparison
+
+**Implementation priority:** Low — specialized clinical use
+
+### 9. Arrhythmia Risk Stratification
+**Scientific basis:** The PROOF-AF study (18-year follow-up, n=1011) found elevated PIP and reduced DFA α1 independently predicted atrial fibrillation [EHJ Open 2025; DOI 10.1093/ehjopen/oeaf030].
+
+**Proposed features:**
+- AF risk score combining PIP, α1, and traditional HRV
+- Ectopic beat burden estimation
+- Long-term rhythm stability tracking
+- Clinical alert thresholds with sensitivity/specificity trade-offs
+
+**Implementation priority:** Low — requires clinical validation
+
+### 10. Cloud-Based Multi-User Research Platform
+**Scientific basis:** Large-scale HRV studies require standardized data collection, quality control, and analysis pipelines across multiple sites.
+
+**Proposed features:**
+- Secure cloud storage with HIPAA/GDPR compliance
+- Multi-site study management dashboard
+- Automated data quality scoring
+- Batch analysis with reproducibility metadata
+- Export to BIDS format for neuroimaging integration
+
+**Implementation priority:** Low — infrastructure-heavy
 
 ---
 
