@@ -1,13 +1,14 @@
 {
   // Ensure Cursor/VS Code uses the project .venv interpreter
-  "python.defaultInterpreterPath": "C:\\Users\\User\\OneDrive\\FAC\\Research\\Python Scripts\\HRV\\.venv\\Scripts\\python.exe",
+  // Uses workspace-relative path that works across different user directories
+  "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
   // Point Python tooling at the Miniconda conda.exe to avoid Anaconda conflicts
-  "python.condaPath": "C:\\Users\\User\\Miniconda3\\Scripts\\conda.exe",
+  // Note: Update this path to match your Miniconda installation location
+  "python.condaPath": "${env:USERPROFILE}\\Miniconda3\\Scripts\\conda.exe",
   // Make terminals auto-activate the selected interpreter
   "python.terminal.activateEnvironment": true,
-  // Use a dedicated local Jupyter server to bypass kernel listing bug in extension
-  "jupyter.jupyterServerType": "remote",
-  "jupyter.jupyterServerURI": "http://localhost:8989/?token=",
+  // Use local Jupyter server (remove remote config if not using remote server)
+  "jupyter.jupyterServerType": "local",
   "jupyter.logging.level": "error"
 }
 
