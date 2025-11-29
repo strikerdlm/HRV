@@ -4408,11 +4408,9 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
                     )
                     
                     render_echarts(
-                        EChartsConfig(
-                            option=unified_chart,
-                            height=500,
-                            key="unified_timeline_chart"
-                        )
+                        unified_chart,
+                        height_px=500,
+                        config=EChartsConfig()
                     )
                 
                 # ML Pattern Detection
@@ -4518,11 +4516,9 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
                             )
                             
                             render_echarts(
-                                EChartsConfig(
-                                    option=ml_chart,
-                                    height=400,
-                                    key="ml_pattern_chart"
-                                )
+                                ml_chart,
+                                height_px=400,
+                                config=EChartsConfig()
                             )
                         
                         # Interpretation
@@ -4574,11 +4570,9 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
                                     )
                                     
                                     render_echarts(
-                                        EChartsConfig(
-                                            option=corr_chart,
-                                            height=400,
-                                            key="unified_corr_matrix"
-                                        )
+                                        corr_chart,
+                                        height_px=400,
+                                        config=EChartsConfig()
                                     )
                                 else:
                                     st.dataframe(corr_df.style.background_gradient(cmap="RdYlGn", vmin=-1, vmax=1))
@@ -4594,14 +4588,14 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
                                                 direction = "positive" if r > 0 else "negative"
                                                 strength = "strong" if abs(r) > 0.7 else "moderate"
                                                 sig_corrs.append(f"- **{m1}** ↔ **{m2}**: r = {r:.3f} ({strength} {direction})")
+                                
+                                if sig_corrs:
+                                    st.markdown("\n".join(sig_corrs))
+                                else:
+                                    st.info("No correlations with |r| > 0.5 found among selected metrics.")
                         except Exception as e:
                             logger.warning(f"Correlation computation failed: {e}")
                             st.warning(f"Could not compute correlations: {e}")
-                    
-                    if sig_corrs:
-                        st.markdown("\n".join(sig_corrs))
-                    else:
-                        st.info("No correlations with |r| > 0.5 found among selected metrics.")
                 elif len(selected_metrics) < 2:
                     st.info("Select at least 2 metrics to compute correlations.")
             elif not selected_metrics:
@@ -4892,11 +4886,9 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                     }
                     
                     render_echarts(
-                        EChartsConfig(
-                            option=coherence_gauge,
-                            height=250,
-                            key="biofeedback_coherence_gauge"
-                        )
+                        coherence_gauge,
+                        height_px=250,
+                        config=EChartsConfig()
                     )
                     
                     # Coherence history chart
@@ -4929,11 +4921,9 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                         }
                         
                         render_echarts(
-                            EChartsConfig(
-                                option=history_chart,
-                                height=200,
-                                key="biofeedback_history_chart"
-                            )
+                            history_chart,
+                            height_px=200,
+                            config=EChartsConfig()
                         )
                 
                 # Auto-refresh
@@ -4983,11 +4973,9 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                         }
                         
                         render_echarts(
-                            EChartsConfig(
-                                option=zone_chart,
-                                height=250,
-                                key="biofeedback_zone_chart"
-                            )
+                            zone_chart,
+                            height_px=250,
+                            config=EChartsConfig()
                         )
                 else:
                     st.info(
@@ -5259,11 +5247,9 @@ that predicts cognitive performance based on:
                     }
                     
                     render_echarts(
-                        EChartsConfig(
-                            option=perf_chart_config,
-                            height=400,
-                            key="fatigue_perf_chart"
-                        )
+                        perf_chart_config,
+                        height_px=400,
+                        config=EChartsConfig()
                     )
                 
                 # Analysis metrics
@@ -5325,11 +5311,9 @@ that predicts cognitive performance based on:
                 }
                 
                 render_echarts(
-                    EChartsConfig(
-                        option=zone_chart_config,
-                        height=350,
-                        key="fatigue_zone_chart"
-                    )
+                    zone_chart_config,
+                    height_px=350,
+                    config=EChartsConfig()
                 )
                 
                 # Risk assessment
@@ -5400,11 +5384,9 @@ that predicts cognitive performance based on:
                 }
                 
                 render_echarts(
-                    EChartsConfig(
-                        option=risk_bar_config,
-                        height=250,
-                        key="fatigue_risk_bar"
-                    )
+                    risk_bar_config,
+                    height_px=250,
+                    config=EChartsConfig()
                 )
                 
                 # Recommendations
@@ -5445,11 +5427,9 @@ that predicts cognitive performance based on:
                         }
                         
                         render_echarts(
-                            EChartsConfig(
-                                option=circ_chart_config,
-                                height=300,
-                                key="fatigue_circ_chart"
-                            )
+                            circ_chart_config,
+                            height_px=300,
+                            config=EChartsConfig()
                         )
                 
                 # Export option
