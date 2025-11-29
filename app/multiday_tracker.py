@@ -635,7 +635,7 @@ class MultiDayTracker:
             recommendations.append("Consider reducing training load or improving recovery.")
         if sleep_trends.get("sleep_efficiency") and sleep_trends["sleep_efficiency"].current_value < 85:
             recommendations.append("Sleep efficiency is below optimal. Review sleep hygiene practices.")
-        if activity_trends.get("stress_score") and activity_trends["stress_score"].status == TrendStatus.IMPROVING:
+        if activity_trends.get("stress_score") and activity_trends["stress_score"].status == TrendStatus.DECLINING:
             recommendations.append("Stress levels are increasing. Consider stress management techniques.")
 
         return LongitudinalSummary(
