@@ -60,6 +60,7 @@ except ImportError:
 # Device imports module
 try:
     from device_imports import (
+        render_primary_import_section,
         render_all_device_imports,
         render_polar_import_section,
         render_garmin_import_section,
@@ -68,6 +69,20 @@ try:
     DEVICE_IMPORTS_AVAILABLE = True
 except ImportError:
     DEVICE_IMPORTS_AVAILABLE = False
+
+# Space weather persistence module
+try:
+    from space_weather_persistence import (
+        get_space_weather_store,
+        fetch_and_store_kp_index,
+        fetch_and_store_solar_wind,
+        fetch_and_store_f107,
+        align_space_weather_with_hrv,
+        compute_hrv_space_weather_correlation,
+    )
+    SPACE_WEATHER_PERSISTENCE_AVAILABLE = True
+except ImportError:
+    SPACE_WEATHER_PERSISTENCE_AVAILABLE = False
 
 # ML analytics for pattern detection
 try:
@@ -3373,83 +3388,76 @@ def main() -> None:
         st.caption("Dr. Diego L. Malpica, MD — Aerospace Medicine Specialist")
         st.caption("Contributing to AsterPhysiology Research Initiative")
 
-    # Standard RR file uploads
-    uploads = _upload_section()
+    # Initialize uploads dictionary
+    uploads: Dict[str, UploadedRR] = {}
     
-    # Enhanced device imports (Polar, Garmin, etc.)
+    # PRIMARY: Device imports (Polar, Garmin, etc.) - in sidebar
     if DEVICE_IMPORTS_AVAILABLE:
-        imported_devices = render_all_device_imports()
+        imported_devices = render_primary_import_section()
         # Convert ImportedRRData to UploadedRR format for compatibility
         for device_name, data in imported_devices.items():
             if data.sample_count > 0:
                 start_ts = data.recording_start or pd.Timestamp.now(tz=timezone.utc)
                 df = _to_dataframe(
-                    f"{device_name}_{data.filename}",
+                    device_name,
                     data.rr_intervals_ms,
                     start_ts=start_ts,
                 )
-                uploads[f"{device_name}_{data.filename}"] = UploadedRR(
-                    name=f"{device_name}_{data.filename}",
+                uploads[device_name] = UploadedRR(
+                    name=device_name,
                     rr_ms=data.rr_intervals_ms,
                     df=df,
                     recording_start_utc=start_ts,
                 )
-    
-    # Device-specific imports (ActiGraph GT3X, Somfit Pro)
-    device_uploads = _device_import_section()
-    
-    # Merge all uploads
-    uploads.update(device_uploads)
+        # Note: render_primary_import_section already handles ActiGraph and Somfit
+    else:
+        # Fallback to legacy upload section if device imports unavailable
+        uploads = _upload_section()
+        
+        # Legacy device-specific imports (ActiGraph GT3X, Somfit Pro)
+        device_uploads = _device_import_section()
+        uploads.update(device_uploads)
     
     if not uploads:
-        st.info("👋 **Welcome to the HRV Analysis Suite!**")
+        # Welcome message when no data uploaded
+        st.markdown("### 👋 Welcome to the Physiological Laboratory")
         st.markdown("""
-        ### Getting Started
+        Upload your heart rate data to begin comprehensive HRV analysis with 
+        space weather correlation, circadian modeling, and AI-powered insights.
         
-        To begin your analysis, please upload your RR interval data files using the sidebar.
-        
-        #### Supported File Formats:
-        - **Polar H10/H9 RR Export** (.txt) - One RR interval (ms) per line
-        - **Kubios HRV Export** (.txt) - Standard RR interval format
-        - **Elite HRV Export** (.txt) - Compatible RR format
-        
-        #### How to Export Your Data:
-        
-        1. **From Polar Sensor Logger App:**
-           - Record a session with your Polar H10/H9 chest strap
-           - Export the RR data as a .txt file
-           - Upload the file here
-        
-        2. **From Garmin Devices (Vivosmart 5, etc.):**
-           - Export your wellness data from Garmin Connect
-           - Download the ZIP file from Account Settings → Export Your Data
-           - Extract and upload the relevant .txt files
-        
-        3. **From Other HRV Apps:**
-           - Export RR intervals in milliseconds
-           - Ensure one value per line in the .txt file
-        
-        #### File Naming Convention (Recommended):
-        Name your files with the recording timestamp for automatic time alignment:
-        ```
-        YYYY-MM-DD HH-MM-SS.txt
-        Example: 2025-01-15 08-30-00.txt
-        ```
-        
-        #### What You'll Get:
-        - 📊 **Time-domain metrics** (SDNN, RMSSD, pNN50)
-        - 📈 **Frequency-domain analysis** (LF, HF, LF/HF ratio)
-        - 🔬 **Nonlinear analysis** (Poincaré, DFA, Entropy)
-        - 🌡️ **Autonomic function tests** (Valsalva, deep breathing)
-        - 🌍 **Space weather correlation** (Solar activity vs HRV)
-        - 🤖 **AI-powered interpretation** (GPT-5.1 analysis)
-        - 📑 **Publication-ready exports** (Tables, statistics)
-        
-        ---
-        
-        💡 **Tip:** For best results, record 5-minute sessions in a relaxed, seated position 
-        at the same time each day (e.g., morning upon waking).
+        **Use the sidebar** to import data from:
+        - ❤️ **Polar H10/H9** — RR interval exports from Polar Sensor Logger  
+        - ⌚ **Garmin Vivosmart 5** — Wellness data from Garmin Connect
+        - 📄 **Generic RR Files** — Any text file with one RR interval (ms) per line
         """)
+        
+        st.markdown("---")
+        
+        # Feature highlights
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.markdown("""
+            **📊 HRV Analysis**
+            - Time-domain (SDNN, RMSSD)
+            - Frequency-domain (LF, HF)
+            - Nonlinear (DFA, Entropy)
+            """)
+        with col2:
+            st.markdown("""
+            **🌍 Space Weather**
+            - Solar activity correlation
+            - Geomagnetic storm tracking
+            - NASA/NOAA data integration
+            """)
+        with col3:
+            st.markdown("""
+            **🌙 Circadian**
+            - Rhythm simulation
+            - Phase analysis
+            - Jet lag prediction
+            """)
+        
+        st.info("💡 **Tip:** For best results, record 5-minute sessions in a relaxed, seated position at the same time each day.")
         
         # Show sample data format
         with st.expander("📄 Sample RR Data Format"):
