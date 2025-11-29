@@ -713,7 +713,8 @@ def build_ans_balance_gauge(
                     "show": True,
                     "distance": 35,
                     "fontSize": 10,
-                    "formatter": lambda v: "SNS" if v < -0.5 else ("PNS" if v > 0.5 else ""),
+                    # JavaScript function as string for ECharts serialization
+                    "formatter": "{value}",
                 },
                 "title": {
                     "show": True,
