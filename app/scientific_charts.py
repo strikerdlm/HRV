@@ -1,0 +1,1126 @@
+"""Scientific charts module for publication-ready visualizations.
+
+This module provides ECharts-based visualizations for:
+- HRV analysis (time series, frequency domain, Poincaré plots)
+- Sleep analysis (hypnograms, sleep architecture)
+- Activity analysis (daily patterns, trends)
+- ANS balance (sympathovagal balance, circadian patterns)
+- Multi-day longitudinal tracking
+- Solar-physiology correlations
+- Statistical results visualization
+
+All charts are designed for:
+- Publication quality (Q1 journal standards)
+- Interactive exploration
+- Responsive design
+- Consistent styling
+
+Color palette based on scientific visualization best practices.
+"""
+
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass
+from datetime import date, datetime
+from typing import Any, Final
+
+import numpy as np
+import pandas as pd
+
+# ---------------------------------------------------------------------------
+# Constants and color schemes
+# ---------------------------------------------------------------------------
+
+_LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+
+# Scientific color palette (colorblind-friendly)
+COLORS: Final[dict[str, str]] = {
+    "primary": "#2E86AB",      # Steel blue
+    "secondary": "#A23B72",    # Raspberry
+    "success": "#28965A",      # Forest green
+    "warning": "#F18F01",      # Orange
+    "danger": "#C73E1D",       # Red
+    "info": "#3B8EA5",         # Teal
+    "light": "#F5F5F5",        # Light gray
+    "dark": "#1A1A2E",         # Dark blue-black
+    "hrv": "#2E86AB",          # HRV metrics
+    "sleep": "#7B68EE",        # Sleep metrics (medium slate blue)
+    "activity": "#28965A",     # Activity metrics
+    "solar": "#F18F01",        # Solar activity
+    "ans_parasympathetic": "#28965A",  # Vagal/parasympathetic
+    "ans_sympathetic": "#C73E1D",      # Sympathetic
+}
+
+# Gradient color scales
+GRADIENT_BLUE: Final[list[str]] = ["#E3F2FD", "#90CAF9", "#42A5F5", "#1E88E5", "#1565C0"]
+GRADIENT_GREEN: Final[list[str]] = ["#E8F5E9", "#A5D6A7", "#66BB6A", "#43A047", "#2E7D32"]
+GRADIENT_DIVERGING: Final[list[str]] = ["#D32F2F", "#EF5350", "#FFCDD2", "#E8F5E9", "#66BB6A", "#2E7D32"]
+
+
+# ---------------------------------------------------------------------------
+# Chart configuration dataclasses
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True, slots=True)
+class ChartConfig:
+    """Configuration for chart appearance.
+
+    Attributes:
+        width: Chart width in pixels or percentage.
+        height: Chart height in pixels.
+        title_font_size: Title font size.
+        label_font_size: Axis label font size.
+        show_legend: Whether to show legend.
+        animation: Whether to enable animations.
+        theme: Chart theme (light/dark).
+    """
+
+    width: str = "100%"
+    height: int = 400
+    title_font_size: int = 16
+    label_font_size: int = 12
+    show_legend: bool = True
+    animation: bool = True
+    theme: str = "light"
+
+
+DEFAULT_CONFIG: Final[ChartConfig] = ChartConfig()
+
+
+# ---------------------------------------------------------------------------
+# Base chart builders
+# ---------------------------------------------------------------------------
+
+
+def _base_chart_options(
+    title: str,
+    subtitle: str = "",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Create base chart options."""
+    return {
+        "title": {
+            "text": title,
+            "subtext": subtitle,
+            "left": "center",
+            "textStyle": {
+                "fontSize": config.title_font_size,
+                "fontWeight": "bold",
+                "color": COLORS["dark"] if config.theme == "light" else COLORS["light"],
+            },
+            "subtextStyle": {
+                "fontSize": config.label_font_size,
+                "color": "#666",
+            },
+        },
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "cross"},
+        },
+        "grid": {
+            "left": "10%",
+            "right": "10%",
+            "top": "15%",
+            "bottom": "15%",
+            "containLabel": True,
+        },
+        "animation": config.animation,
+    }
+
+
+# ---------------------------------------------------------------------------
+# HRV Charts
+# ---------------------------------------------------------------------------
+
+
+def build_hrv_time_series_chart(
+    timestamps: list[datetime] | pd.DatetimeIndex,
+    rmssd: list[float] | np.ndarray,
+    sdnn: list[float] | np.ndarray | None = None,
+    mean_hr: list[float] | np.ndarray | None = None,
+    title: str = "HRV Time Series",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build HRV time series chart.
+
+    Args:
+        timestamps: Time points.
+        rmssd: RMSSD values.
+        sdnn: Optional SDNN values.
+        mean_hr: Optional mean HR values.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    options = _base_chart_options(title, config=config)
+
+    # Format timestamps
+    time_labels = [t.strftime("%Y-%m-%d %H:%M") if isinstance(t, datetime) else str(t) for t in timestamps]
+
+    options["xAxis"] = {
+        "type": "category",
+        "data": time_labels,
+        "axisLabel": {"rotate": 45, "fontSize": 10},
+    }
+
+    options["yAxis"] = [
+        {
+            "type": "value",
+            "name": "HRV (ms)",
+            "position": "left",
+            "axisLine": {"lineStyle": {"color": COLORS["hrv"]}},
+        },
+    ]
+
+    series = [
+        {
+            "name": "RMSSD",
+            "type": "line",
+            "data": list(rmssd),
+            "smooth": True,
+            "lineStyle": {"color": COLORS["hrv"], "width": 2},
+            "itemStyle": {"color": COLORS["hrv"]},
+            "areaStyle": {"color": COLORS["hrv"], "opacity": 0.1},
+        },
+    ]
+
+    if sdnn is not None:
+        series.append({
+            "name": "SDNN",
+            "type": "line",
+            "data": list(sdnn),
+            "smooth": True,
+            "lineStyle": {"color": COLORS["secondary"], "width": 2},
+            "itemStyle": {"color": COLORS["secondary"]},
+        })
+
+    if mean_hr is not None:
+        options["yAxis"].append({
+            "type": "value",
+            "name": "HR (bpm)",
+            "position": "right",
+            "axisLine": {"lineStyle": {"color": COLORS["danger"]}},
+        })
+        series.append({
+            "name": "Mean HR",
+            "type": "line",
+            "yAxisIndex": 1,
+            "data": list(mean_hr),
+            "smooth": True,
+            "lineStyle": {"color": COLORS["danger"], "width": 2, "type": "dashed"},
+            "itemStyle": {"color": COLORS["danger"]},
+        })
+
+    options["series"] = series
+    options["legend"] = {
+        "data": [s["name"] for s in series],
+        "top": "5%",
+    }
+
+    return options
+
+
+def build_frequency_domain_chart(
+    frequencies: list[float] | np.ndarray,
+    psd: list[float] | np.ndarray,
+    vlf_band: tuple[float, float] = (0.003, 0.04),
+    lf_band: tuple[float, float] = (0.04, 0.15),
+    hf_band: tuple[float, float] = (0.15, 0.4),
+    title: str = "HRV Frequency Domain Analysis",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build frequency domain power spectral density chart.
+
+    Args:
+        frequencies: Frequency values (Hz).
+        psd: Power spectral density values.
+        vlf_band: VLF frequency band.
+        lf_band: LF frequency band.
+        hf_band: HF frequency band.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    options = _base_chart_options(title, config=config)
+
+    freq_list = list(frequencies)
+    psd_list = list(psd)
+
+    # Create band markers
+    mark_areas = [
+        {
+            "label": {"show": True, "position": "top"},
+            "itemStyle": {"color": "rgba(255, 193, 7, 0.2)"},
+            "data": [[{"xAxis": vlf_band[0]}, {"xAxis": vlf_band[1]}]],
+        },
+        {
+            "label": {"show": True, "position": "top"},
+            "itemStyle": {"color": "rgba(255, 87, 34, 0.2)"},
+            "data": [[{"xAxis": lf_band[0]}, {"xAxis": lf_band[1]}]],
+        },
+        {
+            "label": {"show": True, "position": "top"},
+            "itemStyle": {"color": "rgba(76, 175, 80, 0.2)"},
+            "data": [[{"xAxis": hf_band[0]}, {"xAxis": hf_band[1]}]],
+        },
+    ]
+
+    options["xAxis"] = {
+        "type": "value",
+        "name": "Frequency (Hz)",
+        "nameLocation": "middle",
+        "nameGap": 30,
+        "min": 0,
+        "max": 0.5,
+    }
+
+    options["yAxis"] = {
+        "type": "value",
+        "name": "PSD (ms²/Hz)",
+        "nameLocation": "middle",
+        "nameGap": 50,
+    }
+
+    options["series"] = [
+        {
+            "name": "PSD",
+            "type": "line",
+            "data": list(zip(freq_list, psd_list)),
+            "smooth": True,
+            "lineStyle": {"color": COLORS["hrv"], "width": 2},
+            "areaStyle": {"color": COLORS["hrv"], "opacity": 0.3},
+            "markArea": {"data": mark_areas},
+        },
+    ]
+
+    # Add band labels
+    options["graphic"] = [
+        {
+            "type": "text",
+            "left": "20%",
+            "top": "20%",
+            "style": {"text": "VLF", "fontSize": 12, "fill": "#FFC107"},
+        },
+        {
+            "type": "text",
+            "left": "40%",
+            "top": "20%",
+            "style": {"text": "LF", "fontSize": 12, "fill": "#FF5722"},
+        },
+        {
+            "type": "text",
+            "left": "60%",
+            "top": "20%",
+            "style": {"text": "HF", "fontSize": 12, "fill": "#4CAF50"},
+        },
+    ]
+
+    return options
+
+
+def build_poincare_plot(
+    rr_intervals: list[float] | np.ndarray,
+    sd1: float | None = None,
+    sd2: float | None = None,
+    title: str = "Poincaré Plot",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build Poincaré plot (RR[n] vs RR[n+1]).
+
+    Args:
+        rr_intervals: RR interval series.
+        sd1: SD1 value for ellipse.
+        sd2: SD2 value for ellipse.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    rr = np.array(rr_intervals)
+    rr_n = rr[:-1]
+    rr_n1 = rr[1:]
+
+    options = _base_chart_options(title, config=config)
+
+    # Scatter data
+    scatter_data = list(zip(rr_n.tolist(), rr_n1.tolist()))
+
+    # Axis range
+    min_val = float(min(rr_n.min(), rr_n1.min()) * 0.95)
+    max_val = float(max(rr_n.max(), rr_n1.max()) * 1.05)
+
+    options["xAxis"] = {
+        "type": "value",
+        "name": "RR[n] (ms)",
+        "nameLocation": "middle",
+        "nameGap": 30,
+        "min": min_val,
+        "max": max_val,
+    }
+
+    options["yAxis"] = {
+        "type": "value",
+        "name": "RR[n+1] (ms)",
+        "nameLocation": "middle",
+        "nameGap": 50,
+        "min": min_val,
+        "max": max_val,
+    }
+
+    series: list[dict[str, Any]] = [
+        {
+            "name": "RR intervals",
+            "type": "scatter",
+            "data": scatter_data,
+            "symbolSize": 4,
+            "itemStyle": {"color": COLORS["hrv"], "opacity": 0.6},
+        },
+    ]
+
+    # Add identity line
+    series.append({
+        "name": "Identity line",
+        "type": "line",
+        "data": [[min_val, min_val], [max_val, max_val]],
+        "lineStyle": {"color": "#999", "type": "dashed", "width": 1},
+        "symbol": "none",
+    })
+
+    # Add SD1/SD2 annotation if provided
+    if sd1 is not None and sd2 is not None:
+        options["graphic"] = [
+            {
+                "type": "text",
+                "left": "75%",
+                "top": "15%",
+                "style": {
+                    "text": f"SD1: {sd1:.1f} ms\nSD2: {sd2:.1f} ms\nSD1/SD2: {sd1/sd2:.2f}",
+                    "fontSize": 12,
+                    "fill": COLORS["dark"],
+                    "backgroundColor": "rgba(255,255,255,0.8)",
+                    "padding": [5, 10],
+                    "borderRadius": 5,
+                },
+            },
+        ]
+
+    options["series"] = series
+
+    return options
+
+
+# ---------------------------------------------------------------------------
+# Sleep Charts
+# ---------------------------------------------------------------------------
+
+
+def build_hypnogram_chart(
+    timestamps: list[datetime] | pd.DatetimeIndex,
+    stages: list[int] | np.ndarray,
+    stage_labels: dict[int, str] | None = None,
+    title: str = "Sleep Hypnogram",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build sleep hypnogram chart.
+
+    Args:
+        timestamps: Time points.
+        stages: Sleep stage values (0=Wake, 1=N1, 2=N2, 3=N3, 4=REM).
+        stage_labels: Optional custom stage labels.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    if stage_labels is None:
+        stage_labels = {0: "Wake", 1: "N1", 2: "N2", 3: "N3", 4: "REM"}
+
+    options = _base_chart_options(title, config=config)
+
+    time_labels = [t.strftime("%H:%M") if isinstance(t, datetime) else str(t) for t in timestamps]
+
+    # Color mapping for stages
+    stage_colors = {
+        0: COLORS["warning"],      # Wake - orange
+        1: "#90CAF9",              # N1 - light blue
+        2: "#42A5F5",              # N2 - medium blue
+        3: "#1565C0",              # N3 - dark blue
+        4: COLORS["sleep"],        # REM - purple
+    }
+
+    options["xAxis"] = {
+        "type": "category",
+        "data": time_labels,
+        "axisLabel": {"rotate": 45, "fontSize": 10},
+        "name": "Time",
+        "nameLocation": "middle",
+        "nameGap": 50,
+    }
+
+    options["yAxis"] = {
+        "type": "category",
+        "data": ["Wake", "REM", "N1", "N2", "N3"],
+        "inverse": True,
+        "name": "Sleep Stage",
+    }
+
+    # Map stages to y-axis positions
+    stage_to_y = {0: "Wake", 1: "N1", 2: "N2", 3: "N3", 4: "REM"}
+    chart_data = []
+    for i, stage in enumerate(stages):
+        y_val = stage_to_y.get(int(stage), "Wake")
+        color = stage_colors.get(int(stage), COLORS["dark"])
+        chart_data.append({
+            "value": [time_labels[i], y_val],
+            "itemStyle": {"color": color},
+        })
+
+    options["series"] = [
+        {
+            "name": "Sleep Stage",
+            "type": "line",
+            "step": "middle",
+            "data": chart_data,
+            "lineStyle": {"width": 3},
+            "symbol": "none",
+        },
+    ]
+
+    return options
+
+
+def build_sleep_architecture_chart(
+    wake_pct: float,
+    n1_pct: float,
+    n2_pct: float,
+    n3_pct: float,
+    rem_pct: float,
+    title: str = "Sleep Architecture",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build sleep architecture pie chart.
+
+    Args:
+        wake_pct: Wake percentage.
+        n1_pct: N1 percentage.
+        n2_pct: N2 percentage.
+        n3_pct: N3 percentage.
+        rem_pct: REM percentage.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    options = _base_chart_options(title, config=config)
+
+    options["series"] = [
+        {
+            "name": "Sleep Stages",
+            "type": "pie",
+            "radius": ["40%", "70%"],
+            "avoidLabelOverlap": True,
+            "itemStyle": {
+                "borderRadius": 10,
+                "borderColor": "#fff",
+                "borderWidth": 2,
+            },
+            "label": {
+                "show": True,
+                "formatter": "{b}: {d}%",
+            },
+            "emphasis": {
+                "label": {"show": True, "fontSize": 14, "fontWeight": "bold"},
+            },
+            "data": [
+                {"value": wake_pct, "name": "Wake", "itemStyle": {"color": COLORS["warning"]}},
+                {"value": n1_pct, "name": "N1", "itemStyle": {"color": "#90CAF9"}},
+                {"value": n2_pct, "name": "N2", "itemStyle": {"color": "#42A5F5"}},
+                {"value": n3_pct, "name": "N3", "itemStyle": {"color": "#1565C0"}},
+                {"value": rem_pct, "name": "REM", "itemStyle": {"color": COLORS["sleep"]}},
+            ],
+        },
+    ]
+
+    return options
+
+
+# ---------------------------------------------------------------------------
+# Activity Charts
+# ---------------------------------------------------------------------------
+
+
+def build_activity_trend_chart(
+    dates: list[date] | pd.DatetimeIndex,
+    steps: list[int] | np.ndarray,
+    active_minutes: list[int] | np.ndarray | None = None,
+    resting_hr: list[float] | np.ndarray | None = None,
+    title: str = "Activity Trends",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build activity trend chart.
+
+    Args:
+        dates: Date values.
+        steps: Daily step counts.
+        active_minutes: Optional active minutes.
+        resting_hr: Optional resting heart rate.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    options = _base_chart_options(title, config=config)
+
+    date_labels = [d.strftime("%Y-%m-%d") if isinstance(d, date) else str(d) for d in dates]
+
+    options["xAxis"] = {
+        "type": "category",
+        "data": date_labels,
+        "axisLabel": {"rotate": 45, "fontSize": 10},
+    }
+
+    y_axes = [
+        {
+            "type": "value",
+            "name": "Steps",
+            "position": "left",
+            "axisLine": {"lineStyle": {"color": COLORS["activity"]}},
+        },
+    ]
+
+    series: list[dict[str, Any]] = [
+        {
+            "name": "Steps",
+            "type": "bar",
+            "data": list(steps),
+            "itemStyle": {"color": COLORS["activity"]},
+        },
+    ]
+
+    if active_minutes is not None:
+        series.append({
+            "name": "Active Minutes",
+            "type": "line",
+            "data": list(active_minutes),
+            "smooth": True,
+            "lineStyle": {"color": COLORS["info"], "width": 2},
+            "itemStyle": {"color": COLORS["info"]},
+        })
+
+    if resting_hr is not None:
+        y_axes.append({
+            "type": "value",
+            "name": "Resting HR (bpm)",
+            "position": "right",
+            "axisLine": {"lineStyle": {"color": COLORS["danger"]}},
+        })
+        series.append({
+            "name": "Resting HR",
+            "type": "line",
+            "yAxisIndex": 1,
+            "data": list(resting_hr),
+            "smooth": True,
+            "lineStyle": {"color": COLORS["danger"], "width": 2, "type": "dashed"},
+            "itemStyle": {"color": COLORS["danger"]},
+        })
+
+    options["yAxis"] = y_axes
+    options["series"] = series
+    options["legend"] = {
+        "data": [s["name"] for s in series],
+        "top": "5%",
+    }
+
+    return options
+
+
+# ---------------------------------------------------------------------------
+# ANS Balance Charts
+# ---------------------------------------------------------------------------
+
+
+def build_ans_balance_gauge(
+    lf_hf_ratio: float,
+    title: str = "ANS Balance",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build ANS balance gauge (sympathovagal balance).
+
+    Args:
+        lf_hf_ratio: LF/HF ratio value.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    # Clamp ratio for display
+    display_ratio = min(max(lf_hf_ratio, 0), 5)
+
+    # Determine balance interpretation
+    if lf_hf_ratio < 0.5:
+        balance_text = "Parasympathetic Dominant"
+        color = COLORS["ans_parasympathetic"]
+    elif lf_hf_ratio > 2.0:
+        balance_text = "Sympathetic Dominant"
+        color = COLORS["ans_sympathetic"]
+    else:
+        balance_text = "Balanced"
+        color = COLORS["primary"]
+
+    return {
+        "title": {
+            "text": title,
+            "subtext": balance_text,
+            "left": "center",
+            "textStyle": {"fontSize": config.title_font_size, "fontWeight": "bold"},
+        },
+        "series": [
+            {
+                "name": "ANS Balance",
+                "type": "gauge",
+                "min": 0,
+                "max": 5,
+                "splitNumber": 5,
+                "radius": "80%",
+                "axisLine": {
+                    "lineStyle": {
+                        "width": 20,
+                        "color": [
+                            [0.2, COLORS["ans_parasympathetic"]],
+                            [0.6, COLORS["primary"]],
+                            [1, COLORS["ans_sympathetic"]],
+                        ],
+                    },
+                },
+                "pointer": {
+                    "itemStyle": {"color": "auto"},
+                    "width": 5,
+                },
+                "axisTick": {"distance": -20, "length": 8, "lineStyle": {"color": "#fff", "width": 2}},
+                "splitLine": {"distance": -20, "length": 20, "lineStyle": {"color": "#fff", "width": 3}},
+                "axisLabel": {
+                    "color": "inherit",
+                    "distance": 30,
+                    "fontSize": 12,
+                    "formatter": "{value}",
+                },
+                "detail": {
+                    "valueAnimation": True,
+                    "formatter": "{value:.2f}",
+                    "color": color,
+                    "fontSize": 24,
+                    "offsetCenter": [0, "70%"],
+                },
+                "data": [{"value": display_ratio, "name": "LF/HF"}],
+            },
+        ],
+    }
+
+
+def build_circadian_pattern_chart(
+    hours: list[int],
+    hrv_by_hour: list[float] | np.ndarray,
+    hr_by_hour: list[float] | np.ndarray | None = None,
+    title: str = "Circadian HRV Pattern",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build circadian pattern radar chart.
+
+    Args:
+        hours: Hour labels (0-23).
+        hrv_by_hour: HRV values by hour.
+        hr_by_hour: Optional HR values by hour.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    hour_labels = [f"{h:02d}:00" for h in hours]
+
+    options = _base_chart_options(title, config=config)
+
+    # Radar chart setup
+    max_hrv = float(max(hrv_by_hour)) * 1.2
+    max_hr = float(max(hr_by_hour)) * 1.2 if hr_by_hour is not None else 100
+
+    options["radar"] = {
+        "indicator": [{"name": label, "max": max_hrv} for label in hour_labels],
+        "shape": "circle",
+        "splitNumber": 4,
+        "axisName": {"color": "#666"},
+    }
+
+    series_data = [
+        {
+            "value": list(hrv_by_hour),
+            "name": "HRV",
+            "areaStyle": {"color": COLORS["hrv"], "opacity": 0.3},
+            "lineStyle": {"color": COLORS["hrv"], "width": 2},
+        },
+    ]
+
+    if hr_by_hour is not None:
+        # Normalize HR to same scale for visualization
+        hr_normalized = [h * max_hrv / max_hr for h in hr_by_hour]
+        series_data.append({
+            "value": hr_normalized,
+            "name": "HR (normalized)",
+            "areaStyle": {"color": COLORS["danger"], "opacity": 0.2},
+            "lineStyle": {"color": COLORS["danger"], "width": 2, "type": "dashed"},
+        })
+
+    options["series"] = [
+        {
+            "name": "Circadian Pattern",
+            "type": "radar",
+            "data": series_data,
+        },
+    ]
+
+    options["legend"] = {
+        "data": ["HRV"] + (["HR (normalized)"] if hr_by_hour is not None else []),
+        "top": "5%",
+    }
+
+    return options
+
+
+# ---------------------------------------------------------------------------
+# Multi-day Longitudinal Charts
+# ---------------------------------------------------------------------------
+
+
+def build_multiday_trend_chart(
+    dates: list[date] | pd.DatetimeIndex,
+    values: list[float] | np.ndarray,
+    rolling_mean: list[float] | np.ndarray | None = None,
+    upper_bound: list[float] | np.ndarray | None = None,
+    lower_bound: list[float] | np.ndarray | None = None,
+    metric_name: str = "Metric",
+    title: str = "Multi-day Trend",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build multi-day trend chart with rolling statistics.
+
+    Args:
+        dates: Date values.
+        values: Daily metric values.
+        rolling_mean: Optional rolling mean.
+        upper_bound: Optional upper bound (e.g., +1 SD).
+        lower_bound: Optional lower bound (e.g., -1 SD).
+        metric_name: Name of the metric.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    options = _base_chart_options(title, config=config)
+
+    date_labels = [d.strftime("%Y-%m-%d") if isinstance(d, date) else str(d) for d in dates]
+
+    options["xAxis"] = {
+        "type": "category",
+        "data": date_labels,
+        "axisLabel": {"rotate": 45, "fontSize": 10},
+    }
+
+    options["yAxis"] = {
+        "type": "value",
+        "name": metric_name,
+    }
+
+    series: list[dict[str, Any]] = [
+        {
+            "name": metric_name,
+            "type": "scatter",
+            "data": list(values),
+            "symbolSize": 8,
+            "itemStyle": {"color": COLORS["primary"]},
+        },
+    ]
+
+    if rolling_mean is not None:
+        series.append({
+            "name": "7-day Mean",
+            "type": "line",
+            "data": list(rolling_mean),
+            "smooth": True,
+            "lineStyle": {"color": COLORS["secondary"], "width": 3},
+            "symbol": "none",
+        })
+
+    if upper_bound is not None and lower_bound is not None:
+        # Add confidence band
+        band_data = [[float(lb), float(ub)] for lb, ub in zip(lower_bound, upper_bound)]
+        series.append({
+            "name": "Normal Range",
+            "type": "line",
+            "data": list(upper_bound),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": COLORS["primary"], "opacity": 0.1},
+            "stack": "confidence",
+            "symbol": "none",
+        })
+        series.append({
+            "name": "_lower",
+            "type": "line",
+            "data": list(lower_bound),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "#fff", "opacity": 1},
+            "stack": "confidence",
+            "symbol": "none",
+        })
+
+    options["series"] = series
+    options["legend"] = {
+        "data": [s["name"] for s in series if not s["name"].startswith("_")],
+        "top": "5%",
+    }
+
+    return options
+
+
+def build_correlation_scatter_chart(
+    x_values: list[float] | np.ndarray,
+    y_values: list[float] | np.ndarray,
+    x_label: str,
+    y_label: str,
+    r: float,
+    p_value: float,
+    title: str = "Correlation Analysis",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build scatter plot with correlation statistics.
+
+    Args:
+        x_values: X-axis values.
+        y_values: Y-axis values.
+        x_label: X-axis label.
+        y_label: Y-axis label.
+        r: Correlation coefficient.
+        p_value: P-value.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    options = _base_chart_options(title, config=config)
+
+    # Scatter data
+    scatter_data = list(zip([float(x) for x in x_values], [float(y) for y in y_values]))
+
+    # Regression line
+    x_arr = np.array(x_values)
+    y_arr = np.array(y_values)
+    slope, intercept = np.polyfit(x_arr, y_arr, 1)
+    x_line = [float(x_arr.min()), float(x_arr.max())]
+    y_line = [slope * x_line[0] + intercept, slope * x_line[1] + intercept]
+
+    # Significance
+    sig_text = "***" if p_value < 0.001 else "**" if p_value < 0.01 else "*" if p_value < 0.05 else ""
+
+    options["xAxis"] = {
+        "type": "value",
+        "name": x_label,
+        "nameLocation": "middle",
+        "nameGap": 30,
+    }
+
+    options["yAxis"] = {
+        "type": "value",
+        "name": y_label,
+        "nameLocation": "middle",
+        "nameGap": 50,
+    }
+
+    options["series"] = [
+        {
+            "name": "Data",
+            "type": "scatter",
+            "data": scatter_data,
+            "symbolSize": 8,
+            "itemStyle": {"color": COLORS["primary"], "opacity": 0.7},
+        },
+        {
+            "name": "Regression",
+            "type": "line",
+            "data": [[x_line[0], y_line[0]], [x_line[1], y_line[1]]],
+            "lineStyle": {"color": COLORS["danger"], "width": 2},
+            "symbol": "none",
+        },
+    ]
+
+    # Add statistics annotation
+    options["graphic"] = [
+        {
+            "type": "text",
+            "left": "75%",
+            "top": "15%",
+            "style": {
+                "text": f"r = {r:.3f}{sig_text}\np = {p_value:.4f}\nn = {len(x_values)}",
+                "fontSize": 12,
+                "fill": COLORS["dark"],
+                "backgroundColor": "rgba(255,255,255,0.9)",
+                "padding": [8, 12],
+                "borderRadius": 5,
+                "borderWidth": 1,
+                "borderColor": "#ddd",
+            },
+        },
+    ]
+
+    return options
+
+
+# ---------------------------------------------------------------------------
+# Statistical Results Charts
+# ---------------------------------------------------------------------------
+
+
+def build_effect_size_forest_plot(
+    comparisons: list[dict[str, Any]],
+    title: str = "Effect Sizes (Forest Plot)",
+    config: ChartConfig = DEFAULT_CONFIG,
+) -> dict[str, Any]:
+    """Build forest plot for effect sizes.
+
+    Args:
+        comparisons: List of dicts with keys: name, effect_size, ci_low, ci_high, significant.
+        title: Chart title.
+        config: Chart configuration.
+
+    Returns:
+        ECharts option dict.
+    """
+    options = _base_chart_options(title, config=config)
+
+    names = [c["name"] for c in comparisons]
+    effect_sizes = [c["effect_size"] for c in comparisons]
+    ci_lows = [c["ci_low"] for c in comparisons]
+    ci_highs = [c["ci_high"] for c in comparisons]
+    significant = [c.get("significant", False) for c in comparisons]
+
+    # Colors based on significance
+    colors = [COLORS["success"] if sig else COLORS["dark"] for sig in significant]
+
+    options["grid"] = {"left": "25%", "right": "15%", "top": "15%", "bottom": "10%"}
+
+    options["xAxis"] = {
+        "type": "value",
+        "name": "Effect Size (Cohen's d)",
+        "nameLocation": "middle",
+        "nameGap": 30,
+    }
+
+    options["yAxis"] = {
+        "type": "category",
+        "data": names,
+        "axisLabel": {"fontSize": 11},
+    }
+
+    # Error bars and points
+    error_data = []
+    for i, (es, low, high) in enumerate(zip(effect_sizes, ci_lows, ci_highs)):
+        error_data.append({
+            "value": [es, i],
+            "itemStyle": {"color": colors[i]},
+        })
+
+    options["series"] = [
+        {
+            "name": "Effect Size",
+            "type": "scatter",
+            "data": [[es, i] for i, es in enumerate(effect_sizes)],
+            "symbolSize": 12,
+            "itemStyle": {"color": COLORS["primary"]},
+        },
+        {
+            "name": "CI",
+            "type": "custom",
+            "renderItem": """function(params, api) {
+                var categoryIndex = api.value(1);
+                var low = api.coord([api.value(2), categoryIndex]);
+                var high = api.coord([api.value(3), categoryIndex]);
+                var height = api.size([0, 1])[1] * 0.1;
+                return {
+                    type: 'group',
+                    children: [{
+                        type: 'line',
+                        shape: {x1: low[0], y1: low[1], x2: high[0], y2: high[1]},
+                        style: {stroke: '#333', lineWidth: 2}
+                    }]
+                };
+            }""",
+            "data": [[es, i, low, high] for i, (es, low, high) in enumerate(zip(effect_sizes, ci_lows, ci_highs))],
+        },
+    ]
+
+    # Add zero line
+    options["series"].append({
+        "name": "Zero",
+        "type": "line",
+        "markLine": {
+            "data": [{"xAxis": 0}],
+            "lineStyle": {"type": "dashed", "color": "#999"},
+            "label": {"show": False},
+        },
+    })
+
+    return options
+
+
+def build_significance_table_chart(
+    results: list[dict[str, Any]],
+    title: str = "Statistical Results Summary",
+) -> dict[str, Any]:
+    """Build table visualization for statistical results.
+
+    Args:
+        results: List of result dicts with statistical values.
+        title: Chart title.
+
+    Returns:
+        Dict with table configuration.
+    """
+    columns = [
+        {"key": "comparison", "label": "Comparison", "width": "25%"},
+        {"key": "statistic", "label": "Statistic", "width": "15%"},
+        {"key": "p_value", "label": "p-value", "width": "15%"},
+        {"key": "effect_size", "label": "Effect Size", "width": "15%"},
+        {"key": "interpretation", "label": "Interpretation", "width": "30%"},
+    ]
+
+    rows = []
+    for r in results:
+        p = r.get("p_value", 1.0)
+        sig_marker = "***" if p < 0.001 else "**" if p < 0.01 else "*" if p < 0.05 else ""
+
+        rows.append({
+            "comparison": r.get("name", ""),
+            "statistic": f"{r.get('statistic', 0):.2f}",
+            "p_value": f"{p:.4f}{sig_marker}",
+            "effect_size": f"{r.get('effect_size', 0):.2f}",
+            "interpretation": r.get("interpretation", ""),
+            "_highlight": p < 0.05,
+        })
+
+    return {
+        "title": title,
+        "columns": columns,
+        "rows": rows,
+    }
+
