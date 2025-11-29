@@ -264,6 +264,117 @@ The Space tab integrates NOAA SWPC feeds commonly used in space‑weather operat
 - Laborde, S., Mosley, E., & Thayer, J. F. (2017). HRV in psychophysiology—planning, analysis, reporting. [Frontiers in Psychology](https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2017.00213/full)
 
 
+## Research-backed improvement roadmap (Nov 2025)
+
+### Diurnal wearable HRV baselines for CKD and metabolic phenotypes
+- The Chronic Renal Insufficiency Cohort (CRIC) analysed approximately 50 ± 9 hours of wearable ECG per participant (n = 458) and showed that diabetes reduced SDNN by 7.4 ms while higher proteinuria (uPCR ≥ 0.2) lowered SDNN by 5.7 ms, underscoring time-of-day and comorbidity effects on HRV [npj Digital Medicine 2025](https://www.nature.com/articles/s41746-025-02010-5).
+- **Proposed feature:** add a diurnal baseline engine that tags each segment by local clock time, sleep/wake status, and renal/metabolic phenotype so readiness scores compare like-for-like contexts.
+- **Quality gains:** encourage uploads of ≥48 h wearable exports, surface recording coverage/motion artefact ratios, and allow phenotype filters (CKD stage, diabetes, proteinuria) when computing baselines or trend alerts.
+
+### Anticipatory stress & workload reactivity testing
+- A Unity-based mental arithmetic paradigm showed graded task difficulty produced significant anticipatory SDNN suppressions that paralleled NASA‑TLX workload scores in healthy adults [Journal of Physiological Anthropology 2025](https://jphysiolanthropol.biomedcentral.com/articles/10.1186/s40101-025-00413-7).
+- **Proposed feature:** integrate a “Cognitive Challenge” tab with standardised low/medium/high arithmetic blocks, automated PRE/ANTICIPATION/TASK/RECOVERY segmentation, SDNN/RMSSD deltas, and embedded NASA‑TLX style questionnaires.
+- **Quality gains:** extend the deviation detector to flag sensitisation (progressive vagal withdrawal across repeated anticipatory blocks) so occupational or aerospace users can quantify resilience training effects.
+
+### Neuromodulation & rehabilitation session monitoring
+- High-intensity paired associative stimulation (TMS + peripheral nerve stimulation) in cervical SCI patients used continuous HRV to verify the protocol did not provoke unsafe autonomic swings despite occasional discomfort reports [Scientific Reports 2025](https://www.nature.com/articles/s41598-025-25802-x).
+- **Proposed feature:** allow clinicians to bookmark PRE/STIM/POST windows for neuromodulation, log stimulation parameters, and compare SDNN/RMSSD/HF trajectories across visits to document autonomic safety.
+- **Quality gains:** define personalised confidence intervals for session phases and emit warnings/exports when parasympathetic suppression exceeds expected ranges, supporting IRB and rehabilitation documentation.
+
+### Cycle-aware readiness for healthy menstruating individuals
+- In a sample of 116 healthy participants wearing Oura rings, heart rate was lowest during menses, and RMSSD dipped in the late-luteal phase for younger adults while midlife adults showed lower overall RMSSD and higher activity [Chronobiol Int 2024; PubMed 39108015](https://pubmed.ncbi.nlm.nih.gov/39108015/).
+- **Proposed feature:** add an optional menstrual phase tracker that ingests LH-kit or diary markers, annotates HRV windows by phase, and compares current SDNN/RMSSD against phase-matched baselines to avoid false “low readiness” alerts in healthy users.
+- **Quality gains:** report phase-stratified trends, surface expected amplitude/mesor differences by age band, and document when HRV deviations exceed the individual’s historical menstrual oscillation.
+
+### HRV biofeedback for healthy stress management
+- A randomized active-controlled trial in healthy university students (10×20 min sessions) showed HRV biofeedback increased resting vagally mediated HRV compared with control, especially in participants with higher pre-training RMSSD [Applied Psychophysiology & Biofeedback 2024; PubMed 38888656](https://pubmed.ncbi.nlm.nih.gov/38888656/). Ongoing HeartBEAM work is extending daily slow-paced breathing protocols to healthy older adults to test cognitive and biomarker benefits [Trials 2024; PubMed 38491546](https://pubmed.ncbi.nlm.nih.gov/38491546/).
+- **Proposed feature:** bundle a guided HRV-biofeedback mode (paced breathing + live coherence gauge) with automatic tracking of adherence, resting vmHRV gains, and participant stratification by baseline RMSSD to identify likely responders.
+- **Quality gains:** support configurable training blocks (e.g., 10 sessions/3 weeks), aggregate vmHRV deltas into longitudinal dashboards, and expose exportable adherence + outcome summaries for wellness coaches or research protocols.
+
+### Everyday wearable fusion for lifestyle monitoring
+- A 2024 engineering study demonstrated a ring-shaped device that simultaneously captures ECG, PPG, galvanic skin response, and motion to derive HRV and other physiological indices comfortably in daily life [Biosensors 2024; PubMed 38667198](https://pubmed.ncbi.nlm.nih.gov/38667198/).
+- **Proposed feature:** generalise the import pipeline to accept multi-sensor wearable exports (RR + PPG + skin conductance), automatically align modalities, and enrich the dashboard with composite stress/sympathetic proxies to serve healthy users tracking training load, sleep, and mood.
+- **Quality gains:** add signal-quality diagnostics per modality, allow cross-checking RR intervals derived from ECG vs PPG, and provide plug-ins for ring/watch ecosystems so everyday users can run the HRV analyses without lab-grade hardware.
+
+---
+
+## Advanced HRV Metrics Roadmap (Nov 2025)
+
+### Heart Rate Fragmentation (HRF) metrics
+Heart rate fragmentation captures non-autonomic components of short-term variability that traditional HRV measures miss. The PROOF-AF study (18-year follow-up, n=1011 aged 65) found that increased **Percentage of Inflection Points (PIP)** and reduced **α1 fractal index** independently predicted atrial fibrillation occurrence, outperforming classical HRV markers alone [EHJ Open 2025; DOI 10.1093/ehjopen/oeaf030](https://doi.org/10.1093/ehjopen/oeaf030). Additional HRF metrics include:
+- **PIP_H / PIP_S** (hard and soft inflection points) — quantify abrupt vs gradual beat-to-beat direction changes.
+- **Word distributions (W₀–W₃)** — count 4-beat sequences by number of inflection points; elevated W₃ correlates with ANS breakdown.
+- **IALS (Inverse Average Length of Segments)** — captures how frequently acceleration/deceleration runs are interrupted.
+- **Proposed feature:** add HRF panel (PIP, PIP_H, PIP_S, W₀–W₃, IALS) alongside existing Poincaré and entropy tabs; flag elevated fragmentation as a potential arrhythmia-risk marker for users aged 60+.
+- **Quality gains:** improve ectopic-beat filtering before HRF computation; provide reference bands from PROOF cohort.
+
+### Nonlinear and entropy metrics expansion
+Recent systematic reviews confirm entropy measures capture complexity lost in linear HRV:
+- **Sample Entropy (SampEn)** and **Approximate Entropy (ApEn)** — quantify irregularity; reduced in cardiovascular disease and aging [Frontiers Neurology 2025; DOI 10.3389/fneur.2025.1636983](https://doi.org/10.3389/fneur.2025.1636983).
+- **Permutation Entropy (PermEn)** — robust to noise; useful for real-world wearable data [medRxiv 2025.01.07.25320157](https://www.medrxiv.org/content/10.1101/2025.01.07.25320157).
+- **Multiscale Entropy (MSE)** — assesses complexity across time scales; sex differences observed at coarse scales [IEEE ESGCO 2024; DOI 10.1109/ESGCO63003.2024.10767001](https://doi.org/10.1109/ESGCO63003.2024.10767001).
+- **Multiscale-Multifractal DFA (MMF-DFA)** — identifies shift-worker cardiovascular stress via altered fractal scaling at short scales [Front. Neuroergonomics 2024; DOI 10.3389/fnrgo.2024.1382919](https://doi.org/10.3389/fnrgo.2024.1382919).
+- **Proposed feature:** add selectable entropy panel (SampEn, ApEn, PermEn) with configurable embedding dimension (m) and tolerance (r); expose MMF-DFA for advanced users.
+- **Quality gains:** provide age- and sex-stratified entropy norms from published datasets.
+
+### Poincaré plot enhancements
+Poincaré plots (SD1, SD2, SD1/SD2) are widely used but mathematically equivalent to RMSSD/SDNN [Entropy 2025; DOI 10.3390/e27080861](https://doi.org/10.3390/e27080861). Novel extensions add value:
+- **Motion path analysis** — tracks dynamic progression of successive points rather than static ellipse descriptors [medRxiv 2025.03.21.25324311](https://www.medrxiv.org/content/10.1101/2025.03.21.25324311).
+- **CSI (Cardiac Sympathetic Index)** and **CVI (Cardiac Vagal Index)** — derived from SD1/SD2 ratio; useful for autonomic balance tracking.
+- **Proposed feature:** overlay motion-path trajectories on Poincaré scatter; compute CSI/CVI and display alongside SD1/SD2.
+
+### Wearable-derived HRV for mental health monitoring
+A 4-week longitudinal study (n=47) using smartwatch PPG found RMSSD, SDNN, SDSD, LF, and LF/HF negatively correlated with PHQ-9 depression and GAD-7 anxiety scores, though parasympathetically biased metrics showed weaker correlations [Frontiers Psychiatry 2024; DOI 10.3389/fpsyt.2024.1371946](https://doi.org/10.3389/fpsyt.2024.1371946). Wearable HRV across menstrual cycles showed inverse associations with premenstrual disorder symptoms, stronger for affective than physiological symptoms [medRxiv 2024.10.27.24316196](https://doi.org/10.1101/2024.10.27.24316196).
+- **Proposed feature:** integrate optional mood/symptom diary with HRV trends; compute rolling correlations between vmHRV and self-reported scores.
+
+### Exercise modality effects on HRV
+A 2024 network meta-analysis of 16 RCTs (n=623) found HIIT most effective for improving SDNN, RMSSD, and LF/HF; resistance training best for HF power; combined training best for LF power [Reviews Cardiovasc Med 2024; DOI 10.31083/j.rcm2501009](https://doi.org/10.31083/j.rcm2501009). A separate meta-analysis (16 RCTs) confirmed exercise training enhances SDNN, RMSSD, and HF, with effects moderated by sex, age, and exercise type [Cureus 2024; DOI 10.7759/cureus.62465](https://doi.org/10.7759/cureus.62465).
+- **Proposed feature:** add training-type tags to sessions; generate modality-specific HRV response summaries.
+
+### Reference values for older adults
+A 2024 systematic review found wide variability in HRV reference values for older adults (n=21–6250 across 11 studies) due to non-standardised methods [Psychophysiology 2024; DOI 10.1111/psyp.14661](https://doi.org/10.1111/psyp.14661). Normative data for children (linear and nonlinear indices) were published in 2024 [Clin Auton Res 2024; DOI 10.1007/s10286-024-01056-x](https://doi.org/10.1007/s10286-024-01056-x).
+- **Proposed feature:** allow user to select age bracket and display corresponding percentile bands from published norms.
+
+---
+
+## Sleep Metrics Development Roadmap (Nov 2025)
+
+### Rationale
+Sleep quality, quantity, and staging are tightly coupled with HRV and autonomic health. Integrating actigraphy-based sleep analysis enables users to correlate nocturnal HRV with sleep architecture, supporting holistic readiness and recovery dashboards.
+
+### Key sleep metrics to implement
+| Metric | Definition | Clinical relevance |
+|--------|------------|--------------------|
+| **Total Sleep Time (TST)** | Minutes scored as sleep within the sleep period | Primary measure of sleep quantity |
+| **Time in Bed (TIB)** | Minutes from lights-off to final awakening | Denominator for efficiency |
+| **Sleep Efficiency (SE)** | TST / TIB × 100% | <85% suggests insomnia; target ≥90% |
+| **Sleep Onset Latency (SOL)** | Minutes from lights-off to first sleep epoch | >30 min indicates difficulty initiating sleep |
+| **Wake After Sleep Onset (WASO)** | Minutes awake after initial sleep onset | Elevated WASO indicates sleep fragmentation |
+| **Number of Awakenings** | Count of wake bouts during sleep period | Correlates with subjective sleep quality |
+| **Sleep Stages (N1, N2, N3/SWS, REM)** | Percentage or minutes per stage | Deep sleep (N3) and REM are restorative; imbalance may signal disorders |
+
+### Open-source libraries for sleep analysis
+1. **GGIR** (R package) — the research community standard for raw accelerometer processing; validated against PSG for sleep/wake classification in adults and children [J Meas Phys Behav 2019; DOI 10.1123/jmpb.2018-0063](https://cran.r-project.org/package=GGIR). Recent 2024 validation in paediatric populations confirms reasonable agreement with PSG [Sleep 2025; DOI 10.1093/sleep/zsaf282](https://doi.org/10.1093/sleep/zsaf282).
+2. **ActiSleep Tracker** (Python) — a 2025 JOSS-published dashboard for refining GGIR sleep predictions with manual adjustment [JOSS 2025; DOI 10.21105/joss.08181](https://doi.org/10.21105/joss.08181).
+3. **YASA (Yet Another Spindle Algorithm)** (Python) — open-source automatic sleep staging from EEG (C4-A1, EOG, EMG); 82–83% agreement with human scorers [Sleep 2024 abstract; raphaelvallat/yasa](https://github.com/raphaelvallat/yasa). Zenodo sample data available for testing [Zenodo 2024; DOI 10.5281/zenodo.14564285](https://zenodo.org/records/14564285).
+4. **PhysioEx** (Python) — a 2025 library for explainable deep-learning sleep staging with XAI support [Physiol Meas 2025; PubMed 39874654](https://pubmed.ncbi.nlm.nih.gov/39874654/).
+5. **NeuroKit2** (Python) — comprehensive physiological signal processing including HRV, ECG, EDA; can derive sleep-relevant HRV features from overnight recordings [Zenodo 2024; DOI 10.5281/zenodo.15395460](https://zenodo.org/records/15395460).
+6. **SleepEEGpy** (Python) — simplifies sleep EEG preprocessing and integrates with MNE-Python [ScienceDirect 2025; DOI 10.1016/j.compbiomed.2025.109839](https://doi.org/10.1016/j.compbiomed.2025.109839).
+
+### Validation evidence
+- A 2024 systematic review of actigraphy sleep staging found limited but promising ability to classify sleep stages vs PSG; heterogeneity in stage groupings limits direct comparison [J Sleep Res 2024; DOI 10.1111/jsr.14143](https://doi.org/10.1111/jsr.14143).
+- Deep-learning models combining actigraphy + coarse HR achieve 78.7% accuracy for 3-stage (Wake/NREM/REM) and 72.5% for 4-stage classification [SLEEP 2021; DOI 10.1093/sleep/zsab072.249](https://doi.org/10.1093/sleep/zsab072.249). A 2025 LSTM approach in children showed similar performance [J Sleep Res 2025; DOI 10.1111/jsr.70149](https://doi.org/10.1111/jsr.70149).
+- Instantaneous HR from single-lead ECG achieves 72.8% accuracy on 4-class staging and 87.7% on sleep/wake, outperforming pure actigraphy [ERJ Open Res 2021; DOI 10.1183/23120541.SLEEPANDBREATHING-2021.63](https://doi.org/10.1183/23120541.SLEEPANDBREATHING-2021.63).
+
+### Proposed implementation plan
+1. **Phase 1 — Actigraphy import:** accept raw accelerometer files (ActiGraph .gt3x, GENEActiv .bin, Axivity .cwa); wrap GGIR via `rpy2` or call R subprocess; compute TST, TIB, SE, SOL, WASO, awakenings.
+2. **Phase 2 — Sleep diary integration:** allow user to input lights-off/on times and subjective quality ratings; compare objective vs subjective metrics.
+3. **Phase 3 — HRV-sleep fusion:** align overnight RR intervals with sleep epochs; compute per-stage HRV (e.g., RMSSD during N3 vs REM); surface in dashboard.
+4. **Phase 4 — Optional EEG staging:** if user provides EEG/EOG/EMG, invoke YASA or PhysioEx for automatic staging; display hypnogram alongside HRV time series.
+5. **Quality gains:** provide signal-quality checks for accelerometer data; flag nights with <4 h TST or SE <70% for review; export sleep summaries in CSV/JSON.
+
+---
+
 ## Notes on App Implementation
 
 - QC heuristics are transparent and bounded; they are not a substitute for full ECG beat annotation or clinical-grade editing. For high-stakes analyses, consider manual review.
