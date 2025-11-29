@@ -32,6 +32,19 @@ from .models import (
 )
 from .lights import LightSchedule
 from .metrics import esri
+from .plots import Actogram
+
+__all__ = [
+    "CircadianModel",
+    "DynamicalTrajectory",
+    "Forger99",
+    "Hannay19",
+    "Hannay19TP",
+    "Jewett99",
+    "LightSchedule",
+    "esri",
+    "Actogram",
+] esri
 from .plots import Actogram, plot_actogram, plot_mae, plot_torus, Stroboscopic
 from .readers import load_csv, load_json, load_actiwatch, WearableData
 from .utils import (
