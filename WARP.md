@@ -1,0 +1,263 @@
+# WARP.md
+
+This file provides guidance to WARP (warp.dev) when working with code in this repository.
+
+## Overview
+HRV (Heart Rate Variability) Analysis application with Space Weather Integration. This is a Streamlit-based scientific application that analyzes heart rate variability metrics from Polar RR-interval recordings and correlates them with space weather data from NOAA SWPC feeds and other sources. The application is designed for aerospace medicine and psychophysiology research.
+
+## Running the Application
+
+### Start the Streamlit app
+```powershell
+streamlit run app/app.py
+```
+
+### Install dependencies
+```powershell
+pip install -r requirements.txt
+```
+
+### Python version
+Python 3.10+ required
+
+### Environment setup
+Create a `.env` file in the project root with API keys:
+```
+OPENAI_API_KEY=sk-...
+NASA_API_KEY=...
+ACCUWEATHER_API_KEY=...
+```
+
+Never commit secrets or API keys. The `.env` file is already in `.gitignore`.
+
+## Architecture
+
+### Core Module Structure
+The application follows a modular architecture with strict separation of concerns:
+
+1. **`app/hrv_core.py`** — Core HRV computation engine
+   - Artifact detection and interpolation
+   - Time-domain metrics (RMSSD, SDNN, pNN50, etc.)
+   - Frequency-domain analysis (VLF, LF, HF power via Welch/Periodogram/AR)
+   - Geometric metrics (Triangular Index, TINN, Baevsky Stress Index)
+   - Nonlinear metrics (Poincaré SD1/SD2, DFA, entropy)
+   - Windowed analysis for time-varying conditions
+   - Autonomic function tests (Valsalva ratio, deep breathing E:I ratio, 30:15 ratio)
+   - Readiness baseline builder from historical parasympathetic indices
+
+2. **`app/noaa_space.py`** — NOAA Space Weather data ingestion
+   - Fetches and harmonizes JSON feeds from NOAA SWPC (https://services.swpc.noaa.gov/json/)
+   - Typed data bundles (`NOAASourceSpec`, `NOAADataBundle`) with metadata
+   - Deterministic caching in `app/data_cache/noaa_space/` (6-hour TTL)
+   - Supports F10.7 flux, planetary K-index, solar wind, IMF, GOES x-ray/proton flux, geomagnetic Dst
+   - All timestamps normalized to UTC timezone-aware format
+
+3. **`app/app.py`** — Main Streamlit application
+   - Multi-tab interface: Overview, Time Series, Frequency, Nonlinear, Spectrogram, Windowed, Metrics, Gauges, ANS Function Tests, Readiness, Space Weather, Science
+   - Manages Streamlit session state for uploaded files and computed metrics
+   - Integrates HRV core, NOAA space data, SpaceWeatherLive scraping, ECharts visualizations
+   - Correlation workflows for HRV↔space-weather analysis with lag scanning, FDR-adjusted p-values, partial correlations
+
+4. **`app/spaceweatherlive_client.py`** — SpaceWeatherLive scraper
+   - Direct HTML parsing of https://www.spaceweatherlive.com/ for Kp forecast, solar wind, IMF, sunspot number
+   - Parses CACTus CME table and SIDC Ursigram for CME velocity stats, halo rates, narrative highlights
+   - Bounded retries/timeouts (≤10s)
+
+5. **`app/spaceweather_openai_fallback.py`** — OpenAI-assisted extraction
+   - Fallback for SpaceWeatherLive when direct scraping fails
+   - Uses OpenAI API for structured data extraction from HTML
+
+6. **`app/ml_enhancements.py`** — Deterministic k-means clustering
+   - Clusters windowed HRV metrics to identify baseline vs high-deviation segments
+   - No random sampling; bounded by `max_iterations` with early convergence exit
+   - Returns enriched dataframe with cluster labels, scores, and summary
+
+7. **`app/gpt_interpretation.py`** — GPT-5.1 interpretation
+   - Builds JSON payload from HRV analysis (datasets overview, metrics tables, windowed results, episodes, ML clusters)
+   - Requests doctoral-level markdown report from OpenAI GPT-5.1
+   - Includes reasoning summary and web search sources
+
+8. **`app/echarts_component.py`** — ECharts visualization wrapper
+   - Streamlit component for rendering Apache ECharts (gauge, line, scatter, heatmap)
+   - Consistent styling (double-ring gauges, responsive layout, tooltips, color semantics)
+
+9. **`app/export_utils.py`** — Export utilities
+   - Markdown report builder for exporting analysis results
+   - Configurable export scope and formatting
+
+### Data Flow
+1. User uploads Polar RR-interval text files (one RR in ms per line, filename format `YYYY-MM-DD HH-MM-SS.txt` inferred as GMT-5)
+2. `hrv_core.clean_rr_intervals` detects artifacts via threshold-median or threshold-prev heuristics
+3. Time/frequency/nonlinear/entropy metrics computed on cleaned RR
+4. Windowed analysis applies sliding window (default 5 min window, 1 min step) with optional deviation detection (robust z-scores via median/MAD)
+5. NOAA space data fetched/cached in `app/data_cache/noaa_space/`
+6. HRV metrics paired with NOAA time-series for lag-aware Pearson/Spearman correlations
+7. FDR q-values (Benjamini-Hochberg), partial correlations (controlling for weather covariates), and OLS residual diagnostics computed
+8. Best correlations persisted to `data/hrv_solar_db.jsonl` (keyed by Cedula)
+9. ECharts gauges/charts render metrics against short-term anchors
+
+### Key Design Principles (From Global Python Rule)
+This codebase adheres to strict deterministic, analyzable, reliable Python standards:
+- **No recursion**; loops must be bounded with explicit counters or finite iterables
+- **All I/O and IPC use finite timeouts** (e.g., `requests` with 10–15s timeout, `asyncio.wait_for` for async)
+- **Explicit input validation** with precise exceptions (ValueError, TypeError); asserts only for internal invariants
+- **Full type hints** (compatible with mypy/pyright strict mode)
+- **Immutable data across module boundaries** (frozen dataclasses, tuples); avoid mutable defaults
+- **Context managers** for files, sockets, locks (no resource leaks)
+- **Small, cohesive functions** (~≤60 LOC, cyclomatic complexity ≤10)
+- **Zero-warnings policy**: ruff/pylint, Black/isort formatting, Bandit security checks
+
+### Testing
+- No existing test suite; when adding tests, use **pytest + Hypothesis** for core logic
+- Property-based tests recommended for artifact detection, interpolation, PSD computation
+- Target ≥90% coverage on critical modules (`hrv_core.py`, `noaa_space.py`)
+- Treat warnings as errors during test runs
+
+### Caching Strategy
+- NOAA space data cached in `app/data_cache/noaa_space/` with 6-hour TTL
+- Cache files named by source key and content hash
+- SpaceWeatherLive snapshots cached in `app/data_cache/space_weather/`
+- Stale cache entries ignored; fresh fetches on cache miss
+
+### Correlation Database
+- `data/hrv_solar_db.jsonl` stores best HRV↔space-weather correlations
+- Each line is a JSON record with fields: `cedula`, `session_id`, `created_utc`, `metric`, `pearson_r`, `p_value`, `n`, `lag_hours`, optional `q_value`
+- Append-only; no modification of existing records
+
+## Working with HRV Metrics
+
+### Key Metrics and Interpretation
+- **RMSSD (ms)**: Vagal modulation proxy; higher = stronger parasympathetic tone
+- **SDNN (ms)**: Overall variability (short-term); not equivalent to 24-h SDNN
+- **HF power (ms²)**: Respiratory sinus arrhythmia; parasympathetic/breathing-related
+- **LF power (ms²)**: Baroreflex with mixed sympathetic/parasympathetic contributions
+- **LF/HF ratio**: Limited "balance" index; sensitive to breathing rate (use with caution)
+- **SD1 (Poincaré)**: Short-term variability ≈ RMSSD/√2
+- **SD2 (Poincaré)**: Long-term variability
+- **DFA α1**: Fractal scaling exponent; ~0.75–1.25 at healthy rest
+- **ApEn/SampEn**: Regularity/complexity; lower = more rigid autonomic regulation
+
+### Autonomic Function Tests
+- **Valsalva ratio**: Longest RR (phase IV) / shortest RR (phase II); ≥1.2 typical for middle-aged adults
+- **Deep breathing E:I**: Expiratory–inspiratory RR difference/ratio; larger = greater vagal modulation
+- **30:15 ratio**: Longest RR near 30th beat post-stand / shortest RR near 15th beat; ≥1.04 typical
+
+### Data Quality Checks
+- Visualize RR time series with artifact flags in "Time Series" tab
+- If >5–10% artifacts flagged, consider retesting or interpreting cautiously
+- Require stationarity for windowed metrics (use ≥5 min recording with stabilization period)
+- Document posture, time-of-day, breathing (spontaneous vs paced), device type, recent exertion/caffeine
+
+## NOAA Space Weather Integration
+
+### Available NOAA Feeds (see `docs/NOAA json.md` for full list)
+- F10.7 cm solar radio flux (3 daily slots)
+- Planetary K-index (1-minute cadence)
+- Solar wind proton speed/density/temperature (ACE/DSCOVR)
+- Interplanetary magnetic field (Bt, Bz GSE/GSM)
+- GOES x-ray flux (0.05–0.4 nm)
+- GOES integral proton flux (≥1–≥500 MeV thresholds)
+- Predicted Kp (1-hour model)
+- Geomagnetic Dst (1-hour, 7-day)
+
+### Correlation Workflow
+1. Select HRV metric (e.g., RMSSD) and NOAA metric (e.g., Kp-index)
+2. Configure lag range (e.g., 0–48 hours), step (e.g., 1 hour), merge tolerance (e.g., 30 min)
+3. Optionally enable weather covariates (temperature, humidity, pressure from Open-Meteo Archive for Bogotá)
+4. Compute Pearson r and p-values (requires SciPy)
+5. Apply Benjamini-Hochberg FDR correction for multiple comparisons
+6. Optionally compute partial correlations controlling for weather
+7. Run OLS residual diagnostics (R², Durbin-Watson, normality test, residual plots)
+8. Save best results to JSONL database with Cedula key
+
+### SpaceWeatherLive Scraping
+- CLI: `python -m app.swl_fetch --output data/spaceweatherlive_snapshot.json`
+- Fetches Kp forecast, solar wind speed/density, IMF Bt/Bz, sunspot number, F10.7, flare probabilities
+- Parses CACTus "Latest CMEs" table for counts, velocity stats (mean/median/max), angular width, halo rate
+- SIDC Ursigram narrative highlights for CME context
+
+## Modifying the Codebase
+
+### Adding a New HRV Metric
+1. Implement computation in `app/hrv_core.py` as a pure function with full type hints and docstring
+2. Add metric to `compute_comprehensive_hrv` return dict
+3. Update `docs/Manual.md` with metric definition, physiological interpretation, and clinical emphasis
+4. Add property-based tests in `test_hrv_core.py` (to be created)
+
+### Adding a New NOAA Feed
+1. Define a `NOAASourceSpec` in `app/noaa_space.py` with key, path, title, description, value_columns, units, cadence_minutes
+2. Add spec to `NOAA_SOURCES` dict in `noaa_space.py`
+3. Test feed ingestion with `load_noaa_space_data(key)` to verify schema normalization and timestamp alignment
+4. Update correlation UI in `app/app.py` Space Weather tab to surface new metric
+
+### Adding a New Visualization
+1. Build ECharts option dict in `app/echarts_component.py` or inline in `app.py`
+2. Use `render_echarts(config)` to display chart in Streamlit
+3. Ensure responsive layout, tooltips, legends, and color semantics match existing gauges/charts
+4. Document chart interpretation in `docs/Manual.md`
+
+### Code Style and Tooling
+- **Linting**: Use `ruff check app/` or `pylint app/`
+- **Formatting**: `black app/ --line-length 120` and `isort app/`
+- **Type checking**: `mypy app/ --strict` or `pyright app/`
+- **Security**: `bandit -r app/`
+- **Pre-commit hooks**: Recommended for ruff, Black, isort, mypy, Bandit
+
+### Commit Workflow
+- **Never commit API keys or secrets**; always use `.env` and ensure it's in `.gitignore`
+- Document changes in `CHANGELOG.md` (features, fixes, notes)
+- Keep commit messages concise and imperative (e.g., "Add NOAA Dst feed ingestion")
+- Before committing large refactors, ensure zero linter warnings and type errors
+
+## File Naming Conventions
+- RR-interval files: `YYYY-MM-DD HH-MM-SS.txt` (parsed as GMT-5, converted to UTC)
+- Cache files: `<source_key>_<hash>.json` in `app/data_cache/noaa_space/` or `app/data_cache/space_weather/`
+- Output snapshots: `spaceweatherlive_snapshot.json`, `hrv_solar_db.jsonl`
+
+## Known Limitations
+- **Arrhythmias/ectopy**: HRV metrics assume sinus rhythm; extensive ectopy invalidates standard interpretations
+- **Short-term vs 24-hour**: SDNN and spectral indices differ across durations; do not extrapolate short-term to 24-h risk markers
+- **Respiration sensitivity**: HF power and LF/HF highly sensitive to breathing rate/depth; document breathing protocol
+- **Entropy parameters**: ApEn/SampEn are parameter- and length-sensitive; compare like-with-like
+- **Readiness baseline**: Requires stable conditions (posture, time-of-day, breathing, sensor type); rebuild if conditions change
+- **P-values require SciPy**: Without SciPy, p-values display as NaN; install SciPy for statistical inference
+
+## Scientific References
+- Task Force ESC/NASPE (1996): Heart rate variability standards ([ESC PDF](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf))
+- Psychophysiology Publication Guidelines (Part 1, 2024)
+- Shaffer & Ginsberg (2017): An Overview of Heart Rate Variability Metrics and Norms
+- Sacha (2016): Heart rate contribution to HRV (Frontiers)
+
+See `docs/Manual.md` for full references and metric-specific citations.
+
+## Troubleshooting
+
+### Streamlit hangs on Windows shutdown
+The app includes Windows console safety workarounds (Colorama fix) in `app/app.py`. If Streamlit still hangs, ensure `CLICOLOR=0` and `NO_COLOR=1` are set in environment.
+
+### OpenAI API errors
+- Verify `OPENAI_API_KEY` in `.env`
+- Check OpenAI service status and API quota
+- Fallback interpretation disabled if key missing; app will skip GPT-5.1 report
+
+### NOAA feed fetch timeout
+- Default timeout is 10–15s; increase `REQUEST_TIMEOUT` in `noaa_space.py` if network is slow
+- Check NOAA SWPC service status: https://services.swpc.noaa.gov/
+- Cache prevents repeated fetches; delete stale cache files in `app/data_cache/noaa_space/` to force refresh
+
+### SpaceWeatherLive scraping fails
+- Direct scraping may fail due to site structure changes; fallback to OpenAI extraction if `OPENAI_API_KEY` is set
+- Verify site is accessible: https://www.spaceweatherlive.com/
+- Increase timeout or retry logic in `spaceweatherlive_client.py`
+
+### Import errors
+- Ensure all dependencies in `requirements.txt` are installed
+- Use Python 3.10+ (some type hints and syntax require 3.10)
+- Activate virtual environment if using `.venv`
+
+## Documentation
+- **User Manual**: `docs/Manual.md` — comprehensive guide for clinicians/researchers
+- **NOAA Feeds**: `docs/NOAA json.md` — full list of SWPC JSON endpoints
+- **Scientific Discussion**: `docs/Scientific_Discussion_Parasympathetic_Analysis.md`
+- **CHANGELOG**: `CHANGELOG.md` — version history and feature additions
+- **README**: `README.md` — quick start and high-level features
