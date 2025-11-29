@@ -20,7 +20,7 @@ Citation:
     }
 """
 
-__version__ = "1.0.2"
+__version__ = "1.0.3"
 
 # Core model classes
 from .models import (
@@ -37,6 +37,25 @@ from .lights import LightSchedule
 
 # Metrics and analysis
 from .metrics import esri, circadian_phase_coherence, phase_deviation, social_jetlag_index
+
+# Wearable data readers
+from .readers import (
+    WearableData,
+    load_json,
+    load_csv,
+    load_actiwatch,
+    combine_wearable_dataframes,
+)
+
+# Utility functions
+from .utils import (
+    phase_difference,
+    amplitude_percent_change,
+    sleep_midpoint_and_duration,
+    phase_coherence,
+    phase_coherence_clock,
+    times_to_angle,
+)
 
 __all__ = [
     # Version
@@ -55,4 +74,17 @@ __all__ = [
     "circadian_phase_coherence",
     "phase_deviation",
     "social_jetlag_index",
+    # Readers
+    "WearableData",
+    "load_json",
+    "load_csv",
+    "load_actiwatch",
+    "combine_wearable_dataframes",
+    # Utils
+    "phase_difference",
+    "amplitude_percent_change",
+    "sleep_midpoint_and_duration",
+    "phase_coherence",
+    "phase_coherence_clock",
+    "times_to_angle",
 ]
