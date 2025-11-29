@@ -1,5 +1,15 @@
 ## HRV Analysis Suite — Complete User Manual
 
+### Author
+
+**Dr. Diego Malpica, MD**  
+*Aerospace Medicine Specialist*  
+National University of Colombia  
+Physiology Instructor, Colombian Aerospace Force  
+Researcher
+
+---
+
 This manual provides step-by-step instructions for all features of the HRV Analysis Suite with practical examples, interpretation guidance, and clinical/research best practices.
 
 ---
@@ -16,11 +26,14 @@ This manual provides step-by-step instructions for all features of the HRV Analy
 8. [Fatigue Prediction (SAFTE Model)](#fatigue-prediction-safte-model)
 9. [Biofeedback and Real-Time HRV](#biofeedback-and-real-time-hrv)
 10. [Garmin Integration](#garmin-integration)
-11. [AI-Powered Interpretation](#ai-powered-interpretation)
-12. [Export and Publication](#export-and-publication)
-13. [Metric Reference Tables](#metric-reference-tables)
-14. [Troubleshooting](#troubleshooting)
-15. [Scientific References](#scientific-references)
+11. [ActiGraph GT3X Integration](#actigraph-gt3x-integration)
+12. [Somfit Pro Integration](#somfit-pro-integration)
+13. [AI-Powered Interpretation](#ai-powered-interpretation)
+14. [Export and Publication](#export-and-publication)
+15. [Metric Reference Tables](#metric-reference-tables)
+16. [Troubleshooting](#troubleshooting)
+17. [Scientific References](#scientific-references)
+18. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
 
 ---
 
@@ -840,6 +853,213 @@ For live data:
 
 ---
 
+## ActiGraph GT3X Integration
+
+### Overview
+
+ActiGraph accelerometers (GT3X, GT3X+, GT9X Link) are research-grade wearable devices used for objective measurement of physical activity and sleep. The HRV Analysis Suite supports importing data from these devices to:
+
+- Correlate activity patterns with HRV metrics
+- Classify sleep/wake periods for overnight HRV analysis
+- Assess activity intensity and sedentary behavior
+- Validate self-reported activity data
+
+### Supported File Formats
+
+| Format | Extension | Description |
+|--------|-----------|-------------|
+| GT3X Binary | `.gt3x` | Native ActiGraph format (ZIP archive with binary data) |
+| ActiLife Database | `.agd` | Processed epoch data (SQLite database) |
+| CSV Export | `.csv` | ActiLife exported counts or raw acceleration |
+
+### Importing ActiGraph Data
+
+**Step 1: Export from ActiLife**
+
+1. Connect ActiGraph device to computer
+2. Open ActiLife software
+3. Download data from device
+4. Export as desired format:
+   - Raw: `.gt3x` file (recommended for research)
+   - Processed: `.agd` file (includes epoch summaries)
+   - CSV: Activity counts or raw acceleration
+
+**Step 2: Upload to HRV App**
+
+1. Expand "📊 ActiGraph GT3X Import" in sidebar
+2. Click file uploader
+3. Select your ActiGraph file
+4. Wait for processing
+
+**Step 3: Review imported data**
+
+The app displays:
+- Number of acceleration samples
+- Device type and sampling rate
+- Activity intensity classifications
+- Sleep/wake periods (if detected)
+- Quality warnings (data gaps, extreme values)
+
+### Available Metrics
+
+| Metric | Description | Use in HRV Analysis |
+|--------|-------------|---------------------|
+| Activity Counts | Epoch-based movement summary | Activity context for HRV |
+| Vector Magnitude | Combined XYZ acceleration | Physical activity level |
+| Sleep/Wake | Actigraphy-based classification | Overnight HRV windows |
+| Intensity | Sedentary/Light/Moderate/Vigorous | Activity correlation |
+| Wear Time | Valid data periods | Quality assessment |
+
+### Activity Intensity Cut-Points
+
+The app uses Freedson adult cut-points (counts per minute):
+
+| Intensity | CPM Range | Description |
+|-----------|-----------|-------------|
+| Sedentary | 0-99 | Sitting, lying |
+| Light | 100-1951 | Standing, slow walking |
+| Moderate | 1952-5724 | Brisk walking |
+| Vigorous | 5725+ | Running, exercise |
+
+### Sleep/Wake Classification
+
+Sleep periods are detected using a simplified Cole-Kripke algorithm:
+- Activity threshold: 40 counts/epoch
+- Minimum sleep duration: 3 consecutive epochs
+- Results align with PSG in ~85% of epochs
+
+### Limitations
+
+⚠️ **Accelerometer limitations:**
+- No direct heart rate measurement (unless HR monitor paired)
+- RR intervals estimated from HR data (if available)
+- Sleep staging less accurate than PSG
+- Wear compliance affects data quality
+
+---
+
+## Somfit Pro Integration
+
+### Overview
+
+The Compumedics Somfit/Somfit Pro is a miniaturized home sleep testing device that attaches to the forehead and captures:
+
+- Single-channel EEG (for sleep staging)
+- EOG (eye movements)
+- Heart rate (PPG-based)
+- SpO2 (pulse oximetry)
+- Body position
+
+The HRV Analysis Suite imports Somfit data to analyze sleep-stage-specific HRV patterns and overnight autonomic function.
+
+### Supported File Formats
+
+| Format | Extension | Description |
+|--------|-----------|-------------|
+| European Data Format | `.edf`, `.edf+` | Standard PSG export format |
+| Profusion XML | `.xml` | Sleep scoring annotations |
+| CSV Export | `.csv` | Summary data from Nexus360 |
+
+### Importing Somfit Data
+
+**Step 1: Export from Profusion Nexus360**
+
+1. Complete sleep study with Somfit device
+2. Upload data via Somfit app
+3. Access Profusion Nexus360 cloud platform
+4. Export study as EDF file
+5. Optionally export scoring annotations as XML
+
+**Step 2: Upload to HRV App**
+
+1. Expand "😴 Somfit Pro Import" in sidebar
+2. Select main data file (.edf or .csv)
+3. Optionally add scoring annotations (.xml)
+4. Wait for processing
+
+**Step 3: Review imported data**
+
+The app displays:
+- Recording duration
+- Number of signals
+- Sleep architecture metrics (if staging available)
+- Heart rate and SpO2 data quality
+- Extracted RR intervals
+
+### Sleep Architecture Metrics
+
+When sleep staging is available, the app computes:
+
+| Metric | Description | Normal Range |
+|--------|-------------|--------------|
+| TST | Total Sleep Time | 7-9 hours |
+| SE | Sleep Efficiency | >85% |
+| SOL | Sleep Onset Latency | <30 min |
+| WASO | Wake After Sleep Onset | <30 min |
+| REM Latency | Time to first REM | 70-120 min |
+| N1% | Stage N1 percentage | 2-5% |
+| N2% | Stage N2 percentage | 45-55% |
+| N3% | Stage N3 percentage | 15-25% |
+| REM% | REM percentage | 20-25% |
+
+### Stage-Specific HRV Analysis
+
+The app can compute HRV metrics for each sleep stage:
+
+```
+Stage   Mean RR   SDNN    RMSSD   Mean HR
+Wake    850 ms    45 ms   35 ms   71 bpm
+N1      920 ms    50 ms   42 ms   65 bpm
+N2      950 ms    55 ms   48 ms   63 bpm
+N3      980 ms    40 ms   52 ms   61 bpm
+REM     900 ms    60 ms   45 ms   67 bpm
+```
+
+This reveals autonomic patterns:
+- **N3 (deep sleep)**: Highest parasympathetic activity (RMSSD)
+- **REM**: Variable HR with sympathetic bursts
+- **Wake**: Lower HRV than sleep stages
+
+### RR Interval Extraction
+
+**From Heart Rate Signal:**
+- RR intervals estimated as: RR = 60000 / HR (ms)
+- Suitable for general HRV trends
+- Not beat-to-beat accurate
+
+**From ECG (if available):**
+- R-peak detection using band-pass filtering
+- True beat-to-beat intervals
+- Recommended for research
+
+### Respiratory Event Analysis
+
+If respiratory events are scored, the app reports:
+
+| Metric | Description | Severity |
+|--------|-------------|----------|
+| AHI | Apnea-Hypopnea Index | <5: Normal, 5-15: Mild, 15-30: Moderate, >30: Severe |
+| ODI | Oxygen Desaturation Index | Events per hour with ≥3% desat |
+| Min SpO2 | Lowest SpO2 during sleep | <90%: Significant |
+
+### Limitations
+
+⚠️ **Somfit limitations:**
+- Single EEG channel may miss some sleep transitions
+- PPG-based HR less accurate than ECG for HRV
+- RR intervals are derived, not measured
+- Home environment may affect signal quality
+
+### Clinical Applications
+
+1. **Sleep apnea screening**: AHI, ODI, SpO2 nadir
+2. **Insomnia assessment**: SOL, WASO, SE
+3. **Circadian analysis**: Sleep timing, architecture
+4. **Autonomic function**: Stage-specific HRV patterns
+5. **Treatment monitoring**: Pre/post intervention comparisons
+
+---
+
 ## AI-Powered Interpretation
 
 ### Setting Up GPT Interpretation
@@ -1186,6 +1406,246 @@ Solutions:
 7. Export CSV for external statistical analysis
 8. Generate LaTeX tables for publication
 ```
+
+---
+
+## Pending Developments and Roadmap
+
+This section outlines planned enhancements and features under development for the HRV Analysis Suite. These represent opportunities for comprehensive advancements in the physiology platform.
+
+### High Priority Enhancements
+
+#### 1. Advanced ECG R-Peak Detection
+**Status:** Planned  
+**Description:** Implement robust R-peak detection algorithms for true beat-to-beat HRV analysis from raw ECG signals.
+
+- Pan-Tompkins algorithm for QRS detection
+- Template matching for artifact rejection
+- Multi-lead ECG support
+- Real-time R-peak detection for biofeedback
+
+**Scientific basis:** Current RR derivation from HR is an approximation; true beat-to-beat analysis requires R-peak detection.
+
+#### 2. Blood Pressure Variability (BPV) Integration
+**Status:** Planned  
+**Description:** Add support for continuous blood pressure monitoring data to analyze baroreflex sensitivity and BPV metrics.
+
+- Import BP waveform data (Finapres, Portapres)
+- Compute systolic/diastolic BPV
+- Baroreflex sensitivity (sequence method, spectral)
+- Cross-spectral HRV-BPV coherence
+
+**Clinical relevance:** BPV complements HRV for comprehensive autonomic assessment.
+
+#### 3. Respiratory Signal Analysis
+**Status:** Partially implemented  
+**Description:** Enhanced respiratory signal processing for accurate breathing rate extraction and RSA analysis.
+
+- Import respiratory belt/thermistor data
+- EDR (ECG-derived respiration) algorithms
+- Respiratory sinus arrhythmia quantification
+- Paced breathing protocol automation
+
+**Current gap:** Breathing rate estimated from HF peak; direct measurement improves accuracy.
+
+#### 4. Multi-Modal Sensor Fusion
+**Status:** In development  
+**Description:** Integrate data from multiple wearable sensors for comprehensive physiological assessment.
+
+- Oura Ring integration (sleep, HRV, temperature)
+- WHOOP integration (strain, recovery, sleep)
+- Apple Watch Health export parsing
+- Fitbit integration
+- Polar Vantage/Verity integration
+
+**Benefit:** Combines strengths of different sensors for robust analysis.
+
+### Medium Priority Enhancements
+
+#### 5. Long-Term HRV Trending
+**Status:** Planned  
+**Description:** Longitudinal analysis tools for tracking HRV changes over weeks/months.
+
+- Baseline establishment (rolling 7-day average)
+- Trend detection with statistical significance
+- Seasonal/circadian pattern analysis
+- Training load correlation (for athletes)
+- Medication effect tracking
+
+**Use case:** Monitoring recovery, training adaptation, disease progression.
+
+#### 6. Population Normative Database
+**Status:** Planned  
+**Description:** Expand reference ranges with age/sex/fitness-stratified normative data.
+
+- Integrate published normative datasets
+- Age-decade specific reference ranges
+- Fitness-level adjustments (VO2max correlation)
+- Disease-specific reference ranges
+- Percentile rankings
+
+**Current limitation:** Generic reference ranges; individual variation not fully captured.
+
+#### 7. Automated Report Generation
+**Status:** Partially implemented  
+**Description:** One-click comprehensive report generation with clinical interpretation.
+
+- Customizable report templates
+- Multi-language support
+- Institution branding options
+- HIPAA-compliant formatting
+- Direct EMR integration (FHIR)
+
+**Enhancement needed:** More template options, PDF export quality.
+
+#### 8. Exercise HRV Analysis
+**Status:** Planned  
+**Description:** Specialized analysis for exercise and recovery HRV patterns.
+
+- Pre/during/post exercise HRV comparison
+- Heart rate recovery (HRR) analysis
+- Parasympathetic reactivation curves
+- Training load quantification (TRIMP)
+- Overtraining risk indicators
+
+**Target users:** Athletes, sports scientists, exercise physiologists.
+
+### Lower Priority / Research Features
+
+#### 9. Advanced Nonlinear Dynamics
+**Status:** Partially implemented  
+**Description:** Additional nonlinear analysis methods for research applications.
+
+- Multiscale entropy (MSE)
+- Recurrence quantification analysis (RQA)
+- Symbolic dynamics (word entropy)
+- Correlation dimension
+- Lyapunov exponents
+
+**Current state:** DFA, SampEn, ApEn implemented; advanced methods pending.
+
+#### 10. Machine Learning Predictions
+**Status:** In development  
+**Description:** ML models for clinical outcome prediction and pattern recognition.
+
+- Atrial fibrillation risk prediction
+- Sudden cardiac death risk stratification
+- Sleep apnea screening from HRV
+- Stress/anxiety detection
+- Personalized baseline modeling
+
+**Requirement:** Validated training datasets, clinical validation studies.
+
+#### 11. Real-Time Bluetooth Integration
+**Status:** Planned  
+**Description:** Direct connection to Bluetooth heart rate monitors for live streaming.
+
+- Polar H10/H9 BLE connection
+- Garmin HRM-Pro support
+- Real-time artifact detection
+- Live biofeedback visualization
+- Session recording and export
+
+**Technical challenge:** Browser BLE API limitations; may require desktop app.
+
+#### 12. Circadian Rhythm Analysis
+**Status:** Planned  
+**Description:** Tools for analyzing circadian patterns in HRV and physiology.
+
+- Cosinor analysis for circadian rhythms
+- Mesor, amplitude, acrophase extraction
+- Circadian disruption indices
+- Shift work impact assessment
+- Jet lag recovery tracking
+
+**Integration:** Combines with sleep data from Somfit/actigraphy.
+
+### Infrastructure Improvements
+
+#### 13. Database Backend
+**Status:** Planned  
+**Description:** Persistent storage for longitudinal data and multi-user support.
+
+- PostgreSQL/SQLite backend
+- User authentication
+- Data encryption at rest
+- Cloud sync options
+- GDPR compliance tools
+
+#### 14. API Development
+**Status:** Planned  
+**Description:** RESTful API for programmatic access and third-party integration.
+
+- HRV computation endpoints
+- Batch processing API
+- Webhook notifications
+- OAuth2 authentication
+- Rate limiting and quotas
+
+#### 15. Mobile Companion App
+**Status:** Conceptual  
+**Description:** Mobile app for data collection and quick HRV checks.
+
+- Morning readiness protocol
+- Quick 1-minute HRV measurement
+- Push notifications for trends
+- Sync with main platform
+- Offline data collection
+
+### Aerospace Medicine Specific
+
+#### 16. G-Tolerance Assessment
+**Status:** Planned  
+**Description:** HRV-based tools for assessing G-tolerance and pilot fitness.
+
+- Pre-flight autonomic screening
+- G-LOC risk indicators
+- Fatigue-HRV correlation for flight duty
+- Anti-G straining maneuver analysis
+- Hypoxia response patterns
+
+**Relevance:** Dr. Malpica's aerospace medicine expertise.
+
+#### 17. Altitude/Hypoxia Analysis
+**Status:** Planned  
+**Description:** HRV changes during altitude exposure and hypoxia.
+
+- Acute mountain sickness prediction
+- Acclimatization monitoring
+- Hypoxic ventilatory response correlation
+- SpO2-HRV relationship analysis
+- High-altitude training optimization
+
+#### 18. Spatial Disorientation Markers
+**Status:** Research phase  
+**Description:** Investigate HRV patterns associated with vestibular stress.
+
+- Coriolis stimulation response
+- Motion sickness susceptibility
+- Vestibular-autonomic coupling
+- Simulator sickness prediction
+
+### How to Contribute
+
+If you're interested in contributing to any of these developments:
+
+1. **Code contributions**: Fork the repository and submit pull requests
+2. **Testing**: Help validate new features with your data
+3. **Documentation**: Improve user guides and scientific references
+4. **Feature requests**: Open GitHub issues with detailed use cases
+5. **Research collaboration**: Contact Dr. Malpica for academic partnerships
+
+### Development Timeline
+
+| Feature | Target Quarter | Priority |
+|---------|----------------|----------|
+| ECG R-peak detection | Q1 2026 | High |
+| Multi-modal fusion | Q1 2026 | High |
+| Long-term trending | Q2 2026 | Medium |
+| Exercise HRV | Q2 2026 | Medium |
+| ML predictions | Q3 2026 | Medium |
+| Real-time BLE | Q3 2026 | Medium |
+| Mobile app | Q4 2026 | Low |
 
 ---
 
