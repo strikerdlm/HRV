@@ -21,25 +21,27 @@ This manual provides step-by-step instructions for all features of the HRV Analy
 3. [Uploading and Loading Data](#uploading-and-loading-data)
 4. [Sidebar Configuration](#sidebar-configuration)
 5. [Tab-by-Tab Guide](#tab-by-tab-guide)
-6. [Autonomic Function Tests](#autonomic-function-tests)
-7. [Space Weather Correlation](#space-weather-correlation)
-8. [Fatigue Prediction (SAFTE Model)](#fatigue-prediction-safte-model)
-9. [Biofeedback and Real-Time HRV](#biofeedback-and-real-time-hrv)
-10. [Garmin Integration](#garmin-integration)
-11. [ActiGraph GT3X Integration](#actigraph-gt3x-integration)
-12. [Somfit Pro Integration](#somfit-pro-integration)
-13. [AI-Powered Interpretation](#ai-powered-interpretation)
-14. [Export and Publication](#export-and-publication)
-15. [Metric Reference Tables](#metric-reference-tables)
-16. [Troubleshooting](#troubleshooting)
-17. [Scientific References](#scientific-references)
-18. [Advanced ECG R-Peak Detection](#advanced-ecg-r-peak-detection)
-19. [Multi-Modal Sensor Fusion](#multi-modal-sensor-fusion)
-20. [Long-Term HRV Trending Analysis](#long-term-hrv-trending-analysis)
-21. [Exercise HRV Analysis](#exercise-hrv-analysis)
-22. [Machine Learning Predictions](#machine-learning-predictions)
-23. [Real-Time BLE Integration](#real-time-ble-integration)
-24. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
+6. [User Profiles and Clinical Scales](#user-profiles-and-clinical-scales)
+7. [Autonomic Function Tests](#autonomic-function-tests)
+8. [Space Weather Correlation](#space-weather-correlation)
+9. [Fatigue Prediction (SAFTE Model)](#fatigue-prediction-safte-model)
+10. [Biofeedback and Real-Time HRV](#biofeedback-and-real-time-hrv)
+11. [Garmin Integration](#garmin-integration)
+12. [ActiGraph GT3X Integration](#actigraph-gt3x-integration)
+13. [Somfit Pro Integration](#somfit-pro-integration)
+14. [AI-Powered Interpretation](#ai-powered-interpretation)
+15. [Export and Publication](#export-and-publication)
+16. [Metric Reference Tables](#metric-reference-tables)
+17. [Troubleshooting](#troubleshooting)
+18. [Scientific References](#scientific-references)
+19. [Advanced ECG R-Peak Detection](#advanced-ecg-r-peak-detection)
+20. [Multi-Modal Sensor Fusion](#multi-modal-sensor-fusion)
+21. [Long-Term HRV Trending Analysis](#long-term-hrv-trending-analysis)
+22. [Exercise HRV Analysis](#exercise-hrv-analysis)
+23. [Machine Learning Predictions](#machine-learning-predictions)
+24. [Real-Time BLE Integration](#real-time-ble-integration)
+25. [Docker Deployment](#docker-deployment)
+26. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
 
 ---
 
@@ -479,6 +481,193 @@ LF/HF: 0.67 → Vagal predominance (typical at rest)
 - Reference ranges are population-based
 - Age, fitness, medications affect individual ranges
 - Use for within-subject trending primarily
+
+---
+
+## User Profiles and Clinical Scales
+
+This feature enables personalized HRV analysis and fatigue assessment by incorporating user-specific biometric data and validated clinical questionnaires.
+
+### User Biometric Profile
+
+The platform collects essential biometric data to tailor physiological calculations:
+
+#### Required Measurements (Metric System)
+
+| Parameter | Unit | Range | Purpose |
+|-----------|------|-------|---------|
+| Height | cm | 100-250 | BMI calculation, VO₂max estimation |
+| Weight | kg | 30-300 | BMI calculation, metabolic estimates |
+| Date of Birth | date | - | Age-based normative comparisons |
+| Sex | M/F/Other | - | Sex-specific HRV norms |
+
+#### Calculated Metrics
+
+**Body Mass Index (BMI)**
+$$BMI = \frac{weight_{kg}}{(height_m)^2}$$
+
+Classification (WHO):
+- <18.5: Underweight
+- 18.5-24.9: Normal weight
+- 25.0-29.9: Overweight
+- ≥30.0: Obese
+
+**VO₂max Estimation** (when not directly measured)
+
+Uses the Jackson et al. (1990) non-exercise prediction equation:
+$$VO_2max = 56.363 + (1.921 \times PA) - (0.381 \times age) - (0.754 \times BMI) + (10.987 \times sex)$$
+
+Where PA = Physical Activity rating (1-7), sex = 1 (male) or 0 (female).
+
+**Maximum Heart Rate** (Tanaka formula):
+$$HR_{max} = 208 - (0.7 \times age)$$
+
+Reference: Tanaka H, et al. *J Am Coll Cardiol.* 2001;37(1):153-156.
+
+### Validated Clinical Scales
+
+The platform includes scientifically validated instruments for fatigue and sleep assessment:
+
+#### Samn-Perelli Fatigue Scale (Aviation Standard)
+
+7-point scale for operational fatigue assessment, widely used in aviation fatigue risk management.
+
+| Rating | Description | Risk Level |
+|--------|-------------|------------|
+| 1 | Fully alert, wide awake | LOW |
+| 2 | Very lively, responsive | LOW |
+| 3 | Okay, somewhat fresh | MODERATE |
+| 4 | A little tired | MODERATE |
+| 5 | Moderately tired, let down | HIGH |
+| 6 | Extremely tired | CRITICAL |
+| 7 | Completely exhausted | CRITICAL |
+
+**Reference:** Samn SW, Perelli LP. *Estimating aircrew fatigue: a technique with application to airlift operations.* Brooks AFB, TX: USAF School of Aerospace Medicine; 1982.
+
+#### Karolinska Sleepiness Scale (KSS)
+
+9-point scale for momentary sleepiness, validated against EEG and behavioral measures.
+
+| Rating | Description |
+|--------|-------------|
+| 1 | Extremely alert |
+| 2 | Very alert |
+| 3 | Alert |
+| 4 | Fairly alert |
+| 5 | Neither alert nor sleepy |
+| 6 | Some signs of sleepiness |
+| 7 | Sleepy, but no effort to stay awake |
+| 8 | Sleepy, some effort to stay awake |
+| 9 | Extremely sleepy, fighting sleep |
+
+**Impairment Threshold:** KSS ≥ 7 indicates potential performance impairment.
+
+**Reference:** Åkerstedt T, Gillberg M. *Int J Neurosci.* 1990;52(1-2):29-37.
+
+#### Epworth Sleepiness Scale (ESS)
+
+8-item questionnaire measuring general level of daytime sleepiness.
+
+**Situations assessed:**
+1. Sitting and reading
+2. Watching TV
+3. Sitting inactive in public
+4. Passenger in car for 1 hour
+5. Lying down in afternoon
+6. Sitting and talking to someone
+7. Sitting quietly after lunch (no alcohol)
+8. In car, stopped in traffic
+
+**Scoring:** Each item 0-3 (chance of dozing). Total score 0-24.
+
+| Score | Interpretation |
+|-------|----------------|
+| 0-5 | Lower normal daytime sleepiness |
+| 6-10 | Higher normal daytime sleepiness |
+| 11-12 | Mild excessive daytime sleepiness |
+| 13-15 | Moderate excessive daytime sleepiness |
+| 16-24 | Severe excessive daytime sleepiness |
+
+**Clinical Threshold:** ESS > 10 indicates excessive daytime sleepiness requiring clinical evaluation.
+
+**Reference:** Johns MW. *A new method for measuring daytime sleepiness: the Epworth sleepiness scale.* Sleep. 1991;14(6):540-545.
+
+#### Pittsburgh Sleep Quality Index (PSQI)
+
+19-item questionnaire assessing sleep quality over the past month.
+
+**7 Component Scores:**
+1. Subjective sleep quality
+2. Sleep latency
+3. Sleep duration
+4. Habitual sleep efficiency
+5. Sleep disturbances
+6. Use of sleeping medication
+7. Daytime dysfunction
+
+**Global Score:** Sum of components (0-21)
+- 0-5: Good sleep quality
+- 6-10: Poor sleep quality
+- 11-15: Moderate sleep disturbance
+- >15: Severe sleep disturbance
+
+**Clinical Threshold:** PSQI > 5 indicates poor sleep quality.
+
+**Reference:** Buysse DJ, et al. *The Pittsburgh Sleep Quality Index: a new instrument for psychiatric practice and research.* Psychiatry Res. 1989;28(2):193-213.
+
+#### Fatigue Severity Scale (FSS)
+
+9-item scale measuring the impact of fatigue on daily functioning.
+
+**Items assess agreement (1-7) with statements about:**
+- Motivation problems
+- Exercise impacts
+- Physical functioning
+- Work/duty performance
+
+**Scoring:** Mean score across 9 items.
+- <3: No significant fatigue
+- 3-4: Mild fatigue impact
+- 4-5: Moderate fatigue impact
+- ≥5: Severe fatigue impact
+
+**Reference:** Krupp LB, et al. *Arch Neurol.* 1989;46(10):1121-1123.
+
+### Profile-Adjusted HRV Interpretation
+
+HRV metrics are interpreted relative to age and sex-specific normative values:
+
+**RMSSD Normative Values** (based on Nunan et al. 2010):
+
+| Age Group | Male Mean±SD | Female Mean±SD |
+|-----------|--------------|----------------|
+| 18-25 | 42.0±15.0 ms | 45.0±18.0 ms |
+| 26-35 | 38.0±14.0 ms | 42.0±16.0 ms |
+| 36-45 | 32.0±12.0 ms | 36.0±14.0 ms |
+| 46-55 | 26.0±10.0 ms | 30.0±12.0 ms |
+| 56-65 | 22.0±9.0 ms | 25.0±10.0 ms |
+| 65+ | 18.0±8.0 ms | 21.0±9.0 ms |
+
+**Reference:** Nunan D, et al. *A quantitative systematic review of normal values for short‐term heart rate variability in healthy adults.* Pacing Clin Electrophysiol. 2010;33(11):1407-1417.
+
+### Health Condition Adjustments
+
+The system accounts for conditions that affect HRV baseline:
+
+| Condition | HRV Effect | Adjustment |
+|-----------|------------|------------|
+| Beta-blockers | ↑ HRV | ×1.3 factor |
+| Cardiac condition | ↓ HRV | ×0.85 factor |
+| Diabetes | ↓ HRV | ×0.9 factor |
+| Smoking | ↓ HRV | Noted in interpretation |
+
+### Data Storage
+
+User profiles and assessments are stored in:
+- **Local mode:** JSON files in `data/profiles/` and `data/assessments/`
+- **Docker mode:** PostgreSQL database with TimescaleDB for time-series optimization
+
+All data remains under user control. No data is transmitted externally unless explicitly exported.
 
 ---
 
