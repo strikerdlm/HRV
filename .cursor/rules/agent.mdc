@@ -1,0 +1,88 @@
+---
+alwaysApply: true
+---
+# AI Agent & Development Rules
+
+This document establishes the authoritative rules for AI agents (Warp, Cursor, MCP) and developers working on the HRV Analysis Suite. These rules ensure code quality, scientific rigor, and consistent behavior.
+
+## 1. Global Python Rules (Deterministic & Analyzable)
+
+*Apply these rules to all Python code generated or modified.*
+
+1. **Control Flow**: Simple and explicit.
+   * **No recursion**.
+   * Use only `if/elif/else`, `for/while`, `try/except/else/finally`.
+   * No dynamic execution (`eval`, `exec`, `importlib` with dynamic strings).
+2. **Bounded Execution**:
+   * All loops must be bounded (explicit counters or finite iterables).
+   * All I/O and IPC must have finite timeouts (e.g., `requests.get(..., timeout=10)`).
+   * `while True` allowed only with explicit, enforced shutdown mechanisms.
+3. **Resource Management**:
+   * Bounded memory usage (e.g., `lru_cache(maxsize=N)`).
+   * Mandatory **context managers** (`with open(...)`, `with lock:`) for resources.
+   * Prefer immutable types (`tuple`, `frozenset`, `dataclasses(frozen=True)`).
+4. **Function Design**:
+   * Small, cohesive functions (~≤60 lines, complexity ≤10).
+   * Pure functions where possible; explicit side effects.
+   * **Full type hints** for all public functions.
+   * Clear docstrings describing behavior, args, returns, and errors.
+5. **Contracts & Validation**:
+   * Validate inputs with explicit checks raising precise exceptions (`ValueError`, `TypeError`).
+   * Use `assert` *only* for internal invariants (never for input validation).
+6. **Scope & Mutability**:
+   * Minimize global/nonlocal state.
+   * **No mutable default arguments** (use `None` sentinel).
+7. **Error Handling**:
+   * Never silently ignore errors.
+   * Catch specific exceptions (no bare `except:`).
+   * Fail closed/safe.
+8. **No Dynamic Metaprogramming**:
+   * Avoid runtime monkey-patching.
+   * No unpickling untrusted data (use JSON with schema).
+9. **Concurrency**:
+   * Single concurrency model per component.
+   * No shared mutable state without strict locking/queues.
+10. **Zero-Warnings Policy**:
+    * Strict typing (`mypy`/`pyright`).
+    * Linting (`ruff`, `pylint`).
+    * Security (`bandit`, `pip-audit`).
+
+## 2. Scientific Standards
+
+*For changes involving metrics, thresholds, or interpretations.*
+
+* **Evidence-Based**: Search peer-reviewed literature for non-trivial changes.
+  * Preferred sources: Task Force 1996, Shaffer & Ginsberg 2017, Nunan et al. 2010.
+* **Citations**: Include at least one verifiable citation (DOI/Link) per new concept.
+* **Uncertainty**: Explicitly flag assumptions, limitations, or lack of validation.
+
+## 3. Documentation & Change Discipline
+
+* **Centralized Docs**: Update `README.md` (high-level) and `docs/Manual.md` (detailed) with code changes.
+* **WARP.md**: Keep `WARP.md` aligned with the high-level architecture.
+* **Changelog**: Update `CHANGELOG.md` with user-visible changes.
+* **File Proliferation**: Do not create new markdown files unless explicitly requested.
+
+## 4. Agentic Best Practices
+
+*Guidelines for AI Agents to maximize effectiveness.*
+
+* **Role**: Act as a specialized Research Engineer in Aerospace Medicine & Signal Processing.
+* **Chain of Thought**: For complex tasks (refactoring, new features, analysis), explicitly plan steps before generating code.
+  1. **Research**: Understand the context and existing code.
+  2. **Plan**: Outline the approach.
+  3. **Execute**: Generate code/files.
+  4. **Verify**: Review against Global Python Rules.
+* **Tool Use**: Use tools precisely. Do not guess parameters. Read file contents before editing.
+* **Context Awareness**: Always check `WARP.md` and `docs/Manual.md` to understand the system architecture before suggesting changes.
+* **Response Structure**:
+  * **Summary**: Brief overview of changes.
+  * **Analysis/Reasoning**: Why this approach?
+  * **Code**: The implementation.
+  * **Next Steps**: "Upgrade / Bug-fix Opportunities".
+
+## 5. Testing & Quality
+
+* **Test-Driven**: New core logic should have `pytest` cases (prefer `hypothesis` for algorithmic code).
+* **Coverage**: Aim for ≥90% coverage on critical modules (`hrv_core.py`, `noaa_space.py`).
+* **Security**: No secrets in code. Use `.env`. Validate all external inputs (NOAA feeds, user files).
