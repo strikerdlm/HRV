@@ -244,40 +244,20 @@ This codebase adheres to strict deterministic, analyzable, reliable Python stand
 
 See `docs/Manual.md` for full references and metric-specific citations.
 
-## AI Agent / Cursor / MCP Rules
+## AI Agent & Development Rules
 
-These rules apply to AI agents operating in Warp, Cursor, or any MCP-enabled environment for this repository.
+**CRITICAL**: All agents and developers must follow the detailed rules in [`docs/Agent_Rules.md`](docs/Agent_Rules.md).
 
-### Evidence and scientific literature
-- For any non-trivial change to metrics, thresholds, interpretations, or new integrations (e.g., space-weather↔HRV models), agents **must**:
-  - Search peer‑reviewed scientific publications using Model Context Protocol (MCP) or the configured literature tools.
-  - Prefer consensus/guideline documents and high‑quality reviews (e.g., Task Force 1996 HRV standards, Shaffer & Ginsberg 2017, Nunan et al. 2010). citeturn0search11turn0search1turn0search8
-  - Include at least one verifiable reference per new concept, linking to an abstract or (where legally available) full‑text PDF.
-- Citations in AI responses should be precise enough that a reader can reach the abstract/PDF from the link in one click (publisher site, PubMed, or equivalent).
+### Summary of Key Rules
+1.  **Global Python Rules**: Deterministic, analyzable, bounded execution, strict typing, zero warnings.
+2.  **Scientific Standards**: Evidence-based changes with peer-reviewed citations.
+3.  **Documentation**: Update `README.md`, `docs/Manual.md`, and `CHANGELOG.md` with every meaningful change.
+4.  **Agentic Best Practices**:
+    *   Act as a specialized **Research Engineer**.
+    *   Use **Chain of Thought** for planning.
+    *   Check `WARP.md` and `docs/Manual.md` for architecture context.
 
-### Coding, testing, and security standards
-- Follow the **Global Python Rule** already encoded in this repo (deterministic, analyzable, no recursion, strict typing, bounded I/O timeouts, no dynamic `eval/exec`, explicit validation and error handling).
-- Apply industry best practices:
-  - Lint/format: ruff or pylint + Black + isort; zero new lint errors.
-  - Types: mypy/pyright in strict mode; no implicit `Any` in new code.
-  - Security: use HTTPS endpoints only; no secrets in code; respect `.env`; run `bandit -r app/` and `pip-audit`/`pip install --upgrade --dry-run` workflow before major releases.
-  - Dependencies: pin versions in `requirements.txt` and keep them updated with security advisories.
-- For new features, extend or add tests under `tests/` rather than only manual verification; prefer pytest + Hypothesis for algorithmic code.
-
-### Documentation and change discipline
-- Whenever a feature, workflow, or integration meaningfully changes, agents should:
-  - Update **README.md** (high‑level behavior) and `docs/Manual.md` (clinician/researcher details) as part of the same change.
-  - Keep **WARP.md** aligned with actual module layout, tabs, and major data flows.
-  - Add concise entries to `CHANGELOG.md` for user‑visible changes.
-- Documentation of scientific context should reference primary sources (guidelines, trials, or cohort studies) with verifiable links as above.
-
-### Per-response obligations for agents
-- For any substantial programming or analysis response (non‑trivial diff, new feature, or analytics workflow), agents should:
-  - Include a short **“Upgrade / Bug‑fix Opportunities”** paragraph summarizing obvious next steps (refactors, tests, robustness, performance, or security).
-  - Flag any assumptions or limitations (e.g., lack of validated clinical cut‑offs, small sample simulation) and, where possible, cite literature clarifying them. citeturn0search0turn0search5turn1search1
-  - Where the answer relies on scientific claims (e.g., normative HRV values, effects of geomagnetic storms on HRV), cite at least one peer‑reviewed study and point to its abstract or open‑access full text. citeturn1search3turn1search4turn1search7
-
-These rules are additive to any project‑specific rules already present; if they conflict, follow the stricter constraint.
+See [`docs/Agent_Rules.md`](docs/Agent_Rules.md) for the complete standard.
 
 ## Troubleshooting
 
