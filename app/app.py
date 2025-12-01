@@ -84,6 +84,26 @@ try:
 except ImportError:
     SPACE_WEATHER_PERSISTENCE_AVAILABLE = False
 
+# Space weather impact prediction module
+try:
+    from space_weather_impact import (
+        SpaceWeatherSnapshot,
+        ImpactEvent,
+        ImpactSeverity,
+        EnergyCategory,
+        fetch_space_weather_snapshot,
+        build_impact_summary_df,
+        get_priority_recommendation,
+        get_severity_color,
+        get_category_icon,
+        format_datetime_bogota,
+        format_countdown,
+        BOGOTA_TZ_NAME,
+    )
+    SPACE_WEATHER_IMPACT_AVAILABLE = True
+except ImportError:
+    SPACE_WEATHER_IMPACT_AVAILABLE = False
+
 # Population norms for comparison
 try:
     from population_norms import (
@@ -6193,6 +6213,137 @@ that predicts cognitive performance based on:
 
     with tab_space_weather:
         st.subheader("Space Weather (NOAA SWPC)")
+        
+        # =====================================================================
+        # IMPACT PREDICTION SECTION - Expected hit times for Bogotá, Colombia
+        # =====================================================================
+        if SPACE_WEATHER_IMPACT_AVAILABLE:
+            st.markdown("---")
+            st.markdown("### 🎯 Space Weather Impact Predictions")
+            st.markdown(f"*All times in Bogotá, Colombia ({BOGOTA_TZ_NAME})*")
+            
+            # Session state for impact snapshot
+            if "impact_snapshot" not in st.session_state:
+                st.session_state["impact_snapshot"] = None
+            
+            col_fetch_impact, col_refresh_info = st.columns([1, 2])
+            with col_fetch_impact:
+                if st.button("🔄 Fetch Impact Predictions", key="fetch_impact_predictions"):
+                    with st.spinner("Calculating arrival times..."):
+                        try:
+                            snapshot = fetch_space_weather_snapshot()
+                            st.session_state["impact_snapshot"] = snapshot
+                        except Exception as exc:
+                            st.error(f"Failed to fetch impact predictions: {exc}")
+            with col_refresh_info:
+                if st.session_state.get("impact_snapshot"):
+                    snap = st.session_state["impact_snapshot"]
+                    st.caption(f"Last updated: {format_datetime_bogota(snap.timestamp_utc)}")
+            
+            snapshot = st.session_state.get("impact_snapshot")
+            if snapshot is not None:
+                # Priority recommendation banner
+                recommendation = get_priority_recommendation(snapshot)
+                most_severe = snapshot.most_severe()
+                
+                if most_severe:
+                    severity_color = get_severity_color(most_severe.severity)
+                    st.markdown(
+                        f"""
+                        <div style="
+                            background: linear-gradient(135deg, {severity_color}20, {severity_color}10);
+                            border-left: 4px solid {severity_color};
+                            padding: 1rem;
+                            border-radius: 0.5rem;
+                            margin-bottom: 1rem;
+                        ">
+                            <h4 style="margin: 0 0 0.5rem 0; color: {severity_color};">
+                                {get_category_icon(most_severe.category)} POLAR H10 MONITORING RECOMMENDATION
+                            </h4>
+                            <div style="font-size: 0.95rem;">{recommendation}</div>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+                
+                # Impact arrival times table
+                st.markdown("#### ⏰ Expected Impact Times (Bogotá)")
+                impact_df = build_impact_summary_df(snapshot)
+                
+                if not impact_df.empty:
+                    # Highlight styling for severity
+                    def style_severity(val: str) -> str:
+                        colors = {
+                            "EXTREME": "background-color: #dc262620; color: #dc2626; font-weight: bold",
+                            "SEVERE": "background-color: #ea580c20; color: #ea580c; font-weight: bold",
+                            "STRONG": "background-color: #f9731620; color: #f97316; font-weight: bold",
+                            "MODERATE": "background-color: #facc1520; color: #ca8a04",
+                            "MINOR": "background-color: #22c55e20; color: #22c55e",
+                            "QUIET": "background-color: #64748b20; color: #64748b",
+                        }
+                        return colors.get(val, "")
+                    
+                    # Use map for pandas >= 2.1, fallback to applymap for older versions
+                    try:
+                        styled_df = impact_df.style.map(
+                            style_severity, subset=["Severity"]
+                        )
+                    except AttributeError:
+                        styled_df = impact_df.style.applymap(
+                            style_severity, subset=["Severity"]
+                        )
+                    st.dataframe(styled_df, use_container_width=True, hide_index=True)
+                else:
+                    st.info("No impact events detected. Click 'Fetch Impact Predictions' to update.")
+                
+                # Individual event cards with detailed info
+                with st.expander("📋 Detailed Event Information & Polar H10 Instructions", expanded=True):
+                    events = snapshot.all_events()
+                    if events:
+                        for event in events:
+                            icon = get_category_icon(event.category)
+                            severity_color = get_severity_color(event.severity)
+                            
+                            st.markdown(
+                                f"""
+                                <div style="
+                                    border: 1px solid {severity_color}40;
+                                    border-radius: 0.5rem;
+                                    padding: 1rem;
+                                    margin-bottom: 0.75rem;
+                                    background: {severity_color}08;
+                                ">
+                                    <h5 style="margin: 0 0 0.5rem 0;">
+                                        {icon} {event.category.value.upper()} - {event.severity.value.upper()}
+                                    </h5>
+                                    <p style="margin: 0.25rem 0;"><strong>Arrival:</strong> {format_datetime_bogota(event.arrival_time_utc)}</p>
+                                    <p style="margin: 0.25rem 0;"><strong>Source:</strong> {event.source_description}</p>
+                                    <p style="margin: 0.25rem 0;"><strong>Biological Effect:</strong> {event.biological_effect}</p>
+                                    <hr style="margin: 0.5rem 0; border-color: {severity_color}30;">
+                                    <p style="margin: 0.25rem 0;"><strong>🎽 Polar H10 Action:</strong> {event.polar_h10_recommendation}</p>
+                                </div>
+                                """,
+                                unsafe_allow_html=True,
+                            )
+                    else:
+                        st.info("No significant events detected.")
+                
+                # Show any errors
+                if snapshot.errors:
+                    with st.expander("⚠️ Data Fetch Warnings"):
+                        for key, msg in snapshot.errors.items():
+                            st.warning(f"**{key}**: {msg}")
+            else:
+                st.info(
+                    "Click **'Fetch Impact Predictions'** to calculate expected arrival times "
+                    "for space weather events and get Polar H10 monitoring recommendations."
+                )
+            
+            st.markdown("---")
+        
+        # =====================================================================
+        # Original space weather content continues below
+        # =====================================================================
         space_state = _space_weather_state()
         donki_state = _donki_state()
         col_fetch_sw, col_fetch_donki = st.columns(2)
