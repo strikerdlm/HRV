@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.6.1
+**Version:** 1.6.2
 
 ---
 
@@ -29,25 +29,26 @@ This manual provides step-by-step instructions for all features of the Physiolog
 8. [Blood Pressure Variability Analysis](#blood-pressure-variability-analysis)
 9. [Circadian Physiology Module](#circadian-physiology-module)
 10. [Autonomic Function Tests](#autonomic-function-tests)
-11. [Space Weather Correlation](#space-weather-correlation)
-12. [Fatigue Prediction (SAFTE Model)](#fatigue-prediction-safte-model)
-13. [Biofeedback and Real-Time HRV](#biofeedback-and-real-time-hrv)
-14. [Garmin Integration](#garmin-integration)
-15. [ActiGraph GT3X Integration](#actigraph-gt3x-integration)
-16. [Somfit Pro Integration](#somfit-pro-integration)
-17. [AI-Powered Interpretation](#ai-powered-interpretation)
-18. [Export and Publication](#export-and-publication)
-19. [Metric Reference Tables](#metric-reference-tables)
-20. [Troubleshooting](#troubleshooting)
-21. [Scientific References](#scientific-references)
-22. [Advanced ECG R-Peak Detection](#advanced-ecg-r-peak-detection)
-23. [Multi-Modal Sensor Fusion](#multi-modal-sensor-fusion)
-24. [Long-Term HRV Trending Analysis](#long-term-hrv-trending-analysis)
-25. [Exercise HRV Analysis](#exercise-hrv-analysis)
-26. [Machine Learning Predictions](#machine-learning-predictions)
-27. [Real-Time BLE Integration](#real-time-ble-integration)
-28. [Docker Deployment](#docker-deployment)
-29. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
+11. [Space Weather Impact Predictions](#space-weather-impact-predictions)
+12. [Space Weather Correlation](#space-weather-correlation)
+13. [Fatigue Prediction (SAFTE Model)](#fatigue-prediction-safte-model)
+14. [Biofeedback and Real-Time HRV](#biofeedback-and-real-time-hrv)
+15. [Garmin Integration](#garmin-integration)
+16. [ActiGraph GT3X Integration](#actigraph-gt3x-integration)
+17. [Somfit Pro Integration](#somfit-pro-integration)
+18. [AI-Powered Interpretation](#ai-powered-interpretation)
+19. [Export and Publication](#export-and-publication)
+20. [Metric Reference Tables](#metric-reference-tables)
+21. [Troubleshooting](#troubleshooting)
+22. [Scientific References](#scientific-references)
+23. [Advanced ECG R-Peak Detection](#advanced-ecg-r-peak-detection)
+24. [Multi-Modal Sensor Fusion](#multi-modal-sensor-fusion)
+25. [Long-Term HRV Trending Analysis](#long-term-hrv-trending-analysis)
+26. [Exercise HRV Analysis](#exercise-hrv-analysis)
+27. [Machine Learning Predictions](#machine-learning-predictions)
+28. [Real-Time BLE Integration](#real-time-ble-integration)
+29. [Docker Deployment](#docker-deployment)
+30. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
 
 ---
 
@@ -1166,6 +1167,160 @@ RR at beat 30 (max): 780 ms
 
 Interpretation: Normal (>1.04 in healthy adults)
 ```
+
+---
+
+## Space Weather Impact Predictions
+
+The Space Weather Impact Predictions feature calculates exact arrival times for different categories of solar energy hitting Earth, providing Polar H10 EKG monitoring recommendations optimized for your research on biological effects.
+
+### Energy Categories Tracked
+
+| Category | Symbol | Source | Travel Time | Detection Method |
+|----------|--------|--------|-------------|------------------|
+| **Photon/X-ray** | ☀️ | Solar flares | ~8.3 min (instantaneous at detector) | GOES X-ray flux |
+| **SEP (Protons)** | ⚡ | Solar flares/CMEs | Minutes to hours | GOES integral proton flux |
+| **Solar Wind Plasma** | 🌊 | L1 (DSCOVR/ACE) | 30-60 min from L1 | SWPC plasma-1-day.json |
+| **Geomagnetic** | 🧲 | Magnetosphere | Immediate (ongoing) | Kp and Dst indices |
+
+### Understanding Arrival Times
+
+All times are displayed in **Bogotá, Colombia timezone (UTC-5)** for your research location.
+
+#### Photon/X-ray Events
+- **What**: Solar flare electromagnetic radiation
+- **Travel time**: ~8.3 minutes from Sun to Earth
+- **Display**: Observation time equals impact time (already at Earth when detected)
+- **Biological relevance**: Ionospheric disturbance onset, potential acute autonomic response
+
+#### Solar Energetic Particles (SEPs)
+- **What**: High-energy protons (>10 MeV) accelerated by flares/CME shocks
+- **Travel time**: Near-instantaneous at geostationary orbit
+- **NOAA S-Scale**: S1 (Minor) → S5 (Extreme) based on flux thresholds
+- **Biological relevance**: Radiation exposure, documented HRV perturbations during major events
+
+#### Solar Wind Plasma
+- **What**: Solar wind measured at L1 Lagrange point (~1.5 million km from Earth)
+- **Travel time**: Calculated as `L1_distance / solar_wind_speed`
+  - Typical: 30-60 minutes depending on speed (300-800 km/s)
+- **Formula**: `ETA = observation_time + (1,500,000 km / speed_km_s)`
+- **Biological relevance**: Geomagnetic coupling, storm onset timing
+
+#### Geomagnetic Conditions
+- **What**: Current state of Earth's magnetic field
+- **Indices**: Kp (0-9 scale), Dst (nT, negative = storm)
+- **G-Scale**: G1 (Minor) → G5 (Extreme) based on Kp thresholds
+- **Biological relevance**: Published associations with HRV depression, cardiovascular events
+
+### Severity Classification
+
+| Severity | Color | Kp Equivalent | Biological Implication |
+|----------|-------|---------------|------------------------|
+| **QUIET** | ⚪ Gray | <4 | Ideal baseline recording |
+| **MINOR** | 🟢 Green | 4 | Subtle effects possible |
+| **MODERATE** | 🟡 Yellow | 5 | Small HRV changes in some |
+| **STRONG** | 🟠 Orange | 6 | Consistent HRV effects |
+| **SEVERE** | 🟠 Orange-Red | 7 | Significant autonomic stress |
+| **EXTREME** | 🔴 Red | 8-9 | Major physiological impact |
+
+### Polar H10 Monitoring Recommendations
+
+The system generates automatic recommendations for EKG capture timing:
+
+#### Extreme/Severe Events
+```
+🔴 IMMEDIATE: Begin continuous Polar H10 monitoring NOW.
+X-class flare detected—high probability of SEP/CME follow-up.
+Record for next 6-12 hours for acute autonomic response capture.
+```
+
+#### Strong Events
+```
+🟠 ALERT: Prepare Polar H10. Strong activity detected.
+Monitor for particle arrival in next 1-6 hours.
+Start recording 30 min before expected arrival.
+```
+
+#### Moderate Events
+```
+🟡 STANDBY: Have Polar H10 ready.
+Begin 5-min baseline recording now, then monitor for escalation.
+```
+
+#### Quiet Conditions
+```
+⚪ QUIET: Background conditions.
+Ideal time for baseline Polar H10 recording (control data).
+```
+
+### Using the Impact Predictions
+
+**Step 1: Fetch Predictions**
+
+1. Navigate to **Space Weather** tab
+2. Click **"🔄 Fetch Impact Predictions"** button
+3. Wait for data retrieval (~5-10 seconds)
+
+**Step 2: Review Arrival Times Table**
+
+The table displays:
+- **Category**: Type of energy (PHOTON, SEP, PLASMA_L1, GEOMAGNETIC)
+- **Severity**: Current classification
+- **Arrival (Bogotá)**: Exact local time of expected impact
+- **Countdown**: Time remaining until arrival
+- **Description**: Source details and measurements
+- **Biological Effect**: Expected physiological implications
+- **Polar H10 Action**: Recommended monitoring protocol
+
+**Step 3: Follow Priority Recommendation**
+
+The colored banner at the top shows the highest-priority action based on the most severe event detected.
+
+**Step 4: Plan Recording Sessions**
+
+Use the arrival times to schedule Polar H10 sessions:
+- Start recording 30-60 minutes before predicted arrival
+- Continue for 2-6 hours after arrival depending on severity
+- Capture both acute impact and recovery phases
+
+### Example Scenario
+
+```
+Current Conditions (2025-12-01 14:00 COT):
+
+☀️ PHOTON - STRONG (M2.3 flare)
+   Arrival: 2025-12-01 13:55:22 COT (already arrived)
+   
+⚡ SEP - MODERATE (S2, 150 pfu)
+   Arrival: 2025-12-01 14:02:00 COT (ongoing)
+   
+🌊 PLASMA_L1 - STRONG (High-speed stream, 620 km/s)
+   Arrival: 2025-12-01 14:42:33 COT (in 42 minutes)
+   
+🧲 GEOMAGNETIC - MODERATE (Kp=5.3, Dst=-45 nT)
+   Arrival: 2025-12-01 14:00:00 COT (current)
+
+PRIORITY RECOMMENDATION:
+🟠 Solar wind disturbance arriving in 42 minutes.
+Begin Polar H10 recording within next 15 minutes.
+Continue for 3 hours post-arrival for storm response capture.
+```
+
+### Data Sources
+
+| Data Type | NOAA Endpoint | Update Cadence |
+|-----------|---------------|----------------|
+| X-ray flux | `xrays-1-day.json` | 1 minute |
+| Proton flux | `integral-protons-1-day.json` | 5 minutes |
+| Solar wind plasma | `plasma-1-day.json` | 1 minute |
+| Kp index | `planetary_k_index_1m.json` | 1 minute |
+| Dst index | `geospace_dst_1_hour.json` | 1 hour |
+
+### Scientific References
+
+- Vieira CLZ, et al. (2022). Geomagnetic disturbances are associated with reduced heart rate variability. *Sci Total Environ, 839*, 156312.
+- Alabdulgader A, et al. (2018). Long-term study of HRV responses to changes in the solar and geomagnetic environment. *Sci Rep, 8*(1), 2663.
+- McCraty R, et al. (2017). Synchronization of human autonomic nervous system rhythms with geomagnetic activity. *Int J Environ Res Public Health, 14*(7), 770.
 
 ---
 
