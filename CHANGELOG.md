@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.2] - 2025-12-01
+
+### Added
+- **Space Weather Impact Predictions**: Real-time arrival time calculations for all solar energy categories
+  - Photon/X-ray impacts (instantaneous detection)
+  - Solar Energetic Particles (SEPs) from GOES proton flux
+  - Solar wind plasma with L1→Earth travel time calculation
+  - Geomagnetic conditions (Kp/Dst indices)
+- **Polar H10 Monitoring Recommendations**: Automatic EKG capture timing guidance based on space weather severity
+- **Bogotá Local Time Display**: All arrival times shown in Colombia timezone (UTC-5)
+- **Priority Alert System**: Color-coded severity banners with countdown to next impact
+- New module: `app/space_weather_impact.py` with complete prediction engine
+
+### Changed
+- Space Weather tab now displays impact predictions prominently at the top
+- Enhanced severity classification (Quiet → Minor → Moderate → Strong → Severe → Extreme)
+
+---
+
 ## [1.6.1] - 2025-11-29
 
 ### Added
@@ -162,6 +181,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.6.2 | 2025-12-01 | Space weather impact predictions, Polar H10 timing recommendations |
 | 1.6.0 | 2025-11-29 | Population norms, BPV analysis, enhanced welcome |
 | 1.5.0 | 2025-11-28 | Circadian module, user profiles, Docker |
 | 1.4.0 | 2025-11-15 | ECG detection, sensor fusion, ML predictions |
