@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.6.1-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.6.2-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 
 ---
@@ -76,6 +76,7 @@ The app will open in your default browser at `http://localhost:8501`.
 | **Autonomic Function Tests** | Valsalva ratio, Deep breathing E:I response, 30:15 standing ratio |
 | **Readiness Scoring** | Kubios-style parasympathetic index with historical baseline comparison |
 | **Space Weather Correlation** | NOAA Kp, Dst, F10.7, solar wind, X-ray flux with lag-aware correlations |
+| **Space Weather Impact Predictions** | Exact arrival times for photons, SEPs, solar wind plasma, with Polar H10 timing recommendations |
 | **NASA DONKI Integration** | Flares, CMEs, geomagnetic storms, radiation belt enhancements |
 | **Fatigue Prediction** | SAFTE biomathematical model for cognitive performance |
 | **HRV Biofeedback** | Real-time coherence training with paced breathing |
@@ -204,6 +205,12 @@ project/
 - Recommendations based on fatigue level
 
 ### Space Weather Tab
+- **Impact Predictions**: Exact arrival times for all energy categories in Bogotá (UTC-5)
+  - Photon/X-ray events (instantaneous)
+  - Solar Energetic Particles (SEPs)
+  - Solar wind plasma (L1→Earth travel time calculated)
+  - Geomagnetic conditions (Kp/Dst)
+- **Polar H10 Recommendations**: Automatic EKG timing guidance based on event severity
 - Live Kp index, solar flux, solar wind parameters
 - SpaceWeatherLive snapshot with CME/flare data
 - Lag-aware correlations (0–72h) with HRV metrics
@@ -419,6 +426,7 @@ HRV/
 │   ├── gauge_builder.py            # Gauge visualization builder
 │   ├── gpt_interpretation.py       # GPT-5.1 AI interpretation
 │   ├── noaa_space.py               # NOAA space weather data
+│   ├── space_weather_impact.py     # Impact predictions & Polar H10 timing
 │   ├── space_weather_persistence.py # NOAA/NASA data persistence
 │   ├── garmin_import.py            # Garmin data import
 │   ├── actigraph_import.py         # ActiGraph GT3X/GT3X+ import
