@@ -9,8 +9,10 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.6.3-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.6.4-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
+[![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
+[![Last Updated](https://img.shields.io/badge/Updated-2025--12--02-blue)](CHANGELOG.md)
 
 ---
 
