@@ -3,7 +3,19 @@ alwaysApply: true
 ---
 # AI Agent & Development Rules
 
+**Version**: 1.6.4 | **Last Updated**: 2025-12-02
+
 This document establishes the authoritative rules for AI agents (Warp, Cursor, MCP) and developers working on the HRV Analysis Suite. These rules ensure code quality, scientific rigor, and consistent behavior.
+
+## 0. Critical Application Maintenance
+
+*This is a production research application. Prioritize stability.*
+
+1. **Check Logs First**: Before any debugging, check `logs/errors.log` and `logs/app.log`.
+2. **Preserve Functionality**: Never remove working features without explicit user request.
+3. **Test Before Commit**: Run `pytest tests/` before considering any change complete.
+4. **Backup Before Schema Changes**: Database schema changes require backup of `app/hrv_users.db`.
+5. **Document All Changes**: Update `CHANGELOG.md` for every user-visible change.
 
 ## 1. Global Python Rules (Deterministic & Analyzable)
 
@@ -36,6 +48,7 @@ This document establishes the authoritative rules for AI agents (Warp, Cursor, M
    * Never silently ignore errors.
    * Catch specific exceptions (no bare `except:`).
    * Fail closed/safe.
+   * **Log all exceptions** using `logging_config.log_exception()`.
 8. **No Dynamic Metaprogramming**:
    * Avoid runtime monkey-patching.
    * No unpickling untrusted data (use JSON with schema).
@@ -86,3 +99,65 @@ This document establishes the authoritative rules for AI agents (Warp, Cursor, M
 * **Test-Driven**: New core logic should have `pytest` cases (prefer `hypothesis` for algorithmic code).
 * **Coverage**: Aim for ≥90% coverage on critical modules (`hrv_core.py`, `noaa_space.py`).
 * **Security**: No secrets in code. Use `.env`. Validate all external inputs (NOAA feeds, user files).
+
+## 6. Logging & Error Tracking
+
+*All modules must use centralized logging.*
+
+### Setup
+```python
+from logging_config import get_logger, log_exception
+
+_LOGGER = get_logger(__name__)
+```
+
+### Usage Patterns
+```python
+# Info-level for normal operations
+_LOGGER.info("Processing %d RR intervals", len(rr_data))
+
+# Warning for recoverable issues
+_LOGGER.warning("Missing VO2max, using estimation")
+
+# Error with exception context
+try:
+    result = compute_hrv(data)
+except ValueError as exc:
+    log_exception(_LOGGER, "HRV computation failed", exc)
+    raise
+```
+
+### Log File Locations
+* `logs/app.log` — All application logs (DEBUG level, 10 MB rotating)
+* `logs/errors.log` — Errors only (ERROR level, 10 MB rotating)
+* Logs auto-rotate with 5 backups
+
+### Audit Trail
+```python
+from logging_config import log_user_action
+
+log_user_action("uploaded_file", {"filename": name, "size_kb": size})
+log_user_action("ran_analysis", {"metric": "RMSSD", "window_min": 5})
+```
+
+## 7. Module Architecture Quick Reference
+
+| Module | Purpose | Key Functions |
+|--------|---------|---------------|
+| `hrv_core.py` | Core HRV computations | `compute_comprehensive_hrv()`, `clean_rr_intervals()` |
+| `noaa_space.py` | NOAA data ingestion | `load_noaa_space_data()` |
+| `gpu_processing.py` | CUDA acceleration | `gpu_rmssd()`, `gpu_psd()` |
+| `user_profile_tab.py` | User management UI | `render_user_profile_tab()` |
+| `user_database.py` | SQLite persistence | `UserDatabase` class |
+| `performance_utils.py` | CPU optimization | `get_performance_settings()` |
+| `space_weather_impact.py` | Solar event predictions | `fetch_space_weather_snapshot()` |
+| `logging_config.py` | Logging setup | `setup_logging()`, `get_logger()` |
+
+## 8. Common Bug Patterns to Avoid
+
+1. **Streamlit Value Errors**: Ensure `min_value <= value <= max_value` for `st.number_input()`.
+2. **Nested Expanders**: Never nest `st.expander()` inside another expander.
+3. **Session State Keys**: Always use unique keys for Streamlit widgets.
+4. **API Timeouts**: All `requests.get()` calls must have `timeout=` parameter.
+5. **DataFrame Copies**: Use `df.copy()` before modifying to avoid SettingWithCopyWarning.
+6. **GPU Memory**: Check `gpu_available()` before using GPU functions.
