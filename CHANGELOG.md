@@ -28,11 +28,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - SQLite database storage with multi-user support
   - New module: `app/user_profile_tab.py`
 
+- **Centralized Logging Infrastructure**: Persistent debug and error logs
+  - Rotating file logs in `logs/` directory (auto-created)
+  - `logs/app.log` — All application logs (DEBUG level, 10 MB rotating)
+  - `logs/errors.log` — Error-only log for critical issues
+  - User action audit trail via `log_user_action()`
+  - Console + file dual output with consistent formatting
+  - New module: `app/logging_config.py`
+
 ### Changed
 - Sidebar now includes GPU Processing settings (⚡ Performance + 🖥️ GPU)
 - User Profile tab added as second tab (after Overview)
 - Models can now access centralized user profile data via `get_current_user_data()`
 - Updated requirements.txt with GPU installation instructions
+- `setup_console_logging()` now integrates with centralized file logging
+- Updated `.gitignore` to exclude `logs/` directory
+
+### Fixed
+- VO2max input field now accepts 0 (for "unknown - will be estimated")
+
+### Documentation
+- Updated `WARP.md` with logging infrastructure, GPU support, and troubleshooting
+- Updated `.cursor/rules/agent.mdc` with logging policy and common bug patterns
+- Added maintenance checklist and module architecture quick reference
 
 ## [1.6.3] - 2025-12-02
 
