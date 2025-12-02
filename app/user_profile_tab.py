@@ -219,7 +219,7 @@ def _render_registration_form() -> Optional[UserProfile]:
         with col_vo2:
             vo2max = st.number_input(
                 "VO2max (ml/kg/min)",
-                min_value=10.0,
+                min_value=0.0,
                 max_value=90.0,
                 value=0.0,
                 step=0.5,
