@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.6.2
+**Version:** 1.6.3
 
 ---
 
@@ -53,6 +53,19 @@ This manual provides step-by-step instructions for all features of the Physiolog
 ---
 
 ## Getting Started
+
+### Explore Without Data
+
+The app is fully navigable **without uploading HRV data**. These features work immediately:
+
+| Module | What You Can Do |
+|--------|-----------------|
+| 🌍 **Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing |
+| ☀️ **Circadian** | Simulate circadian rhythms with different light schedules |
+| 😴 **SAFTE/Fatigue** | Model how sleep debt affects cognitive performance |
+| 🫀 **Biofeedback** | Try the paced breathing demo |
+
+All other tabs show **example data** and **reference values** to help you understand what's available before uploading your own recordings.
 
 ### System Requirements
 
