@@ -95,6 +95,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | **NASA DONKI Integration** | Flares, CMEs, geomagnetic storms, radiation belt enhancements |
 | **Fatigue Prediction** | SAFTE biomathematical model for cognitive performance |
 | **HRV Biofeedback** | Real-time coherence training with paced breathing |
+| **CPU Performance Mode** | Adjustable presets (Fast/Balanced/Quality) with smart downsampling |
 | **User Profiles** | Biometric data with validated clinical scales (ESS, KSS, PSQI, Samn-Perelli) |
 | **Multi-Device Import** | Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, Somfit Pro |
 | **Docker Deployment** | Containerized with PostgreSQL/TimescaleDB for production environments |
@@ -441,6 +442,7 @@ HRV/
 │   ├── gauge_builder.py            # Gauge visualization builder
 │   ├── gpt_interpretation.py       # GPT-5.1 AI interpretation
 │   ├── noaa_space.py               # NOAA space weather data
+│   ├── performance_utils.py        # CPU performance optimization utilities
 │   ├── space_weather_impact.py     # Impact predictions & Polar H10 timing
 │   ├── space_weather_persistence.py # NOAA/NASA data persistence
 │   ├── garmin_import.py            # Garmin data import
