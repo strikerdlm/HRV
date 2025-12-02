@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.6.2-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.6.3-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 
 ---
@@ -57,6 +57,21 @@ The app will open in your default browser at `http://localhost:8501`.
 3. **Explore tabs**: Start with **Overview** for summary statistics, then explore **Gauges** for visual benchmarks
 
 4. **Export**: Go to **Export** tab to download a comprehensive Markdown report
+
+---
+
+## 🚀 Explore Without Data
+
+The app is fully navigable **without uploading HRV data**. These features work immediately:
+
+| Module | What You Can Do |
+|--------|-----------------|
+| 🌍 **Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing |
+| ☀️ **Circadian** | Simulate circadian rhythms with different light schedules |
+| 😴 **SAFTE/Fatigue** | Model how sleep debt affects cognitive performance |
+| 🫀 **Biofeedback** | Try the paced breathing demo |
+
+All other tabs show **example data** and **reference values** to help you understand what's available before uploading your own recordings.
 
 ---
 
