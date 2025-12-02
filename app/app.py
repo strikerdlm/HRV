@@ -84,6 +84,22 @@ try:
 except ImportError:
     SPACE_WEATHER_PERSISTENCE_AVAILABLE = False
 
+# Performance utilities for CPU optimization
+try:
+    from performance_utils import (
+        get_performance_settings,
+        render_performance_settings_sidebar,
+        downsample_array,
+        sample_large_dataframe,
+        optimize_dataframe,
+        cached_in_session,
+        TimedExecution,
+        get_performance_metrics,
+    )
+    PERFORMANCE_UTILS_AVAILABLE = True
+except ImportError:
+    PERFORMANCE_UTILS_AVAILABLE = False
+
 # Space weather impact prediction module
 try:
     from space_weather_impact import (
@@ -2412,10 +2428,21 @@ def _plot_rr_timeseries(
     render_echarts(opt, height_px=420, width="100%", config=EChartsConfig())
 
 
-def _plot_hr_timeseries(datasets: Dict[str, UploadedRR]) -> None:
+def _plot_hr_timeseries(
+    datasets: Dict[str, UploadedRR],
+    *,
+    max_points: Optional[int] = None,
+) -> None:
+    """Plot heart rate time series with optional downsampling for performance."""
     series = []
     x_min: Optional[pd.Timestamp] = None
     x_max: Optional[pd.Timestamp] = None
+    
+    # Get max_points from performance settings if not specified
+    if max_points is None and PERFORMANCE_UTILS_AVAILABLE:
+        perf = get_performance_settings()
+        max_points = perf.get("max_plot_points", 2000)
+    
     for name, up in datasets.items():
         if up.df.empty:
             continue
@@ -2425,8 +2452,18 @@ def _plot_hr_timeseries(datasets: Dict[str, UploadedRR]) -> None:
             cur_max = ts_ser.iloc[-1]
             x_min = cur_min if (x_min is None or cur_min < x_min) else x_min
             x_max = cur_max if (x_max is None or cur_max > x_max) else x_max
-        x = up.df["timestamp"].astype(str).tolist()
-        y = up.df["heart_rate [bpm]"].astype(float).tolist()
+        x_vals = up.df["timestamp"].astype(str).tolist()
+        y_vals = up.df["heart_rate [bpm]"].astype(float).tolist()
+        
+        # Downsample if needed for performance
+        if max_points is not None and len(y_vals) > max_points:
+            idx = np.linspace(0, len(y_vals) - 1, max_points).astype(int)
+            x = [x_vals[i] for i in idx]
+            y = [y_vals[i] for i in idx]
+        else:
+            x = x_vals
+            y = y_vals
+        
         series.append(_echarts_line_series(name, x, y))
     opt = {
         "title": {"text": "Heart Rate over Time", "left": "center"},
@@ -2446,19 +2483,41 @@ def _plot_hr_timeseries(datasets: Dict[str, UploadedRR]) -> None:
     render_echarts(opt, height_px=420, width="100%", config=EChartsConfig())
 
 
-def _plot_psd_overlay(datasets: Dict[str, UploadedRR], *, method: str) -> None:
+def _plot_psd_overlay(
+    datasets: Dict[str, UploadedRR],
+    *,
+    method: str,
+    max_points: Optional[int] = None,
+) -> None:
+    """Plot PSD overlay with optional downsampling for performance."""
     series = []
+    
+    # Get max_points from performance settings if not specified
+    if max_points is None and PERFORMANCE_UTILS_AVAILABLE:
+        perf = get_performance_settings()
+        max_points = perf.get("max_plot_points", 2000)
+    
     for name, up in datasets.items():
         rr = up.rr_ms_clean if (up.rr_ms_clean is not None) else up.rr_ms
         f, p = _cached_psd(rr, method=str(method))
         if f.size == 0:
             continue
+        
+        # Downsample PSD if needed
+        if max_points is not None and len(f) > max_points:
+            idx = np.linspace(0, len(f) - 1, max_points).astype(int)
+            f_ds = f[idx]
+            p_ds = p[idx]
+        else:
+            f_ds = f
+            p_ds = p
+        
         series.append(
             {
                 "name": f"{name}{' (cleaned)' if (up.rr_ms_clean is not None) else ''}",
                 "type": "line",
                 "showSymbol": False,
-                "data": [[float(fi), float(pi)] for fi, pi in zip(f, p)],
+                "data": [[float(fi), float(pi)] for fi, pi in zip(f_ds, p_ds)],
             }
         )
     opt = {
@@ -3584,6 +3643,17 @@ def main() -> None:
         enable_ml = st.sidebar.checkbox(
             "Enable ML-assisted deviation clustering", value=False
         )
+        
+        # Performance settings (CPU optimization)
+        if PERFORMANCE_UTILS_AVAILABLE:
+            perf_settings = render_performance_settings_sidebar()
+        else:
+            perf_settings = {
+                "max_plot_points": 2000,
+                "max_dataframe_rows": 500,
+                "enable_heavy_plots": False,
+                "optimize_memory": True,
+            }
 
         st.sidebar.markdown("---")
         st.sidebar.subheader("AI interpretation")
@@ -3657,6 +3727,17 @@ def main() -> None:
         sex = "Male"
         bmi = 29.0
         exercise = "Sedentary"
+        
+        # Performance settings (CPU optimization) - available even without data
+        if PERFORMANCE_UTILS_AVAILABLE:
+            perf_settings = render_performance_settings_sidebar()
+        else:
+            perf_settings = {
+                "max_plot_points": 2000,
+                "max_dataframe_rows": 500,
+                "enable_heavy_plots": False,
+                "optimize_memory": True,
+            }
         
         # Show exploration callout in sidebar
         st.sidebar.markdown("---")
@@ -4294,12 +4375,20 @@ def main() -> None:
             "- Sliding windows (e.g., 5 min, step 1 min) estimate locally stationary segments to track trends over time.  \n"
             "- Minimum RR count safeguards metric stability; interpretation should consider protocol and respiration.")
         if has_hrv_data and not windowed_df.empty:
-            st.dataframe(
-                windowed_df[
-                    ["start", "source"]
-                    + [c for c in windowed_df.columns if c not in ("start", "source")]
-                ].head(50)
-            )
+            # Use performance settings for row limit
+            max_display_rows = 50
+            if PERFORMANCE_UTILS_AVAILABLE:
+                perf = get_performance_settings()
+                max_display_rows = min(perf.get("max_dataframe_rows", 500), len(windowed_df))
+            
+            display_df = windowed_df[
+                ["start", "source"]
+                + [c for c in windowed_df.columns if c not in ("start", "source")]
+            ].head(max_display_rows)
+            
+            st.dataframe(display_df)
+            if len(windowed_df) > max_display_rows:
+                st.caption(f"Showing {max_display_rows} of {len(windowed_df)} windows. Adjust in ⚡ Performance Settings.")
             if apply_dev and "dev_level" in windowed_df.columns:
                 st.markdown(
                     "Deviation timeline across selected metrics (green < warn, yellow ≥ warn, red ≥ alert):"
