@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.3] - 2025-12-02
+
+### Added
+- **No-Data Navigation**: All tabs now accessible without uploading HRV data
+  - Space Weather, Circadian, SAFTE, and Biofeedback tabs fully functional without uploads
+  - Data-dependent tabs show friendly explanations with example data
+- **Enhanced Welcome Experience**: Interactive module cards with availability indicators
+- **User-Friendly Examples**: Each data-dependent tab shows reference values and interpretation guides
+- **Sidebar Exploration Mode**: Quick-access panel highlighting available features
+
+### Changed
+- App structure refactored to show tabs immediately on load
+- Welcome header now emphasizes modules that work without data
+- Getting Started guide expanded with immediate exploration options
+
+---
+
 ## [1.6.2] - 2025-12-01
 
 ### Added
@@ -181,6 +198,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| 1.6.3 | 2025-12-02 | No-data navigation, enhanced welcome experience, user-friendly examples |
 | 1.6.2 | 2025-12-01 | Space weather impact predictions, Polar H10 timing recommendations |
 | 1.6.0 | 2025-11-29 | Population norms, BPV analysis, enhanced welcome |
 | 1.5.0 | 2025-11-28 | Circadian module, user profiles, Docker |
