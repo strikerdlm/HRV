@@ -16,11 +16,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Enhanced Welcome Experience**: Interactive module cards with availability indicators
 - **User-Friendly Examples**: Each data-dependent tab shows reference values and interpretation guides
 - **Sidebar Exploration Mode**: Quick-access panel highlighting available features
+- **CPU Performance Optimization**: New performance utilities module
+  - Configurable performance presets (Fast/Balanced/Quality/Custom)
+  - Smart downsampling for plots based on CPU capability
+  - DataFrame row limits with feedback
+  - Session-state caching with TTL for expensive operations
+  - Performance metrics tracking (cache hits, slowest operations)
+  - New module: `app/performance_utils.py`
 
 ### Changed
 - App structure refactored to show tabs immediately on load
 - Welcome header now emphasizes modules that work without data
 - Getting Started guide expanded with immediate exploration options
+- Plot functions now auto-downsample based on performance settings
+- Windowed metrics display respects performance row limits
 
 ---
 
