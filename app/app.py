@@ -3478,307 +3478,358 @@ def main() -> None:
         device_uploads = _device_import_section()
         uploads.update(device_uploads)
     
-    if not uploads:
-        # Welcome message when no data uploaded
-        st.markdown("### 👋 Welcome to the Physiological Laboratory")
-        st.markdown("""
-        Upload your heart rate data to begin comprehensive HRV analysis with 
-        space weather correlation, circadian modeling, and AI-powered insights.
-        
-        **Use the sidebar** to import data from:
-        - ❤️ **Polar H10/H9** — RR interval exports from Polar Sensor Logger  
-        - ⌚ **Garmin Vivosmart 5** — Wellness data from Garmin Connect
-        - 📄 **Generic RR Files** — Any text file with one RR interval (ms) per line
-        """)
-        
-        st.markdown("---")
-        
-        # Feature highlights
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            st.markdown("""
-            **📊 HRV Analysis**
-            - Time-domain (SDNN, RMSSD)
-            - Frequency-domain (LF, HF)
-            - Nonlinear (DFA, Entropy)
-            """)
-        with col2:
-            st.markdown("""
-            **🌍 Space Weather**
-            - Solar activity correlation
-            - Geomagnetic storm tracking
-            - NASA/NOAA data integration
-            """)
-        with col3:
-            st.markdown("""
-            **🌙 Circadian**
-            - Rhythm simulation
-            - Phase analysis
-            - Jet lag prediction
-            """)
-        
-        st.info("💡 **Tip:** For best results, record 5-minute sessions in a relaxed, seated position at the same time each day.")
-        
-        # Show sample data format
-        with st.expander("📄 Sample RR Data Format"):
-            st.code("""
-# Example RR interval file content (one value per line in milliseconds):
-823
-845
-812
-867
-834
-821
-856
-...
-            """, language="text")
-        
-        return
+    # Initialize flag for data availability - used throughout for conditional rendering
+    has_hrv_data_uploaded = bool(uploads)
 
-    # Controls
-    col_a, col_b, col_c = st.sidebar.columns(3)
-    with col_a:
-        win = st.text_input("Window", "5min")
-    with col_b:
-        step = st.text_input("Step", "1min")
-    with col_c:
-        min_rr = st.number_input(
-            "Min RR per window",
-            min_value=30,
-            max_value=1000,
-            value=60,
-            step=10)
-    max_windows = st.sidebar.number_input(
-        "Max windows (for long tracings)",
-        min_value=200,
-        max_value=20000,
-        value=1500,
-        step=100,
-    )
+    # ==========================================================================
+    # SIDEBAR CONTROLS - Show HRV settings only when data is available
+    # ==========================================================================
+    if has_hrv_data_uploaded:
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("⚙️ Analysis Settings")
+        
+        # Controls
+        col_a, col_b, col_c = st.sidebar.columns(3)
+        with col_a:
+            win = st.text_input("Window", "5min")
+        with col_b:
+            step = st.text_input("Step", "1min")
+        with col_c:
+            min_rr = st.number_input(
+                "Min RR per window",
+                min_value=30,
+                max_value=1000,
+                value=60,
+                step=10)
+        max_windows = st.sidebar.number_input(
+            "Max windows (for long tracings)",
+            min_value=200,
+            max_value=20000,
+            value=1500,
+            step=100,
+        )
 
-    # QC controls
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Data Quality")
-    apply_clean = st.sidebar.checkbox("Apply artifact correction", value=True)
-    method = st.sidebar.selectbox(
-        "QC method", ["threshold_median", "threshold_prev"], index=0
-    )
-    max_dev = st.sidebar.slider(
-        "Deviation threshold",
-        min_value=0.05,
-        max_value=0.5,
-        value=0.2,
-        step=0.05)
-    median_win = st.sidebar.number_input(
-        "Median window (odd)", min_value=3, max_value=99, value=11, step=2
-    )
-    psd_method = st.sidebar.selectbox(
-        "PSD method", ["welch", "periodogram", "ar"], index=0
-    )
-    fast_windowing = st.sidebar.checkbox(
-        "Fast time-domain windowing (skip spectral/nonlinear in windows)", value=True)
-    high_compute = st.sidebar.checkbox(
-        "Advanced analysis (high compute for full-recording metrics)",
-        value=False)
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Deviation detection")
-    apply_dev = st.sidebar.checkbox(
-        "Detect deviations in windowed metrics", value=True)
-    dev_metrics = st.sidebar.multiselect(
-        "Metrics to monitor",
-        options=["rmssd", "sdnn", "lf_hf_ratio", "hf_power"],
-        default=["rmssd", "sdnn", "lf_hf_ratio", "hf_power"],
-    )
-    z_warn = st.sidebar.slider(
-        "Warn threshold (|z|)",
-        min_value=0.5,
-        max_value=3.0,
-        value=1.0,
-        step=0.1)
-    z_alert = st.sidebar.slider(
-        "Alert threshold (|z|)",
-        min_value=1.0,
-        max_value=5.0,
-        value=2.0,
-        step=0.1)
-    min_sustain = st.sidebar.number_input(
-        "Min windows to define an episode",
-        min_value=1,
-        max_value=60,
-        value=3,
-        step=1)
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Performance & display")
-    minimal_mode = st.sidebar.checkbox("Minimal mode (fastest)", value=True)
-    max_datasets = st.sidebar.number_input(
-        "Process first N datasets", min_value=1, value=3, step=1
-    )
-    rr_plot_cap = st.sidebar.selectbox(
-        "RR plot point cap per dataset", [
-            "500", "2000", "10000", "No limit"], index=1)
-    skip_freq = st.sidebar.checkbox("Skip Frequency overlay plot", value=True)
-    skip_poincare = st.sidebar.checkbox("Skip Poincaré plot", value=True)
-    skip_spectrogram = st.sidebar.checkbox("Skip Spectrogram", value=True)
-    skip_gauges = st.sidebar.checkbox("Skip Gauges", value=False)
-    show_debug = st.sidebar.checkbox(
-        "Show detailed progress logs", value=False)
-    # Adjust runtime log verbosity from sidebar preference
-    logger.setLevel(logging.DEBUG if show_debug else logging.INFO)
-    for _handler in logger.handlers:
-        _handler.setLevel(logger.level)
+        # QC controls
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Data Quality")
+        apply_clean = st.sidebar.checkbox("Apply artifact correction", value=True)
+        method = st.sidebar.selectbox(
+            "QC method", ["threshold_median", "threshold_prev"], index=0
+        )
+        max_dev = st.sidebar.slider(
+            "Deviation threshold",
+            min_value=0.05,
+            max_value=0.5,
+            value=0.2,
+            step=0.05)
+        median_win = st.sidebar.number_input(
+            "Median window (odd)", min_value=3, max_value=99, value=11, step=2
+        )
+        psd_method = st.sidebar.selectbox(
+            "PSD method", ["welch", "periodogram", "ar"], index=0
+        )
+        fast_windowing = st.sidebar.checkbox(
+            "Fast time-domain windowing (skip spectral/nonlinear in windows)", value=True)
+        high_compute = st.sidebar.checkbox(
+            "Advanced analysis (high compute for full-recording metrics)",
+            value=False)
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Deviation detection")
+        apply_dev = st.sidebar.checkbox(
+            "Detect deviations in windowed metrics", value=True)
+        dev_metrics = st.sidebar.multiselect(
+            "Metrics to monitor",
+            options=["rmssd", "sdnn", "lf_hf_ratio", "hf_power"],
+            default=["rmssd", "sdnn", "lf_hf_ratio", "hf_power"],
+        )
+        z_warn = st.sidebar.slider(
+            "Warn threshold (|z|)",
+            min_value=0.5,
+            max_value=3.0,
+            value=1.0,
+            step=0.1)
+        z_alert = st.sidebar.slider(
+            "Alert threshold (|z|)",
+            min_value=1.0,
+            max_value=5.0,
+            value=2.0,
+            step=0.1)
+        min_sustain = st.sidebar.number_input(
+            "Min windows to define an episode",
+            min_value=1,
+            max_value=60,
+            value=3,
+            step=1)
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Performance & display")
+        minimal_mode = st.sidebar.checkbox("Minimal mode (fastest)", value=True)
+        max_datasets = st.sidebar.number_input(
+            "Process first N datasets", min_value=1, value=3, step=1
+        )
+        rr_plot_cap = st.sidebar.selectbox(
+            "RR plot point cap per dataset", [
+                "500", "2000", "10000", "No limit"], index=1)
+        skip_freq = st.sidebar.checkbox("Skip Frequency overlay plot", value=True)
+        skip_poincare = st.sidebar.checkbox("Skip Poincaré plot", value=True)
+        skip_spectrogram = st.sidebar.checkbox("Skip Spectrogram", value=True)
+        skip_gauges = st.sidebar.checkbox("Skip Gauges", value=False)
+        show_debug = st.sidebar.checkbox(
+            "Show detailed progress logs", value=False)
+        # Adjust runtime log verbosity from sidebar preference
+        logger.setLevel(logging.DEBUG if show_debug else logging.INFO)
+        for _handler in logger.handlers:
+            _handler.setLevel(logger.level)
 
-    st.sidebar.subheader("ML enhancements")
-    enable_ml = st.sidebar.checkbox(
-        "Enable ML-assisted deviation clustering", value=False
-    )
+        st.sidebar.subheader("ML enhancements")
+        enable_ml = st.sidebar.checkbox(
+            "Enable ML-assisted deviation clustering", value=False
+        )
 
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("AI interpretation")
-    gpt_high_enabled = st.sidebar.toggle(
-        "GPT-5.1 High Reasoning Interpretation",
-        value=False,
-        help="Send analysis outputs to OpenAI GPT-5.1 with high reasoning effort to obtain a doctoral-level markdown report. Requires OPENAI_API_KEY in the .env file.",
-    )
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("AI interpretation")
+        gpt_high_enabled = st.sidebar.toggle(
+            "GPT-5.1 High Reasoning Interpretation",
+            value=False,
+            help="Send analysis outputs to OpenAI GPT-5.1 with high reasoning effort to obtain a doctoral-level markdown report. Requires OPENAI_API_KEY in the .env file.",
+        )
 
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Patient profile (covariate adjustment)")
-    enable_cov = st.sidebar.checkbox(
-        "Enable covariate adjustment (RMSSD/SDNN)", value=False
-    )
-    age_years = st.sidebar.number_input(
-        "Age (years)", min_value=10, max_value=100, value=45, step=1
-    )
-    sex = st.sidebar.selectbox("Sex", ["Female", "Male"], index=1)
-    bmi = st.sidebar.number_input(
-        "BMI (kg/m²)", min_value=10.0, max_value=60.0, value=29.0, step=0.5
-    )
-    exercise = st.sidebar.selectbox(
-        "Exercise regularity", ["Sedentary", "Moderate", "Athlete"], index=0
-    )
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Patient profile (covariate adjustment)")
+        enable_cov = st.sidebar.checkbox(
+            "Enable covariate adjustment (RMSSD/SDNN)", value=False
+        )
+        age_years = st.sidebar.number_input(
+            "Age (years)", min_value=10, max_value=100, value=45, step=1
+        )
+        sex = st.sidebar.selectbox("Sex", ["Female", "Male"], index=1)
+        bmi = st.sidebar.number_input(
+            "BMI (kg/m²)", min_value=10.0, max_value=60.0, value=29.0, step=0.5
+        )
+        exercise = st.sidebar.selectbox(
+            "Exercise regularity", ["Sedentary", "Moderate", "Athlete"], index=0
+        )
 
-    # Apply minimal mode overrides to ensure fastest behavior by default
-    if minimal_mode:
+        # Apply minimal mode overrides to ensure fastest behavior by default
+        if minimal_mode:
+            max_datasets = 1
+            rr_plot_cap = "500"
+            skip_freq = True
+            skip_poincare = True
+            skip_spectrogram = True
+            skip_gauges = True
+            fast_windowing = True
+            high_compute = False
+            max_windows = min(int(max_windows), 800)
+            enable_ml = False
+            st.sidebar.caption(
+                "Minimal mode: processing 1 dataset, fast time-domain windowing, heavy plots/tabs skipped."
+            )
+    else:
+        # Default values when no data uploaded - needed for tab rendering
+        win = "5min"
+        step = "1min"
+        min_rr = 60
+        max_windows = 1500
+        apply_clean = True
+        method = "threshold_median"
+        max_dev = 0.2
+        median_win = 11
+        psd_method = "welch"
+        fast_windowing = True
+        high_compute = False
+        apply_dev = True
+        dev_metrics = ["rmssd", "sdnn", "lf_hf_ratio", "hf_power"]
+        z_warn = 1.0
+        z_alert = 2.0
+        min_sustain = 3
+        minimal_mode = True
         max_datasets = 1
         rr_plot_cap = "500"
         skip_freq = True
         skip_poincare = True
         skip_spectrogram = True
-        skip_gauges = True
-        fast_windowing = True
-        high_compute = False
-        max_windows = min(int(max_windows), 800)
+        skip_gauges = False
+        show_debug = False
         enable_ml = False
-        st.sidebar.caption(
-            "Minimal mode: processing 1 dataset, fast time-domain windowing, heavy plots/tabs skipped."
+        gpt_high_enabled = False
+        enable_cov = False
+        age_years = 45
+        sex = "Male"
+        bmi = 29.0
+        exercise = "Sedentary"
+        
+        # Show exploration callout in sidebar
+        st.sidebar.markdown("---")
+        st.sidebar.info(
+            "📖 **Explore the App**\n\n"
+            "No data required to explore:\n"
+            "- 🌍 Space Weather\n"
+            "- ☀️ Circadian Models\n"
+            "- 😴 SAFTE/Fatigue\n"
+            "- 🫀 Biofeedback Demo\n\n"
+            "Upload HRV data to unlock all analysis tabs."
         )
 
-    # Prepare dataset dict (limit number of datasets for performance)
-    datasets_all = uploads
-    dataset_items = list(datasets_all.items())
-    datasets = dict(dataset_items[: int(max_datasets)])
+    # ==========================================================================
+    # DATA PROCESSING - Only when uploads exist
+    # ==========================================================================
+    # Initialize defaults for all data-dependent variables
+    datasets: Dict[str, UploadedRR] = {}
+    meta_rows: List[Dict[str, Any]] = []
+    windowed_df = pd.DataFrame()
+    multi_results_df = pd.DataFrame()
+    ml_summary_df = pd.DataFrame()
+    ml_error_message = ""
+    episodes_df = pd.DataFrame()
+    meta_rows_for_context: List[Dict[str, Any]] = []
+    
+    if has_hrv_data_uploaded:
+        # Prepare dataset dict (limit number of datasets for performance)
+        datasets_all = uploads
+        dataset_items = list(datasets_all.items())
+        datasets = dict(dataset_items[: int(max_datasets)])
 
-    # Cleaning + metadata with immediate percentage updates (no progress bars)
-    total = max(1, len(datasets))
-    txt_clean = st.empty()
-    txt_clean.text(
-        ("Cleaning datasets... " if apply_clean else "Preparing datasets... ") +
-        "0%")
-    logger.info(
-        "Starting %s of %d dataset(s)",
-        "cleaning" if apply_clean else "preparation",
-        total,
-    )
-    meta_rows = []
-    completed = 0
-    for name, up in datasets.items():
-        if up.rr_ms.size == 0:
+        # Cleaning + metadata with immediate percentage updates (no progress bars)
+        total = max(1, len(datasets))
+        txt_clean = st.empty()
+        txt_clean.text(
+            ("Cleaning datasets... " if apply_clean else "Preparing datasets... ") +
+            "0%")
+        logger.info(
+            "Starting %s of %d dataset(s)",
+            "cleaning" if apply_clean else "preparation",
+            total,
+        )
+        completed = 0
+        for name, up in datasets.items():
+            if up.rr_ms.size == 0:
+                completed += 1
+                txt_clean.text(
+                    ("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
+                    + f"{min(100, int(completed * 100 / total))}%"
+                )
+                continue
+            if apply_clean:
+                cleaned, valid_mask, summary = clean_rr_intervals(
+                    up.rr_ms,
+                    method=str(method),
+                    max_deviation=float(max_dev),
+                    median_window=int(median_win),
+                )
+                up.rr_ms_clean = cleaned
+                up.artifact_valid_mask = valid_mask
+                up.qc_summary = summary
+                if not up.df.empty:
+                    n = min(len(up.df), cleaned.size)
+                    up.df.loc[: n - 1, "rr_intervals_ms_clean"] = cleaned[:n]
+                    if valid_mask.size >= n:
+                        up.df.loc[: n - 1, "artifact_flag"] = ~valid_mask[:n]
+                    else:
+                        up.df["artifact_flag"] = False
+            start_iso = ""
+            if isinstance(up.recording_start_utc, pd.Timestamp):
+                start_ts = up.recording_start_utc
+                if start_ts.tzinfo is None or start_ts.tzinfo.utcoffset(start_ts) is None:
+                    start_ts = start_ts.tz_localize(timezone.utc)
+                else:
+                    start_ts = start_ts.tz_convert(timezone.utc)
+                start_iso = start_ts.isoformat()
+            meta_entry = {
+                "source": name,
+                "beats": int(up.rr_ms.size),
+                "duration_min": float(up.rr_ms.sum() / (1000.0 * 60.0)),
+                "mean_hr": float(np.mean(60000.0 / up.rr_ms)),
+                "flagged_pct": (
+                    float(up.qc_summary.get("flagged_pct", 0.0))
+                    if (apply_clean and up.qc_summary)
+                    else 0.0
+                ),
+            }
+            if start_iso:
+                meta_entry["recording_start_utc"] = start_iso
+            meta_rows.append(meta_entry)
             completed += 1
             txt_clean.text(
                 ("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
                 + f"{min(100, int(completed * 100 / total))}%"
             )
-            continue
-        if apply_clean:
-            cleaned, valid_mask, summary = clean_rr_intervals(
-                up.rr_ms,
-                method=str(method),
-                max_deviation=float(max_dev),
-                median_window=int(median_win),
-            )
-            up.rr_ms_clean = cleaned
-            up.artifact_valid_mask = valid_mask
-            up.qc_summary = summary
-            if not up.df.empty:
-                n = min(len(up.df), cleaned.size)
-                up.df.loc[: n - 1, "rr_intervals_ms_clean"] = cleaned[:n]
-                if valid_mask.size >= n:
-                    up.df.loc[: n - 1, "artifact_flag"] = ~valid_mask[:n]
-                else:
-                    up.df["artifact_flag"] = False
-        start_iso = ""
-        if isinstance(up.recording_start_utc, pd.Timestamp):
-            start_ts = up.recording_start_utc
-            if start_ts.tzinfo is None or start_ts.tzinfo.utcoffset(start_ts) is None:
-                start_ts = start_ts.tz_localize(timezone.utc)
-            else:
-                start_ts = start_ts.tz_convert(timezone.utc)
-            start_iso = start_ts.isoformat()
-        meta_entry = {
-            "source": name,
-            "beats": int(up.rr_ms.size),
-            "duration_min": float(up.rr_ms.sum() / (1000.0 * 60.0)),
-            "mean_hr": float(np.mean(60000.0 / up.rr_ms)),
-            "flagged_pct": (
-                float(up.qc_summary.get("flagged_pct", 0.0))
-                if (apply_clean and up.qc_summary)
-                else 0.0
-            ),
-        }
-        if start_iso:
-            meta_entry["recording_start_utc"] = start_iso
-        meta_rows.append(meta_entry)
-        completed += 1
+        logger.info(
+            "Finished %s of %d dataset(s)",
+            "cleaning" if apply_clean else "preparation",
+            total,
+        )
         txt_clean.text(
-            ("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
-            + f"{min(100, int(completed * 100 / total))}%"
-        )
-    logger.info(
-        "Finished %s of %d dataset(s)",
-        "cleaning" if apply_clean else "preparation",
-        total,
-    )
-    txt_clean.text(
-        ("Cleaning complete." if apply_clean else "Preparation complete.") +
-        " 100%")
+            ("Cleaning complete." if apply_clean else "Preparation complete.") +
+            " 100%")
 
-    windowed_all: List[pd.DataFrame] = []
-    txt_win = st.empty()
-    txt_win.text("Computing windowed metrics... 0%")
-    total_win = max(1, len(datasets))
-    done_win = 0
-    for name, up in datasets.items():
-        wdf = _cached_windowed(
-            up.df,
-            rr_col=(
-                "rr_intervals_ms_clean"
-                if (apply_clean and "rr_intervals_ms_clean" in up.df.columns)
-                else "rr_intervals_ms"
-            ),
-            window=win,
-            step=step,
-            min_rr_count=int(min_rr),
-            max_windows=int(max_windows),
-            include_advanced=not bool(fast_windowing),
-        )
-        if not wdf.empty:
-            windowed_all.append(wdf.assign(source=name))
-        done_win += 1
-        txt_win.text(
-            "Computing windowed metrics... "
-            + f"{min(100, int(done_win * 100 / total_win))}%"
-        )
-    if windowed_all:
-        windowed_df = pd.concat(windowed_all, ignore_index=True)
+        # Windowed metrics computation
+        windowed_all: List[pd.DataFrame] = []
+        txt_win = st.empty()
+        txt_win.text("Computing windowed metrics... 0%")
+        total_win = max(1, len(datasets))
+        done_win = 0
+        for name, up in datasets.items():
+            wdf = _cached_windowed(
+                up.df,
+                rr_col=(
+                    "rr_intervals_ms_clean"
+                    if (apply_clean and "rr_intervals_ms_clean" in up.df.columns)
+                    else "rr_intervals_ms"
+                ),
+                window=win,
+                step=step,
+                min_rr_count=int(min_rr),
+                max_windows=int(max_windows),
+                include_advanced=not bool(fast_windowing),
+            )
+            if not wdf.empty:
+                windowed_all.append(wdf.assign(source=name))
+            done_win += 1
+            txt_win.text(
+                "Computing windowed metrics... "
+                + f"{min(100, int(done_win * 100 / total_win))}%"
+            )
+        if windowed_all:
+            windowed_df = pd.concat(windowed_all, ignore_index=True)
+            if not windowed_df.empty:
+                windowed_df["start"] = pd.to_datetime(
+                    windowed_df["start"], errors="coerce", utc=True
+                )
+                if "end" in windowed_df.columns:
+                    windowed_df["end"] = pd.to_datetime(
+                        windowed_df["end"], errors="coerce", utc=True
+                    )
+                windowed_df = windowed_df.dropna(subset=["start"])
+            if apply_dev:
+                windowed_df = _compute_deviation_scores(
+                    windowed_df,
+                    metrics=dev_metrics,
+                    z_warn=float(z_warn),
+                    z_alert=float(z_alert),
+                )
+        txt_win.text("Computing windowed metrics... 100%")
+
+        # ML clustering
+        if enable_ml and not windowed_df.empty:
+            ml_metrics = (
+                list(dev_metrics)
+                if dev_metrics
+                else ["rmssd", "sdnn", "lf_hf_ratio", "hf_power"]
+            )
+            try:
+                ml_result = run_windowed_kmeans(
+                    windowed_df,
+                    ml_metrics,
+                    n_clusters=2,
+                    max_iterations=50,
+                )
+            except ValueError as exc:
+                logger.warning("ML clustering failed: %s", exc, exc_info=True)
+                ml_error_message = str(exc)
+            else:
+                windowed_df = ml_result.windowed_with_clusters
+                ml_summary_df = ml_result.cluster_summary
+
         if not windowed_df.empty:
             windowed_df["start"] = pd.to_datetime(
                 windowed_df["start"], errors="coerce", utc=True
@@ -3788,215 +3839,177 @@ def main() -> None:
                     windowed_df["end"], errors="coerce", utc=True
                 )
             windowed_df = windowed_df.dropna(subset=["start"])
-        if apply_dev:
-            windowed_df = _compute_deviation_scores(
-                windowed_df,
-                metrics=dev_metrics,
-                z_warn=float(z_warn),
-                z_alert=float(z_alert),
-            )
-    else:
-        windowed_df = pd.DataFrame()
-    txt_win.text("Computing windowed metrics... 100%")
 
-    ml_summary_df = pd.DataFrame()
-    ml_error_message = ""
-    if enable_ml and not windowed_df.empty:
-        ml_metrics = (
-            list(dev_metrics)
-            if dev_metrics
-            else ["rmssd", "sdnn", "lf_hf_ratio", "hf_power"]
-        )
-        try:
-            ml_result = run_windowed_kmeans(
-                windowed_df,
-                ml_metrics,
-                n_clusters=2,
-                max_iterations=50,
-            )
-        except ValueError as exc:
-            logger.warning("ML clustering failed: %s", exc, exc_info=True)
-            ml_error_message = str(exc)
-        else:
-            windowed_df = ml_result.windowed_with_clusters
-            ml_summary_df = ml_result.cluster_summary
-
-    if not windowed_df.empty:
-        windowed_df["start"] = pd.to_datetime(
-            windowed_df["start"], errors="coerce", utc=True
-        )
-        if "end" in windowed_df.columns:
-            windowed_df["end"] = pd.to_datetime(
-                windowed_df["end"], errors="coerce", utc=True
-            )
-        windowed_df = windowed_df.dropna(subset=["start"])
-
-    # Aggregate anomaly episodes (contiguous yellow/red windows)
-    def _episodes(df: pd.DataFrame, min_len: int) -> pd.DataFrame:
-        if df.empty or "dev_level" not in df.columns:
-            return pd.DataFrame()
-        out = []
-        step_td = pd.to_timedelta(step)
-        for src, sub in df.sort_values(["source", "start"]).groupby("source"):
-            cur_level = None
-            cur_start = None
-            cur_end = None
-            cur_count = 0
-            cur_max = 0.0
-            prev_start = None
-            for _, r in sub.iterrows():
-                level = str(r.get("dev_level", "green"))
-                if level == "green":
-                    level = None
-                start_ts = pd.to_datetime(r.get("start"))
-                end_ts = pd.to_datetime(r.get("end"))
-                if cur_level is None and level is not None:
-                    cur_level = level
-                    cur_start = start_ts
-                    cur_end = end_ts
-                    cur_count = 1
-                    cur_max = float(r.get("dev_index", 0.0))
-                elif cur_level is not None:
-                    # continue if same level and contiguous
-                    if (
-                        level == cur_level
-                        and prev_start is not None
-                        and (start_ts - prev_start) <= step_td * 1.5
-                    ):
+        # Aggregate anomaly episodes (contiguous yellow/red windows)
+        def _episodes(df: pd.DataFrame, min_len: int) -> pd.DataFrame:
+            if df.empty or "dev_level" not in df.columns:
+                return pd.DataFrame()
+            out_eps: List[Dict[str, Any]] = []
+            step_td = pd.to_timedelta(step)
+            for src, sub in df.sort_values(["source", "start"]).groupby("source"):
+                cur_level = None
+                cur_start = None
+                cur_end = None
+                cur_count = 0
+                cur_max = 0.0
+                prev_start = None
+                for _, r in sub.iterrows():
+                    level = str(r.get("dev_level", "green"))
+                    if level == "green":
+                        level = None
+                    start_ts = pd.to_datetime(r.get("start"))
+                    end_ts = pd.to_datetime(r.get("end"))
+                    if cur_level is None and level is not None:
+                        cur_level = level
+                        cur_start = start_ts
                         cur_end = end_ts
-                        cur_count += 1
-                        cur_max = max(cur_max, float(r.get("dev_index", 0.0)))
-                else:
-                    if cur_count >= int(min_len):
-                        out.append(
-                            {
-                                "source": src,
-                                "level": cur_level,
-                                "start": cur_start,
-                                "end": cur_end,
-                                "n_windows": cur_count,
-                                "max_dev_index": cur_max,
-                            }
-                        )
-                    cur_level = level
-                    cur_start = start_ts if level is not None else None
-                    cur_end = end_ts if level is not None else None
-                    cur_count = 1 if level is not None else 0
-                    cur_max = (float(r.get("dev_index", 0.0))
-                               if level is not None else 0.0)
-                prev_start = start_ts
-            if cur_level is not None and cur_count >= int(min_len):
-                out.append(
-                    {
-                        "source": src,
-                        "level": cur_level,
-                        "start": cur_start,
-                        "end": cur_end,
-                        "n_windows": cur_count,
-                        "max_dev_index": cur_max,
-                    }
-                )
-        return pd.DataFrame(out)
+                        cur_count = 1
+                        cur_max = float(r.get("dev_index", 0.0))
+                    elif cur_level is not None:
+                        # continue if same level and contiguous
+                        if (
+                            level == cur_level
+                            and prev_start is not None
+                            and (start_ts - prev_start) <= step_td * 1.5
+                        ):
+                            cur_end = end_ts
+                            cur_count += 1
+                            cur_max = max(cur_max, float(r.get("dev_index", 0.0)))
+                    else:
+                        if cur_count >= int(min_len):
+                            out_eps.append(
+                                {
+                                    "source": src,
+                                    "level": cur_level,
+                                    "start": cur_start,
+                                    "end": cur_end,
+                                    "n_windows": cur_count,
+                                    "max_dev_index": cur_max,
+                                }
+                            )
+                        cur_level = level
+                        cur_start = start_ts if level is not None else None
+                        cur_end = end_ts if level is not None else None
+                        cur_count = 1 if level is not None else 0
+                        cur_max = (float(r.get("dev_index", 0.0))
+                                   if level is not None else 0.0)
+                    prev_start = start_ts
+                if cur_level is not None and cur_count >= int(min_len):
+                    out_eps.append(
+                        {
+                            "source": src,
+                            "level": cur_level,
+                            "start": cur_start,
+                            "end": cur_end,
+                            "n_windows": cur_count,
+                            "max_dev_index": cur_max,
+                        }
+                    )
+            return pd.DataFrame(out_eps)
 
-    episodes_df = (
-        _episodes(windowed_df, int(min_sustain))
-        if (apply_dev and not windowed_df.empty and "dev_level" in windowed_df.columns)
-        else pd.DataFrame()
-    )
-
-    # Full-recording metrics
-    multi_results: List[Dict] = []
-    ordered_sources: List[str] = []
-    txt_full = st.empty()
-    txt_full.text("Computing full-recording metrics... 0%")
-
-    total_full = max(1, len(datasets))
-    done_full = 0
-    for name, up in datasets.items():
-        if up.rr_ms.size >= 10:
-            use_rr = (
-                up.rr_ms_clean
-                if (apply_clean and up.rr_ms_clean is not None)
-                else up.rr_ms
-            )
-            m = _cached_comprehensive(
-                use_rr, include_advanced=bool(high_compute))
-            m["source"] = name
-            if apply_clean and up.qc_summary:
-                m["qc_flagged_pct"] = float(
-                    up.qc_summary.get("flagged_pct", 0.0))
-                m["qc_method"] = str(up.qc_summary.get("qc_method", {}))
-            if enable_cov:
-                from hrv_core import covariate_adjust_short_term as _cov
-
-                adj = _cov(
-                    age_years=int(age_years),
-                    sex=str(sex),
-                    bmi=float(bmi),
-                    exercise_level=str(exercise),
-                    rmssd=float(m.get("rmssd", np.nan)),
-                    sdnn=float(m.get("sdnn", np.nan)),
-                )
-                m.update(adj)
-            multi_results.append(m)
-            ordered_sources.append(name)
-            done_full += 1
-            txt_full.text(
-                "Computing full-recording metrics... "
-                + f"{min(100, int(done_full * 100 / total_full))}%"
-            )
-    txt_full.text("Computing full-recording metrics... 100%")
-    multi_results_df = pd.DataFrame(
-        multi_results) if multi_results else pd.DataFrame()
-
-    # Long-term summaries (5-min windows): SDANN (std of mean_nni), SDNNIDX
-    # (mean of window SDNN)
-    if (
-        not windowed_df.empty
-        and "mean_nni" in windowed_df.columns
-        and "sdnn" in windowed_df.columns
-    ):
-        lts = (
-            windowed_df.groupby("source")
-            .agg(
-                sdann_5min=(
-                    "mean_nni",
-                    lambda x: float(
-                        np.std(pd.to_numeric(x, errors="coerce").dropna(), ddof=1)
-                    ),
-                ),
-                sdnnidx_5min=(
-                    "sdnn",
-                    lambda x: float(
-                        np.mean(pd.to_numeric(x, errors="coerce").dropna())
-                    ),
-                ),
-            )
-            .reset_index()
+        episodes_df = (
+            _episodes(windowed_df, int(min_sustain))
+            if (apply_dev and not windowed_df.empty and "dev_level" in windowed_df.columns)
+            else pd.DataFrame()
         )
-        if not multi_results_df.empty:
-            multi_results_df = multi_results_df.merge(
-                lts, on="source", how="left")
 
-    pns_mapping: Dict[str, float] = {}
-    if (
-        not multi_results_df.empty
-        and "parasympathetic_index" in multi_results_df.columns
-    ):
-        for src in ordered_sources:
-            row = multi_results_df[multi_results_df["source"] == src]
-            if row.empty:
-                continue
-            val = float(row["parasympathetic_index"].iloc[0])
-            if np.isfinite(val):
-                pns_mapping[src] = val
+        # Full-recording metrics
+        multi_results: List[Dict[str, Any]] = []
+        ordered_sources: List[str] = []
+        txt_full = st.empty()
+        txt_full.text("Computing full-recording metrics... 0%")
 
-    # Enrich meta_rows with NOAA explanations so GPT/export can include them
-    try:
-        _noaa_rows = get_noaa_metric_explanations()
-    except Exception:
-        _noaa_rows = []
-    meta_rows_for_context = meta_rows + _noaa_rows if _noaa_rows else meta_rows
+        total_full = max(1, len(datasets))
+        done_full = 0
+        for name, up in datasets.items():
+            if up.rr_ms.size >= 10:
+                use_rr = (
+                    up.rr_ms_clean
+                    if (apply_clean and up.rr_ms_clean is not None)
+                    else up.rr_ms
+                )
+                m = _cached_comprehensive(
+                    use_rr, include_advanced=bool(high_compute))
+                m["source"] = name
+                if apply_clean and up.qc_summary:
+                    m["qc_flagged_pct"] = float(
+                        up.qc_summary.get("flagged_pct", 0.0))
+                    m["qc_method"] = str(up.qc_summary.get("qc_method", {}))
+                if enable_cov:
+                    from hrv_core import covariate_adjust_short_term as _cov
+
+                    adj = _cov(
+                        age_years=int(age_years),
+                        sex=str(sex),
+                        bmi=float(bmi),
+                        exercise_level=str(exercise),
+                        rmssd=float(m.get("rmssd", np.nan)),
+                        sdnn=float(m.get("sdnn", np.nan)),
+                    )
+                    m.update(adj)
+                multi_results.append(m)
+                ordered_sources.append(name)
+                done_full += 1
+                txt_full.text(
+                    "Computing full-recording metrics... "
+                    + f"{min(100, int(done_full * 100 / total_full))}%"
+                )
+        txt_full.text("Computing full-recording metrics... 100%")
+        multi_results_df = pd.DataFrame(
+            multi_results) if multi_results else pd.DataFrame()
+
+        # Long-term summaries (5-min windows): SDANN (std of mean_nni), SDNNIDX
+        # (mean of window SDNN)
+        if (
+            not windowed_df.empty
+            and "mean_nni" in windowed_df.columns
+            and "sdnn" in windowed_df.columns
+        ):
+            lts = (
+                windowed_df.groupby("source")
+                .agg(
+                    sdann_5min=(
+                        "mean_nni",
+                        lambda x: float(
+                            np.std(pd.to_numeric(x, errors="coerce").dropna(), ddof=1)
+                        ),
+                    ),
+                    sdnnidx_5min=(
+                        "sdnn",
+                        lambda x: float(
+                            np.mean(pd.to_numeric(x, errors="coerce").dropna())
+                        ),
+                    ),
+                )
+                .reset_index()
+            )
+            if not multi_results_df.empty:
+                multi_results_df = multi_results_df.merge(
+                    lts, on="source", how="left")
+
+        pns_mapping: Dict[str, float] = {}
+        if (
+            not multi_results_df.empty
+            and "parasympathetic_index" in multi_results_df.columns
+        ):
+            for src in ordered_sources:
+                row = multi_results_df[multi_results_df["source"] == src]
+                if row.empty:
+                    continue
+                val = float(row["parasympathetic_index"].iloc[0])
+                if np.isfinite(val):
+                    pns_mapping[src] = val
+
+        # Enrich meta_rows with NOAA explanations so GPT/export can include them
+        try:
+            _noaa_rows = get_noaa_metric_explanations()
+        except Exception:
+            _noaa_rows = []
+        meta_rows_for_context = meta_rows + _noaa_rows if _noaa_rows else meta_rows
+    else:
+        # No data uploaded - set remaining defaults
+        pns_mapping = {}
+        ordered_sources = []
 
     ai_section = st.container()
     _render_gpt_high_interpretation(
@@ -4137,17 +4150,40 @@ def main() -> None:
             st.dataframe(multi_results_df[["source", "respiratory_rate_bpm"]].rename(
                 columns={"respiratory_rate_bpm": "respiratory_rate [breaths/min]"}))
     with tab_ts:
-        max_pts = None if rr_plot_cap == "No limit" else int(rr_plot_cap)
-        _plot_rr_timeseries(
-            datasets,
-            dev_windows=(
-                windowed_df
-                if (apply_dev and "dev_level" in windowed_df.columns)
-                else None
-            ),
-            max_points=max_pts,
-        )
-        _plot_hr_timeseries(datasets)
+        if not has_hrv_data:
+            st.info(
+                "📈 **Time Series Analysis**\n\n"
+                "This tab displays your RR interval and heart rate time series plots.\n\n"
+                "**What you'll see:**\n"
+                "- Beat-to-beat RR intervals (milliseconds)\n"
+                "- Heart rate derived from RR intervals (bpm)\n"
+                "- Deviation zones highlighting anomalies\n\n"
+                "👈 **Upload HRV data using the sidebar to begin.**"
+            )
+            with st.expander("📊 Example: What RR Interval Data Looks Like"):
+                st.markdown("""
+                A healthy resting recording typically shows:
+                - **RR intervals**: 800-1200 ms (corresponding to 50-75 bpm)
+                - **Natural variability**: Irregular pattern reflecting autonomic modulation
+                - **Respiratory influence**: ~0.15-0.4 Hz oscillation from breathing
+                
+                ```
+                Example RR values (ms): 823, 845, 812, 867, 834, 821, 856, 891, 878, 803
+                Mean HR: ~70 bpm | RMSSD: ~45 ms | SDNN: ~55 ms
+                ```
+                """)
+        else:
+            max_pts = None if rr_plot_cap == "No limit" else int(rr_plot_cap)
+            _plot_rr_timeseries(
+                datasets,
+                dev_windows=(
+                    windowed_df
+                    if (apply_dev and "dev_level" in windowed_df.columns)
+                    else None
+                ),
+                max_points=max_pts,
+            )
+            _plot_hr_timeseries(datasets)
         st.markdown(
             "**Scientific notes (time series)**  \n"
             "- RR intervals (ms) are beat-to-beat times; healthy resting dynamics are irregular and complex.  \n"
@@ -4156,7 +4192,29 @@ def main() -> None:
             "[Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf) "
             "and updated in [Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full).")
     with tab_freq:
-        if skip_freq:
+        if not has_hrv_data:
+            st.info(
+                "🌊 **Frequency Domain Analysis**\n\n"
+                "This tab shows power spectral density (PSD) analysis of your HRV data.\n\n"
+                "**Frequency Bands:**\n"
+                "- **VLF** (0.0033–0.04 Hz): Thermoregulation, hormonal rhythms\n"
+                "- **LF** (0.04–0.15 Hz): Baroreflex, sympathetic + parasympathetic\n"
+                "- **HF** (0.15–0.40 Hz): Respiratory sinus arrhythmia (vagal)\n\n"
+                "👈 **Upload HRV data to see your frequency analysis.**"
+            )
+            with st.expander("📊 Example: Typical Resting Frequency Analysis"):
+                st.markdown("""
+                **Healthy Adult at Rest:**
+                | Band | Power (ms²) | Interpretation |
+                |------|-------------|----------------|
+                | VLF | 500-1500 | Thermoregulation |
+                | LF | 300-1000 | Baroreflex activity |
+                | HF | 200-800 | Vagal (parasympathetic) |
+                | LF/HF | 0.5-2.0 | Autonomic balance (interpret with caution) |
+                
+                *Note: LF/HF ratio has limited validity as a sympathetic/parasympathetic "balance" index.*
+                """)
+        elif skip_freq:
             st.info("Frequency overlay disabled (Performance & display).")
         else:
             _plot_psd_overlay(datasets, method=psd_method)
@@ -4168,7 +4226,31 @@ def main() -> None:
             "[Nunan et al., 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/); "
             "[Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full).")
     with tab_nl:
-        if skip_poincare:
+        if not has_hrv_data:
+            st.info(
+                "🔀 **Nonlinear Analysis**\n\n"
+                "This tab shows Poincaré plots, entropy measures, and fractal analysis.\n\n"
+                "**Key Metrics:**\n"
+                "- **Poincaré SD1/SD2**: Short-term vs long-term variability\n"
+                "- **DFA α1**: Fractal scaling exponent (0.75-1.25 at healthy rest)\n"
+                "- **Sample Entropy**: Signal complexity/regularity\n\n"
+                "👈 **Upload HRV data to see nonlinear dynamics.**"
+            )
+            with st.expander("📊 Example: Poincaré Plot Interpretation"):
+                st.markdown("""
+                **The Poincaré plot** graphs each RR interval against the next (RR[n] vs RR[n+1]).
+                
+                **Healthy Pattern:**
+                - Ellipse shape with SD1 (short-term) < SD2 (long-term)
+                - SD1 ≈ 30-60 ms (vagal modulation)
+                - SD2 ≈ 60-120 ms (overall variability)
+                
+                **Abnormal Patterns:**
+                - *Torpedo shape*: Reduced short-term variability → parasympathetic dysfunction
+                - *Wide scatter*: Arrhythmias or artifacts
+                - *Tight cluster*: Very low HRV → reduced autonomic flexibility
+                """)
+        elif skip_poincare:
             st.info("Poincaré plot disabled (Performance & display).")
         else:
             _plot_poincare(datasets)
@@ -4178,7 +4260,17 @@ def main() -> None:
             "- DFA α1 ≈ 0.75–1.25 at rest reflects healthy fractal-like regulation; lower values can indicate exercise intensity near the aerobic threshold in exertional contexts.  \n"
             "References: [Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full).")
     with tab_tfr:
-        if skip_spectrogram:
+        if not has_hrv_data:
+            st.info(
+                "📉 **Time-Frequency Analysis (Spectrogram)**\n\n"
+                "This tab visualizes how spectral power changes over time.\n\n"
+                "**What you'll see:**\n"
+                "- X-axis: Time (seconds or minutes)\n"
+                "- Y-axis: Frequency (Hz)\n"
+                "- Color intensity: Power (ms²/Hz)\n\n"
+                "👈 **Upload HRV data to see time-frequency dynamics.**"
+            )
+        elif skip_spectrogram:
             st.info("Spectrogram disabled (Performance & display).")
         else:
             _plot_spectrogram(datasets)
@@ -4187,11 +4279,21 @@ def main() -> None:
             "- Spectrogram visualizes how spectral power evolves; HF tracks respiration; LF reflects slower autonomic rhythms.  \n"
             "- Stationarity assumptions matter; windowed PSD improves interpretability for long, varying recordings.")
     with tab_window:
+        if not has_hrv_data:
+            st.info(
+                "🪟 **Windowed Analysis**\n\n"
+                "This tab shows HRV metrics computed over sliding time windows.\n\n"
+                "**Purpose:**\n"
+                "- Track HRV trends over time\n"
+                "- Identify deviation episodes\n"
+                "- Detect anomalous periods for further investigation\n\n"
+                "👈 **Upload HRV data to see windowed metrics.**"
+            )
         st.markdown(
             "**Scientific notes (windowed metrics)**  \n"
             "- Sliding windows (e.g., 5 min, step 1 min) estimate locally stationary segments to track trends over time.  \n"
             "- Minimum RR count safeguards metric stability; interpretation should consider protocol and respiration.")
-        if not windowed_df.empty:
+        if has_hrv_data and not windowed_df.empty:
             st.dataframe(
                 windowed_df[
                     ["start", "source"]
@@ -4223,7 +4325,31 @@ def main() -> None:
         st.markdown("### 📋 Comprehensive Metrics Table")
         st.markdown("*All computed HRV metrics across time, frequency, nonlinear, and advanced domains*")
         
-        if not multi_results_df.empty:
+        if not has_hrv_data:
+            st.info(
+                "📋 **Metrics Dashboard**\n\n"
+                "This tab displays a comprehensive table of all computed HRV metrics.\n\n"
+                "**Metric Categories:**\n"
+                "- **Time Domain**: SDNN, RMSSD, pNN50, Mean HR\n"
+                "- **Frequency Domain**: VLF, LF, HF, LF/HF ratio\n"
+                "- **Nonlinear**: SD1, SD2, DFA α1, Sample Entropy\n"
+                "- **Advanced**: Deceleration capacity, symbolic dynamics, recurrence\n\n"
+                "👈 **Upload HRV data to compute metrics.**"
+            )
+            with st.expander("📊 Example: HRV Reference Values (Healthy Adult at Rest)"):
+                st.markdown("""
+                | Metric | Typical Range | Unit | Interpretation |
+                |--------|---------------|------|----------------|
+                | SDNN | 50-100 | ms | Overall variability |
+                | RMSSD | 25-60 | ms | Vagal tone |
+                | pNN50 | 5-25 | % | Parasympathetic marker |
+                | LF power | 300-1000 | ms² | Baroreflex activity |
+                | HF power | 200-800 | ms² | Respiratory sinus arrhythmia |
+                | DFA α1 | 0.75-1.25 | - | Fractal complexity |
+                
+                *Values from Shaffer & Ginsberg (2017), Task Force (1996)*
+                """)
+        elif not multi_results_df.empty:
             st.dataframe(multi_results_df)
             novel_columns = [
                 "hrf_pip_pct",
@@ -4473,6 +4599,17 @@ def main() -> None:
         st.markdown("### 🏃 Readiness & Recovery Assessment")
         st.markdown("*Parasympathetic index compared to your personal baseline*")
         
+        if not has_hrv_data:
+            st.info(
+                "🏃 **Readiness Assessment**\n\n"
+                "This tab evaluates your autonomic recovery state based on HRV metrics.\n\n"
+                "**Readiness Scoring considers:**\n"
+                "- Parasympathetic index (HF, RMSSD, pNN50, SD1)\n"
+                "- Comparison to your personal baseline\n"
+                "- Day-to-day variability patterns\n\n"
+                "👈 **Upload HRV data to see your readiness score.**"
+            )
+        
         with st.expander("📖 **Understanding Readiness Scoring**", expanded=False):
             st.markdown("""
 **What is Readiness?**
@@ -4681,7 +4818,17 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
         st.markdown("### 🎯 HRV Metric Gauges")
         st.markdown("*Visual comparison against population reference ranges*")
         
-        if skip_gauges:
+        if not has_hrv_data:
+            st.info(
+                "🎯 **HRV Gauges**\n\n"
+                "This tab shows visual gauges comparing your metrics to reference ranges.\n\n"
+                "**Gauge Interpretation:**\n"
+                "- 🟢 Green: Within normal range\n"
+                "- 🟡 Yellow: Borderline (1-2 SD)\n"
+                "- 🔴 Red: Outside typical range (>2 SD)\n\n"
+                "👈 **Upload HRV data to see your gauges.**"
+            )
+        elif skip_gauges:
             st.info("Gauges disabled (Performance & display).")
         else:
             _render_normogram_gauges(multi_results_df)
@@ -4714,6 +4861,17 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
     with tab_unified:
         st.markdown("### 📈 Unified Physiological Timeline")
         st.markdown("*Time-synchronized view of all physiological metrics with ML pattern detection*")
+        
+        if not has_hrv_data:
+            st.info(
+                "📈 **Unified Timeline**\n\n"
+                "This tab provides a synchronized view of multiple physiological metrics.\n\n"
+                "**Features:**\n"
+                "- Cross-domain metric visualization\n"
+                "- ML-based pattern detection\n"
+                "- Temporal relationship analysis\n\n"
+                "👈 **Upload HRV data to see your unified timeline.**"
+            )
         
         with st.expander("📖 **Understanding the Unified Timeline**", expanded=False):
             st.markdown("""
@@ -5156,8 +5314,11 @@ Context (posture, time of day, medications) strongly affects interpretation.*
                     "- Heart rate: Mean HR"
                 )
                 
-                # Show example with simulated data
-                with st.expander("📋 View Example Comparison (Simulated Data)"):
+                # Show example with simulated data - use checkbox instead of expander
+                # (render_population_comparison_ui uses expanders internally, can't nest)
+                st.markdown("---")
+                show_example = st.checkbox("📋 Show Example Comparison (Simulated Data)", value=False, key="pop_norms_example_checkbox")
+                if show_example:
                     example_metrics = {
                         "sdnn": 45.2,
                         "rmssd": 38.5,
