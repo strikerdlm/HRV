@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.6.3
+**Version:** 1.6.4
 
 ---
 
@@ -60,6 +60,7 @@ The app is fully navigable **without uploading HRV data**. These features work i
 
 | Module | What You Can Do |
 |--------|-----------------|
+| 👤 **User Profile** | Register profile, complete clinical scales (ESS, Samn-Perelli, KSS), track history |
 | 🌍 **Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing |
 | ☀️ **Circadian** | Simulate circadian rhythms with different light schedules |
 | 😴 **SAFTE/Fatigue** | Model how sleep debt affects cognitive performance |
@@ -75,6 +76,18 @@ All other tabs show **example data** and **reference values** to help you unders
 | RAM | 4 GB | 8 GB |
 | Storage | 500 MB | 1 GB |
 | Browser | Chrome 90+ | Chrome/Edge latest |
+| GPU (optional) | — | NVIDIA RTX 3080/4090/5070 |
+
+### GPU Acceleration (Optional)
+
+For heavy HRV computations, GPU acceleration is supported via NVIDIA CUDA:
+
+1. **Supported GPUs**: RTX 5070, RTX 4090, RTX 3080, and other CUDA-capable cards
+2. **Installation**: `pip install cupy-cuda12x` (for CUDA 12.x)
+3. **Usage**: Enable in sidebar under "🖥️ GPU Processing"
+4. **Benefits**: 2-10x speedup for FFT, PSD, and large array operations
+
+The app automatically detects GPU availability and falls back to CPU when CUDA is not present.
 
 ### Installation Steps
 
