@@ -358,7 +358,13 @@ except ImportError:
 
 def setup_console_logging(level: int = logging.INFO) -> logging.Logger:
     """
-    Configure an application logger that writes to stderr with a stable format.
+    Configure an application logger with both console and file output.
+    
+    Writes to:
+    - Console (stderr) for real-time feedback
+    - logs/app.log for persistent debugging
+    - logs/errors.log for error-only tracking
+    
     This function is idempotent across Streamlit reruns: it clears
     existing handlers on the application logger to avoid duplicate
     messages.
@@ -380,12 +386,22 @@ def setup_console_logging(level: int = logging.INFO) -> logging.Logger:
     """
     if not isinstance(level, int):
         raise TypeError("level must be an int logging level")
+    
+    # Initialize centralized file logging (idempotent)
+    try:
+        from logging_config import setup_logging
+        setup_logging(log_level_console=level)
+    except ImportError:
+        pass  # Fall back to console-only if logging_config unavailable
+    
     app_logger = logging.getLogger("hrv_app")
-    app_logger.propagate = False
+    app_logger.propagate = True  # Allow logs to reach root handlers (file)
+    
     # Clear existing handlers to prevent duplicates after Streamlit reruns
     for handler in list(app_logger.handlers):
         app_logger.removeHandler(handler)
 
+    # Console handler for app-specific logs
     stream_handler = logging.StreamHandler(stream=sys.stderr)
     stream_handler.setLevel(level)
     formatter = logging.Formatter(
