@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.6.4] - 2025-12-02
+
+### Added
+- **NVIDIA GPU Processing Support**: Hardware acceleration for HRV computations
+  - Auto-detection of NVIDIA GPUs (RTX 5070, RTX 4090, etc.)
+  - CUDA-accelerated RMSSD, SDNN, pNN50, FFT PSD, and Poincaré calculations
+  - Built-in GPU benchmark with CPU comparison
+  - GPU settings sidebar panel with enable/disable toggle
+  - Automatic fallback to CPU when GPU unavailable
+  - New module: `app/gpu_processing.py`
+
+- **Centralized User Profile Tab**: Complete user data management
+  - User registration with biometric data (age, height, weight, BMI)
+  - Clinical scales: ESS, Samn-Perelli, KSS, VAS fatigue/pain
+  - Assessment history with timestamps and trend charts
+  - HRV measurement history linked to user
+  - Data export/import (JSON format)
+  - SQLite database storage with multi-user support
+  - New module: `app/user_profile_tab.py`
+
+### Changed
+- Sidebar now includes GPU Processing settings (⚡ Performance + 🖥️ GPU)
+- User Profile tab added as second tab (after Overview)
+- Models can now access centralized user profile data via `get_current_user_data()`
+
 ## [1.6.3] - 2025-12-02
 
 ### Added
