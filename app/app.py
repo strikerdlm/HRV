@@ -100,6 +100,34 @@ try:
 except ImportError:
     PERFORMANCE_UTILS_AVAILABLE = False
 
+# GPU processing module for NVIDIA CUDA acceleration
+try:
+    from gpu_processing import (
+        get_gpu_info,
+        get_gpu_config,
+        set_gpu_config,
+        is_gpu_enabled,
+        render_gpu_settings_sidebar,
+        compute_rmssd_gpu,
+        compute_sdnn_gpu,
+        compute_pnn50_gpu,
+        benchmark_gpu,
+        GPUConfig,
+    )
+    GPU_PROCESSING_AVAILABLE = True
+except ImportError:
+    GPU_PROCESSING_AVAILABLE = False
+
+# User profile tab for centralized user data management
+try:
+    from user_profile_tab import (
+        render_user_profile_tab,
+        get_current_user_data,
+    )
+    USER_PROFILE_TAB_AVAILABLE = True
+except ImportError:
+    USER_PROFILE_TAB_AVAILABLE = False
+
 # Space weather impact prediction module
 try:
     from space_weather_impact import (
@@ -3654,6 +3682,12 @@ def main() -> None:
                 "enable_heavy_plots": False,
                 "optimize_memory": True,
             }
+        
+        # GPU processing settings (NVIDIA CUDA)
+        if GPU_PROCESSING_AVAILABLE:
+            gpu_config = render_gpu_settings_sidebar()
+        else:
+            gpu_config = None
 
         st.sidebar.markdown("---")
         st.sidebar.subheader("AI interpretation")
@@ -3739,11 +3773,18 @@ def main() -> None:
                 "optimize_memory": True,
             }
         
+        # GPU processing settings (NVIDIA CUDA) - available even without data
+        if GPU_PROCESSING_AVAILABLE:
+            gpu_config = render_gpu_settings_sidebar()
+        else:
+            gpu_config = None
+        
         # Show exploration callout in sidebar
         st.sidebar.markdown("---")
         st.sidebar.info(
             "📖 **Explore the App**\n\n"
             "No data required to explore:\n"
+            "- 👤 User Profile\n"
             "- 🌍 Space Weather\n"
             "- ☀️ Circadian Models\n"
             "- 😴 SAFTE/Fatigue\n"
@@ -4125,6 +4166,7 @@ def main() -> None:
     # Tabs
     (
         tab_overview,
+        tab_user_profile,
         tab_ts,
         tab_freq,
         tab_nl,
@@ -4148,6 +4190,7 @@ def main() -> None:
     ) = st.tabs(
         [
             "Overview",
+            "👤 User Profile",
             "Time Series",
             "Frequency",
             "Nonlinear",
@@ -4230,6 +4273,25 @@ def main() -> None:
         ):
             st.dataframe(multi_results_df[["source", "respiratory_rate_bpm"]].rename(
                 columns={"respiratory_rate_bpm": "respiratory_rate [breaths/min]"}))
+    
+    # =========================================================================
+    # USER PROFILE TAB - Centralized user data and clinical assessments
+    # =========================================================================
+    with tab_user_profile:
+        if USER_PROFILE_TAB_AVAILABLE:
+            render_user_profile_tab()
+        else:
+            st.markdown("### 👤 User Profile")
+            st.warning(
+                "User Profile module not available.\n\n"
+                "This tab provides:\n"
+                "- **Personal data management** (age, weight, height, BMI)\n"
+                "- **Clinical scales** (ESS, Samn-Perelli, KSS, PSQI)\n"
+                "- **Assessment history** with timestamps\n"
+                "- **HRV measurement tracking**\n\n"
+                "Please ensure `user_profile_tab.py` is in the app directory."
+            )
+    
     with tab_ts:
         if not has_hrv_data:
             st.info(
