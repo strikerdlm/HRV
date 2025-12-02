@@ -12,7 +12,7 @@ from __future__ import annotations
 import streamlit as st
 
 # Application metadata
-APP_VERSION = "1.6.1"
+APP_VERSION = "1.6.3"
 GITHUB_REPO = "https://github.com/strikerdlm/HRV"
 
 
@@ -196,22 +196,47 @@ def render_quick_access_grid(has_data: bool = False) -> None:
         has_data: Whether physiological data is loaded
     """
     st.markdown("### 🔬 Analysis Modules")
+    
+    if not has_data:
+        st.markdown(
+            """
+            <div style="
+                background: linear-gradient(135deg, #1a472a 0%, #2d5a3f 100%);
+                border: 1px solid rgba(46, 204, 113, 0.3);
+                border-radius: 12px;
+                padding: 1rem;
+                margin-bottom: 1rem;
+            ">
+                <div style="color: #2ecc71; font-weight: 600; margin-bottom: 0.5rem;">
+                    ✨ Explore Without Data
+                </div>
+                <div style="color: #90EE90; font-size: 0.9rem;">
+                    Modules marked with ✓ are fully functional without uploading HRV data. 
+                    Click any tab above to explore!
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    
     st.markdown("Select a tab above to explore each module. Modules marked with ✓ are available without data.")
     
-    # Module definitions
+    # Module definitions with categories
     modules = [
-        {"icon": "📊", "name": "Overview", "desc": "Summary statistics and key HRV metrics", "no_data": False, "color": "#667eea"},
-        {"icon": "📈", "name": "Time Series", "desc": "RR interval time-domain analysis", "no_data": False, "color": "#4ecdc4"},
-        {"icon": "🌊", "name": "Frequency", "desc": "Power spectral density (LF, HF, VLF)", "no_data": False, "color": "#ff6b6b"},
-        {"icon": "🔀", "name": "Nonlinear", "desc": "Poincaré, entropy, DFA analysis", "no_data": False, "color": "#f7b731"},
-        {"icon": "📉", "name": "Spectrogram", "desc": "Time-frequency analysis", "no_data": False, "color": "#a55eea"},
-        {"icon": "🪟", "name": "Windowed", "desc": "Segmented HRV analysis", "no_data": False, "color": "#26de81"},
-        {"icon": "☀️", "name": "Circadian", "desc": "Circadian rhythm simulation", "no_data": True, "color": "#fd9644"},
-        {"icon": "🌍", "name": "Space Weather", "desc": "Solar activity & correlations", "no_data": True, "color": "#9b59b6"},
-        {"icon": "😴", "name": "SAFTE Model", "desc": "Fatigue & performance prediction", "no_data": True, "color": "#3498db"},
-        {"icon": "📋", "name": "Population Norms", "desc": "Compare against reference values", "no_data": False, "color": "#1abc9c"},
-        {"icon": "🫀", "name": "Biofeedback", "desc": "Real-time coherence training", "no_data": True, "color": "#e74c3c"},
-        {"icon": "📄", "name": "Export", "desc": "Generate reports & export data", "no_data": False, "color": "#95a5a6"},
+        # Data-independent modules (highlighted)
+        {"icon": "🌍", "name": "Space Weather", "desc": "Solar activity, CME predictions & Polar H10 timing", "no_data": True, "color": "#9b59b6", "highlight": True},
+        {"icon": "☀️", "name": "Circadian", "desc": "Circadian rhythm simulation & jet lag", "no_data": True, "color": "#fd9644", "highlight": True},
+        {"icon": "😴", "name": "SAFTE Model", "desc": "Fatigue & cognitive performance", "no_data": True, "color": "#3498db", "highlight": True},
+        {"icon": "🫀", "name": "Biofeedback", "desc": "Real-time coherence training demo", "no_data": True, "color": "#e74c3c", "highlight": True},
+        # Data-dependent modules
+        {"icon": "📊", "name": "Overview", "desc": "Summary statistics and key HRV metrics", "no_data": False, "color": "#667eea", "highlight": False},
+        {"icon": "📈", "name": "Time Series", "desc": "RR interval time-domain analysis", "no_data": False, "color": "#4ecdc4", "highlight": False},
+        {"icon": "🌊", "name": "Frequency", "desc": "Power spectral density (LF, HF, VLF)", "no_data": False, "color": "#ff6b6b", "highlight": False},
+        {"icon": "🔀", "name": "Nonlinear", "desc": "Poincaré, entropy, DFA analysis", "no_data": False, "color": "#f7b731", "highlight": False},
+        {"icon": "📉", "name": "Spectrogram", "desc": "Time-frequency analysis", "no_data": False, "color": "#a55eea", "highlight": False},
+        {"icon": "🪟", "name": "Windowed", "desc": "Segmented HRV analysis", "no_data": False, "color": "#26de81", "highlight": False},
+        {"icon": "📋", "name": "Population Norms", "desc": "Compare against reference values", "no_data": False, "color": "#1abc9c", "highlight": False},
+        {"icon": "📄", "name": "Export", "desc": "Generate reports & export data", "no_data": False, "color": "#95a5a6", "highlight": False},
     ]
     
     # Render in 4-column grid
@@ -224,6 +249,11 @@ def render_quick_access_grid(has_data: bool = False) -> None:
             status_color = "#90EE90" if available else "#666"
             opacity = "1" if available else "0.6"
             
+            # Extra highlighting for available modules when no data
+            border_glow = ""
+            if mod.get("highlight") and not has_data:
+                border_glow = f"box-shadow: 0 0 10px {mod['color']}55;"
+            
             st.markdown(
                 f"""
                 <div style="
@@ -234,6 +264,7 @@ def render_quick_access_grid(has_data: bool = False) -> None:
                     margin-bottom: 0.5rem;
                     min-height: 95px;
                     opacity: {opacity};
+                    {border_glow}
                 ">
                     <div style="font-size: 1.4rem; margin-bottom: 0.2rem;">{mod['icon']}</div>
                     <div style="color: {mod['color']}; font-weight: 600; font-size: 0.85rem;">
@@ -317,45 +348,50 @@ def render_data_status_panel(
 
 def render_getting_started_guide() -> None:
     """Render a getting started guide for new users."""
-    with st.expander("🚀 Getting Started Guide", expanded=False):
+    with st.expander("🚀 Getting Started Guide", expanded=True):
         st.markdown(
             """
-            ### Welcome to the Physiological Laboratory!
+            ### Welcome to the Physiological Laboratory! 👋
             
             This platform provides comprehensive tools for **Heart Rate Variability (HRV)** analysis, 
             **circadian rhythm** modeling, **fatigue prediction**, and **space weather correlations**.
             
-            #### Quick Start Steps:
+            ---
             
-            1. **📱 Import Data** (Sidebar)
-               - Select your device type (Polar H10, Garmin, ActiGraph, or generic file)
-               - Upload your RR interval or HRV data file
-               - Data will be automatically validated and cleaned
+            #### 🎯 Start Exploring NOW (No Data Required!)
             
-            2. **👤 Set Your Profile** (Optional but recommended)
-               - Enter your age and sex for accurate population comparisons
-               - Add clinical scale scores (ESS, KSS, PSQI) for fatigue correlation
-               - Profile data enhances interpretation accuracy
+            **Click these tabs above** to see real space weather data and simulations:
             
-            3. **🔬 Explore Analysis Modules**
-               - **Time/Frequency/Nonlinear**: Core HRV analysis
-               - **Circadian**: Simulate circadian rhythms with different light schedules
-               - **Space Weather**: Explore correlations with solar activity
-               - **SAFTE**: Model fatigue and performance
-               - **Population Norms**: Compare your metrics to reference populations
+            | Tab | What You Can Do |
+            |-----|-----------------|
+            | 🌍 **Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing |
+            | ☀️ **Circadian** | Simulate your circadian rhythm with different light schedules |
+            | 😴 **SAFTE/Fatigue** | Model how sleep debt affects cognitive performance |
+            | 🫀 **Biofeedback** | Try the paced breathing demo |
             
-            4. **📄 Export Results**
-               - Generate publication-ready reports
-               - Export data in multiple formats (CSV, JSON, PDF)
+            ---
             
-            #### Modules Available Without Data:
-            - ☀️ **Circadian Physiology** - Simulate circadian rhythms
-            - 🌍 **Space Weather** - View current solar activity
-            - 😴 **SAFTE Model** - Model fatigue scenarios
-            - ℹ️ **About** - Documentation and references
+            #### 📱 To Analyze Your Own HRV Data:
             
-            #### Need Help?
-            - Check the **About** tab for documentation
-            - Visit our [GitHub repository](https://github.com/strikerdlm/HRV) for issues and updates
+            1. **Import Data** using the sidebar:
+               - **Polar H10/H9**: Export from Polar Sensor Logger
+               - **Garmin**: Wellness data from Garmin Connect
+               - **Generic**: Any text file with RR intervals (one per line, ms)
+            
+            2. **Set Your Profile** (optional) for personalized interpretation
+            
+            3. **Explore All Analysis Tabs** - they'll populate with your data
+            
+            4. **Export Results** as publication-ready reports
+            
+            ---
+            
+            #### 💡 Pro Tips:
+            - Record 5-minute sessions, seated, at the same time daily
+            - Uncheck "Minimal mode" in sidebar for full analysis
+            - Enable "GPT-5.1 Interpretation" for doctoral-level insights
+            
+            📚 [GitHub Repository](https://github.com/strikerdlm/HRV) • 
+            📖 [Documentation](https://github.com/strikerdlm/HRV/blob/main/docs/Manual.md)
             """
         )
