@@ -1,9 +1,18 @@
 # WARP.md
 
-This file provides guidance to WARP (warp.dev) when working with code in this repository.
+This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when working with code in this repository.
+
+**Version**: 1.6.4 | **Last Updated**: 2025-12-02
 
 ## Overview
 HRV (Heart Rate Variability) Analysis application with Space Weather and NOAA Integration. This is a Streamlit-based scientific application that analyzes heart rate variability metrics from Polar RR-interval recordings and correlates them with space weather data from NOAA SWPC feeds, NASA DONKI, and SpaceWeatherLive snapshots. The application is designed for aerospace medicine and psychophysiology research.
+
+### Key Capabilities (v1.6.4)
+- **GPU Acceleration**: Optional CUDA-powered HRV computations (RTX 5070 supported)
+- **User Profiles**: Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS, VAS)
+- **Space Weather Impact Predictions**: Real-time arrival time calculations for solar events
+- **Performance Optimization**: Configurable CPU/memory presets with smart caching
+- **Persistent Logging**: File-based debug logs in `logs/` directory
 
 ## Running the Application
 
@@ -85,6 +94,36 @@ The application follows a modular architecture with strict separation of concern
    - Markdown report builder for exporting analysis results
    - Configurable export scope and formatting
 
+10. **`app/gpu_processing.py`** — GPU-accelerated HRV computations (NEW v1.6.4)
+    - CUDA-powered RMSSD, SDNN, pNN50, FFT-based PSD, band powers, Poincaré metrics
+    - Automatic GPU detection with CPU fallback
+    - Benchmark tool to compare GPU vs CPU performance
+    - Requires `cupy-cuda12x` (optional dependency)
+
+11. **`app/user_profile_tab.py`** — User profile management (NEW v1.6.4)
+    - Centralized biometric data (age, weight, height, BMI, VO2max)
+    - Clinical scale assessments (ESS, Samn-Perelli, KSS, VAS Fatigue/Pain)
+    - Persistent SQLite storage via `user_database.py`
+    - Historical assessment tracking with timestamps
+
+12. **`app/performance_utils.py`** — CPU performance optimization (NEW v1.6.3)
+    - Configurable presets (Fast, Balanced, Full Quality)
+    - Smart downsampling for large datasets
+    - Session-state caching with TTL
+    - DataFrame optimization utilities
+
+13. **`app/space_weather_impact.py`** — Solar event impact predictions (NEW v1.6.2)
+    - Exact arrival time calculations for photons, SEPs, plasma, geomagnetic storms
+    - Bogotá timezone display with countdown timers
+    - Biological effect descriptions and Polar H10 recommendations
+    - Severity classification (LOW/MODERATE/HIGH/SEVERE)
+
+14. **`app/logging_config.py`** — Centralized logging infrastructure (NEW v1.6.4)
+    - Rotating file logs in `logs/` directory (app.log, errors.log)
+    - 10 MB per file with 5 backup rotations
+    - Audit trail for user actions
+    - Console + file dual output
+
 ### Data Flow
 1. User uploads Polar RR-interval text files (one RR in ms per line, filename format `YYYY-MM-DD HH-MM-SS.txt` inferred as GMT-5)
 2. `hrv_core.clean_rr_intervals` detects artifacts via threshold-median or threshold-prev heuristics
@@ -117,6 +156,31 @@ This codebase adheres to strict deterministic, analyzable, reliable Python stand
 - **Context managers** for files, sockets, locks (no resource leaks)
 - **Small, cohesive functions** (~≤60 LOC, cyclomatic complexity ≤10)
 - **Zero-warnings policy**: ruff/pylint, Black/isort formatting, Bandit security checks
+
+### Logging & Error Tracking
+The application maintains persistent logs for debugging and audit trails:
+
+```
+logs/
+├── app.log        # Main application log (DEBUG level, 10 MB rotating)
+├── errors.log     # Error-only log (ERROR level, 10 MB rotating)
+└── session_*.log  # Per-session logs (optional)
+```
+
+**Log Configuration** (`app/logging_config.py`):
+- `setup_logging()` — Initialize file + console logging (call once at startup)
+- `get_logger(__name__)` — Get module-specific logger
+- `log_exception(logger, msg, exc)` — Consistent exception formatting
+- `log_user_action(action, details)` — Audit trail for user interactions
+
+**Viewing Logs**:
+```powershell
+# Tail the main log
+Get-Content logs/app.log -Tail 50 -Wait
+
+# View errors only
+Get-Content logs/errors.log
+```
 
 ### Testing
 - Test suite lives under `tests/`:
@@ -261,6 +325,16 @@ See [`docs/Agent_Rules.md`](docs/Agent_Rules.md) for the complete standard.
 
 ## Troubleshooting
 
+### Debugging with Logs
+**First step for any issue**: Check the log files:
+```powershell
+# View recent errors
+Get-Content logs/errors.log -Tail 100
+
+# Search for specific error
+Select-String -Path logs/app.log -Pattern "ERROR|EXCEPTION" -Context 3
+```
+
 ### Streamlit hangs on Windows shutdown
 The app includes Windows console safety workarounds (Colorama fix) in `app/app.py`. If Streamlit still hangs, ensure `CLICOLOR=0` and `NO_COLOR=1` are set in environment.
 
@@ -268,6 +342,7 @@ The app includes Windows console safety workarounds (Colorama fix) in `app/app.p
 - Verify `OPENAI_API_KEY` in `.env`
 - Check OpenAI service status and API quota
 - Fallback interpretation disabled if key missing; app will skip GPT-5.1 report
+- Check `logs/app.log` for API response details
 
 ### NOAA feed fetch timeout
 - Default timeout is 10–15s; increase `REQUEST_TIMEOUT` in `noaa_space.py` if network is slow
@@ -279,10 +354,21 @@ The app includes Windows console safety workarounds (Colorama fix) in `app/app.p
 - Verify site is accessible: https://www.spaceweatherlive.com/
 - Increase timeout or retry logic in `spaceweatherlive_client.py`
 
+### GPU Acceleration Issues
+- **GPU not detected**: Verify CUDA installation: `nvidia-smi`
+- **CuPy import fails**: Install correct version: `pip install cupy-cuda12x`
+- **Out of memory**: Reduce batch size or disable GPU for large datasets
+- Check `logs/app.log` for GPU initialization messages
+
 ### Import errors
 - Ensure all dependencies in `requirements.txt` are installed
 - Use Python 3.10+ (some type hints and syntax require 3.10)
 - Activate virtual environment if using `.venv`
+
+### Database/Profile Issues
+- SQLite database stored in `app/hrv_users.db`
+- Backup before schema changes: `copy app\hrv_users.db app\hrv_users.db.bak`
+- Reset profiles: Delete `app/hrv_users.db` (data will be lost)
 
 ## Documentation
 - **User Manual**: `docs/Manual.md` — comprehensive guide for clinicians/researchers
@@ -290,3 +376,47 @@ The app includes Windows console safety workarounds (Colorama fix) in `app/app.p
 - **Scientific Discussion**: `docs/Scientific_Discussion_Parasympathetic_Analysis.md`
 - **CHANGELOG**: `CHANGELOG.md` — version history and feature additions
 - **README**: `README.md` — quick start and high-level features
+- **Agent Rules**: `.cursor/rules/agent.mdc` — AI agent development guidelines
+
+## Project Structure (Updated v1.6.4)
+```
+HRV/
+├── app/
+│   ├── app.py                    # Main Streamlit application
+│   ├── hrv_core.py               # Core HRV computations
+│   ├── noaa_space.py             # NOAA data ingestion
+│   ├── gpu_processing.py         # GPU-accelerated computations (NEW)
+│   ├── user_profile_tab.py       # User profile management (NEW)
+│   ├── user_database.py          # SQLite persistence (NEW)
+│   ├── performance_utils.py      # CPU optimization utilities (NEW)
+│   ├── space_weather_impact.py   # Solar event predictions (NEW)
+│   ├── logging_config.py         # Centralized logging (NEW)
+│   └── data_cache/               # Cached API responses
+├── logs/                         # Application logs (NEW)
+│   ├── app.log                   # Main log (rotating)
+│   └── errors.log                # Error-only log
+├── tests/                        # pytest test suite
+├── docs/                         # Documentation
+├── requirements.txt              # Dependencies
+├── WARP.md                       # This file
+└── .cursor/rules/agent.mdc       # AI agent rules
+```
+
+## Maintenance Checklist
+When modifying this codebase:
+
+1. **Before Changes**:
+   - Read `WARP.md` and `docs/Manual.md` for context
+   - Check `logs/errors.log` for existing issues
+   - Run `pytest` to verify baseline
+
+2. **During Development**:
+   - Follow Global Python Rules (see `.cursor/rules/agent.mdc`)
+   - Add type hints and docstrings
+   - Use `get_logger(__name__)` for logging
+
+3. **After Changes**:
+   - Update `CHANGELOG.md` with user-visible changes
+   - Update `docs/Manual.md` if feature affects users
+   - Run linters: `ruff check app/`
+   - Check for new errors in `logs/errors.log`
