@@ -258,16 +258,15 @@ class MultiUserSessionManager:
         st.session_state[SESSION_KEY_USER_CACHE] = {}
 
 
-# Singleton instance
-_manager: Optional[MultiUserSessionManager] = None
-
-
+# Singleton instance using Streamlit cache_resource for performance
+@st.cache_resource
 def get_multi_user_manager() -> MultiUserSessionManager:
-    """Get the singleton multi-user session manager."""
-    global _manager
-    if _manager is None:
-        _manager = MultiUserSessionManager()
-    return _manager
+    """Get the singleton multi-user session manager (cached).
+    
+    Uses @st.cache_resource for efficient singleton pattern that survives
+    Streamlit reruns without re-initialization overhead.
+    """
+    return MultiUserSessionManager()
 
 
 def render_user_switcher() -> None:
