@@ -560,7 +560,7 @@ Reference: Tanaka H, et al. *J Am Coll Cardiol.* 2001;37(1):153-156.
 
 ### Exploration Medical Record (NASA isolation missions)
 
-Mission Control - Flight Surgeon now includes an exploration medical record aligned with NASA’s Medical Information Systems & Tools (MIST) architecture and the Exploration Medical Capability (ExMC) guidance for Earth-independent care.\u301023\u2020L1-L5\u301124\u2020L1-L4\u3011 Every entry is stored in the `medical_history` table (JSON payload) so longitudinal and group-level statistics can be performed later. Key fields:
+Mission Control - Flight Surgeon now includes an exploration medical record aligned with NASA's Medical Information Systems & Tools (MIST) architecture and the Exploration Medical Capability (ExMC) guidance for Earth-independent care. Every entry is stored in the `medical_history` table (JSON payload) so longitudinal and group-level statistics can be performed later. Key fields:
 
 | Field | Description | Units |
 |-------|-------------|-------|
@@ -589,7 +589,7 @@ If a crew member uses Polar Flow, the NASA Nutrition calculator can import the l
    - `POLAR_ACCESSLINK_USER_ID`
 3. Restart the app. The calculator exposes a **Use Polar value** toggle to override the manual VO₂max entry.
 
-Polar AccessLink provides access to body metrics, exercise intensity, and cardiorespiratory fitness data that have already been uploaded to Polar Flow’s cloud infrastructure.\u301025\u2020L1-L3\u3011
+Polar AccessLink provides access to body metrics, exercise intensity, and cardiorespiratory fitness data that have already been uploaded to Polar Flow's cloud infrastructure.
 
 ### Validated Clinical Scales
 
@@ -2175,9 +2175,15 @@ Solutions:
 
 24. NASA Ames Research Center. (2024). *A Clinical Decision Support System for Earth-independent Medical Operations.* https://www.nasa.gov/centers-and-facilities/ames/ames-science/ames-space-biosciences/a-clinical-decision-support-system-for-earth-independent-medical-operations/
 
+25. NASA Human Research Program. (2023). *Exploration Medical Capability - Advancing Medical System Design and Risk-Informed Decision Making for Deep Space Exploration.* NASA Technical Reports Server. https://ntrs.nasa.gov/citations/20230015831
+
+26. NASA Glenn Research Center. (2024). *Exploration Medical Technologies.* https://www.nasa.gov/glenn/glenn-expertise-space-exploration/human-health-performance/exploration-medical-technologies/
+
 ### API Integrations
 
-25. Developer Tech News. (2014). *Polar opens its API for developers to access health data.* https://www.developer-tech.com/news/polar-opens-its-api-developers-access-user-health-data/
+27. Polar Electro. (2024). *Polar AccessLink API Documentation.* https://www.polar.com/accesslink-api/
+
+28. Developer Tech News. (2014). *Polar opens its API for developers to access health data.* https://www.developer-tech.com/news/polar-opens-its-api-developers-access-user-health-data/
 
 ---
 
