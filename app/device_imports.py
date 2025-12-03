@@ -1,5 +1,5 @@
 """
-Device-specific data import interfaces for HRV Analysis Suite.
+Device-specific data import interfaces for Mission Control - Flight Surgeon.
 
 This module provides the PRIMARY import interface for physiological data:
 - Polar H10/H9 RR interval files (main import)
