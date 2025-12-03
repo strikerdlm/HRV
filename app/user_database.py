@@ -8,6 +8,12 @@ Provides SQLite-based persistent storage for multiple users with:
 - Longitudinal tracking and repeated measures
 - Statistical analysis capabilities
 
+Performance optimizations:
+- Connection pooling with persistent connection
+- WAL mode for concurrent reads/writes
+- Lazy schema initialization (once per session)
+- Optimized pragmas for responsiveness
+
 Author: Dr. Diego Leonel Malpica Hincapié, MD
 """
 
@@ -18,6 +24,7 @@ import json
 import logging
 import os
 import sqlite3
+import threading
 import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass, field, asdict
@@ -33,6 +40,9 @@ _LOGGER = logging.getLogger(__name__)
 # Database configuration
 DEFAULT_DB_NAME = "hrv_users.db"
 SCHEMA_VERSION = 1
+
+# Thread-local storage for connection reuse
+_thread_local = threading.local()
 
 
 def get_database_path() -> Path:
@@ -229,7 +239,18 @@ class HRVMeasurement:
 # ---------------------------------------------------------------------------
 
 class UserDatabase:
-    """SQLite database manager for multi-user HRV data."""
+    """SQLite database manager for multi-user HRV data.
+    
+    Performance optimizations:
+    - Persistent connection per thread (connection reuse)
+    - WAL mode for concurrent access
+    - Optimized pragmas for responsiveness
+    - Lazy schema initialization (only once per database file)
+    """
+    
+    # Class-level tracking of initialized databases
+    _initialized_dbs: set[str] = set()
+    _init_lock = threading.Lock()
     
     def __init__(self, db_path: Optional[Path] = None) -> None:
         """Initialize database connection.
@@ -238,26 +259,76 @@ class UserDatabase:
             db_path: Path to database file. Uses default if None.
         """
         self.db_path = db_path or get_database_path()
-        self._init_database()
+        self._db_path_str = str(self.db_path)
+        
+        # Only initialize schema once per database file (thread-safe)
+        with UserDatabase._init_lock:
+            if self._db_path_str not in UserDatabase._initialized_dbs:
+                self._init_database()
+                UserDatabase._initialized_dbs.add(self._db_path_str)
+    
+    def _get_persistent_connection(self) -> sqlite3.Connection:
+        """Get or create a persistent connection for the current thread.
+        
+        Returns:
+            SQLite connection with optimized settings.
+        """
+        # Check if we have a valid connection for this thread and database
+        conn_key = f"conn_{id(self)}"
+        conn = getattr(_thread_local, conn_key, None)
+        
+        if conn is not None:
+            try:
+                # Test if connection is still valid
+                conn.execute("SELECT 1")
+                return conn
+            except sqlite3.Error:
+                # Connection is broken, create new one
+                conn = None
+        
+        # Create new connection with optimized settings
+        conn = sqlite3.connect(
+            self._db_path_str,
+            check_same_thread=False,
+            timeout=30.0,
+        )
+        conn.row_factory = sqlite3.Row
+        
+        # Apply performance pragmas
+        conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for concurrency
+        conn.execute("PRAGMA synchronous=NORMAL")  # Good balance of safety/speed
+        conn.execute("PRAGMA cache_size=-64000")  # 64MB cache
+        conn.execute("PRAGMA temp_store=MEMORY")  # Temp tables in memory
+        conn.execute("PRAGMA mmap_size=268435456")  # 256MB memory-mapped I/O
+        
+        setattr(_thread_local, conn_key, conn)
+        return conn
     
     @contextmanager
     def _get_connection(self) -> Generator[sqlite3.Connection, None, None]:
-        """Context manager for database connections."""
-        conn = sqlite3.connect(str(self.db_path))
-        conn.row_factory = sqlite3.Row
+        """Context manager for database operations using persistent connection.
+        
+        Uses connection reuse for performance while maintaining transaction safety.
+        """
+        conn = self._get_persistent_connection()
         try:
             yield conn
             conn.commit()
         except Exception:
             conn.rollback()
             raise
-        finally:
-            conn.close()
     
     def _init_database(self) -> None:
-        """Initialize database schema."""
-        with self._get_connection() as conn:
+        """Initialize database schema (called once per database file)."""
+        # Use a direct connection for initialization to avoid recursion
+        conn = sqlite3.connect(self._db_path_str, timeout=30.0)
+        conn.row_factory = sqlite3.Row
+        
+        try:
             cursor = conn.cursor()
+            
+            # Apply WAL mode immediately for better concurrent access
+            cursor.execute("PRAGMA journal_mode=WAL")
             
             # Users table
             cursor.execute("""
@@ -355,6 +426,11 @@ class UserDatabase:
                 CREATE INDEX IF NOT EXISTS idx_scales_user_date 
                 ON clinical_scales(user_id, assessment_date)
             """)
+            # Explicit index on username for faster lookups during registration
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_users_username
+                ON users(username)
+            """)
             
             # Schema version tracking
             cursor.execute("""
@@ -366,6 +442,11 @@ class UserDatabase:
             cursor.execute("""
                 INSERT OR REPLACE INTO schema_info (key, value) VALUES ('version', ?)
             """, (str(SCHEMA_VERSION),))
+            
+            conn.commit()
+            _LOGGER.info("Database schema initialized: %s", self._db_path_str)
+        finally:
+            conn.close()
     
     # -----------------------------------------------------------------------
     # User Management
@@ -413,6 +494,69 @@ class UserDatabase:
         
         _LOGGER.info("Created user: %s (%s)", profile.username, profile.user_id)
         return profile.user_id
+    
+    def create_user_if_not_exists(
+        self,
+        profile: UserProfile,
+        password: Optional[str] = None,
+    ) -> Tuple[str, bool]:
+        """Create a new user only if the username doesn't exist.
+        
+        This is an optimized method that checks and creates in a single transaction,
+        avoiding the overhead of separate database calls during registration.
+        
+        Args:
+            profile: User profile data.
+            password: Optional password for authentication.
+            
+        Returns:
+            Tuple of (user_id, created) where created is True if new user was made,
+            False if username already existed.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        profile.user_id = profile.user_id or str(uuid.uuid4())
+        profile.created_at = now
+        profile.updated_at = now
+        
+        password_hash = None
+        if password:
+            password_hash = hashlib.sha256(password.encode()).hexdigest()
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            
+            # Check if username exists (single query)
+            cursor.execute(
+                "SELECT user_id FROM users WHERE username = ?",
+                (profile.username,)
+            )
+            existing = cursor.fetchone()
+            
+            if existing:
+                return existing["user_id"], False
+            
+            # Insert new user (same transaction)
+            cursor.execute("""
+                INSERT INTO users (
+                    user_id, username, password_hash, full_name, email,
+                    date_of_birth, sex, height_cm, weight_kg, resting_hr_bpm,
+                    max_hr_bpm, vo2max_ml_kg_min, occupation, activity_level,
+                    smoking_status, alcohol_use, caffeine_intake_mg,
+                    medical_conditions, medications, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                profile.user_id, profile.username, password_hash, profile.full_name,
+                profile.email, profile.date_of_birth, profile.sex, profile.height_cm,
+                profile.weight_kg, profile.resting_hr_bpm, profile.max_hr_bpm,
+                profile.vo2max_ml_kg_min, profile.occupation, profile.activity_level,
+                profile.smoking_status, profile.alcohol_use, profile.caffeine_intake_mg,
+                json.dumps(profile.medical_conditions),
+                json.dumps(profile.medications),
+                profile.created_at, profile.updated_at
+            ))
+        
+        _LOGGER.info("Created user: %s (%s)", profile.username, profile.user_id)
+        return profile.user_id, True
     
     def get_user(self, user_id: str) -> Optional[UserProfile]:
         """Get user profile by ID."""
