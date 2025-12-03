@@ -22,6 +22,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Space Weather Tab**: HRV-Kp correlation now requires explicit button click instead of auto-compute
   - Weather covariates checkbox defaults to unchecked for faster tab loading
   - `fetch_open_meteo_hourly()` cache decorator now has `show_spinner=False`
+- **Fast Mode Enabled by Default**: All performance settings now default to fastest options
+  - Minimal mode ON by default (skip heavy plots, limit datasets)
+  - Skip Gauges, Frequency overlay, Poincaré, Spectrogram all ON by default
+  - Max windows reduced from 1500 to 500
+  - Step size increased from 1min to 2min for fewer windows
+  - Performance preset defaults to "Fast (Low CPU)" instead of "Balanced"
+  - Max plot points reduced from 2000 to 1000
+  - Max dataframe rows reduced from 500 to 200
 
 ### Fixed
 - **FutureWarning**: Fixed deprecated `pd.to_numeric(errors='ignore')` in SWPC and DONKI data fetchers
