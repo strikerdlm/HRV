@@ -1,4 +1,4 @@
-# HRV Analysis Suite - Python Dependencies
+# Mission Control - Flight Surgeon - Python Dependencies
 # Last updated: 2025-12-02
 # Version: 1.6.4
 
