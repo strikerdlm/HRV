@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.6.4  
-**Last Updated:** 2025-12-02
+**Version:** 1.7.0  
+**Last Updated:** 2025-12-03
 
 ---
 
@@ -2109,6 +2109,32 @@ Solutions:
 12. Hursh, S. R., Redmond, D. P., Johnson, M. L., et al. (2004). Fatigue models for applied research in warfighting. *Aviation, Space, and Environmental Medicine, 75*(3 Suppl), A44-A53.
 
 13. Van Dongen, H. P., Maislin, G., Mullington, J. M., & Dinges, D. F. (2003). The cumulative cost of additional wakefulness: Dose-response effects on neurobehavioral functions and sleep physiology. *Sleep, 26*(2), 117-126.
+
+### Basal Metabolic Rate & Nutrition
+
+14. Mifflin, M. D., St Jeor, S. T., Hill, L. A., Scott, B. J., Daugherty, S. A., & Koh, Y. O. (1990). A new predictive equation for resting energy expenditure in healthy individuals. *American Journal of Clinical Nutrition, 51*(2), 241-247. https://doi.org/10.1093/ajcn/51.2.241
+
+15. Harris, J. A., & Benedict, F. G. (1918). A biometric study of human basal metabolism. *Proceedings of the National Academy of Sciences, 4*(12), 370-373.
+
+16. NASA Johnson Space Center. (2020). *Nutritional Requirements for Exploration Missions up to 365 days* (JSC67378). Houston, TX: NASA.
+
+17. Scott, J. P. R., Green, D. A., Weerts, G., & Cheuvront, S. N. (2020). Body size and its implications upon resource utilization during human space exploration missions. *Scientific Reports, 10*, 13836. https://doi.org/10.1038/s41598-020-70054-6
+
+### Clinical Scales (Validated Translations)
+
+18. Chica-Urzola, H. L., Escobar-Córdoba, F., & Eslava-Schmalbach, J. (2007). Validación de la Escala de Somnolencia de Epworth. *Revista de Salud Pública, 9*(4), 558-567. https://doi.org/10.1590/S0124-00642007000400008
+
+19. Velásquez-Paz, J. A., Torres, J. C., Valencia-Flores, M., et al. (2022). Validation of the Colombian version of the Karolinska sleepiness scale. *Sleep Science, 15*(Spec 1), 190-196. https://doi.org/10.5935/1984-0063.20220006
+
+20. Samn, S. W., & Perelli, L. P. (1982). *Estimating aircrew fatigue: A technique with implications to airlift operations* (USAF-SAM-TR-82-21). Brooks Air Force Base, TX: USAF School of Aerospace Medicine.
+
+### Kidney Function (eGFR)
+
+21. Inker, L. A., Eneanya, N. D., Coresh, J., et al. (2021). New creatinine- and cystatin C-based equations to estimate GFR without race. *New England Journal of Medicine, 385*(19), 1737-1749. https://doi.org/10.1056/NEJMoa2102953
+
+### Body Composition
+
+22. Hodgdon, J. A., & Beckett, M. B. (1984). *Prediction of percent body fat for U.S. Navy men from body circumferences and height* (NHRC-84-11). San Diego, CA: Naval Health Research Center.
 
 ---
 
