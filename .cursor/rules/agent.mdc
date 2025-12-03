@@ -99,6 +99,15 @@ This document establishes the authoritative rules for AI agents (Warp, Cursor, M
 * **Test-Driven**: New core logic should have `pytest` cases (prefer `hypothesis` for algorithmic code).
 * **Coverage**: Aim for ≥90% coverage on critical modules (`hrv_core.py`, `noaa_space.py`).
 * **Security**: No secrets in code. Use `.env`. Validate all external inputs (NOAA feeds, user files).
+* **Code Style**: Use the same code style as the existing code.
+* **virtual environment**: Use the hrv-py312 via conda activate hrv-py312
+* **python version**: Use python 3.12
+* **dependencies**: Use the dependencies in the `requirements.txt` file
+* **testing**: Use the testing framework in the `tests` folder
+* **documentation**: Use the documentation in the `docs` folder
+* **logging**: Use the logging in the `logging_config.py` file
+* **error tracking**: Use the error tracking in the `error_tracking.py` file
+* **security**: Use the security in the `security.py`
 
 ## 6. Logging & Error Tracking
 
