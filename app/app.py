@@ -3539,7 +3539,7 @@ def main() -> None:
     if WELCOME_HEADER_AVAILABLE:
         render_welcome_header()
     else:
-        st.title("🧬 Physiological Laboratory")
+        st.title("🧬 Mission Control - Flight Surgeon")
         st.caption("Dr. Diego L. Malpica, MD — Aerospace Medicine Specialist")
         st.caption("Contributing to AsterPhysiology Research Initiative")
     
