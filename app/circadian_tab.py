@@ -1,5 +1,5 @@
 """
-Circadian Physiology Tab for HRV Analysis Suite.
+Circadian Physiology Tab for Mission Control - Flight Surgeon.
 
 Provides interactive simulation and visualization of circadian rhythms using
 mathematical models from the circadian research literature.
