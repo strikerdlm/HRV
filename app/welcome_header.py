@@ -254,26 +254,27 @@ def render_quick_access_grid(has_data: bool = False) -> None:
             if mod.get("highlight") and not has_data:
                 border_glow = f"box-shadow: 0 0 10px {mod['color']}55;"
             
+            # Build card style as single line to avoid Streamlit markdown parsing issues
+            card_style = (
+                f"background: linear-gradient(135deg, {mod['color']}22 0%, {mod['color']}11 100%); "
+                f"border: 1px solid {mod['color']}44; "
+                f"border-radius: 10px; "
+                f"padding: 0.75rem; "
+                f"margin-bottom: 0.5rem; "
+                f"min-height: 95px; "
+                f"opacity: {opacity}; "
+                f"{border_glow}"
+            )
+            
             st.markdown(
-                f"""
-                <div style="
-                    background: linear-gradient(135deg, {mod['color']}22 0%, {mod['color']}11 100%);
-                    border: 1px solid {mod['color']}44;
-                    border-radius: 10px;
-                    padding: 0.75rem;
-                    margin-bottom: 0.5rem;
-                    min-height: 95px;
-                    opacity: {opacity};
-                    {border_glow}
-                ">
-                    <div style="font-size: 1.4rem; margin-bottom: 0.2rem;">{mod['icon']}</div>
-                    <div style="color: {mod['color']}; font-weight: 600; font-size: 0.85rem;">
-                        {mod['name']} 
-                        <span style="color: {status_color}; font-size: 0.7rem;">{status}</span>
-                    </div>
-                    <div style="color: #888; font-size: 0.7rem; line-height: 1.3;">{mod['desc']}</div>
-                </div>
-                """,
+                f'<div style="{card_style}">'
+                f'<div style="font-size: 1.4rem; margin-bottom: 0.2rem;">{mod["icon"]}</div>'
+                f'<div style="color: {mod["color"]}; font-weight: 600; font-size: 0.85rem;">'
+                f'{mod["name"]} '
+                f'<span style="color: {status_color}; font-size: 0.7rem;">{status}</span>'
+                f'</div>'
+                f'<div style="color: #888; font-size: 0.7rem; line-height: 1.3;">{mod["desc"]}</div>'
+                f'</div>',
                 unsafe_allow_html=True,
             )
 
