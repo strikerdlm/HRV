@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.1] - 2025-12-03
+
+### Changed
+- **Performance Optimizations**: Major improvements to app responsiveness
+  - `get_database()` now uses `@st.cache_resource` for singleton caching
+  - Added `get_cached_user_list()` with 30-second TTL to avoid DB queries on rerun
+  - User login dropdown uses cached data; full profile fetched only on selection
+  - Multi-user session manager now cached with `@st.cache_resource`
+  - i18n translation functions optimized with fast-path dictionary lookups
+  - Added `@st.fragment` decorator to clinical assessment forms (ESS, KSS, Samn-Perelli)
+  - NASA Nutrition Calculator and Medical Record forms now use partial reruns
+  - Loading spinners added for assessment history and HRV data queries
+
+### Fixed
+- Reduced unnecessary full page reruns when interacting with form widgets
+- Eliminated repeated database initialization on every Streamlit rerun
+- User list queries no longer block UI during page refresh
+
+### Requirements
+- Streamlit minimum version updated to 1.37 (required for `@st.fragment` support)
+
+---
+
 ## [1.7.0] - 2025-12-03
 
 ### Added
