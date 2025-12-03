@@ -5,7 +5,7 @@ This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when
 **Version**: 1.7.0 | **Last Updated**: 2025-12-03
 
 ## Overview
-HRV (Heart Rate Variability) Analysis application with Space Weather and NOAA Integration. This is a Streamlit-based scientific application that analyzes heart rate variability metrics from Polar RR-interval recordings and correlates them with space weather data from NOAA SWPC feeds, NASA DONKI, and SpaceWeatherLive snapshots. The application is designed for aerospace medicine and psychophysiology research, with astronaut-grade physiological assessment capabilities.
+Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations console with Space Weather and NOAA integration. It analyzes Polar RR-interval recordings, correlates HRV with NOAA SWPC feeds, NASA DONKI events, and SpaceWeatherLive snapshots, and now anchors astronaut-grade physiological assessments plus exploration medical records for isolation missions.
 
 ### Key Capabilities (v1.7.0)
 - **Multi-Language Support**: English + Spanish (Colombian-validated clinical scales)
@@ -25,21 +25,21 @@ HRV (Heart Rate Variability) Analysis application with Space Weather and NOAA In
 ### Current Sprint (December 2025)
 
 #### Phase 1: UI Visualization (Priority: HIGH)
-- [ ] **Clinical Profile UI**: Render all clinical_profile.py features in user_profile_tab.py
+- [x] **Clinical Profile UI**: Render all clinical_profile.py features in user_profile_tab.py
   - Body composition entry form with missing data indicators
   - Medical history questionnaire
   - Laboratory data entry (CBC, Chemistry, Urinalysis)
   - NASA nutrition calculator with real-time results
   - BMR/TDEE display with activity adjustments
-- [ ] **Data Completeness Indicators**: Visual cues for missing required fields
+- [x] **Data Completeness Indicators**: Visual cues for missing required fields
 - [ ] **Performance Optimization**: Batch form submissions, debounced updates
 
 #### Phase 2: Multi-User Session Management (Priority: HIGH)
-- [ ] **Concurrent Users**: Support 1-7 users open simultaneously
+- [x] **Concurrent Users**: Support 1-7 users open simultaneously
   - User tabs/cards showing active profiles
   - Quick-switch between users
   - Per-user calculation caching
-- [ ] **User Context Propagation**: All tabs receive active user settings
+- [x] **User Context Propagation**: All tabs receive active user settings
   - Circadian model uses user's chronotype, location, occupation
   - SAFTE model uses user's sleep history
   - HRV analysis adjusted for user's baseline
@@ -49,6 +49,11 @@ HRV (Heart Rate Variability) Analysis application with Space Weather and NOAA In
 - [ ] **Move Settings to Tabs**: Circadian, SAFTE settings move from sidebar to respective tabs
 - [ ] **Tab-Specific Settings Persistence**: Save per-tab configurations per user
 - [ ] **Cross-Tab Correlation**: Enable tabs to share computed results
+
+#### Phase 4: Integrations & Analytics (Priority: MEDIUM)
+- [ ] **Polar AccessLink Automation**: Persist OAuth tokens securely and sync VO2max history
+- [ ] **Exploration Medical Analytics**: Surface med-record aggregates (radiation, EVA, stress) in dashboards
+- [ ] **Group Summaries**: Begin exposing cohort-level med/HRV stats in export tab
 
 ### Planned Features (Q1 2026)
 
