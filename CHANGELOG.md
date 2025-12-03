@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.7.0] - 2025-12-03
 
 ### Added
+- **Clinical Profile UI Tab**: New "🏥 Clinical Profile" tab in User Profile
+  - NASA Nutrition Calculator with real-time BMR/TDEE/hydration calculations
+  - Body composition entry form (body fat%, lean mass, circumferences)
+  - Medical history summary view
+  - Profile completeness indicators with missing field alerts
+  - Exercise type selection with configurable duration (default 2 hours)
+
+- **Multi-User Session Management**: Support for up to 7 concurrent users
+  - New module: `app/multi_user_session.py`
+  - User session tracking with quick-switch capability
+  - Per-user calculation caching
+  - Sessions tab in User Profile for management
+  - `get_active_user_context()` for tabs to access user settings
+  - `get_all_active_users()` for group analysis preparation
+
+- **Multi-User & Longitudinal Study Roadmap** (see WARP.md):
+  - Baseline + 22 measurements longitudinal tracking (planned)
+  - Intra-subject analysis: within-individual change detection (planned)
+  - Inter-subject analysis: between-group comparisons (planned)
+  - Group × Time interaction effects (planned)
+
 - **Spanish Language Support (i18n)**: Full bilingual support for clinical assessments
   - Colombian-validated translations for clinical scales (ESE-VC, KSS)
   - Escala de Somnolencia de Epworth (Chica-Urzola et al., 2007)
