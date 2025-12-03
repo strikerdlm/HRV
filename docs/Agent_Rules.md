@@ -1,6 +1,6 @@
 # AI Agent & Development Rules
 
-This document establishes the authoritative rules for AI agents (Warp, Cursor, MCP) and developers working on the HRV Analysis Suite. These rules ensure code quality, scientific rigor, and consistent behavior.
+This document establishes the authoritative rules for AI agents (Warp, Cursor, MCP) and developers working on the Mission Control - Flight Surgeon. These rules ensure code quality, scientific rigor, and consistent behavior.
 
 ## 1. Global Python Rules (Deterministic & Analyzable)
 *Apply these rules to all Python code generated or modified.*
