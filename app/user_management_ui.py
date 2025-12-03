@@ -218,11 +218,6 @@ def render_profile_creator() -> None:
             
             db = get_database()
             
-            # Check if username exists
-            if db.get_user_by_username(username):
-                st.error(f"Username '{username}' already exists!")
-                return
-            
             # Create profile
             profile = UserProfile(
                 user_id=str(uuid.uuid4()),
@@ -246,7 +241,13 @@ def render_profile_creator() -> None:
             )
             
             try:
-                db.create_user(profile)
+                # Optimized: check and create in single transaction
+                user_id, created = db.create_user_if_not_exists(profile)
+                
+                if not created:
+                    st.error(f"Username '{username}' already exists!")
+                    return
+                
                 set_current_user(profile)
                 st.session_state["show_profile_creator"] = False
                 st.success(f"Profile created for {full_name}!")
