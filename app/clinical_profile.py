@@ -118,10 +118,10 @@ def fetch_polar_vo2max(
 ) -> Optional[float]:
     """Fetch VO2max (cardiorespiratory fitness) from Polar AccessLink API.
 
-    Polar’s AccessLink API exposes exercise intensity, body metrics, and
-    cardiorespiratory fitness data collected in Polar Flow (see Developer Tech
-    News, 2014).\u30100\u2020L1-L3\u3011 The API requires OAuth credentials
-    provisioned in the developer portal.
+    Polar's AccessLink API exposes exercise intensity, body metrics, and
+    cardiorespiratory fitness data collected in Polar Flow.
+    See: https://www.polar.com/accesslink-api/
+    The API requires OAuth credentials provisioned in the developer portal.
 
     Args:
         access_token: OAuth access token (defaults to POLAR_ACCESSLINK_TOKEN env).
@@ -774,7 +774,8 @@ def calculate_exercise_energy_expenditure(
     adjusted estimate that scales effort according to the participant's
     VO2max. Astronauts with higher aerobic capacity expend noticeably more
     energy for the same scheduled countermeasure block, so planning must
-    compensate accordingly (NASA Exploration Medical Technologies, 2023).\u30101\u2020L1-L5\u3011
+    compensate accordingly (NASA Glenn Exploration Medical Technologies).
+    See: https://www.nasa.gov/glenn/glenn-expertise-space-exploration/human-health-performance/exploration-medical-technologies/
     
     Args:
         weight_kg: Body weight in kilograms
