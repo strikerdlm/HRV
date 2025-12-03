@@ -1,5 +1,5 @@
 """
-Internationalization (i18n) module for HRV Analysis Suite.
+Internationalization (i18n) module for Mission Control - Flight Surgeon.
 
 Provides multilingual support starting with English and Spanish (Colombian).
 Clinical scales use validated translations where available:
