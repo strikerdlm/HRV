@@ -24,7 +24,7 @@ import os
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Final, Iterable, Mapping
+from typing import Any, Final, Iterable, Mapping, Optional
 
 import pandas as pd
 
