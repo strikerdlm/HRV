@@ -1,5 +1,5 @@
 """
-Comprehensive Clinical Profile Module for HRV Analysis Suite.
+Comprehensive Clinical Profile Module for Mission Control - Flight Surgeon.
 
 Provides astronaut-grade physiological assessment including:
 - Extended anthropometrics (body composition)
@@ -22,10 +22,13 @@ from __future__ import annotations
 
 import logging
 import math
+import os
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, date, timezone
 from enum import Enum
 from typing import Any, Dict, Final, List, Optional, Tuple
+
+import requests
 
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
@@ -92,6 +95,90 @@ EXERCISE_METS: Dict[str, float] = {
     "astronaut_cevis": 7.0,  # Cycle Ergometer with Vibration Isolation
     "astronaut_t2": 8.0,  # Treadmill (T2)
 }
+
+POLAR_ACCESSLINK_BASE_URL: Final[str] = "https://www.polaraccesslink.com/v3"
+VO2_REFERENCE_ML_KG_MIN: Final[float] = 45.0  # Average trained adult
+VO2_ADJUSTMENT_MIN: Final[float] = 0.65  # Floor multiplier for low fitness
+VO2_ADJUSTMENT_MAX: Final[float] = 1.35  # Ceiling multiplier for elite fitness
+
+
+def polar_accesslink_available() -> bool:
+    """Return True if environment variables for Polar AccessLink are configured."""
+    return bool(
+        os.getenv("POLAR_ACCESSLINK_TOKEN")
+        and os.getenv("POLAR_ACCESSLINK_USER_ID")
+    )
+
+
+def fetch_polar_vo2max(
+    *,
+    access_token: Optional[str] = None,
+    user_id: Optional[str] = None,
+    timeout: float = 10.0,
+) -> Optional[float]:
+    """Fetch VO2max (cardiorespiratory fitness) from Polar AccessLink API.
+
+    Polar’s AccessLink API exposes exercise intensity, body metrics, and
+    cardiorespiratory fitness data collected in Polar Flow (see Developer Tech
+    News, 2014).\u30100\u2020L1-L3\u3011 The API requires OAuth credentials
+    provisioned in the developer portal.
+
+    Args:
+        access_token: OAuth access token (defaults to POLAR_ACCESSLINK_TOKEN env).
+        user_id: Polar Flow user ID (defaults to POLAR_ACCESSLINK_USER_ID env).
+        timeout: HTTP timeout in seconds.
+
+    Returns:
+        VO2max in mL·kg⁻¹·min⁻¹ if available, otherwise None.
+    """
+    token = (access_token or os.getenv("POLAR_ACCESSLINK_TOKEN", "")).strip()
+    polar_user_id = (user_id or os.getenv("POLAR_ACCESSLINK_USER_ID", "")).strip()
+    if not token or not polar_user_id:
+        return None
+    url = f"{POLAR_ACCESSLINK_BASE_URL}/users/{polar_user_id}/cardiorespiratory-fitness"
+    headers = {
+        "Authorization": f"Bearer {token}",
+        "Accept": "application/json",
+    }
+    try:
+        response = requests.get(url, headers=headers, timeout=timeout)
+        if response.status_code == 404:
+            return None
+        response.raise_for_status()
+        payload = response.json()
+    except (requests.RequestException, ValueError) as exc:
+        _LOGGER.warning("Polar AccessLink VO2max fetch failed: %s", exc)
+        return None
+    # API payloads vary; search for the first numeric VO2 field.
+    candidate_keys = ("vo2max", "vo2_max", "cardiorespiratory_fitness")
+    for key in candidate_keys:
+        value = payload.get(key)
+        if isinstance(value, (int, float)):
+            return float(value)
+    # Some responses embed data in lists/dicts
+    if isinstance(payload, dict):
+        for value in payload.values():
+            if isinstance(value, (int, float)):
+                return float(value)
+            if isinstance(value, dict):
+                for key in candidate_keys:
+                    nested = value.get(key)
+                    if isinstance(nested, (int, float)):
+                        return float(nested)
+    return None
+
+
+def adjust_met_for_vo2(
+    met_value: float,
+    vo2max_ml_kg_min: Optional[float],
+) -> Tuple[float, float]:
+    """Adjust MET value by VO2max-derived fitness factor."""
+    if vo2max_ml_kg_min is None or vo2max_ml_kg_min <= 0:
+        return met_value, 1.0
+    factor = vo2max_ml_kg_min / VO2_REFERENCE_ML_KG_MIN
+    factor = max(VO2_ADJUSTMENT_MIN, min(VO2_ADJUSTMENT_MAX, factor))
+    adjusted_met = max(1.0, met_value * factor)
+    return adjusted_met, factor
 
 
 # ---------------------------------------------------------------------------
@@ -674,27 +761,58 @@ def calculate_tdee(
     return bmr * pal
 
 
-def calculate_exercise_calories(
+def calculate_exercise_energy_expenditure(
     weight_kg: float,
     exercise_type: str,
     duration_minutes: float,
-) -> float:
+    vo2max_ml_kg_min: Optional[float] = None,
+) -> Dict[str, float]:
     """
-    Calculate calories burned during exercise using MET values.
+    Calculate exercise energy expenditure with VO2max compensation.
     
-    Formula: Calories = MET × weight(kg) × duration(hours)
+    This function returns both the baseline MET-derived calories and an
+    adjusted estimate that scales effort according to the participant's
+    VO2max. Astronauts with higher aerobic capacity expend noticeably more
+    energy for the same scheduled countermeasure block, so planning must
+    compensate accordingly (NASA Exploration Medical Technologies, 2023).\u30101\u2020L1-L5\u3011
     
     Args:
         weight_kg: Body weight in kilograms
         exercise_type: Type of exercise (key from EXERCISE_METS)
         duration_minutes: Exercise duration in minutes
+        vo2max_ml_kg_min: Optional VO2max for scaling effort
         
     Returns:
-        Calories burned during exercise
+        Dictionary with baseline/adjusted METs and kcal estimates
     """
-    met = EXERCISE_METS.get(exercise_type, 5.0)  # Default to moderate activity
-    duration_hours = duration_minutes / 60.0
-    return met * weight_kg * duration_hours
+    base_met = EXERCISE_METS.get(exercise_type, 5.0)
+    adjusted_met, vo2_factor = adjust_met_for_vo2(base_met, vo2max_ml_kg_min)
+    duration_hours = max(0.0, duration_minutes) / 60.0
+    base_kcal = base_met * weight_kg * duration_hours
+    adjusted_kcal = adjusted_met * weight_kg * duration_hours
+    return {
+        "base_met": round(base_met, 3),
+        "adjusted_met": round(adjusted_met, 3),
+        "vo2_factor": round(vo2_factor, 3),
+        "base_kcal": round(base_kcal, 2),
+        "adjusted_kcal": round(adjusted_kcal, 2),
+    }
+
+
+def calculate_exercise_calories(
+    weight_kg: float,
+    exercise_type: str,
+    duration_minutes: float,
+    vo2max_ml_kg_min: Optional[float] = None,
+) -> float:
+    """Backward-compatible helper returning only the adjusted calories."""
+    summary = calculate_exercise_energy_expenditure(
+        weight_kg=weight_kg,
+        exercise_type=exercise_type,
+        duration_minutes=duration_minutes,
+        vo2max_ml_kg_min=vo2max_ml_kg_min,
+    )
+    return summary["adjusted_kcal"]
 
 
 def calculate_nasa_water_requirement(
