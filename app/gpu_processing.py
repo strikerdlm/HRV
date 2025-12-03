@@ -1,5 +1,5 @@
 """
-GPU Processing Module for HRV Analysis Suite.
+GPU Processing Module for Mission Control - Flight Surgeon.
 
 Provides NVIDIA CUDA-accelerated computation for CPU-intensive operations.
 Automatically falls back to CPU when GPU is unavailable.
