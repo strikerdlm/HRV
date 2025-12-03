@@ -1399,23 +1399,112 @@ class UserDatabase:
 
 
 # ---------------------------------------------------------------------------
-# Global database instance
+# Global database instance with Streamlit caching
 # ---------------------------------------------------------------------------
 
 _db_instance: Optional[UserDatabase] = None
 
 
-def get_database() -> UserDatabase:
-    """Get or create the global database instance."""
-    global _db_instance
-    if _db_instance is None:
-        _db_instance = UserDatabase()
-    return _db_instance
+def _create_database_singleton() -> UserDatabase:
+    """Internal function to create the database singleton."""
+    return UserDatabase()
+
+
+# Try to use Streamlit's cache_resource for singleton pattern
+try:
+    import streamlit as st
+    
+    @st.cache_resource(show_spinner=False)
+    def get_database() -> UserDatabase:
+        """Get or create the global database instance (Streamlit-cached singleton).
+        
+        Uses @st.cache_resource for efficient singleton pattern that survives
+        Streamlit reruns without re-initialization overhead.
+        """
+        return _create_database_singleton()
+
+except ImportError:
+    # Fallback for non-Streamlit contexts (testing, scripts)
+    def get_database() -> UserDatabase:
+        """Get or create the global database instance (fallback singleton)."""
+        global _db_instance
+        if _db_instance is None:
+            _db_instance = UserDatabase()
+        return _db_instance
 
 
 # ---------------------------------------------------------------------------
 # Module Exports
 # ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Cached Query Functions (Performance Optimization)
+# ---------------------------------------------------------------------------
+
+# Try to use Streamlit caching for expensive queries
+try:
+    import streamlit as st
+    
+    @st.cache_data(ttl=30, show_spinner=False)
+    def get_cached_user_list() -> List[Dict[str, Any]]:
+        """Get cached list of users (30-second TTL).
+        
+        Returns list of dicts instead of UserProfile objects for cacheability.
+        Use this for dropdowns and selection UIs that don't need full objects.
+        """
+        db = get_database()
+        users = db.list_users()
+        # Convert to dicts for cache serialization
+        return [
+            {
+                "user_id": u.user_id,
+                "username": u.username,
+                "full_name": u.full_name,
+                "email": u.email,
+            }
+            for u in users
+        ]
+    
+    @st.cache_data(ttl=60, show_spinner=False)
+    def get_cached_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+        """Get cached user profile by ID (60-second TTL).
+        
+        Returns dict instead of UserProfile for cacheability.
+        """
+        db = get_database()
+        user = db.get_user(user_id)
+        if user:
+            return user.to_dict()
+        return None
+
+except ImportError:
+    # Fallback for non-Streamlit contexts
+    def get_cached_user_list() -> List[Dict[str, Any]]:
+        db = get_database()
+        return [
+            {
+                "user_id": u.user_id,
+                "username": u.username,
+                "full_name": u.full_name,
+                "email": u.email,
+            }
+            for u in db.list_users()
+        ]
+    
+    def get_cached_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+        db = get_database()
+        user = db.get_user(user_id)
+        return user.to_dict() if user else None
+
+
+def clear_user_cache() -> None:
+    """Clear user-related caches after modifications (create, update, delete)."""
+    try:
+        get_cached_user_list.clear()  # type: ignore[attr-defined]
+        get_cached_user_by_id.clear()  # type: ignore[attr-defined]
+    except (AttributeError, NameError):
+        pass  # Cache not available
+
 
 __all__ = [
     "UserProfile",
@@ -1424,5 +1513,8 @@ __all__ = [
     "UserDatabase",
     "get_database",
     "get_database_path",
+    "get_cached_user_list",
+    "get_cached_user_by_id",
+    "clear_user_cache",
 ]
 
