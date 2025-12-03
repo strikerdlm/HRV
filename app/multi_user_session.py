@@ -1,5 +1,5 @@
 """
-Multi-User Session Manager for HRV Analysis Suite.
+Multi-User Session Manager for Mission Control - Flight Surgeon.
 
 Provides support for up to 7 concurrent user sessions, allowing:
 - Quick switching between users
