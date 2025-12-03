@@ -3702,7 +3702,7 @@ def main() -> None:
         skip_freq = st.sidebar.checkbox("Skip Frequency overlay plot", value=True)
         skip_poincare = st.sidebar.checkbox("Skip Poincaré plot", value=True)
         skip_spectrogram = st.sidebar.checkbox("Skip Spectrogram", value=True)
-        skip_gauges = st.sidebar.checkbox("Skip Gauges", value=False)
+        skip_gauges = st.sidebar.checkbox("Skip Gauges", value=True)
         show_debug = st.sidebar.checkbox(
             "Show detailed progress logs", value=False)
         # Adjust runtime log verbosity from sidebar preference
@@ -3773,33 +3773,34 @@ def main() -> None:
             )
     else:
         # Default values when no data uploaded - needed for tab rendering
+        # All defaults set for FAST MODE to maximize performance
         win = "5min"
-        step = "1min"
+        step = "2min"  # Faster: larger step = fewer windows
         min_rr = 60
-        max_windows = 1500
+        max_windows = 500  # Fast mode: reduced from 1500
         apply_clean = True
         method = "threshold_median"
         max_dev = 0.2
         median_win = 11
         psd_method = "welch"
-        fast_windowing = True
-        high_compute = False
+        fast_windowing = True  # Fast mode: skip spectral in windows
+        high_compute = False  # Fast mode: no advanced analysis
         apply_dev = True
         dev_metrics = ["rmssd", "sdnn", "lf_hf_ratio", "hf_power"]
         z_warn = 1.0
         z_alert = 2.0
         min_sustain = 3
-        minimal_mode = True
-        max_datasets = 1
-        rr_plot_cap = "500"
-        skip_freq = True
-        skip_poincare = True
-        skip_spectrogram = True
-        skip_gauges = False
+        minimal_mode = True  # Fast mode: always start minimal
+        max_datasets = 1  # Fast mode: process only 1 dataset
+        rr_plot_cap = "500"  # Fast mode: limit plot points
+        skip_freq = True  # Fast mode: skip heavy plots
+        skip_poincare = True  # Fast mode: skip heavy plots
+        skip_spectrogram = True  # Fast mode: skip heavy plots
+        skip_gauges = True  # Fast mode: skip gauges
         show_debug = False
-        enable_ml = False
-        gpt_high_enabled = False
-        enable_cov = False
+        enable_ml = False  # Fast mode: no ML clustering
+        gpt_high_enabled = False  # Fast mode: no GPT calls
+        enable_cov = False  # Fast mode: no covariate adjustment
         age_years = 45
         sex = "Male"
         bmi = 29.0
