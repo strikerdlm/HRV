@@ -2,17 +2,163 @@
 
 This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when working with code in this repository.
 
-**Version**: 1.6.4 | **Last Updated**: 2025-12-02
+**Version**: 1.7.0 | **Last Updated**: 2025-12-03
 
 ## Overview
-HRV (Heart Rate Variability) Analysis application with Space Weather and NOAA Integration. This is a Streamlit-based scientific application that analyzes heart rate variability metrics from Polar RR-interval recordings and correlates them with space weather data from NOAA SWPC feeds, NASA DONKI, and SpaceWeatherLive snapshots. The application is designed for aerospace medicine and psychophysiology research.
+HRV (Heart Rate Variability) Analysis application with Space Weather and NOAA Integration. This is a Streamlit-based scientific application that analyzes heart rate variability metrics from Polar RR-interval recordings and correlates them with space weather data from NOAA SWPC feeds, NASA DONKI, and SpaceWeatherLive snapshots. The application is designed for aerospace medicine and psychophysiology research, with astronaut-grade physiological assessment capabilities.
 
-### Key Capabilities (v1.6.4)
+### Key Capabilities (v1.7.0)
+- **Multi-Language Support**: English + Spanish (Colombian-validated clinical scales)
+- **Comprehensive Clinical Profiles**: Astronaut-grade physiological assessment
+- **NASA-Based Calculations**: BMR (Mifflin-St Jeor), hydration, macronutrients
+- **Extended Anthropometrics**: Body composition, medical history, laboratory data
+- **Multi-User Support**: Up to 7 concurrent user sessions (in progress)
 - **GPU Acceleration**: Optional CUDA-powered HRV computations (RTX 5070 supported)
-- **User Profiles**: Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS, VAS)
 - **Space Weather Impact Predictions**: Real-time arrival time calculations for solar events
 - **Performance Optimization**: Configurable CPU/memory presets with smart caching
 - **Persistent Logging**: File-based debug logs in `logs/` directory
+
+---
+
+## 🚀 DEVELOPMENT ROADMAP (v2.0 Target)
+
+### Current Sprint (December 2025)
+
+#### Phase 1: UI Visualization (Priority: HIGH)
+- [ ] **Clinical Profile UI**: Render all clinical_profile.py features in user_profile_tab.py
+  - Body composition entry form with missing data indicators
+  - Medical history questionnaire
+  - Laboratory data entry (CBC, Chemistry, Urinalysis)
+  - NASA nutrition calculator with real-time results
+  - BMR/TDEE display with activity adjustments
+- [ ] **Data Completeness Indicators**: Visual cues for missing required fields
+- [ ] **Performance Optimization**: Batch form submissions, debounced updates
+
+#### Phase 2: Multi-User Session Management (Priority: HIGH)
+- [ ] **Concurrent Users**: Support 1-7 users open simultaneously
+  - User tabs/cards showing active profiles
+  - Quick-switch between users
+  - Per-user calculation caching
+- [ ] **User Context Propagation**: All tabs receive active user settings
+  - Circadian model uses user's chronotype, location, occupation
+  - SAFTE model uses user's sleep history
+  - HRV analysis adjusted for user's baseline
+  - Space Weather impact based on user's sensitivity profile
+
+#### Phase 3: Tab Configuration Refactoring (Priority: MEDIUM)
+- [ ] **Move Settings to Tabs**: Circadian, SAFTE settings move from sidebar to respective tabs
+- [ ] **Tab-Specific Settings Persistence**: Save per-tab configurations per user
+- [ ] **Cross-Tab Correlation**: Enable tabs to share computed results
+
+### Planned Features (Q1 2026)
+
+#### Longitudinal Study Support
+The database schema supports a comprehensive longitudinal study design:
+
+```
+Subject (1) → Measurements (up to 22)
+                ↓
+            Baseline (T0)
+            Follow-up T1...T21
+```
+
+**Intra-Subject Analysis** (within individual):
+- [ ] Baseline establishment (T0) with confidence intervals
+- [ ] Change detection from baseline (Δ metrics)
+- [ ] Trend analysis (linear, polynomial, seasonal decomposition)
+- [ ] Individual response patterns to interventions
+- [ ] Personal reference ranges (percentile-based)
+
+**Inter-Subject Analysis** (between individuals):
+- [ ] Group-level statistics (mean, SD, SEM, 95% CI)
+- [ ] Between-group comparisons (t-test, ANOVA, mixed models)
+- [ ] Responder vs non-responder classification
+- [ ] Subgroup identification (clustering)
+
+#### Group Analysis Framework
+```
+Study
+├── Control Group (n subjects)
+│   ├── Subject 1 → T0, T1, T2, ... T21
+│   ├── Subject 2 → T0, T1, T2, ... T21
+│   └── ...
+└── Intervention Group (n subjects)
+    ├── Subject 1 → T0, T1, T2, ... T21
+    ├── Subject 2 → T0, T1, T2, ... T21
+    └── ...
+```
+
+**Planned Analysis Types**:
+- [ ] Per-subject time series with individual baselines
+- [ ] Per-group aggregated statistics at each timepoint
+- [ ] Group × Time interaction effects
+- [ ] Mixed-effects models (random subject intercepts)
+- [ ] Repeated measures ANOVA/MANOVA
+- [ ] Effect size calculations (Cohen's d, η²)
+
+#### Database Schema (Longitudinal)
+```sql
+-- Existing: users, body_composition, medical_history, lab_*
+-- To Add:
+CREATE TABLE study_groups (
+    group_id TEXT PRIMARY KEY,
+    study_id TEXT NOT NULL,
+    group_name TEXT NOT NULL,        -- 'control', 'intervention_a', etc.
+    description TEXT
+);
+
+CREATE TABLE study_assignments (
+    assignment_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    group_id TEXT NOT NULL,
+    assignment_date TEXT NOT NULL,
+    FOREIGN KEY (user_id) REFERENCES users(user_id),
+    FOREIGN KEY (group_id) REFERENCES study_groups(group_id)
+);
+
+CREATE TABLE measurement_timepoints (
+    timepoint_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    timepoint_label TEXT NOT NULL,   -- 'T0_baseline', 'T1', 'T2', etc.
+    measurement_date TEXT NOT NULL,
+    measurement_number INTEGER,       -- 0-21
+    is_baseline BOOLEAN DEFAULT FALSE,
+    notes TEXT,
+    FOREIGN KEY (user_id) REFERENCES users(user_id)
+);
+
+-- Link HRV measurements, clinical scales, labs to timepoints
+ALTER TABLE hrv_measurements ADD COLUMN timepoint_id TEXT;
+ALTER TABLE clinical_scales ADD COLUMN timepoint_id TEXT;
+ALTER TABLE lab_cbc ADD COLUMN timepoint_id TEXT;
+ALTER TABLE lab_chemistry ADD COLUMN timepoint_id TEXT;
+```
+
+### Scientific References (Updated)
+
+#### BMR & Metabolism
+- **Mifflin-St Jeor (Gold Standard)**: Mifflin MD et al. Am J Clin Nutr. 1990;51(2):241-247. DOI: 10.1093/ajcn/51.2.241
+- **Harris-Benedict (Comparison)**: Harris JA, Benedict FG. Proc Natl Acad Sci USA. 1918;4(12):370-373
+- **Katch-McArdle**: Katch VL et al. Exerc Sport Sci Rev. 1996
+
+#### NASA Nutrition Standards
+- **JSC67378**: Nutritional Requirements for Exploration Missions up to 365 days. NASA Johnson Space Center, 2020
+- **NASA-STD-3001**: NASA Space Flight Human-System Standard. Water Requirements Technical Brief
+- **Scott et al. 2020**: Body size and resource utilization during human space exploration. Sci Rep. 10, 13836. DOI: 10.1038/s41598-020-70054-6
+
+#### Clinical Scales (Validated)
+- **Epworth (ESE-VC)**: Chica-Urzola HL et al. Rev Salud Publica (Bogota). 2007;9(4):558-567. DOI: 10.1590/S0124-00642007000400008
+- **Karolinska (KSS-CO)**: Velásquez-Paz JA et al. Sleep Sci. 2022;15(Spec 1):190-196. DOI: 10.5935/1984-0063.20220006
+- **Samn-Perelli**: Samn SW, Perelli LP. USAF-SAM-TR-82-21, 1982
+
+#### Kidney Function
+- **CKD-EPI 2021**: Inker LA et al. N Engl J Med. 2021;385(19):1737-1749. DOI: 10.1056/NEJMoa2102953
+
+#### HRV Standards
+- **Task Force 1996**: Heart rate variability: standards of measurement. Circulation. 1996;93(5):1043-1065
+- **Shaffer & Ginsberg 2017**: An Overview of Heart Rate Variability Metrics and Norms. Front Public Health. 5:258
+
+---
 
 ## Running the Application
 
