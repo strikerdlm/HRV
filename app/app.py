@@ -1923,6 +1923,7 @@ def _render_gpt_high_interpretation(
     windowed_df: pd.DataFrame,
     episodes_df: pd.DataFrame,
     ml_summary_df: pd.DataFrame,
+    report_markdown: Optional[str] = None,
 ) -> None:
     state = st.session_state.setdefault(
         "gpt5_high_state",
@@ -1952,6 +1953,7 @@ def _render_gpt_high_interpretation(
             windowed_df,
             episodes_df,
             ml_summary_df,
+            report_markdown=report_markdown,
         )
     except (GPT5InterpretationError, ValueError, TypeError) as exc:
         body_container.error(str(exc))
@@ -4148,17 +4150,6 @@ def main() -> None:
         # No data uploaded - set remaining defaults
         pns_mapping = {}
         ordered_sources = []
-
-    ai_section = st.container()
-    _render_gpt_high_interpretation(
-        ai_section,
-        enabled=gpt_high_enabled,
-        meta_rows=meta_rows_for_context,
-        multi_results_df=multi_results_df,
-        windowed_df=windowed_df,
-        episodes_df=episodes_df,
-        ml_summary_df=ml_summary_df,
-    )
 
     metric_list: List[str] = _select_hrv_metric_columns(
         windowed_df,
@@ -8389,6 +8380,20 @@ that predicts cognitive performance based on:
                 ):
                     st.info(
                         f"ML section included but no clusters were generated: {ml_error_message}")
+                if gpt_high_enabled:
+                    gpt_section = st.container()
+                    _render_gpt_high_interpretation(
+                        gpt_section,
+                        enabled=True,
+                        meta_rows=meta_rows_for_context,
+                        multi_results_df=multi_results_df,
+                        windowed_df=windowed_df,
+                        episodes_df=episodes_df,
+                        ml_summary_df=ml_summary_df,
+                        report_markdown=report_markdown,
+                    )
+                else:
+                    st.session_state["gpt5_export_markdown"] = ""
         gpt_report_md = st.session_state.get("gpt5_export_markdown", "")
         if gpt_report_md:
             st.markdown("---")
