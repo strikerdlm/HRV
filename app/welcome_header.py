@@ -1,5 +1,5 @@
 """
-Professional welcome header for HRV Analysis Suite.
+Professional welcome header for Mission Control - Flight Surgeon.
 
 Displays laboratory branding, version info, and contributor credits.
 Uses Streamlit native components with minimal HTML for reliable rendering.
@@ -96,7 +96,7 @@ def render_welcome_header() -> None:
         <div style="text-align: center; margin-bottom: 0.5rem;">
             <span style="font-size: 3rem;">🧬</span>
         </div>
-        <div class="welcome-title">Physiological Laboratory</div>
+        <div class="welcome-title">Mission Control - Flight Surgeon</div>
         <div class="welcome-subtitle">
             <strong>Dr. Diego L. Malpica, MD</strong> — Aerospace Medicine Specialist
         </div>
@@ -180,7 +180,7 @@ def render_sidebar_branding() -> None:
                 font-size: 0.9rem;
                 font-weight: 700;
                 color: #667eea;
-            ">Physiological Lab</div>
+            ">Mission Control Lab</div>
             <div style="font-size: 0.7rem; color: #888;">v{APP_VERSION}</div>
         </div>
         """,
@@ -335,7 +335,7 @@ def render_data_status_panel(
                 margin: 1rem 0;
             ">
                 <div style="color: #f39c12; font-weight: 600; margin-bottom: 0.5rem;">
-                    ⚠️ No Physiological Data Loaded
+                    ⚠️ No Mission Control Data Loaded
                 </div>
                 <div style="color: #FFB347; font-size: 0.9rem;">
                     Use the sidebar to import RR interval data from your device (Polar, Garmin, ActiGraph) 
@@ -352,7 +352,7 @@ def render_getting_started_guide() -> None:
     with st.expander("🚀 Getting Started Guide", expanded=True):
         st.markdown(
             """
-            ### Welcome to the Physiological Laboratory! 👋
+            ### Welcome to Mission Control - Flight Surgeon! 👋
             
             This platform provides comprehensive tools for **Heart Rate Variability (HRV)** analysis, 
             **circadian rhythm** modeling, **fatigue prediction**, and **space weather correlations**.
