@@ -950,6 +950,69 @@ class UserDatabase:
         )
     
     # -----------------------------------------------------------------------
+    # Medical History (NASA exploration record)
+    # -----------------------------------------------------------------------
+    
+    def save_medical_history_entry(
+        self,
+        user_id: str,
+        record: Dict[str, Any],
+        *,
+        history_id: Optional[str] = None,
+    ) -> str:
+        """Save or update a structured medical history entry."""
+        entry_id = history_id or str(uuid.uuid4())
+        timestamp = datetime.now(timezone.utc).isoformat()
+        payload = json.dumps(record, ensure_ascii=False, default=str)
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO medical_history (history_id, user_id, updated_at, history_json)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(history_id) DO UPDATE SET
+                    updated_at = excluded.updated_at,
+                    history_json = excluded.history_json
+                """,
+                (entry_id, user_id, timestamp, payload),
+            )
+        
+        return entry_id
+    
+    def get_medical_history(
+        self,
+        user_id: str,
+        *,
+        limit: int = 50,
+    ) -> List[Dict[str, Any]]:
+        """Return structured medical history entries ordered from newest to oldest."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT history_id, updated_at, history_json
+                FROM medical_history
+                WHERE user_id = ?
+                ORDER BY datetime(updated_at) DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            )
+            rows = cursor.fetchall()
+        
+        entries: List[Dict[str, Any]] = []
+        for row in rows:
+            try:
+                payload = json.loads(row["history_json"])
+            except (TypeError, json.JSONDecodeError):
+                payload = {}
+            payload["history_id"] = row["history_id"]
+            payload["updated_at"] = row["updated_at"]
+            entries.append(payload)
+        return entries
+    
+    # -----------------------------------------------------------------------
     # HRV Measurements
     # -----------------------------------------------------------------------
     
