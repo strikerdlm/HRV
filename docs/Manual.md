@@ -558,6 +558,39 @@ $$HR_{max} = 208 - (0.7 \times age)$$
 
 Reference: Tanaka H, et al. *J Am Coll Cardiol.* 2001;37(1):153-156.
 
+### Exploration Medical Record (NASA isolation missions)
+
+Mission Control - Flight Surgeon now includes an exploration medical record aligned with NASA’s Medical Information Systems & Tools (MIST) architecture and the Exploration Medical Capability (ExMC) guidance for Earth-independent care.\u301023\u2020L1-L5\u301124\u2020L1-L4\u3011 Every entry is stored in the `medical_history` table (JSON payload) so longitudinal and group-level statistics can be performed later. Key fields:
+
+| Field | Description | Units |
+|-------|-------------|-------|
+| `mission_profile` | Scenario (e.g., LUNAR-22, Gateway-30, Mars analog) | categorical |
+| `mission_day` | Mission elapsed day (supports ≥22 days) | integer |
+| `habitat` | Analog site (HERA, CHAPEA, NEEMO, etc.) | categorical |
+| `eva_status` | EVA clearance (Cleared, Restricted, No EVA) | categorical |
+| `eva_hours_72h` | EVA minutes accumulated during the last 72 h | hours |
+| `radiation_dose_msv` | Daily or cumulative ionizing dose | mSv |
+| `space_weather_alert` | NOAA/NASA alert level to correlate with HRV | categorical |
+| `confinement_stress` | Self-reported confinement burden (1‑10) | ordinal |
+| `sleep_hours` | Sleep obtained in the last 24 h | hours |
+| `exercise_minutes` | Countermeasure exercise duration | minutes |
+| `hydration_liters` | Water intake per day | liters |
+| `behavioral_flags` | Team cohesion / cognitive notes | categorical |
+
+The UI form includes chronic condition selectors, acute symptom checklists, and free-text notes for operational anomalies. Each submission either creates a new mission-day entry or updates the latest record, enabling high-resolution studies for 22-day isolation missions up to Mars analog campaigns.
+
+### Polar AccessLink VO₂max (optional)
+
+If a crew member uses Polar Flow, the NASA Nutrition calculator can import the latest VO₂max via Polar AccessLink. Configure:
+
+1. Register an application in the [Polar AccessLink program](https://www.polar.com/accesslink-api/).
+2. Set environment variables (never committed to source control):
+   - `POLAR_ACCESSLINK_TOKEN`
+   - `POLAR_ACCESSLINK_USER_ID`
+3. Restart the app. The calculator exposes a **Use Polar value** toggle to override the manual VO₂max entry.
+
+Polar AccessLink provides access to body metrics, exercise intensity, and cardiorespiratory fitness data that have already been uploaded to Polar Flow’s cloud infrastructure.\u301025\u2020L1-L3\u3011
+
 ### Validated Clinical Scales
 
 The platform includes scientifically validated instruments for fatigue and sleep assessment:
@@ -2135,6 +2168,16 @@ Solutions:
 ### Body Composition
 
 22. Hodgdon, J. A., & Beckett, M. B. (1984). *Prediction of percent body fat for U.S. Navy men from body circumferences and height* (NHRC-84-11). San Diego, CA: Naval Health Research Center.
+
+### Exploration Medical Records
+
+23. NASA. (2023). *Medical Information Systems and Tools (MIST).* https://www.nasa.gov/general/medical-information-systems-and-tools-mist/
+
+24. NASA Ames Research Center. (2024). *A Clinical Decision Support System for Earth-independent Medical Operations.* https://www.nasa.gov/centers-and-facilities/ames/ames-science/ames-space-biosciences/a-clinical-decision-support-system-for-earth-independent-medical-operations/
+
+### API Integrations
+
+25. Developer Tech News. (2014). *Polar opens its API for developers to access health data.* https://www.developer-tech.com/news/polar-opens-its-api-developers-access-user-health-data/
 
 ---
 
