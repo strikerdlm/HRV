@@ -1024,6 +1024,8 @@ try:
         calculate_nasa_water_requirement,
         PAL_MULTIPLIERS,
         EXERCISE_METS,
+        polar_accesslink_available,
+        fetch_polar_vo2max,
     )
     CLINICAL_PROFILE_AVAILABLE = True
 except ImportError:
@@ -1057,6 +1059,9 @@ def _render_clinical_profile(user: UserProfile) -> None:
     # Medical History Summary
     with st.expander("📋 Medical History", expanded=False):
         _render_medical_history_summary(user)
+    
+    with st.expander("🧾 Exploration Medical Record", expanded=False):
+        _render_medical_record_form(user)
 
 
 def _render_data_completeness(user: UserProfile) -> None:
@@ -1154,6 +1159,45 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         ActivityLevel.MODERATELY_ACTIVE
     )
     
+    # VO2max handling (manual + optional Polar AccessLink)
+    vo2_default = float(user.vo2max_ml_kg_min or 38.0)
+    st.markdown("##### 🫁 VO2max Source")
+    col_vo2_a, col_vo2_b = st.columns([2, 1])
+    with col_vo2_a:
+        vo2_manual = st.number_input(
+            "Manual VO2max (mL·kg⁻¹·min⁻¹)",
+            min_value=10.0,
+            max_value=90.0,
+            value=vo2_default,
+            step=0.5,
+            help="Enter lab VO2max or estimation from field test.",
+        )
+    polar_cache_key = f"polar_vo2_cache_{user.user_id}"
+    polar_cached = st.session_state.get(polar_cache_key)
+    use_polar_override = False
+    with col_vo2_b:
+        if CLINICAL_PROFILE_AVAILABLE and polar_accesslink_available():
+            st.caption("Polar AccessLink configured.")
+            if st.button("🔄 Fetch from Polar", key=f"fetch_polar_vo2_{user.user_id}"):
+                polar_value = fetch_polar_vo2max()
+                if polar_value:
+                    st.session_state[polar_cache_key] = polar_value
+                    polar_cached = polar_value
+                    st.success(f"Retrieved VO2max {polar_value:.1f} mL/kg/min")
+                else:
+                    st.warning("Polar AccessLink did not return a VO2max value.")
+            use_polar_override = st.checkbox(
+                "Use Polar value",
+                value=bool(polar_cached),
+                help="Requires POLAR_ACCESSLINK_TOKEN and POLAR_ACCESSLINK_USER_ID in the environment.",
+                key=f"use_polar_vo2_{user.user_id}",
+            )
+        else:
+            st.caption("Set POLAR_ACCESSLINK_TOKEN & POLAR_ACCESSLINK_USER_ID to enable API fetch.")
+    effective_vo2 = vo2_manual
+    if use_polar_override and polar_cached:
+        effective_vo2 = float(polar_cached)
+    
     # Exercise settings
     col1, col2 = st.columns(2)
     with col1:
@@ -1184,7 +1228,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
             activity_level=activity_level,
             exercise_type=exercise_type,
             exercise_duration_min=exercise_duration,
-            vo2max_ml_kg_min=user.vo2max_ml_kg_min,
+            vo2max_ml_kg_min=effective_vo2,
             lean_mass_kg=None,  # Would come from body composition
         )
         
@@ -1215,6 +1259,21 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                 "Total Daily",
                 f"{results['energy']['total_daily_kcal']:.0f} kcal",
                 delta=f"+{results['energy']['exercise_kcal']:.0f}" if exercise_duration > 0 else None,
+            )
+        
+        st.markdown("##### 🫁 VO2max Compensation")
+        exercise_details = results["energy"].get("exercise_details", {})
+        vo2_help = "Manual entry" if not use_polar_override or not polar_cached else "Polar AccessLink override"
+        st.metric(
+            "VO2max used",
+            f"{effective_vo2:.1f} mL/kg/min",
+            help=vo2_help,
+        )
+        if exercise_details:
+            st.caption(
+                f"Exercise MET base {exercise_details.get('base_met', 0)} → "
+                f"{exercise_details.get('adjusted_met', 0)} after VO2 factor "
+                f"{exercise_details.get('vo2_factor', 1.0)}."
             )
         
         st.markdown("##### 💧 Hydration (NASA Standard)")
@@ -1380,6 +1439,253 @@ def _render_medical_history_summary(user: UserProfile) -> None:
         "💡 For comprehensive medical history including cardiovascular, respiratory, "
         "metabolic conditions and family history, use the Medical History form in Data Management."
     )
+
+
+def _render_medical_record_form(user: UserProfile) -> None:
+    """Render NASA-style exploration medical record entry form."""
+    st.caption(
+        "Structured per NASA Medical Information Systems & Tools (MIST) and "
+        "Exploration Medical Capability guidance for autonomous missions.\u30101\u2020L1-L5\u30112\u2020L1-L4\u3011"
+    )
+    try:
+        db = get_database()
+        history = db.get_medical_history(user.user_id, limit=25)
+    except Exception as exc:
+        st.error(f"Unable to load medical history: {exc}")
+        history = []
+    latest = history[0] if history else {}
+    
+    mission_options = {
+        "LUNAR-22": "Lunar sortie (22-day habitat)",
+        "GATEWAY-30": "Gateway stack (30-day)",
+        "MARS-ANALOG-45": "Mars analog (45-day isolation)",
+        "CHAPEA-378": "CHAPEA / Mars Dune Alpha (long-duration)",
+        "CUSTOM": "Custom exploration profile",
+    }
+    habitats = ["HERA", "CHAPEA", "NEEMO", "Gateway", "ISS", "Custom"]
+    crew_roles = ["Flight Surgeon", "Commander", "Pilot", "Mission Specialist", "Payload Specialist"]
+    eva_status_options = ["Cleared", "Restricted", "No EVA"]
+    space_weather_alerts = ["None", "Watch", "Warning", "Post-Event Monitoring"]
+    chronic_condition_options = [
+        "Cardiovascular",
+        "Respiratory",
+        "Metabolic",
+        "Neurological",
+        "Psychological",
+        "Musculoskeletal",
+        "Renal/Urologic",
+    ]
+    acute_symptom_options = [
+        "Headache",
+        "Dizziness",
+        "Visual change",
+        "GI upset",
+        "Musculoskeletal pain",
+        "Sleep disruption",
+        "Skin lesion",
+    ]
+    behavioral_flags = [
+        "Confinement stress",
+        "Team friction",
+        "Mood change",
+        "Cognitive slowing",
+        "Motivation dip",
+    ]
+    
+    with st.form("exploration_medical_record_form", clear_on_submit=False):
+        col_a, col_b, col_c = st.columns(3)
+        with col_a:
+            mission_profile = st.selectbox(
+                "Mission profile",
+                options=list(mission_options.keys()),
+                format_func=lambda key: mission_options.get(key, key),
+                index=list(mission_options.keys()).index(
+                    latest.get("mission_profile", "LUNAR-22")
+                )
+                if latest.get("mission_profile", "LUNAR-22") in mission_options
+                else 0,
+            )
+            mission_day = st.number_input(
+                "Mission day",
+                min_value=0,
+                max_value=720,
+                value=int(latest.get("mission_day", 1)),
+                step=1,
+            )
+            habitat = st.selectbox(
+                "Habitat/analog site",
+                options=habitats,
+                index=habitats.index(latest.get("habitat", habitats[0]))
+                if latest.get("habitat") in habitats
+                else 0,
+            )
+        with col_b:
+            crew_role = st.selectbox(
+                "Crew role",
+                options=crew_roles,
+                index=crew_roles.index(latest.get("crew_role", crew_roles[0]))
+                if latest.get("crew_role") in crew_roles
+                else 0,
+            )
+            eva_status = st.selectbox(
+                "EVA clearance",
+                options=eva_status_options,
+                index=eva_status_options.index(
+                    latest.get("eva_status", eva_status_options[0])
+                )
+                if latest.get("eva_status") in eva_status_options
+                else 0,
+            )
+            eva_hours = st.number_input(
+                "EVA hours (last 72h)",
+                min_value=0.0,
+                max_value=36.0,
+                value=float(latest.get("eva_hours_72h", 0.0)),
+                step=0.5,
+            )
+        with col_c:
+            radiation_dose = st.number_input(
+                "Radiation dose (mSv)",
+                min_value=0.0,
+                max_value=250.0,
+                value=float(latest.get("radiation_dose_msv", 0.0)),
+                step=0.1,
+            )
+            space_weather = st.selectbox(
+                "Space-weather alert level",
+                options=space_weather_alerts,
+                index=space_weather_alerts.index(
+                    latest.get("space_weather_alert", space_weather_alerts[0])
+                )
+                if latest.get("space_weather_alert") in space_weather_alerts
+                else 0,
+            )
+            confinement_stress = st.slider(
+                "Confinement stress (1-10)",
+                min_value=1,
+                max_value=10,
+                value=int(latest.get("confinement_stress", 3)),
+            )
+        
+        chronic_conditions = st.multiselect(
+            "Chronic condition log",
+            options=chronic_condition_options,
+            default=latest.get("chronic_conditions", []),
+        )
+        acute_symptoms = st.multiselect(
+            "Acute symptoms (last 24h)",
+            options=acute_symptom_options,
+            default=latest.get("acute_symptoms", []),
+        )
+        behavioral_state = st.multiselect(
+            "Behavioral health notes",
+            options=behavioral_flags,
+            default=latest.get("behavioral_flags", []),
+        )
+        
+        col_d, col_e, col_f = st.columns(3)
+        with col_d:
+            sleep_hours = st.number_input(
+                "Sleep (last 24h, hours)",
+                min_value=0.0,
+                max_value=12.0,
+                value=float(latest.get("sleep_hours", 7.0)),
+                step=0.25,
+            )
+        with col_e:
+            exercise_minutes = st.number_input(
+                "Countermeasure exercise (min/day)",
+                min_value=0.0,
+                max_value=300.0,
+                value=float(latest.get("exercise_minutes", 120.0)),
+                step=5.0,
+            )
+        with col_f:
+            hydration_liters = st.number_input(
+                "Water intake (L/day)",
+                min_value=0.0,
+                max_value=10.0,
+                value=float(latest.get("hydration_liters", 3.8)),
+                step=0.1,
+            )
+        
+        inventory_alert = st.selectbox(
+            "Medical inventory status",
+            options=["Nominal", "Monitor", "Critical Shortage"],
+            index=["Nominal", "Monitor", "Critical Shortage"].index(
+                latest.get("inventory_alert", "Nominal")
+            )
+            if latest.get("inventory_alert") in ["Nominal", "Monitor", "Critical Shortage"]
+            else 0,
+        )
+        notes = st.text_area(
+            "Operational/clinical notes",
+            value=str(latest.get("notes", "")),
+            height=120,
+        )
+        update_latest = st.checkbox(
+            "Update latest entry instead of creating a new record",
+            value=False,
+        )
+        
+        submitted = st.form_submit_button("💾 Save Exploration Medical Record")
+        if submitted:
+            record = {
+                "mission_profile": mission_profile,
+                "mission_day": mission_day,
+                "habitat": habitat,
+                "crew_role": crew_role,
+                "eva_status": eva_status,
+                "eva_hours_72h": eva_hours,
+                "radiation_dose_msv": radiation_dose,
+                "space_weather_alert": space_weather,
+                "confinement_stress": confinement_stress,
+                "chronic_conditions": chronic_conditions,
+                "acute_symptoms": acute_symptoms,
+                "behavioral_flags": behavioral_state,
+                "sleep_hours": sleep_hours,
+                "exercise_minutes": exercise_minutes,
+                "hydration_liters": hydration_liters,
+                "inventory_alert": inventory_alert,
+                "notes": notes,
+            }
+            try:
+                entry_id = db.save_medical_history_entry(
+                    user.user_id,
+                    record,
+                    history_id=latest.get("history_id") if (update_latest and latest) else None,
+                )
+                st.success("Exploration medical record saved.")
+                st.session_state["last_med_record_id"] = entry_id
+            except Exception as exc:
+                st.error(f"Failed to save medical record: {exc}")
+    
+    if history:
+        st.markdown("#### 📚 Recent Medical Records")
+        display_df = pd.DataFrame(history)
+        # Flatten list columns for readability
+        for col in ["chronic_conditions", "acute_symptoms", "behavioral_flags"]:
+            if col in display_df.columns:
+                display_df[col] = display_df[col].apply(
+                    lambda val: ", ".join(val) if isinstance(val, list) else val
+                )
+        st.dataframe(
+            display_df[
+                [
+                    "updated_at",
+                    "mission_profile",
+                    "mission_day",
+                    "eva_status",
+                    "space_weather_alert",
+                    "radiation_dose_msv",
+                    "sleep_hours",
+                    "exercise_minutes",
+                ]
+            ],
+            use_container_width=True,
+        )
+    else:
+        st.info("No exploration medical records logged yet.")
 
 
 # ---------------------------------------------------------------------------
@@ -1572,6 +1878,15 @@ def get_current_user_data() -> Optional[Dict[str, Any]]:
     if user is None:
         return None
     
+    latest_medical_record: Dict[str, Any] = {}
+    try:
+        db = get_database()
+        last_rows = db.get_medical_history(user.user_id, limit=1)
+        if last_rows:
+            latest_medical_record = last_rows[0]
+    except Exception:
+        latest_medical_record = {}
+    
     return {
         "user_id": user.user_id,
         "username": user.username,
@@ -1589,6 +1904,7 @@ def get_current_user_data() -> Optional[Dict[str, Any]]:
         "language": getattr(user, 'language', 'en'),
         "medical_conditions": getattr(user, 'medical_conditions', []),
         "medications": getattr(user, 'medications', []),
+        "medical_record": latest_medical_record,
     }
 
 
@@ -1627,6 +1943,7 @@ def get_active_user_context() -> Dict[str, Any]:
             "occupation": None,
             "medical_conditions": [],
             "medications": [],
+            "medical_record": {},
             "is_guest": True,
         }
     
@@ -1648,6 +1965,15 @@ def get_active_user_context() -> Dict[str, Any]:
         elif any(x in occupation_lower for x in ["early", "morning", "farmer"]):
             chronotype_offset = -1.0  # Morning tendency
     
+    latest_medical_record: Dict[str, Any] = {}
+    try:
+        db = get_database()
+        med_rows = db.get_medical_history(user.user_id, limit=1)
+        if med_rows:
+            latest_medical_record = med_rows[0]
+    except Exception:
+        latest_medical_record = {}
+    
     return {
         "has_user": True,
         "user_id": user.user_id,
@@ -1668,6 +1994,7 @@ def get_active_user_context() -> Dict[str, Any]:
         "medications": getattr(user, 'medications', []),
         "language": getattr(user, 'language', 'en'),
         "is_guest": False,
+        "medical_record": latest_medical_record,
     }
 
 
