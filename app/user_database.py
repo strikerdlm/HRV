@@ -94,6 +94,9 @@ class UserProfile:
     medical_conditions: List[str] = field(default_factory=list)
     medications: List[str] = field(default_factory=list)
     
+    # Preferences
+    language: str = "en"  # "en" or "es" for Spanish
+    
     # Timestamps
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
@@ -352,10 +355,17 @@ class UserDatabase:
                     caffeine_intake_mg REAL,
                     medical_conditions TEXT,
                     medications TEXT,
+                    language TEXT DEFAULT 'en',
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL
                 )
             """)
+            
+            # Migration: Add language column if it doesn't exist (for existing databases)
+            try:
+                cursor.execute("ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'en'")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
             
             # Clinical scales table
             cursor.execute("""
@@ -479,8 +489,8 @@ class UserDatabase:
                     date_of_birth, sex, height_cm, weight_kg, resting_hr_bpm,
                     max_hr_bpm, vo2max_ml_kg_min, occupation, activity_level,
                     smoking_status, alcohol_use, caffeine_intake_mg,
-                    medical_conditions, medications, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    medical_conditions, medications, language, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 profile.user_id, profile.username, password_hash, profile.full_name,
                 profile.email, profile.date_of_birth, profile.sex, profile.height_cm,
@@ -489,6 +499,7 @@ class UserDatabase:
                 profile.smoking_status, profile.alcohol_use, profile.caffeine_intake_mg,
                 json.dumps(profile.medical_conditions),
                 json.dumps(profile.medications),
+                profile.language,
                 profile.created_at, profile.updated_at
             ))
         
@@ -542,8 +553,8 @@ class UserDatabase:
                     date_of_birth, sex, height_cm, weight_kg, resting_hr_bpm,
                     max_hr_bpm, vo2max_ml_kg_min, occupation, activity_level,
                     smoking_status, alcohol_use, caffeine_intake_mg,
-                    medical_conditions, medications, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    medical_conditions, medications, language, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 profile.user_id, profile.username, password_hash, profile.full_name,
                 profile.email, profile.date_of_birth, profile.sex, profile.height_cm,
@@ -552,6 +563,7 @@ class UserDatabase:
                 profile.smoking_status, profile.alcohol_use, profile.caffeine_intake_mg,
                 json.dumps(profile.medical_conditions),
                 json.dumps(profile.medications),
+                profile.language,
                 profile.created_at, profile.updated_at
             ))
         
@@ -602,7 +614,7 @@ class UserDatabase:
                     height_cm = ?, weight_kg = ?, resting_hr_bpm = ?, max_hr_bpm = ?,
                     vo2max_ml_kg_min = ?, occupation = ?, activity_level = ?,
                     smoking_status = ?, alcohol_use = ?, caffeine_intake_mg = ?,
-                    medical_conditions = ?, medications = ?, updated_at = ?
+                    medical_conditions = ?, medications = ?, language = ?, updated_at = ?
                 WHERE user_id = ?
             """, (
                 profile.full_name, profile.email, profile.date_of_birth, profile.sex,
@@ -610,7 +622,8 @@ class UserDatabase:
                 profile.max_hr_bpm, profile.vo2max_ml_kg_min, profile.occupation,
                 profile.activity_level, profile.smoking_status, profile.alcohol_use,
                 profile.caffeine_intake_mg, json.dumps(profile.medical_conditions),
-                json.dumps(profile.medications), profile.updated_at, profile.user_id
+                json.dumps(profile.medications), profile.language, profile.updated_at,
+                profile.user_id
             ))
     
     def delete_user(self, user_id: str) -> None:
@@ -664,6 +677,12 @@ class UserDatabase:
             except json.JSONDecodeError:
                 pass
         
+        # Safely get language with fallback for existing databases
+        try:
+            language = row["language"] or "en"
+        except (KeyError, IndexError):
+            language = "en"
+        
         return UserProfile(
             user_id=row["user_id"],
             username=row["username"],
@@ -683,6 +702,7 @@ class UserDatabase:
             caffeine_intake_mg=row["caffeine_intake_mg"],
             medical_conditions=medical_conditions,
             medications=medications,
+            language=language,
             created_at=row["created_at"],
             updated_at=row["updated_at"],
         )
