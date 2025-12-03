@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.7.0] - 2025-12-03
 
 ### Added
+- **Rebrand**: Physiological Laboratory → Mission Control - Flight Surgeon across UI, docs, metadata, and automation.
+
+- **Exploration Medical Record**: NASA-style mission log stored in `medical_history`
+  - Mission profile/day, habitat, EVA clearance, radiation dose, and space-weather alerts
+  - Behavioral health, confinement stress, hydration, and countermeasure adherence tracking
+  - Tabular history for 22-day isolation campaigns with JSON export for statistics
+
+- **Polar AccessLink VO₂max Sync**: Optional integration with Polar Flow
+  - Environment variable configuration (`POLAR_ACCESSLINK_TOKEN`, `POLAR_ACCESSLINK_USER_ID`)
+  - One-click VO₂max fetch inside NASA Nutrition calculator
+  - Exercise energy expenditure now compensates MET values using VO₂max-derived factors
+
 - **Clinical Profile UI Tab**: New "🏥 Clinical Profile" tab in User Profile
   - NASA Nutrition Calculator with real-time BMR/TDEE/hydration calculations
   - Body composition entry form (body fat%, lean mass, circumferences)
@@ -102,6 +114,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User Profile tab now supports language preference (EN/ES)
 - Clinical scales render with translated strings based on user language
 - Database schema version updated with migration support
+- GPT-5.1 high reasoning workflow now lives inside the Export tab and consumes the rendered statistical report payload.
 
 ### Technical
 - Database connection pooling with persistent connections
