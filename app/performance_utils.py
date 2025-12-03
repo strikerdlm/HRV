@@ -1,5 +1,5 @@
 """
-Performance Utilities for HRV Analysis Suite
+Performance Utilities for Mission Control - Flight Surgeon
 
 Provides CPU-optimized caching, lazy loading, and computation management
 to improve Streamlit app responsiveness.
