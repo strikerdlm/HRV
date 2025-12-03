@@ -7,6 +7,95 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.0] - 2025-12-03
+
+### Added
+- **Spanish Language Support (i18n)**: Full bilingual support for clinical assessments
+  - Colombian-validated translations for clinical scales (ESE-VC, KSS)
+  - Escala de Somnolencia de Epworth (Chica-Urzola et al., 2007)
+  - Escala de Somnolencia de Karolinska (Velásquez-Paz et al., 2022)
+  - Escala de Fatiga de Samn-Perelli (aviation standards)
+  - Language selector in User Profile settings
+  - Automatic language sync when user logs in
+  - New module: `app/i18n.py`
+
+- **Comprehensive Clinical Profile Module**: Astronaut-grade physiological assessment
+  - **Extended Anthropometrics**: Body composition analysis
+    - Body fat %, lean mass, muscle mass, bone mass, water %
+    - Circumference measurements (waist, hip, neck, chest, arm, thigh, calf)
+    - Skinfold measurements for caliper-based body fat
+    - US Navy body fat estimation method
+    - Waist-to-hip and waist-to-height ratios
+    - Visceral fat level tracking
+  
+  - **Basal Metabolic Rate Calculations**:
+    - Mifflin-St Jeor equation (gold standard, ADA recommended)
+    - Harris-Benedict equation (for comparison)
+    - Katch-McArdle equation (when lean mass known)
+    - VO2max-adjusted calculations
+  
+  - **NASA-Based Nutrition Requirements** (JSC67378):
+    - Daily water: 32 mL/kg body weight minimum (2500 mL/day floor)
+    - Activity-adjusted hydration with exercise add-ons
+    - Macronutrient ratios: 15% protein, 30% fat, 55% carbs
+    - Protein: 1.2-1.8 g/kg body mass
+    - Extra 500 kcal for EVA/intense activities
+  
+  - **Exercise Energy Expenditure**:
+    - MET-based calorie calculations for 15+ exercise types
+    - Astronaut-specific exercises (ARED, CEVIS, T2)
+    - Configurable duration (default: 2 hours)
+    - Activity factor multipliers (PAL 1.2-2.0)
+  
+  - **Complete Medical History Tracking**:
+    - Cardiovascular, respiratory, metabolic conditions
+    - Neurological, musculoskeletal, psychiatric history
+    - Allergies (drug, environmental, food, latex)
+    - Surgical history, family history
+    - Current medications and supplements
+    - Lifestyle factors (tobacco, alcohol)
+    - Cardiovascular risk factor summary
+  
+  - **Laboratory Data Management**:
+    - Complete Blood Count (CBC/Hemogram)
+    - Comprehensive Metabolic Panel
+    - Lipid Panel with calculated ratios
+    - Thyroid function tests
+    - Iron studies and vitamins
+    - Inflammatory markers
+    - Urinalysis with microscopy
+    - eGFR calculation (CKD-EPI 2021 race-free equation)
+  
+  - New module: `app/clinical_profile.py`
+
+- **Database Schema Expansion**: New tables for clinical data
+  - `body_composition` - Extended anthropometric measurements
+  - `medical_history` - Comprehensive medical antecedents (JSON storage)
+  - `lab_cbc` - Complete blood count results
+  - `lab_chemistry` - Blood chemistry/metabolic panel
+  - `lab_urinalysis` - Urinalysis results
+  - `physiological_calcs` - Cached calculation results
+  - Language preference field in user profiles
+
+### Changed
+- User Profile tab now supports language preference (EN/ES)
+- Clinical scales render with translated strings based on user language
+- Database schema version updated with migration support
+
+### Technical
+- Database connection pooling with persistent connections
+- WAL mode for concurrent database access
+- Optimized user registration (single-transaction username check + creation)
+- Added indices for body composition and laboratory tables
+
+### References
+- Mifflin MD et al. Am J Clin Nutr. 1990;51(2):241-247
+- NASA JSC67378 Exploration Nutrition Requirements
+- NASA-STD-3001 Water Requirements
+- Inker LA et al. N Engl J Med. 2021;385(19):1737-1749 (CKD-EPI 2021)
+
+---
+
 ## [1.6.4] - 2025-12-02
 
 ### Added
