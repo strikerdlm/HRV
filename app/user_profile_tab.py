@@ -9,9 +9,10 @@ Provides a centralized interface for:
 - Data export/import
 
 All data is stored in SQLite database with timestamped entries.
+Supports English and Spanish (Colombian validated scales).
 
 Author: AI Assistant
-Version: 1.0.0
+Version: 1.1.0
 """
 
 from __future__ import annotations
@@ -37,6 +38,28 @@ try:
     DATABASE_AVAILABLE = True
 except ImportError:
     DATABASE_AVAILABLE = False
+
+# Import i18n module for translations
+try:
+    from i18n import (
+        Language,
+        get_current_language,
+        set_language,
+        t,
+        get_epworth_translations,
+        get_karolinska_translations,
+        get_samn_perelli_translations,
+        get_vas_translations,
+        render_language_selector,
+    )
+    I18N_AVAILABLE = True
+except ImportError:
+    I18N_AVAILABLE = False
+    # Fallback function if i18n not available
+    def t(key: str, **kwargs: Any) -> str:  # type: ignore[misc]
+        return key
+    def get_current_language() -> str:  # type: ignore[misc]
+        return "en"
 
 # Import profile module
 try:
@@ -81,10 +104,18 @@ def _get_current_user() -> Optional[UserProfile]:
 
 
 def _set_current_user(user: Optional[UserProfile]) -> None:
-    """Set current user in session state."""
+    """Set current user in session state and sync language preference."""
     st.session_state[_SESSION_CURRENT_USER] = user
     if user:
         st.session_state[_SESSION_USER_ID] = user.user_id
+        # Sync language preference from user profile
+        if I18N_AVAILABLE and hasattr(user, 'language') and user.language:
+            try:
+                from i18n import Language, set_language
+                lang = Language(user.language)
+                set_language(lang)
+            except (ValueError, ImportError):
+                pass  # Keep current language if invalid
 
 
 def _calculate_age(dob_str: Optional[str]) -> Optional[int]:
@@ -443,20 +474,38 @@ def _render_profile_edit(user: UserProfile) -> None:
 
 
 def _render_epworth_form(user_id: str) -> Optional[int]:
-    """Render Epworth Sleepiness Scale form."""
-    st.markdown("#### Epworth Sleepiness Scale (ESS)")
-    st.caption("Rate your chance of dozing off in each situation (0-3)")
+    """Render Epworth Sleepiness Scale form with i18n support."""
+    # Get translations for current language
+    if I18N_AVAILABLE:
+        tr = get_epworth_translations()
+    else:
+        tr = {
+            "title": "Epworth Sleepiness Scale (ESS)",
+            "subtitle": "Rate your chance of dozing off in each situation (0-3)",
+            "help": "0 = Never doze, 3 = High chance of dozing",
+            "situations": [
+                ("sitting_reading", "Sitting and reading"),
+                ("watching_tv", "Watching TV"),
+                ("sitting_inactive_public", "Sitting inactive in a public place"),
+                ("passenger_car_hour", "As a passenger in a car for an hour"),
+                ("lying_down_afternoon", "Lying down to rest in the afternoon"),
+                ("sitting_talking", "Sitting and talking to someone"),
+                ("sitting_quietly_after_lunch", "Sitting quietly after lunch (no alcohol)"),
+                ("car_stopped_traffic", "In a car, while stopped in traffic"),
+            ],
+            "interpretation": {
+                "normal": "Normal daytime sleepiness",
+                "mild": "Mild excessive daytime sleepiness",
+                "moderate": "Moderate excessive daytime sleepiness",
+                "severe": "Severe excessive daytime sleepiness",
+            },
+            "warning": "Score >10 suggests excessive daytime sleepiness. Consider sleep evaluation.",
+        }
     
-    situations = [
-        ("sitting_reading", "Sitting and reading"),
-        ("watching_tv", "Watching TV"),
-        ("sitting_inactive_public", "Sitting inactive in a public place"),
-        ("passenger_car_hour", "As a passenger in a car for an hour"),
-        ("lying_down_afternoon", "Lying down to rest in the afternoon"),
-        ("sitting_talking", "Sitting and talking to someone"),
-        ("sitting_quietly_after_lunch", "Sitting quietly after lunch (no alcohol)"),
-        ("car_stopped_traffic", "In a car, while stopped in traffic"),
-    ]
+    st.markdown(f"#### {tr['title']}")
+    st.caption(tr['subtitle'])
+    
+    situations = tr['situations']
     
     scores: Dict[str, int] = {}
     
@@ -471,100 +520,131 @@ def _render_epworth_form(user_id: str) -> Optional[int]:
                     max_value=3,
                     value=0,
                     key=f"ess_{key}",
-                    help="0 = Never doze, 3 = High chance of dozing",
+                    help=tr['help'],
                 )
     
     total = sum(scores.values())
     
-    # Interpretation
+    # Interpretation using translations
+    interp_labels = tr.get('interpretation', {})
     if total <= 5:
-        interp = "Lower normal daytime sleepiness"
+        interp = interp_labels.get("normal", "Normal daytime sleepiness")
         color = "green"
     elif total <= 10:
-        interp = "Higher normal daytime sleepiness"
+        interp = interp_labels.get("normal", "Normal daytime sleepiness")
         color = "green"
     elif total <= 12:
-        interp = "Mild excessive daytime sleepiness"
+        interp = interp_labels.get("mild", "Mild excessive daytime sleepiness")
         color = "orange"
     elif total <= 15:
-        interp = "Moderate excessive daytime sleepiness"
+        interp = interp_labels.get("moderate", "Moderate excessive daytime sleepiness")
         color = "orange"
     else:
-        interp = "Severe excessive daytime sleepiness"
+        interp = interp_labels.get("severe", "Severe excessive daytime sleepiness")
         color = "red"
     
-    st.markdown(f"**Total Score: {total}/24** — :{color}[{interp}]")
+    total_label = tr.get('total_score', 'Total Score')
+    st.markdown(f"**{total_label}: {total}/24** — :{color}[{interp}]")
     
     if total > 10:
-        st.warning("⚠️ Score >10 suggests excessive daytime sleepiness. Consider sleep evaluation.")
+        st.warning(f"⚠️ {tr.get('warning', 'Score >10 suggests excessive daytime sleepiness.')}")
     
     return total
 
 
 def _render_samn_perelli_form(user_id: str) -> Optional[int]:
-    """Render Samn-Perelli Fatigue Scale form."""
-    st.markdown("#### Samn-Perelli Fatigue Scale")
-    st.caption("Select the statement that best describes your current state")
+    """Render Samn-Perelli Fatigue Scale form with i18n support."""
+    # Get translations for current language
+    if I18N_AVAILABLE:
+        tr = get_samn_perelli_translations()
+    else:
+        tr = {
+            "title": "Samn-Perelli Fatigue Scale",
+            "subtitle": "Select the statement that best describes your current state",
+            "current_state": "Current fatigue state:",
+            "options": {
+                1: "1 - Fully alert, wide awake",
+                2: "2 - Very lively, responsive, but not at peak",
+                3: "3 - Okay, somewhat fresh",
+                4: "4 - A little tired, less than fresh",
+                5: "5 - Moderately tired, let down",
+                6: "6 - Extremely tired, very difficult to concentrate",
+                7: "7 - Completely exhausted, unable to function effectively",
+            },
+            "risk_level": "Operational Risk Level",
+            "risk_levels": {"LOW": "LOW", "MODERATE": "MODERATE", "HIGH": "HIGH", "CRITICAL": "CRITICAL"},
+            "warning": "Fatigue level may impair performance. Consider rest before safety-critical tasks.",
+        }
     
-    options = {
-        1: "1 - Fully alert, wide awake",
-        2: "2 - Very lively, responsive, but not at peak",
-        3: "3 - Okay, somewhat fresh",
-        4: "4 - A little tired, less than fresh",
-        5: "5 - Moderately tired, let down",
-        6: "6 - Extremely tired, very difficult to concentrate",
-        7: "7 - Completely exhausted, unable to function effectively",
-    }
+    st.markdown(f"#### {tr['title']}")
+    st.caption(tr['subtitle'])
+    
+    options = tr['options']
     
     rating = st.radio(
-        "Current fatigue state:",
+        tr['current_state'],
         options=list(options.keys()),
         format_func=lambda x: options[x],
         horizontal=False,
         key="samn_perelli_rating",
     )
     
-    # Risk level
+    # Risk level with translations
+    risk_labels = tr.get('risk_levels', {})
     if rating <= 2:
-        risk = "LOW"
+        risk_key = "LOW"
         color = "green"
     elif rating <= 4:
-        risk = "MODERATE"
+        risk_key = "MODERATE"
         color = "orange"
     elif rating <= 5:
-        risk = "HIGH"
+        risk_key = "HIGH"
         color = "red"
     else:
-        risk = "CRITICAL"
+        risk_key = "CRITICAL"
         color = "red"
     
-    st.markdown(f"**Operational Risk Level: :{color}[{risk}]**")
+    risk_display = risk_labels.get(risk_key, risk_key)
+    risk_label = tr.get('risk_level', 'Operational Risk Level')
+    st.markdown(f"**{risk_label}: :{color}[{risk_display}]**")
     
     if rating >= 5:
-        st.error("⚠️ Fatigue level may impair performance. Consider rest before safety-critical tasks.")
+        st.error(f"⚠️ {tr.get('warning', 'Fatigue level may impair performance.')}")
     
     return rating
 
 
 def _render_kss_form(user_id: str) -> Optional[int]:
-    """Render Karolinska Sleepiness Scale form."""
-    st.markdown("#### Karolinska Sleepiness Scale (KSS)")
-    st.caption("Rate your current sleepiness level")
+    """Render Karolinska Sleepiness Scale form with i18n support."""
+    # Get translations for current language
+    if I18N_AVAILABLE:
+        tr = get_karolinska_translations()
+    else:
+        tr = {
+            "title": "Karolinska Sleepiness Scale (KSS)",
+            "subtitle": "Rate your current sleepiness level",
+            "current_sleepiness": "Current sleepiness:",
+            "options": {
+                1: "1 - Extremely alert",
+                2: "2 - Very alert",
+                3: "3 - Alert",
+                4: "4 - Fairly alert",
+                5: "5 - Neither alert nor sleepy",
+                6: "6 - Some signs of sleepiness",
+                7: "7 - Sleepy, but no effort to stay awake",
+                8: "8 - Sleepy, some effort to stay awake",
+                9: "9 - Extremely sleepy, fighting sleep",
+            },
+            "warning": "KSS ≥7 indicates significant sleepiness that may impair performance.",
+        }
     
-    options = {
-        1: "1 - Extremely alert",
-        2: "2 - Very alert",
-        3: "3 - Alert",
-        4: "4 - Fairly alert",
-        5: "5 - Neither alert nor sleepy",
-        6: "6 - Some signs of sleepiness",
-        7: "7 - Sleepy, but no effort to stay awake",
-        8: "8 - Sleepy, some effort to stay awake",
-        9: "9 - Extremely sleepy, fighting sleep",
-    }
+    st.markdown(f"#### {tr['title']}")
+    st.caption(tr['subtitle'])
+    
+    options = tr['options']
     
     rating = st.radio(
-        "Current sleepiness:",
+        tr['current_sleepiness'],
         options=list(options.keys()),
         format_func=lambda x: options[x],
         horizontal=False,
@@ -572,21 +652,32 @@ def _render_kss_form(user_id: str) -> Optional[int]:
     )
     
     if rating >= 7:
-        st.warning("⚠️ KSS ≥7 indicates significant sleepiness that may impair performance.")
+        st.warning(f"⚠️ {tr.get('warning', 'KSS ≥7 indicates significant sleepiness.')}")
     
     return rating
 
 
 def _render_vas_scales(user_id: str) -> Dict[str, float]:
-    """Render Visual Analog Scale assessments."""
-    st.markdown("#### Visual Analog Scales (VAS)")
-    st.caption("Rate your current state on a 0-10 scale")
+    """Render Visual Analog Scale assessments with i18n support."""
+    # Get translations for current language
+    if I18N_AVAILABLE:
+        tr = get_vas_translations()
+    else:
+        tr = {
+            "title": "Visual Analog Scales (VAS)",
+            "subtitle": "Rate your current state on a 0-10 scale",
+            "fatigue": "Fatigue (0 = None, 10 = Extreme)",
+            "pain": "Pain (0 = None, 10 = Worst imaginable)",
+        }
+    
+    st.markdown(f"#### {tr['title']}")
+    st.caption(tr['subtitle'])
     
     col1, col2 = st.columns(2)
     
     with col1:
         vas_fatigue = st.slider(
-            "Fatigue (0 = None, 10 = Extreme)",
+            tr['fatigue'],
             min_value=0.0,
             max_value=10.0,
             value=3.0,
@@ -596,7 +687,7 @@ def _render_vas_scales(user_id: str) -> Dict[str, float]:
     
     with col2:
         vas_pain = st.slider(
-            "Pain (0 = None, 10 = Worst)",
+            tr['pain'],
             min_value=0.0,
             max_value=10.0,
             value=0.0,
@@ -613,16 +704,21 @@ def _render_vas_scales(user_id: str) -> Dict[str, float]:
 
 
 def _render_clinical_assessment(user: UserProfile) -> None:
-    """Render comprehensive clinical assessment section."""
-    st.markdown("## 📊 Clinical Assessment")
-    st.caption("Complete standardized scales for fatigue and sleep evaluation")
+    """Render comprehensive clinical assessment section with i18n support."""
+    st.markdown(f"## {t('clinical_assessment')}")
+    st.caption(t('clinical_assessment_subtitle'))
+    
+    # Language selector for clinical scales
+    if I18N_AVAILABLE:
+        with st.expander(f"🌐 {t('language')}", expanded=False):
+            render_language_selector(location="main", key_suffix="clinical")
     
     # Context inputs
-    with st.expander("⏰ Assessment Context", expanded=True):
+    with st.expander(t('assessment_context'), expanded=True):
         col1, col2, col3 = st.columns(3)
         with col1:
             hours_since_wake = st.number_input(
-                "Hours since waking",
+                t('hours_since_waking'),
                 min_value=0.0,
                 max_value=48.0,
                 value=8.0,
@@ -630,7 +726,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
             )
         with col2:
             hours_sleep = st.number_input(
-                "Hours slept last night",
+                t('hours_slept'),
                 min_value=0.0,
                 max_value=24.0,
                 value=7.0,
@@ -638,23 +734,23 @@ def _render_clinical_assessment(user: UserProfile) -> None:
             )
         with col3:
             caffeine_cups = st.number_input(
-                "Caffeine today (cups)",
+                t('caffeine_today'),
                 min_value=0,
                 max_value=20,
                 value=1,
                 step=1,
             )
     
-    # Scale selection
+    # Scale selection with translations
     available_scales = {
-        "ESS": "Epworth Sleepiness Scale (trait measure)",
-        "SP": "Samn-Perelli Fatigue Scale (state measure)",
-        "KSS": "Karolinska Sleepiness Scale (state measure)",
-        "VAS": "Visual Analog Scales (fatigue, pain)",
+        "ESS": t('ess_description'),
+        "SP": t('sp_description'),
+        "KSS": t('kss_description'),
+        "VAS": t('vas_description'),
     }
     
     selected_scales = st.multiselect(
-        "Select scales to complete:",
+        t('select_scales'),
         options=list(available_scales.keys()),
         default=["SP", "KSS"],
         format_func=lambda x: f"{x}: {available_scales[x]}",
@@ -682,13 +778,13 @@ def _render_clinical_assessment(user: UserProfile) -> None:
     
     # Notes
     notes = st.text_area(
-        "Assessment Notes",
-        placeholder="Optional notes about current conditions, activities, etc.",
+        t('assessment_notes'),
+        placeholder=t('assessment_notes_placeholder'),
         max_chars=500,
     )
     
     # Submit assessment
-    if st.button("💾 Save Assessment", type="primary", use_container_width=True):
+    if st.button(t('save_assessment'), type="primary", use_container_width=True):
         try:
             db = get_database()
             
@@ -705,7 +801,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
             )
             
             db.save_clinical_scales(scales)
-            st.success("✅ Assessment saved successfully!")
+            st.success(t('assessment_saved'))
             st.balloons()
             
         except Exception as exc:
