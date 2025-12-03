@@ -687,7 +687,32 @@ def _write_dataframe_cache(cache_path: Path, df: pd.DataFrame) -> None:
         )
 
 
-@st.cache_data(ttl=300)
+def _safe_to_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """Convert DataFrame columns to numeric where possible without deprecation warnings.
+    
+    Replaces df.apply(pd.to_numeric, errors='ignore') which is deprecated.
+    """
+    if df.empty:
+        return df
+    
+    result = df.copy()
+    for col in result.columns:
+        # Skip already numeric columns and datetime columns
+        if result[col].dtype.kind in "iufcmM":  # int, uint, float, complex, timedelta, datetime
+            continue
+        # Try to convert object columns to numeric
+        if result[col].dtype == object:
+            try:
+                converted = pd.to_numeric(result[col], errors="coerce")
+                # Only keep conversion if it didn't produce all NaNs
+                if not converted.isna().all():
+                    result[col] = converted
+            except (ValueError, TypeError):
+                pass
+    return result
+
+
+@st.cache_data(ttl=300, show_spinner=False)
 def _fetch_swpc_dataset(path: str) -> pd.DataFrame:
     url = f"{SWPC_BASE_URL}{path}"
     response = requests.get(url, timeout=SWPC_TIMEOUT)
@@ -712,7 +737,7 @@ def _fetch_swpc_dataset(path: str) -> pd.DataFrame:
                 if "time" in lowered or "date" in lowered or "tag" in lowered:
                     df[col] = pd.to_datetime(
                         df[col], errors="coerce", utc=True)
-        df = df.apply(pd.to_numeric, errors="ignore")
+        df = _safe_to_numeric_columns(df)
     return df
 
 
@@ -1007,7 +1032,7 @@ def fetch_donki(
     for col in time_columns:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce", utc=True)
-    df = df.apply(pd.to_numeric, errors="ignore")
+    df = _safe_to_numeric_columns(df)
     return df
 
 
@@ -3348,7 +3373,7 @@ OPEN_METEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/era5"
 BOGOTA = {"latitude": 4.7110, "longitude": -74.0721}
 
 
-@st.cache_data(ttl=1800)
+@st.cache_data(ttl=1800, show_spinner=False)
 def fetch_open_meteo_hourly(
     start_date: str,
     end_date: str,
@@ -7519,12 +7544,23 @@ that predicts cognitive performance based on:
             placeholder="e.g., 12345678")
         use_weather = st.checkbox(
             "Include weather covariates (Bogotá) for partial correlations",
-            value=True)
+            value=False,
+            help="Fetches weather data from Open-Meteo API. Uncheck for faster loading.")
 
         lags = list(range(int(lag_min), int(lag_max) + 1, int(lag_step)))
         if not lags:
             lags = [0]
 
+        # Check prerequisites before showing compute button
+        can_compute_corr = (
+            not windowed_df.empty
+            and "start" in windowed_df.columns
+            and metric_list
+            and not kp_error
+            and not kp_df.empty
+            and "kp_index" in kp_df.columns
+        )
+        
         if windowed_df.empty:
             st.info("Windowed HRV metrics are not available. Run an analysis first.")
         elif "start" not in windowed_df.columns:
@@ -7532,8 +7568,17 @@ that predicts cognitive performance based on:
         elif not metric_list:
             st.info("No numeric HRV metrics available for correlation.")
         elif kp_error or kp_df.empty or "kp_index" not in kp_df.columns:
-            st.info("Planetary K-index data not available for correlation.")
-        else:
+            st.info("Planetary K-index data not available for correlation. Click 'Fetch space weather data' first.")
+        
+        # Add explicit button to compute correlations (avoids automatic computation on tab render)
+        compute_corr_clicked = st.button(
+            "🔬 Compute HRV-Kp Correlations",
+            key="compute_hrv_kp_corr",
+            disabled=not can_compute_corr,
+            help="Calculates lagged correlations between HRV metrics and planetary K-index",
+        )
+        
+        if can_compute_corr and compute_corr_clicked:
             # optional weather covariates fetched for time span of HRV windows
             cov_df = pd.DataFrame()
             if use_weather:
@@ -7544,7 +7589,8 @@ that predicts cognitive performance based on:
                     span_min = start_dt.min().date().isoformat()
                     span_max = start_dt.max().date().isoformat()
                     try:
-                        cov_df = fetch_open_meteo_hourly(span_min, span_max)
+                        with st.spinner("Fetching weather data..."):
+                            cov_df = fetch_open_meteo_hourly(span_min, span_max)
                     except requests.RequestException as exc:
                         st.warning(f"Weather API error: {exc}")
                 if not cov_df.empty:
@@ -7604,13 +7650,14 @@ that predicts cognitive performance based on:
                         axis=1,
                     )
 
-            lag_results = _scan_lag_correlations(
-                windowed_df,
-                kp_df,
-                metric_list,
-                lags,
-                merge_tolerance_minutes=int(merge_tol),
-            )
+            with st.spinner("Computing correlations..."):
+                lag_results = _scan_lag_correlations(
+                    windowed_df,
+                    kp_df,
+                    metric_list,
+                    lags,
+                    merge_tolerance_minutes=int(merge_tol),
+                )
             if lag_results.empty:
                 st.info(
                     "No lagged correlations could be computed with current data.")
