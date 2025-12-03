@@ -3,7 +3,7 @@ alwaysApply: true
 ---
 # AI Agent & Development Rules
 
-**Version**: 1.6.4 | **Last Updated**: 2025-12-02
+**Version**: 1.6.4 | **Last Updated**: 2025-12-03
 
 This document establishes the authoritative rules for AI agents (Warp, Cursor, MCP) and developers working on the HRV Analysis Suite. These rules ensure code quality, scientific rigor, and consistent behavior.
 
@@ -66,7 +66,7 @@ This document establishes the authoritative rules for AI agents (Warp, Cursor, M
 
 * **Evidence-Based**: Search peer-reviewed literature for non-trivial changes.
   * Preferred sources: Task Force 1996, Shaffer & Ginsberg 2017, Nunan et al. 2010.
-* **Citations**: Include at least one verifiable citation (DOI/Link) per new concept.
+* **Citations**: Include at least one verifiable citation (DOI/Link) per new concept and make sure all the references are also included in the `docs/Manual.md` file, the references tab in the app. All the references should be in the APA format and be verifiable. This is why mcp tools are available to you to verify the references.
 * **Uncertainty**: Explicitly flag assumptions, limitations, or lack of validation.
 
 ## 3. Documentation & Change Discipline
