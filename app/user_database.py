@@ -442,6 +442,179 @@ class UserDatabase:
                 ON users(username)
             """)
             
+            # Body composition table (extended anthropometrics)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS body_composition (
+                    composition_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    measurement_date TEXT NOT NULL,
+                    height_cm REAL,
+                    weight_kg REAL,
+                    body_fat_pct REAL,
+                    lean_mass_kg REAL,
+                    muscle_mass_kg REAL,
+                    bone_mass_kg REAL,
+                    water_pct REAL,
+                    visceral_fat_level INTEGER,
+                    waist_cm REAL,
+                    hip_cm REAL,
+                    neck_cm REAL,
+                    chest_cm REAL,
+                    arm_cm REAL,
+                    thigh_cm REAL,
+                    calf_cm REAL,
+                    measurement_method TEXT,
+                    notes TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            
+            # Medical history table
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS medical_history (
+                    history_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    history_json TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            
+            # Laboratory results - CBC/Hemogram
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS lab_cbc (
+                    lab_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    test_date TEXT NOT NULL,
+                    laboratory TEXT,
+                    rbc_million_ul REAL,
+                    hemoglobin_g_dl REAL,
+                    hematocrit_pct REAL,
+                    mcv_fl REAL,
+                    mch_pg REAL,
+                    mchc_g_dl REAL,
+                    rdw_pct REAL,
+                    wbc_thousand_ul REAL,
+                    neutrophils_pct REAL,
+                    lymphocytes_pct REAL,
+                    monocytes_pct REAL,
+                    eosinophils_pct REAL,
+                    basophils_pct REAL,
+                    platelets_thousand_ul REAL,
+                    mpv_fl REAL,
+                    notes TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            
+            # Laboratory results - Blood Chemistry
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS lab_chemistry (
+                    lab_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    test_date TEXT NOT NULL,
+                    fasting INTEGER,
+                    laboratory TEXT,
+                    glucose_mg_dl REAL,
+                    bun_mg_dl REAL,
+                    creatinine_mg_dl REAL,
+                    sodium_meq_l REAL,
+                    potassium_meq_l REAL,
+                    chloride_meq_l REAL,
+                    co2_meq_l REAL,
+                    calcium_mg_dl REAL,
+                    total_protein_g_dl REAL,
+                    albumin_g_dl REAL,
+                    bilirubin_total_mg_dl REAL,
+                    ast_u_l REAL,
+                    alt_u_l REAL,
+                    alp_u_l REAL,
+                    total_cholesterol_mg_dl REAL,
+                    ldl_cholesterol_mg_dl REAL,
+                    hdl_cholesterol_mg_dl REAL,
+                    triglycerides_mg_dl REAL,
+                    hba1c_pct REAL,
+                    tsh_miu_l REAL,
+                    free_t4_ng_dl REAL,
+                    iron_ug_dl REAL,
+                    ferritin_ng_ml REAL,
+                    vitamin_d_25oh_ng_ml REAL,
+                    vitamin_b12_pg_ml REAL,
+                    crp_mg_l REAL,
+                    uric_acid_mg_dl REAL,
+                    notes TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            
+            # Laboratory results - Urinalysis
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS lab_urinalysis (
+                    lab_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    test_date TEXT NOT NULL,
+                    collection_method TEXT,
+                    color TEXT,
+                    appearance TEXT,
+                    specific_gravity REAL,
+                    ph REAL,
+                    protein_qualitative TEXT,
+                    glucose_qualitative TEXT,
+                    ketones TEXT,
+                    blood TEXT,
+                    bilirubin TEXT,
+                    nitrite TEXT,
+                    leukocyte_esterase TEXT,
+                    rbc_per_hpf REAL,
+                    wbc_per_hpf REAL,
+                    bacteria TEXT,
+                    casts TEXT,
+                    crystals TEXT,
+                    notes TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            
+            # Physiological calculations (cached results)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS physiological_calcs (
+                    calc_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    calculation_date TEXT NOT NULL,
+                    bmr_kcal REAL,
+                    bmr_method TEXT,
+                    tdee_kcal REAL,
+                    activity_level TEXT,
+                    water_requirement_ml REAL,
+                    protein_g REAL,
+                    fat_g REAL,
+                    carbohydrate_g REAL,
+                    fiber_g REAL,
+                    exercise_kcal REAL,
+                    total_kcal REAL,
+                    calculation_json TEXT,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            
+            # Create indices for new tables
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_body_comp_user_date 
+                ON body_composition(user_id, measurement_date)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_lab_cbc_user_date 
+                ON lab_cbc(user_id, test_date)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_lab_chem_user_date 
+                ON lab_chemistry(user_id, test_date)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_lab_urine_user_date 
+                ON lab_urinalysis(user_id, test_date)
+            """)
+            
             # Schema version tracking
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS schema_info (
