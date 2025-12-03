@@ -1,4 +1,4 @@
-## Physiological Laboratory — Complete User Manual
+## Mission Control - Flight Surgeon — Complete User Manual
 
 ### Author
 
@@ -14,7 +14,7 @@ Contributing to **AsterPhysiology** Research Initiative
 
 ---
 
-This manual provides step-by-step instructions for all features of the Physiological Laboratory (HRV Analysis Suite) with practical examples, interpretation guidance, and clinical/research best practices.
+This manual provides step-by-step instructions for all features of Mission Control - Flight Surgeon with practical examples, interpretation guidance, and clinical/research best practices.
 
 ---
 
@@ -1619,7 +1619,7 @@ For live data:
 
 ### Overview
 
-ActiGraph accelerometers (GT3X, GT3X+, GT9X Link) are research-grade wearable devices used for objective measurement of physical activity and sleep. The HRV Analysis Suite supports importing data from these devices to:
+ActiGraph accelerometers (GT3X, GT3X+, GT9X Link) are research-grade wearable devices used for objective measurement of physical activity and sleep. The Mission Control - Flight Surgeon supports importing data from these devices to:
 
 - Correlate activity patterns with HRV metrics
 - Classify sleep/wake periods for overnight HRV analysis
@@ -1712,7 +1712,7 @@ The Compumedics Somfit/Somfit Pro is a miniaturized home sleep testing device th
 - SpO2 (pulse oximetry)
 - Body position
 
-The HRV Analysis Suite imports Somfit data to analyze sleep-stage-specific HRV patterns and overnight autonomic function.
+The Mission Control - Flight Surgeon imports Somfit data to analyze sleep-stage-specific HRV patterns and overnight autonomic function.
 
 ### Supported File Formats
 
@@ -3183,7 +3183,7 @@ For full BLE functionality, consider the desktop version which provides:
 
 ## Docker Deployment
 
-The HRV Analysis Suite supports containerized deployment for production environments with persistent data storage.
+The Mission Control - Flight Surgeon supports containerized deployment for production environments with persistent data storage.
 
 ### Prerequisites
 
@@ -3297,7 +3297,7 @@ docker-compose --profile admin up -d
 
 ## Pending Developments and Roadmap
 
-This section outlines completed features and remaining planned enhancements for the HRV Analysis Suite.
+This section outlines completed features and remaining planned enhancements for the Mission Control - Flight Surgeon.
 
 ### Completed Features (Q4 2025)
 
