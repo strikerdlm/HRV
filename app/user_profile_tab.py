@@ -1,5 +1,5 @@
 """
-User Profile Tab for HRV Analysis Suite.
+User Profile Tab for Mission Control - Flight Surgeon.
 
 Provides a centralized interface for:
 - User registration and profile management
