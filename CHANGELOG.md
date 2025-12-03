@@ -19,8 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `@st.fragment` decorator to clinical assessment forms (ESS, KSS, Samn-Perelli)
   - NASA Nutrition Calculator and Medical Record forms now use partial reruns
   - Loading spinners added for assessment history and HRV data queries
+  - **Space Weather Tab**: HRV-Kp correlation now requires explicit button click instead of auto-compute
+  - Weather covariates checkbox defaults to unchecked for faster tab loading
+  - `fetch_open_meteo_hourly()` cache decorator now has `show_spinner=False`
 
 ### Fixed
+- **FutureWarning**: Fixed deprecated `pd.to_numeric(errors='ignore')` in SWPC and DONKI data fetchers
 - Reduced unnecessary full page reruns when interacting with form widgets
 - Eliminated repeated database initialization on every Streamlit rerun
 - User list queries no longer block UI during page refresh
