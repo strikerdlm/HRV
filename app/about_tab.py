@@ -1,5 +1,5 @@
 """
-Professional About Tab for HRV Analysis Suite.
+Professional About Tab for Mission Control - Flight Surgeon.
 
 Provides a comprehensive, visually appealing About section with:
 - Author information and credentials
@@ -22,7 +22,7 @@ import streamlit as st
 
 # Application metadata
 APP_VERSION = "1.6.1"
-APP_NAME = "HRV Analysis Suite"
+APP_NAME = "Mission Control - Flight Surgeon"
 APP_RELEASE_DATE = "2025-11-29"
 APP_AUTHOR = "Dr. Diego Leonel Malpica Hincapié, MD"
 APP_AUTHOR_TITLE = "Aerospace Medicine Specialist"
@@ -235,7 +235,7 @@ def _render_citation_box() -> str:
             color: #a0aec0;
             white-space: pre-wrap;
             word-break: break-word;
-        ">Malpica, D. L. (2025). HRV Analysis Suite: A comprehensive platform for heart rate variability analysis and physiological monitoring (Version 1.5.0) [Computer software]. https://github.com/strikerdlm/HRV</code>
+        ">Malpica, D. L. (2025). Mission Control - Flight Surgeon: A comprehensive platform for heart rate variability analysis and physiological monitoring (Version 1.5.0) [Computer software]. https://github.com/strikerdlm/HRV</code>
     </div>
     """
 
