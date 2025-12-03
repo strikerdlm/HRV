@@ -3482,4 +3482,4 @@ If you're interested in contributing to any of these developments:
 
 ---
 
-*Last updated: November 29, 2025*
+*Last updated: December 3, 2025*
