@@ -1445,7 +1445,9 @@ def _render_medical_record_form(user: UserProfile) -> None:
     """Render NASA-style exploration medical record entry form."""
     st.caption(
         "Structured per NASA Medical Information Systems & Tools (MIST) and "
-        "Exploration Medical Capability guidance for autonomous missions.\u30101\u2020L1-L5\u30112\u2020L1-L4\u3011"
+        "Exploration Medical Capability (ExMC) guidance for autonomous missions. "
+        "See: https://www.nasa.gov/general/medical-information-systems-and-tools-mist/ "
+        "and https://ntrs.nasa.gov/citations/20230015831"
     )
     try:
         db = get_database()
