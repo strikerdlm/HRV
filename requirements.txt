@@ -1,6 +1,6 @@
 # Mission Control - Flight Surgeon - Python Dependencies
-# Last updated: 2025-12-02
-# Version: 1.6.4
+# Last updated: 2025-12-03
+# Version: 1.7.0
 
 # ===========================================================================
 # CORE DEPENDENCIES (Required)
