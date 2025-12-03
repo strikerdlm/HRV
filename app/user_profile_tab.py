@@ -34,10 +34,17 @@ try:
         HRVMeasurement,
         UserDatabase,
         get_database,
+        get_cached_user_list,
+        clear_user_cache,
     )
     DATABASE_AVAILABLE = True
 except ImportError:
     DATABASE_AVAILABLE = False
+    # Fallbacks for missing functions
+    def get_cached_user_list() -> list:  # type: ignore[misc]
+        return []
+    def clear_user_cache() -> None:  # type: ignore[misc]
+        pass
 
 # Import i18n module for translations
 try:
@@ -94,6 +101,23 @@ except ImportError:
     PROFILE_MODULE_AVAILABLE = False
 
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+
+# Check for @st.fragment support (Streamlit 1.37+)
+try:
+    _HAS_FRAGMENT = hasattr(st, "fragment")
+except AttributeError:
+    _HAS_FRAGMENT = False
+
+
+def _fragment_if_available(func: Any) -> Any:
+    """Decorator that applies @st.fragment if available, otherwise no-op.
+    
+    Fragments allow partial reruns of just the decorated function,
+    avoiding full page reruns when interacting with widgets inside.
+    """
+    if _HAS_FRAGMENT:
+        return st.fragment(func)
+    return func
 
 
 # ---------------------------------------------------------------------------
@@ -324,6 +348,9 @@ def _render_registration_form() -> Optional[UserProfile]:
                     st.error(f"Username '{profile.username}' already exists.")
                     return None
                 
+                # Clear user cache after successful creation
+                clear_user_cache()
+                
                 st.success(f"✅ Profile created for {full_name}!")
                 return profile
                 
@@ -341,10 +368,10 @@ def _render_registration_form() -> Optional[UserProfile]:
 
 def _render_login_section() -> Optional[UserProfile]:
     """Render user login/selection section."""
-    db = get_database()
-    users = db.list_users()
+    # Use cached user list for better performance
+    cached_users = get_cached_user_list()
     
-    if not users:
+    if not cached_users:
         st.info("No users registered. Create a new profile below.")
         return None
     
@@ -353,21 +380,26 @@ def _render_login_section() -> Optional[UserProfile]:
     col_select, col_action = st.columns([3, 1])
     
     with col_select:
-        user_options = {u.username: u for u in users}
+        # Build options from cached data (avoiding full DB query)
+        user_options = {u["username"]: u for u in cached_users}
         selected_username = st.selectbox(
             "Select User",
             options=list(user_options.keys()),
-            format_func=lambda x: f"{user_options[x].full_name} (@{x})",
+            format_func=lambda x: f"{user_options[x]['full_name']} (@{x})",
         )
     
     with col_action:
         st.write("")  # Spacing
         if st.button("✅ Select User", use_container_width=True):
-            user = user_options.get(selected_username)
-            if user:
-                _set_current_user(user)
-                st.success(f"Logged in as {user.full_name}")
-                st.rerun()
+            selected_data = user_options.get(selected_username)
+            if selected_data:
+                # Fetch full user profile only when needed
+                db = get_database()
+                user = db.get_user(selected_data["user_id"])
+                if user:
+                    _set_current_user(user)
+                    st.success(f"Logged in as {user.full_name}")
+                    st.rerun()
     
     return None
 
@@ -498,6 +530,7 @@ def _render_profile_edit(user: UserProfile) -> None:
 # ---------------------------------------------------------------------------
 
 
+@_fragment_if_available
 def _render_epworth_form(user_id: str) -> Optional[int]:
     """Render Epworth Sleepiness Scale form with i18n support."""
     # Get translations for current language
@@ -577,6 +610,7 @@ def _render_epworth_form(user_id: str) -> Optional[int]:
     return total
 
 
+@_fragment_if_available
 def _render_samn_perelli_form(user_id: str) -> Optional[int]:
     """Render Samn-Perelli Fatigue Scale form with i18n support."""
     # Get translations for current language
@@ -639,6 +673,7 @@ def _render_samn_perelli_form(user_id: str) -> Optional[int]:
     return rating
 
 
+@_fragment_if_available
 def _render_kss_form(user_id: str) -> Optional[int]:
     """Render Karolinska Sleepiness Scale form with i18n support."""
     # Get translations for current language
@@ -843,8 +878,9 @@ def _render_assessment_history(user: UserProfile) -> None:
     st.markdown("## 📈 Assessment History")
     
     try:
-        db = get_database()
-        history = db.get_clinical_scales_history(user.user_id, limit=50)
+        with st.spinner("Loading assessment history..."):
+            db = get_database()
+            history = db.get_clinical_scales_history(user.user_id, limit=50)
         
         if not history:
             st.info("No assessment history found. Complete a clinical assessment to start tracking.")
@@ -903,8 +939,9 @@ def _render_hrv_history(user: UserProfile) -> None:
     st.markdown("## 💓 HRV Measurement History")
     
     try:
-        db = get_database()
-        df = db.get_hrv_dataframe(user.user_id)
+        with st.spinner("Loading HRV measurements..."):
+            db = get_database()
+            df = db.get_hrv_dataframe(user.user_id)
         
         if df.empty:
             st.info("No HRV measurements recorded. Import HRV data from the main analysis to populate this section.")
@@ -1116,6 +1153,7 @@ def _render_data_completeness(user: UserProfile) -> None:
         )
 
 
+@_fragment_if_available
 def _render_nasa_calculator(user: UserProfile) -> None:
     """Render NASA-based nutrition calculator."""
     st.markdown("#### 🧮 Energy & Nutrition Requirements")
@@ -1441,6 +1479,7 @@ def _render_medical_history_summary(user: UserProfile) -> None:
     )
 
 
+@_fragment_if_available
 def _render_medical_record_form(user: UserProfile) -> None:
     """Render NASA-style exploration medical record entry form."""
     st.caption(
