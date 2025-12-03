@@ -1,5 +1,5 @@
 """
-Centralized logging configuration for HRV Analysis Suite.
+Centralized logging configuration for Mission Control - Flight Surgeon.
 
 Provides persistent file logging for debugging, error tracking, and audit trails.
 Logs are written to the `logs/` directory with automatic rotation.
@@ -14,7 +14,7 @@ Usage:
     logger = get_logger(__name__)
     logger.info("Processing started")
 
-Author: HRV Analysis Suite
+Author: Mission Control - Flight Surgeon
 Version: 1.0.0
 """
 
