@@ -9,14 +9,17 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.6.4-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.7.0-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
-[![Last Updated](https://img.shields.io/badge/Updated-2025--12--02-blue)](CHANGELOG.md)
+[![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
+[![Last Updated](https://img.shields.io/badge/Updated-2025--12--03-blue)](CHANGELOG.md)
 
 ---
 
 A comprehensive, research-grade Heart Rate Variability (HRV) analysis platform integrating circadian rhythm simulation, blood pressure variability, population norms comparison, and real-time space weather data from NOAA SWPC and NASA DONKI. Built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.7.0**: Astronaut-grade clinical profiles with NASA nutrition calculations, Spanish language support (Colombian-validated scales), extended anthropometrics, and laboratory data tracking.
 
 ## 🚀 Quick Start
 
@@ -100,11 +103,53 @@ All other tabs show **example data** and **reference values** to help you unders
 | **CPU Performance Mode** | Adjustable presets (Fast/Balanced/Quality) with smart downsampling |
 | **GPU Acceleration** | NVIDIA CUDA support (RTX 5070/4090/3080) for heavy computations |
 | **User Profile System** | Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS), history tracking |
-| **User Profiles** | Biometric data with validated clinical scales (ESS, KSS, PSQI, Samn-Perelli) |
+| **Clinical Profiles** | Astronaut-grade assessment: BMR, TDEE, NASA nutrition, body composition |
+| **Multi-Language** | English + Spanish (Colombian-validated scales: ESE-VC, KSS-CO) |
+| **Laboratory Tracking** | CBC/Hemogram, Blood Chemistry, Urinalysis with normal ranges |
 | **Multi-Device Import** | Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, Somfit Pro |
 | **Docker Deployment** | Containerized with PostgreSQL/TimescaleDB for production environments |
 | **AI Interpretation** | GPT-5.1 high-reasoning analysis with scientific citations |
 | **Publication Export** | APA 7th edition formatted reports, LaTeX tables, CSV/JSON data |
+
+---
+
+## 🗺️ Development Roadmap (v2.0)
+
+### Current Sprint (December 2025)
+
+| Priority | Feature | Status |
+|----------|---------|--------|
+| 🔴 HIGH | Clinical Profile UI visualization | In Progress |
+| 🔴 HIGH | Multi-user sessions (1-7 concurrent) | Planned |
+| 🟡 MEDIUM | Move Circadian settings to tab | Planned |
+| 🟡 MEDIUM | All tabs use active user context | Planned |
+| 🟢 LOW | Per-tab settings persistence | Planned |
+
+### Planned Features (Q1 2026)
+
+#### Longitudinal Study Support
+- **Baseline + 22 Measurements**: Track subjects over time (T0 → T21)
+- **Intra-Subject Analysis**: Within-individual change detection, trend analysis
+- **Inter-Subject Analysis**: Between-group comparisons, effect sizes
+- **Mixed-Effects Models**: Random subject intercepts, repeated measures
+
+#### Group Analysis Framework
+```
+Study Design:
+├── Control Group (n subjects)
+│   └── Each subject: T0, T1, T2, ... T21
+└── Intervention Group (n subjects)
+    └── Each subject: T0, T1, T2, ... T21
+```
+
+**Analysis Types**:
+- Per-subject time series with individual baselines
+- Per-group aggregated statistics at each timepoint  
+- Group × Time interaction effects
+- Responder vs non-responder classification
+- Effect size calculations (Cohen's d, η²)
+
+> **For detailed roadmap**: See [WARP.md](WARP.md) section "🚀 DEVELOPMENT ROADMAP"
 
 ---
 
