@@ -131,6 +131,7 @@ def build_analysis_payload(
     episodes_df: pd.DataFrame,
     ml_summary_df: pd.DataFrame,
     *,
+    report_markdown: Optional[str] = None,
     max_table_rows: int = 12,
     max_table_columns: int = 20,
 ) -> str:
@@ -144,6 +145,7 @@ def build_analysis_payload(
         ml_summary_df: ML clustering summary DataFrame.
         max_table_rows: Maximum rows per table.
         max_table_columns: Maximum columns per table.
+        report_markdown: Optional markdown export preview to include.
 
     Returns:
         JSON string payload for interpretation.
@@ -205,6 +207,8 @@ def build_analysis_payload(
             },
         ],
     }
+    if report_markdown:
+        payload["export_markdown_excerpt"] = report_markdown[:12000]
     return json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
 
 
