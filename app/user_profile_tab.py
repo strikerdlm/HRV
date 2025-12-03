@@ -258,13 +258,16 @@ def _render_registration_form() -> Optional[UserProfile]:
             
             try:
                 db = get_database()
-                # Check if username exists
-                existing = db.get_user_by_username(profile.username)
-                if existing:
+                # Optimized: check and create in single transaction
+                user_id, created = db.create_user_if_not_exists(
+                    profile,
+                    password if password else None,
+                )
+                
+                if not created:
                     st.error(f"Username '{profile.username}' already exists.")
                     return None
                 
-                db.create_user(profile, password if password else None)
                 st.success(f"✅ Profile created for {full_name}!")
                 return profile
                 
