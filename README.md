@@ -17,7 +17,7 @@ Contributing to **AsterPhysiology** Research Initiative
 
 ---
 
-A comprehensive, research-grade Heart Rate Variability (HRV) analysis platform integrating circadian rhythm simulation, blood pressure variability, population norms comparison, and real-time space weather data from NOAA SWPC and NASA DONKI. Built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
 
 **NEW in v1.7.0**: Astronaut-grade clinical profiles with NASA nutrition calculations, Spanish language support (Colombian-validated scales), extended anthropometrics, and laboratory data tracking.
 
@@ -63,6 +63,18 @@ The app will open in your default browser at `http://localhost:8501`.
 
 4. **Export**: Go to **Export** tab to download a comprehensive Markdown report
 
+### Polar AccessLink (optional VO2max sync)
+
+Mission Control - Flight Surgeon can pull VO2max estimates from Polar Flow via the AccessLink API for higher-fidelity exercise compensation:
+
+1. Register an application in the [Polar AccessLink program](https://www.polar.com/accesslink-api/) and complete the OAuth handshake to obtain a bearer token.
+2. Set environment variables (never commit secrets):
+   - `POLAR_ACCESSLINK_TOKEN` — bearer token returned by AccessLink.
+   - `POLAR_ACCESSLINK_USER_ID` — numeric user identifier reported by Polar Flow.
+3. Restart the app and open **User Profile → NASA Nutrition**. A **Use Polar value** toggle will appear when credentials are available.
+
+If the env vars are omitted the calculator falls back to the VO2max stored in the user profile.
+
 ---
 
 ## 🚀 Explore Without Data
@@ -104,6 +116,8 @@ All other tabs show **example data** and **reference values** to help you unders
 | **GPU Acceleration** | NVIDIA CUDA support (RTX 5070/4090/3080) for heavy computations |
 | **User Profile System** | Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS), history tracking |
 | **Clinical Profiles** | Astronaut-grade assessment: BMR, TDEE, NASA nutrition, body composition |
+| **Exploration Medical Record** | NASA isolation/mission log with EVA, radiation, stress, and behavioral metrics |
+| **Polar AccessLink VO2 Integration** | Optional VO2max sync for exercise compensation via AccessLink API |
 | **Multi-Language** | English + Spanish (Colombian-validated scales: ESE-VC, KSS-CO) |
 | **Laboratory Tracking** | CBC/Hemogram, Blood Chemistry, Urinalysis with normal ranges |
 | **Multi-Device Import** | Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, Somfit Pro |
