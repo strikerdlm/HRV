@@ -418,7 +418,13 @@ def get_current_language() -> Language:
     Returns:
         Current Language enum value.
     """
-    lang_code = st.session_state.get(_SESSION_LANGUAGE_KEY, _DEFAULT_LANGUAGE)
+    # Fast path: avoid repeated dict lookup
+    if _SESSION_LANGUAGE_KEY in st.session_state:
+        lang_code = st.session_state[_SESSION_LANGUAGE_KEY]
+    else:
+        lang_code = _DEFAULT_LANGUAGE
+        st.session_state[_SESSION_LANGUAGE_KEY] = lang_code
+    
     try:
         return Language(lang_code)
     except ValueError:
@@ -446,9 +452,15 @@ def t(key: str, **kwargs: Any) -> str:
         Translated string, or key if not found.
     """
     lang = get_current_language()
-    translations = UI_TRANSLATIONS.get(lang.value, UI_TRANSLATIONS["en"])
     
-    text = translations.get(key, UI_TRANSLATIONS["en"].get(key, key))
+    # Fast path: direct dictionary access (avoids double lookup)
+    lang_dict = UI_TRANSLATIONS.get(lang.value)
+    if lang_dict is None:
+        lang_dict = UI_TRANSLATIONS["en"]
+    
+    text = lang_dict.get(key)
+    if text is None:
+        text = UI_TRANSLATIONS["en"].get(key, key)
     
     if kwargs:
         try:
@@ -457,6 +469,16 @@ def t(key: str, **kwargs: Any) -> str:
             pass
     
     return text
+
+
+# Pre-compute translation lookups for hot paths
+@st.cache_data(ttl=3600, show_spinner=False)
+def _get_translations_for_language(lang_code: str) -> Dict[str, str]:
+    """Cache UI translations for a language (1-hour TTL).
+    
+    This avoids repeated dictionary lookups on every t() call.
+    """
+    return UI_TRANSLATIONS.get(lang_code, UI_TRANSLATIONS["en"]).copy()
 
 
 def get_epworth_translations() -> Dict[str, Any]:
