@@ -380,18 +380,19 @@ def downsample_array(
 # ---------------------------------------------------------------------------
 def get_performance_settings() -> Dict[str, Any]:
     """
-    Get performance settings from session state with sensible defaults.
+    Get performance settings from session state with FAST defaults.
     
     Returns:
         Dictionary of performance settings
     """
+    # Fast mode defaults for maximum responsiveness
     defaults = {
-        "enable_heavy_plots": False,
-        "max_plot_points": 2000,
-        "max_dataframe_rows": 500,
+        "enable_heavy_plots": False,  # Fast: no heavy plots
+        "max_plot_points": 1000,  # Fast: reduced from 2000
+        "max_dataframe_rows": 200,  # Fast: reduced from 500
         "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
         "throttle_interval": 0.5,
-        "optimize_memory": True,
+        "optimize_memory": True,  # Fast: always optimize
     }
     
     if "performance_settings" not in st.session_state:
@@ -412,11 +413,11 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
     with st.sidebar.expander("⚡ Performance Settings", expanded=False):
         st.caption("Adjust for your CPU speed")
         
-        # Preset options
+        # Preset options - Fast mode is default for best responsiveness
         preset = st.selectbox(
             "Performance Preset",
-            options=["Balanced", "Fast (Low CPU)", "Quality (High CPU)", "Custom"],
-            index=0,
+            options=["Fast (Low CPU)", "Balanced", "Quality (High CPU)", "Custom"],
+            index=0,  # Fast mode is first and default
             help="Quick presets for different CPU capabilities",
         )
         
