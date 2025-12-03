@@ -974,7 +974,13 @@ def calculate_comprehensive_requirements(
     tdee = calculate_tdee(bmr_adjusted, activity_level)
     
     # Exercise calories for the specified duration
-    exercise_kcal = calculate_exercise_calories(weight_kg, exercise_type, exercise_duration_min)
+    exercise_summary = calculate_exercise_energy_expenditure(
+        weight_kg=weight_kg,
+        exercise_type=exercise_type,
+        duration_minutes=exercise_duration_min,
+        vo2max_ml_kg_min=vo2max_ml_kg_min,
+    )
+    exercise_kcal = exercise_summary["adjusted_kcal"]
     
     # Total daily needs with exercise
     total_kcal_with_exercise = tdee + exercise_kcal
@@ -1014,6 +1020,7 @@ def calculate_comprehensive_requirements(
             "exercise_duration_min": exercise_duration_min,
             "eva_adjustment_kcal": NASA_EVA_EXTRA_KCAL if is_high_intensity else 0,
             "total_daily_kcal": round(total_kcal_with_exercise, 0),
+            "exercise_details": exercise_summary,
         },
         "hydration": water_reqs,
         "macronutrients": macros,
