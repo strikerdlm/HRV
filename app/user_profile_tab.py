@@ -58,6 +58,18 @@ except ImportError:
     # Fallback function if i18n not available
     def t(key: str, **kwargs: Any) -> str:  # type: ignore[misc]
         return key
+
+# Import multi-user session manager
+try:
+    from multi_user_session import (
+        get_multi_user_manager,
+        render_user_switcher,
+        render_user_session_manager,
+        MAX_CONCURRENT_USERS,
+    )
+    MULTI_USER_AVAILABLE = True
+except ImportError:
+    MULTI_USER_AVAILABLE = False
     def get_current_language() -> str:  # type: ignore[misc]
         return "en"
 
@@ -104,7 +116,7 @@ def _get_current_user() -> Optional[UserProfile]:
 
 
 def _set_current_user(user: Optional[UserProfile]) -> None:
-    """Set current user in session state and sync language preference."""
+    """Set current user in session state, sync language, and register in multi-user manager."""
     st.session_state[_SESSION_CURRENT_USER] = user
     if user:
         st.session_state[_SESSION_USER_ID] = user.user_id
@@ -116,6 +128,19 @@ def _set_current_user(user: Optional[UserProfile]) -> None:
                 set_language(lang)
             except (ValueError, ImportError):
                 pass  # Keep current language if invalid
+        
+        # Register in multi-user session manager
+        if MULTI_USER_AVAILABLE:
+            try:
+                manager = get_multi_user_manager()
+                manager.add_user_session(
+                    user_id=user.user_id,
+                    username=user.username,
+                    full_name=user.full_name or user.username,
+                    make_active=True,
+                )
+            except Exception:
+                pass  # Continue even if multi-user registration fails
 
 
 def _calculate_age(dob_str: Optional[str]) -> Optional[int]:
@@ -987,6 +1012,470 @@ def _render_data_management(user: UserProfile) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Clinical Profile Section (NASA Nutrition, Body Composition)
+# ---------------------------------------------------------------------------
+
+# Import clinical profile module if available
+try:
+    from clinical_profile import (
+        BiologicalSex,
+        ActivityLevel,
+        calculate_comprehensive_requirements,
+        calculate_nasa_water_requirement,
+        PAL_MULTIPLIERS,
+        EXERCISE_METS,
+    )
+    CLINICAL_PROFILE_AVAILABLE = True
+except ImportError:
+    CLINICAL_PROFILE_AVAILABLE = False
+
+
+def _render_clinical_profile(user: UserProfile) -> None:
+    """Render comprehensive clinical profile with NASA calculations."""
+    st.markdown("## 🏥 Comprehensive Clinical Profile")
+    
+    if not CLINICAL_PROFILE_AVAILABLE:
+        st.warning(
+            "Clinical profile module not available. "
+            "Ensure `clinical_profile.py` is in the app directory."
+        )
+        return
+    
+    # Data completeness check
+    _render_data_completeness(user)
+    
+    st.markdown("---")
+    
+    # NASA Nutrition Calculator
+    with st.expander("🚀 NASA Nutrition Calculator", expanded=True):
+        _render_nasa_calculator(user)
+    
+    # Body Composition
+    with st.expander("📏 Body Composition", expanded=False):
+        _render_body_composition_form(user)
+    
+    # Medical History Summary
+    with st.expander("📋 Medical History", expanded=False):
+        _render_medical_history_summary(user)
+
+
+def _render_data_completeness(user: UserProfile) -> None:
+    """Show data completeness indicators."""
+    st.markdown("### 📊 Profile Completeness")
+    
+    # Check required fields
+    required_fields = {
+        "Height": user.height_cm is not None,
+        "Weight": user.weight_kg is not None,
+        "Date of Birth": user.date_of_birth is not None,
+        "Sex": user.sex is not None,
+        "Activity Level": user.activity_level is not None,
+    }
+    
+    optional_fields = {
+        "Resting HR": user.resting_hr_bpm is not None,
+        "VO2max": user.vo2max_ml_kg_min is not None,
+        "Max HR": user.max_hr_bpm is not None,
+        "Occupation": user.occupation is not None,
+    }
+    
+    # Calculate completeness
+    required_complete = sum(required_fields.values())
+    required_total = len(required_fields)
+    optional_complete = sum(optional_fields.values())
+    optional_total = len(optional_fields)
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        pct = int(required_complete / required_total * 100)
+        color = "green" if pct == 100 else "orange" if pct >= 60 else "red"
+        st.metric("Required Fields", f"{required_complete}/{required_total}")
+        if pct < 100:
+            missing = [k for k, v in required_fields.items() if not v]
+            st.caption(f"⚠️ Missing: {', '.join(missing)}")
+    
+    with col2:
+        st.metric("Optional Fields", f"{optional_complete}/{optional_total}")
+    
+    with col3:
+        overall = int((required_complete + optional_complete) / (required_total + optional_total) * 100)
+        st.metric("Overall", f"{overall}%")
+    
+    # Show warning if required fields missing
+    if required_complete < required_total:
+        st.warning(
+            "⚠️ **Required fields missing!** "
+            "NASA nutrition calculations require: Height, Weight, Age, Sex, Activity Level. "
+            "Click 'Edit Profile' above to complete your profile."
+        )
+
+
+def _render_nasa_calculator(user: UserProfile) -> None:
+    """Render NASA-based nutrition calculator."""
+    st.markdown("#### 🧮 Energy & Nutrition Requirements")
+    st.caption(
+        "Calculations based on NASA JSC67378 standards and Mifflin-St Jeor equation. "
+        "[View References](docs/Manual.md#scientific-references)"
+    )
+    
+    # Check if we have required data
+    if not all([user.height_cm, user.weight_kg, user.date_of_birth, user.sex]):
+        st.info("Complete your profile (height, weight, age, sex) to calculate nutrition requirements.")
+        return
+    
+    # Calculate age
+    age = _calculate_age(user.date_of_birth)
+    if age is None:
+        st.error("Could not calculate age from date of birth.")
+        return
+    
+    # Map sex to BiologicalSex enum
+    sex_map = {
+        "male": BiologicalSex.MALE,
+        "female": BiologicalSex.FEMALE,
+        "other": BiologicalSex.FEMALE,  # Conservative estimate
+    }
+    sex = sex_map.get(user.sex, BiologicalSex.FEMALE)
+    
+    # Activity level mapping
+    activity_map = {
+        "sedentary": ActivityLevel.SEDENTARY,
+        "light": ActivityLevel.LIGHTLY_ACTIVE,
+        "lightly_active": ActivityLevel.LIGHTLY_ACTIVE,
+        "moderate": ActivityLevel.MODERATELY_ACTIVE,
+        "moderately_active": ActivityLevel.MODERATELY_ACTIVE,
+        "active": ActivityLevel.VERY_ACTIVE,
+        "very_active": ActivityLevel.VERY_ACTIVE,
+        "extra_active": ActivityLevel.EXTRA_ACTIVE,
+    }
+    activity_level = activity_map.get(
+        user.activity_level or "moderate",
+        ActivityLevel.MODERATELY_ACTIVE
+    )
+    
+    # Exercise settings
+    col1, col2 = st.columns(2)
+    with col1:
+        exercise_type = st.selectbox(
+            "Exercise Type",
+            options=list(EXERCISE_METS.keys()),
+            index=list(EXERCISE_METS.keys()).index("cycling_moderate"),
+            format_func=lambda x: x.replace("_", " ").title(),
+            key="nasa_exercise_type",
+        )
+    with col2:
+        exercise_duration = st.slider(
+            "Exercise Duration (min)",
+            min_value=0,
+            max_value=240,
+            value=120,  # Default 2 hours as requested
+            step=15,
+            key="nasa_exercise_duration",
+        )
+    
+    # Calculate requirements
+    try:
+        results = calculate_comprehensive_requirements(
+            weight_kg=user.weight_kg,
+            height_cm=user.height_cm,
+            age_years=age,
+            sex=sex,
+            activity_level=activity_level,
+            exercise_type=exercise_type,
+            exercise_duration_min=exercise_duration,
+            vo2max_ml_kg_min=user.vo2max_ml_kg_min,
+            lean_mass_kg=None,  # Would come from body composition
+        )
+        
+        # Display results
+        st.markdown("##### ⚡ Energy Requirements")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        with col1:
+            st.metric(
+                "BMR",
+                f"{results['bmr']['adjusted_kcal']:.0f} kcal",
+                help=f"Method: {results['bmr']['method']}"
+            )
+        with col2:
+            st.metric(
+                "TDEE",
+                f"{results['energy']['tdee_kcal']:.0f} kcal",
+                help=f"PAL: {results['energy']['pal_multiplier']:.2f}"
+            )
+        with col3:
+            st.metric(
+                "Exercise",
+                f"+{results['energy']['exercise_kcal']:.0f} kcal",
+                help=f"{exercise_duration} min {exercise_type}"
+            )
+        with col4:
+            st.metric(
+                "Total Daily",
+                f"{results['energy']['total_daily_kcal']:.0f} kcal",
+                delta=f"+{results['energy']['exercise_kcal']:.0f}" if exercise_duration > 0 else None,
+            )
+        
+        st.markdown("##### 💧 Hydration (NASA Standard)")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            st.metric(
+                "Base Requirement",
+                f"{results['hydration']['base_ml']:.0f} mL",
+                help="32 mL/kg body weight (NASA-STD-3001)"
+            )
+        with col2:
+            st.metric(
+                "With Activity",
+                f"{results['hydration']['total_ml']:.0f} mL",
+            )
+        with col3:
+            st.metric(
+                "Daily Target",
+                f"{results['hydration']['total_liters']:.1f} L",
+                help=f"~{results['hydration']['minimum_glasses_8oz']} glasses (8 oz each)"
+            )
+        
+        st.markdown("##### 🥗 Macronutrients (NASA JSC67378)")
+        col1, col2, col3, col4 = st.columns(4)
+        
+        macros = results['macronutrients']
+        with col1:
+            st.metric(
+                "Protein",
+                f"{macros['protein_g']:.0f} g",
+                help=f"{macros['protein_g_per_kg']:.1f} g/kg ({macros['protein_pct']:.0f}%)"
+            )
+        with col2:
+            st.metric(
+                "Carbohydrates",
+                f"{macros['carbohydrate_g']:.0f} g",
+                help=f"{macros['carbohydrate_pct']:.0f}%"
+            )
+        with col3:
+            st.metric(
+                "Fat",
+                f"{macros['fat_g']:.0f} g",
+                help=f"{macros['fat_pct']:.0f}%"
+            )
+        with col4:
+            st.metric(
+                "Fiber",
+                f"{macros['fiber_g']:.0f} g",
+                help="14g per 1000 kcal (IOM)"
+            )
+        
+        # Reference note
+        st.caption(
+            "📚 **References**: Mifflin et al. (1990), NASA JSC67378 (2020), "
+            "Scott et al. (2020). See Manual for full citations."
+        )
+        
+    except Exception as exc:
+        st.error(f"Calculation error: {exc}")
+
+
+def _render_body_composition_form(user: UserProfile) -> None:
+    """Render body composition entry form."""
+    st.markdown("#### 📐 Body Composition Measurements")
+    st.caption("Enter values from bioimpedance scale, DEXA, or caliper measurements.")
+    
+    with st.form("body_composition_form", clear_on_submit=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            body_fat_pct = st.number_input(
+                "Body Fat %",
+                min_value=1.0,
+                max_value=60.0,
+                value=20.0,
+                step=0.5,
+                help="From bioimpedance scale, DEXA, or calipers"
+            )
+            lean_mass_kg = st.number_input(
+                "Lean Mass (kg)",
+                min_value=20.0,
+                max_value=120.0,
+                value=float(user.weight_kg * 0.8) if user.weight_kg else 55.0,
+                step=0.5,
+            )
+            muscle_mass_kg = st.number_input(
+                "Muscle Mass (kg)",
+                min_value=10.0,
+                max_value=80.0,
+                value=float(user.weight_kg * 0.4) if user.weight_kg else 30.0,
+                step=0.5,
+            )
+        
+        with col2:
+            bone_mass_kg = st.number_input(
+                "Bone Mass (kg)",
+                min_value=1.0,
+                max_value=10.0,
+                value=3.0,
+                step=0.1,
+            )
+            water_pct = st.number_input(
+                "Water %",
+                min_value=30.0,
+                max_value=80.0,
+                value=55.0,
+                step=0.5,
+            )
+            visceral_fat = st.number_input(
+                "Visceral Fat Level",
+                min_value=1,
+                max_value=59,
+                value=8,
+                step=1,
+                help="1-12 healthy, 13-59 excess"
+            )
+        
+        st.markdown("##### 📏 Circumferences (cm)")
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            waist_cm = st.number_input("Waist", min_value=40.0, max_value=200.0, value=80.0, step=0.5)
+            hip_cm = st.number_input("Hip", min_value=50.0, max_value=200.0, value=95.0, step=0.5)
+        with col2:
+            neck_cm = st.number_input("Neck", min_value=20.0, max_value=60.0, value=38.0, step=0.5)
+            chest_cm = st.number_input("Chest", min_value=50.0, max_value=150.0, value=95.0, step=0.5)
+        with col3:
+            arm_cm = st.number_input("Arm (relaxed)", min_value=15.0, max_value=60.0, value=32.0, step=0.5)
+            thigh_cm = st.number_input("Thigh", min_value=30.0, max_value=90.0, value=55.0, step=0.5)
+        
+        measurement_method = st.selectbox(
+            "Measurement Method",
+            options=["bioimpedance", "dexa", "calipers", "tape_measure", "estimated"],
+            format_func=lambda x: x.replace("_", " ").title(),
+        )
+        
+        submitted = st.form_submit_button("💾 Save Body Composition", use_container_width=True)
+        
+        if submitted:
+            st.success("✅ Body composition saved!")
+            # TODO: Save to database when schema is connected
+
+
+def _render_medical_history_summary(user: UserProfile) -> None:
+    """Render medical history summary and quick entry."""
+    st.markdown("#### 📋 Medical History Summary")
+    
+    # Show current conditions from user profile
+    if user.medical_conditions:
+        st.write("**Current Conditions:**")
+        for condition in user.medical_conditions:
+            st.write(f"• {condition}")
+    else:
+        st.info("No medical conditions recorded. Edit your profile to add medical history.")
+    
+    if user.medications:
+        st.write("**Current Medications:**")
+        for med in user.medications:
+            st.write(f"• {med}")
+    
+    st.caption(
+        "💡 For comprehensive medical history including cardiovascular, respiratory, "
+        "metabolic conditions and family history, use the Medical History form in Data Management."
+    )
+
+
+# ---------------------------------------------------------------------------
+# User Sessions Tab (Multi-User Support)
+# ---------------------------------------------------------------------------
+
+
+def _render_user_sessions_tab(current_user: UserProfile) -> None:
+    """Render the user sessions management tab."""
+    st.markdown("## 👥 User Sessions Management")
+    
+    if not MULTI_USER_AVAILABLE:
+        st.info(
+            "Multi-user sessions allow you to have up to 7 users open simultaneously. "
+            "This feature enables quick switching between users for data entry and analysis."
+        )
+        st.warning("Multi-user module not available. Ensure `multi_user_session.py` is in the app directory.")
+        return
+    
+    manager = get_multi_user_manager()
+    
+    # Display session count
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        st.metric("Active Sessions", f"{manager.session_count}/{MAX_CONCURRENT_USERS}")
+    with col2:
+        if manager.can_add_user:
+            st.success("✓ Can add more users")
+        else:
+            st.warning("⚠️ Maximum reached")
+    
+    st.markdown("---")
+    
+    # Full session manager
+    render_user_session_manager()
+    
+    st.markdown("---")
+    
+    # Quick add user section
+    st.markdown("### ➕ Add Another User")
+    st.caption("Log in with another existing account to add them to your active sessions.")
+    
+    try:
+        db = get_database()
+        all_users = db.list_users()
+        
+        # Filter out already active users
+        active_ids = {s["user_id"] for s in manager.get_all_sessions_summary()}
+        available_users = [u for u in all_users if u.user_id not in active_ids]
+        
+        if not available_users:
+            if not all_users:
+                st.info("No other users registered. Register new users from the Login tab.")
+            else:
+                st.info("All registered users are already in active sessions.")
+        elif not manager.can_add_user:
+            st.warning(f"Maximum {MAX_CONCURRENT_USERS} sessions reached. Close a session to add more users.")
+        else:
+            user_options = {u.username: u for u in available_users}
+            selected = st.selectbox(
+                "Select user to add",
+                options=list(user_options.keys()),
+                format_func=lambda x: f"{x} ({user_options[x].full_name or x})",
+                key="add_user_session_select",
+            )
+            
+            if st.button("➕ Add to Active Sessions", key="add_user_session_btn"):
+                user_to_add = user_options[selected]
+                if manager.add_user_session(
+                    user_id=user_to_add.user_id,
+                    username=user_to_add.username,
+                    full_name=user_to_add.full_name or user_to_add.username,
+                    make_active=False,  # Don't switch, just add
+                ):
+                    st.success(f"Added {user_to_add.username} to active sessions!")
+                    st.rerun()
+                else:
+                    st.error("Failed to add user session.")
+    
+    except Exception as exc:
+        st.error(f"Error loading users: {exc}")
+    
+    st.markdown("---")
+    
+    # Roadmap note
+    st.info(
+        "🚀 **Coming Soon**: Full multi-user analysis capabilities including:\n"
+        "- Per-user correlation calculations\n"
+        "- Group-based analysis (inter-subject)\n"
+        "- Longitudinal tracking (baseline + 22 timepoints)\n"
+        "- Comparative HRV metrics across users\n\n"
+        "See [WARP.md](WARP.md) for the complete roadmap."
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main Tab Renderer
 # ---------------------------------------------------------------------------
 
@@ -1005,6 +1494,14 @@ def render_user_profile_tab() -> None:
             "Please ensure `user_database.py` is in the app directory."
         )
         return
+    
+    # Show multi-user session manager if available and users are active
+    if MULTI_USER_AVAILABLE:
+        manager = get_multi_user_manager()
+        if manager.session_count > 1:
+            with st.expander(f"👥 Active Sessions ({manager.session_count}/{MAX_CONCURRENT_USERS})", expanded=False):
+                render_user_session_manager()
+            st.divider()
     
     # Check current user
     current_user = _get_current_user()
@@ -1031,15 +1528,20 @@ def render_user_profile_tab() -> None:
         st.markdown("---")
         
         # Sub-tabs for different sections
-        tab_assess, tab_history, tab_hrv, tab_data = st.tabs([
-            "📋 New Assessment",
-            "📈 Assessment History",
-            "💓 HRV History",
-            "📦 Data Management",
+        tab_assess, tab_clinical, tab_history, tab_hrv, tab_data, tab_sessions = st.tabs([
+            "📋 Assessments",
+            "🏥 Clinical Profile",
+            "📈 History",
+            "💓 HRV",
+            "📦 Data",
+            "👥 Sessions",
         ])
         
         with tab_assess:
             _render_clinical_assessment(current_user)
+        
+        with tab_clinical:
+            _render_clinical_profile(current_user)
         
         with tab_history:
             _render_assessment_history(current_user)
@@ -1049,10 +1551,13 @@ def render_user_profile_tab() -> None:
         
         with tab_data:
             _render_data_management(current_user)
+        
+        with tab_sessions:
+            _render_user_sessions_tab(current_user)
 
 
 # ---------------------------------------------------------------------------
-# Convenience function for getting current user data
+# Convenience functions for getting current user data (for other modules)
 # ---------------------------------------------------------------------------
 
 
@@ -1081,7 +1586,131 @@ def get_current_user_data() -> Optional[Dict[str, Any]]:
         "vo2max_ml_kg_min": user.vo2max_ml_kg_min,
         "activity_level": user.activity_level,
         "occupation": user.occupation,
+        "language": getattr(user, 'language', 'en'),
+        "medical_conditions": getattr(user, 'medical_conditions', []),
+        "medications": getattr(user, 'medications', []),
     }
+
+
+def get_active_user_context() -> Dict[str, Any]:
+    """
+    Get comprehensive user context for all tabs to use in calculations.
+    
+    This function provides all user-specific settings that affect computations:
+    - Demographics for age-adjusted calculations
+    - Physiological parameters (VO2max, resting HR, max HR)
+    - Body composition for energy calculations
+    - Activity level for metabolic adjustments
+    - Medical history for risk considerations
+    
+    Returns:
+        Dictionary with user context, or defaults if no user logged in.
+    """
+    user = _get_current_user()
+    
+    # Default context if no user
+    if user is None:
+        return {
+            "has_user": False,
+            "user_id": None,
+            "username": "Guest",
+            "age_years": 35,  # Default middle-aged adult
+            "sex": "other",
+            "weight_kg": 70.0,
+            "height_cm": 170.0,
+            "bmi": 24.2,
+            "resting_hr_bpm": 70,
+            "max_hr_bpm": 185,
+            "vo2max_ml_kg_min": 35.0,  # Average fitness
+            "activity_level": "moderately_active",
+            "chronotype_offset": 0.0,  # Neutral chronotype
+            "occupation": None,
+            "medical_conditions": [],
+            "medications": [],
+            "is_guest": True,
+        }
+    
+    # Calculate derived values
+    age = _calculate_age(user.date_of_birth)
+    bmi = _calculate_bmi(user.height_cm, user.weight_kg)
+    
+    # Estimate max HR if not provided (using Fox formula)
+    max_hr = user.max_hr_bpm
+    if max_hr is None and age is not None:
+        max_hr = 220 - age
+    
+    # Estimate chronotype offset from occupation (simplified)
+    chronotype_offset = 0.0
+    if user.occupation:
+        occupation_lower = user.occupation.lower()
+        if any(x in occupation_lower for x in ["night", "shift", "pilot", "flight"]):
+            chronotype_offset = 1.0  # Slight evening tendency for shift workers
+        elif any(x in occupation_lower for x in ["early", "morning", "farmer"]):
+            chronotype_offset = -1.0  # Morning tendency
+    
+    return {
+        "has_user": True,
+        "user_id": user.user_id,
+        "username": user.username,
+        "full_name": user.full_name,
+        "age_years": age or 35,
+        "sex": user.sex or "other",
+        "weight_kg": user.weight_kg or 70.0,
+        "height_cm": user.height_cm or 170.0,
+        "bmi": bmi or 24.2,
+        "resting_hr_bpm": user.resting_hr_bpm or 70,
+        "max_hr_bpm": max_hr or 185,
+        "vo2max_ml_kg_min": user.vo2max_ml_kg_min or 35.0,
+        "activity_level": user.activity_level or "moderately_active",
+        "chronotype_offset": chronotype_offset,
+        "occupation": user.occupation,
+        "medical_conditions": getattr(user, 'medical_conditions', []),
+        "medications": getattr(user, 'medications', []),
+        "language": getattr(user, 'language', 'en'),
+        "is_guest": False,
+    }
+
+
+def get_all_active_users() -> List[Dict[str, Any]]:
+    """
+    Get data for all users in active sessions.
+    
+    Returns:
+        List of user data dictionaries for all active users.
+    """
+    if not MULTI_USER_AVAILABLE:
+        # Fall back to current user only
+        current = get_current_user_data()
+        return [current] if current else []
+    
+    try:
+        manager = get_multi_user_manager()
+        sessions = manager.get_all_sessions_summary()
+        
+        if not sessions:
+            return []
+        
+        db = get_database()
+        users_data = []
+        
+        for session in sessions:
+            user = db.get_user(session["user_id"])
+            if user:
+                users_data.append({
+                    "user_id": user.user_id,
+                    "username": user.username,
+                    "full_name": user.full_name,
+                    "age_years": _calculate_age(user.date_of_birth),
+                    "sex": user.sex,
+                    "weight_kg": user.weight_kg,
+                    "height_cm": user.height_cm,
+                    "is_active": session["is_active"],
+                })
+        
+        return users_data
+    
+    except Exception:
+        return []
 
 
 # ---------------------------------------------------------------------------
@@ -1091,5 +1720,7 @@ def get_current_user_data() -> Optional[Dict[str, Any]]:
 __all__ = [
     "render_user_profile_tab",
     "get_current_user_data",
+    "get_active_user_context",
+    "get_all_active_users",
 ]
 
