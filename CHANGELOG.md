@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.2] - 2025-12-04
+
+### Added
+- **Multi-User Sessions Expanded**: Support increased from 7 to 13 concurrent user sessions
+  - Optimized for longitudinal study groups and research cohorts
+  - Per-user calculation caching with improved memory management
+  - Module version updated to 1.1.0
+
+- **CPU Optimization Module**: New `app/cpu_optimization.py` for non-GPU systems
+  - Smart CPU detection (cores, frequency, memory, performance tier)
+  - Cross-platform support (Linux, macOS, Windows)
+  - Automatic performance tier classification (low/medium/high)
+  - Adaptive algorithm selection based on hardware capabilities
+
+- **Optimized HRV Algorithms**: CPU-only performance enhancements
+  - `compute_time_domain_fast()`: Vectorized time-domain metrics with reduced allocations
+  - `compute_entropy_fast()`: Chunked entropy calculation (O(n) vs O(n²) for large arrays)
+  - `compute_poincare_fast()`: Minimal allocation Poincaré analysis
+  - `compute_dfa_fast()`: Segment-batched DFA with vectorized fluctuation
+  - `compute_psd_fast()`: Optimized FFT with linear interpolation
+  - `compute_hrv_fast()`: Comprehensive HRV with adaptive algorithm selection
+  - `compute_windowed_hrv_fast()`: Adaptive windowed analysis with limits
+
+- **Auto-Tuning Performance Settings**: Settings automatically adjust to hardware
+  - "Auto (Recommended)" preset detects CPU and applies optimal settings
+  - Visual CPU tier indicator in sidebar (🟢 High / 🟡 Medium / 🔴 Low)
+  - New settings: `max_windows`, `use_fast_entropy`
+  - Optional Numba JIT compilation support when available
+  - Optional psutil integration for detailed CPU information
+
+### Changed
+- **Performance Settings UI**: Now shows detected CPU tier and auto-tunes defaults
+  - Fast entropy mode enabled by default for low/medium CPUs
+  - Window limits adjusted based on CPU performance tier
+  - Memory optimization enabled by default for non-high-tier CPUs
+- `performance_utils.py` updated to v1.1.0 with CPU detection integration
+
+### Technical
+- Added optional dependencies: `psutil` (CPU detection), `numba` (JIT compilation)
+- All optimized functions maintain API compatibility with original implementations
+- Subsample-based entropy for arrays >2000 samples on low-end CPUs
+
+---
+
 ## [1.7.1] - 2025-12-03
 
 ### Changed

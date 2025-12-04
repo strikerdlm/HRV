@@ -2,20 +2,21 @@
 
 This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when working with code in this repository.
 
-**Version**: 1.7.0 | **Last Updated**: 2025-12-03
+**Version**: 1.7.2 | **Last Updated**: 2025-12-04
 
 ## Overview
 Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations console with Space Weather and NOAA integration. It analyzes Polar RR-interval recordings, correlates HRV with NOAA SWPC feeds, NASA DONKI events, and SpaceWeatherLive snapshots, and now anchors astronaut-grade physiological assessments plus exploration medical records for isolation missions.
 
-### Key Capabilities (v1.7.0)
+### Key Capabilities (v1.7.2)
 - **Multi-Language Support**: English + Spanish (Colombian-validated clinical scales)
 - **Comprehensive Clinical Profiles**: Astronaut-grade physiological assessment
 - **NASA-Based Calculations**: BMR (Mifflin-St Jeor), hydration, macronutrients
 - **Extended Anthropometrics**: Body composition, medical history, laboratory data
-- **Multi-User Support**: Up to 7 concurrent user sessions (in progress)
+- **Multi-User Support**: Up to 13 concurrent user sessions (for study groups)
 - **GPU Acceleration**: Optional CUDA-powered HRV computations (RTX 5070 supported)
+- **CPU Optimization**: Smart auto-detection and optimized algorithms for non-GPU systems
 - **Space Weather Impact Predictions**: Real-time arrival time calculations for solar events
-- **Performance Optimization**: Configurable CPU/memory presets with smart caching
+- **Performance Optimization**: Auto-tuned CPU/memory presets with adaptive caching
 - **Persistent Logging**: File-based debug logs in `logs/` directory
 
 ---
@@ -34,16 +35,32 @@ Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations c
 - [x] **Data Completeness Indicators**: Visual cues for missing required fields
 - [ ] **Performance Optimization**: Batch form submissions, debounced updates
 
-#### Phase 2: Multi-User Session Management (Priority: HIGH)
-- [x] **Concurrent Users**: Support 1-7 users open simultaneously
+#### Phase 2: Multi-User Session Management (Priority: HIGH) ✅ COMPLETE
+- [x] **Concurrent Users**: Support 1-13 users open simultaneously
   - User tabs/cards showing active profiles
   - Quick-switch between users
   - Per-user calculation caching
+  - Optimized for longitudinal study groups (up to 13 subjects)
 - [x] **User Context Propagation**: All tabs receive active user settings
   - Circadian model uses user's chronotype, location, occupation
   - SAFTE model uses user's sleep history
   - HRV analysis adjusted for user's baseline
   - Space Weather impact based on user's sensitivity profile
+
+#### Phase 2.5: CPU Performance Optimization (Priority: HIGH) ✅ COMPLETE
+- [x] **Smart CPU Detection**: Auto-detect CPU capabilities and tier
+  - Physical/logical cores, frequency, available memory
+  - Performance tier classification (low/medium/high)
+  - Cross-platform support (Linux, macOS, Windows)
+- [x] **Adaptive Performance Settings**: Auto-tune based on hardware
+  - Max plot points, DataFrame rows, analysis windows
+  - Fast entropy mode for low-end CPUs
+  - Memory optimization toggles
+- [x] **Optimized HRV Algorithms**: CPU-only performance enhancements
+  - Vectorized time-domain metrics
+  - Chunked entropy calculations (O(n) vs O(n²))
+  - Efficient DFA with segment batching
+  - Optional Numba JIT compilation support
 
 #### Phase 3: Tab Configuration Refactoring (Priority: MEDIUM)
 - [ ] **Move Settings to Tabs**: Circadian, SAFTE settings move from sidebar to respective tabs
