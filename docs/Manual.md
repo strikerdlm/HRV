@@ -99,7 +99,19 @@ git clone https://github.com/yourusername/hrv-space-weather.git
 cd hrv-space-weather
 ```
 
-**Step 2: Create a virtual environment (recommended)**
+**Step 2: Set up Python environment**
+
+**Option A: Using Conda (Recommended)**
+
+```bash
+# Activate the conda environment
+conda activate hrv-py312
+
+# Verify Python version (should be 3.12)
+python --version
+```
+
+**Option B: Using Virtual Environment**
 
 ```bash
 # Windows
