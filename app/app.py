@@ -8107,15 +8107,8 @@ that predicts cognitive performance based on:
         if refresh_noaa_clicked:
             with st.spinner("Refreshing NOAA JSON feeds…"):
                 _load_noaa_space_datasets(noaa_state, use_cache=False)
-        if (
-            not noaa_state.get("bundles")
-            and not noaa_state.get("loading")
-            and not fetch_noaa_clicked
-            and not refresh_noaa_clicked
-            and not noaa_state.get("errors")
-        ):
-            with st.spinner("Loading NOAA JSON feeds…"):
-                _load_noaa_space_datasets(noaa_state)
+        # Removed automatic loading to prevent app hanging when internet is unavailable
+        # Users must manually click "Fetch NOAA feeds" button to load data
         if noaa_state.get("loading"):
             st.info("NOAA feeds are loading…")
         errors = noaa_state.get("errors", {})
