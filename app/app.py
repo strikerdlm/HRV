@@ -3552,8 +3552,39 @@ def partial_pearson_r_p(
         return _pearson_r_p(x, y)
 
 
+def _set_process_priority() -> None:
+    """
+    Set high priority for Python process to improve performance.
+    
+    Only works on Windows. On Linux/Mac, requires appropriate permissions.
+    """
+    try:
+        import psutil
+        p = psutil.Process(os.getpid())
+        if os.name == "nt":  # Windows
+            try:
+                p.nice(psutil.HIGH_PRIORITY_CLASS)
+                logger = logging.getLogger(__name__)
+                logger.debug("Set process priority to HIGH_PRIORITY_CLASS")
+            except (psutil.AccessDenied, AttributeError):
+                pass  # Requires admin or not available
+        else:  # Linux/Mac
+            try:
+                p.nice(-10)  # Higher priority (requires appropriate permissions)
+                logger = logging.getLogger(__name__)
+                logger.debug("Set process nice value to -10")
+            except (psutil.AccessDenied, AttributeError):
+                pass
+    except ImportError:
+        pass  # psutil not available
+
+
 def main() -> None:
     logger: logging.Logger = setup_console_logging(logging.INFO)
+    
+    # Set high process priority for better performance (if available)
+    _set_process_priority()
+    
     # Streamlit detailed tracebacks in the UI and console
     st.set_option("client.showErrorDetails", True)
     st.set_page_config(
@@ -4058,33 +4089,87 @@ def main() -> None:
             state.mark_complete(files_hash, settings_hash, cleaning=True)
             cache_mgr.update_computation_state(state)
 
-        # Windowed metrics computation
+        # Windowed metrics computation with optional parallel processing
         windowed_all: List[pd.DataFrame] = []
         txt_win = st.empty()
         txt_win.text("Computing windowed metrics... 0%")
         total_win = max(1, len(datasets))
-        done_win = 0
-        for name, up in datasets.items():
-            wdf = _cached_windowed(
-                up.df,
-                rr_col=(
-                    "rr_intervals_ms_clean"
-                    if (apply_clean and "rr_intervals_ms_clean" in up.df.columns)
-                    else "rr_intervals_ms"
-                ),
-                window=win,
-                step=step,
-                min_rr_count=int(min_rr),
-                max_windows=int(max_windows),
-                include_advanced=not bool(fast_windowing),
-            )
-            if not wdf.empty:
-                windowed_all.append(wdf.assign(source=name))
-            done_win += 1
-            txt_win.text(
-                "Computing windowed metrics... "
-                + f"{min(100, int(done_win * 100 / total_win))}%"
-            )
+        
+        # Check if parallel processing should be enabled
+        use_parallel = False
+        max_workers = 1
+        if PERFORMANCE_UTILS_AVAILABLE:
+            try:
+                from cpu_optimization import get_adaptive_settings
+                adaptive = get_adaptive_settings()
+                use_parallel = adaptive.use_parallel and len(datasets) > 1
+                max_workers = min(adaptive.n_workers, len(datasets), os.cpu_count() or 2)
+            except Exception:
+                pass
+        
+        if use_parallel and max_workers > 1:
+            # Parallel processing for multiple datasets
+            def compute_windowed_for_dataset(item: Tuple[str, Any]) -> Tuple[str, Optional[pd.DataFrame]]:
+                name, up = item
+                try:
+                    wdf = _cached_windowed(
+                        up.df,
+                        rr_col=(
+                            "rr_intervals_ms_clean"
+                            if (apply_clean and "rr_intervals_ms_clean" in up.df.columns)
+                            else "rr_intervals_ms"
+                        ),
+                        window=win,
+                        step=step,
+                        min_rr_count=int(min_rr),
+                        max_windows=int(max_windows),
+                        include_advanced=not bool(fast_windowing),
+                    )
+                    return (name, wdf if not wdf.empty else None)
+                except Exception as exc:
+                    logger.warning("Windowed computation failed for %s: %s", name, exc)
+                    return (name, None)
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(compute_windowed_for_dataset, item): item[0]
+                    for item in datasets.items()
+                }
+                done_win = 0
+                for future in concurrent.futures.as_completed(futures):
+                    name, wdf = future.result()
+                    if wdf is not None:
+                        windowed_all.append(wdf.assign(source=name))
+                    done_win += 1
+                    txt_win.text(
+                        "Computing windowed metrics... "
+                        + f"{min(100, int(done_win * 100 / total_win))}%"
+                    )
+        else:
+            # Sequential processing (original code path)
+            done_win = 0
+            for name, up in datasets.items():
+                wdf = _cached_windowed(
+                    up.df,
+                    rr_col=(
+                        "rr_intervals_ms_clean"
+                        if (apply_clean and "rr_intervals_ms_clean" in up.df.columns)
+                        else "rr_intervals_ms"
+                    ),
+                    window=win,
+                    step=step,
+                    min_rr_count=int(min_rr),
+                    max_windows=int(max_windows),
+                    include_advanced=not bool(fast_windowing),
+                )
+                if not wdf.empty:
+                    windowed_all.append(wdf.assign(source=name))
+                done_win += 1
+                txt_win.text(
+                    "Computing windowed metrics... "
+                    + f"{min(100, int(done_win * 100 / total_win))}%"
+                )
+        
         if windowed_all:
             windowed_df = pd.concat(windowed_all, ignore_index=True)
             if not windowed_df.empty:
