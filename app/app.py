@@ -204,6 +204,19 @@ try:
 except ImportError:
     STATISTICAL_ANALYSIS_AVAILABLE = False
 
+# HRV Results Caching System for performance optimization
+try:
+    from hrv_cache import (
+        get_cache_manager,
+        get_cached_clean_rr,
+        should_skip_computation,
+        compute_rr_hash,
+        compute_settings_hash,
+    )
+    HRV_CACHE_AVAILABLE = True
+except ImportError:
+    HRV_CACHE_AVAILABLE = False
+
 from dataclasses import asdict, dataclass
 from datetime import timezone, timedelta
 from typing import (
@@ -2061,7 +2074,21 @@ def _to_dataframe(
     return df
 
 
+def _compute_file_hash(content: bytes) -> str:
+    """Compute hash of file content for cache key."""
+    return hashlib.md5(content).hexdigest()[:16]
+
+
 def _upload_section() -> Dict[str, UploadedRR]:
+    """
+    Handle RR interval file uploads with session state caching.
+    
+    Uses hash-based caching to avoid re-parsing files on every Streamlit rerun.
+    Files are only re-parsed if their content changes.
+    
+    Returns:
+        Dictionary mapping filename to UploadedRR objects.
+    """
     st.sidebar.header("Upload RR (.txt)")
     files = st.sidebar.file_uploader(
         "Select one or more Polar-like RR .txt files (one ms value per line)",
@@ -2070,23 +2097,75 @@ def _upload_section() -> Dict[str, UploadedRR]:
     )
     out: Dict[str, UploadedRR] = {}
     if not files:
+        # Clear cached uploads if no files selected
+        if "uploaded_rr_cache" in st.session_state:
+            st.session_state["uploaded_rr_cache"] = {}
         return out
+    
+    # Initialize upload cache in session state
+    if "uploaded_rr_cache" not in st.session_state:
+        st.session_state["uploaded_rr_cache"] = {}
+    
+    upload_cache = st.session_state["uploaded_rr_cache"]
+    
     for f in files:
-        content = f.getvalue().decode("utf-8", errors="ignore")
-        rr = load_rr_intervals_from_text(f.name, content)
-        start_ts, precise = _infer_recording_start(f.name)
-        df = _to_dataframe(f.name, rr, start_ts=start_ts)
-        out[f.name] = UploadedRR(
-            name=f.name,
-            rr_ms=rr,
-            df=df,
-            recording_start_utc=start_ts,
-        )
-        if not precise:
-            st.sidebar.warning(
-                f"'{f.name}' does not encode a recording start timestamp. "
-                f"Defaulting to {start_ts.strftime('%Y-%m-%d %H:%M UTC')}."
+        # Compute hash of file content for cache invalidation
+        file_content = f.getvalue()
+        file_hash = _compute_file_hash(file_content)
+        cache_key = f"{f.name}_{file_hash}"
+        
+        # Check if we have a valid cached entry
+        if cache_key in upload_cache:
+            # Use cached data (avoid re-parsing)
+            cached = upload_cache[cache_key]
+            out[f.name] = UploadedRR(
+                name=f.name,
+                rr_ms=np.array(cached["rr_ms"]),
+                df=pd.DataFrame(cached["df_dict"]),
+                recording_start_utc=pd.Timestamp(cached["recording_start_utc"]) if cached.get("recording_start_utc") else None,
             )
+            # Restore timestamp column as datetime
+            if "timestamp" in out[f.name].df.columns:
+                out[f.name].df["timestamp"] = pd.to_datetime(out[f.name].df["timestamp"], utc=True)
+        else:
+            # Parse file (cache miss)
+            content = file_content.decode("utf-8", errors="ignore")
+            rr = load_rr_intervals_from_text(f.name, content)
+            start_ts, precise = _infer_recording_start(f.name)
+            df = _to_dataframe(f.name, rr, start_ts=start_ts)
+            
+            out[f.name] = UploadedRR(
+                name=f.name,
+                rr_ms=rr,
+                df=df,
+                recording_start_utc=start_ts,
+            )
+            
+            # Store in cache (convert to serializable format)
+            df_dict = df.to_dict(orient="list")
+            # Convert timestamps to strings for serialization
+            if "timestamp" in df_dict:
+                df_dict["timestamp"] = [str(t) for t in df_dict["timestamp"]]
+            
+            upload_cache[cache_key] = {
+                "rr_ms": rr.tolist(),
+                "df_dict": df_dict,
+                "recording_start_utc": start_ts.isoformat() if start_ts else None,
+                "precise": precise,
+            }
+            
+            if not precise:
+                st.sidebar.warning(
+                    f"'{f.name}' does not encode a recording start timestamp. "
+                    f"Defaulting to {start_ts.strftime('%Y-%m-%d %H:%M UTC')}."
+                )
+    
+    # Clean up old cache entries (files no longer uploaded)
+    current_keys = {f"{f.name}_{_compute_file_hash(f.getvalue())}" for f in files}
+    stale_keys = [k for k in upload_cache if k not in current_keys]
+    for k in stale_keys:
+        del upload_cache[k]
+    
     return out
 
 
@@ -2462,7 +2541,8 @@ def _plot_rr_timeseries(
                 }
             )
         if "artifact_flag" in up.df.columns:
-            mask_series = up.df["artifact_flag"].fillna(False)
+            # Fix FutureWarning: use explicit type conversion instead of fillna downcasting
+            mask_series = up.df["artifact_flag"].fillna(False).infer_objects(copy=False)
             mask = mask_series.astype(bool).to_numpy()
             if mask.any():
                 timestamps_masked = up.df.loc[mask, "timestamp"]
@@ -3855,33 +3935,69 @@ def main() -> None:
         dataset_items = list(datasets_all.items())
         datasets = dict(dataset_items[: int(max_datasets)])
 
+        # ===================================================================
+        # PERFORMANCE OPTIMIZATION: Use cached cleaning results when available
+        # ===================================================================
+        # Check if we can skip computation entirely (same data + settings)
+        _skip_compute = False
+        if HRV_CACHE_AVAILABLE:
+            _skip_compute = should_skip_computation(
+                datasets,
+                str(method),
+                float(max_dev),
+                int(median_win),
+                win,
+                step,
+            )
+            if _skip_compute:
+                logger.debug("Skipping cleaning - results already cached with same settings")
+        
         # Cleaning + metadata with immediate percentage updates (no progress bars)
         total = max(1, len(datasets))
         txt_clean = st.empty()
-        txt_clean.text(
-            ("Cleaning datasets... " if apply_clean else "Preparing datasets... ") +
-            "0%")
-        logger.info(
-            "Starting %s of %d dataset(s)",
-            "cleaning" if apply_clean else "preparation",
-            total,
-        )
+        
+        # Only show progress if not using cached results
+        if not _skip_compute:
+            txt_clean.text(
+                ("Cleaning datasets... " if apply_clean else "Preparing datasets... ") +
+                "0%")
+            logger.info(
+                "Starting %s of %d dataset(s)",
+                "cleaning" if apply_clean else "preparation",
+                total,
+            )
+        else:
+            txt_clean.text("Loading cached results... 100%")
+        
         completed = 0
         for name, up in datasets.items():
             if up.rr_ms.size == 0:
                 completed += 1
-                txt_clean.text(
-                    ("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
-                    + f"{min(100, int(completed * 100 / total))}%"
-                )
+                if not _skip_compute:
+                    txt_clean.text(
+                        ("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
+                        + f"{min(100, int(completed * 100 / total))}%"
+                    )
                 continue
             if apply_clean:
-                cleaned, valid_mask, summary = clean_rr_intervals(
-                    up.rr_ms,
-                    method=str(method),
-                    max_deviation=float(max_dev),
-                    median_window=int(median_win),
-                )
+                # Use cached cleaning when available for performance
+                if HRV_CACHE_AVAILABLE:
+                    cleaned, valid_mask, summary = get_cached_clean_rr(
+                        name,
+                        up.rr_ms,
+                        str(method),
+                        float(max_dev),
+                        int(median_win),
+                        clean_rr_intervals,  # Pass the function for cache misses
+                    )
+                else:
+                    # Fallback to direct call if caching unavailable
+                    cleaned, valid_mask, summary = clean_rr_intervals(
+                        up.rr_ms,
+                        method=str(method),
+                        max_deviation=float(max_dev),
+                        median_window=int(median_win),
+                    )
                 up.rr_ms_clean = cleaned
                 up.artifact_valid_mask = valid_mask
                 up.qc_summary = summary
@@ -3915,18 +4031,32 @@ def main() -> None:
                 meta_entry["recording_start_utc"] = start_iso
             meta_rows.append(meta_entry)
             completed += 1
-            txt_clean.text(
-                ("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
-                + f"{min(100, int(completed * 100 / total))}%"
+            if not _skip_compute:
+                txt_clean.text(
+                    ("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
+                    + f"{min(100, int(completed * 100 / total))}%"
+                )
+        
+        if not _skip_compute:
+            logger.info(
+                "Finished %s of %d dataset(s)",
+                "cleaning" if apply_clean else "preparation",
+                total,
             )
-        logger.info(
-            "Finished %s of %d dataset(s)",
-            "cleaning" if apply_clean else "preparation",
-            total,
-        )
         txt_clean.text(
             ("Cleaning complete." if apply_clean else "Preparation complete.") +
             " 100%")
+        
+        # Update computation state for next rerun
+        if HRV_CACHE_AVAILABLE:
+            cache_mgr = get_cache_manager()
+            state = cache_mgr.get_computation_state()
+            files_hash = cache_mgr.compute_all_uploads_hash(datasets)
+            settings_hash = compute_settings_hash(
+                str(method), float(max_dev), int(median_win), win, step
+            )
+            state.mark_complete(files_hash, settings_hash, cleaning=True)
+            cache_mgr.update_computation_state(state)
 
         # Windowed metrics computation
         windowed_all: List[pd.DataFrame] = []
