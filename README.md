@@ -25,15 +25,41 @@ Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate V
 
 ### Prerequisites
 
-- Python 3.10 or later
+- Python 3.12 (recommended) or 3.10+
+- Conda (for environment management) or pip
 - pip package manager
 
 ### Installation
+
+#### Option 1: Using Conda (Recommended)
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/hrv-space-weather.git
 cd hrv-space-weather
+
+# Activate the conda environment
+conda activate hrv-py312
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Run the application
+streamlit run app/app.py
+```
+
+#### Option 2: Using Virtual Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/hrv-space-weather.git
+cd hrv-space-weather
+
+# Create and activate virtual environment
+python -m venv .venv
+.venv\Scripts\activate  # Windows
+# or
+source .venv/bin/activate  # macOS/Linux
 
 # Install dependencies
 pip install -r requirements.txt
