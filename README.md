@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.7.0-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.7.2-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
@@ -133,8 +133,10 @@ All other tabs show **example data** and **reference values** to help you unders
 
 | Priority | Feature | Status |
 |----------|---------|--------|
+| ✅ DONE | Multi-user sessions (1-13 concurrent) | Complete |
+| ✅ DONE | CPU optimization for non-GPU systems | Complete |
+| ✅ DONE | Smart CPU auto-detection & tuning | Complete |
 | 🔴 HIGH | Clinical Profile UI visualization | In Progress |
-| 🔴 HIGH | Multi-user sessions (1-7 concurrent) | Planned |
 | 🟡 MEDIUM | Move Circadian settings to tab | Planned |
 | 🟡 MEDIUM | All tabs use active user context | Planned |
 | 🟢 LOW | Per-tab settings persistence | Planned |
