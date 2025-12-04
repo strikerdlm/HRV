@@ -1,14 +1,14 @@
 """
 Multi-User Session Manager for Mission Control - Flight Surgeon.
 
-Provides support for up to 7 concurrent user sessions, allowing:
+Provides support for up to 13 concurrent user sessions, allowing:
 - Quick switching between users
 - Per-user calculation caching
 - Individual user context for all tabs
 - Session persistence
 
 Author: Dr. Diego Leonel Malpica Hincapié, MD
-Version: 1.0.0
+Version: 1.1.0
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ import streamlit as st
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 # Constants
-MAX_CONCURRENT_USERS: Final[int] = 7
+MAX_CONCURRENT_USERS: Final[int] = 13
 SESSION_KEY_MULTI_USER: Final[str] = "multi_user_sessions"
 SESSION_KEY_ACTIVE_USER_ID: Final[str] = "active_user_id"
 SESSION_KEY_USER_CACHE: Final[str] = "user_calculation_cache"
@@ -58,7 +58,7 @@ class MultiUserSessionManager:
     - Add/remove users from active sessions
     - Quick switch between active users
     - Per-user calculation cache
-    - Maximum of 7 concurrent users
+    - Maximum of 13 concurrent users (optimized for study groups)
     """
     
     def __init__(self) -> None:

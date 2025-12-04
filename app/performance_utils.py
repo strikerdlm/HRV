@@ -4,14 +4,22 @@ Performance Utilities for Mission Control - Flight Surgeon
 Provides CPU-optimized caching, lazy loading, and computation management
 to improve Streamlit app responsiveness.
 
+Features (v1.1.0):
+- Smart CPU detection and auto-tuning
+- Adaptive performance presets based on hardware
+- Session-state caching with TTL
+- DataFrame optimization utilities
+- Integration with cpu_optimization module
+
 Author: AI Assistant
-Version: 1.0.0
+Version: 1.1.0
 """
 
 from __future__ import annotations
 
 import functools
 import hashlib
+import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -24,12 +32,29 @@ import streamlit as st
 # Type variable for generic caching
 T = TypeVar("T")
 
+_LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 DEFAULT_CACHE_TTL_SECONDS: Final[int] = 300  # 5 minutes
 HEAVY_COMPUTE_TTL_SECONDS: Final[int] = 600  # 10 minutes for heavy ops
 NETWORK_CACHE_TTL_SECONDS: Final[int] = 180  # 3 minutes for network calls
+
+# ---------------------------------------------------------------------------
+# CPU Detection Integration
+# ---------------------------------------------------------------------------
+try:
+    from app.cpu_optimization import (
+        CPUInfo,
+        get_cpu_info,
+        get_adaptive_settings,
+        AdaptiveSettings,
+    )
+    _CPU_OPTIMIZATION_AVAILABLE: Final[bool] = True
+except ImportError:
+    _CPU_OPTIMIZATION_AVAILABLE = False
+    _LOGGER.debug("cpu_optimization module not available")
 
 
 # ---------------------------------------------------------------------------
@@ -380,20 +405,62 @@ def downsample_array(
 # ---------------------------------------------------------------------------
 def get_performance_settings() -> Dict[str, Any]:
     """
-    Get performance settings from session state with FAST defaults.
+    Get performance settings from session state with auto-tuned defaults.
+    
+    Uses CPU detection to automatically select appropriate defaults
+    for the current hardware.
     
     Returns:
         Dictionary of performance settings
     """
-    # Fast mode defaults for maximum responsiveness
-    defaults = {
-        "enable_heavy_plots": False,  # Fast: no heavy plots
-        "max_plot_points": 1000,  # Fast: reduced from 2000
-        "max_dataframe_rows": 200,  # Fast: reduced from 500
-        "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
-        "throttle_interval": 0.5,
-        "optimize_memory": True,  # Fast: always optimize
-    }
+    # Auto-detect defaults based on CPU
+    if _CPU_OPTIMIZATION_AVAILABLE:
+        try:
+            cpu_info = get_cpu_info()
+            adaptive = get_adaptive_settings()
+            
+            # Set defaults based on CPU performance tier
+            if cpu_info.performance_tier == "high":
+                defaults = {
+                    "enable_heavy_plots": True,
+                    "max_plot_points": 3000,
+                    "max_dataframe_rows": 500,
+                    "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
+                    "throttle_interval": 0.3,
+                    "optimize_memory": False,
+                    "max_windows": adaptive.max_windows,
+                    "use_fast_entropy": False,
+                    "detected_tier": "high",
+                }
+            elif cpu_info.performance_tier == "medium":
+                defaults = {
+                    "enable_heavy_plots": False,
+                    "max_plot_points": 1500,
+                    "max_dataframe_rows": 300,
+                    "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
+                    "throttle_interval": 0.5,
+                    "optimize_memory": True,
+                    "max_windows": adaptive.max_windows,
+                    "use_fast_entropy": True,
+                    "detected_tier": "medium",
+                }
+            else:  # low
+                defaults = {
+                    "enable_heavy_plots": False,
+                    "max_plot_points": 800,
+                    "max_dataframe_rows": 150,
+                    "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
+                    "throttle_interval": 0.8,
+                    "optimize_memory": True,
+                    "max_windows": adaptive.max_windows,
+                    "use_fast_entropy": True,
+                    "detected_tier": "low",
+                }
+        except Exception as exc:
+            _LOGGER.debug("CPU auto-detection failed: %s", exc)
+            defaults = _get_fallback_defaults()
+    else:
+        defaults = _get_fallback_defaults()
     
     if "performance_settings" not in st.session_state:
         st.session_state["performance_settings"] = defaults.copy()
@@ -401,9 +468,24 @@ def get_performance_settings() -> Dict[str, Any]:
     return st.session_state["performance_settings"]
 
 
+def _get_fallback_defaults() -> Dict[str, Any]:
+    """Get conservative fallback defaults when CPU detection is unavailable."""
+    return {
+        "enable_heavy_plots": False,
+        "max_plot_points": 1000,
+        "max_dataframe_rows": 200,
+        "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
+        "throttle_interval": 0.5,
+        "optimize_memory": True,
+        "max_windows": 500,
+        "use_fast_entropy": True,
+        "detected_tier": "unknown",
+    }
+
+
 def render_performance_settings_sidebar() -> Dict[str, Any]:
     """
-    Render performance settings in the sidebar.
+    Render performance settings in the sidebar with CPU auto-detection.
     
     Returns:
         Current performance settings
@@ -411,31 +493,55 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
     settings = get_performance_settings()
     
     with st.sidebar.expander("⚡ Performance Settings", expanded=False):
-        st.caption("Adjust for your CPU speed")
+        # Show detected CPU tier
+        tier = settings.get("detected_tier", "unknown")
+        if tier != "unknown":
+            tier_colors = {"high": "🟢", "medium": "🟡", "low": "🔴"}
+            st.caption(f"{tier_colors.get(tier, '⚪')} Detected: {tier.upper()} performance CPU")
+            
+            if _CPU_OPTIMIZATION_AVAILABLE:
+                cpu_info = get_cpu_info()
+                st.caption(f"📍 {cpu_info.cpu_name[:40]}...")
         
-        # Preset options - Fast mode is default for best responsiveness
+        # Preset options - Auto is now the default
+        presets = ["Auto (Recommended)", "Fast (Low CPU)", "Balanced", "Quality (High CPU)", "Custom"]
+        
+        # Determine current preset based on settings
+        current_idx = 0  # Default to Auto
+        
         preset = st.selectbox(
             "Performance Preset",
-            options=["Fast (Low CPU)", "Balanced", "Quality (High CPU)", "Custom"],
-            index=0,  # Fast mode is first and default
-            help="Quick presets for different CPU capabilities",
+            options=presets,
+            index=current_idx,
+            help="Auto adjusts based on detected CPU capabilities",
         )
         
-        if preset == "Fast (Low CPU)":
-            settings["max_plot_points"] = 1000
-            settings["max_dataframe_rows"] = 200
+        if preset == "Auto (Recommended)":
+            # Re-apply auto-detected settings
+            new_settings = get_performance_settings()
+            settings.update(new_settings)
+            st.caption("✓ Using auto-detected optimal settings")
+        elif preset == "Fast (Low CPU)":
+            settings["max_plot_points"] = 800
+            settings["max_dataframe_rows"] = 150
+            settings["max_windows"] = 200
             settings["enable_heavy_plots"] = False
             settings["optimize_memory"] = True
+            settings["use_fast_entropy"] = True
         elif preset == "Quality (High CPU)":
             settings["max_plot_points"] = 5000
             settings["max_dataframe_rows"] = 1000
+            settings["max_windows"] = 1000
             settings["enable_heavy_plots"] = True
             settings["optimize_memory"] = False
+            settings["use_fast_entropy"] = False
         elif preset == "Balanced":
             settings["max_plot_points"] = 2000
             settings["max_dataframe_rows"] = 500
+            settings["max_windows"] = 500
             settings["enable_heavy_plots"] = False
             settings["optimize_memory"] = True
+            settings["use_fast_entropy"] = True
         
         # Only show sliders if Custom
         if preset == "Custom":
@@ -443,7 +549,7 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
                 "Max plot points",
                 min_value=500,
                 max_value=10000,
-                value=settings["max_plot_points"],
+                value=settings.get("max_plot_points", 1000),
                 step=500,
                 help="Reduce for faster rendering on slower CPUs",
             )
@@ -452,31 +558,47 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
                 "Max DataFrame rows to display",
                 min_value=100,
                 max_value=2000,
-                value=settings["max_dataframe_rows"],
+                value=settings.get("max_dataframe_rows", 200),
                 step=100,
                 help="Limit rows shown in data tables",
             )
             
+            settings["max_windows"] = st.slider(
+                "Max analysis windows",
+                min_value=100,
+                max_value=2000,
+                value=settings.get("max_windows", 500),
+                step=100,
+                help="Limit windowed analysis iterations",
+            )
+            
             settings["enable_heavy_plots"] = st.checkbox(
                 "Enable heavy visualizations",
-                value=settings["enable_heavy_plots"],
+                value=settings.get("enable_heavy_plots", False),
                 help="Spectrograms, 3D plots, etc.",
             )
             
             settings["optimize_memory"] = st.checkbox(
                 "Optimize memory usage",
-                value=settings["optimize_memory"],
+                value=settings.get("optimize_memory", True),
                 help="Downcast DataFrames to save memory",
+            )
+            
+            settings["use_fast_entropy"] = st.checkbox(
+                "Fast entropy mode",
+                value=settings.get("use_fast_entropy", True),
+                help="Use faster entropy approximations",
             )
         else:
             # Show current values as info
             st.caption(
-                f"Plot points: {settings['max_plot_points']} | "
-                f"Table rows: {settings['max_dataframe_rows']}"
+                f"📊 Points: {settings.get('max_plot_points', 1000)} | "
+                f"Rows: {settings.get('max_dataframe_rows', 200)} | "
+                f"Windows: {settings.get('max_windows', 500)}"
             )
         
         # Show current performance metrics
-        if st.button("📊 Show Performance Stats", key="perf_stats_btn"):
+        if st.button("📈 Show Performance Stats", key="perf_stats_btn"):
             metrics = get_performance_metrics()
             summary = metrics.get_summary()
             st.caption(f"Cache hit rate: {summary['cache_hit_rate']}")
