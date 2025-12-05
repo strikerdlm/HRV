@@ -16,6 +16,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.9] - 2025-12-05
+
+### Changed
+- **Profile load performance** (`app/user_database.py`, `app/user_profile_tab.py`, `app/user_management_ui.py`): HRV history queries now fetch only recent records without RR JSON payloads by default, reducing profile load times for large datasets.
+- **Version sync** (`app/version_info.py`): Updated default version to align UI badges and About with this release.
+
+---
+
 ## [1.7.7] - 2025-12-05
 
 ### Added
