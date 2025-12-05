@@ -5,6 +5,14 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [1.8.0] - 2025-12-05
+
+### Changed
+- **Portable database location** (`app/user_database.py`): Database now lives alongside the app (`hrv_users.db` in the project folder) for easy copying between machines.
+- **Explicit HRV run control** (`app/app.py`): HRV analysis only runs after clicking **Run HRV Analysis**; uploads alone no longer trigger automatic computation.
+- **Docs and version** (`README.md`, `docs/Manual.md`, `WARP.md`, `app/version_info.py`): Version bumped to 1.8.0 and navigation notes updated for the new workflow.
+
 ---
 
 ## [1.7.8] - 2025-12-05
