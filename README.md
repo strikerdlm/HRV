@@ -163,11 +163,11 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE | CPU optimization for non-GPU systems | Complete |
 | ✅ DONE | Smart CPU auto-detection & tuning | Complete |
 | ✅ DONE | Clinical Profile UI visualization | Complete (batched forms + debounced saves) |
-| 🟡 MEDIUM | Move Circadian settings to tab | Planned |
+| ✅ DONE | Move Circadian settings to tab | Complete |
 | 🟡 MEDIUM | All tabs use active user context | Planned |
 | 🟢 LOW | Per-tab settings persistence | Planned |
 
-**Best next task:** Move Circadian settings into their dedicated tab so the sidebar stays light and tab-specific presets can persist alongside the new per-form batching.
+**Best next task:** Ensure every tab consumes the active user context so NASA calculators, fatigue models, and circadian presets stay in sync without manual re-entry.
 
 ### Planned Features (Q1 2026)
 
@@ -342,6 +342,7 @@ project/
 - Light schedule generation (Regular, Shift Work, Slam Shift, Social Jetlag)
 - Entrainment Signal Regularity Index (ESRI) calculation
 - Phase and amplitude trajectory visualization
+- Integrated scenario builder with in-tab presets and batched submissions (no sidebar required)
 - Based on Arcascope circadian package (Tavella, Hannay, Walch)
 
 ### Population Norms Tab

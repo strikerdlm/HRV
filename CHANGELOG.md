@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.5] - 2025-12-05
+
+### Added
+- **Circadian scenario builder** (`app/circadian_tab.py`): Moved every configuration control from the global sidebar into the Circadian tab, added a batched form with an explicit **Apply scenario** button, and introduced a preset vault (up to five saved schedules per session).
+
+### Changed
+- **Circadian documentation** (`README.md`, `docs/Manual.md`, `WARP.md`): Roadmap now marks the relocation task as complete, manuals describe the new workflow, and Phase 3 lists SAFTE settings as the next configuration refactor target.
+
+---
+
 ## [1.7.4] - 2025-12-05
 
 ### Added

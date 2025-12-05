@@ -22,7 +22,7 @@ import time as time_module
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Final, List, Optional, Tuple
 
 import numpy as np
 import streamlit as st
@@ -69,6 +69,363 @@ PRIMARY_COLOR = "#667eea"
 SECONDARY_COLOR = "#764ba2"
 ACCENT_COLOR = "#20c997"
 WARNING_COLOR = "#f093fb"
+
+_MODEL_OPTIONS: Final[List[str]] = ["Forger99", "Jewett99", "Hannay19", "Hannay19TP"]
+_SCHEDULE_OPTIONS: Final[List[str]] = [
+    "Regular",
+    "ShiftWork",
+    "SlamShift",
+    "SocialJetlag",
+    "Custom Pulse",
+]
+_STATE_SETTINGS_KEY: Final[str] = "circadian_settings_state"
+_STATE_PRESETS_KEY: Final[str] = "circadian_settings_presets"
+_STATE_PRESET_ORDER_KEY: Final[str] = "circadian_preset_order"
+_MAX_PRESETS: Final[int] = 5
+
+
+def _default_circadian_settings() -> Dict[str, Any]:
+    """Return default circadian configuration."""
+    return {
+        "selected_models": ["Hannay19"],
+        "schedule_type": "Regular",
+        "lux": 500,
+        "lights_on": 8,
+        "lights_off": 22,
+        "days_on": 3,
+        "days_off": 2,
+        "shift_hours": -6,
+        "baseline_days": 7,
+        "weekend_delay": 2.0,
+        "pulse_start": 20,
+        "pulse_duration": 2.0,
+        "total_days": 30,
+        "step_hours": 0.1,
+        "equilibration_reps": 3,
+        "show_dlmo": True,
+        "show_cbt": False,
+        "show_light_overlay": True,
+    }
+
+
+def _clone_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
+    """Create a shallow copy that preserves list fields."""
+    clone = dict(settings)
+    clone["selected_models"] = list(settings.get("selected_models", []))
+    return clone
+
+
+def _get_circadian_settings() -> Dict[str, Any]:
+    """Load persisted circadian settings from session state."""
+    stored = st.session_state.get(_STATE_SETTINGS_KEY)
+    if stored is None:
+        stored = _default_circadian_settings()
+        st.session_state[_STATE_SETTINGS_KEY] = _clone_settings(stored)
+    defaults = _default_circadian_settings()
+    defaults.update(stored)
+    models = [
+        model for model in defaults.get("selected_models", []) if model in _MODEL_OPTIONS
+    ]
+    defaults["selected_models"] = models or _default_circadian_settings()[
+        "selected_models"
+    ]
+    return _clone_settings(defaults)
+
+
+def _update_circadian_settings(settings: Dict[str, Any]) -> None:
+    """Persist circadian settings back to session state."""
+    defaults = _default_circadian_settings()
+    merged = {**defaults, **settings}
+    merged["selected_models"] = [
+        model for model in merged.get("selected_models", []) if model in _MODEL_OPTIONS
+    ] or defaults["selected_models"]
+    st.session_state[_STATE_SETTINGS_KEY] = _clone_settings(merged)
+
+
+def _reset_circadian_settings() -> Dict[str, Any]:
+    """Reset stored settings to defaults."""
+    defaults = _default_circadian_settings()
+    _update_circadian_settings(defaults)
+    return defaults
+
+
+def _ensure_preset_state() -> None:
+    """Initialize preset storage in session state."""
+    st.session_state.setdefault(_STATE_PRESETS_KEY, {})
+    st.session_state.setdefault(_STATE_PRESET_ORDER_KEY, [])
+
+
+def _get_circadian_presets() -> Dict[str, Dict[str, Any]]:
+    """Return preset dictionary from session state."""
+    _ensure_preset_state()
+    return st.session_state[_STATE_PRESETS_KEY]
+
+
+def _save_circadian_preset(name: str, settings: Dict[str, Any]) -> None:
+    """Save (or overwrite) a preset and enforce the preset limit."""
+    trimmed = name.strip()
+    if not trimmed:
+        return
+    _ensure_preset_state()
+    presets = st.session_state[_STATE_PRESETS_KEY]
+    order: List[str] = st.session_state[_STATE_PRESET_ORDER_KEY]
+    presets[trimmed] = _clone_settings(settings)
+    if trimmed in order:
+        order.remove(trimmed)
+    order.insert(0, trimmed)
+    while len(order) > _MAX_PRESETS:
+        removed = order.pop()
+        presets.pop(removed, None)
+
+
+def _load_circadian_preset(name: str) -> Optional[Dict[str, Any]]:
+    """Load a preset by name."""
+    presets = _get_circadian_presets()
+    preset = presets.get(name)
+    if preset is None:
+        return None
+    return _clone_settings(preset)
+
+
+def _render_preset_controls(settings: Dict[str, Any]) -> Dict[str, Any]:
+    """Render preset management controls and return possibly updated settings."""
+    presets = _get_circadian_presets()
+    preset_names = ["(none)"] + sorted(presets.keys())
+    col_load, col_save, col_reset = st.columns([2, 2, 1])
+
+    with col_load:
+        selected = st.selectbox(
+            "Saved scenarios",
+            options=preset_names,
+            index=0,
+            key="circadian_preset_select",
+            help="Load a previously saved configuration.",
+        )
+        load_clicked = st.button("Load preset", use_container_width=True)
+    with col_save:
+        preset_name = st.text_input(
+            "Preset name",
+            value="",
+            key="circadian_preset_name",
+            help="Save the current scenario for later reuse.",
+        )
+        save_clicked = st.button("Save preset", use_container_width=True)
+    with col_reset:
+        reset_clicked = st.button(
+            "Reset defaults",
+            use_container_width=True,
+            help="Restore NASA default scenario parameters.",
+        )
+
+    updated_settings = settings
+    if load_clicked and selected != "(none)":
+        loaded = _load_circadian_preset(selected)
+        if loaded:
+            _update_circadian_settings(loaded)
+            updated_settings = loaded
+            st.success(f"Loaded circadian preset: {selected}")
+        else:
+            st.warning("Preset not found. It may have been removed.")
+
+    if save_clicked:
+        trimmed_name = preset_name.strip()
+        if not trimmed_name:
+            st.warning("Enter a preset name before saving.")
+        else:
+            _save_circadian_preset(trimmed_name, settings)
+            st.success(f"Saved preset '{trimmed_name}'. Latest scenarios stay on top.")
+
+    if reset_clicked:
+        updated_settings = _reset_circadian_settings()
+        st.info("Circadian settings reset to mission defaults.")
+
+    return updated_settings
+
+
+def _render_schedule_section(schedule_type: str, settings: Dict[str, Any]) -> Dict[str, Any]:
+    """Render schedule-specific controls and return their values."""
+    if schedule_type == "Regular":
+        col_on, col_off = st.columns(2)
+        return {
+            "lights_on": col_on.slider(
+                "Lights on (hour)",
+                min_value=0,
+                max_value=23,
+                value=int(settings.get("lights_on", 8)),
+            ),
+            "lights_off": col_off.slider(
+                "Lights off (hour)",
+                min_value=0,
+                max_value=23,
+                value=int(settings.get("lights_off", 22)),
+            ),
+        }
+    if schedule_type == "ShiftWork":
+        col_days_on, col_days_off = st.columns(2)
+        return {
+            "days_on": col_days_on.slider(
+                "Night shifts (days)",
+                min_value=1,
+                max_value=7,
+                value=int(settings.get("days_on", 3)),
+            ),
+            "days_off": col_days_off.slider(
+                "Days off",
+                min_value=1,
+                max_value=7,
+                value=int(settings.get("days_off", 2)),
+            ),
+        }
+    if schedule_type == "SlamShift":
+        col_shift, col_baseline = st.columns(2)
+        return {
+            "shift_hours": col_shift.slider(
+                "Phase shift (hours)",
+                min_value=-12,
+                max_value=12,
+                value=int(settings.get("shift_hours", -6)),
+            ),
+            "baseline_days": col_baseline.slider(
+                "Baseline days",
+                min_value=3,
+                max_value=14,
+                value=int(settings.get("baseline_days", 7)),
+            ),
+        }
+    if schedule_type == "SocialJetlag":
+        return {
+            "weekend_delay": st.slider(
+                "Weekend delay (hours)",
+                min_value=0.0,
+                max_value=6.0,
+                value=float(settings.get("weekend_delay", 2.0)),
+                step=0.5,
+            )
+        }
+    col_start, col_duration = st.columns(2)
+    return {
+        "pulse_start": col_start.slider(
+            "Pulse start (hour)",
+            min_value=0,
+            max_value=23,
+            value=int(settings.get("pulse_start", 20)),
+        ),
+        "pulse_duration": col_duration.slider(
+            "Pulse duration (hours)",
+            min_value=0.5,
+            max_value=6.0,
+            value=float(settings.get("pulse_duration", 2.0)),
+            step=0.5,
+        ),
+    }
+
+
+def _render_simulation_section(settings: Dict[str, Any]) -> Dict[str, Any]:
+    """Render simulation window controls."""
+    st.markdown("#### ⏱️ Simulation window")
+    total_days = st.slider(
+        "Simulation days",
+        min_value=7,
+        max_value=90,
+        value=int(settings.get("total_days", 30)),
+    )
+    step_hours = st.select_slider(
+        "Time step (hours)",
+        options=[0.05, 0.1, 0.25, 0.5],
+        value=float(settings.get("step_hours", 0.1)),
+    )
+    equilibration_reps = st.slider(
+        "Equilibration repetitions",
+        min_value=0,
+        max_value=10,
+        value=int(settings.get("equilibration_reps", 3)),
+    )
+    return {
+        "total_days": total_days,
+        "step_hours": step_hours,
+        "equilibration_reps": equilibration_reps,
+    }
+
+
+def _render_visualization_section(settings: Dict[str, Any]) -> Dict[str, bool]:
+    """Render visualization flags and return their values."""
+    st.markdown("#### 📊 Visualization options")
+    col_dlmo, col_cbt, col_overlay = st.columns(3)
+    return {
+        "show_dlmo": col_dlmo.checkbox(
+            "Show DLMO markers",
+            value=bool(settings.get("show_dlmo", True)),
+        ),
+        "show_cbt": col_cbt.checkbox(
+            "Show CBTmin markers",
+            value=bool(settings.get("show_cbt", False)),
+        ),
+        "show_light_overlay": col_overlay.checkbox(
+            "Overlay light on amplitude plot",
+            value=bool(settings.get("show_light_overlay", True)),
+        ),
+    }
+
+
+def _render_settings_form(settings: Dict[str, Any]) -> Dict[str, Any]:
+    """Render the scenario builder form and return updated settings."""
+    with st.form("circadian_settings_form"):
+        st.markdown("#### 🧪 Scenario Builder")
+        st.caption("Adjust parameters, then click **Apply scenario** to refresh simulations.")
+
+        selected_models = st.multiselect(
+            "Select models",
+            _MODEL_OPTIONS,
+            default=settings.get("selected_models", ["Hannay19"]),
+            help="Run multiple oscillators to compare predictions.",
+        )
+
+        schedule_type = st.selectbox(
+            "Schedule type",
+            _SCHEDULE_OPTIONS,
+            index=_SCHEDULE_OPTIONS.index(settings.get("schedule_type", "Regular")),
+            help="Defines the zeitgeber (light) pattern for the simulation.",
+        )
+
+        lux = st.slider(
+            "Light intensity (lux)",
+            min_value=50,
+            max_value=1000,
+            value=int(settings.get("lux", 500)),
+            step=50,
+        )
+
+        schedule_values = _render_schedule_section(schedule_type, settings)
+        simulation_values = _render_simulation_section(settings)
+        visualization_flags = _render_visualization_section(settings)
+
+        apply_clicked = st.form_submit_button(
+            "Apply scenario",
+            type="primary",
+            use_container_width=True,
+        )
+
+    updated_settings = settings
+    if apply_clicked:
+        updated_settings = dict(settings)
+        updated_settings.update(
+            {
+                "selected_models": selected_models or settings.get(
+                    "selected_models", ["Hannay19"]
+                ),
+                "schedule_type": schedule_type,
+                "lux": lux,
+                **simulation_values,
+                **visualization_flags,
+            }
+        )
+
+        updated_settings.update(schedule_values)
+
+        _update_circadian_settings(updated_settings)
+        st.success("Circadian scenario updated. Visualizations refreshed below.")
+
+    return updated_settings
 
 
 def _get_echarts_config(
@@ -485,75 +842,64 @@ def render_circadian_tab(user_profile: Optional[Dict] = None) -> None:
     </div>
     """, unsafe_allow_html=True)
     
-    # Sidebar configuration
-    with st.sidebar:
-        st.markdown("### 🌙 Circadian Settings")
-        
-        # Model selection
-        model_options = ["Forger99", "Jewett99", "Hannay19", "Hannay19TP"]
-        selected_models = st.multiselect(
-            "Select Models",
-            model_options,
-            default=["Hannay19"],
-            help="Choose circadian oscillator models to simulate",
-        )
-        
-        # Light schedule
-        st.markdown("#### 💡 Light Schedule")
-        schedule_type = st.selectbox(
-            "Schedule Type",
-            ["Regular", "ShiftWork", "SlamShift", "SocialJetlag", "Custom Pulse"],
-            help="Select a predefined light schedule pattern",
-        )
-        
-        # Schedule parameters
-        lux = st.slider("Light Intensity (lux)", 50, 1000, 500, 50)
-        
-        if schedule_type == "Regular":
-            lights_on = st.slider("Lights On (hour)", 0, 23, 8)
-            lights_off = st.slider("Lights Off (hour)", 0, 23, 22)
-        elif schedule_type == "ShiftWork":
-            days_on = st.slider("Night Shifts (days)", 1, 7, 3)
-            days_off = st.slider("Days Off", 1, 7, 2)
-        elif schedule_type == "SlamShift":
-            shift_hours = st.slider("Phase Shift (hours)", -12, 12, -6)
-            baseline_days = st.slider("Baseline Days", 3, 14, 7)
-        elif schedule_type == "SocialJetlag":
-            weekend_delay = st.slider("Weekend Delay (hours)", 0.0, 6.0, 2.0, 0.5)
-        else:  # Custom Pulse
-            pulse_start = st.slider("Pulse Start (hour)", 0, 23, 20)
-            pulse_duration = st.slider("Pulse Duration (hours)", 0.5, 6.0, 2.0, 0.5)
-        
-        # Simulation parameters
-        st.markdown("#### ⚙️ Simulation")
-        total_days = st.slider("Simulation Days", 7, 90, 30)
-        step_hours = st.select_slider("Time Step (hours)", [0.05, 0.1, 0.25, 0.5], 0.1)
-        equilibration_reps = st.slider("Equilibration Reps", 0, 10, 3)
-        
-        # Visualization options
-        st.markdown("#### 📊 Visualization")
-        show_dlmo = st.checkbox("Show DLMO Markers", True)
-        show_cbt = st.checkbox("Show CBTmin Markers", False)
-        show_light_overlay = st.checkbox("Light Overlay", True)
+    settings = _get_circadian_settings()
+    st.markdown("### ⚙️ Scenario Configuration")
+    settings = _render_preset_controls(settings)
+    settings = _render_settings_form(settings)
     
-    # Create time array
+    st.markdown("---")
+    st.caption(
+        f"Active scenario • Models: {', '.join(settings['selected_models'])} | "
+        f"Schedule: {settings['schedule_type']} @ {int(settings['lux'])} lux | "
+        f"Duration: {int(settings['total_days'])} days"
+    )
+    
+    # Create time array and light schedule from persisted settings
+    total_days = int(settings["total_days"])
+    step_hours = float(settings["step_hours"])
+    schedule_type = settings["schedule_type"]
+    lux = int(settings["lux"])
     time_arr = np.arange(0, 24 * total_days, step_hours)
     
-    # Create light schedule
     if schedule_type == "Regular":
-        light_schedule = LightSchedule.Regular(lux=lux, lights_on=lights_on, lights_off=lights_off)
+        light_schedule = LightSchedule.Regular(
+            lux=lux,
+            lights_on=int(settings["lights_on"]),
+            lights_off=int(settings["lights_off"]),
+        )
     elif schedule_type == "ShiftWork":
-        light_schedule = LightSchedule.ShiftWork(lux=lux, days_on=days_on, days_off=days_off)
+        light_schedule = LightSchedule.ShiftWork(
+            lux=lux,
+            days_on=int(settings["days_on"]),
+            days_off=int(settings["days_off"]),
+        )
     elif schedule_type == "SlamShift":
-        light_schedule = LightSchedule.SlamShift(lux=lux, shift_hours=shift_hours, baseline_days=baseline_days)
+        light_schedule = LightSchedule.SlamShift(
+            lux=lux,
+            shift_hours=int(settings["shift_hours"]),
+            baseline_days=int(settings["baseline_days"]),
+        )
     elif schedule_type == "SocialJetlag":
-        light_schedule = LightSchedule.SocialJetlag(lux=lux, weekend_delay=weekend_delay)
-    else:  # Custom Pulse
+        light_schedule = LightSchedule.SocialJetlag(
+            lux=lux,
+            weekend_delay=float(settings["weekend_delay"]),
+        )
+    else:
         light_schedule = LightSchedule.from_pulse(
-            pulse_lux=lux, pulse_start=pulse_start, pulse_duration=pulse_duration
+            pulse_lux=lux,
+            pulse_start=int(settings["pulse_start"]),
+            pulse_duration=float(settings["pulse_duration"]),
         )
     
     light_arr = light_schedule(time_arr)
+    selected_models = settings["selected_models"]
+    equilibration_reps = int(settings["equilibration_reps"])
+    show_dlmo = bool(settings["show_dlmo"])
+    show_cbt = bool(settings["show_cbt"])
+    show_light_overlay = bool(settings["show_light_overlay"])
+    
+    dlmo_all: List[float] = []
+    cbt_all: List[float] = []
     
     # Tabs for different views
     sim_tab, actogram_tab, esri_tab, info_tab = st.tabs([
@@ -582,8 +928,6 @@ def render_circadian_tab(user_profile: Optional[Dict] = None) -> None:
             st.markdown("### 🧠 Model Trajectories")
             
             trajectories = {}
-            dlmo_all = []
-            cbt_all = []
             
             model_classes = {
                 "Forger99": Forger99,
@@ -631,7 +975,7 @@ def render_circadian_tab(user_profile: Optional[Dict] = None) -> None:
             </div>
             """, unsafe_allow_html=True)
         else:
-            st.info("👆 Select at least one model from the sidebar to run simulations.")
+            st.info("👆 Select at least one model in the scenario panel to run simulations.")
     
     with actogram_tab:
         st.markdown("### 📊 Double-Plotted Actogram")
