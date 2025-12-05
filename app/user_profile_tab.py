@@ -545,7 +545,10 @@ def _render_profile_edit(user: UserProfile) -> None:
 
 
 def _render_epworth_form(user_id: str) -> Optional[int]:
-    """Render Epworth Sleepiness Scale form with i18n support."""
+    """Render Epworth Sleepiness Scale form with i18n support.
+    
+    Uses st.session_state to aggregate slider values without triggering full reruns.
+    """
     # Get translations for current language
     if I18N_AVAILABLE:
         tr = get_epworth_translations()
@@ -578,6 +581,7 @@ def _render_epworth_form(user_id: str) -> Optional[int]:
     
     situations = tr['situations']
     
+    # Use select_slider for smoother interaction (fewer DOM updates)
     scores: Dict[str, int] = {}
     
     cols_per_row = 2
@@ -585,12 +589,15 @@ def _render_epworth_form(user_id: str) -> Optional[int]:
         cols = st.columns(cols_per_row)
         for j, (key, label) in enumerate(situations[i:i + cols_per_row]):
             with cols[j]:
-                scores[key] = st.slider(
+                slider_key = f"ess_{key}"
+                # Pre-initialize session state for smoother behavior
+                if slider_key not in st.session_state:
+                    st.session_state[slider_key] = 0
+                scores[key] = st.select_slider(
                     label,
-                    min_value=0,
-                    max_value=3,
-                    value=0,
-                    key=f"ess_{key}",
+                    options=[0, 1, 2, 3],
+                    value=st.session_state.get(slider_key, 0),
+                    key=slider_key,
                     help=tr['help'],
                 )
     
@@ -948,21 +955,26 @@ def _render_assessment_preview(
 # ---------------------------------------------------------------------------
 
 
+@_fragment_if_available
 def _render_assessment_history(user: UserProfile) -> None:
     """Render clinical assessment history."""
     st.markdown("## 📈 Assessment History")
     
+    # Use cached loader for fast repeated views
+    @st.cache_data(ttl=30, show_spinner=False)
+    def _load_history(uid: str, limit: int) -> list:
+        db = get_database()
+        return [h.to_dict() for h in db.get_clinical_scales_history(uid, limit=limit)]
+    
     try:
-        with st.spinner("Loading assessment history..."):
-            db = get_database()
-            history = db.get_clinical_scales_history(user.user_id, limit=50)
+        history_dicts = _load_history(user.user_id, 50)
         
-        if not history:
+        if not history_dicts:
             st.info("No assessment history found. Complete a clinical assessment to start tracking.")
             return
         
         # Convert to DataFrame
-        df = pd.DataFrame([h.to_dict() for h in history])
+        df = pd.DataFrame(history_dicts)
         df["assessment_date"] = pd.to_datetime(df["assessment_date"])
         df = df.sort_values("assessment_date", ascending=False)
         
@@ -1540,126 +1552,225 @@ def _render_body_composition_form(user: UserProfile) -> None:
 
 
 def _render_medical_history_summary(user: UserProfile) -> None:
-    """Render medical history summary and quick entry."""
+    """Render medical history summary pulling from both profile and medical_history table."""
     st.markdown("#### 📋 Medical History Summary")
+    
+    # Load latest medical record from database for richer context
+    @st.cache_data(ttl=30, show_spinner=False)
+    def _load_latest_record(uid: str) -> Dict[str, Any]:
+        try:
+            db = get_database()
+            rows = db.get_medical_history(uid, limit=1)
+            return rows[0] if rows else {}
+        except Exception:
+            return {}
+    
+    latest_record = _load_latest_record(user.user_id)
     
     # Show current conditions from user profile
     if user.medical_conditions:
         st.write("**Current Conditions:**")
         for condition in user.medical_conditions:
             st.write(f"• {condition}")
-    else:
-        st.info("No medical conditions recorded. Edit your profile to add medical history.")
     
     if user.medications:
         st.write("**Current Medications:**")
         for med in user.medications:
             st.write(f"• {med}")
     
-    st.caption(
-        "💡 For comprehensive medical history including cardiovascular, respiratory, "
-        "metabolic conditions and family history, use the Medical History form in Data Management."
-    )
+    # Show most recent exploration medical record summary
+    if latest_record:
+        st.markdown("---")
+        st.markdown("**Latest Exploration Medical Record:**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            mission = latest_record.get("mission_profile", "—")
+            day = latest_record.get("mission_day", "—")
+            st.metric("Mission", f"{mission} D{day}")
+        with col2:
+            eva_status = latest_record.get("eva_status", "—")
+            st.metric("EVA Status", eva_status)
+        with col3:
+            rad = latest_record.get("radiation_dose_msv", 0.0)
+            st.metric("Radiation (mSv)", f"{rad:.1f}")
+        
+        # Chronic/acute flags
+        chronic_list = latest_record.get("chronic_conditions", [])
+        acute_list = latest_record.get("acute_symptoms", [])
+        if chronic_list:
+            st.caption(f"🩺 Chronic: {', '.join(chronic_list)}")
+        if acute_list:
+            st.caption(f"⚠️ Acute (24h): {', '.join(acute_list)}")
+        st.caption(f"_Updated: {latest_record.get('updated_at', '—')}_")
+    else:
+        if not user.medical_conditions and not user.medications:
+            st.info("No medical history recorded. Edit your profile or use the Exploration Medical Record form.")
 
 
 @_fragment_if_available
 def _render_medical_record_form(user: UserProfile) -> None:
-    """Render NASA-style exploration medical record entry form."""
+    """Render NASA-style exploration medical record entry form.
+    
+    Structured per Exploration Medical Capability (ExMC) and Earth-Independent
+    Medical Operations (EIMO) framework for autonomous deep-space missions.
+    Reference: https://ntrs.nasa.gov/citations/20230015831 (ExMC AsMA 2024).
+    """
     st.caption(
-        "Structured per NASA Medical Information Systems & Tools (MIST) and "
-        "Exploration Medical Capability (ExMC) guidance for autonomous missions. "
-        "See: https://www.nasa.gov/general/medical-information-systems-and-tools-mist/ "
-        "and https://ntrs.nasa.gov/citations/20230015831"
+        "Structured per NASA Exploration Medical Capability (ExMC) and the "
+        "Earth-Independent Medical Operations (EIMO) paradigm for deep-space "
+        "autonomy. Reference: Lehnhardt et al., NASA Technical Reports Server, "
+        "2023 (DOI: 10.1109/OJEMB.2023.3255513)."
     )
+    
+    # -------------------------------------------------------------------------
+    # Helper: Safe index lookup for selectbox (resilient to schema changes)
+    # -------------------------------------------------------------------------
+    def _safe_selectbox_index(stored_value: Any, options: list, default_index: int = 0) -> int:
+        """Return index of stored_value in options, or default_index if not found."""
+        if stored_value in options:
+            return options.index(stored_value)
+        if stored_value is not None:
+            _LOGGER.debug(
+                "Selectbox schema migration: stored value %r not in options, using default index %d",
+                stored_value,
+                default_index,
+            )
+        return default_index
+    
     try:
         db = get_database()
         history = db.get_medical_history(user.user_id, limit=25)
+        _LOGGER.debug("Loaded %d medical history entries for user %s", len(history), user.user_id)
     except Exception as exc:
+        _LOGGER.warning("Unable to load medical history for user %s: %s", user.user_id, exc)
         st.error(f"Unable to load medical history: {exc}")
         history = []
     latest = history[0] if history else {}
     
+    # Mission profiles aligned with NASA EIMO planning horizons
     mission_options = {
-        "LUNAR-22": "Lunar sortie (22-day habitat)",
-        "GATEWAY-30": "Gateway stack (30-day)",
-        "MARS-ANALOG-45": "Mars analog (45-day isolation)",
-        "CHAPEA-378": "CHAPEA / Mars Dune Alpha (long-duration)",
+        "LEO-ISS": "ISS / Low-Earth Orbit (continuous ground support)",
+        "LUNAR-SLS": "Artemis lunar sortie (6–30 days, limited EIMO)",
+        "GATEWAY-30": "Gateway cislunar (30-day increments)",
+        "LUNAR-SURFACE-90": "Lunar surface sustained (up to 90 days)",
+        "MARS-TRANSIT-180": "Mars transit (180+ days, high EIMO)",
+        "MARS-SURFACE-500": "Mars surface (500+ days, full autonomy)",
+        "ANALOG-CHAPEA": "CHAPEA / Mars Dune Alpha analog",
+        "ANALOG-HERA": "HERA campaign (45-day isolation)",
         "CUSTOM": "Custom exploration profile",
     }
-    habitats = ["HERA", "CHAPEA", "NEEMO", "Gateway", "ISS", "Custom"]
-    crew_roles = ["Flight Surgeon", "Commander", "Pilot", "Mission Specialist", "Payload Specialist"]
-    eva_status_options = ["Cleared", "Restricted", "No EVA"]
-    space_weather_alerts = ["None", "Watch", "Warning", "Post-Event Monitoring"]
-    chronic_condition_options = [
-        "Cardiovascular",
-        "Respiratory",
-        "Metabolic",
-        "Neurological",
-        "Psychological",
-        "Musculoskeletal",
-        "Renal/Urologic",
+    habitats = ["ISS", "Gateway", "Starship HLS", "Mars Dune Alpha", "HERA", "NEEMO", "Lunar Hab", "Custom"]
+    crew_roles = [
+        "Flight Surgeon",
+        "Crew Medical Officer (CMO)",
+        "Commander",
+        "Pilot",
+        "Mission Specialist",
+        "Payload Specialist",
+        "Research Scientist",
     ]
+    eva_status_options = ["Cleared", "Cleared with Restriction", "No EVA", "Post-EVA Recovery"]
+    space_weather_alerts = ["None", "Watch", "Warning", "Storm In Progress", "Post-Event Monitoring"]
+    # Chronic condition categories per HRP/ExMC risk taxonomy
+    chronic_condition_options = [
+        "Cardiovascular (SANS, arrhythmia)",
+        "Respiratory (atelectasis, hypoxia history)",
+        "Metabolic (glucose, bone loss)",
+        "Neurological (vestibular, ICP)",
+        "Psychological (anxiety, depression, adjustment)",
+        "Musculoskeletal (muscle atrophy, back pain)",
+        "Renal/Urologic (nephrolithiasis)",
+        "Dermatologic (rash, infection)",
+        "Ophthalmologic (SANS-related)",
+        "Immunologic (allergy, infection susceptibility)",
+    ]
+    # Acute symptoms expanded per ExMC clinical decision support categories
     acute_symptom_options = [
         "Headache",
-        "Dizziness",
-        "Visual change",
-        "GI upset",
-        "Musculoskeletal pain",
-        "Sleep disruption",
-        "Skin lesion",
+        "Dizziness / Vertigo",
+        "Visual change (blur, scotoma)",
+        "Nausea / Vomiting",
+        "Abdominal pain",
+        "Chest pain / Palpitations",
+        "Dyspnea",
+        "Musculoskeletal pain (specify)",
+        "Skin lesion / Wound",
+        "Sleep disruption (insomnia / hypersomnia)",
+        "Cognitive change (attention, memory)",
+        "Mood change (irritability, apathy)",
+        "Fever / Chills",
+        "Urinary symptoms",
     ]
     behavioral_flags = [
         "Confinement stress",
-        "Team friction",
-        "Mood change",
-        "Cognitive slowing",
-        "Motivation dip",
+        "Team friction / Interpersonal conflict",
+        "Mood dysregulation",
+        "Cognitive slowing / Attention deficit",
+        "Motivation dip / Amotivation",
+        "Sleep-wake cycle disruption",
+        "Isolation distress",
+        "Homesickness / Nostalgia",
+    ]
+    # EIMO autonomy level (per Levin et al. 2023)
+    autonomy_levels = [
+        "Ground-Supported (real-time telemedicine)",
+        "Delayed Support (2–20 min latency)",
+        "Limited Autonomy (hours to days delay)",
+        "Full EIMO (crew autonomous)",
     ]
     
     form_key = f"exploration_medical_record_form_{user.user_id}"
     with st.form(form_key, clear_on_submit=False):
+        # ─────────────────────────────────────────────────────────────────────
+        # Section 1: Mission Context (EIMO Phase & Habitat)
+        # ─────────────────────────────────────────────────────────────────────
+        st.markdown("##### 🚀 Mission Context")
         col_a, col_b, col_c = st.columns(3)
+        mission_keys = list(mission_options.keys())
         with col_a:
             mission_profile = st.selectbox(
                 "Mission profile",
-                options=list(mission_options.keys()),
+                options=mission_keys,
                 format_func=lambda key: mission_options.get(key, key),
-                index=list(mission_options.keys()).index(
-                    latest.get("mission_profile", "LUNAR-22")
-                )
-                if latest.get("mission_profile", "LUNAR-22") in mission_options
-                else 0,
+                index=_safe_selectbox_index(latest.get("mission_profile"), mission_keys, 0),
             )
             mission_day = st.number_input(
                 "Mission day",
                 min_value=0,
-                max_value=720,
+                max_value=999,
                 value=int(latest.get("mission_day", 1)),
                 step=1,
             )
             habitat = st.selectbox(
-                "Habitat/analog site",
+                "Habitat / Analog site",
                 options=habitats,
-                index=habitats.index(latest.get("habitat", habitats[0]))
-                if latest.get("habitat") in habitats
-                else 0,
+                index=_safe_selectbox_index(latest.get("habitat"), habitats, 0),
             )
         with col_b:
             crew_role = st.selectbox(
                 "Crew role",
                 options=crew_roles,
-                index=crew_roles.index(latest.get("crew_role", crew_roles[0]))
-                if latest.get("crew_role") in crew_roles
-                else 0,
+                index=_safe_selectbox_index(latest.get("crew_role"), crew_roles, 0),
             )
+            autonomy_level = st.selectbox(
+                "EIMO autonomy level",
+                options=autonomy_levels,
+                index=_safe_selectbox_index(latest.get("autonomy_level"), autonomy_levels, 0),
+                help="Earth-Independent Medical Operations autonomy classification",
+            )
+            comm_delay_min = st.number_input(
+                "Comm delay (min, one-way)",
+                min_value=0.0,
+                max_value=25.0,
+                value=float(latest.get("comm_delay_min", 0.0)),
+                step=0.5,
+                help="Mars averages 3–22 min one-way; Gateway ~1.3 s",
+            )
+        with col_c:
             eva_status = st.selectbox(
                 "EVA clearance",
                 options=eva_status_options,
-                index=eva_status_options.index(
-                    latest.get("eva_status", eva_status_options[0])
-                )
-                if latest.get("eva_status") in eva_status_options
-                else 0,
+                index=_safe_selectbox_index(latest.get("eva_status"), eva_status_options, 0),
             )
             eva_hours = st.number_input(
                 "EVA hours (last 72h)",
@@ -1668,54 +1779,120 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 value=float(latest.get("eva_hours_72h", 0.0)),
                 step=0.5,
             )
-        with col_c:
-            radiation_dose = st.number_input(
-                "Radiation dose (mSv)",
-                min_value=0.0,
-                max_value=250.0,
-                value=float(latest.get("radiation_dose_msv", 0.0)),
-                step=0.1,
+            days_since_last_eva = st.number_input(
+                "Days since last EVA",
+                min_value=0,
+                max_value=365,
+                value=int(latest.get("days_since_last_eva", 0)),
+                step=1,
             )
+        
+        # ─────────────────────────────────────────────────────────────────────
+        # Section 2: Radiation & Space Weather (ExMC risk domain)
+        # ─────────────────────────────────────────────────────────────────────
+        st.markdown("##### ☢️ Radiation & Space Weather")
+        col_r1, col_r2, col_r3 = st.columns(3)
+        with col_r1:
+            radiation_dose = st.number_input(
+                "Cumulative dose (mSv)",
+                min_value=0.0,
+                max_value=1200.0,
+                value=float(latest.get("radiation_dose_msv", 0.0)),
+                step=0.5,
+                help="Career limit ~1000 mSv (NASA); Mars transit ~300 mSv per transit",
+            )
+        with col_r2:
             space_weather = st.selectbox(
                 "Space-weather alert level",
                 options=space_weather_alerts,
-                index=space_weather_alerts.index(
-                    latest.get("space_weather_alert", space_weather_alerts[0])
-                )
-                if latest.get("space_weather_alert") in space_weather_alerts
-                else 0,
+                index=_safe_selectbox_index(latest.get("space_weather_alert"), space_weather_alerts, 0),
             )
-            confinement_stress = st.slider(
-                "Confinement stress (1-10)",
-                min_value=1,
-                max_value=10,
-                value=int(latest.get("confinement_stress", 3)),
+        with col_r3:
+            galactic_cosmic_ray = st.checkbox(
+                "GCR exposure concern",
+                value=latest.get("gcr_concern", False),
+                help="Galactic Cosmic Ray monitoring for deep-space missions",
             )
         
+        # ─────────────────────────────────────────────────────────────────────
+        # Section 3: Health Status (Chronic / Acute / Behavioral)
+        # ─────────────────────────────────────────────────────────────────────
+        st.markdown("##### 🩺 Health Status")
+        
+        # Helper to filter stored defaults against current options (resilient to schema changes)
+        def _safe_multiselect_default(stored: list, options: list) -> list:
+            """Return only stored values that exist in current options."""
+            if not stored:
+                return []
+            valid = [v for v in stored if v in options]
+            # Log migration warnings for stale values
+            stale = set(stored) - set(valid)
+            if stale:
+                _LOGGER.debug(
+                    "Multiselect schema migration: dropped stale defaults %s",
+                    stale,
+                )
+            return valid
+        
         chronic_conditions = st.multiselect(
-            "Chronic condition log",
+            "Chronic condition log (HRP risk categories)",
             options=chronic_condition_options,
-            default=latest.get("chronic_conditions", []),
+            default=_safe_multiselect_default(
+                latest.get("chronic_conditions", []),
+                chronic_condition_options,
+            ),
         )
         acute_symptoms = st.multiselect(
             "Acute symptoms (last 24h)",
             options=acute_symptom_options,
-            default=latest.get("acute_symptoms", []),
+            default=_safe_multiselect_default(
+                latest.get("acute_symptoms", []),
+                acute_symptom_options,
+            ),
         )
         behavioral_state = st.multiselect(
             "Behavioral health notes",
             options=behavioral_flags,
-            default=latest.get("behavioral_flags", []),
+            default=_safe_multiselect_default(
+                latest.get("behavioral_flags", []),
+                behavioral_flags,
+            ),
         )
+        col_h1, col_h2 = st.columns(2)
+        with col_h1:
+            confinement_stress = st.slider(
+                "Confinement stress (1–10)",
+                min_value=1,
+                max_value=10,
+                value=int(latest.get("confinement_stress", 3)),
+            )
+        with col_h2:
+            workload_rating = st.slider(
+                "Workload rating (1–10)",
+                min_value=1,
+                max_value=10,
+                value=int(latest.get("workload_rating", 5)),
+                help="NASA TLX-style subjective workload",
+            )
         
+        # ─────────────────────────────────────────────────────────────────────
+        # Section 4: Countermeasures & Life Support
+        # ─────────────────────────────────────────────────────────────────────
+        st.markdown("##### 🏋️ Countermeasures & Life Support")
         col_d, col_e, col_f = st.columns(3)
         with col_d:
             sleep_hours = st.number_input(
                 "Sleep (last 24h, hours)",
                 min_value=0.0,
-                max_value=12.0,
+                max_value=14.0,
                 value=float(latest.get("sleep_hours", 7.0)),
                 step=0.25,
+            )
+            sleep_quality = st.slider(
+                "Sleep quality (1–5)",
+                min_value=1,
+                max_value=5,
+                value=int(latest.get("sleep_quality", 3)),
             )
         with col_e:
             exercise_minutes = st.number_input(
@@ -1724,6 +1901,13 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 max_value=300.0,
                 value=float(latest.get("exercise_minutes", 120.0)),
                 step=5.0,
+                help="ISS target ~2 h/day resistive + aerobic",
+            )
+            _exercise_modalities = ["ARED", "T2 / COLBERT", "CEVIS", "Combined", "Limited", "None"]
+            exercise_type = st.selectbox(
+                "Primary exercise modality",
+                options=_exercise_modalities,
+                index=_safe_selectbox_index(latest.get("exercise_type"), _exercise_modalities, 3),
             )
         with col_f:
             hydration_liters = st.number_input(
@@ -1733,20 +1917,40 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 value=float(latest.get("hydration_liters", 3.8)),
                 step=0.1,
             )
-        
-        inventory_alert = st.selectbox(
-            "Medical inventory status",
-            options=["Nominal", "Monitor", "Critical Shortage"],
-            index=["Nominal", "Monitor", "Critical Shortage"].index(
-                latest.get("inventory_alert", "Nominal")
+            caloric_intake = st.number_input(
+                "Caloric intake (kcal/day)",
+                min_value=0,
+                max_value=5000,
+                value=int(latest.get("caloric_intake", 2500)),
+                step=50,
             )
-            if latest.get("inventory_alert") in ["Nominal", "Monitor", "Critical Shortage"]
-            else 0,
-        )
+        
+        # ─────────────────────────────────────────────────────────────────────
+        # Section 5: Medical Inventory & Logistics
+        # ─────────────────────────────────────────────────────────────────────
+        st.markdown("##### 📦 Medical Inventory & Logistics")
+        col_inv1, col_inv2 = st.columns(2)
+        with col_inv1:
+            _inventory_status_options = ["Nominal", "Monitor", "Low Stock", "Critical Shortage"]
+            inventory_alert = st.selectbox(
+                "Medical inventory status",
+                options=_inventory_status_options,
+                index=_safe_selectbox_index(latest.get("inventory_alert"), _inventory_status_options, 0),
+            )
+        with col_inv2:
+            resupply_days = st.number_input(
+                "Days until next resupply",
+                min_value=0,
+                max_value=999,
+                value=int(latest.get("resupply_days", 0)),
+                step=1,
+                help="0 = N/A or continuous resupply (LEO)",
+            )
+        
         notes = st.text_area(
-            "Operational/clinical notes",
+            "Operational / Clinical notes",
             value=str(latest.get("notes", "")),
-            height=120,
+            height=100,
         )
         update_latest = st.checkbox(
             "Update latest entry instead of creating a new record",
@@ -1759,22 +1963,36 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 st.info("Processing previous submission... please wait.")
                 return
             record = {
+                # Mission Context
                 "mission_profile": mission_profile,
                 "mission_day": mission_day,
                 "habitat": habitat,
                 "crew_role": crew_role,
+                "autonomy_level": autonomy_level,
+                "comm_delay_min": comm_delay_min,
                 "eva_status": eva_status,
                 "eva_hours_72h": eva_hours,
+                "days_since_last_eva": days_since_last_eva,
+                # Radiation & Space Weather
                 "radiation_dose_msv": radiation_dose,
                 "space_weather_alert": space_weather,
-                "confinement_stress": confinement_stress,
+                "gcr_concern": galactic_cosmic_ray,
+                # Health Status
                 "chronic_conditions": chronic_conditions,
                 "acute_symptoms": acute_symptoms,
                 "behavioral_flags": behavioral_state,
+                "confinement_stress": confinement_stress,
+                "workload_rating": workload_rating,
+                # Countermeasures
                 "sleep_hours": sleep_hours,
+                "sleep_quality": sleep_quality,
                 "exercise_minutes": exercise_minutes,
+                "exercise_type": exercise_type,
                 "hydration_liters": hydration_liters,
+                "caloric_intake": caloric_intake,
+                # Inventory
                 "inventory_alert": inventory_alert,
+                "resupply_days": resupply_days,
                 "notes": notes,
             }
             try:
