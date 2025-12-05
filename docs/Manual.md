@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.7.9  
+**Version:** 1.8.0  
 **Last Updated:** 2025-12-05
 
 ---
@@ -71,7 +71,7 @@ All other tabs show **example data** and **reference values** to help you unders
 
 **Session persistence:** Circadian and SAFTE tabs now remember per-user configurations during the current session—when you switch users or rerun the app, your last light schedule and fatigue inputs are restored automatically.
 
-**Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. HRV history in the profile loads only the latest records for quicker switching.
+**Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the database lives alongside the app (`hrv_users.db`) for easy portability.
 
 ### System Requirements
 
