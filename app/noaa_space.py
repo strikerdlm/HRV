@@ -14,7 +14,7 @@ import requests
 import re
 from pandas.api.types import is_datetime64_any_dtype
 
-from logging_config import get_logger, log_exception
+from app.logging_config import get_logger, log_exception
 
 SWPC_BASE_URL = "https://services.swpc.noaa.gov/json/"
 REQUEST_TIMEOUT = 10.0
