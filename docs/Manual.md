@@ -540,7 +540,14 @@ This feature enables personalized HRV analysis and fatigue assessment by incorpo
 - **Debounced commits:** Each submit action passes through a 0.8 s debounce guard to prevent duplicate entries when users double-click or when the page reruns due to other activity.
 - **Exploration medical record protection:** NASA-style mission logs share the same debounce to keep longitudinal data clean even when uploading from multiple tabs.
 
-**Next focus:** Relocate Circadian configuration controls into their dedicated tab so per-tab presets and batching can extend beyond the clinical workspace.
+**Next focus:** Ensure every analysis tab consumes the active user context so NASA nutrition, fatigue, and circadian modules stay synchronized without re-entering profile data.
+
+### Circadian Scenario Builder (December 2025 Sprint)
+
+- **In-tab controls:** The Circadian Physiology tab now hosts its own configuration drawer, freeing the global sidebar for mission controls.
+- **Batched apply button:** All sliders and selectors live inside a single form—adjust everything first, then click **Apply scenario** to trigger a single simulation rerun.
+- **Preset vault:** Save up to five named scenarios (e.g., *Night Ops*, *Mars Analog*) directly in the tab. Presets persist across reruns and are shared with multi-user sessions.
+- **Mission defaults:** A single “Reset defaults” button restores NASA baseline parameters (30-day run, Hannay19 model, regular 08:00–22:00 light) in one click.
 
 ### User Biometric Profile
 
@@ -959,31 +966,23 @@ The module generates various light exposure patterns:
 
 ### Using the Circadian Tab
 
-**Step 1: Select Model**
-1. Navigate to Circadian Physiology tab
-2. Choose mathematical model from dropdown
-3. Review model parameters (adjustable for advanced users)
+**Step 1: Configure Scenario (In-Tab Builder)**
+1. Open the scenario builder panel at the top of the Circadian tab.
+2. Pick one or more models (Hannay19 is the mission default).
+3. Select a light schedule template and adjust its parameters (wake window, shift hours, custom pulse, etc.).
+4. Define the simulation window (days, integration step, equilibration passes).
+5. Toggle visualization flags (DLMO/CBT markers, light overlay) as needed.
+6. Optionally **Save preset** (up to five) or load an existing scenario. Presets persist across reruns and multi-user sessions.
 
-**Step 2: Configure Light Schedule**
-1. Select schedule type
-2. Enter parameters:
-   - Wake time (hours, 24h format)
-   - Sleep duration (hours)
-   - Light intensity during wake (lux)
-   - Simulation duration (days)
+**Step 2: Apply and Simulate**
+1. Click **Apply scenario** once. All widgets are batched through the form, so heavy simulations only run after this action.
+2. The light schedule plot updates immediately, followed by amplitude/phase trajectories for every selected model.
 
-**Step 3: Run Simulation**
-1. Click "Generate Light Schedule"
-2. Click "Run Circadian Model"
-3. Review trajectory plots:
-   - Phase over time
-   - Amplitude over time
-   - Core body temperature prediction
-
-**Step 4: Analyze Results**
-- View ESRI score for schedule regularity
-- Examine phase deviation from target
-- Compare different schedules
+**Step 3: Analyze Outputs**
+- Use the double-plotted actogram to inspect entrainment stability and rapid phase shifts.
+- Review ESRI to quantify how entrainment-friendly the schedule is (0–1 scale).
+- Compare DLMO/CBT markers between models to plan light therapy or shift rotations.
+- Export the scenario (JSON) along with preset notes for mission planning logs.
 
 ### Clinical Applications
 
