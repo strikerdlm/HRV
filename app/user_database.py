@@ -46,17 +46,15 @@ _thread_local = threading.local()
 
 
 def get_database_path() -> Path:
-    """Get the database path - works on any system."""
-    # Try app data directory first, then fall back to current directory
-    app_data = Path(os.environ.get("APPDATA", "")) / "HRVAnalysis"
-    if not app_data.exists():
-        # Linux/Mac: use ~/.hrv_analysis
-        home = Path.home()
-        app_data = home / ".hrv_analysis"
+    """
+    Get the database path placed alongside the application for easy portability.
     
-    # Create directory if needed
-    app_data.mkdir(parents=True, exist_ok=True)
-    return app_data / DEFAULT_DB_NAME
+    The database now lives in the project directory (same folder as the app)
+    to simplify copying the app and data together across machines.
+    """
+    project_root = Path(__file__).resolve().parents[1]
+    project_root.mkdir(parents=True, exist_ok=True)
+    return project_root / DEFAULT_DB_NAME
 
 
 # ---------------------------------------------------------------------------
