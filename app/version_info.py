@@ -11,7 +11,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Tuple
 
-from logging_config import get_logger, log_exception
+from app.logging_config import get_logger, log_exception
 
 _LOGGER = get_logger(__name__)
 _CHANGELOG_PATH = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
