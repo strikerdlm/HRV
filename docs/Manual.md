@@ -71,6 +71,8 @@ All other tabs show **example data** and **reference values** to help you unders
 
 **Session persistence:** Circadian and SAFTE tabs now remember per-user configurations during the current session—when you switch users or rerun the app, your last light schedule and fatigue inputs are restored automatically.
 
+**Cross-tab correlation:** The Circadian tab now publishes DLMO/CBT markers, ESRI, and light window details to the SAFTE/Fatigue tab. A single click in SAFTE applies the latest circadian sleep window and chronotype offset to fatigue simulations for tighter mission planning.
+
 **Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the database lives alongside the app (`hrv_users.db`) for easy portability.
 
 ### System Requirements
