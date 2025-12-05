@@ -11,7 +11,10 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Tuple
 
-from app.logging_config import get_logger, log_exception
+try:
+    from app.logging_config import get_logger, log_exception
+except ImportError:  # pragma: no cover - fallback for script execution
+    from logging_config import get_logger, log_exception
 
 _LOGGER = get_logger(__name__)
 _CHANGELOG_PATH = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
