@@ -11,8 +11,10 @@ from __future__ import annotations
 
 import streamlit as st
 
+from version_info import get_app_version
+
 # Application metadata
-APP_VERSION = "1.7.2"
+APP_VERSION = get_app_version()
 GITHUB_REPO = "https://github.com/strikerdlm/HRV"
 
 
