@@ -176,6 +176,7 @@ try:
         UIStateManager,
         DataType,
         get_state_manager,
+        get_tab_settings_manager,
         render_data_status_badge,
         render_conditional_compute_button,
         render_tab_header,
@@ -478,6 +479,7 @@ _DEFAULT_FATIGUE_WIDGET_STATE: Dict[str, Any] = {
     "fatigue_days": 3,
     "fatigue_model": "Advanced SAFTE",
 }
+_FATIGUE_SETTING_KEYS: Tuple[str, ...] = tuple(_DEFAULT_FATIGUE_WIDGET_STATE.keys())
 
 
 def _derive_fatigue_widget_state(user_context: Dict[str, Any]) -> Dict[str, Any]:
@@ -6339,7 +6341,21 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 "and the `fatigue_calculator` package are properly installed."
             )
         else:
+            tab_settings_manager = get_tab_settings_manager()
+            fatigue_user_id = (
+                active_user_context.get("user_id")
+                if active_user_context.get("has_user")
+                else None
+            )
+            stored_fatigue_settings = tab_settings_manager.get_settings(
+                "fatigue", fatigue_user_id
+            )
+
             fatigue_defaults = _sync_fatigue_widgets(active_user_context)
+            if stored_fatigue_settings:
+                for key, value in stored_fatigue_settings.items():
+                    st.session_state[key] = value
+                fatigue_defaults.update(stored_fatigue_settings)
             # Scientific explanation expander
             with st.expander("📖 **Understanding the SAFTE Model**", expanded=False):
                 st.markdown("""
@@ -6512,6 +6528,29 @@ that predicts cognitive performance based on:
                     type="primary",
                     key="run_fatigue_btn"
                 )
+
+            current_fatigue_settings: Dict[str, Any] = {
+                "fatigue_age": int(fatigue_age),
+                "fatigue_sex": str(fatigue_sex),
+                "fatigue_chronotype": float(fatigue_chronotype),
+                "fatigue_sleep_quality": float(fatigue_sleep_quality),
+                "fatigue_sleep_duration": float(fatigue_sleep_duration),
+                "fatigue_bedtime": int(fatigue_bedtime),
+                "fatigue_waketime": int(fatigue_waketime),
+                "fatigue_sleep_debt": float(fatigue_sleep_debt),
+                "fatigue_has_work": bool(fatigue_has_work),
+                "fatigue_work_start": int(fatigue_work_start),
+                "fatigue_work_end": int(fatigue_work_end),
+                "fatigue_cognitive_load": int(fatigue_cognitive_load),
+                "fatigue_days": int(fatigue_days),
+                "fatigue_model": str(fatigue_model),
+            }
+            tab_settings_manager.save_settings(
+                "fatigue",
+                fatigue_user_id,
+                current_fatigue_settings,
+                allowed_keys=_FATIGUE_SETTING_KEYS,
+            )
             
             # Run simulation
             if run_fatigue:
