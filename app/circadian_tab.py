@@ -82,6 +82,7 @@ _STATE_SETTINGS_KEY: Final[str] = "circadian_settings_state"
 _STATE_PRESETS_KEY: Final[str] = "circadian_settings_presets"
 _STATE_PRESET_ORDER_KEY: Final[str] = "circadian_preset_order"
 _MAX_PRESETS: Final[int] = 5
+_CONTEXT_USER_KEY: Final[str] = "circadian_context_user_id"
 
 
 def _default_circadian_settings() -> Dict[str, Any]:
@@ -240,6 +241,78 @@ def _render_preset_controls(settings: Dict[str, Any]) -> Dict[str, Any]:
         st.info("Circadian settings reset to mission defaults.")
 
     return updated_settings
+
+
+def _derive_contextual_settings(user_context: Optional[Dict[str, Any]]) -> Dict[str, Any]:
+    """Build circadian settings tailored to the active user context."""
+    settings = _default_circadian_settings()
+    if not user_context or not user_context.get("has_user"):
+        return settings
+
+    chronotype = float(user_context.get("chronotype_offset") or 0.0)
+    if chronotype > 0.75:
+        settings["schedule_type"] = "SocialJetlag"
+        settings["weekend_delay"] = min(6.0, round(abs(chronotype) * 3.0, 1))
+    elif chronotype < -0.75:
+        settings["schedule_type"] = "Regular"
+        settings["lights_on"] = 6
+        settings["lights_off"] = 20
+    else:
+        settings["lights_on"] = 7
+        settings["lights_off"] = 23
+
+    medical_record = user_context.get("medical_record") or {}
+    mission_profile = medical_record.get("mission_profile")
+    if mission_profile in {"GATEWAY-30", "MARS-ANALOG-45", "CHAPEA-378"}:
+        settings["schedule_type"] = "ShiftWork"
+        settings["days_on"] = 4 if mission_profile != "CHAPEA-378" else 6
+        settings["days_off"] = 2
+        settings["lux"] = 750
+    elif mission_profile == "LUNAR-22":
+        settings["schedule_type"] = "SlamShift"
+        settings["shift_hours"] = -6 if chronotype <= 0 else -3
+        settings["baseline_days"] = 9
+
+    sleep_hours = medical_record.get("sleep_hours")
+    if isinstance(sleep_hours, (int, float)):
+        lights_on = settings.get("lights_on", 8)
+        settings["lights_off"] = int((lights_on + float(sleep_hours)) % 24)
+
+    if medical_record.get("space_weather_alert") in {"Watch", "Warning"}:
+        settings["pulse_start"] = 18
+        settings["pulse_duration"] = 3.0
+
+    crew_role = (medical_record.get("crew_role") or "").lower()
+    if "commander" in crew_role or "pilot" in crew_role:
+        settings["selected_models"] = ["Jewett99", "Hannay19"]
+    elif "flight surgeon" in crew_role:
+        settings["selected_models"] = ["Hannay19TP"]
+
+    if mission_profile in {"MARS-ANALOG-45", "CHAPEA-378"}:
+        settings["total_days"] = 45 if mission_profile == "MARS-ANALOG-45" else 60
+
+    return settings
+
+
+def _sync_settings_with_context(
+    user_context: Optional[Dict[str, Any]], *, force: bool = False
+) -> None:
+    """Persist personalized circadian settings when the active user changes."""
+    target_user = (
+        user_context.get("user_id") if user_context and user_context.get("has_user") else None
+    )
+    stored_user = st.session_state.get(_CONTEXT_USER_KEY)
+    if not force and stored_user == target_user:
+        return
+
+    if user_context and user_context.get("has_user"):
+        personalized = _derive_contextual_settings(user_context)
+        _update_circadian_settings(personalized)
+        st.session_state[_CONTEXT_USER_KEY] = target_user
+    elif force:
+        defaults = _default_circadian_settings()
+        _update_circadian_settings(defaults)
+        st.session_state[_CONTEXT_USER_KEY] = None
 
 
 def _render_schedule_section(schedule_type: str, settings: Dict[str, Any]) -> Dict[str, Any]:
@@ -812,7 +885,10 @@ def _create_esri_chart(esri_time: NDArray, esri_values: NDArray) -> Dict:
     )
 
 
-def render_circadian_tab(user_profile: Optional[Dict] = None) -> None:
+def render_circadian_tab(
+    user_profile: Optional[Dict[str, Any]] = None,
+    user_context: Optional[Dict[str, Any]] = None,
+) -> None:
     """Render the complete Circadian Physiology tab."""
     
     if not CIRCADIAN_AVAILABLE:
@@ -842,8 +918,20 @@ def render_circadian_tab(user_profile: Optional[Dict] = None) -> None:
     </div>
     """, unsafe_allow_html=True)
     
+    _sync_settings_with_context(user_context)
     settings = _get_circadian_settings()
     st.markdown("### ⚙️ Scenario Configuration")
+    if user_context and user_context.get("has_user"):
+        if st.button(
+            "Align with active profile",
+            key="circadian_sync_profile",
+            help="Pull sleep/wake cues from the active user and re-run simulations.",
+        ):
+            _sync_settings_with_context(user_context, force=True)
+            settings = _get_circadian_settings()
+            st.success(
+                f"Scenario synced with {user_context.get('full_name') or user_context.get('username') or 'active user'}."
+            )
     settings = _render_preset_controls(settings)
     settings = _render_settings_form(settings)
     

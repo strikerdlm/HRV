@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.6] - 2025-12-05
+
+### Added
+- **Active user context bridge** (`app/app.py`, `app/circadian_tab.py`): The app now fetches the active astronaut’s demographics, chronotype, and latest exploration medical record once per rerun and shares it across mission tabs.
+- **Profile-aware scenario sync** (`app/circadian_tab.py`): New **Align with active profile** button maps user chronotype/mission profile to light schedules, shift cadence, and model presets.
+
+### Changed
+- **SAFTE/Fatigue tab** (`app/app.py`): Inputs auto-populate age, sex, chronotype offset, sleep debt, and work cadence from the active profile. A sync button lets operators refresh values after editing NASA logs.
+- **Documentation** (`README.md`, `docs/Manual.md`): Added guidance for the new profile sync workflows and updated the roadmap to mark the feature complete.
+
+### Fixed
+- **Pytest warning cleanup** (`app/statistical_analysis.py`, `tests/test_comprehensive_modules.py`): Renamed `TestType` to `StatisticalTestType` so pytest no longer attempts to collect it as a test class.
+
+---
+
 ## [1.7.5] - 2025-12-05
 
 ### Added

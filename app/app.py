@@ -123,10 +123,15 @@ try:
     from user_profile_tab import (
         render_user_profile_tab,
         get_current_user_data,
+        get_active_user_context,
     )
     USER_PROFILE_TAB_AVAILABLE = True
 except ImportError:
     USER_PROFILE_TAB_AVAILABLE = False
+
+    def get_active_user_context() -> Dict[str, Any]:
+        """Fallback user context when profile tab is unavailable."""
+        return _guest_user_context()
 
 # Space weather impact prediction module
 try:
@@ -247,6 +252,29 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from pathlib import Path
+
+# Default active-user context used when user profile data is unavailable
+def _guest_user_context() -> Dict[str, Any]:
+    return {
+        "has_user": False,
+        "user_id": None,
+        "username": "Guest",
+        "age_years": 35,
+        "sex": "other",
+        "weight_kg": 70.0,
+        "height_cm": 170.0,
+        "bmi": 24.2,
+        "resting_hr_bpm": 70,
+        "max_hr_bpm": 185,
+        "vo2max_ml_kg_min": 35.0,
+        "activity_level": "moderately_active",
+        "chronotype_offset": 0.0,
+        "occupation": None,
+        "medical_conditions": [],
+        "medications": [],
+        "medical_record": {},
+        "is_guest": True,
+    }
 
 # Load .env variables early (e.g., NASA_API_KEY, ACCUWEATHER_API_KEY)
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
@@ -430,6 +458,133 @@ def setup_console_logging(level: int = logging.INFO) -> logging.Logger:
     logging.captureWarnings(True)
 
     return app_logger
+
+
+_FATIGUE_WIDGET_STATE_KEY = "fatigue_widget_defaults"
+_FATIGUE_WIDGET_USER_KEY = "fatigue_widget_user_id"
+_DEFAULT_FATIGUE_WIDGET_STATE: Dict[str, Any] = {
+    "fatigue_age": 30,
+    "fatigue_sex": "other",
+    "fatigue_chronotype": 0.0,
+    "fatigue_sleep_quality": 0.8,
+    "fatigue_sleep_duration": 7.0,
+    "fatigue_bedtime": 23,
+    "fatigue_waketime": 7,
+    "fatigue_sleep_debt": 0.0,
+    "fatigue_has_work": True,
+    "fatigue_work_start": 9,
+    "fatigue_work_end": 17,
+    "fatigue_cognitive_load": 1,
+    "fatigue_days": 3,
+    "fatigue_model": "Advanced SAFTE",
+}
+
+
+def _derive_fatigue_widget_state(user_context: Dict[str, Any]) -> Dict[str, Any]:
+    """Derive fatigue widget defaults from the active user context."""
+    state = dict(_DEFAULT_FATIGUE_WIDGET_STATE)
+    if not user_context.get("has_user"):
+        return state
+
+    age = user_context.get("age_years")
+    if isinstance(age, (int, float)):
+        state["fatigue_age"] = int(max(16, min(90, round(age))))
+
+    sex = (user_context.get("sex") or "other").lower()
+    state["fatigue_sex"] = sex if sex in {"male", "female", "other"} else "other"
+
+    chronotype = float(user_context.get("chronotype_offset") or 0.0)
+    state["fatigue_chronotype"] = float(max(-2.5, min(2.5, chronotype)))
+
+    medical_record = user_context.get("medical_record") or {}
+    sleep_hours = medical_record.get("sleep_hours")
+    if isinstance(sleep_hours, (int, float)):
+        state["fatigue_sleep_duration"] = float(
+            max(4.0, min(10.0, round(float(sleep_hours), 1)))
+        )
+
+    stress = medical_record.get("confinement_stress")
+    if isinstance(stress, (int, float)):
+        state["fatigue_sleep_quality"] = float(
+            max(0.4, min(0.95, 1.0 - (float(stress) - 1.0) * 0.06))
+        )
+
+    state["fatigue_sleep_debt"] = float(
+        max(0.0, round(7.5 - state["fatigue_sleep_duration"], 1))
+    )
+
+    # Approximate bed/wake windows from chronotype and sleep duration
+    bedtime = 23
+    if chronotype > 0.75:
+        bedtime = 1
+    elif chronotype < -0.75:
+        bedtime = 21
+    state["fatigue_bedtime"] = int(bedtime % 24)
+    state["fatigue_waketime"] = int(
+        (state["fatigue_bedtime"] + round(state["fatigue_sleep_duration"])) % 24
+    )
+
+    occupation = (user_context.get("occupation") or "").lower()
+    crew_role = (medical_record.get("crew_role") or "").lower()
+    has_work = bool(occupation or crew_role)
+    state["fatigue_has_work"] = has_work
+
+    work_start, work_end = 9, 17
+    if any(tag in occupation for tag in ["night", "shift"]):
+        work_start, work_end = 20, 6
+    elif "pilot" in crew_role or "commander" in crew_role:
+        work_start, work_end = 8, 16
+    elif "flight surgeon" in crew_role:
+        work_start, work_end = 10, 20
+    state["fatigue_work_start"] = int(max(0, min(23, work_start)))
+    state["fatigue_work_end"] = int(max(0, min(23, work_end)))
+
+    behavioral_flags = medical_record.get("behavioral_flags") or []
+    acute_symptoms = medical_record.get("acute_symptoms") or []
+    cognitive_load = 1
+    if "Cognitive slowing" in behavioral_flags:
+        cognitive_load = 2
+    if "Sleep disruption" in acute_symptoms:
+        cognitive_load = max(cognitive_load, 2)
+    if "Restricted" in str(medical_record.get("eva_status", "")):
+        cognitive_load = max(cognitive_load, 3)
+    state["fatigue_cognitive_load"] = int(min(3, cognitive_load))
+
+    mission_profile = medical_record.get("mission_profile")
+    if mission_profile == "CHAPEA-378":
+        state["fatigue_days"] = 14
+        state["fatigue_model"] = "Classic SAFTE"
+    elif mission_profile == "MARS-ANALOG-45":
+        state["fatigue_days"] = 10
+    elif mission_profile == "GATEWAY-30":
+        state["fatigue_days"] = 7
+    elif mission_profile == "LUNAR-22":
+        state["fatigue_days"] = 5
+
+    return state
+
+
+def _sync_fatigue_widgets(
+    user_context: Dict[str, Any], *, force: bool = False
+) -> Dict[str, Any]:
+    """
+    Ensure fatigue widgets mirror the active user context.
+
+    Returns the state dictionary that should be considered the latest defaults.
+    """
+    target_user = user_context.get("user_id") if user_context.get("has_user") else None
+    stored_user = st.session_state.get(_FATIGUE_WIDGET_USER_KEY)
+    if not force and stored_user == target_user:
+        return st.session_state.get(
+            _FATIGUE_WIDGET_STATE_KEY, dict(_DEFAULT_FATIGUE_WIDGET_STATE)
+        )
+
+    state = _derive_fatigue_widget_state(user_context)
+    for key, value in state.items():
+        st.session_state[key] = value
+    st.session_state[_FATIGUE_WIDGET_STATE_KEY] = state
+    st.session_state[_FATIGUE_WIDGET_USER_KEY] = target_user
+    return state
 
 
 SWPC_BASE_URL = "https://services.swpc.noaa.gov/json/"
@@ -4411,6 +4566,12 @@ def main() -> None:
             source="Uploaded Files",
         )
     
+    # Active user context for cross-tab personalization
+    try:
+        active_user_context = get_active_user_context()
+    except Exception:
+        active_user_context = _guest_user_context()
+
     # Tabs
     (
         tab_overview,
@@ -5302,6 +5463,29 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
             st.info("📁 Upload HRV data files to see the unified timeline visualization.")
         else:
             st.markdown("---")
+            if active_user_context.get("has_user"):
+                sync_col, info_col = st.columns([1, 3])
+                with sync_col:
+                    if st.button(
+                        "Sync with active profile",
+                        key="fatigue_sync_profile",
+                        help="Refresh all fatigue inputs from the latest active user context.",
+                    ):
+                        fatigue_defaults = _sync_fatigue_widgets(
+                            active_user_context, force=True
+                        )
+                        st.success(
+                            f"Inputs synced for {active_user_context.get('full_name') or active_user_context.get('username') or 'active user'}."
+                        )
+                with info_col:
+                    st.caption(
+                        "Profile-linked defaults use the latest exploration medical record "
+                        "to seed age, chronotype, sleep debt, and work cadence."
+                    )
+            else:
+                st.caption(
+                    "No active user selected — using mission-generic defaults for fatigue modelling."
+                )
             
             # Metric selection
             st.markdown("#### 📊 Select Metrics to Display")
@@ -6155,6 +6339,7 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 "and the `fatigue_calculator` package are properly installed."
             )
         else:
+            fatigue_defaults = _sync_fatigue_widgets(active_user_context)
             # Scientific explanation expander
             with st.expander("📖 **Understanding the SAFTE Model**", expanded=False):
                 st.markdown("""
@@ -6188,68 +6373,108 @@ that predicts cognitive performance based on:
             with col_profile:
                 st.markdown("#### 👤 User Profile")
                 fatigue_age = st.number_input(
-                    "Age (years)", min_value=16, max_value=90, value=30, step=1,
-                    key="fatigue_age"
+                    "Age (years)",
+                    min_value=16,
+                    max_value=90,
+                    value=int(fatigue_defaults["fatigue_age"]),
+                    step=1,
+                    key="fatigue_age",
+                )
+                sex_options = ["male", "female", "other"]
+                default_sex = fatigue_defaults["fatigue_sex"]
+                sex_index = (
+                    sex_options.index(default_sex)
+                    if default_sex in sex_options
+                    else 2
                 )
                 fatigue_sex = st.selectbox(
-                    "Sex", options=["male", "female", "other"], index=2,
-                    key="fatigue_sex"
+                    "Sex",
+                    options=sex_options,
+                    index=sex_index,
+                    key="fatigue_sex",
                 )
                 fatigue_chronotype = st.slider(
                     "Chronotype offset (hours)",
-                    min_value=-2.5, max_value=2.5, value=0.0, step=0.5,
+                    min_value=-2.5,
+                    max_value=2.5,
+                    value=float(fatigue_defaults["fatigue_chronotype"]),
+                    step=0.5,
                     help="Negative = morning person, Positive = evening person",
-                    key="fatigue_chronotype"
+                    key="fatigue_chronotype",
                 )
             
             with col_sleep:
                 st.markdown("#### 😴 Sleep Schedule")
                 fatigue_sleep_quality = st.slider(
                     "Sleep quality (0-1)",
-                    min_value=0.0, max_value=1.0, value=0.8, step=0.05,
-                    key="fatigue_sleep_quality"
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=float(fatigue_defaults["fatigue_sleep_quality"]),
+                    step=0.05,
+                    key="fatigue_sleep_quality",
                 )
                 fatigue_sleep_duration = st.slider(
                     "Sleep duration (hours)",
-                    min_value=4.0, max_value=10.0, value=7.0, step=0.5,
-                    key="fatigue_sleep_duration"
+                    min_value=4.0,
+                    max_value=10.0,
+                    value=float(fatigue_defaults["fatigue_sleep_duration"]),
+                    step=0.5,
+                    key="fatigue_sleep_duration",
                 )
                 fatigue_bedtime = st.slider(
-                    "Bedtime (hour)", min_value=0, max_value=23, value=23,
-                    key="fatigue_bedtime"
+                    "Bedtime (hour)",
+                    min_value=0,
+                    max_value=23,
+                    value=int(fatigue_defaults["fatigue_bedtime"]),
+                    key="fatigue_bedtime",
                 )
                 fatigue_waketime = st.slider(
-                    "Wake time (hour)", min_value=0, max_value=23, value=7,
-                    key="fatigue_waketime"
+                    "Wake time (hour)",
+                    min_value=0,
+                    max_value=23,
+                    value=int(fatigue_defaults["fatigue_waketime"]),
+                    key="fatigue_waketime",
                 )
                 fatigue_sleep_debt = st.slider(
                     "Current sleep debt (hours)",
-                    min_value=0.0, max_value=50.0, value=0.0, step=0.5,
-                    key="fatigue_sleep_debt"
+                    min_value=0.0,
+                    max_value=50.0,
+                    value=float(fatigue_defaults["fatigue_sleep_debt"]),
+                    step=0.5,
+                    key="fatigue_sleep_debt",
                 )
             
             with col_work:
                 st.markdown("#### 💼 Work Schedule")
                 fatigue_has_work = st.checkbox(
-                    "Include work schedule", value=True,
-                    key="fatigue_has_work"
+                    "Include work schedule",
+                    value=bool(fatigue_defaults["fatigue_has_work"]),
+                    key="fatigue_has_work",
                 )
                 fatigue_work_start = st.slider(
-                    "Work start (hour)", min_value=0, max_value=23, value=9,
+                    "Work start (hour)",
+                    min_value=0,
+                    max_value=23,
+                    value=int(fatigue_defaults["fatigue_work_start"]),
                     disabled=not fatigue_has_work,
-                    key="fatigue_work_start"
+                    key="fatigue_work_start",
                 )
                 fatigue_work_end = st.slider(
-                    "Work end (hour)", min_value=0, max_value=23, value=17,
+                    "Work end (hour)",
+                    min_value=0,
+                    max_value=23,
+                    value=int(fatigue_defaults["fatigue_work_end"]),
                     disabled=not fatigue_has_work,
-                    key="fatigue_work_end"
+                    key="fatigue_work_end",
                 )
                 fatigue_cognitive_load = st.slider(
                     "Cognitive load (0-3)",
-                    min_value=0, max_value=3, value=1,
+                    min_value=0,
+                    max_value=3,
+                    value=int(fatigue_defaults["fatigue_cognitive_load"]),
                     disabled=not fatigue_has_work,
                     help="0=low, 1=moderate, 2=high, 3=very high",
-                    key="fatigue_cognitive_load"
+                    key="fatigue_cognitive_load",
                 )
             
             # Simulation settings
@@ -6258,16 +6483,27 @@ that predicts cognitive performance based on:
             
             with col_sim1:
                 fatigue_days = st.number_input(
-                    "Prediction days", min_value=1, max_value=14, value=3, step=1,
-                    key="fatigue_days"
+                    "Prediction days",
+                    min_value=1,
+                    max_value=14,
+                    value=int(fatigue_defaults["fatigue_days"]),
+                    step=1,
+                    key="fatigue_days",
                 )
             
             with col_sim2:
+                model_options = ["Advanced SAFTE", "Classic SAFTE"]
+                model_default = fatigue_defaults["fatigue_model"]
+                model_index = (
+                    model_options.index(model_default)
+                    if model_default in model_options
+                    else 0
+                )
                 fatigue_model = st.selectbox(
                     "Model type",
-                    options=["Advanced SAFTE", "Classic SAFTE"],
-                    index=0,
-                    key="fatigue_model"
+                    options=model_options,
+                    index=model_index,
+                    key="fatigue_model",
                 )
             
             with col_sim3:
@@ -6731,7 +6967,10 @@ that predicts cognitive performance based on:
             user_profile_data = None
             if "current_user_id" in st.session_state:
                 user_profile_data = {"user_id": st.session_state.get("current_user_id")}
-            render_circadian_tab(user_profile=user_profile_data)
+            render_circadian_tab(
+                user_profile=user_profile_data,
+                user_context=active_user_context,
+            )
         else:
             st.markdown("""
             <div style="
