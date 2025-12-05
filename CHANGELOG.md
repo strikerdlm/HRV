@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.4] - 2025-12-05
+
+### Added
+- **Clinical assessment preview panel** (`app/user_profile_tab.py`): New Preview button summarizes ESS, KSS, Samn-Perelli, and VAS scores plus context before saving so crews can validate entries without hitting the database.
+
+### Changed
+- **Clinical assessment forms batched**: Epworth, Samn-Perelli, Karolinska, and VAS controls now live inside Streamlit forms. Slider adjustments no longer trigger full reruns, which keeps the Clinical Profile tab responsive even on lower-tier CPUs.
+- **Debounced submissions**: A shared 0.8 s debounce guard prevents duplicate clinical assessments and exploration medical record entries when users double-click or multiple tabs submit simultaneously.
+
+---
+
 ## [1.7.3] - 2025-12-04
 
 ### Added

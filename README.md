@@ -162,10 +162,12 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE | Multi-user sessions (1-13 concurrent) | Complete |
 | ✅ DONE | CPU optimization for non-GPU systems | Complete |
 | ✅ DONE | Smart CPU auto-detection & tuning | Complete |
-| 🔴 HIGH | Clinical Profile UI visualization | In Progress |
+| ✅ DONE | Clinical Profile UI visualization | Complete (batched forms + debounced saves) |
 | 🟡 MEDIUM | Move Circadian settings to tab | Planned |
 | 🟡 MEDIUM | All tabs use active user context | Planned |
 | 🟢 LOW | Per-tab settings persistence | Planned |
+
+**Best next task:** Move Circadian settings into their dedicated tab so the sidebar stays light and tab-specific presets can persist alongside the new per-form batching.
 
 ### Planned Features (Q1 2026)
 
