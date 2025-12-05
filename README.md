@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.7.9-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.0-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
@@ -18,6 +18,8 @@ Contributing to **AsterPhysiology** Research Initiative
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.8.0**: HRV analysis runs only when you click **Run HRV Analysis**, and the database now sits alongside the app (`hrv_users.db`) for easy copy/portability.
 
 **NEW in v1.7.9**: Profile HRV history now loads only the latest records (without RR payloads) for much faster profile switching.
 
