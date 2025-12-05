@@ -141,6 +141,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | **CPU Performance Mode** | Adjustable presets (Fast/Balanced/Quality) with smart downsampling |
 | **GPU Acceleration** | NVIDIA CUDA support (RTX 5070/4090/3080) for heavy computations |
 | **User Profile System** | Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS), history tracking |
+| **Active User Context Sync** | Circadian and SAFTE tabs auto-fill age, chronotype, sleep debt, and mission schedules from the selected profile with a single sync button |
 | **Clinical Profiles** | Astronaut-grade assessment: BMR, TDEE, NASA nutrition, body composition |
 | **Exploration Medical Record** | NASA isolation/mission log with EVA, radiation, stress, and behavioral metrics |
 | **Polar AccessLink VO2 Integration** | Optional VO2max sync for exercise compensation via AccessLink API |
@@ -164,10 +165,10 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE | Smart CPU auto-detection & tuning | Complete |
 | ✅ DONE | Clinical Profile UI visualization | Complete (batched forms + debounced saves) |
 | ✅ DONE | Move Circadian settings to tab | Complete |
-| 🟡 MEDIUM | All tabs use active user context | Planned |
+| ✅ DONE | Active user context sync across mission tabs | Complete (Circadian + SAFTE auto-populate) |
 | 🟢 LOW | Per-tab settings persistence | Planned |
 
-**Best next task:** Ensure every tab consumes the active user context so NASA calculators, fatigue models, and circadian presets stay in sync without manual re-entry.
+**Best next task:** Implement tab-specific settings persistence so mission planners can capture separate Circadian, SAFTE, and NOAA configurations per astronaut.
 
 ### Planned Features (Q1 2026)
 
@@ -312,6 +313,7 @@ project/
 - Sleep schedule and work schedule inputs
 - Risk assessment with factor breakdown
 - Recommendations based on fatigue level
+- One-click **Sync with active profile** button pulls age, chronotype, sleep debt, and mission schedule directly from the selected astronaut's medical log
 
 ### Space Weather Tab
 - **Impact Predictions**: Exact arrival times for all energy categories in Bogotá (UTC-5)
@@ -343,6 +345,7 @@ project/
 - Entrainment Signal Regularity Index (ESRI) calculation
 - Phase and amplitude trajectory visualization
 - Integrated scenario builder with in-tab presets and batched submissions (no sidebar required)
+- **Align with active profile** auto-populates light schedules and model selections based on the active user's chronotype, mission profile, and NASA medical history
 - Based on Arcascope circadian package (Tavella, Hannay, Walch)
 
 ### Population Norms Tab

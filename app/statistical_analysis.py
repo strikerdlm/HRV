@@ -52,7 +52,7 @@ _MIN_SAMPLES: Final[int] = 3
 _ALPHA_DEFAULT: Final[float] = 0.05
 
 
-class TestType(str, Enum):
+class StatisticalTestType(str, Enum):
     """Statistical test type."""
 
     TTEST_IND = "independent_ttest"
@@ -145,7 +145,7 @@ class GroupComparisonResult:
         recommendation: Interpretation recommendation.
     """
 
-    test_type: TestType
+    test_type: StatisticalTestType
     statistic: float
     p_value: float
     p_adjusted: float
@@ -250,7 +250,7 @@ class ANOVAResult:
         post_hoc: List of post-hoc comparison results.
     """
 
-    test_type: TestType
+    test_type: StatisticalTestType
     statistic: float
     p_value: float
     df_between: int
@@ -560,7 +560,7 @@ def compare_two_groups(
     n1, n2 = len(arr1), len(arr2)
     if n1 < _MIN_SAMPLES or n2 < _MIN_SAMPLES:
         return GroupComparisonResult(
-            test_type=TestType.TTEST_IND,
+            test_type=StatisticalTestType.TTEST_IND,
             statistic=0.0,
             p_value=1.0,
             p_adjusted=1.0,
@@ -590,17 +590,17 @@ def compare_two_groups(
     if paired:
         if both_normal:
             stat, p_val = ttest_rel(arr1, arr2)
-            test_type = TestType.TTEST_PAIRED
+            test_type = StatisticalTestType.TTEST_PAIRED
         else:
             stat, p_val = wilcoxon(arr1, arr2)
-            test_type = TestType.WILCOXON
+            test_type = StatisticalTestType.WILCOXON
     else:
         if both_normal:
             stat, p_val = ttest_ind(arr1, arr2)
-            test_type = TestType.TTEST_IND
+            test_type = StatisticalTestType.TTEST_IND
         else:
             stat, p_val = mannwhitneyu(arr1, arr2, alternative="two-sided")
-            test_type = TestType.MANNWHITNEY
+            test_type = StatisticalTestType.MANNWHITNEY
 
     # Effect size
     d, ci_low, ci_high = compute_cohens_d(arr1, arr2)
@@ -676,10 +676,10 @@ def compare_multiple_groups(
     group_arrays = list(clean_groups.values())
     if all_normal:
         stat, p_val = f_oneway(*group_arrays)
-        test_type = TestType.ANOVA
+        test_type = StatisticalTestType.ANOVA
     else:
         stat, p_val = kruskal(*group_arrays)
-        test_type = TestType.KRUSKAL
+        test_type = StatisticalTestType.KRUSKAL
 
     # Compute effect size (eta-squared)
     all_data = np.concatenate(group_arrays)
@@ -1082,7 +1082,7 @@ def format_apa_anova(result: ANOVAResult) -> str:
         APA-formatted string.
     """
     p_str = "< .001" if result.p_value < 0.001 else f"= {result.p_value:.3f}"
-    if result.test_type == TestType.ANOVA:
+    if result.test_type == StatisticalTestType.ANOVA:
         return f"F({result.df_between}, {result.df_within}) = {result.statistic:.2f}, p {p_str}, η² = {result.eta_squared:.2f}"
     return f"H({result.df_between}) = {result.statistic:.2f}, p {p_str}, η² = {result.eta_squared:.2f}"
 
