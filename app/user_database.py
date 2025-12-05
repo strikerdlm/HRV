@@ -30,7 +30,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Generator, List, Optional, Tuple
+from typing import Any, Dict, Generator, List, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -1065,16 +1065,75 @@ class UserDatabase:
             
             return [self._row_to_hrv_measurement(row) for row in rows]
     
-    def get_hrv_dataframe(self, user_id: str) -> pd.DataFrame:
-        """Get HRV history as pandas DataFrame for analysis."""
+    def get_hrv_dataframe(
+        self,
+        user_id: str,
+        *,
+        limit: Optional[int] = None,
+        include_rr: bool = False,
+        columns: Optional[Sequence[str]] = None,
+    ) -> pd.DataFrame:
+        """
+        Get HRV history as pandas DataFrame for analysis.
+
+        Args:
+            user_id: User identifier.
+            limit: Optional maximum rows to return (most recent first).
+            include_rr: Whether to include `rr_intervals_json` (large payload).
+            columns: Optional explicit column whitelist; overrides defaults.
+        """
+        default_cols: List[str] = [
+            "measurement_id",
+            "user_id",
+            "measurement_date",
+            "device_name",
+            "recording_duration_min",
+            "recording_context",
+            "body_position",
+            "mean_rr_ms",
+            "sdnn_ms",
+            "rmssd_ms",
+            "pnn50_pct",
+            "mean_hr_bpm",
+            "sdhr_bpm",
+            "vlf_power_ms2",
+            "lf_power_ms2",
+            "hf_power_ms2",
+            "lf_hf_ratio",
+            "total_power_ms2",
+            "sd1_ms",
+            "sd2_ms",
+            "dfa_alpha1",
+            "dfa_alpha2",
+            "sample_entropy",
+            "stress_index",
+            "parasympathetic_index",
+            "hrv_score",
+            "artifact_percentage",
+            "quality_score",
+            "notes",
+        ]
+
+        if include_rr and "rr_intervals_json" not in default_cols:
+            default_cols.append("rr_intervals_json")
+
+        selected_cols = list(columns) if columns is not None else default_cols
+        select_clause = ", ".join(selected_cols)
+
+        sql = (
+            f"SELECT {select_clause} FROM hrv_measurements "
+            "WHERE user_id = ? "
+            "ORDER BY measurement_date DESC"
+        )
+        params: Tuple[Any, ...] = (user_id,)
+        if limit is not None:
+            sql += " LIMIT ?"
+            params = (user_id, int(limit))
+
         with self._get_connection() as conn:
-            df = pd.read_sql_query(
-                "SELECT * FROM hrv_measurements WHERE user_id = ? ORDER BY measurement_date",
-                conn,
-                params=(user_id,)
-            )
-            if not df.empty and 'measurement_date' in df.columns:
-                df['measurement_date'] = pd.to_datetime(df['measurement_date'])
+            df = pd.read_sql_query(sql, conn, params=params)
+            if not df.empty and "measurement_date" in df.columns:
+                df["measurement_date"] = pd.to_datetime(df["measurement_date"])
             return df
     
     def _row_to_hrv_measurement(self, row: sqlite3.Row) -> HRVMeasurement:
