@@ -73,7 +73,7 @@ All other tabs show **example data** and **reference values** to help you unders
 
 **Cross-tab correlation:** The Circadian tab now publishes DLMO/CBT markers, ESRI, and light window details to the SAFTE/Fatigue tab. A single click in SAFTE applies the latest circadian sleep window and chronotype offset to fatigue simulations for tighter mission planning.
 
-**Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the database lives alongside the app (`hrv_users.db`) for easy portability.
+**Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. Space Weather and NOAA tabs auto-load cache-first data on open (reusing cached Kp/F10.7/NOAA feeds if offline) even without RR uploads. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the database lives alongside the app (`hrv_users.db`) for easy portability.
 
 ### System Requirements
 
@@ -1260,6 +1260,8 @@ Interpretation: Normal (>1.04 in healthy adults)
 
 The Space Weather Impact Predictions feature calculates exact arrival times for different categories of solar energy hitting Earth, providing Polar H10 EKG monitoring recommendations optimized for your research on biological effects.
 
+Data now preloads automatically when you open the Space Weather tab (cache-first). If the network is unavailable, the app serves the last cached Kp/F10.7 snapshot and surfaces a warning; you can still click **🔄 Fetch Impact Predictions** to force a refresh.
+
 ### Energy Categories Tracked
 
 | Category | Symbol | Source | Travel Time | Detection Method |
@@ -1343,8 +1345,8 @@ Ideal time for baseline Polar H10 recording (control data).
 
 **Step 1: Fetch Predictions**
 
-1. Navigate to **Space Weather** tab
-2. Click **"🔄 Fetch Impact Predictions"** button
+1. Navigate to **Space Weather** tab (impact predictions auto-load using cache-first data)
+2. Click **"🔄 Fetch Impact Predictions"** if you want to force a refresh
 3. Wait for data retrieval (~5-10 seconds)
 
 **Step 2: Review Arrival Times Table**
@@ -1423,8 +1425,8 @@ Continue for 3 hours post-arrival for storm response capture.
 **Step 2: Open Space Weather tab**
 
 1. Navigate to **Space Weather** tab
-2. Click "Load SWPC Data" to fetch current solar/geomagnetic indices
-3. Wait for data to load (cached for 6 hours)
+2. The app auto-loads SWPC Kp/F10.7 data cache-first; click **"Fetch space weather data"** if you want to force a refresh
+3. Data is cached for 6 hours; if offline, the last cached copy is shown with a warning
 
 **Step 3: Configure correlation parameters**
 
@@ -1482,6 +1484,8 @@ storm onset. Effect size is modest; individual sensitivity varies.
 | Solar wind | Speed, density, temp | Real-time |
 | X-ray flux | Solar flare activity | 1-min |
 | Proton flux | Radiation storm levels | 5-min |
+
+Data auto-loads when you open the **NOAA Space** tab (cache-first). Use **Fetch NOAA feeds** to refresh, or **Force refresh NOAA feeds** to bypass cache. If NOAA is unreachable, the dashboard shows the last cached snapshot and posts a warning.
 
 **Feature Matrix Builder:**
 
