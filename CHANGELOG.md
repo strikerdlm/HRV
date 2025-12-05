@@ -5,6 +5,20 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.2] - 2025-12-05
+
+### Changed
+- **Always-on space weather pipelines** (`app/app.py`, `app/noaa_space.py`): Space Weather, NOAA Space, and impact predictions now auto-load on tab entry even with no RR uploads, using cache-first fetches and stale-cache fallback for Kp/F10.7 and NOAA feeds when connectivity drops.
+- **Resilience and logging** (`app/app.py`, `app/noaa_space.py`): SWPC/NOAA fetch failures now log centrally and surface warnings while keeping prior cached data available.
+
+### Fixed
+- **NOAA auto-load retry storm** (`app/app.py`): Added auto-loading/attempt guards so NOAA auto-fetch runs once per session and won’t hammer the APIs when feeds fail (empty bundles no longer trigger repeated retries).
+
+### Documentation
+- Updated **README.md** and **docs/Manual.md** to explain automatic loading and offline-friendly cache behavior for space weather features.
+
+---
+
 ## [1.8.1] - 2025-12-05
 
 ### Added
