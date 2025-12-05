@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.7.6  
+**Version:** 1.7.7  
 **Last Updated:** 2025-12-05
 
 ---
@@ -68,6 +68,8 @@ The app is fully navigable **without uploading HRV data**. These features work i
 | 🫀 **Biofeedback** | Try the paced breathing demo |
 
 All other tabs show **example data** and **reference values** to help you understand what's available before uploading your own recordings.
+
+**Session persistence:** Circadian and SAFTE tabs now remember per-user configurations during the current session—when you switch users or rerun the app, your last light schedule and fatigue inputs are restored automatically.
 
 ### System Requirements
 
