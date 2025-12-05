@@ -70,10 +70,10 @@ pyedflib>=0.1.30  # Uncomment for EDF file support (Somfit, PSG)
 # psycopg2-binary>=2.9,<3  # Uncomment for PostgreSQL support
 
 # ===========================================================================
-# DEVELOPMENT & TESTING (Optional)
+# DEVELOPMENT & TESTING (Recommended)
 # ===========================================================================
-# pytest>=7.4,<9
-# hypothesis>=6.90,<7
-# mypy>=1.8,<2
-# ruff>=0.3,<1
-# bandit>=1.7,<2
+pytest>=7.4,<10
+hypothesis>=6.90,<7
+mypy>=1.8,<2
+ruff>=0.3,<1
+bandit>=1.7,<2
