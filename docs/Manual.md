@@ -3490,6 +3490,33 @@ This section outlines completed features and remaining planned enhancements for 
 - Vestibular-autonomic coupling
 - Simulator sickness prediction
 
+#### 19. Exploration Medical Capability (ExMC) Clinical Assessment  
+**Status:** In Progress (Q4 2025)  
+**Description:** Comprehensive clinical profile system aligned with NASA ExMC and EIMO frameworks for deep-space mission autonomy.
+
+**Implemented:**
+- Mission profile taxonomy (LEO through Mars Surface)
+- EIMO autonomy level tracking (ground-supported → full autonomy)
+- Radiation dose and space weather monitoring
+- HRP risk category alignment (chronic/acute symptom catalogs)
+- Countermeasure tracking (exercise, sleep, hydration, nutrition)
+- Behavioral health flags (confinement stress, workload, team dynamics)
+- Medical inventory and resupply logistics
+
+**Planned Enhancements (Q1 2026):**
+- AI-assisted clinical decision support (CDSS) per MEDEA concept (García-Gómez, 2020)
+- Probabilistic risk assessment for medical events
+- Integration with HRV longitudinal trends for fitness-for-duty checks
+- Extended reality (XR) telepresence support annotations
+- Pharmaceutical stability tracking and pharmacokinetics modeling
+- Just-in-time training module cross-links
+
+**Scientific References:**
+- Levin DR, et al. (2023). Enabling Human Space Exploration Missions Through Progressively Earth Independent Medical Operations (EIMO). *IEEE Open J Eng Med Biol.* DOI: 10.1109/OJEMB.2023.3255513
+- Anderson A, et al. (2025). Development of Progressively Earth-Independent Medical Operations to Enable NASA Exploration Missions. *Wilderness Environ Med.* DOI: 10.1177/10806032241310386
+- García-Gómez JM. (2020). Basic principles and concept design of a real-time clinical decision support system for autonomous medical care on missions to Mars based on adaptive deep learning. arXiv:2010.07029
+- Tran KA, et al. (2025). Managing Select Medical Emergencies During Long-Duration Space Missions. *Aerosp Med Hum Perform.* DOI: 10.3357/AMHP.6510.2025
+
 ### Research-Based Feature Ideas (2025-2026)
 
 Based on recent scientific literature, the following features are under consideration:
@@ -3583,8 +3610,10 @@ If you're interested in contributing to any of these developments:
 | Circadian analysis | Q4 2025 | ✅ Completed |
 | User profiles | Q4 2025 | ✅ Completed |
 | Docker deployment | Q4 2025 | ✅ Completed |
+| ExMC Clinical Assessment | Q4 2025 | 🔄 In Progress |
 | Baroreflex sensitivity | Q1 2026 | Planned |
 | Advanced nonlinear | Q1 2026 | Planned |
+| ExMC CDSS / AI support | Q1 2026 | Planned |
 | Mobile app | Q4 2026 | Conceptual |
 
 ---
