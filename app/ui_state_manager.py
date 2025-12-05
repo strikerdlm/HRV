@@ -19,6 +19,8 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import streamlit as st
 
+from logging_config import get_logger
+
 
 class DataType(Enum):
     """Types of data that can be uploaded/available."""
@@ -252,6 +254,135 @@ class TabSettingsManager:
         return dict(filtered)
 
 
+class CrossTabResultBroker:
+    """
+    Lightweight broker to share computed results across Streamlit tabs.
+
+    Stores per-user, per-tab payloads in `st.session_state` with bounded size to
+    avoid unbounded growth during long sessions. Payloads should be small,
+    JSON-serializable dictionaries.
+    """
+
+    _STATE_KEY = "cross_tab_results"
+
+    def __init__(
+        self,
+        max_users: int = 20,
+        max_tabs: int = 10,
+        max_entries_per_tab: int = 6,
+    ) -> None:
+        self._max_users = max_users
+        self._max_tabs = max_tabs
+        self._max_entries_per_tab = max_entries_per_tab
+        self._logger = get_logger(__name__)
+        self._ensure_state()
+
+    @staticmethod
+    def _user_key(user_id: Optional[str]) -> str:
+        """Normalize user identifiers for storage."""
+        return str(user_id) if user_id else "guest"
+
+    def _ensure_state(self) -> None:
+        """Ensure storage container exists in session state."""
+        if self._STATE_KEY not in st.session_state:
+            st.session_state[self._STATE_KEY] = {
+                "results": {},
+                "initialized_at": datetime.now(tz=timezone.utc).isoformat(),
+            }
+
+    def _get_store(self) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+        """Return the underlying store dictionary."""
+        self._ensure_state()
+        return st.session_state[self._STATE_KEY]["results"]
+
+    def publish(
+        self,
+        tab_id: str,
+        user_id: Optional[str],
+        key: str,
+        payload: Dict[str, Any],
+        *,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Publish a payload for a given tab/user combination.
+
+        Args:
+            tab_id: Logical tab identifier (e.g., "circadian", "fatigue").
+            user_id: Active user id or None for guests.
+            key: Logical key for the payload (e.g., "circadian_summary").
+            payload: JSON-serializable dictionary.
+            metadata: Optional metadata for diagnostics or provenance.
+
+        Returns:
+            The stored entry.
+        """
+        store = self._get_store()
+        user_key = self._user_key(user_id)
+
+        if user_key not in store and len(store) >= self._max_users:
+            evict_user = next(iter(store))
+            store.pop(evict_user, None)
+            self._logger.warning("Evicted cross-tab cache for user %s", evict_user)
+
+        user_store = store.setdefault(user_key, {})
+        if tab_id not in user_store and len(user_store) >= self._max_tabs:
+            evict_tab = next(iter(user_store))
+            user_store.pop(evict_tab, None)
+            self._logger.warning("Evicted cross-tab cache for tab %s", evict_tab)
+
+        entries = [entry for entry in user_store.get(tab_id, []) if entry.get("key") != key]
+        entry = {
+            "key": key,
+            "payload": dict(payload),
+            "metadata": dict(metadata) if metadata else {},
+            "stored_at": datetime.now(tz=timezone.utc).isoformat(),
+        }
+        entries.append(entry)
+        if len(entries) > self._max_entries_per_tab:
+            entries = entries[-self._max_entries_per_tab :]
+        user_store[tab_id] = entries
+        return entry
+
+    def get_latest(self, tab_id: str, user_id: Optional[str]) -> Optional[Dict[str, Any]]:
+        """Return the most recent entry for a tab/user combination."""
+        store = self._get_store()
+        user_store = store.get(self._user_key(user_id), {})
+        entries = user_store.get(tab_id, [])
+        if not entries:
+            return None
+        return dict(entries[-1])
+
+    def get_by_key(
+        self,
+        tab_id: str,
+        user_id: Optional[str],
+        key: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Return the most recent entry matching a key for a tab/user."""
+        store = self._get_store()
+        user_store = store.get(self._user_key(user_id), {})
+        entries = user_store.get(tab_id, [])
+        for entry in reversed(entries):
+            if entry.get("key") == key:
+                return dict(entry)
+        return None
+
+    def clear(self, tab_id: Optional[str] = None, user_id: Optional[str] = None) -> None:
+        """Clear stored entries for a user/tab or everything."""
+        store = self._get_store()
+        if user_id is None and tab_id is None:
+            store.clear()
+            return
+        if user_id is not None:
+            store.pop(self._user_key(user_id), None)
+            return
+        # Clear tab for all users
+        for user_key, tabs in store.items():
+            if tab_id in tabs:
+                tabs.pop(tab_id, None)
+
+
 # =============================================================================
 # STREAMLIT UI HELPERS
 # =============================================================================
@@ -264,6 +395,11 @@ def get_state_manager() -> UIStateManager:
 def get_tab_settings_manager() -> TabSettingsManager:
     """Get or create the tab settings manager."""
     return TabSettingsManager()
+
+
+def get_cross_tab_broker() -> CrossTabResultBroker:
+    """Get or create the cross-tab result broker."""
+    return CrossTabResultBroker()
 
 
 def render_data_status_badge() -> None:
@@ -596,4 +732,23 @@ def update_data_status_from_session() -> None:
     # Check for space weather data
     if "space_weather_data" in st.session_state and st.session_state["space_weather_data"]:
         manager.set_data_available(DataType.SPACE_WEATHER, is_available=True)
+
+
+__all__ = [
+    "DataType",
+    "DataStatus",
+    "UIStateManager",
+    "TabSettingsManager",
+    "CrossTabResultBroker",
+    "get_state_manager",
+    "get_tab_settings_manager",
+    "get_cross_tab_broker",
+    "render_data_status_badge",
+    "render_conditional_compute_button",
+    "render_tab_header",
+    "render_exploration_mode_notice",
+    "render_quick_start_guide",
+    "render_tab_navigation_cards",
+    "update_data_status_from_session",
+]
 
