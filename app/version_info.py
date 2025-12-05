@@ -15,7 +15,7 @@ from logging_config import get_logger, log_exception
 
 _LOGGER = get_logger(__name__)
 _CHANGELOG_PATH = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
-_DEFAULT_VERSION = "1.7.7"
+_DEFAULT_VERSION = "1.7.8"
 _DEFAULT_RELEASE_DATE = "2025-12-05"
 
 
