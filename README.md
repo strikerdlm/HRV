@@ -174,9 +174,10 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE | Clinical Profile UI visualization | Complete (batched forms + debounced saves) |
 | ✅ DONE | Move Circadian settings to tab | Complete |
 | ✅ DONE | Active user context sync across mission tabs | Complete (Circadian + SAFTE auto-populate) |
-| 🟢 LOW | Per-tab settings persistence | Planned |
+| ✅ DONE | Per-tab settings persistence | Complete (TabSettingsManager) |
+| 🟢 NEW | Cross-tab correlation (Circadian → Fatigue) | Complete (shared broker + auto-applied sleep window) |
 
-**Best next task:** Implement tab-specific settings persistence so mission planners can capture separate Circadian, SAFTE, and NOAA configurations per astronaut.
+**Best next task:** Polar AccessLink automation (persist OAuth tokens and sync VO2max history).
 
 ### Planned Features (Q1 2026)
 
