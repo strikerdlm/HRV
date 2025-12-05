@@ -66,7 +66,7 @@ Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations c
 - [ ] **Move Settings to Tabs**: Circadian, SAFTE settings move from sidebar to respective tabs
   - [x] Circadian controls now live inside the tab with preset management (v1.7.5)
   - [ ] SAFTE/fatigue sliders still in the sidebar
-- [ ] **Tab-Specific Settings Persistence**: Save per-tab configurations per user
+- [x] **Tab-Specific Settings Persistence**: Save per-tab configurations per user (Circadian + SAFTE, v1.7.7)
 - [ ] **Cross-Tab Correlation**: Enable tabs to share computed results
 
 #### Phase 4: Integrations & Analytics (Priority: MEDIUM)
