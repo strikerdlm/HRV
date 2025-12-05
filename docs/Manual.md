@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.7.7  
+**Version:** 1.7.8  
 **Last Updated:** 2025-12-05
 
 ---
@@ -70,6 +70,8 @@ The app is fully navigable **without uploading HRV data**. These features work i
 All other tabs show **example data** and **reference values** to help you understand what's available before uploading your own recordings.
 
 **Session persistence:** Circadian and SAFTE tabs now remember per-user configurations during the current session—when you switch users or rerun the app, your last light schedule and fatigue inputs are restored automatically.
+
+**Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state.
 
 ### System Requirements
 
