@@ -2,12 +2,12 @@
 
 This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when working with code in this repository.
 
-**Version**: 1.7.2 | **Last Updated**: 2025-12-04
+**Version**: 1.7.8 | **Last Updated**: 2025-12-05
 
 ## Overview
 Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations console with Space Weather and NOAA integration. It analyzes Polar RR-interval recordings, correlates HRV with NOAA SWPC feeds, NASA DONKI events, and SpaceWeatherLive snapshots, and now anchors astronaut-grade physiological assessments plus exploration medical records for isolation missions.
 
-### Key Capabilities (v1.7.2)
+### Key Capabilities (v1.7.8)
 - **Multi-Language Support**: English + Spanish (Colombian-validated clinical scales)
 - **Comprehensive Clinical Profiles**: Astronaut-grade physiological assessment
 - **NASA-Based Calculations**: BMR (Mifflin-St Jeor), hydration, macronutrients
