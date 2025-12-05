@@ -534,6 +534,14 @@ LF/HF: 0.67 → Vagal predominance (typical at rest)
 
 This feature enables personalized HRV analysis and fatigue assessment by incorporating user-specific biometric data and validated clinical questionnaires.
 
+### Batched Clinical Assessments (December 2025 Sprint)
+
+- **Clinical form batching:** Epworth, Samn-Perelli, Karolinska, and VAS controls now live inside Streamlit forms so you can adjust multiple sliders without forcing a full-page rerun. Press **Preview** to refresh summaries or **Save** to persist the assessment.
+- **Debounced commits:** Each submit action passes through a 0.8 s debounce guard to prevent duplicate entries when users double-click or when the page reruns due to other activity.
+- **Exploration medical record protection:** NASA-style mission logs share the same debounce to keep longitudinal data clean even when uploading from multiple tabs.
+
+**Next focus:** Relocate Circadian configuration controls into their dedicated tab so per-tab presets and batching can extend beyond the clinical workspace.
+
 ### User Biometric Profile
 
 The platform collects essential biometric data to tailor physiological calculations:

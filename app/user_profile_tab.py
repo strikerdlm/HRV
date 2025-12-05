@@ -18,6 +18,7 @@ Version: 1.1.0
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from datetime import datetime, date, timezone, timedelta
 from typing import Any, Dict, Final, List, Optional
@@ -127,6 +128,8 @@ def _fragment_if_available(func: Any) -> Any:
 _SESSION_CURRENT_USER = "current_user_profile"
 _SESSION_USER_ID = "current_user_id"
 _SESSION_SHOW_REGISTRATION = "show_registration_form"
+_FORM_DEBOUNCE_PREFIX: Final[str] = "form_debounce_key_"
+_FORM_DEBOUNCE_SECONDS: Final[float] = 0.8
 
 
 # ---------------------------------------------------------------------------
@@ -165,6 +168,17 @@ def _set_current_user(user: Optional[UserProfile]) -> None:
                 )
             except Exception:
                 pass  # Continue even if multi-user registration fails
+
+
+def _should_process_form_submission(form_key: str, debounce_seconds: float = _FORM_DEBOUNCE_SECONDS) -> bool:
+    """Prevent duplicate form submissions within a short interval."""
+    state_key = f"{_FORM_DEBOUNCE_PREFIX}{form_key}"
+    now = time.monotonic()
+    last_submission = st.session_state.get(state_key, 0.0)
+    if now - last_submission < debounce_seconds:
+        return False
+    st.session_state[state_key] = now
+    return True
 
 
 def _calculate_age(dob_str: Optional[str]) -> Optional[int]:
@@ -530,7 +544,6 @@ def _render_profile_edit(user: UserProfile) -> None:
 # ---------------------------------------------------------------------------
 
 
-@_fragment_if_available
 def _render_epworth_form(user_id: str) -> Optional[int]:
     """Render Epworth Sleepiness Scale form with i18n support."""
     # Get translations for current language
@@ -610,7 +623,6 @@ def _render_epworth_form(user_id: str) -> Optional[int]:
     return total
 
 
-@_fragment_if_available
 def _render_samn_perelli_form(user_id: str) -> Optional[int]:
     """Render Samn-Perelli Fatigue Scale form with i18n support."""
     # Get translations for current language
@@ -673,7 +685,6 @@ def _render_samn_perelli_form(user_id: str) -> Optional[int]:
     return rating
 
 
-@_fragment_if_available
 def _render_kss_form(user_id: str) -> Optional[int]:
     """Render Karolinska Sleepiness Scale form with i18n support."""
     # Get translations for current language
@@ -764,50 +775,22 @@ def _render_vas_scales(user_id: str) -> Dict[str, float]:
 
 
 def _render_clinical_assessment(user: UserProfile) -> None:
-    """Render comprehensive clinical assessment section with i18n support."""
+    """Render comprehensive clinical assessment section with batched submissions."""
     st.markdown(f"## {t('clinical_assessment')}")
     st.caption(t('clinical_assessment_subtitle'))
     
-    # Language selector for clinical scales
     if I18N_AVAILABLE:
         with st.expander(f"🌐 {t('language')}", expanded=False):
             render_language_selector(location="main", key_suffix="clinical")
     
-    # Context inputs
-    with st.expander(t('assessment_context'), expanded=True):
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            hours_since_wake = st.number_input(
-                t('hours_since_waking'),
-                min_value=0.0,
-                max_value=48.0,
-                value=8.0,
-                step=0.5,
-            )
-        with col2:
-            hours_sleep = st.number_input(
-                t('hours_slept'),
-                min_value=0.0,
-                max_value=24.0,
-                value=7.0,
-                step=0.5,
-            )
-        with col3:
-            caffeine_cups = st.number_input(
-                t('caffeine_today'),
-                min_value=0,
-                max_value=20,
-                value=1,
-                step=1,
-            )
-    
-    # Scale selection with translations
     available_scales = {
         "ESS": t('ess_description'),
         "SP": t('sp_description'),
         "KSS": t('kss_description'),
         "VAS": t('vas_description'),
     }
+    
+    st.caption("⚡ Inputs are batched — use Preview or Save to refresh scores without full reruns.")
     
     selected_scales = st.multiselect(
         t('select_scales'),
@@ -816,38 +799,92 @@ def _render_clinical_assessment(user: UserProfile) -> None:
         format_func=lambda x: f"{x}: {available_scales[x]}",
     )
     
-    # Render selected scales
+    form_key = f"clinical_assessment_form_{user.user_id}"
     results: Dict[str, Any] = {}
+    context_data: Dict[str, Any] = {}
+    notes_text = ""
     
-    if "ESS" in selected_scales:
-        with st.expander("📋 Epworth Sleepiness Scale", expanded=True):
-            results["ess"] = _render_epworth_form(user.user_id)
+    with st.form(form_key, clear_on_submit=False):
+        with st.expander(t('assessment_context'), expanded=True):
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                hours_since_wake = st.number_input(
+                    t('hours_since_waking'),
+                    min_value=0.0,
+                    max_value=48.0,
+                    value=8.0,
+                    step=0.5,
+                )
+            with col2:
+                hours_sleep = st.number_input(
+                    t('hours_slept'),
+                    min_value=0.0,
+                    max_value=24.0,
+                    value=7.0,
+                    step=0.5,
+                )
+            with col3:
+                caffeine_cups = st.number_input(
+                    t('caffeine_today'),
+                    min_value=0,
+                    max_value=20,
+                    value=1,
+                    step=1,
+                )
+        context_data = {
+            "hours_since_wake": hours_since_wake,
+            "hours_sleep": hours_sleep,
+            "caffeine_cups": caffeine_cups,
+        }
+        
+        if "ESS" in selected_scales:
+            with st.expander("📋 Epworth Sleepiness Scale", expanded=True):
+                results["ess"] = _render_epworth_form(user.user_id)
+        
+        if "SP" in selected_scales:
+            with st.expander("📋 Samn-Perelli Fatigue Scale", expanded=True):
+                results["samn_perelli"] = _render_samn_perelli_form(user.user_id)
+        
+        if "KSS" in selected_scales:
+            with st.expander("📋 Karolinska Sleepiness Scale", expanded=True):
+                results["kss"] = _render_kss_form(user.user_id)
+        
+        if "VAS" in selected_scales:
+            with st.expander("📋 Visual Analog Scales", expanded=True):
+                results.update(_render_vas_scales(user.user_id))
+        
+        notes_text = st.text_area(
+            t('assessment_notes'),
+            placeholder=t('assessment_notes_placeholder'),
+            max_chars=500,
+        )
+        
+        col_save, col_preview = st.columns([3, 1])
+        save_clicked = col_save.form_submit_button(
+            t('save_assessment'),
+            type="primary",
+            use_container_width=True,
+        )
+        preview_clicked = col_preview.form_submit_button(
+            "🔁 Preview Scores",
+            use_container_width=True,
+        )
     
-    if "SP" in selected_scales:
-        with st.expander("📋 Samn-Perelli Fatigue Scale", expanded=True):
-            results["samn_perelli"] = _render_samn_perelli_form(user.user_id)
+    if preview_clicked or save_clicked:
+        _render_assessment_preview(results, context_data, notes_text)
     
-    if "KSS" in selected_scales:
-        with st.expander("📋 Karolinska Sleepiness Scale", expanded=True):
-            results["kss"] = _render_kss_form(user.user_id)
-    
-    if "VAS" in selected_scales:
-        with st.expander("📋 Visual Analog Scales", expanded=True):
-            vas_results = _render_vas_scales(user.user_id)
-            results.update(vas_results)
-    
-    # Notes
-    notes = st.text_area(
-        t('assessment_notes'),
-        placeholder=t('assessment_notes_placeholder'),
-        max_chars=500,
-    )
-    
-    # Submit assessment
-    if st.button(t('save_assessment'), type="primary", use_container_width=True):
+    if save_clicked:
+        if not _should_process_form_submission(form_key):
+            st.info("Processing previous submission... please wait.")
+            return
         try:
             db = get_database()
-            
+            context_note = (
+                f"Wake: {context_data.get('hours_since_wake', 0)}h, "
+                f"Sleep: {context_data.get('hours_sleep', 0)}h, "
+                f"Caffeine: {context_data.get('caffeine_cups', 0)} cups. "
+                f"{notes_text}"
+            )
             scales = ClinicalScales(
                 assessment_id=str(uuid.uuid4()),
                 user_id=user.user_id,
@@ -857,15 +894,53 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                 samn_perelli_fatigue=results.get("samn_perelli"),
                 vas_fatigue=results.get("vas_fatigue"),
                 vas_pain=results.get("vas_pain"),
-                notes=f"Wake: {hours_since_wake}h, Sleep: {hours_sleep}h, Caffeine: {caffeine_cups} cups. {notes}",
+                notes=context_note,
             )
-            
             db.save_clinical_scales(scales)
             st.success(t('assessment_saved'))
             st.balloons()
-            
         except Exception as exc:
             st.error(f"Failed to save assessment: {exc}")
+
+
+def _render_assessment_preview(
+    results: Dict[str, Any],
+    context_data: Dict[str, Any],
+    notes_text: str,
+) -> None:
+    """Display a summary panel for previewed assessments."""
+    if not results:
+        st.info("Select at least one scale to preview.")
+        return
+    
+    st.markdown("### 📊 Assessment Preview")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        value = results.get("samn_perelli")
+        st.metric("Samn-Perelli", f"{value:.1f}" if value is not None else "—")
+    with col2:
+        value = results.get("kss")
+        st.metric("KSS", f"{value:.1f}" if value is not None else "—")
+    with col3:
+        value = results.get("ess")
+        st.metric("ESS", f"{value:.0f}" if value is not None else "—")
+    
+    vas_fatigue = results.get("vas_fatigue")
+    vas_pain = results.get("vas_pain")
+    if vas_fatigue is not None or vas_pain is not None:
+        st.caption(
+            f"VAS — Fatigue: {vas_fatigue if vas_fatigue is not None else '—'}/10 · "
+            f"Pain: {vas_pain if vas_pain is not None else '—'}/10"
+        )
+    
+    st.caption(
+        "Context: Wake "
+        f"{context_data.get('hours_since_wake', '—')}h | Sleep "
+        f"{context_data.get('hours_sleep', '—')}h | Caffeine "
+        f"{context_data.get('caffeine_cups', '—')} cups"
+    )
+    if notes_text.strip():
+        st.caption(f"Notes: {notes_text.strip()}")
 
 
 # ---------------------------------------------------------------------------
@@ -1379,7 +1454,8 @@ def _render_body_composition_form(user: UserProfile) -> None:
     st.markdown("#### 📐 Body Composition Measurements")
     st.caption("Enter values from bioimpedance scale, DEXA, or caliper measurements.")
     
-    with st.form("body_composition_form", clear_on_submit=False):
+    form_key = f"body_composition_form_{user.user_id}"
+    with st.form(form_key, clear_on_submit=False):
         col1, col2 = st.columns(2)
         
         with col1:
@@ -1449,7 +1525,10 @@ def _render_body_composition_form(user: UserProfile) -> None:
             format_func=lambda x: x.replace("_", " ").title(),
         )
         
-        submitted = st.form_submit_button("💾 Save Body Composition", use_container_width=True)
+        submitted = st.form_submit_button(
+            "💾 Save Body Composition",
+            use_container_width=True,
+        )
         
         if submitted:
             st.success("✅ Body composition saved!")
@@ -1533,7 +1612,8 @@ def _render_medical_record_form(user: UserProfile) -> None:
         "Motivation dip",
     ]
     
-    with st.form("exploration_medical_record_form", clear_on_submit=False):
+    form_key = f"exploration_medical_record_form_{user.user_id}"
+    with st.form(form_key, clear_on_submit=False):
         col_a, col_b, col_c = st.columns(3)
         with col_a:
             mission_profile = st.selectbox(
@@ -1671,6 +1751,9 @@ def _render_medical_record_form(user: UserProfile) -> None:
         
         submitted = st.form_submit_button("💾 Save Exploration Medical Record")
         if submitted:
+            if not _should_process_form_submission(form_key):
+                st.info("Processing previous submission... please wait.")
+                return
             record = {
                 "mission_profile": mission_profile,
                 "mission_day": mission_day,
