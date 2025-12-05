@@ -20,10 +20,12 @@ from typing import Optional
 
 import streamlit as st
 
+from version_info import get_app_release_date, get_app_version
+
 # Application metadata
-APP_VERSION = "1.6.1"
+APP_VERSION = get_app_version()
 APP_NAME = "Mission Control - Flight Surgeon"
-APP_RELEASE_DATE = "2025-11-29"
+APP_RELEASE_DATE = get_app_release_date()
 APP_AUTHOR = "Dr. Diego Leonel Malpica Hincapié, MD"
 APP_AUTHOR_TITLE = "Aerospace Medicine Specialist"
 APP_INSTITUTION = "National University of Colombia"
@@ -217,7 +219,7 @@ def _render_tech_stack() -> str:
 
 def _render_citation_box() -> str:
     """Create a citation guideline box."""
-    return """
+    return f"""
     <div style="
         background: rgba(102, 126, 234, 0.1);
         border-left: 4px solid #667eea;
@@ -235,7 +237,7 @@ def _render_citation_box() -> str:
             color: #a0aec0;
             white-space: pre-wrap;
             word-break: break-word;
-        ">Malpica, D. L. (2025). Mission Control - Flight Surgeon: A comprehensive platform for heart rate variability analysis and physiological monitoring (Version 1.5.0) [Computer software]. https://github.com/strikerdlm/HRV</code>
+        ">Malpica, D. L. (2025). Mission Control - Flight Surgeon: A comprehensive platform for heart rate variability analysis and physiological monitoring (Version {APP_VERSION}) [Computer software]. https://github.com/strikerdlm/HRV</code>
     </div>
     """
 
