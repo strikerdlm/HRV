@@ -177,6 +177,7 @@ try:
         DataType,
         get_state_manager,
         get_tab_settings_manager,
+    get_cross_tab_broker,
         render_data_status_badge,
         render_conditional_compute_button,
         render_tab_header,
@@ -6361,6 +6362,7 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
             )
         else:
             tab_settings_manager = get_tab_settings_manager()
+            cross_tab_broker = get_cross_tab_broker()
             fatigue_user_id = (
                 active_user_context.get("user_id")
                 if active_user_context.get("has_user")
@@ -6375,6 +6377,65 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 for key, value in stored_fatigue_settings.items():
                     st.session_state[key] = value
                 fatigue_defaults.update(stored_fatigue_settings)
+
+            st.markdown("#### 🔄 Cross-tab correlation: Circadian ➜ Fatigue")
+            circadian_context = cross_tab_broker.get_latest("circadian", fatigue_user_id)
+            if circadian_context:
+                sleep_window = circadian_context.get("sleep_window", {})
+                bedtime_hour = int(
+                    sleep_window.get("bedtime_hour", fatigue_defaults["fatigue_bedtime"])
+                )
+                waketime_hour = int(
+                    sleep_window.get("waketime_hour", fatigue_defaults["fatigue_waketime"])
+                )
+                models = circadian_context.get("models") or []
+                esri_info = circadian_context.get("esri", {})
+                esri_mean = esri_info.get("mean")
+
+                col_ctx1, col_ctx2, col_ctx3, col_ctx4 = st.columns(4)
+                with col_ctx1:
+                    st.metric(
+                        "Models",
+                        ", ".join(models) if models else "—",
+                        help="Latest circadian models executed",
+                    )
+                with col_ctx2:
+                    st.metric(
+                        "Sleep window",
+                        f"{bedtime_hour:02d}:00 → {waketime_hour:02d}:00",
+                        help="From Circadian tab light schedule",
+                    )
+                with col_ctx3:
+                    st.metric(
+                        "Chronotype Δ",
+                        f"{circadian_context.get('chronotype_offset', 0.0):+.1f} h",
+                        help="Offset from active circadian scenario",
+                    )
+                with col_ctx4:
+                    st.metric(
+                        "ESRI",
+                        f"{esri_mean:.3f}" if esri_mean is not None else "—",
+                        help="Entrainment Signal Regularity Index (higher is better)",
+                    )
+
+                if st.button(
+                    "Apply circadian window to fatigue inputs",
+                    key="fatigue_apply_circadian_window",
+                    type="secondary",
+                    help="Uses the latest circadian scenario to seed bedtime/waketime and chronotype.",
+                ):
+                    st.session_state["fatigue_bedtime"] = bedtime_hour
+                    st.session_state["fatigue_waketime"] = waketime_hour
+                    st.session_state["fatigue_chronotype"] = float(
+                        circadian_context.get(
+                            "chronotype_offset", fatigue_defaults["fatigue_chronotype"]
+                        )
+                    )
+                    st.success("Fatigue inputs updated from Circadian tab.")
+            else:
+                st.caption(
+                    "No circadian scenario shared yet. Run the Circadian tab to sync cues for fatigue planning."
+                )
             # Scientific explanation expander
             with st.expander("📖 **Understanding the SAFTE Model**", expanded=False):
                 st.markdown("""
@@ -6621,6 +6682,21 @@ that predicts cognitive performance based on:
                         # Store in session state
                         st.session_state["fatigue_result"] = result
                         st.success("✅ Fatigue prediction completed!")
+
+                        cross_tab_broker.publish(
+                            "fatigue",
+                            fatigue_user_id,
+                            "fatigue_prediction",
+                            {
+                                "analysis": dict(result.analysis),
+                                "risk_assessment": dict(result.risk_assessment),
+                                "recommendations": list(result.recommendations)[:3],
+                                "model": model_type,
+                                "prediction_days": int(fatigue_days),
+                                "timestamp": pd.Timestamp.utcnow().isoformat(),
+                            },
+                            metadata={"source": "fatigue_tab"},
+                        )
                         
                     except Exception as e:
                         st.error(f"Error running fatigue simulation: {e}")
