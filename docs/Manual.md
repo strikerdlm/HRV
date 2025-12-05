@@ -973,6 +973,7 @@ The module generates various light exposure patterns:
 4. Define the simulation window (days, integration step, equilibration passes).
 5. Toggle visualization flags (DLMO/CBT markers, light overlay) as needed.
 6. Optionally **Save preset** (up to five) or load an existing scenario. Presets persist across reruns and multi-user sessions.
+> **Profile sync:** Use **Align with active profile** to pull chronotype, mission profile, and latest NASA medical log data into the scenario builder. The stored configuration updates automatically whenever you switch astronauts.
 
 **Step 2: Apply and Simulate**
 1. Click **Apply scenario** once. All widgets are batched through the form, so heavy simulations only run after this action.
@@ -1506,6 +1507,8 @@ The Sleep, Activity, Fatigue, and Task Effectiveness (SAFTE) model predicts cogn
    - Wake time hour (0-23)
    - Sleep quality (0-100%)
    - Prior sleep debt (hours)
+
+> **Profile sync:** Click **Sync with active profile** to auto-fill age, sex, chronotype offset, sleep debt, and work cadence from the currently selected astronaut's exploration medical record. The values refresh automatically after you switch users, so you only need to tweak edge cases.
 
 **Step 2: Configure work schedule**
 

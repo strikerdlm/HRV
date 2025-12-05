@@ -61,7 +61,7 @@ from app.statistical_analysis import (
     DescriptiveStats,
     EffectSizeType,
     GroupComparisonResult,
-    TestType,
+    StatisticalTestType,
     bonferroni_correction,
     compare_multiple_groups,
     compare_two_groups,
@@ -139,7 +139,10 @@ class TestGroupComparisons:
         result = compare_two_groups(before, after, paired=True)
 
         assert isinstance(result, GroupComparisonResult)
-        assert result.test_type in (TestType.TTEST_PAIRED, TestType.WILCOXON)
+        assert result.test_type in (
+            StatisticalTestType.TTEST_PAIRED,
+            StatisticalTestType.WILCOXON,
+        )
 
     def test_anova(self) -> None:
         """Test ANOVA comparison."""
@@ -283,7 +286,7 @@ class TestAPAFormatting:
     def test_format_ttest(self) -> None:
         """Test APA t-test formatting."""
         result = GroupComparisonResult(
-            test_type=TestType.TTEST_IND,
+            test_type=StatisticalTestType.TTEST_IND,
             statistic=2.5,
             p_value=0.015,
             p_adjusted=0.015,
