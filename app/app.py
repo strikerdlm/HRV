@@ -4117,7 +4117,26 @@ def main() -> None:
     episodes_df = pd.DataFrame()
     meta_rows_for_context: List[Dict[str, Any]] = []
     
-    if has_hrv_data_uploaded:
+    # Require explicit user action to run HRV analysis
+    hrv_analysis_ready = st.session_state.get("hrv_analysis_ready", False)
+    upload_signature = tuple(sorted(uploads.keys())) if has_hrv_data_uploaded else tuple()
+    if st.session_state.get("hrv_analysis_signature") != upload_signature:
+        st.session_state["hrv_analysis_signature"] = upload_signature
+        hrv_analysis_ready = False
+        st.session_state["hrv_analysis_ready"] = False
+    
+    if has_hrv_data_uploaded and not hrv_analysis_ready:
+        st.info("HRV data uploaded. Click **Run HRV Analysis** to start processing.")
+        if st.button(
+            "🚀 Run HRV Analysis",
+            key="run_hrv_analysis",
+            type="primary",
+            help="Runs HRV cleaning, windowing, and metric computation for uploaded datasets.",
+        ):
+            hrv_analysis_ready = True
+            st.session_state["hrv_analysis_ready"] = True
+    
+    if has_hrv_data_uploaded and hrv_analysis_ready:
         # Prepare dataset dict (limit number of datasets for performance)
         datasets_all = uploads
         dataset_items = list(datasets_all.items())
