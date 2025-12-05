@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Countermeasures: sleep quality, exercise modality, caloric intake
   - Medical logistics: resupply days tracking
 
+### Fixed
+- **Schema migration resilience** (`app/user_profile_tab.py`): All selectbox and multiselect widgets now gracefully handle stale values from database records when option lists change. Prevents `StreamlitAPIException` when stored defaults no longer match current options; logs migration events for debugging.
+
 ### Removed
 - **Deprecated MIST reference** (`app/user_profile_tab.py`): Removed outdated NASA MIST URL; form now cites ExMC/EIMO peer-reviewed sources.
 
