@@ -67,7 +67,7 @@ Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations c
   - [x] Circadian controls now live inside the tab with preset management (v1.7.5)
   - [ ] SAFTE/fatigue sliders still in the sidebar
 - [x] **Tab-Specific Settings Persistence**: Save per-tab configurations per user (Circadian + SAFTE, v1.7.7)
-- [ ] **Cross-Tab Correlation**: Enable tabs to share computed results
+- [x] **Cross-Tab Correlation**: Circadian tab now publishes summaries (DLMO/ESRI/light window) to Fatigue tab via broker
 
 #### Phase 4: Integrations & Analytics (Priority: MEDIUM)
 - [ ] **Polar AccessLink Automation**: Persist OAuth tokens securely and sync VO2max history
