@@ -254,7 +254,8 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from pathlib import Path
-from logging_config import get_logger, log_exception
+from app.logging_config import get_logger, log_exception
+from pandas.api.types import is_datetime64_any_dtype
 
 # Default active-user context used when user profile data is unavailable
 def _guest_user_context() -> Dict[str, Any]:
@@ -987,10 +988,11 @@ def get_swpc_solar_radio_flux() -> pd.DataFrame:
         if df.empty:
             return df
         # Ensure a unified time column name
-        time_cols = [
-            col for col in df.columns if np.issubdtype(
-                df[col].dtype,
-                np.datetime64)]
+    time_cols = [
+        col
+        for col in df.columns
+        if is_datetime64_any_dtype(df[col])
+    ]
         if time_cols:
             main_time = time_cols[0]
             df = df.dropna(subset=[main_time]).sort_values(main_time)
@@ -1126,6 +1128,8 @@ def _noaa_space_state() -> Dict[str, Any]:
             "errors": {},
             "last_updated": None,
             "loading": False,
+            "auto_loading": False,
+            "auto_attempted": False,
             "correlations": {},
             "corr_params": {},
             "global_corr": pd.DataFrame(),
@@ -1189,12 +1193,16 @@ def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
     Preload NOAA feeds using cache-first retrieval so the tab is always populated.
     """
 
-    if state.get("bundles") or state.get("loading"):
+    if state.get("bundles") or state.get("loading") or state.get("auto_loading") or state.get("auto_attempted"):
         return
+    state["auto_loading"] = True
     try:
         _load_noaa_space_datasets(state, use_cache=True)
     except Exception as exc:  # pragma: no cover - defensive
         log_exception(_LOGGER, "Automatic NOAA preload failed", exc)
+    finally:
+        state["auto_loading"] = False
+        state["auto_attempted"] = True
 
 
 def _donki_state() -> Dict[str, Any]:
