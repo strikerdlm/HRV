@@ -331,6 +331,7 @@ project/
   - Solar wind plasma (L1→Earth travel time calculated)
   - Geomagnetic conditions (Kp/Dst)
 - **Polar H10 Recommendations**: Automatic EKG timing guidance based on event severity
+- **Always-on data**: Auto-loads on tab open (cache-first) and falls back to the last cached Kp/F10.7 values if the network blips—no RR uploads required
 - Live Kp index, solar flux, solar wind parameters
 - SpaceWeatherLive snapshot with CME/flare data
 - Lag-aware correlations (0–72h) with HRV metrics
@@ -338,6 +339,7 @@ project/
 
 ### NOAA Space Tab
 - Comprehensive NOAA SWPC data feeds
+- Auto-fetches with cache-first fallback so feeds stay available even offline; manual refresh is still available
 - Interactive gauges for all space weather metrics
 - Batch correlation analysis across multiple parameters
 - Feature matrix builder for predictive modeling
