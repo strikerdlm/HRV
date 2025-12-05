@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.8] - 2025-12-05
+
+### Changed
+- **Tab layout** (`app/app.py`): Science tab moved next to References; About, Space Weather, and NOAA tabs remain fully active/visible.
+- **Documentation** (`README.md`, `docs/Manual.md`, `WARP.md`): Updated version badges and navigation notes to match the new layout and visibility rules.
+- **Version sync** (`app/version_info.py`): Default version updated to 1.7.8 to keep About and headers consistent with the changelog.
+
+---
+
 ## [1.7.7] - 2025-12-05
 
 ### Added
