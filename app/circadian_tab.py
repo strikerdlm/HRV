@@ -28,6 +28,8 @@ import numpy as np
 import streamlit as st
 from numpy.typing import NDArray
 
+from ui_state_manager import get_tab_settings_manager
+
 # Try to import circadian module components - use multiple import strategies for portability
 CIRCADIAN_AVAILABLE = False
 _import_errors: List[str] = []
@@ -114,6 +116,9 @@ def _clone_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     clone = dict(settings)
     clone["selected_models"] = list(settings.get("selected_models", []))
     return clone
+
+
+_CIRCADIAN_SETTING_KEYS: Final[Tuple[str, ...]] = tuple(_default_circadian_settings().keys())
 
 
 def _get_circadian_settings() -> Dict[str, Any]:
@@ -918,8 +923,19 @@ def render_circadian_tab(
     </div>
     """, unsafe_allow_html=True)
     
+    tab_settings_manager = get_tab_settings_manager()
+    active_user_id = (
+        user_context.get("user_id") if user_context and user_context.get("has_user") else None
+    )
+
     _sync_settings_with_context(user_context)
     settings = _get_circadian_settings()
+    stored_settings = tab_settings_manager.get_settings("circadian", active_user_id)
+    if stored_settings:
+        merged_settings = {**settings, **stored_settings}
+        _update_circadian_settings(merged_settings)
+        settings = merged_settings
+
     st.markdown("### ⚙️ Scenario Configuration")
     if user_context and user_context.get("has_user"):
         if st.button(
@@ -934,6 +950,12 @@ def render_circadian_tab(
             )
     settings = _render_preset_controls(settings)
     settings = _render_settings_form(settings)
+    tab_settings_manager.save_settings(
+        "circadian",
+        active_user_id,
+        settings,
+        allowed_keys=_CIRCADIAN_SETTING_KEYS,
+    )
     
     st.markdown("---")
     st.caption(
