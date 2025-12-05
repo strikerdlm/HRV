@@ -5,6 +5,17 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.1] - 2025-12-05
+
+### Added
+- **Cross-tab result broker** (`app/ui_state_manager.py`): New per-user, per-tab broker shares small summaries safely across Streamlit reruns.
+- **Circadian → SAFTE sync** (`app/circadian_tab.py`, `app/app.py`): Circadian tab publishes DLMO/CBT/ESRI plus light windows; SAFTE tab can apply the latest circadian sleep window and chronotype with one click.
+- **Unit tests** (`tests/test_ui_state_manager.py`): Coverage for the broker’s publish/get/eviction behavior.
+
+### Changed
+- **Documentation** (`README.md`, `docs/Manual.md`, `WARP.md`): Roadmap now marks cross-tab correlation complete and explains the new circadian-to-fatigue bridge.
+
+---
 
 ## [1.8.0] - 2025-12-05
 
