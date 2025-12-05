@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [1.7.7] - 2025-12-05
+
+### Added
+- **Tab-specific settings persistence** (`app/ui_state_manager.py`, `app/app.py`, `app/circadian_tab.py`): Circadian and SAFTE tabs now remember per-user configurations for the current session, rehydrating sliders and selectors when switching users or rerunning the app.
+
+### Changed
+- **Welcome/About auto-versioning** (`app/version_info.py` consumers): UI badges now source version numbers directly from the latest changelog entry to keep the welcome header and About tab synchronized with releases.
+
+---
+
 ## [1.7.6] - 2025-12-05
 
 ### Added
