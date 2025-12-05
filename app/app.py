@@ -254,8 +254,13 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from pathlib import Path
-from app.logging_config import get_logger, log_exception
 from pandas.api.types import is_datetime64_any_dtype
+
+try:
+    # Package import (tests, package mode)
+    from app.logging_config import get_logger, log_exception
+except ImportError:  # pragma: no cover - fallback for Streamlit script execution
+    from logging_config import get_logger, log_exception
 
 # Default active-user context used when user profile data is unavailable
 def _guest_user_context() -> Dict[str, Any]:
