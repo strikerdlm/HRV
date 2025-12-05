@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.7.0  
-**Last Updated:** 2025-12-03
+**Version:** 1.7.6  
+**Last Updated:** 2025-12-05
 
 ---
 
