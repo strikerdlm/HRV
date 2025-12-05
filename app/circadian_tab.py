@@ -20,7 +20,7 @@ import json
 import tempfile
 import time as time_module
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Final, List, Optional, Tuple
 
@@ -28,7 +28,7 @@ import numpy as np
 import streamlit as st
 from numpy.typing import NDArray
 
-from ui_state_manager import get_tab_settings_manager
+from ui_state_manager import get_cross_tab_broker, get_tab_settings_manager
 
 # Try to import circadian module components - use multiple import strategies for portability
 CIRCADIAN_AVAILABLE = False
@@ -924,6 +924,7 @@ def render_circadian_tab(
     """, unsafe_allow_html=True)
     
     tab_settings_manager = get_tab_settings_manager()
+    cross_tab_broker = get_cross_tab_broker()
     active_user_id = (
         user_context.get("user_id") if user_context and user_context.get("has_user") else None
     )
@@ -1007,6 +1008,32 @@ def render_circadian_tab(
     show_dlmo = bool(settings["show_dlmo"])
     show_cbt = bool(settings["show_cbt"])
     show_light_overlay = bool(settings["show_light_overlay"])
+
+    circadian_summary: Dict[str, Any] = {
+        "models": list(selected_models),
+        "schedule": {
+            "type": schedule_type,
+            "lux": lux,
+            "lights_on": int(settings.get("lights_on", 8)),
+            "lights_off": int(settings.get("lights_off", 22)),
+            "days_on": int(settings.get("days_on", 3)),
+            "days_off": int(settings.get("days_off", 2)),
+            "shift_hours": int(settings.get("shift_hours", -6)),
+            "baseline_days": int(settings.get("baseline_days", 7)),
+            "pulse_start": int(settings.get("pulse_start", 20)),
+            "pulse_duration": float(settings.get("pulse_duration", 2.0)),
+        },
+        "sleep_window": {
+            "bedtime_hour": int(settings.get("lights_off", 22)),
+            "waketime_hour": int(settings.get("lights_on", 8)),
+        },
+        "total_days": total_days,
+        "step_hours": step_hours,
+        "chronotype_offset": float(user_context.get("chronotype_offset") or 0.0)
+        if user_context
+        else 0.0,
+        "generated_at": datetime.now(tz=timezone.utc).isoformat(),
+    }
     
     dlmo_all: List[float] = []
     cbt_all: List[float] = []
@@ -1073,6 +1100,24 @@ def render_circadian_tab(
                 time_arr, trajectories, light_arr if show_light_overlay else None
             )
             _render_echarts(amp_phase_config, height=450, key="amp_phase")
+
+            circadian_summary.update(
+                {
+                    "dlmo_hours": [float(val % 24) for val in dlmo_all[:12]],
+                    "cbt_hours": [float(val % 24) for val in cbt_all[:12]],
+                    "light_preview": {
+                        "time_hours": float(time_arr[-1]) if len(time_arr) else 0.0,
+                        "lux": lux,
+                    },
+                }
+            )
+            cross_tab_broker.publish(
+                "circadian",
+                active_user_id,
+                "circadian_summary",
+                circadian_summary,
+                metadata={"source": "circadian_tab", "section": "simulation"},
+            )
             
             st.markdown("""
             <div style="background: rgba(32, 201, 151, 0.1); border-radius: 8px; padding: 1rem; margin: 1rem 0;">
@@ -1147,6 +1192,21 @@ def render_circadian_tab(
                     st.metric("Min ESRI", f"{np.min(valid_esri):.3f}")
                 with col3:
                     st.metric("Max ESRI", f"{np.max(valid_esri):.3f}")
+
+                circadian_summary["esri"] = {
+                    "mean": float(np.mean(valid_esri)),
+                    "min": float(np.min(valid_esri)),
+                    "max": float(np.max(valid_esri)),
+                    "analysis_window_days": int(analysis_days),
+                    "resolution_hours": float(esri_dt),
+                }
+                cross_tab_broker.publish(
+                    "circadian",
+                    active_user_id,
+                    "circadian_summary",
+                    circadian_summary,
+                    metadata={"source": "circadian_tab", "section": "esri"},
+                )
             
             st.markdown("""
             <div style="background: rgba(79, 172, 254, 0.1); border-radius: 8px; padding: 1rem; margin: 1rem 0;">
