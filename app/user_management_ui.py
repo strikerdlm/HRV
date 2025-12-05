@@ -777,12 +777,15 @@ def render_user_management_tab() -> None:
         render_longitudinal_stats(selected_metric)
         
         # Show HRV trend chart
-        df = db.get_hrv_dataframe(current_user.user_id)
+        df = db.get_hrv_dataframe(current_user.user_id, limit=365, include_rr=False)
         if not df.empty and selected_metric in df.columns:
             st.markdown("### Trend Over Time")
             chart_data = df[["measurement_date", selected_metric]].dropna()
+            chart_data = chart_data.sort_values("measurement_date")
             if not chart_data.empty:
                 st.line_chart(chart_data.set_index("measurement_date")[selected_metric])
+            if len(df) >= 365:
+                st.caption("Showing the 365 most recent HRV measurements for faster loading.")
     
     with tab4:
         render_data_export_import()
