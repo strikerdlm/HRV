@@ -15,7 +15,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple
+
 import streamlit as st
 
 
@@ -162,6 +163,95 @@ class UIStateManager:
         return dict(self._state[self._DATA_STATUS_KEY])
 
 
+class TabSettingsManager:
+    """
+    Persist per-tab UI settings on a per-user basis for the current session.
+
+    Stored settings are bounded to avoid unbounded growth:
+    - Max unique users tracked: `_max_users`
+    - Max tabs per user: `_max_tabs`
+    """
+
+    _STATE_KEY = "tab_settings_manager"
+
+    def __init__(self, max_users: int = 20, max_tabs: int = 8) -> None:
+        self._max_users = max_users
+        self._max_tabs = max_tabs
+        self._ensure_state()
+
+    def _ensure_state(self) -> None:
+        """Ensure the tab settings container exists in session state."""
+        if self._STATE_KEY not in st.session_state:
+            st.session_state[self._STATE_KEY] = {
+                "settings": {},
+                "initialized_at": datetime.now(tz=timezone.utc).isoformat(),
+            }
+
+    @staticmethod
+    def _user_key(user_id: Optional[str]) -> str:
+        """Return a normalized user key for storage."""
+        return str(user_id) if user_id else "guest"
+
+    def _get_store(self) -> Dict[str, Dict[str, Dict[str, Any]]]:
+        """Internal accessor for the settings dictionary."""
+        self._ensure_state()
+        return st.session_state[self._STATE_KEY]["settings"]
+
+    def get_settings(self, tab_id: str, user_id: Optional[str]) -> Dict[str, Any]:
+        """
+        Retrieve settings for a tab/user combination.
+
+        Args:
+            tab_id: Unique tab identifier (e.g., "fatigue", "circadian").
+            user_id: User identifier or None for guest.
+
+        Returns:
+            A shallow copy of the stored settings; empty dict if none saved.
+        """
+        store = self._get_store()
+        user_store = store.get(self._user_key(user_id), {})
+        return dict(user_store.get(tab_id, {}))
+
+    def save_settings(
+        self,
+        tab_id: str,
+        user_id: Optional[str],
+        settings: Dict[str, Any],
+        allowed_keys: Optional[Tuple[str, ...]] = None,
+    ) -> Dict[str, Any]:
+        """
+        Persist settings for a tab/user, enforcing storage bounds.
+
+        Args:
+            tab_id: Unique tab identifier.
+            user_id: User identifier or None for guest.
+            settings: Dictionary of settings to store.
+            allowed_keys: Optional whitelist; only these keys are persisted.
+
+        Returns:
+            The filtered settings that were stored.
+        """
+        store = self._get_store()
+        user_key = self._user_key(user_id)
+
+        if user_key not in store and len(store) >= self._max_users:
+            # Evict the oldest inserted user to bound memory usage.
+            evict_key = next(iter(store))
+            store.pop(evict_key, None)
+
+        user_store = store.setdefault(user_key, {})
+        if tab_id not in user_store and len(user_store) >= self._max_tabs:
+            evict_tab = next(iter(user_store))
+            user_store.pop(evict_tab, None)
+
+        filtered = dict(settings)
+        if allowed_keys is not None:
+            filtered = {key: value for key, value in settings.items() if key in allowed_keys}
+
+        user_store[tab_id] = filtered
+        return dict(filtered)
+
+
 # =============================================================================
 # STREAMLIT UI HELPERS
 # =============================================================================
@@ -169,6 +259,11 @@ class UIStateManager:
 def get_state_manager() -> UIStateManager:
     """Get or create the singleton UI state manager."""
     return UIStateManager()
+
+
+def get_tab_settings_manager() -> TabSettingsManager:
+    """Get or create the tab settings manager."""
+    return TabSettingsManager()
 
 
 def render_data_status_badge() -> None:
