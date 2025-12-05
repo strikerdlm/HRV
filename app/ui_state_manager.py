@@ -19,7 +19,7 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import streamlit as st
 
-from logging_config import get_logger
+from app.logging_config import get_logger
 
 
 class DataType(Enum):
