@@ -2,7 +2,47 @@
 
 This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when working with code in this repository.
 
-**Version**: 1.8.0 | **Last Updated**: 2025-12-05
+**Version**: 1.8.0 | **Last Updated**: 2025-12-05 | **Environment**: conda (hrv)
+
+---
+
+## 🚀 Quick Reference
+
+### Essential Commands (PowerShell)
+
+```powershell
+# Activate conda environment (REQUIRED before any work)
+conda activate hrv
+
+# Run the application
+streamlit run app/app.py
+
+# Run tests
+pytest
+
+# Check environment status
+conda env list
+python --version
+pip list | Select-String "streamlit|pandas|numpy"
+
+# View logs
+Get-Content logs/app.log -Tail 50 -Wait
+Get-Content logs/errors.log
+
+# Deactivate environment
+conda deactivate
+```
+
+### Common Issues - Fast Fixes
+
+| Problem | Solution |
+|---------|----------|
+| "No Python at 'C:\Python311\python.exe'" | `Remove-Item .venv -Recurse -Force`<br>Then reload VS Code window |
+| ModuleNotFoundError | `conda activate hrv`<br>Verify with `pip list` |
+| Streamlit won't start | Check `conda env list` shows `*` next to hrv |
+| VS Code wrong interpreter | Ctrl+Shift+P → "Python: Select Interpreter"<br>Choose "Python 3.12.12 ('hrv': conda)" |
+
+---
 
 ## Overview
 Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations console with Space Weather and NOAA integration. It analyzes Polar RR-interval recordings, correlates HRV with NOAA SWPC feeds, NASA DONKI events, and SpaceWeatherLive snapshots, and now anchors astronaut-grade physiological assessments plus exploration medical records for isolation missions.
@@ -186,28 +226,59 @@ ALTER TABLE lab_chemistry ADD COLUMN timepoint_id TEXT;
 
 ## Running the Application
 
-### Start the Streamlit app
+### Environment Setup (CRITICAL)
+
+**This project uses conda, NOT venv**. The conda environment must be activated before running the application.
+
 ```powershell
+# Activate the conda environment
+conda activate hrv
+
+# Start the Streamlit app
 streamlit run app/app.py
 ```
 
-### Install dependencies
+### First-Time Setup
+
+If the `hrv` conda environment doesn't exist yet:
+
 ```powershell
-pip install -r requirements.txt
+# Create conda environment with Python 3.12
+conda create -n hrv python=3.12 -y
+
+# Install conda packages
+conda install -n hrv -c conda-forge streamlit pandas numpy scipy python-dotenv beautifulsoup4 numba psutil -y
+
+# Install remaining packages via pip
+conda run -n hrv pip install "requests>=2.31,<3" "openai>=1.55,<2" "pygt3x>=0.4" "pyedflib>=0.1.30"
+
+# Activate environment
+conda activate hrv
 ```
 
-### Python version
-Python 3.10+ required
+### Python Version
+- **Required**: Python 3.10+
+- **Recommended**: Python 3.12 (current conda environment)
+- **Do NOT use Python 3.13** (compatibility issues with some dependencies)
 
-### Environment setup
+### API Keys Setup
 Create a `.env` file in the project root with API keys:
 ```
 OPENAI_API_KEY=sk-...
 NASA_API_KEY=...
 ACCUWEATHER_API_KEY=...
+POLAR_ACCESSLINK_TOKEN=...  # Optional for VO2max sync
+POLAR_ACCESSLINK_USER_ID=...  # Optional
 ```
 
-Never commit secrets or API keys. The `.env` file is already in `.gitignore`.
+**CRITICAL**: Never commit secrets or API keys. The `.env` file is already in `.gitignore`.
+
+### VS Code / Cursor Configuration
+
+The `.vscode/settings.json` is configured to use the conda environment. After setup:
+1. Reload VS Code window (Ctrl+Shift+P → "Reload Window")
+2. Verify Python interpreter shows: `Python 3.12.12 ('hrv': conda)`
+3. Terminal should auto-activate the conda environment
 
 ## Architecture
 
@@ -495,14 +566,62 @@ See [`docs/Agent_Rules.md`](docs/Agent_Rules.md) for the complete standard.
 
 ## Troubleshooting
 
+### Environment Verification
+**First step for any issue**: Verify your environment setup:
+```powershell
+# Verify conda environment is active
+conda env list  # Look for * next to 'hrv'
+
+# Check Python version
+python --version  # Should show 3.12.x
+
+# Verify key packages
+pip list | Select-String "streamlit|pandas|numpy|openai"
+```
+
 ### Debugging with Logs
-**First step for any issue**: Check the log files:
+**After environment verification**: Check the log files:
 ```powershell
 # View recent errors
 Get-Content logs/errors.log -Tail 100
 
 # Search for specific error
 Select-String -Path logs/app.log -Pattern "ERROR|EXCEPTION" -Context 3
+```
+
+### Conda Environment Issues
+
+**Problem**: "No Python at 'C:\Python311\python.exe'" or similar path errors
+
+**Solution**: Your VS Code is pointing to an old/broken venv. Follow these steps:
+```powershell
+# 1. Remove any .venv directory if it exists
+Remove-Item .venv -Recurse -Force -ErrorAction SilentlyContinue
+
+# 2. Verify conda environment exists
+conda env list | Select-String "hrv"
+
+# 3. If missing, create it (see First-Time Setup section above)
+
+# 4. Reload VS Code window
+# Ctrl+Shift+P → "Reload Window"
+
+# 5. Select correct Python interpreter
+# Ctrl+Shift+P → "Python: Select Interpreter" → Choose "Python 3.12.12 ('hrv': conda)"
+```
+
+**Problem**: ModuleNotFoundError for installed packages
+
+**Solution**: Wrong conda environment is active
+```powershell
+# Verify you're in the hrv environment
+conda activate hrv
+
+# Check if package is installed
+pip list | Select-String "<package_name>"
+
+# If missing, install it
+conda run -n hrv pip install <package_name>
 ```
 
 ### Streamlit hangs on Windows shutdown
@@ -531,9 +650,11 @@ The app includes Windows console safety workarounds (Colorama fix) in `app/app.p
 - Check `logs/app.log` for GPU initialization messages
 
 ### Import errors
-- Ensure all dependencies in `requirements.txt` are installed
+- **CRITICAL**: Ensure conda environment is activated: `conda activate hrv`
+- Verify you're NOT in base conda environment (check terminal prompt)
+- Ensure all dependencies are installed in hrv environment
 - Use Python 3.10+ (some type hints and syntax require 3.10)
-- Activate virtual environment if using `.venv`
+- **Do NOT use .venv** - this project uses conda exclusively
 
 ### Database/Profile Issues
 - SQLite database stored in `app/hrv_users.db`
