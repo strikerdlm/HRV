@@ -988,11 +988,11 @@ def get_swpc_solar_radio_flux() -> pd.DataFrame:
         if df.empty:
             return df
         # Ensure a unified time column name
-    time_cols = [
-        col
-        for col in df.columns
-        if is_datetime64_any_dtype(df[col])
-    ]
+        time_cols = [
+            col
+            for col in df.columns
+            if is_datetime64_any_dtype(df[col])
+        ]
         if time_cols:
             main_time = time_cols[0]
             df = df.dropna(subset=[main_time]).sort_values(main_time)
@@ -1111,6 +1111,7 @@ def _space_weather_state() -> Dict[str, Any]:
             "swl_cme_daily": pd.DataFrame(),
             "swl_feature_matrix": pd.DataFrame(),
             "auto_loading": False,
+            "auto_attempted": False,
         },
     )
     return state
@@ -1177,7 +1178,7 @@ def _auto_fetch_space_weather_if_needed(state: Dict[str, Any]) -> None:
     Ensure the basic space weather datasets are available without user clicks.
     """
 
-    if state.get("loaded") or state.get("auto_loading"):
+    if state.get("loaded") or state.get("auto_loading") or state.get("auto_attempted"):
         return
     state["auto_loading"] = True
     try:
@@ -1186,6 +1187,7 @@ def _auto_fetch_space_weather_if_needed(state: Dict[str, Any]) -> None:
         log_exception(_LOGGER, "Automatic space weather bootstrap failed", exc)
     finally:
         state["auto_loading"] = False
+        state["auto_attempted"] = True
 
 
 def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
@@ -7238,7 +7240,6 @@ that predicts cognitive performance based on:
                     st.session_state["impact_snapshot_error"] = ""
                 except Exception as exc:
                     log_exception(_LOGGER, "Automatic impact prediction fetch failed", exc)
-                    st.session_state["impact_snapshot"] = None
                     st.session_state["impact_snapshot_error"] = str(exc)
             
             col_fetch_impact, col_refresh_info = st.columns([1, 2])
