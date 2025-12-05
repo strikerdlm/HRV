@@ -1016,12 +1016,16 @@ def _render_hrv_history(user: UserProfile) -> None:
     try:
         with st.spinner("Loading HRV measurements..."):
             db = get_database()
-            df = db.get_hrv_dataframe(user.user_id)
+            df = db.get_hrv_dataframe(user.user_id, limit=500, include_rr=False)
         
         if df.empty:
             st.info("No HRV measurements recorded. Import HRV data from the main analysis to populate this section.")
             return
         
+        df = df.sort_values("measurement_date")
+        if len(df) >= 500:
+            st.caption("Showing the 500 most recent HRV measurements for faster loading.")
+    
         # Summary metrics
         col1, col2, col3, col4 = st.columns(4)
         with col1:
