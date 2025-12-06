@@ -5,6 +5,40 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.5] - 2025-12-06
+
+### Added
+- **Polar AccessLink Automation** (`app/polar_accesslink.py`): Complete OAuth token management and VO2max sync
+  - `PolarAccessLinkClient` class for per-user credential management
+  - Secure token storage with XOR encryption (obfuscation for local SQLite)
+  - VO2max history tracking with source attribution (Polar, manual, etc.)
+  - Automatic sync with duplicate detection (avoids redundant entries)
+  - Fitness class determination based on VO2max values
+- **Database schema updates** (`app/user_database.py`):
+  - `polar_credentials` table for persisting OAuth tokens per user
+  - `vo2max_history` table for longitudinal VO2max tracking
+  - `PolarCredentials` and `VO2maxEntry` dataclasses
+  - Database methods: `save_polar_credentials()`, `get_polar_credentials()`, `delete_polar_credentials()`
+  - Database methods: `save_vo2max_entry()`, `get_vo2max_history()`, `get_latest_vo2max()`, `get_vo2max_dataframe()`
+- **Unit tests** (`tests/test_polar_accesslink.py`): 24 comprehensive tests covering:
+  - Token encryption/decryption round-trips
+  - Database CRUD operations for credentials and VO2max history
+  - PolarAccessLinkClient lifecycle and sync operations
+  - Mocked API response handling
+
+### Changed
+- **NASA Nutrition Calculator** (`app/user_profile_tab.py`):
+  - VO2max section now uses `PolarAccessLinkClient` for persistent sync
+  - Added "💾 Save Manual Entry" button to record manual VO2max values
+  - VO2max history expander shows recent entries with source and fitness class
+  - Improved source attribution ("Polar AccessLink sync", "History", "Manual entry")
+- **Import structure** (`app/polar_accesslink.py`): Fallback imports for both `app.` prefix and direct module imports
+
+### Fixed
+- **Token encryption** (`app/polar_accesslink.py`): `os.getlogin()` now falls back to environment variables when running in non-TTY environments
+
+---
+
 ## [1.8.4] - 2025-12-05
 
 ### Fixed
