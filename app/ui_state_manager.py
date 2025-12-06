@@ -19,7 +19,10 @@ from typing import Any, Callable, Dict, List, Optional, Set, Tuple
 
 import streamlit as st
 
-from logging_config import get_logger
+try:
+    from app.logging_config import get_logger
+except ImportError:  # pragma: no cover - fallback for script execution
+    from logging_config import get_logger
 
 
 class DataType(Enum):

@@ -20,8 +20,9 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections import Counter
 from datetime import datetime, date, timezone, timedelta
-from typing import Any, Dict, Final, List, Optional
+from typing import Any, Dict, Final, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -58,6 +59,7 @@ try:
         get_karolinska_translations,
         get_samn_perelli_translations,
         get_vas_translations,
+        get_panas_translations,
         render_language_selector,
     )
     I18N_AVAILABLE = True
@@ -66,6 +68,8 @@ except ImportError:
     # Fallback function if i18n not available
     def t(key: str, **kwargs: Any) -> str:  # type: ignore[misc]
         return key
+    def get_panas_translations() -> dict:  # type: ignore[misc]
+        return {}
 
 # Import multi-user session manager
 try:
@@ -545,7 +549,10 @@ def _render_profile_edit(user: UserProfile) -> None:
 
 
 def _render_epworth_form(user_id: str) -> Optional[int]:
-    """Render Epworth Sleepiness Scale form with i18n support."""
+    """Render Epworth Sleepiness Scale form with i18n support.
+    
+    Uses st.session_state to aggregate slider values without triggering full reruns.
+    """
     # Get translations for current language
     if I18N_AVAILABLE:
         tr = get_epworth_translations()
@@ -578,6 +585,7 @@ def _render_epworth_form(user_id: str) -> Optional[int]:
     
     situations = tr['situations']
     
+    # Use select_slider for smoother interaction (fewer DOM updates)
     scores: Dict[str, int] = {}
     
     cols_per_row = 2
@@ -585,12 +593,15 @@ def _render_epworth_form(user_id: str) -> Optional[int]:
         cols = st.columns(cols_per_row)
         for j, (key, label) in enumerate(situations[i:i + cols_per_row]):
             with cols[j]:
-                scores[key] = st.slider(
+                slider_key = f"ess_{key}"
+                # Pre-initialize session state for smoother behavior
+                if slider_key not in st.session_state:
+                    st.session_state[slider_key] = 0
+                scores[key] = st.select_slider(
                     label,
-                    min_value=0,
-                    max_value=3,
-                    value=0,
-                    key=f"ess_{key}",
+                    options=[0, 1, 2, 3],
+                    value=st.session_state.get(slider_key, 0),
+                    key=slider_key,
                     help=tr['help'],
                 )
     
@@ -769,6 +780,287 @@ def _render_vas_scales(user_id: str) -> Dict[str, float]:
     return {"vas_fatigue": vas_fatigue, "vas_pain": vas_pain}
 
 
+def _render_panas_form(user_id: str) -> Dict[str, Optional[int]]:
+    """Render PANAS (Positive and Negative Affect Schedule) form with i18n support.
+    
+    Returns PA and NA scores (10-50 each) based on Watson, Clark & Tellegen (1988).
+    Spanish validation: Sandín et al. (1999), Psicothema.
+    """
+    # Get translations for current language
+    if I18N_AVAILABLE:
+        tr = get_panas_translations()
+    else:
+        tr = {
+            "title": "Positive and Negative Affect Schedule (PANAS)",
+            "subtitle": "Indicate to what extent you feel this way right now",
+            "response_options": {1: "Very slightly", 2: "A little", 3: "Moderately", 4: "Quite a bit", 5: "Extremely"},
+            "pa_items": [
+                ("interested", "Interested"), ("excited", "Excited"), ("strong", "Strong"),
+                ("enthusiastic", "Enthusiastic"), ("proud", "Proud"), ("alert", "Alert"),
+                ("inspired", "Inspired"), ("determined", "Determined"), ("attentive", "Attentive"),
+                ("active", "Active"),
+            ],
+            "na_items": [
+                ("distressed", "Distressed"), ("upset", "Upset"), ("guilty", "Guilty"),
+                ("scared", "Scared"), ("hostile", "Hostile"), ("irritable", "Irritable"),
+                ("ashamed", "Ashamed"), ("nervous", "Nervous"), ("jittery", "Jittery"),
+                ("afraid", "Afraid"),
+            ],
+            "pa_label": "Positive Affect (PA)",
+            "na_label": "Negative Affect (NA)",
+            "score_range": "Score range: 10–50",
+            "interpretation": {
+                "pa_high": "High positive affect",
+                "pa_moderate": "Moderate positive affect",
+                "pa_low": "Low positive affect",
+                "na_high": "High negative affect",
+                "na_moderate": "Moderate negative affect",
+                "na_low": "Low negative affect",
+            },
+            "reference": "Watson, Clark, & Tellegen (1988)",
+            "clinical_note": "PA and NA are independent dimensions.",
+        }
+    
+    st.markdown(f"#### {tr['title']}")
+    st.caption(tr['subtitle'])
+    
+    response_opts = tr['response_options']
+    pa_items = tr['pa_items']
+    na_items = tr['na_items']
+    
+    # Pre-initialize session state for smoother behavior
+    for key, _ in pa_items + na_items:
+        state_key = f"panas_{key}"
+        if state_key not in st.session_state:
+            st.session_state[state_key] = 3  # Default to "Moderately"
+    
+    # Create two columns for PA and NA
+    col_pa, col_na = st.columns(2)
+    
+    pa_scores: Dict[str, int] = {}
+    na_scores: Dict[str, int] = {}
+    
+    with col_pa:
+        st.markdown(f"**{tr['pa_label']}** 🌟")
+        for key, label in pa_items:
+            state_key = f"panas_{key}"
+            pa_scores[key] = st.select_slider(
+                label,
+                options=list(response_opts.keys()),
+                value=st.session_state.get(state_key, 3),
+                format_func=lambda x: f"{x}",
+                key=state_key,
+                help=response_opts.get(st.session_state.get(state_key, 3), ""),
+            )
+    
+    with col_na:
+        st.markdown(f"**{tr['na_label']}** ⚡")
+        for key, label in na_items:
+            state_key = f"panas_{key}"
+            na_scores[key] = st.select_slider(
+                label,
+                options=list(response_opts.keys()),
+                value=st.session_state.get(state_key, 3),
+                format_func=lambda x: f"{x}",
+                key=state_key,
+                help=response_opts.get(st.session_state.get(state_key, 3), ""),
+            )
+    
+    # Calculate totals
+    pa_total = sum(pa_scores.values())
+    na_total = sum(na_scores.values())
+    
+    # Interpretation thresholds (based on normative data from Crawford & Henry, 2004)
+    # PA: Mean ~31, SD ~8 → Low <23, Moderate 23-39, High >39
+    # NA: Mean ~16, SD ~6 → Low <10, Moderate 10-22, High >22
+    interp = tr.get('interpretation', {})
+    
+    if pa_total >= 40:
+        pa_interp = interp.get("pa_high", "High positive affect")
+        pa_color = "green"
+    elif pa_total >= 23:
+        pa_interp = interp.get("pa_moderate", "Moderate positive affect")
+        pa_color = "blue"
+    else:
+        pa_interp = interp.get("pa_low", "Low positive affect")
+        pa_color = "orange"
+    
+    if na_total >= 23:
+        na_interp = interp.get("na_high", "High negative affect")
+        na_color = "red"
+    elif na_total >= 10:
+        na_interp = interp.get("na_moderate", "Moderate negative affect")
+        na_color = "orange"
+    else:
+        na_interp = interp.get("na_low", "Low negative affect")
+        na_color = "green"
+    
+    st.markdown("---")
+    
+    # Display results with gauges using ECharts
+    col_g1, col_g2 = st.columns(2)
+    
+    with col_g1:
+        _render_panas_gauge(
+            value=pa_total,
+            title=tr['pa_label'],
+            min_val=10,
+            max_val=50,
+            color_zones=[
+                (23, "#ff9800"),  # Low (orange)
+                (40, "#2196f3"),  # Moderate (blue)
+                (50, "#4caf50"),  # High (green)
+            ],
+            key_suffix="pa",
+        )
+        st.markdown(f"**PA: {pa_total}/50** — :{pa_color}[{pa_interp}]")
+    
+    with col_g2:
+        _render_panas_gauge(
+            value=na_total,
+            title=tr['na_label'],
+            min_val=10,
+            max_val=50,
+            color_zones=[
+                (10, "#4caf50"),  # Low (green)
+                (23, "#ff9800"),  # Moderate (orange)
+                (50, "#f44336"),  # High (red)
+            ],
+            key_suffix="na",
+        )
+        st.markdown(f"**NA: {na_total}/50** — :{na_color}[{na_interp}]")
+    
+    # Clinical note
+    st.caption(f"💡 {tr.get('clinical_note', '')}")
+    st.caption(f"📚 {tr.get('reference', '')}")
+    
+    return {"panas_pa": pa_total, "panas_na": na_total}
+
+
+def _render_panas_gauge(
+    value: int,
+    title: str,
+    min_val: int,
+    max_val: int,
+    color_zones: list,
+    key_suffix: str,
+) -> None:
+    """Render a modern ECharts gauge for PANAS scores.
+    
+    Args:
+        value: Current score value.
+        title: Gauge title.
+        min_val: Minimum scale value.
+        max_val: Maximum scale value.
+        color_zones: List of (threshold, color) tuples for gauge zones.
+        key_suffix: Unique key suffix for the component.
+    """
+    import json
+    
+    # Build color zone config for ECharts
+    zones = []
+    prev_threshold = min_val
+    for threshold, color in color_zones:
+        zones.append([
+            (threshold - min_val) / (max_val - min_val),
+            color
+        ])
+        prev_threshold = threshold
+    
+    # ECharts gauge option - modern two-ring style
+    option = {
+        "series": [
+            {
+                "type": "gauge",
+                "center": ["50%", "60%"],
+                "startAngle": 200,
+                "endAngle": -20,
+                "min": min_val,
+                "max": max_val,
+                "splitNumber": 8,
+                "itemStyle": {"color": "#2196f3"},
+                "progress": {
+                    "show": True,
+                    "width": 20,
+                    "itemStyle": {
+                        "color": {
+                            "type": "linear",
+                            "x": 0, "y": 0, "x2": 1, "y2": 0,
+                            "colorStops": [
+                                {"offset": 0, "color": color_zones[0][1]},
+                                {"offset": 0.5, "color": color_zones[1][1] if len(color_zones) > 1 else color_zones[0][1]},
+                                {"offset": 1, "color": color_zones[-1][1]},
+                            ],
+                        }
+                    }
+                },
+                "pointer": {
+                    "icon": "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
+                    "length": "12%",
+                    "width": 20,
+                    "offsetCenter": [0, "-60%"],
+                    "itemStyle": {"color": "auto"},
+                },
+                "axisLine": {
+                    "lineStyle": {
+                        "width": 20,
+                        "color": zones,
+                    }
+                },
+                "axisTick": {
+                    "distance": -30,
+                    "splitNumber": 5,
+                    "lineStyle": {"width": 2, "color": "#999"},
+                },
+                "splitLine": {
+                    "distance": -35,
+                    "length": 14,
+                    "lineStyle": {"width": 3, "color": "#999"},
+                },
+                "axisLabel": {
+                    "distance": -20,
+                    "color": "#999",
+                    "fontSize": 12,
+                },
+                "anchor": {
+                    "show": False,
+                },
+                "title": {"show": False},
+                "detail": {
+                    "valueAnimation": True,
+                    "width": "60%",
+                    "lineHeight": 40,
+                    "borderRadius": 8,
+                    "offsetCenter": [0, "-15%"],
+                    "fontSize": 28,
+                    "fontWeight": "bold",
+                    "formatter": "{value}",
+                    "color": "inherit",
+                },
+                "data": [{"value": value}],
+            }
+        ],
+    }
+    
+    # Render using streamlit-echarts if available, otherwise use HTML/JS
+    try:
+        from streamlit_echarts import st_echarts
+        st_echarts(options=option, height="220px", key=f"panas_gauge_{key_suffix}")
+    except ImportError:
+        # Fallback: render as HTML with ECharts CDN
+        option_json = json.dumps(option)
+        html = f'''
+        <div id="panas_gauge_{key_suffix}" style="width:100%;height:220px;"></div>
+        <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+        <script>
+            var chart = echarts.init(document.getElementById('panas_gauge_{key_suffix}'));
+            chart.setOption({option_json});
+            window.addEventListener('resize', function() {{ chart.resize(); }});
+        </script>
+        '''
+        st.components.v1.html(html, height=240)
+
+
 # ---------------------------------------------------------------------------
 # Clinical Assessment Session
 # ---------------------------------------------------------------------------
@@ -788,6 +1080,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
         "SP": t('sp_description'),
         "KSS": t('kss_description'),
         "VAS": t('vas_description'),
+        "PANAS": "Positive and Negative Affect Schedule (mood/affect)",
     }
     
     st.caption("⚡ Inputs are batched — use Preview or Save to refresh scores without full reruns.")
@@ -853,6 +1146,12 @@ def _render_clinical_assessment(user: UserProfile) -> None:
             with st.expander("📋 Visual Analog Scales", expanded=True):
                 results.update(_render_vas_scales(user.user_id))
         
+        if "PANAS" in selected_scales:
+            with st.expander("📋 PANAS - Positive & Negative Affect", expanded=True):
+                panas_result = _render_panas_form(user.user_id)
+                results["panas_pa"] = panas_result.get("panas_pa")
+                results["panas_na"] = panas_result.get("panas_na")
+        
         notes_text = st.text_area(
             t('assessment_notes'),
             placeholder=t('assessment_notes_placeholder'),
@@ -892,6 +1191,8 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                 epworth_sleepiness_scale=results.get("ess"),
                 karolinska_sleepiness_scale=results.get("kss"),
                 samn_perelli_fatigue=results.get("samn_perelli"),
+                panas_positive_affect=results.get("panas_pa"),
+                panas_negative_affect=results.get("panas_na"),
                 vas_fatigue=results.get("vas_fatigue"),
                 vas_pain=results.get("vas_pain"),
                 notes=context_note,
@@ -925,6 +1226,20 @@ def _render_assessment_preview(
         value = results.get("ess")
         st.metric("ESS", f"{value:.0f}" if value is not None else "—")
     
+    # PANAS preview
+    panas_pa = results.get("panas_pa")
+    panas_na = results.get("panas_na")
+    if panas_pa is not None or panas_na is not None:
+        col_pa, col_na = st.columns(2)
+        with col_pa:
+            if panas_pa is not None:
+                pa_color = "green" if panas_pa >= 40 else ("blue" if panas_pa >= 23 else "orange")
+                st.metric("PANAS PA", f"{panas_pa}/50", help="Positive Affect")
+        with col_na:
+            if panas_na is not None:
+                na_color = "red" if panas_na >= 23 else ("orange" if panas_na >= 10 else "green")
+                st.metric("PANAS NA", f"{panas_na}/50", help="Negative Affect")
+    
     vas_fatigue = results.get("vas_fatigue")
     vas_pain = results.get("vas_pain")
     if vas_fatigue is not None or vas_pain is not None:
@@ -948,43 +1263,70 @@ def _render_assessment_preview(
 # ---------------------------------------------------------------------------
 
 
+@_fragment_if_available
 def _render_assessment_history(user: UserProfile) -> None:
     """Render clinical assessment history."""
     st.markdown("## 📈 Assessment History")
     
+    # Use cached loader for fast repeated views
+    @st.cache_data(ttl=30, show_spinner=False)
+    def _load_history(uid: str, limit: int) -> list:
+        db = get_database()
+        return [h.to_dict() for h in db.get_clinical_scales_history(uid, limit=limit)]
+    
     try:
-        with st.spinner("Loading assessment history..."):
-            db = get_database()
-            history = db.get_clinical_scales_history(user.user_id, limit=50)
+        history_dicts = _load_history(user.user_id, 50)
         
-        if not history:
+        if not history_dicts:
             st.info("No assessment history found. Complete a clinical assessment to start tracking.")
             return
         
         # Convert to DataFrame
-        df = pd.DataFrame([h.to_dict() for h in history])
+        df = pd.DataFrame(history_dicts)
         df["assessment_date"] = pd.to_datetime(df["assessment_date"])
         df = df.sort_values("assessment_date", ascending=False)
         
         # Summary metrics
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
             st.metric("Total Assessments", len(df))
         with col2:
             if "samn_perelli_fatigue" in df.columns:
                 mean_sp = df["samn_perelli_fatigue"].mean()
-                st.metric("Avg Samn-Perelli", f"{mean_sp:.1f}" if pd.notna(mean_sp) else "—")
+                st.metric("Avg SP", f"{mean_sp:.1f}" if pd.notna(mean_sp) else "—")
         with col3:
             if "karolinska_sleepiness_scale" in df.columns:
                 mean_kss = df["karolinska_sleepiness_scale"].mean()
                 st.metric("Avg KSS", f"{mean_kss:.1f}" if pd.notna(mean_kss) else "—")
+        with col4:
+            if "panas_positive_affect" in df.columns:
+                mean_pa = df["panas_positive_affect"].mean()
+                st.metric("Avg PA", f"{mean_pa:.0f}" if pd.notna(mean_pa) else "—", help="PANAS Positive Affect")
+        with col5:
+            if "panas_negative_affect" in df.columns:
+                mean_na = df["panas_negative_affect"].mean()
+                st.metric("Avg NA", f"{mean_na:.0f}" if pd.notna(mean_na) else "—", help="PANAS Negative Affect")
         
-        # Trend chart
+        # Trend charts - Fatigue scales
         if len(df) > 1:
-            chart_data = df[["assessment_date", "samn_perelli_fatigue", "karolinska_sleepiness_scale"]].dropna(how="all", subset=["samn_perelli_fatigue", "karolinska_sleepiness_scale"])
-            if not chart_data.empty:
-                chart_data = chart_data.set_index("assessment_date")
-                st.line_chart(chart_data)
+            st.markdown("##### 📈 Fatigue & Sleepiness Trends")
+            chart_cols = ["samn_perelli_fatigue", "karolinska_sleepiness_scale"]
+            available_cols = [c for c in chart_cols if c in df.columns]
+            if available_cols:
+                chart_data = df[["assessment_date"] + available_cols].dropna(how="all", subset=available_cols)
+                if not chart_data.empty:
+                    chart_data = chart_data.set_index("assessment_date")
+                    st.line_chart(chart_data)
+            
+            # PANAS Trend chart
+            panas_cols = ["panas_positive_affect", "panas_negative_affect"]
+            available_panas = [c for c in panas_cols if c in df.columns]
+            if available_panas and df[available_panas].notna().any().any():
+                st.markdown("##### 🎭 PANAS Affect Trends")
+                panas_data = df[["assessment_date"] + available_panas].dropna(how="all", subset=available_panas)
+                if not panas_data.empty:
+                    panas_data = panas_data.set_index("assessment_date")
+                    st.line_chart(panas_data)
         
         # Data table
         with st.expander("📊 All Assessment Data"):
@@ -993,6 +1335,8 @@ def _render_assessment_history(user: UserProfile) -> None:
                 "epworth_sleepiness_scale",
                 "samn_perelli_fatigue",
                 "karolinska_sleepiness_scale",
+                "panas_positive_affect",
+                "panas_negative_affect",
                 "vas_fatigue",
                 "vas_pain",
                 "notes",
@@ -1140,12 +1484,26 @@ try:
         calculate_nasa_water_requirement,
         PAL_MULTIPLIERS,
         EXERCISE_METS,
-        polar_accesslink_available,
-        fetch_polar_vo2max,
     )
     CLINICAL_PROFILE_AVAILABLE = True
 except ImportError:
     CLINICAL_PROFILE_AVAILABLE = False
+
+# Import Polar AccessLink module if available
+try:
+    from polar_accesslink import (
+        PolarAccessLinkClient,
+        polar_accesslink_available,
+        fetch_polar_vo2max,
+        save_manual_vo2max,
+    )
+    POLAR_MODULE_AVAILABLE = True
+except ImportError:
+    POLAR_MODULE_AVAILABLE = False
+    def polar_accesslink_available() -> bool:  # type: ignore[misc]
+        return False
+    def fetch_polar_vo2max() -> None:  # type: ignore[misc]
+        return None
 
 
 def _render_clinical_profile(user: UserProfile) -> None:
@@ -1178,6 +1536,9 @@ def _render_clinical_profile(user: UserProfile) -> None:
     
     with st.expander("🧾 Exploration Medical Record", expanded=False):
         _render_medical_record_form(user)
+    
+    with st.expander("📊 Exploration Medical Analytics", expanded=False):
+        _render_exploration_medical_analytics(user)
 
 
 def _render_data_completeness(user: UserProfile) -> None:
@@ -1276,9 +1637,22 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         ActivityLevel.MODERATELY_ACTIVE
     )
     
-    # VO2max handling (manual + optional Polar AccessLink)
+    # VO2max handling (manual + optional Polar AccessLink with history)
     vo2_default = float(user.vo2max_ml_kg_min or 38.0)
     st.markdown("##### 🫁 VO2max Source")
+    
+    # Check for latest VO2max from history
+    latest_vo2_entry = None
+    polar_client = None
+    if POLAR_MODULE_AVAILABLE and DATABASE_AVAILABLE:
+        try:
+            polar_client = PolarAccessLinkClient(user.user_id)
+            latest_vo2_entry = polar_client.get_latest_vo2max()
+            if latest_vo2_entry:
+                vo2_default = latest_vo2_entry.vo2max_ml_kg_min
+        except Exception:
+            pass  # Continue with default
+    
     col_vo2_a, col_vo2_b = st.columns([2, 1])
     with col_vo2_a:
         vo2_manual = st.number_input(
@@ -1289,31 +1663,88 @@ def _render_nasa_calculator(user: UserProfile) -> None:
             step=0.5,
             help="Enter lab VO2max or estimation from field test.",
         )
+    
     polar_cache_key = f"polar_vo2_cache_{user.user_id}"
     polar_cached = st.session_state.get(polar_cache_key)
     use_polar_override = False
+    
     with col_vo2_b:
-        if CLINICAL_PROFILE_AVAILABLE and polar_accesslink_available():
-            st.caption("Polar AccessLink configured.")
-            if st.button("🔄 Fetch from Polar", key=f"fetch_polar_vo2_{user.user_id}"):
-                polar_value = fetch_polar_vo2max()
-                if polar_value:
-                    st.session_state[polar_cache_key] = polar_value
-                    polar_cached = polar_value
-                    st.success(f"Retrieved VO2max {polar_value:.1f} mL/kg/min")
+        # Check if Polar is configured (env vars or stored credentials)
+        has_polar = polar_accesslink_available()
+        has_stored_creds = polar_client.has_credentials() if polar_client else False
+        
+        if has_polar or has_stored_creds:
+            st.caption("✅ Polar AccessLink configured")
+            if st.button("🔄 Sync from Polar", key=f"sync_polar_vo2_{user.user_id}"):
+                if polar_client:
+                    with st.spinner("Syncing from Polar Flow..."):
+                        result = polar_client.sync_vo2max()
+                    if result.success and result.vo2max:
+                        st.session_state[polar_cache_key] = result.vo2max
+                        polar_cached = result.vo2max
+                        st.success(
+                            f"VO2max: **{result.vo2max:.1f}** mL/kg/min "
+                            f"({result.fitness_class or 'N/A'})"
+                        )
+                    elif result.success:
+                        st.info(result.message)
+                    else:
+                        st.warning(f"Sync failed: {result.error or 'Unknown error'}")
                 else:
-                    st.warning("Polar AccessLink did not return a VO2max value.")
+                    # Fallback to simple fetch
+                    polar_value = fetch_polar_vo2max()
+                    if polar_value:
+                        st.session_state[polar_cache_key] = polar_value
+                        polar_cached = polar_value
+                        st.success(f"Retrieved VO2max {polar_value:.1f} mL/kg/min")
+                    else:
+                        st.warning("Polar AccessLink did not return a VO2max value.")
+            
             use_polar_override = st.checkbox(
-                "Use Polar value",
-                value=bool(polar_cached),
-                help="Requires POLAR_ACCESSLINK_TOKEN and POLAR_ACCESSLINK_USER_ID in the environment.",
+                "Use synced value",
+                value=bool(polar_cached or latest_vo2_entry),
+                help="Use the most recent synced or stored VO2max value.",
                 key=f"use_polar_vo2_{user.user_id}",
             )
         else:
-            st.caption("Set POLAR_ACCESSLINK_TOKEN & POLAR_ACCESSLINK_USER_ID to enable API fetch.")
+            st.caption("ℹ️ Set POLAR_ACCESSLINK_TOKEN & POLAR_ACCESSLINK_USER_ID to enable.")
+        
+        # Save manual entry button
+        if st.button("💾 Save Manual Entry", key=f"save_manual_vo2_{user.user_id}"):
+            if POLAR_MODULE_AVAILABLE:
+                try:
+                    save_manual_vo2max(
+                        user_id=user.user_id,
+                        vo2max=vo2_manual,
+                        notes="Manual entry from NASA Nutrition Calculator",
+                    )
+                    st.success(f"Saved VO2max {vo2_manual:.1f} mL/kg/min to history")
+                except Exception as e:
+                    st.error(f"Failed to save: {e}")
+    
+    # Determine effective VO2max
     effective_vo2 = vo2_manual
-    if use_polar_override and polar_cached:
-        effective_vo2 = float(polar_cached)
+    if use_polar_override:
+        if polar_cached:
+            effective_vo2 = float(polar_cached)
+        elif latest_vo2_entry:
+            effective_vo2 = latest_vo2_entry.vo2max_ml_kg_min
+    
+    # Show VO2max history if available
+    if polar_client and POLAR_MODULE_AVAILABLE:
+        vo2_history = polar_client.get_vo2max_history(limit=10)
+        if len(vo2_history) > 1:
+            with st.expander("📈 VO2max History", expanded=False):
+                history_data = [
+                    {
+                        "Date": entry.measurement_date[:10] if entry.measurement_date else "N/A",
+                        "VO2max": f"{entry.vo2max_ml_kg_min:.1f}",
+                        "Source": entry.source.title(),
+                        "Class": entry.polar_fitness_class or "—",
+                    }
+                    for entry in vo2_history
+                ]
+                st.dataframe(history_data, use_container_width=True, hide_index=True)
     
     # Exercise settings
     col1, col2 = st.columns(2)
@@ -1380,11 +1811,17 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         
         st.markdown("##### 🫁 VO2max Compensation")
         exercise_details = results["energy"].get("exercise_details", {})
-        vo2_help = "Manual entry" if not use_polar_override or not polar_cached else "Polar AccessLink override"
+        # Determine source description
+        if use_polar_override and polar_cached:
+            vo2_source = "Polar AccessLink sync"
+        elif use_polar_override and latest_vo2_entry:
+            vo2_source = f"History ({latest_vo2_entry.source.title()})"
+        else:
+            vo2_source = "Manual entry"
         st.metric(
             "VO2max used",
             f"{effective_vo2:.1f} mL/kg/min",
-            help=vo2_help,
+            help=vo2_source,
         )
         if exercise_details:
             st.caption(
@@ -1540,126 +1977,439 @@ def _render_body_composition_form(user: UserProfile) -> None:
 
 
 def _render_medical_history_summary(user: UserProfile) -> None:
-    """Render medical history summary and quick entry."""
+    """Render medical history summary pulling from both profile and medical_history table."""
     st.markdown("#### 📋 Medical History Summary")
+    
+    # Load latest medical record from database for richer context
+    @st.cache_data(ttl=30, show_spinner=False)
+    def _load_latest_record(uid: str) -> Dict[str, Any]:
+        try:
+            db = get_database()
+            rows = db.get_medical_history(uid, limit=1)
+            return rows[0] if rows else {}
+        except Exception:
+            return {}
+    
+    latest_record = _load_latest_record(user.user_id)
     
     # Show current conditions from user profile
     if user.medical_conditions:
         st.write("**Current Conditions:**")
         for condition in user.medical_conditions:
             st.write(f"• {condition}")
-    else:
-        st.info("No medical conditions recorded. Edit your profile to add medical history.")
     
     if user.medications:
         st.write("**Current Medications:**")
         for med in user.medications:
             st.write(f"• {med}")
     
-    st.caption(
-        "💡 For comprehensive medical history including cardiovascular, respiratory, "
-        "metabolic conditions and family history, use the Medical History form in Data Management."
+    # Show most recent exploration medical record summary
+    if latest_record:
+        st.markdown("---")
+        st.markdown("**Latest Exploration Medical Record:**")
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            mission = latest_record.get("mission_profile", "—")
+            day = latest_record.get("mission_day", "—")
+            st.metric("Mission", f"{mission} D{day}")
+        with col2:
+            eva_status = latest_record.get("eva_status", "—")
+            st.metric("EVA Status", eva_status)
+        with col3:
+            rad = latest_record.get("radiation_dose_msv", 0.0)
+            st.metric("Radiation (mSv)", f"{rad:.1f}")
+        
+        # Chronic/acute flags
+        chronic_list = latest_record.get("chronic_conditions", [])
+        acute_list = latest_record.get("acute_symptoms", [])
+        if chronic_list:
+            st.caption(f"🩺 Chronic: {', '.join(chronic_list)}")
+        if acute_list:
+            st.caption(f"⚠️ Acute (24h): {', '.join(acute_list)}")
+        st.caption(f"_Updated: {latest_record.get('updated_at', '—')}_")
+    else:
+        if not user.medical_conditions and not user.medications:
+            st.info("No medical history recorded. Edit your profile or use the Exploration Medical Record form.")
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_medical_history_dataframe(user_id: str) -> pd.DataFrame:
+    """Load exploration medical history entries as a typed DataFrame."""
+    if not user_id:
+        return pd.DataFrame()
+    try:
+        db = get_database()
+        records = db.get_medical_history(user_id, limit=180)
+    except Exception as exc:
+        _LOGGER.warning("Unable to load exploration medical history for %s: %s", user_id, exc)
+        return pd.DataFrame()
+    if not records:
+        return pd.DataFrame()
+    history_df = pd.DataFrame(records)
+    numeric_columns = [
+        "mission_day",
+        "radiation_dose_msv",
+        "eva_hours_72h",
+        "days_since_last_eva",
+        "confinement_stress",
+        "workload_rating",
+        "sleep_hours",
+        "sleep_quality",
+        "exercise_minutes",
+        "hydration_liters",
+        "caloric_intake",
+        "comm_delay_min",
+    ]
+    for column in numeric_columns:
+        if column in history_df.columns:
+            history_df[column] = pd.to_numeric(history_df[column], errors="coerce")
+    if "updated_at" in history_df.columns:
+        history_df["updated_at"] = pd.to_datetime(history_df["updated_at"], errors="coerce")
+        history_df.sort_values("updated_at", inplace=True)
+    elif "mission_day" in history_df.columns:
+        history_df.sort_values("mission_day", inplace=True)
+    history_df.reset_index(drop=True, inplace=True)
+    return history_df
+
+
+def _compute_radiation_rate(history_df: pd.DataFrame) -> Optional[float]:
+    """Compute average cumulative radiation increase per mission day."""
+    if history_df.empty or not {"mission_day", "radiation_dose_msv"}.issubset(history_df.columns):
+        return None
+    valid = history_df.dropna(subset=["mission_day", "radiation_dose_msv"]).sort_values("mission_day")
+    if len(valid) < 2:
+        return None
+    start_day = float(valid["mission_day"].iloc[0])
+    end_day = float(valid["mission_day"].iloc[-1])
+    if start_day == end_day:
+        return None
+    start_dose = float(valid["radiation_dose_msv"].iloc[0])
+    end_dose = float(valid["radiation_dose_msv"].iloc[-1])
+    return (end_dose - start_dose) / (end_day - start_day)
+
+
+def _build_frequency_df(values: Sequence[Any], top_n: int = 5) -> pd.DataFrame:
+    """Aggregate frequency counts for list-like history fields."""
+    counts: Counter[str] = Counter()
+    for entry in values:
+        if entry is None or (isinstance(entry, float) and np.isnan(entry)):
+            continue
+        if isinstance(entry, (list, tuple, set)):
+            for item in entry:
+                text = str(item).strip()
+                if text:
+                    counts[text] += 1
+        elif isinstance(entry, str):
+            text = entry.strip()
+            if text:
+                counts[text] += 1
+        else:
+            text = str(entry).strip()
+            if text:
+                counts[text] += 1
+    if not counts:
+        return pd.DataFrame(columns=["Label", "Count"])
+    most_common = counts.most_common(max(1, top_n))
+    return pd.DataFrame(most_common, columns=["Label", "Count"])
+
+
+def _render_exploration_medical_analytics(user: UserProfile) -> None:
+    """Render exploration medical analytics dashboard with aggregate indicators."""
+    st.markdown("#### 📊 Exploration Medical Analytics Dashboard")
+    history_df = _load_medical_history_dataframe(user.user_id)
+    if history_df.empty:
+        st.info("Log at least one exploration medical record to unlock analytics.")
+        return
+    latest_entry = history_df.iloc[-1]
+
+    # Radiation exposure
+    st.markdown("##### ☢️ Radiation Exposure")
+    rad_series = history_df["radiation_dose_msv"].dropna() if "radiation_dose_msv" in history_df.columns else pd.Series(dtype=float)
+    rad_limit = 1000.0  # NASA career limit guideline for deep-space crews
+    if rad_series.empty:
+        st.warning("No radiation dose entries recorded yet.")
+    else:
+        max_rad = float(rad_series.max())
+        median_rad = float(rad_series.median())
+        rad_rate = _compute_radiation_rate(history_df)
+        remaining = max(rad_limit - max_rad, 0.0)
+        col_r1, col_r2, col_r3 = st.columns(3)
+        col_r1.metric(
+            "Max cumulative dose",
+            f"{max_rad:.1f} mSv",
+            delta=f"{remaining:.1f} mSv below NASA limit",
+        )
+        col_r2.metric(
+            "Median logged dose",
+            f"{median_rad:.1f} mSv",
+            delta=None,
+        )
+        col_r3.metric(
+            "Daily accumulation",
+            f"{rad_rate:.2f} mSv/day" if rad_rate is not None else "—",
+            delta=None if rad_rate is None else "Avg change per mission day",
+        )
+        progress_value = min(max_rad / rad_limit, 1.0)
+        st.progress(progress_value)
+        st.caption(f"{progress_value * 100:.1f}% of NASA 1000 mSv career guideline")
+        if {"mission_day"}.issubset(history_df.columns):
+            chart_df = history_df.dropna(subset=["mission_day", "radiation_dose_msv"]).copy()
+            if not chart_df.empty:
+                chart_df = chart_df.sort_values("mission_day").set_index("mission_day")
+                chart_df.rename(columns={"radiation_dose_msv": "Radiation (mSv)"}, inplace=True)
+                st.line_chart(chart_df[["Radiation (mSv)"]])
+
+    # EVA workload
+    st.markdown("##### 🧑‍🚀 EVA Workload")
+    eva_series = history_df["eva_hours_72h"].dropna() if "eva_hours_72h" in history_df.columns else pd.Series(dtype=float)
+    avg_eva = float(eva_series.mean()) if not eva_series.empty else None
+    peak_eva = float(eva_series.max()) if not eva_series.empty else None
+    days_since_last = latest_entry.get("days_since_last_eva")
+    days_since_last_display = (
+        f"{int(days_since_last)} d" if days_since_last is not None and not np.isnan(days_since_last) else "—"
     )
+    col_e1, col_e2, col_e3 = st.columns(3)
+    col_e1.metric("Avg EVA hrs (72h)", f"{avg_eva:.1f} h" if avg_eva is not None else "—")
+    col_e2.metric("Peak EVA load", f"{peak_eva:.1f} h" if peak_eva is not None else "—", delta="Rolling 72h window")
+    col_e3.metric("Days since last EVA", days_since_last_display)
+    if "eva_status" in history_df.columns:
+        eva_status_counts = history_df["eva_status"].dropna().value_counts().head(4)
+        if not eva_status_counts.empty:
+            st.bar_chart(eva_status_counts.rename("EVA Clearance States"))
+
+    # Stress and behavioral indicators
+    st.markdown("##### 🧠 Stress & Behavioral Indicators")
+    stress_series = history_df["confinement_stress"].dropna() if "confinement_stress" in history_df.columns else pd.Series(dtype=float)
+    workload_series = history_df["workload_rating"].dropna() if "workload_rating" in history_df.columns else pd.Series(dtype=float)
+    sleep_series = history_df["sleep_hours"].dropna() if "sleep_hours" in history_df.columns else pd.Series(dtype=float)
+    recent_window = history_df.tail(min(len(history_df), 5))
+    recent_stress = (
+        float(recent_window["confinement_stress"].dropna().mean())
+        if "confinement_stress" in recent_window.columns and not recent_window["confinement_stress"].dropna().empty
+        else None
+    )
+    baseline_stress = float(stress_series.mean()) if not stress_series.empty else None
+    stress_delta = (
+        None if baseline_stress is None or recent_stress is None else recent_stress - baseline_stress
+    )
+    recent_workload = (
+        float(recent_window["workload_rating"].dropna().mean())
+        if "workload_rating" in recent_window.columns and not recent_window["workload_rating"].dropna().empty
+        else None
+    )
+    workload_delta = (
+        None
+        if workload_series.empty or recent_workload is None
+        else recent_workload - float(workload_series.mean())
+    )
+    recent_sleep = (
+        float(recent_window["sleep_hours"].dropna().mean())
+        if "sleep_hours" in recent_window.columns and not recent_window["sleep_hours"].dropna().empty
+        else None
+    )
+    col_s1, col_s2, col_s3 = st.columns(3)
+    col_s1.metric(
+        "Confinement stress (last 5)",
+        f"{recent_stress:.1f}/10" if recent_stress is not None else "—",
+        delta=f"{stress_delta:+.1f} vs avg" if stress_delta is not None else None,
+    )
+    col_s2.metric(
+        "Workload rating (last 5)",
+        f"{recent_workload:.1f}/10" if recent_workload is not None else "—",
+        delta=f"{workload_delta:+.1f} vs avg" if workload_delta is not None else None,
+    )
+    col_s3.metric(
+        "Sleep hours (last 5)",
+        f"{recent_sleep:.1f} h" if recent_sleep is not None else "—",
+        delta=None,
+    )
+    symptom_df = _build_frequency_df(
+        history_df["acute_symptoms"].tolist() if "acute_symptoms" in history_df.columns else [],
+        top_n=5,
+    )
+    behavior_df = _build_frequency_df(
+        history_df["behavioral_flags"].tolist() if "behavioral_flags" in history_df.columns else [],
+        top_n=5,
+    )
+    col_b1, col_b2 = st.columns(2)
+    with col_b1:
+        if symptom_df.empty:
+            st.caption("No acute symptom trends logged yet.")
+        else:
+            st.caption("Top acute symptoms (all-time)")
+            st.dataframe(symptom_df, use_container_width=True, hide_index=True)
+    with col_b2:
+        if behavior_df.empty:
+            st.caption("No behavioral flags logged yet.")
+        else:
+            st.caption("Behavioral health flags (frequency)")
+            st.dataframe(behavior_df, use_container_width=True, hide_index=True)
 
 
 @_fragment_if_available
 def _render_medical_record_form(user: UserProfile) -> None:
-    """Render NASA-style exploration medical record entry form."""
+    """Render NASA-style exploration medical record entry form.
+    
+    Structured per Exploration Medical Capability (ExMC) and Earth-Independent
+    Medical Operations (EIMO) framework for autonomous deep-space missions.
+    Reference: https://ntrs.nasa.gov/citations/20230015831 (ExMC AsMA 2024).
+    """
     st.caption(
-        "Structured per NASA Medical Information Systems & Tools (MIST) and "
-        "Exploration Medical Capability (ExMC) guidance for autonomous missions. "
-        "See: https://www.nasa.gov/general/medical-information-systems-and-tools-mist/ "
-        "and https://ntrs.nasa.gov/citations/20230015831"
+        "Structured per NASA Exploration Medical Capability (ExMC) and the "
+        "Earth-Independent Medical Operations (EIMO) paradigm for deep-space "
+        "autonomy. Reference: Lehnhardt et al., NASA Technical Reports Server, "
+        "2023 (DOI: 10.1109/OJEMB.2023.3255513)."
     )
+    
+    # -------------------------------------------------------------------------
+    # Helper: Safe index lookup for selectbox (resilient to schema changes)
+    # -------------------------------------------------------------------------
+    def _safe_selectbox_index(stored_value: Any, options: list, default_index: int = 0) -> int:
+        """Return index of stored_value in options, or default_index if not found."""
+        if stored_value in options:
+            return options.index(stored_value)
+        if stored_value is not None:
+            _LOGGER.debug(
+                "Selectbox schema migration: stored value %r not in options, using default index %d",
+                stored_value,
+                default_index,
+            )
+        return default_index
+    
     try:
         db = get_database()
         history = db.get_medical_history(user.user_id, limit=25)
+        _LOGGER.debug("Loaded %d medical history entries for user %s", len(history), user.user_id)
     except Exception as exc:
+        _LOGGER.warning("Unable to load medical history for user %s: %s", user.user_id, exc)
         st.error(f"Unable to load medical history: {exc}")
         history = []
     latest = history[0] if history else {}
     
+    # Mission profiles aligned with NASA EIMO planning horizons
     mission_options = {
-        "LUNAR-22": "Lunar sortie (22-day habitat)",
-        "GATEWAY-30": "Gateway stack (30-day)",
-        "MARS-ANALOG-45": "Mars analog (45-day isolation)",
-        "CHAPEA-378": "CHAPEA / Mars Dune Alpha (long-duration)",
+        "LEO-ISS": "ISS / Low-Earth Orbit (continuous ground support)",
+        "LUNAR-SLS": "Artemis lunar sortie (6–30 days, limited EIMO)",
+        "GATEWAY-30": "Gateway cislunar (30-day increments)",
+        "LUNAR-SURFACE-90": "Lunar surface sustained (up to 90 days)",
+        "MARS-TRANSIT-180": "Mars transit (180+ days, high EIMO)",
+        "MARS-SURFACE-500": "Mars surface (500+ days, full autonomy)",
+        "ANALOG-CHAPEA": "CHAPEA / Mars Dune Alpha analog",
+        "ANALOG-HERA": "HERA campaign (45-day isolation)",
         "CUSTOM": "Custom exploration profile",
     }
-    habitats = ["HERA", "CHAPEA", "NEEMO", "Gateway", "ISS", "Custom"]
-    crew_roles = ["Flight Surgeon", "Commander", "Pilot", "Mission Specialist", "Payload Specialist"]
-    eva_status_options = ["Cleared", "Restricted", "No EVA"]
-    space_weather_alerts = ["None", "Watch", "Warning", "Post-Event Monitoring"]
-    chronic_condition_options = [
-        "Cardiovascular",
-        "Respiratory",
-        "Metabolic",
-        "Neurological",
-        "Psychological",
-        "Musculoskeletal",
-        "Renal/Urologic",
+    habitats = ["ISS", "Gateway", "Starship HLS", "Mars Dune Alpha", "HERA", "NEEMO", "Lunar Hab", "Custom"]
+    crew_roles = [
+        "Flight Surgeon",
+        "Crew Medical Officer (CMO)",
+        "Commander",
+        "Pilot",
+        "Mission Specialist",
+        "Payload Specialist",
+        "Research Scientist",
     ]
+    eva_status_options = ["Cleared", "Cleared with Restriction", "No EVA", "Post-EVA Recovery"]
+    space_weather_alerts = ["None", "Watch", "Warning", "Storm In Progress", "Post-Event Monitoring"]
+    # Chronic condition categories per HRP/ExMC risk taxonomy
+    chronic_condition_options = [
+        "Cardiovascular (SANS, arrhythmia)",
+        "Respiratory (atelectasis, hypoxia history)",
+        "Metabolic (glucose, bone loss)",
+        "Neurological (vestibular, ICP)",
+        "Psychological (anxiety, depression, adjustment)",
+        "Musculoskeletal (muscle atrophy, back pain)",
+        "Renal/Urologic (nephrolithiasis)",
+        "Dermatologic (rash, infection)",
+        "Ophthalmologic (SANS-related)",
+        "Immunologic (allergy, infection susceptibility)",
+    ]
+    # Acute symptoms expanded per ExMC clinical decision support categories
     acute_symptom_options = [
         "Headache",
-        "Dizziness",
-        "Visual change",
-        "GI upset",
-        "Musculoskeletal pain",
-        "Sleep disruption",
-        "Skin lesion",
+        "Dizziness / Vertigo",
+        "Visual change (blur, scotoma)",
+        "Nausea / Vomiting",
+        "Abdominal pain",
+        "Chest pain / Palpitations",
+        "Dyspnea",
+        "Musculoskeletal pain (specify)",
+        "Skin lesion / Wound",
+        "Sleep disruption (insomnia / hypersomnia)",
+        "Cognitive change (attention, memory)",
+        "Mood change (irritability, apathy)",
+        "Fever / Chills",
+        "Urinary symptoms",
     ]
     behavioral_flags = [
         "Confinement stress",
-        "Team friction",
-        "Mood change",
-        "Cognitive slowing",
-        "Motivation dip",
+        "Team friction / Interpersonal conflict",
+        "Mood dysregulation",
+        "Cognitive slowing / Attention deficit",
+        "Motivation dip / Amotivation",
+        "Sleep-wake cycle disruption",
+        "Isolation distress",
+        "Homesickness / Nostalgia",
+    ]
+    # EIMO autonomy level (per Levin et al. 2023)
+    autonomy_levels = [
+        "Ground-Supported (real-time telemedicine)",
+        "Delayed Support (2–20 min latency)",
+        "Limited Autonomy (hours to days delay)",
+        "Full EIMO (crew autonomous)",
     ]
     
     form_key = f"exploration_medical_record_form_{user.user_id}"
     with st.form(form_key, clear_on_submit=False):
+        # ─────────────────────────────────────────────────────────────────────
+        # Section 1: Mission Context (EIMO Phase & Habitat)
+        # ─────────────────────────────────────────────────────────────────────
+        st.markdown("##### 🚀 Mission Context")
         col_a, col_b, col_c = st.columns(3)
+        mission_keys = list(mission_options.keys())
         with col_a:
             mission_profile = st.selectbox(
                 "Mission profile",
-                options=list(mission_options.keys()),
+                options=mission_keys,
                 format_func=lambda key: mission_options.get(key, key),
-                index=list(mission_options.keys()).index(
-                    latest.get("mission_profile", "LUNAR-22")
-                )
-                if latest.get("mission_profile", "LUNAR-22") in mission_options
-                else 0,
+                index=_safe_selectbox_index(latest.get("mission_profile"), mission_keys, 0),
             )
             mission_day = st.number_input(
                 "Mission day",
                 min_value=0,
-                max_value=720,
+                max_value=999,
                 value=int(latest.get("mission_day", 1)),
                 step=1,
             )
             habitat = st.selectbox(
-                "Habitat/analog site",
+                "Habitat / Analog site",
                 options=habitats,
-                index=habitats.index(latest.get("habitat", habitats[0]))
-                if latest.get("habitat") in habitats
-                else 0,
+                index=_safe_selectbox_index(latest.get("habitat"), habitats, 0),
             )
         with col_b:
             crew_role = st.selectbox(
                 "Crew role",
                 options=crew_roles,
-                index=crew_roles.index(latest.get("crew_role", crew_roles[0]))
-                if latest.get("crew_role") in crew_roles
-                else 0,
+                index=_safe_selectbox_index(latest.get("crew_role"), crew_roles, 0),
             )
+            autonomy_level = st.selectbox(
+                "EIMO autonomy level",
+                options=autonomy_levels,
+                index=_safe_selectbox_index(latest.get("autonomy_level"), autonomy_levels, 0),
+                help="Earth-Independent Medical Operations autonomy classification",
+            )
+            comm_delay_min = st.number_input(
+                "Comm delay (min, one-way)",
+                min_value=0.0,
+                max_value=25.0,
+                value=float(latest.get("comm_delay_min", 0.0)),
+                step=0.5,
+                help="Mars averages 3–22 min one-way; Gateway ~1.3 s",
+            )
+        with col_c:
             eva_status = st.selectbox(
                 "EVA clearance",
                 options=eva_status_options,
-                index=eva_status_options.index(
-                    latest.get("eva_status", eva_status_options[0])
-                )
-                if latest.get("eva_status") in eva_status_options
-                else 0,
+                index=_safe_selectbox_index(latest.get("eva_status"), eva_status_options, 0),
             )
             eva_hours = st.number_input(
                 "EVA hours (last 72h)",
@@ -1668,54 +2418,120 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 value=float(latest.get("eva_hours_72h", 0.0)),
                 step=0.5,
             )
-        with col_c:
-            radiation_dose = st.number_input(
-                "Radiation dose (mSv)",
-                min_value=0.0,
-                max_value=250.0,
-                value=float(latest.get("radiation_dose_msv", 0.0)),
-                step=0.1,
+            days_since_last_eva = st.number_input(
+                "Days since last EVA",
+                min_value=0,
+                max_value=365,
+                value=int(latest.get("days_since_last_eva", 0)),
+                step=1,
             )
+        
+        # ─────────────────────────────────────────────────────────────────────
+        # Section 2: Radiation & Space Weather (ExMC risk domain)
+        # ─────────────────────────────────────────────────────────────────────
+        st.markdown("##### ☢️ Radiation & Space Weather")
+        col_r1, col_r2, col_r3 = st.columns(3)
+        with col_r1:
+            radiation_dose = st.number_input(
+                "Cumulative dose (mSv)",
+                min_value=0.0,
+                max_value=1200.0,
+                value=float(latest.get("radiation_dose_msv", 0.0)),
+                step=0.5,
+                help="Career limit ~1000 mSv (NASA); Mars transit ~300 mSv per transit",
+            )
+        with col_r2:
             space_weather = st.selectbox(
                 "Space-weather alert level",
                 options=space_weather_alerts,
-                index=space_weather_alerts.index(
-                    latest.get("space_weather_alert", space_weather_alerts[0])
-                )
-                if latest.get("space_weather_alert") in space_weather_alerts
-                else 0,
+                index=_safe_selectbox_index(latest.get("space_weather_alert"), space_weather_alerts, 0),
             )
-            confinement_stress = st.slider(
-                "Confinement stress (1-10)",
-                min_value=1,
-                max_value=10,
-                value=int(latest.get("confinement_stress", 3)),
+        with col_r3:
+            galactic_cosmic_ray = st.checkbox(
+                "GCR exposure concern",
+                value=latest.get("gcr_concern", False),
+                help="Galactic Cosmic Ray monitoring for deep-space missions",
             )
         
+        # ─────────────────────────────────────────────────────────────────────
+        # Section 3: Health Status (Chronic / Acute / Behavioral)
+        # ─────────────────────────────────────────────────────────────────────
+        st.markdown("##### 🩺 Health Status")
+        
+        # Helper to filter stored defaults against current options (resilient to schema changes)
+        def _safe_multiselect_default(stored: list, options: list) -> list:
+            """Return only stored values that exist in current options."""
+            if not stored:
+                return []
+            valid = [v for v in stored if v in options]
+            # Log migration warnings for stale values
+            stale = set(stored) - set(valid)
+            if stale:
+                _LOGGER.debug(
+                    "Multiselect schema migration: dropped stale defaults %s",
+                    stale,
+                )
+            return valid
+        
         chronic_conditions = st.multiselect(
-            "Chronic condition log",
+            "Chronic condition log (HRP risk categories)",
             options=chronic_condition_options,
-            default=latest.get("chronic_conditions", []),
+            default=_safe_multiselect_default(
+                latest.get("chronic_conditions", []),
+                chronic_condition_options,
+            ),
         )
         acute_symptoms = st.multiselect(
             "Acute symptoms (last 24h)",
             options=acute_symptom_options,
-            default=latest.get("acute_symptoms", []),
+            default=_safe_multiselect_default(
+                latest.get("acute_symptoms", []),
+                acute_symptom_options,
+            ),
         )
         behavioral_state = st.multiselect(
             "Behavioral health notes",
             options=behavioral_flags,
-            default=latest.get("behavioral_flags", []),
+            default=_safe_multiselect_default(
+                latest.get("behavioral_flags", []),
+                behavioral_flags,
+            ),
         )
+        col_h1, col_h2 = st.columns(2)
+        with col_h1:
+            confinement_stress = st.slider(
+                "Confinement stress (1–10)",
+                min_value=1,
+                max_value=10,
+                value=int(latest.get("confinement_stress", 3)),
+            )
+        with col_h2:
+            workload_rating = st.slider(
+                "Workload rating (1–10)",
+                min_value=1,
+                max_value=10,
+                value=int(latest.get("workload_rating", 5)),
+                help="NASA TLX-style subjective workload",
+            )
         
+        # ─────────────────────────────────────────────────────────────────────
+        # Section 4: Countermeasures & Life Support
+        # ─────────────────────────────────────────────────────────────────────
+        st.markdown("##### 🏋️ Countermeasures & Life Support")
         col_d, col_e, col_f = st.columns(3)
         with col_d:
             sleep_hours = st.number_input(
                 "Sleep (last 24h, hours)",
                 min_value=0.0,
-                max_value=12.0,
+                max_value=14.0,
                 value=float(latest.get("sleep_hours", 7.0)),
                 step=0.25,
+            )
+            sleep_quality = st.slider(
+                "Sleep quality (1–5)",
+                min_value=1,
+                max_value=5,
+                value=int(latest.get("sleep_quality", 3)),
             )
         with col_e:
             exercise_minutes = st.number_input(
@@ -1724,6 +2540,13 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 max_value=300.0,
                 value=float(latest.get("exercise_minutes", 120.0)),
                 step=5.0,
+                help="ISS target ~2 h/day resistive + aerobic",
+            )
+            _exercise_modalities = ["ARED", "T2 / COLBERT", "CEVIS", "Combined", "Limited", "None"]
+            exercise_type = st.selectbox(
+                "Primary exercise modality",
+                options=_exercise_modalities,
+                index=_safe_selectbox_index(latest.get("exercise_type"), _exercise_modalities, 3),
             )
         with col_f:
             hydration_liters = st.number_input(
@@ -1733,20 +2556,40 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 value=float(latest.get("hydration_liters", 3.8)),
                 step=0.1,
             )
-        
-        inventory_alert = st.selectbox(
-            "Medical inventory status",
-            options=["Nominal", "Monitor", "Critical Shortage"],
-            index=["Nominal", "Monitor", "Critical Shortage"].index(
-                latest.get("inventory_alert", "Nominal")
+            caloric_intake = st.number_input(
+                "Caloric intake (kcal/day)",
+                min_value=0,
+                max_value=5000,
+                value=int(latest.get("caloric_intake", 2500)),
+                step=50,
             )
-            if latest.get("inventory_alert") in ["Nominal", "Monitor", "Critical Shortage"]
-            else 0,
-        )
+        
+        # ─────────────────────────────────────────────────────────────────────
+        # Section 5: Medical Inventory & Logistics
+        # ─────────────────────────────────────────────────────────────────────
+        st.markdown("##### 📦 Medical Inventory & Logistics")
+        col_inv1, col_inv2 = st.columns(2)
+        with col_inv1:
+            _inventory_status_options = ["Nominal", "Monitor", "Low Stock", "Critical Shortage"]
+            inventory_alert = st.selectbox(
+                "Medical inventory status",
+                options=_inventory_status_options,
+                index=_safe_selectbox_index(latest.get("inventory_alert"), _inventory_status_options, 0),
+            )
+        with col_inv2:
+            resupply_days = st.number_input(
+                "Days until next resupply",
+                min_value=0,
+                max_value=999,
+                value=int(latest.get("resupply_days", 0)),
+                step=1,
+                help="0 = N/A or continuous resupply (LEO)",
+            )
+        
         notes = st.text_area(
-            "Operational/clinical notes",
+            "Operational / Clinical notes",
             value=str(latest.get("notes", "")),
-            height=120,
+            height=100,
         )
         update_latest = st.checkbox(
             "Update latest entry instead of creating a new record",
@@ -1759,22 +2602,36 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 st.info("Processing previous submission... please wait.")
                 return
             record = {
+                # Mission Context
                 "mission_profile": mission_profile,
                 "mission_day": mission_day,
                 "habitat": habitat,
                 "crew_role": crew_role,
+                "autonomy_level": autonomy_level,
+                "comm_delay_min": comm_delay_min,
                 "eva_status": eva_status,
                 "eva_hours_72h": eva_hours,
+                "days_since_last_eva": days_since_last_eva,
+                # Radiation & Space Weather
                 "radiation_dose_msv": radiation_dose,
                 "space_weather_alert": space_weather,
-                "confinement_stress": confinement_stress,
+                "gcr_concern": galactic_cosmic_ray,
+                # Health Status
                 "chronic_conditions": chronic_conditions,
                 "acute_symptoms": acute_symptoms,
                 "behavioral_flags": behavioral_state,
+                "confinement_stress": confinement_stress,
+                "workload_rating": workload_rating,
+                # Countermeasures
                 "sleep_hours": sleep_hours,
+                "sleep_quality": sleep_quality,
                 "exercise_minutes": exercise_minutes,
+                "exercise_type": exercise_type,
                 "hydration_liters": hydration_liters,
+                "caloric_intake": caloric_intake,
+                # Inventory
                 "inventory_alert": inventory_alert,
+                "resupply_days": resupply_days,
                 "notes": notes,
             }
             try:
