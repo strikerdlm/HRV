@@ -166,6 +166,10 @@ class ClinicalScales:
     beck_depression_inventory: Optional[int] = None  # BDI: 0-63
     state_trait_anxiety_inventory: Optional[int] = None  # STAI
     
+    # Affect scales (PANAS - Watson, Clark & Tellegen, 1988)
+    panas_positive_affect: Optional[int] = None  # PA: 10-50
+    panas_negative_affect: Optional[int] = None  # NA: 10-50
+    
     # Physical
     borg_rpe: Optional[int] = None  # 6-20
     vas_pain: Optional[float] = None  # 0-10
@@ -380,6 +384,8 @@ class UserDatabase:
                     perceived_stress_scale INTEGER,
                     beck_depression_inventory INTEGER,
                     state_trait_anxiety_inventory INTEGER,
+                    panas_positive_affect INTEGER,
+                    panas_negative_affect INTEGER,
                     borg_rpe INTEGER,
                     vas_pain REAL,
                     vas_fatigue REAL,
@@ -387,6 +393,16 @@ class UserDatabase:
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """)
+            
+            # Migration: Add PANAS columns if they don't exist (for existing databases)
+            try:
+                cursor.execute("ALTER TABLE clinical_scales ADD COLUMN panas_positive_affect INTEGER")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            try:
+                cursor.execute("ALTER TABLE clinical_scales ADD COLUMN panas_negative_affect INTEGER")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
             
             # HRV measurements table
             cursor.execute("""
@@ -895,16 +911,18 @@ class UserDatabase:
                     insomnia_severity_index, karolinska_sleepiness_scale,
                     samn_perelli_fatigue, fatigue_severity_scale,
                     perceived_stress_scale, beck_depression_inventory,
-                    state_trait_anxiety_inventory, borg_rpe, vas_pain,
+                    state_trait_anxiety_inventory, panas_positive_affect,
+                    panas_negative_affect, borg_rpe, vas_pain,
                     vas_fatigue, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 scales.assessment_id, scales.user_id, scales.assessment_date,
                 scales.epworth_sleepiness_scale, scales.pittsburgh_sleep_quality_index,
                 scales.insomnia_severity_index, scales.karolinska_sleepiness_scale,
                 scales.samn_perelli_fatigue, scales.fatigue_severity_scale,
                 scales.perceived_stress_scale, scales.beck_depression_inventory,
-                scales.state_trait_anxiety_inventory, scales.borg_rpe, scales.vas_pain,
+                scales.state_trait_anxiety_inventory, scales.panas_positive_affect,
+                scales.panas_negative_affect, scales.borg_rpe, scales.vas_pain,
                 scales.vas_fatigue, scales.notes
             ))
         
@@ -928,6 +946,13 @@ class UserDatabase:
     
     def _row_to_clinical_scales(self, row: sqlite3.Row) -> ClinicalScales:
         """Convert database row to ClinicalScales."""
+        # Helper to safely get columns that might not exist in older databases
+        def _safe_get(key: str, default: Any = None) -> Any:
+            try:
+                return row[key]
+            except (IndexError, KeyError):
+                return default
+        
         return ClinicalScales(
             assessment_id=row["assessment_id"],
             user_id=row["user_id"],
@@ -941,6 +966,8 @@ class UserDatabase:
             perceived_stress_scale=row["perceived_stress_scale"],
             beck_depression_inventory=row["beck_depression_inventory"],
             state_trait_anxiety_inventory=row["state_trait_anxiety_inventory"],
+            panas_positive_affect=_safe_get("panas_positive_affect"),
+            panas_negative_affect=_safe_get("panas_negative_affect"),
             borg_rpe=row["borg_rpe"],
             vas_pain=row["vas_pain"],
             vas_fatigue=row["vas_fatigue"],
