@@ -25,6 +25,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Database CRUD operations for credentials and VO2max history
   - PolarAccessLinkClient lifecycle and sync operations
   - Mocked API response handling
+- **Exploration Medical Analytics Dashboard** (`app/user_profile_tab.py`):
+  - Radiation gauge tracks cumulative mSv vs NASA 1000 mSv guideline with daily accumulation rate
+  - EVA workload cards summarize 72 h EVA hours, peaks, and days since last EVA alongside clearance histograms
+  - Stress panel surfaces rolling averages for confinement stress, workload rating, and sleep duration
+  - Frequency tables tally the most common acute symptoms and behavioral flags straight from ExMC logs
+- **Unit tests** (`tests/test_new_modules.py`): Added coverage for the radiation-rate computation and frequency aggregation helper powering the dashboard
 
 ### Changed
 - **NASA Nutrition Calculator** (`app/user_profile_tab.py`):
@@ -36,6 +42,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Token encryption** (`app/polar_accesslink.py`): `os.getlogin()` now falls back to environment variables when running in non-TTY environments
+
+### Documentation
+- **README.md / docs/Manual.md / WARP.md**: Documented the Exploration Medical Analytics dashboard, updated the roadmap status, and highlighted the new radiation/EVA/stress cards.
 
 ---
 

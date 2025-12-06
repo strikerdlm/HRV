@@ -154,6 +154,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | **Active User Context Sync** | Circadian and SAFTE tabs auto-fill age, chronotype, sleep debt, and mission schedules from the selected profile with a single sync button |
 | **Clinical Profiles** | Astronaut-grade assessment: BMR, TDEE, NASA nutrition, body composition |
 | **Exploration Medical Record** | NASA isolation/mission log with EVA, radiation, stress, and behavioral metrics |
+| **Exploration Medical Analytics** | Radiation/EVA/stress dashboards with trend cards sourced from ExMC logs |
 | **Polar AccessLink VO2 Integration** | Optional VO2max sync for exercise compensation via AccessLink API |
 | **Multi-Language** | English + Spanish (Colombian-validated scales: ESE-VC, KSS-CO) |
 | **Laboratory Tracking** | CBC/Hemogram, Blood Chemistry, Urinalysis with normal ranges |
@@ -179,8 +180,9 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE | Per-tab settings persistence | Complete (TabSettingsManager) |
 | ✅ DONE | Cross-tab correlation (Circadian → Fatigue) | Complete (shared broker + auto-applied sleep window) |
 | ✅ DONE | Polar AccessLink automation | Complete (persistent OAuth tokens + VO2max history) |
+| ✅ DONE | Exploration Medical Analytics dashboards | Complete (radiation/EVA/stress cards in Clinical tab) |
 
-**Best next task:** Exploration Medical Analytics (surface med-record aggregates in dashboards).
+**Best next task:** Group Summaries (cohort-level med/HRV exports).
 
 ### Planned Features (Q1 2026)
 
