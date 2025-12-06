@@ -184,6 +184,44 @@ class ClinicalScales:
 
 
 @dataclass
+class PolarCredentials:
+    """Polar AccessLink OAuth credentials for a user."""
+    
+    credential_id: str
+    user_id: str
+    polar_user_id: Optional[str] = None
+    access_token_encrypted: Optional[str] = None
+    refresh_token_encrypted: Optional[str] = None
+    token_expires_at: Optional[str] = None
+    last_sync_at: Optional[str] = None
+    sync_enabled: bool = True
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+
+@dataclass
+class VO2maxEntry:
+    """A single VO2max measurement entry."""
+    
+    entry_id: str
+    user_id: str
+    measurement_date: str  # ISO format
+    vo2max_ml_kg_min: float
+    source: str  # 'polar', 'manual', 'garmin', 'whoop', etc.
+    polar_fitness_class: Optional[str] = None  # Polar's fitness classification
+    notes: Optional[str] = None
+    created_at: Optional[str] = None
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+
+@dataclass
 class HRVMeasurement:
     """A single HRV measurement session."""
     
@@ -629,6 +667,48 @@ class UserDatabase:
                 ON lab_urinalysis(user_id, test_date)
             """)
             
+            # Polar AccessLink credentials table (encrypted tokens)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS polar_credentials (
+                    credential_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL UNIQUE,
+                    polar_user_id TEXT,
+                    access_token_encrypted TEXT,
+                    refresh_token_encrypted TEXT,
+                    token_expires_at TEXT,
+                    last_sync_at TEXT,
+                    sync_enabled INTEGER DEFAULT 1,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            
+            # VO2max history table (tracks changes over time)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS vo2max_history (
+                    entry_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    measurement_date TEXT NOT NULL,
+                    vo2max_ml_kg_min REAL NOT NULL,
+                    source TEXT NOT NULL,
+                    polar_fitness_class TEXT,
+                    notes TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            
+            # Create indices for Polar tables
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_polar_creds_user 
+                ON polar_credentials(user_id)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_vo2max_user_date 
+                ON vo2max_history(user_id, measurement_date)
+            """)
+            
             # Schema version tracking
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS schema_info (
@@ -1036,6 +1116,229 @@ class UserDatabase:
             payload["updated_at"] = row["updated_at"]
             entries.append(payload)
         return entries
+    
+    # -----------------------------------------------------------------------
+    # Polar AccessLink Credentials
+    # -----------------------------------------------------------------------
+    
+    def save_polar_credentials(self, credentials: PolarCredentials) -> str:
+        """Save or update Polar AccessLink credentials for a user.
+        
+        Args:
+            credentials: PolarCredentials object with token data.
+            
+        Returns:
+            The credential_id.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        credentials.credential_id = credentials.credential_id or str(uuid.uuid4())
+        credentials.created_at = credentials.created_at or now
+        credentials.updated_at = now
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO polar_credentials (
+                    credential_id, user_id, polar_user_id,
+                    access_token_encrypted, refresh_token_encrypted,
+                    token_expires_at, last_sync_at, sync_enabled,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    polar_user_id = excluded.polar_user_id,
+                    access_token_encrypted = excluded.access_token_encrypted,
+                    refresh_token_encrypted = excluded.refresh_token_encrypted,
+                    token_expires_at = excluded.token_expires_at,
+                    last_sync_at = excluded.last_sync_at,
+                    sync_enabled = excluded.sync_enabled,
+                    updated_at = excluded.updated_at
+            """, (
+                credentials.credential_id, credentials.user_id,
+                credentials.polar_user_id, credentials.access_token_encrypted,
+                credentials.refresh_token_encrypted, credentials.token_expires_at,
+                credentials.last_sync_at, 1 if credentials.sync_enabled else 0,
+                credentials.created_at, credentials.updated_at
+            ))
+        
+        _LOGGER.info("Saved Polar credentials for user: %s", credentials.user_id)
+        return credentials.credential_id
+    
+    def get_polar_credentials(self, user_id: str) -> Optional[PolarCredentials]:
+        """Get Polar AccessLink credentials for a user.
+        
+        Args:
+            user_id: User identifier.
+            
+        Returns:
+            PolarCredentials if found, None otherwise.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT * FROM polar_credentials WHERE user_id = ?",
+                (user_id,)
+            )
+            row = cursor.fetchone()
+            
+            if not row:
+                return None
+            
+            return PolarCredentials(
+                credential_id=row["credential_id"],
+                user_id=row["user_id"],
+                polar_user_id=row["polar_user_id"],
+                access_token_encrypted=row["access_token_encrypted"],
+                refresh_token_encrypted=row["refresh_token_encrypted"],
+                token_expires_at=row["token_expires_at"],
+                last_sync_at=row["last_sync_at"],
+                sync_enabled=bool(row["sync_enabled"]),
+                created_at=row["created_at"],
+                updated_at=row["updated_at"],
+            )
+    
+    def delete_polar_credentials(self, user_id: str) -> bool:
+        """Delete Polar AccessLink credentials for a user.
+        
+        Args:
+            user_id: User identifier.
+            
+        Returns:
+            True if credentials were deleted, False if not found.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM polar_credentials WHERE user_id = ?",
+                (user_id,)
+            )
+            deleted = cursor.rowcount > 0
+        
+        if deleted:
+            _LOGGER.info("Deleted Polar credentials for user: %s", user_id)
+        return deleted
+    
+    def update_polar_sync_time(self, user_id: str) -> None:
+        """Update the last sync timestamp for a user's Polar credentials.
+        
+        Args:
+            user_id: User identifier.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE polar_credentials SET last_sync_at = ?, updated_at = ? WHERE user_id = ?",
+                (now, now, user_id)
+            )
+    
+    # -----------------------------------------------------------------------
+    # VO2max History
+    # -----------------------------------------------------------------------
+    
+    def save_vo2max_entry(self, entry: VO2maxEntry) -> str:
+        """Save a VO2max measurement entry.
+        
+        Args:
+            entry: VO2maxEntry object with measurement data.
+            
+        Returns:
+            The entry_id.
+        """
+        now = datetime.now(timezone.utc).isoformat()
+        entry.entry_id = entry.entry_id or str(uuid.uuid4())
+        entry.created_at = entry.created_at or now
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO vo2max_history (
+                    entry_id, user_id, measurement_date, vo2max_ml_kg_min,
+                    source, polar_fitness_class, notes, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """, (
+                entry.entry_id, entry.user_id, entry.measurement_date,
+                entry.vo2max_ml_kg_min, entry.source, entry.polar_fitness_class,
+                entry.notes, entry.created_at
+            ))
+        
+        _LOGGER.info(
+            "Saved VO2max entry for user %s: %.1f mL/kg/min from %s",
+            entry.user_id, entry.vo2max_ml_kg_min, entry.source
+        )
+        return entry.entry_id
+    
+    def get_vo2max_history(
+        self, user_id: str, limit: int = 100
+    ) -> List[VO2maxEntry]:
+        """Get VO2max history for a user.
+        
+        Args:
+            user_id: User identifier.
+            limit: Maximum number of entries to return.
+            
+        Returns:
+            List of VO2maxEntry objects ordered by date descending.
+        """
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT * FROM vo2max_history 
+                WHERE user_id = ? 
+                ORDER BY measurement_date DESC 
+                LIMIT ?
+            """, (user_id, limit))
+            rows = cursor.fetchall()
+            
+            return [
+                VO2maxEntry(
+                    entry_id=row["entry_id"],
+                    user_id=row["user_id"],
+                    measurement_date=row["measurement_date"],
+                    vo2max_ml_kg_min=row["vo2max_ml_kg_min"],
+                    source=row["source"],
+                    polar_fitness_class=row["polar_fitness_class"],
+                    notes=row["notes"],
+                    created_at=row["created_at"],
+                )
+                for row in rows
+            ]
+    
+    def get_latest_vo2max(self, user_id: str) -> Optional[VO2maxEntry]:
+        """Get the most recent VO2max entry for a user.
+        
+        Args:
+            user_id: User identifier.
+            
+        Returns:
+            Most recent VO2maxEntry if found, None otherwise.
+        """
+        history = self.get_vo2max_history(user_id, limit=1)
+        return history[0] if history else None
+    
+    def get_vo2max_dataframe(self, user_id: str) -> pd.DataFrame:
+        """Get VO2max history as a pandas DataFrame for analysis.
+        
+        Args:
+            user_id: User identifier.
+            
+        Returns:
+            DataFrame with VO2max history and date parsing.
+        """
+        with self._get_connection() as conn:
+            df = pd.read_sql_query(
+                """
+                SELECT entry_id, user_id, measurement_date, vo2max_ml_kg_min,
+                       source, polar_fitness_class, notes, created_at
+                FROM vo2max_history
+                WHERE user_id = ?
+                ORDER BY measurement_date DESC
+                """,
+                conn,
+                params=(user_id,)
+            )
+            if not df.empty and "measurement_date" in df.columns:
+                df["measurement_date"] = pd.to_datetime(df["measurement_date"])
+            return df
     
     # -----------------------------------------------------------------------
     # HRV Measurements
@@ -1594,6 +1897,8 @@ __all__ = [
     "UserProfile",
     "ClinicalScales",
     "HRVMeasurement",
+    "PolarCredentials",
+    "VO2maxEntry",
     "UserDatabase",
     "get_database",
     "get_database_path",

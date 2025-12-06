@@ -1483,12 +1483,26 @@ try:
         calculate_nasa_water_requirement,
         PAL_MULTIPLIERS,
         EXERCISE_METS,
-        polar_accesslink_available,
-        fetch_polar_vo2max,
     )
     CLINICAL_PROFILE_AVAILABLE = True
 except ImportError:
     CLINICAL_PROFILE_AVAILABLE = False
+
+# Import Polar AccessLink module if available
+try:
+    from polar_accesslink import (
+        PolarAccessLinkClient,
+        polar_accesslink_available,
+        fetch_polar_vo2max,
+        save_manual_vo2max,
+    )
+    POLAR_MODULE_AVAILABLE = True
+except ImportError:
+    POLAR_MODULE_AVAILABLE = False
+    def polar_accesslink_available() -> bool:  # type: ignore[misc]
+        return False
+    def fetch_polar_vo2max() -> None:  # type: ignore[misc]
+        return None
 
 
 def _render_clinical_profile(user: UserProfile) -> None:
@@ -1619,9 +1633,22 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         ActivityLevel.MODERATELY_ACTIVE
     )
     
-    # VO2max handling (manual + optional Polar AccessLink)
+    # VO2max handling (manual + optional Polar AccessLink with history)
     vo2_default = float(user.vo2max_ml_kg_min or 38.0)
     st.markdown("##### 🫁 VO2max Source")
+    
+    # Check for latest VO2max from history
+    latest_vo2_entry = None
+    polar_client = None
+    if POLAR_MODULE_AVAILABLE and DATABASE_AVAILABLE:
+        try:
+            polar_client = PolarAccessLinkClient(user.user_id)
+            latest_vo2_entry = polar_client.get_latest_vo2max()
+            if latest_vo2_entry:
+                vo2_default = latest_vo2_entry.vo2max_ml_kg_min
+        except Exception:
+            pass  # Continue with default
+    
     col_vo2_a, col_vo2_b = st.columns([2, 1])
     with col_vo2_a:
         vo2_manual = st.number_input(
@@ -1632,31 +1659,88 @@ def _render_nasa_calculator(user: UserProfile) -> None:
             step=0.5,
             help="Enter lab VO2max or estimation from field test.",
         )
+    
     polar_cache_key = f"polar_vo2_cache_{user.user_id}"
     polar_cached = st.session_state.get(polar_cache_key)
     use_polar_override = False
+    
     with col_vo2_b:
-        if CLINICAL_PROFILE_AVAILABLE and polar_accesslink_available():
-            st.caption("Polar AccessLink configured.")
-            if st.button("🔄 Fetch from Polar", key=f"fetch_polar_vo2_{user.user_id}"):
-                polar_value = fetch_polar_vo2max()
-                if polar_value:
-                    st.session_state[polar_cache_key] = polar_value
-                    polar_cached = polar_value
-                    st.success(f"Retrieved VO2max {polar_value:.1f} mL/kg/min")
+        # Check if Polar is configured (env vars or stored credentials)
+        has_polar = polar_accesslink_available()
+        has_stored_creds = polar_client.has_credentials() if polar_client else False
+        
+        if has_polar or has_stored_creds:
+            st.caption("✅ Polar AccessLink configured")
+            if st.button("🔄 Sync from Polar", key=f"sync_polar_vo2_{user.user_id}"):
+                if polar_client:
+                    with st.spinner("Syncing from Polar Flow..."):
+                        result = polar_client.sync_vo2max()
+                    if result.success and result.vo2max:
+                        st.session_state[polar_cache_key] = result.vo2max
+                        polar_cached = result.vo2max
+                        st.success(
+                            f"VO2max: **{result.vo2max:.1f}** mL/kg/min "
+                            f"({result.fitness_class or 'N/A'})"
+                        )
+                    elif result.success:
+                        st.info(result.message)
+                    else:
+                        st.warning(f"Sync failed: {result.error or 'Unknown error'}")
                 else:
-                    st.warning("Polar AccessLink did not return a VO2max value.")
+                    # Fallback to simple fetch
+                    polar_value = fetch_polar_vo2max()
+                    if polar_value:
+                        st.session_state[polar_cache_key] = polar_value
+                        polar_cached = polar_value
+                        st.success(f"Retrieved VO2max {polar_value:.1f} mL/kg/min")
+                    else:
+                        st.warning("Polar AccessLink did not return a VO2max value.")
+            
             use_polar_override = st.checkbox(
-                "Use Polar value",
-                value=bool(polar_cached),
-                help="Requires POLAR_ACCESSLINK_TOKEN and POLAR_ACCESSLINK_USER_ID in the environment.",
+                "Use synced value",
+                value=bool(polar_cached or latest_vo2_entry),
+                help="Use the most recent synced or stored VO2max value.",
                 key=f"use_polar_vo2_{user.user_id}",
             )
         else:
-            st.caption("Set POLAR_ACCESSLINK_TOKEN & POLAR_ACCESSLINK_USER_ID to enable API fetch.")
+            st.caption("ℹ️ Set POLAR_ACCESSLINK_TOKEN & POLAR_ACCESSLINK_USER_ID to enable.")
+        
+        # Save manual entry button
+        if st.button("💾 Save Manual Entry", key=f"save_manual_vo2_{user.user_id}"):
+            if POLAR_MODULE_AVAILABLE:
+                try:
+                    save_manual_vo2max(
+                        user_id=user.user_id,
+                        vo2max=vo2_manual,
+                        notes="Manual entry from NASA Nutrition Calculator",
+                    )
+                    st.success(f"Saved VO2max {vo2_manual:.1f} mL/kg/min to history")
+                except Exception as e:
+                    st.error(f"Failed to save: {e}")
+    
+    # Determine effective VO2max
     effective_vo2 = vo2_manual
-    if use_polar_override and polar_cached:
-        effective_vo2 = float(polar_cached)
+    if use_polar_override:
+        if polar_cached:
+            effective_vo2 = float(polar_cached)
+        elif latest_vo2_entry:
+            effective_vo2 = latest_vo2_entry.vo2max_ml_kg_min
+    
+    # Show VO2max history if available
+    if polar_client and POLAR_MODULE_AVAILABLE:
+        vo2_history = polar_client.get_vo2max_history(limit=10)
+        if len(vo2_history) > 1:
+            with st.expander("📈 VO2max History", expanded=False):
+                history_data = [
+                    {
+                        "Date": entry.measurement_date[:10] if entry.measurement_date else "N/A",
+                        "VO2max": f"{entry.vo2max_ml_kg_min:.1f}",
+                        "Source": entry.source.title(),
+                        "Class": entry.polar_fitness_class or "—",
+                    }
+                    for entry in vo2_history
+                ]
+                st.dataframe(history_data, use_container_width=True, hide_index=True)
     
     # Exercise settings
     col1, col2 = st.columns(2)
@@ -1723,11 +1807,17 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         
         st.markdown("##### 🫁 VO2max Compensation")
         exercise_details = results["energy"].get("exercise_details", {})
-        vo2_help = "Manual entry" if not use_polar_override or not polar_cached else "Polar AccessLink override"
+        # Determine source description
+        if use_polar_override and polar_cached:
+            vo2_source = "Polar AccessLink sync"
+        elif use_polar_override and latest_vo2_entry:
+            vo2_source = f"History ({latest_vo2_entry.source.title()})"
+        else:
+            vo2_source = "Manual entry"
         st.metric(
             "VO2max used",
             f"{effective_vo2:.1f} mL/kg/min",
-            help=vo2_help,
+            help=vo2_source,
         )
         if exercise_details:
             st.caption(
