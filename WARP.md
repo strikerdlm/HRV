@@ -2,7 +2,7 @@
 
 This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when working with code in this repository.
 
-**Version**: 1.8.0 | **Last Updated**: 2025-12-05 | **Environment**: conda (hrv)
+**Version**: 1.8.5 | **Last Updated**: 2025-12-06 | **Environment**: conda (hrv)
 
 ---
 
@@ -110,7 +110,7 @@ Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations c
 - [x] **Cross-Tab Correlation**: Circadian tab now publishes summaries (DLMO/ESRI/light window) to Fatigue tab via broker
 
 #### Phase 4: Integrations & Analytics (Priority: MEDIUM)
-- [ ] **Polar AccessLink Automation**: Persist OAuth tokens securely and sync VO2max history
+- [x] **Polar AccessLink Automation**: Persist OAuth tokens securely and sync VO2max history (v1.8.5)
 - [ ] **Exploration Medical Analytics**: Surface med-record aggregates (radiation, EVA, stress) in dashboards
 - [ ] **Group Summaries**: Begin exposing cohort-level med/HRV stats in export tab
 
@@ -669,24 +669,26 @@ The app includes Windows console safety workarounds (Colorama fix) in `app/app.p
 - **README**: `README.md` — quick start and high-level features
 - **Agent Rules**: `.cursor/rules/agent.mdc` — AI agent development guidelines
 
-## Project Structure (Updated v1.6.4)
+## Project Structure (Updated v1.8.5)
 ```
 HRV/
 ├── app/
 │   ├── app.py                    # Main Streamlit application
 │   ├── hrv_core.py               # Core HRV computations
 │   ├── noaa_space.py             # NOAA data ingestion
-│   ├── gpu_processing.py         # GPU-accelerated computations (NEW)
-│   ├── user_profile_tab.py       # User profile management (NEW)
-│   ├── user_database.py          # SQLite persistence (NEW)
-│   ├── performance_utils.py      # CPU optimization utilities (NEW)
-│   ├── space_weather_impact.py   # Solar event predictions (NEW)
-│   ├── logging_config.py         # Centralized logging (NEW)
+│   ├── gpu_processing.py         # GPU-accelerated computations
+│   ├── user_profile_tab.py       # User profile management
+│   ├── user_database.py          # SQLite persistence
+│   ├── polar_accesslink.py       # Polar AccessLink OAuth & VO2max sync (NEW)
+│   ├── performance_utils.py      # CPU optimization utilities
+│   ├── space_weather_impact.py   # Solar event predictions
+│   ├── logging_config.py         # Centralized logging
 │   └── data_cache/               # Cached API responses
-├── logs/                         # Application logs (NEW)
+├── logs/                         # Application logs
 │   ├── app.log                   # Main log (rotating)
 │   └── errors.log                # Error-only log
 ├── tests/                        # pytest test suite
+│   └── test_polar_accesslink.py  # Polar integration tests (NEW)
 ├── docs/                         # Documentation
 ├── requirements.txt              # Dependencies
 ├── WARP.md                       # This file

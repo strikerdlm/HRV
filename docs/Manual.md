@@ -614,13 +614,43 @@ The UI form includes chronic condition selectors, acute symptom checklists, and 
 
 ### Polar AccessLink VO₂max (optional)
 
-If a crew member uses Polar Flow, the NASA Nutrition calculator can import the latest VO₂max via Polar AccessLink. Configure:
+If a crew member uses Polar Flow, the NASA Nutrition calculator can import and track VO₂max via Polar AccessLink. The system now provides **automated sync** with persistent token storage and historical tracking.
+
+#### Quick Setup (Environment Variables)
 
 1. Register an application in the [Polar AccessLink program](https://www.polar.com/accesslink-api/).
 2. Set environment variables (never committed to source control):
-   - `POLAR_ACCESSLINK_TOKEN`
-   - `POLAR_ACCESSLINK_USER_ID`
-3. Restart the app. The calculator exposes a **Use Polar value** toggle to override the manual VO₂max entry.
+   - `POLAR_ACCESSLINK_TOKEN` — OAuth bearer token
+   - `POLAR_ACCESSLINK_USER_ID` — Polar Flow user ID
+3. Restart the app. The NASA Nutrition calculator will show a **🔄 Sync from Polar** button.
+
+#### Automated Sync Features (v1.8.5+)
+
+The new Polar AccessLink automation module provides:
+
+- **Persistent Token Storage**: OAuth tokens are encrypted and stored in the local database per user. No need to reconfigure on each app restart.
+- **VO₂max History Tracking**: Every sync saves to a history table with timestamp, source attribution (Polar vs manual), and Polar fitness class.
+- **Duplicate Detection**: The system avoids saving redundant entries if the value hasn't changed within 24 hours.
+- **Manual Entry Fallback**: Click **💾 Save Manual Entry** to record lab-tested VO₂max values with proper attribution.
+- **History Expander**: View recent VO₂max entries with dates, values, sources, and fitness classifications.
+
+#### VO₂max Source Attribution
+
+The calculator shows the source of the effective VO₂max value:
+- **"Polar AccessLink sync"**: Latest value fetched from Polar API
+- **"History (Polar)"** / **"History (Manual)"**: Value from stored history
+- **"Manual entry"**: Directly entered in the form
+
+#### Fitness Classifications
+
+Based on Polar's methodology, VO₂max values are classified as:
+- Very Poor: <25 mL/kg/min
+- Poor: 25–39 mL/kg/min
+- Fair: 40–44 mL/kg/min
+- Moderate: 45–50 mL/kg/min
+- Good: 51–56 mL/kg/min
+- Very Good: 57–62 mL/kg/min
+- Excellent: ≥63 mL/kg/min
 
 Polar AccessLink provides access to body metrics, exercise intensity, and cardiorespiratory fitness data that have already been uploaded to Polar Flow's cloud infrastructure.
 
