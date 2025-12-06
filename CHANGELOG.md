@@ -7,10 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.8.3] - 2025-12-05
 
+### Added
+- **PANAS Scale (Positive and Negative Affect Schedule)** (`app/user_profile_tab.py`, `app/i18n.py`):
+  - Full 20-item PANAS assessment (Watson, Clark & Tellegen, 1988)
+  - Validated English and Spanish (Sandín et al., 1999) translations
+  - Interactive select sliders for all 10 PA and 10 NA items
+  - Real-time ECharts gauge visualizations for PA and NA scores
+  - Normative interpretation thresholds (Crawford & Henry, 2004)
+  - Integration with clinical assessment history and trends
+
 ### Changed
 - **User Profile performance** (`app/user_profile_tab.py`): Assessment history now uses `@st.cache_data` with TTL for faster repeated loads after login.
 - **ESS slider optimization** (`app/user_profile_tab.py`): Epworth Sleepiness Scale uses `st.select_slider` with pre-initialized session state for smoother interaction.
 - **Medical history summary** (`app/user_profile_tab.py`): Summary now pulls latest exploration medical record from database, showing mission/EVA/radiation at a glance.
+- **Assessment history** (`app/user_profile_tab.py`): Now displays PANAS PA/NA averages and trends alongside fatigue scales.
 - **Exploration Medical Record (ExMC/EIMO)** (`app/user_profile_tab.py`): Expanded form per NASA Exploration Medical Capability and Earth-Independent Medical Operations frameworks:
   - Mission profiles: LEO through Mars Surface with EIMO autonomy levels
   - Radiation & space weather: cumulative dose, GCR concern flag
@@ -20,11 +30,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Schema migration resilience** (`app/user_profile_tab.py`): All selectbox and multiselect widgets now gracefully handle stale values from database records when option lists change. Prevents `StreamlitAPIException` when stored defaults no longer match current options; logs migration events for debugging.
+- **Database schema** (`app/user_database.py`): Added `panas_positive_affect` and `panas_negative_affect` columns to clinical_scales table with automatic migration.
 
 ### Removed
 - **Deprecated MIST reference** (`app/user_profile_tab.py`): Removed outdated NASA MIST URL; form now cites ExMC/EIMO peer-reviewed sources.
 
 ### Documentation
+- **PANAS documentation** (`docs/Manual.md`): Complete guide including interpretation tables, clinical significance, and scientific references.
 - **Roadmap** (`docs/Manual.md`): Added ExMC Clinical Assessment milestone (Q4 2025 in progress) with planned Q1 2026 enhancements (CDSS, probabilistic risk, XR telepresence).
 
 ---
