@@ -733,6 +733,54 @@ The platform includes scientifically validated instruments for fatigue and sleep
 
 **Reference:** Krupp LB, et al. *Arch Neurol.* 1989;46(10):1121-1123.
 
+#### Positive and Negative Affect Schedule (PANAS)
+
+The PANAS is a 20-item self-report measure of affect developed by Watson, Clark, and Tellegen (1988). It is one of the most widely used measures of mood in psychological research.
+
+**Structure:**
+- **Positive Affect (PA):** 10 items measuring extent of enthusiastic, active, alert states
+- **Negative Affect (NA):** 10 items measuring extent of distress, unpleasurable engagement
+
+**Positive Affect Items:** Interested, Excited, Strong, Enthusiastic, Proud, Alert, Inspired, Determined, Attentive, Active
+
+**Negative Affect Items:** Distressed, Upset, Guilty, Scared, Hostile, Irritable, Ashamed, Nervous, Jittery, Afraid
+
+**Response Scale:** 5-point Likert scale
+1. Very slightly or not at all
+2. A little
+3. Moderately
+4. Quite a bit
+5. Extremely
+
+**Scoring:** Sum items for each subscale. Score range: 10-50 for each.
+
+| PA Score | Interpretation |
+|----------|----------------|
+| 10-22 | Low positive affect (sadness, lethargy) |
+| 23-39 | Moderate positive affect |
+| 40-50 | High positive affect (energetic, engaged) |
+
+| NA Score | Interpretation |
+|----------|----------------|
+| 10-14 | Low negative affect (calm, serene) |
+| 15-22 | Moderate negative affect |
+| 23-50 | High negative affect (distress, anxiety) |
+
+**Clinical Significance:**
+- PA and NA are largely independent dimensions
+- High NA is associated with anxiety and depression
+- Low PA is specifically linked to depression (distinct from high NA)
+- Together they provide a comprehensive picture of affective state
+
+**Available Languages:**
+- **English:** Original validation (Watson, Clark, & Tellegen, 1988)
+- **Spanish:** Validated translation (Sandín et al., 1999, Psicothema; α=0.92 PA, α=0.88 NA)
+
+**References:**
+- Watson D, Clark LA, Tellegen A. *Development and validation of brief measures of positive and negative affect: The PANAS scales.* J Pers Soc Psychol. 1988;54(6):1063-1070. DOI: 10.1037/0022-3514.54.6.1063
+- Sandín B, et al. *Escalas PANAS de afecto positivo y negativo: Validación factorial y convergencia transcultural.* Psicothema. 1999;11(1):37-51.
+- Crawford JR, Henry JD. *The Positive and Negative Affect Schedule (PANAS): Construct validity, measurement properties and normative data in a large non-clinical sample.* Br J Clin Psychol. 2004;43(3):245-265.
+
 ### Profile-Adjusted HRV Interpretation
 
 HRV metrics are interpreted relative to age and sex-specific normative values:
