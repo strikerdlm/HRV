@@ -612,6 +612,17 @@ Mission Control - Flight Surgeon now includes an exploration medical record alig
 
 The UI form includes chronic condition selectors, acute symptom checklists, and free-text notes for operational anomalies. Each submission either creates a new mission-day entry or updates the latest record, enabling high-resolution studies for 22-day isolation missions up to Mars analog campaigns.
 
+#### Exploration Medical Analytics Dashboard
+
+The Clinical Profile tab now exposes an **Exploration Medical Analytics** dashboard that aggregates every ExMC/EIMO entry into actionable indicators:
+
+- **Radiation Gauge**: Displays the highest cumulative dose logged to date, percentage of the NASA 1000 mSv career guideline, and daily accumulation rate to highlight accelerating exposure trends (NASA Human Research Program, 2023).
+- **EVA Workload Cards**: Summaries for average/peak EVA hours (rolling 72 h), days since the last EVA, and a clearance histogram so teams can identify when restrictions cluster around specific mission profiles.
+- **Stress & Behavioral Trends**: Five-entry rolling averages for confinement stress, workload rating, and sleep duration compare against the all-time mean to expose subtle drifts in crew well-being.
+- **Symptom & Behavioral Frequency Tables**: Top acute symptoms and behavioral health flags are tallied automatically, giving medical officers a quick triage list without exporting raw JSON.
+
+All indicators update in real time once a record is saved, giving crews immediate feedback without leaving the Clinical Profile context.
+
 ### Polar AccessLink VO₂max (optional)
 
 If a crew member uses Polar Flow, the NASA Nutrition calculator can import and track VO₂max via Polar AccessLink. The system now provides **automated sync** with persistent token storage and historical tracking.
