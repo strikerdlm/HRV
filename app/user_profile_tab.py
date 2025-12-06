@@ -58,6 +58,7 @@ try:
         get_karolinska_translations,
         get_samn_perelli_translations,
         get_vas_translations,
+        get_panas_translations,
         render_language_selector,
     )
     I18N_AVAILABLE = True
@@ -66,6 +67,8 @@ except ImportError:
     # Fallback function if i18n not available
     def t(key: str, **kwargs: Any) -> str:  # type: ignore[misc]
         return key
+    def get_panas_translations() -> dict:  # type: ignore[misc]
+        return {}
 
 # Import multi-user session manager
 try:
@@ -776,6 +779,287 @@ def _render_vas_scales(user_id: str) -> Dict[str, float]:
     return {"vas_fatigue": vas_fatigue, "vas_pain": vas_pain}
 
 
+def _render_panas_form(user_id: str) -> Dict[str, Optional[int]]:
+    """Render PANAS (Positive and Negative Affect Schedule) form with i18n support.
+    
+    Returns PA and NA scores (10-50 each) based on Watson, Clark & Tellegen (1988).
+    Spanish validation: Sandín et al. (1999), Psicothema.
+    """
+    # Get translations for current language
+    if I18N_AVAILABLE:
+        tr = get_panas_translations()
+    else:
+        tr = {
+            "title": "Positive and Negative Affect Schedule (PANAS)",
+            "subtitle": "Indicate to what extent you feel this way right now",
+            "response_options": {1: "Very slightly", 2: "A little", 3: "Moderately", 4: "Quite a bit", 5: "Extremely"},
+            "pa_items": [
+                ("interested", "Interested"), ("excited", "Excited"), ("strong", "Strong"),
+                ("enthusiastic", "Enthusiastic"), ("proud", "Proud"), ("alert", "Alert"),
+                ("inspired", "Inspired"), ("determined", "Determined"), ("attentive", "Attentive"),
+                ("active", "Active"),
+            ],
+            "na_items": [
+                ("distressed", "Distressed"), ("upset", "Upset"), ("guilty", "Guilty"),
+                ("scared", "Scared"), ("hostile", "Hostile"), ("irritable", "Irritable"),
+                ("ashamed", "Ashamed"), ("nervous", "Nervous"), ("jittery", "Jittery"),
+                ("afraid", "Afraid"),
+            ],
+            "pa_label": "Positive Affect (PA)",
+            "na_label": "Negative Affect (NA)",
+            "score_range": "Score range: 10–50",
+            "interpretation": {
+                "pa_high": "High positive affect",
+                "pa_moderate": "Moderate positive affect",
+                "pa_low": "Low positive affect",
+                "na_high": "High negative affect",
+                "na_moderate": "Moderate negative affect",
+                "na_low": "Low negative affect",
+            },
+            "reference": "Watson, Clark, & Tellegen (1988)",
+            "clinical_note": "PA and NA are independent dimensions.",
+        }
+    
+    st.markdown(f"#### {tr['title']}")
+    st.caption(tr['subtitle'])
+    
+    response_opts = tr['response_options']
+    pa_items = tr['pa_items']
+    na_items = tr['na_items']
+    
+    # Pre-initialize session state for smoother behavior
+    for key, _ in pa_items + na_items:
+        state_key = f"panas_{key}"
+        if state_key not in st.session_state:
+            st.session_state[state_key] = 3  # Default to "Moderately"
+    
+    # Create two columns for PA and NA
+    col_pa, col_na = st.columns(2)
+    
+    pa_scores: Dict[str, int] = {}
+    na_scores: Dict[str, int] = {}
+    
+    with col_pa:
+        st.markdown(f"**{tr['pa_label']}** 🌟")
+        for key, label in pa_items:
+            state_key = f"panas_{key}"
+            pa_scores[key] = st.select_slider(
+                label,
+                options=list(response_opts.keys()),
+                value=st.session_state.get(state_key, 3),
+                format_func=lambda x: f"{x}",
+                key=state_key,
+                help=response_opts.get(st.session_state.get(state_key, 3), ""),
+            )
+    
+    with col_na:
+        st.markdown(f"**{tr['na_label']}** ⚡")
+        for key, label in na_items:
+            state_key = f"panas_{key}"
+            na_scores[key] = st.select_slider(
+                label,
+                options=list(response_opts.keys()),
+                value=st.session_state.get(state_key, 3),
+                format_func=lambda x: f"{x}",
+                key=state_key,
+                help=response_opts.get(st.session_state.get(state_key, 3), ""),
+            )
+    
+    # Calculate totals
+    pa_total = sum(pa_scores.values())
+    na_total = sum(na_scores.values())
+    
+    # Interpretation thresholds (based on normative data from Crawford & Henry, 2004)
+    # PA: Mean ~31, SD ~8 → Low <23, Moderate 23-39, High >39
+    # NA: Mean ~16, SD ~6 → Low <10, Moderate 10-22, High >22
+    interp = tr.get('interpretation', {})
+    
+    if pa_total >= 40:
+        pa_interp = interp.get("pa_high", "High positive affect")
+        pa_color = "green"
+    elif pa_total >= 23:
+        pa_interp = interp.get("pa_moderate", "Moderate positive affect")
+        pa_color = "blue"
+    else:
+        pa_interp = interp.get("pa_low", "Low positive affect")
+        pa_color = "orange"
+    
+    if na_total >= 23:
+        na_interp = interp.get("na_high", "High negative affect")
+        na_color = "red"
+    elif na_total >= 10:
+        na_interp = interp.get("na_moderate", "Moderate negative affect")
+        na_color = "orange"
+    else:
+        na_interp = interp.get("na_low", "Low negative affect")
+        na_color = "green"
+    
+    st.markdown("---")
+    
+    # Display results with gauges using ECharts
+    col_g1, col_g2 = st.columns(2)
+    
+    with col_g1:
+        _render_panas_gauge(
+            value=pa_total,
+            title=tr['pa_label'],
+            min_val=10,
+            max_val=50,
+            color_zones=[
+                (23, "#ff9800"),  # Low (orange)
+                (40, "#2196f3"),  # Moderate (blue)
+                (50, "#4caf50"),  # High (green)
+            ],
+            key_suffix="pa",
+        )
+        st.markdown(f"**PA: {pa_total}/50** — :{pa_color}[{pa_interp}]")
+    
+    with col_g2:
+        _render_panas_gauge(
+            value=na_total,
+            title=tr['na_label'],
+            min_val=10,
+            max_val=50,
+            color_zones=[
+                (10, "#4caf50"),  # Low (green)
+                (23, "#ff9800"),  # Moderate (orange)
+                (50, "#f44336"),  # High (red)
+            ],
+            key_suffix="na",
+        )
+        st.markdown(f"**NA: {na_total}/50** — :{na_color}[{na_interp}]")
+    
+    # Clinical note
+    st.caption(f"💡 {tr.get('clinical_note', '')}")
+    st.caption(f"📚 {tr.get('reference', '')}")
+    
+    return {"panas_pa": pa_total, "panas_na": na_total}
+
+
+def _render_panas_gauge(
+    value: int,
+    title: str,
+    min_val: int,
+    max_val: int,
+    color_zones: list,
+    key_suffix: str,
+) -> None:
+    """Render a modern ECharts gauge for PANAS scores.
+    
+    Args:
+        value: Current score value.
+        title: Gauge title.
+        min_val: Minimum scale value.
+        max_val: Maximum scale value.
+        color_zones: List of (threshold, color) tuples for gauge zones.
+        key_suffix: Unique key suffix for the component.
+    """
+    import json
+    
+    # Build color zone config for ECharts
+    zones = []
+    prev_threshold = min_val
+    for threshold, color in color_zones:
+        zones.append([
+            (threshold - min_val) / (max_val - min_val),
+            color
+        ])
+        prev_threshold = threshold
+    
+    # ECharts gauge option - modern two-ring style
+    option = {
+        "series": [
+            {
+                "type": "gauge",
+                "center": ["50%", "60%"],
+                "startAngle": 200,
+                "endAngle": -20,
+                "min": min_val,
+                "max": max_val,
+                "splitNumber": 8,
+                "itemStyle": {"color": "#2196f3"},
+                "progress": {
+                    "show": True,
+                    "width": 20,
+                    "itemStyle": {
+                        "color": {
+                            "type": "linear",
+                            "x": 0, "y": 0, "x2": 1, "y2": 0,
+                            "colorStops": [
+                                {"offset": 0, "color": color_zones[0][1]},
+                                {"offset": 0.5, "color": color_zones[1][1] if len(color_zones) > 1 else color_zones[0][1]},
+                                {"offset": 1, "color": color_zones[-1][1]},
+                            ],
+                        }
+                    }
+                },
+                "pointer": {
+                    "icon": "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
+                    "length": "12%",
+                    "width": 20,
+                    "offsetCenter": [0, "-60%"],
+                    "itemStyle": {"color": "auto"},
+                },
+                "axisLine": {
+                    "lineStyle": {
+                        "width": 20,
+                        "color": zones,
+                    }
+                },
+                "axisTick": {
+                    "distance": -30,
+                    "splitNumber": 5,
+                    "lineStyle": {"width": 2, "color": "#999"},
+                },
+                "splitLine": {
+                    "distance": -35,
+                    "length": 14,
+                    "lineStyle": {"width": 3, "color": "#999"},
+                },
+                "axisLabel": {
+                    "distance": -20,
+                    "color": "#999",
+                    "fontSize": 12,
+                },
+                "anchor": {
+                    "show": False,
+                },
+                "title": {"show": False},
+                "detail": {
+                    "valueAnimation": True,
+                    "width": "60%",
+                    "lineHeight": 40,
+                    "borderRadius": 8,
+                    "offsetCenter": [0, "-15%"],
+                    "fontSize": 28,
+                    "fontWeight": "bold",
+                    "formatter": "{value}",
+                    "color": "inherit",
+                },
+                "data": [{"value": value}],
+            }
+        ],
+    }
+    
+    # Render using streamlit-echarts if available, otherwise use HTML/JS
+    try:
+        from streamlit_echarts import st_echarts
+        st_echarts(options=option, height="220px", key=f"panas_gauge_{key_suffix}")
+    except ImportError:
+        # Fallback: render as HTML with ECharts CDN
+        option_json = json.dumps(option)
+        html = f'''
+        <div id="panas_gauge_{key_suffix}" style="width:100%;height:220px;"></div>
+        <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+        <script>
+            var chart = echarts.init(document.getElementById('panas_gauge_{key_suffix}'));
+            chart.setOption({option_json});
+            window.addEventListener('resize', function() {{ chart.resize(); }});
+        </script>
+        '''
+        st.components.v1.html(html, height=240)
+
+
 # ---------------------------------------------------------------------------
 # Clinical Assessment Session
 # ---------------------------------------------------------------------------
@@ -795,6 +1079,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
         "SP": t('sp_description'),
         "KSS": t('kss_description'),
         "VAS": t('vas_description'),
+        "PANAS": "Positive and Negative Affect Schedule (mood/affect)",
     }
     
     st.caption("⚡ Inputs are batched — use Preview or Save to refresh scores without full reruns.")
@@ -860,6 +1145,12 @@ def _render_clinical_assessment(user: UserProfile) -> None:
             with st.expander("📋 Visual Analog Scales", expanded=True):
                 results.update(_render_vas_scales(user.user_id))
         
+        if "PANAS" in selected_scales:
+            with st.expander("📋 PANAS - Positive & Negative Affect", expanded=True):
+                panas_result = _render_panas_form(user.user_id)
+                results["panas_pa"] = panas_result.get("panas_pa")
+                results["panas_na"] = panas_result.get("panas_na")
+        
         notes_text = st.text_area(
             t('assessment_notes'),
             placeholder=t('assessment_notes_placeholder'),
@@ -899,6 +1190,8 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                 epworth_sleepiness_scale=results.get("ess"),
                 karolinska_sleepiness_scale=results.get("kss"),
                 samn_perelli_fatigue=results.get("samn_perelli"),
+                panas_positive_affect=results.get("panas_pa"),
+                panas_negative_affect=results.get("panas_na"),
                 vas_fatigue=results.get("vas_fatigue"),
                 vas_pain=results.get("vas_pain"),
                 notes=context_note,
@@ -931,6 +1224,20 @@ def _render_assessment_preview(
     with col3:
         value = results.get("ess")
         st.metric("ESS", f"{value:.0f}" if value is not None else "—")
+    
+    # PANAS preview
+    panas_pa = results.get("panas_pa")
+    panas_na = results.get("panas_na")
+    if panas_pa is not None or panas_na is not None:
+        col_pa, col_na = st.columns(2)
+        with col_pa:
+            if panas_pa is not None:
+                pa_color = "green" if panas_pa >= 40 else ("blue" if panas_pa >= 23 else "orange")
+                st.metric("PANAS PA", f"{panas_pa}/50", help="Positive Affect")
+        with col_na:
+            if panas_na is not None:
+                na_color = "red" if panas_na >= 23 else ("orange" if panas_na >= 10 else "green")
+                st.metric("PANAS NA", f"{panas_na}/50", help="Negative Affect")
     
     vas_fatigue = results.get("vas_fatigue")
     vas_pain = results.get("vas_pain")
@@ -979,24 +1286,46 @@ def _render_assessment_history(user: UserProfile) -> None:
         df = df.sort_values("assessment_date", ascending=False)
         
         # Summary metrics
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4, col5 = st.columns(5)
         with col1:
             st.metric("Total Assessments", len(df))
         with col2:
             if "samn_perelli_fatigue" in df.columns:
                 mean_sp = df["samn_perelli_fatigue"].mean()
-                st.metric("Avg Samn-Perelli", f"{mean_sp:.1f}" if pd.notna(mean_sp) else "—")
+                st.metric("Avg SP", f"{mean_sp:.1f}" if pd.notna(mean_sp) else "—")
         with col3:
             if "karolinska_sleepiness_scale" in df.columns:
                 mean_kss = df["karolinska_sleepiness_scale"].mean()
                 st.metric("Avg KSS", f"{mean_kss:.1f}" if pd.notna(mean_kss) else "—")
+        with col4:
+            if "panas_positive_affect" in df.columns:
+                mean_pa = df["panas_positive_affect"].mean()
+                st.metric("Avg PA", f"{mean_pa:.0f}" if pd.notna(mean_pa) else "—", help="PANAS Positive Affect")
+        with col5:
+            if "panas_negative_affect" in df.columns:
+                mean_na = df["panas_negative_affect"].mean()
+                st.metric("Avg NA", f"{mean_na:.0f}" if pd.notna(mean_na) else "—", help="PANAS Negative Affect")
         
-        # Trend chart
+        # Trend charts - Fatigue scales
         if len(df) > 1:
-            chart_data = df[["assessment_date", "samn_perelli_fatigue", "karolinska_sleepiness_scale"]].dropna(how="all", subset=["samn_perelli_fatigue", "karolinska_sleepiness_scale"])
-            if not chart_data.empty:
-                chart_data = chart_data.set_index("assessment_date")
-                st.line_chart(chart_data)
+            st.markdown("##### 📈 Fatigue & Sleepiness Trends")
+            chart_cols = ["samn_perelli_fatigue", "karolinska_sleepiness_scale"]
+            available_cols = [c for c in chart_cols if c in df.columns]
+            if available_cols:
+                chart_data = df[["assessment_date"] + available_cols].dropna(how="all", subset=available_cols)
+                if not chart_data.empty:
+                    chart_data = chart_data.set_index("assessment_date")
+                    st.line_chart(chart_data)
+            
+            # PANAS Trend chart
+            panas_cols = ["panas_positive_affect", "panas_negative_affect"]
+            available_panas = [c for c in panas_cols if c in df.columns]
+            if available_panas and df[available_panas].notna().any().any():
+                st.markdown("##### 🎭 PANAS Affect Trends")
+                panas_data = df[["assessment_date"] + available_panas].dropna(how="all", subset=available_panas)
+                if not panas_data.empty:
+                    panas_data = panas_data.set_index("assessment_date")
+                    st.line_chart(panas_data)
         
         # Data table
         with st.expander("📊 All Assessment Data"):
@@ -1005,6 +1334,8 @@ def _render_assessment_history(user: UserProfile) -> None:
                 "epworth_sleepiness_scale",
                 "samn_perelli_fatigue",
                 "karolinska_sleepiness_scale",
+                "panas_positive_affect",
+                "panas_negative_affect",
                 "vas_fatigue",
                 "vas_pain",
                 "notes",
