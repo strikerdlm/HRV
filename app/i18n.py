@@ -223,6 +223,117 @@ VAS_TRANSLATIONS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# PANAS - Positive and Negative Affect Schedule
+# English: Watson, Clark, & Tellegen (1988). J Pers Soc Psychol 54(6):1063-1070
+# Spanish: Sandín et al. (1999). Psicothema 11(1):37-51; Cronbach α=0.92 PA, 0.88 NA
+PANAS_TRANSLATIONS: Dict[str, Dict[str, Any]] = {
+    "en": {
+        "title": "Positive and Negative Affect Schedule (PANAS)",
+        "subtitle": "Indicate to what extent you feel this way right now, at the present moment",
+        "instruction": "Read each item and select the appropriate answer",
+        "time_frame": "right now",
+        "response_options": {
+            1: "Very slightly or not at all",
+            2: "A little",
+            3: "Moderately",
+            4: "Quite a bit",
+            5: "Extremely",
+        },
+        # Positive Affect items (PA) - Items 1,3,5,9,10,12,14,16,17,19
+        "pa_items": [
+            ("interested", "Interested"),
+            ("excited", "Excited"),
+            ("strong", "Strong"),
+            ("enthusiastic", "Enthusiastic"),
+            ("proud", "Proud"),
+            ("alert", "Alert"),
+            ("inspired", "Inspired"),
+            ("determined", "Determined"),
+            ("attentive", "Attentive"),
+            ("active", "Active"),
+        ],
+        # Negative Affect items (NA) - Items 2,4,6,7,8,11,13,15,18,20
+        "na_items": [
+            ("distressed", "Distressed"),
+            ("upset", "Upset"),
+            ("guilty", "Guilty"),
+            ("scared", "Scared"),
+            ("hostile", "Hostile"),
+            ("irritable", "Irritable"),
+            ("ashamed", "Ashamed"),
+            ("nervous", "Nervous"),
+            ("jittery", "Jittery"),
+            ("afraid", "Afraid"),
+        ],
+        "pa_label": "Positive Affect (PA)",
+        "na_label": "Negative Affect (NA)",
+        "score_range": "Score range: 10–50",
+        "interpretation": {
+            "pa_high": "High positive affect: high energy, concentration, pleasurable engagement",
+            "pa_moderate": "Moderate positive affect: typical engagement and energy",
+            "pa_low": "Low positive affect: sadness, lethargy, reduced engagement",
+            "na_high": "High negative affect: distress, unpleasant engagement, aversive states",
+            "na_moderate": "Moderate negative affect: typical negative emotional experience",
+            "na_low": "Low negative affect: calm, serene state",
+        },
+        "reference": "Watson, Clark, & Tellegen (1988). Development and validation of brief measures of positive and negative affect: The PANAS scales. J Pers Soc Psychol, 54(6), 1063-1070.",
+        "clinical_note": "PA and NA are largely independent dimensions. High NA is associated with anxiety/depression; low PA is specifically linked to depression.",
+    },
+    "es": {
+        # Spanish validated version - Sandín et al. (1999), Psicothema
+        "title": "Escala de Afecto Positivo y Negativo (PANAS)",
+        "subtitle": "Indique en qué medida se siente así en este momento, ahora mismo",
+        "instruction": "Lea cada ítem y seleccione la respuesta apropiada",
+        "time_frame": "ahora mismo",
+        "response_options": {
+            1: "Muy poco o nada",
+            2: "Un poco",
+            3: "Moderadamente",
+            4: "Bastante",
+            5: "Extremadamente",
+        },
+        # Positive Affect items (AP) - Spanish validated terms
+        "pa_items": [
+            ("interested", "Interesado/a"),
+            ("excited", "Emocionado/a"),
+            ("strong", "Fuerte"),
+            ("enthusiastic", "Entusiasmado/a"),
+            ("proud", "Orgulloso/a"),
+            ("alert", "Alerta"),
+            ("inspired", "Inspirado/a"),
+            ("determined", "Decidido/a"),
+            ("attentive", "Atento/a"),
+            ("active", "Activo/a"),
+        ],
+        # Negative Affect items (AN) - Spanish validated terms
+        "na_items": [
+            ("distressed", "Angustiado/a"),
+            ("upset", "Disgustado/a"),
+            ("guilty", "Culpable"),
+            ("scared", "Asustado/a"),
+            ("hostile", "Hostil"),
+            ("irritable", "Irritable"),
+            ("ashamed", "Avergonzado/a"),
+            ("nervous", "Nervioso/a"),
+            ("jittery", "Agitado/a"),
+            ("afraid", "Temeroso/a"),
+        ],
+        "pa_label": "Afecto Positivo (AP)",
+        "na_label": "Afecto Negativo (AN)",
+        "score_range": "Rango de puntuación: 10–50",
+        "interpretation": {
+            "pa_high": "Afecto positivo alto: alta energía, concentración, compromiso placentero",
+            "pa_moderate": "Afecto positivo moderado: energía y compromiso típicos",
+            "pa_low": "Afecto positivo bajo: tristeza, letargo, compromiso reducido",
+            "na_high": "Afecto negativo alto: angustia, malestar, estados aversivos",
+            "na_moderate": "Afecto negativo moderado: experiencia emocional negativa típica",
+            "na_low": "Afecto negativo bajo: estado calmado y sereno",
+        },
+        "reference": "Sandín et al. (1999). Escalas PANAS de afecto positivo y negativo: Validación factorial y convergencia transcultural. Psicothema, 11(1), 37-51.",
+        "clinical_note": "AP y AN son dimensiones independientes. Alto AN se asocia con ansiedad/depresión; bajo AP se vincula específicamente con depresión.",
+    },
+}
+
 # User Interface Strings
 UI_TRANSLATIONS: Dict[str, Dict[str, str]] = {
     "en": {
@@ -505,6 +616,12 @@ def get_vas_translations() -> Dict[str, Any]:
     return VAS_TRANSLATIONS.get(lang.value, VAS_TRANSLATIONS["en"])
 
 
+def get_panas_translations() -> Dict[str, Any]:
+    """Get PANAS (Positive and Negative Affect Schedule) translations for current language."""
+    lang = get_current_language()
+    return PANAS_TRANSLATIONS.get(lang.value, PANAS_TRANSLATIONS["en"])
+
+
 # ---------------------------------------------------------------------------
 # Language Selector Widget
 # ---------------------------------------------------------------------------
@@ -605,6 +722,7 @@ __all__ = [
     "get_karolinska_translations",
     "get_samn_perelli_translations",
     "get_vas_translations",
+    "get_panas_translations",
     "render_language_selector",
     "render_language_toggle",
     "EPWORTH_TRANSLATIONS",
