@@ -5,6 +5,107 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.5] - 2025-12-06
+
+### Added
+- **Polar AccessLink Automation** (`app/polar_accesslink.py`): Complete OAuth token management and VO2max sync
+  - `PolarAccessLinkClient` class for per-user credential management
+  - Secure token storage with XOR encryption (obfuscation for local SQLite)
+  - VO2max history tracking with source attribution (Polar, manual, etc.)
+  - Automatic sync with duplicate detection (avoids redundant entries)
+  - Fitness class determination based on VO2max values
+- **Database schema updates** (`app/user_database.py`):
+  - `polar_credentials` table for persisting OAuth tokens per user
+  - `vo2max_history` table for longitudinal VO2max tracking
+  - `PolarCredentials` and `VO2maxEntry` dataclasses
+  - Database methods: `save_polar_credentials()`, `get_polar_credentials()`, `delete_polar_credentials()`
+  - Database methods: `save_vo2max_entry()`, `get_vo2max_history()`, `get_latest_vo2max()`, `get_vo2max_dataframe()`
+- **Unit tests** (`tests/test_polar_accesslink.py`): 24 comprehensive tests covering:
+  - Token encryption/decryption round-trips
+  - Database CRUD operations for credentials and VO2max history
+  - PolarAccessLinkClient lifecycle and sync operations
+  - Mocked API response handling
+- **Exploration Medical Analytics Dashboard** (`app/user_profile_tab.py`):
+  - Radiation gauge tracks cumulative mSv vs NASA 1000 mSv guideline with daily accumulation rate
+  - EVA workload cards summarize 72 h EVA hours, peaks, and days since last EVA alongside clearance histograms
+  - Stress panel surfaces rolling averages for confinement stress, workload rating, and sleep duration
+  - Frequency tables tally the most common acute symptoms and behavioral flags straight from ExMC logs
+- **Unit tests** (`tests/test_new_modules.py`): Added coverage for the radiation-rate computation and frequency aggregation helper powering the dashboard
+
+### Changed
+- **NASA Nutrition Calculator** (`app/user_profile_tab.py`):
+  - VO2max section now uses `PolarAccessLinkClient` for persistent sync
+  - Added "💾 Save Manual Entry" button to record manual VO2max values
+  - VO2max history expander shows recent entries with source and fitness class
+  - Improved source attribution ("Polar AccessLink sync", "History", "Manual entry")
+- **Import structure** (`app/polar_accesslink.py`): Fallback imports for both `app.` prefix and direct module imports
+
+### Fixed
+- **Token encryption** (`app/polar_accesslink.py`): `os.getlogin()` now falls back to environment variables when running in non-TTY environments
+
+### Documentation
+- **README.md / docs/Manual.md / WARP.md**: Documented the Exploration Medical Analytics dashboard, updated the roadmap status, and highlighted the new radiation/EVA/stress cards.
+
+---
+
+## [1.8.4] - 2025-12-05
+
+### Fixed
+- **FutureWarning** (`app/app.py`): Fixed deprecated `.fillna()` downcasting on artifact_flag column using explicit `boolean` dtype conversion.
+- **CPU name detection** (`app/cpu_optimization.py`): Fixed `[WinError 2]` on modern Windows by reading CPU name from registry instead of deprecated `wmic` command.
+
+---
+
+## [1.8.3] - 2025-12-05
+
+### Added
+- **PANAS Scale (Positive and Negative Affect Schedule)** (`app/user_profile_tab.py`, `app/i18n.py`):
+  - Full 20-item PANAS assessment (Watson, Clark & Tellegen, 1988)
+  - Validated English and Spanish (Sandín et al., 1999) translations
+  - Interactive select sliders for all 10 PA and 10 NA items
+  - Real-time ECharts gauge visualizations for PA and NA scores
+  - Normative interpretation thresholds (Crawford & Henry, 2004)
+  - Integration with clinical assessment history and trends
+
+### Changed
+- **User Profile performance** (`app/user_profile_tab.py`): Assessment history now uses `@st.cache_data` with TTL for faster repeated loads after login.
+- **ESS slider optimization** (`app/user_profile_tab.py`): Epworth Sleepiness Scale uses `st.select_slider` with pre-initialized session state for smoother interaction.
+- **Medical history summary** (`app/user_profile_tab.py`): Summary now pulls latest exploration medical record from database, showing mission/EVA/radiation at a glance.
+- **Assessment history** (`app/user_profile_tab.py`): Now displays PANAS PA/NA averages and trends alongside fatigue scales.
+- **Exploration Medical Record (ExMC/EIMO)** (`app/user_profile_tab.py`): Expanded form per NASA Exploration Medical Capability and Earth-Independent Medical Operations frameworks:
+  - Mission profiles: LEO through Mars Surface with EIMO autonomy levels
+  - Radiation & space weather: cumulative dose, GCR concern flag
+  - Health status: HRP risk categories, expanded acute symptoms, workload rating
+  - Countermeasures: sleep quality, exercise modality, caloric intake
+  - Medical logistics: resupply days tracking
+
+### Fixed
+- **Schema migration resilience** (`app/user_profile_tab.py`): All selectbox and multiselect widgets now gracefully handle stale values from database records when option lists change. Prevents `StreamlitAPIException` when stored defaults no longer match current options; logs migration events for debugging.
+- **Database schema** (`app/user_database.py`): Added `panas_positive_affect` and `panas_negative_affect` columns to clinical_scales table with automatic migration.
+
+### Removed
+- **Deprecated MIST reference** (`app/user_profile_tab.py`): Removed outdated NASA MIST URL; form now cites ExMC/EIMO peer-reviewed sources.
+
+### Documentation
+- **PANAS documentation** (`docs/Manual.md`): Complete guide including interpretation tables, clinical significance, and scientific references.
+- **Roadmap** (`docs/Manual.md`): Added ExMC Clinical Assessment milestone (Q4 2025 in progress) with planned Q1 2026 enhancements (CDSS, probabilistic risk, XR telepresence).
+
+---
+
+## [1.8.2] - 2025-12-05
+
+### Changed
+- **Always-on space weather pipelines** (`app/app.py`, `app/noaa_space.py`): Space Weather, NOAA Space, and impact predictions now auto-load on tab entry even with no RR uploads, using cache-first fetches and stale-cache fallback for Kp/F10.7 and NOAA feeds when connectivity drops.
+- **Resilience and logging** (`app/app.py`, `app/noaa_space.py`): SWPC/NOAA fetch failures now log centrally and surface warnings while keeping prior cached data available.
+
+### Fixed
+- **NOAA auto-load retry storm** (`app/app.py`): Added auto-loading/attempt guards so NOAA auto-fetch runs once per session and won't hammer the APIs when feeds fail (empty bundles no longer trigger repeated retries).
+
+### Documentation
+- Updated **README.md** and **docs/Manual.md** to explain automatic loading and offline-friendly cache behavior for space weather features.
+
+---
+
 ## [1.8.1] - 2025-12-05
 
 ### Added

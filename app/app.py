@@ -254,6 +254,13 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 from pathlib import Path
+from pandas.api.types import is_datetime64_any_dtype
+
+try:
+    # Package import (tests, package mode)
+    from app.logging_config import get_logger, log_exception
+except ImportError:  # pragma: no cover - fallback for Streamlit script execution
+    from logging_config import get_logger, log_exception
 
 # Default active-user context used when user profile data is unavailable
 def _guest_user_context() -> Dict[str, Any]:
@@ -280,6 +287,7 @@ def _guest_user_context() -> Dict[str, Any]:
 
 # Load .env variables early (e.g., NASA_API_KEY, ACCUWEATHER_API_KEY)
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+_LOGGER = get_logger(__name__)
 NASA_API_KEY = os.getenv("NASA_API_KEY", "")
 ACCUWEATHER_API_KEY = os.getenv("ACCUWEATHER_API_KEY", "")
 
@@ -920,30 +928,42 @@ def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
         cache_file, max_age=SPACE_WEATHER_CACHE_TTL)
     if cached_df is not None:
         return cached_df
-    url = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
-    response = requests.get(url, timeout=SWPC_TIMEOUT)
-    response.raise_for_status()
-    payload = response.json()
-    if not payload:
-        return pd.DataFrame()
-    if isinstance(payload, list) and payload and isinstance(payload[0], list):
-        header = payload[0]
-        rows = payload[1:]
-        df = pd.DataFrame(rows, columns=header)
-    else:
-        df = pd.json_normalize(payload)
-    if "time_tag" in df.columns:
-        df["time_tag"] = pd.to_datetime(
-            df["time_tag"], errors="coerce", utc=True)
-        if days is not None:
-            cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(days))
-            df = df[df["time_tag"] >= cutoff]
-    if "kp_index" in df.columns:
-        df["kp_index"] = df["kp_index"].apply(_kp_to_numeric)
-        df["kp_index"] = pd.to_numeric(df["kp_index"], errors="coerce")
-    df = df.sort_values("time_tag") if "time_tag" in df.columns else df
-    _write_dataframe_cache(cache_file, df)
-    return df
+    try:
+        url = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
+        response = requests.get(url, timeout=SWPC_TIMEOUT)
+        response.raise_for_status()
+        payload = response.json()
+        if not payload:
+            return pd.DataFrame()
+        if isinstance(payload, list) and payload and isinstance(payload[0], list):
+            header = payload[0]
+            rows = payload[1:]
+            df = pd.DataFrame(rows, columns=header)
+        else:
+            df = pd.json_normalize(payload)
+        if "time_tag" in df.columns:
+            df["time_tag"] = pd.to_datetime(
+                df["time_tag"], errors="coerce", utc=True)
+            if days is not None:
+                cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(days=int(days))
+                df = df[df["time_tag"] >= cutoff]
+        if "kp_index" in df.columns:
+            df["kp_index"] = df["kp_index"].apply(_kp_to_numeric)
+            df["kp_index"] = pd.to_numeric(df["kp_index"], errors="coerce")
+        df = df.sort_values("time_tag") if "time_tag" in df.columns else df
+        _write_dataframe_cache(cache_file, df)
+        return df
+    except (requests.RequestException, ValueError) as exc:
+        stale_df = _read_dataframe_cache(cache_file, max_age=None)
+        if stale_df is not None:
+            log_exception(
+                _LOGGER,
+                "Failed to refresh SWPC Kp index; using last cached copy",
+                exc,
+            )
+            return stale_df
+        log_exception(_LOGGER, "Failed to refresh SWPC Kp index", exc)
+        raise
 
 
 def get_swpc_solar_radio_flux() -> pd.DataFrame:
@@ -957,52 +977,65 @@ def get_swpc_solar_radio_flux() -> pd.DataFrame:
         "solar_radio_flux.json",
         "predicted_f107cm_flux.json",
     ]
-    df = pd.DataFrame()
-    for path in candidates:
-        try:
-            df_candidate = _fetch_swpc_dataset(path)
-        except requests.HTTPError as exc:
-            status = getattr(exc.response, "status_code", None)
-            if status == 404:
-                continue
-            raise
-        if not df_candidate.empty:
-            df = df_candidate
-            break
-    if df.empty:
+    try:
+        df = pd.DataFrame()
+        for path in candidates:
+            try:
+                df_candidate = _fetch_swpc_dataset(path)
+            except requests.HTTPError as exc:
+                status = getattr(exc.response, "status_code", None)
+                if status == 404:
+                    continue
+                raise
+            if not df_candidate.empty:
+                df = df_candidate
+                break
+        if df.empty:
+            return df
+        # Ensure a unified time column name
+        time_cols = [
+            col
+            for col in df.columns
+            if is_datetime64_any_dtype(df[col])
+        ]
+        if time_cols:
+            main_time = time_cols[0]
+            df = df.dropna(subset=[main_time]).sort_values(main_time)
+            if "time_tag" not in df.columns:
+                df = df.rename(columns={main_time: "time_tag"})
+        else:
+            df["time_tag"] = pd.to_datetime(
+                df.iloc[:, 0], errors="coerce", utc=True)
+            df = df.dropna(subset=["time_tag"]).sort_values("time_tag")
+        # Identify numeric flux columns
+        numeric_cols = [col for col in df.columns if df[col].dtype.kind in "fcid"]
+        flux_candidates = [
+            col
+            for col in numeric_cols
+            if any(
+                keyword in col.lower()
+                for keyword in ("flux", "value", "observed", "adjusted")
+            )
+        ]
+        if flux_candidates:
+            for col in flux_candidates:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        else:
+            for col in numeric_cols:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        _write_dataframe_cache(cache_file, df)
         return df
-    # Ensure a unified time column name
-    time_cols = [
-        col for col in df.columns if np.issubdtype(
-            df[col].dtype,
-            np.datetime64)]
-    if time_cols:
-        main_time = time_cols[0]
-        df = df.dropna(subset=[main_time]).sort_values(main_time)
-        if "time_tag" not in df.columns:
-            df = df.rename(columns={main_time: "time_tag"})
-    else:
-        df["time_tag"] = pd.to_datetime(
-            df.iloc[:, 0], errors="coerce", utc=True)
-        df = df.dropna(subset=["time_tag"]).sort_values("time_tag")
-    # Identify numeric flux columns
-    numeric_cols = [col for col in df.columns if df[col].dtype.kind in "fcid"]
-    flux_candidates = [
-        col
-        for col in numeric_cols
-        if any(
-            keyword in col.lower()
-            for keyword in ("flux", "value", "observed", "adjusted")
-        )
-    ]
-    if flux_candidates:
-        for col in flux_candidates:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-    else:
-        for col in numeric_cols:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-    _write_dataframe_cache(cache_file, df)
-    return df
+    except (requests.RequestException, ValueError) as exc:
+        stale_df = _read_dataframe_cache(cache_file, max_age=None)
+        if stale_df is not None:
+            log_exception(
+                _LOGGER,
+                "Failed to refresh solar radio flux; using last cached copy",
+                exc,
+            )
+            return stale_df
+        log_exception(_LOGGER, "Failed to refresh solar radio flux", exc)
+        raise
 
 
 def get_swpc_solar_probabilities() -> pd.DataFrame:
@@ -1082,6 +1115,8 @@ def _space_weather_state() -> Dict[str, Any]:
             "swl_last_updated": None,
             "swl_cme_daily": pd.DataFrame(),
             "swl_feature_matrix": pd.DataFrame(),
+            "auto_loading": False,
+            "auto_attempted": False,
         },
     )
     return state
@@ -1099,6 +1134,8 @@ def _noaa_space_state() -> Dict[str, Any]:
             "errors": {},
             "last_updated": None,
             "loading": False,
+            "auto_loading": False,
+            "auto_attempted": False,
             "correlations": {},
             "corr_params": {},
             "global_corr": pd.DataFrame(),
@@ -1139,6 +1176,40 @@ def _load_noaa_space_datasets(
         state["global_corr_labels"] = {}
     finally:
         state["loading"] = False
+
+
+def _auto_fetch_space_weather_if_needed(state: Dict[str, Any]) -> None:
+    """
+    Ensure the basic space weather datasets are available without user clicks.
+    """
+
+    if state.get("loaded") or state.get("auto_loading") or state.get("auto_attempted"):
+        return
+    state["auto_loading"] = True
+    try:
+        _fetch_space_weather_datasets(state)
+    except Exception as exc:  # pragma: no cover - defensive
+        log_exception(_LOGGER, "Automatic space weather bootstrap failed", exc)
+    finally:
+        state["auto_loading"] = False
+        state["auto_attempted"] = True
+
+
+def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
+    """
+    Preload NOAA feeds using cache-first retrieval so the tab is always populated.
+    """
+
+    if state.get("bundles") or state.get("loading") or state.get("auto_loading") or state.get("auto_attempted"):
+        return
+    state["auto_loading"] = True
+    try:
+        _load_noaa_space_datasets(state, use_cache=True)
+    except Exception as exc:  # pragma: no cover - defensive
+        log_exception(_LOGGER, "Automatic NOAA preload failed", exc)
+    finally:
+        state["auto_loading"] = False
+        state["auto_attempted"] = True
 
 
 def _donki_state() -> Dict[str, Any]:
@@ -2060,13 +2131,18 @@ def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
     try:
         state["kp_df"] = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
     except (requests.RequestException, ValueError) as exc:
+        log_exception(_LOGGER, "Failed to fetch SWPC K-index", exc)
         state["kp_error"] = f"Failed to retrieve K-index data: {exc}"
     try:
         state["flux_df"] = get_swpc_solar_radio_flux()
     except (requests.RequestException, ValueError) as exc:
+        log_exception(_LOGGER, "Failed to fetch SWPC solar radio flux", exc)
         state["flux_error"] = f"Failed to retrieve solar radio flux: {exc}"
     state["last_updated"] = pd.Timestamp.utcnow()
-    state["loaded"] = True
+    state["loaded"] = bool(
+        (isinstance(state.get("kp_df"), pd.DataFrame) and not state["kp_df"].empty)
+        or (isinstance(state.get("flux_df"), pd.DataFrame) and not state["flux_df"].empty)
+    )
 
 
 def _request_interpretation_with_progress(
@@ -2699,9 +2775,8 @@ def _plot_rr_timeseries(
                 }
             )
         if "artifact_flag" in up.df.columns:
-            # Fix FutureWarning: use explicit type conversion instead of fillna downcasting
-            mask_series = up.df["artifact_flag"].fillna(False).infer_objects(copy=False)
-            mask = mask_series.astype(bool).to_numpy()
+            # Fix FutureWarning: convert to bool dtype first, then fill NaN with False
+            mask = up.df["artifact_flag"].astype("boolean").fillna(False).to_numpy()
             if mask.any():
                 timestamps_masked = up.df.loc[mask, "timestamp"]
                 rr_masked = pd.to_numeric(
@@ -7158,6 +7233,18 @@ that predicts cognitive performance based on:
             # Session state for impact snapshot
             if "impact_snapshot" not in st.session_state:
                 st.session_state["impact_snapshot"] = None
+            if "impact_snapshot_error" not in st.session_state:
+                st.session_state["impact_snapshot_error"] = ""
+            
+            if st.session_state.get("impact_snapshot") is None and not st.session_state.get(
+                "impact_snapshot_error"
+            ):
+                try:
+                    st.session_state["impact_snapshot"] = fetch_space_weather_snapshot()
+                    st.session_state["impact_snapshot_error"] = ""
+                except Exception as exc:
+                    log_exception(_LOGGER, "Automatic impact prediction fetch failed", exc)
+                    st.session_state["impact_snapshot_error"] = str(exc)
             
             col_fetch_impact, col_refresh_info = st.columns([1, 2])
             with col_fetch_impact:
@@ -7166,7 +7253,10 @@ that predicts cognitive performance based on:
                         try:
                             snapshot = fetch_space_weather_snapshot()
                             st.session_state["impact_snapshot"] = snapshot
+                            st.session_state["impact_snapshot_error"] = ""
                         except Exception as exc:
+                            log_exception(_LOGGER, "Manual impact prediction fetch failed", exc)
+                            st.session_state["impact_snapshot_error"] = str(exc)
                             st.error(f"Failed to fetch impact predictions: {exc}")
             with col_refresh_info:
                 if st.session_state.get("impact_snapshot"):
@@ -7267,10 +7357,16 @@ that predicts cognitive performance based on:
                         for key, msg in snapshot.errors.items():
                             st.warning(f"**{key}**: {msg}")
             else:
-                st.info(
-                    "Click **'Fetch Impact Predictions'** to calculate expected arrival times "
-                    "for space weather events and get Polar H10 monitoring recommendations."
-                )
+                error_msg = st.session_state.get("impact_snapshot_error")
+                if error_msg:
+                    st.warning(
+                        f"Impact predictions are temporarily unavailable; using last known data when possible. Details: {error_msg}"
+                    )
+                else:
+                    st.info(
+                        "Click **'Fetch Impact Predictions'** to calculate expected arrival times "
+                        "for space weather events and get Polar H10 monitoring recommendations."
+                    )
             
             st.markdown("---")
         
@@ -7278,6 +7374,7 @@ that predicts cognitive performance based on:
         # Original space weather content continues below
         # =====================================================================
         space_state = _space_weather_state()
+        _auto_fetch_space_weather_if_needed(space_state)
         donki_state = _donki_state()
         col_fetch_sw, col_fetch_donki = st.columns(2)
         with col_fetch_sw:
@@ -8465,6 +8562,7 @@ that predicts cognitive performance based on:
             """)
         
         noaa_state = _noaa_space_state()
+        _auto_fetch_noaa_space_if_needed(noaa_state)
         col_fetch_noaa, col_refresh_noaa = st.columns(2)
         with col_fetch_noaa:
             fetch_noaa_clicked = st.button(
@@ -8480,8 +8578,7 @@ that predicts cognitive performance based on:
         if refresh_noaa_clicked:
             with st.spinner("Refreshing NOAA JSON feeds…"):
                 _load_noaa_space_datasets(noaa_state, use_cache=False)
-        # Removed automatic loading to prevent app hanging when internet is unavailable
-        # Users must manually click "Fetch NOAA feeds" button to load data
+        # Auto-load uses cache-first; buttons remain for manual refresh/force refresh
         if noaa_state.get("loading"):
             st.info("NOAA feeds are loading…")
         errors = noaa_state.get("errors", {})

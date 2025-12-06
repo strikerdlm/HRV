@@ -9,15 +9,17 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.0-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.5-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2025--12--05-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2025--12--06-blue)](CHANGELOG.md)
 
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.8.5**: Polar AccessLink automation with persistent OAuth tokens and VO2max history tracking. Sync your cardiorespiratory fitness data with one click and track changes over time.
 
 **NEW in v1.8.0**: HRV analysis runs only when you click **Run HRV Analysis**, and the database now sits alongside the app (`hrv_users.db`) for easy copy/portability.
 
@@ -152,6 +154,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | **Active User Context Sync** | Circadian and SAFTE tabs auto-fill age, chronotype, sleep debt, and mission schedules from the selected profile with a single sync button |
 | **Clinical Profiles** | Astronaut-grade assessment: BMR, TDEE, NASA nutrition, body composition |
 | **Exploration Medical Record** | NASA isolation/mission log with EVA, radiation, stress, and behavioral metrics |
+| **Exploration Medical Analytics** | Radiation/EVA/stress dashboards with trend cards sourced from ExMC logs |
 | **Polar AccessLink VO2 Integration** | Optional VO2max sync for exercise compensation via AccessLink API |
 | **Multi-Language** | English + Spanish (Colombian-validated scales: ESE-VC, KSS-CO) |
 | **Laboratory Tracking** | CBC/Hemogram, Blood Chemistry, Urinalysis with normal ranges |
@@ -175,9 +178,11 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE | Move Circadian settings to tab | Complete |
 | ✅ DONE | Active user context sync across mission tabs | Complete (Circadian + SAFTE auto-populate) |
 | ✅ DONE | Per-tab settings persistence | Complete (TabSettingsManager) |
-| 🟢 NEW | Cross-tab correlation (Circadian → Fatigue) | Complete (shared broker + auto-applied sleep window) |
+| ✅ DONE | Cross-tab correlation (Circadian → Fatigue) | Complete (shared broker + auto-applied sleep window) |
+| ✅ DONE | Polar AccessLink automation | Complete (persistent OAuth tokens + VO2max history) |
+| ✅ DONE | Exploration Medical Analytics dashboards | Complete (radiation/EVA/stress cards in Clinical tab) |
 
-**Best next task:** Polar AccessLink automation (persist OAuth tokens and sync VO2max history).
+**Best next task:** Group Summaries (cohort-level med/HRV exports).
 
 ### Planned Features (Q1 2026)
 
@@ -331,6 +336,7 @@ project/
   - Solar wind plasma (L1→Earth travel time calculated)
   - Geomagnetic conditions (Kp/Dst)
 - **Polar H10 Recommendations**: Automatic EKG timing guidance based on event severity
+- **Always-on data**: Auto-loads on tab open (cache-first) and falls back to the last cached Kp/F10.7 values if the network blips—no RR uploads required
 - Live Kp index, solar flux, solar wind parameters
 - SpaceWeatherLive snapshot with CME/flare data
 - Lag-aware correlations (0–72h) with HRV metrics
@@ -338,6 +344,7 @@ project/
 
 ### NOAA Space Tab
 - Comprehensive NOAA SWPC data feeds
+- Auto-fetches with cache-first fallback so feeds stay available even offline; manual refresh is still available
 - Interactive gauges for all space weather metrics
 - Batch correlation analysis across multiple parameters
 - Feature matrix builder for predictive modeling
