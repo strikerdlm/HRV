@@ -2775,9 +2775,8 @@ def _plot_rr_timeseries(
                 }
             )
         if "artifact_flag" in up.df.columns:
-            # Fix FutureWarning: use explicit type conversion instead of fillna downcasting
-            mask_series = up.df["artifact_flag"].fillna(False).infer_objects(copy=False)
-            mask = mask_series.astype(bool).to_numpy()
+            # Fix FutureWarning: convert to bool dtype first, then fill NaN with False
+            mask = up.df["artifact_flag"].astype("boolean").fillna(False).to_numpy()
             if mask.any():
                 timestamps_masked = up.df.loc[mask, "timestamp"]
                 rr_masked = pd.to_numeric(

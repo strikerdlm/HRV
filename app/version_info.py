@@ -18,7 +18,7 @@ except ImportError:  # pragma: no cover - fallback for script execution
 
 _LOGGER = get_logger(__name__)
 _CHANGELOG_PATH = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
-_DEFAULT_VERSION = "1.8.3"
+_DEFAULT_VERSION = "1.8.4"
 _DEFAULT_RELEASE_DATE = "2025-12-05"
 
 
