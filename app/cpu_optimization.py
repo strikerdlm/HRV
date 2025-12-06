@@ -129,17 +129,20 @@ def detect_cpu_info() -> CPUInfo:
             if result.returncode == 0:
                 cpu_name = result.stdout.strip()
         elif sys.platform == "win32":
-            import subprocess
-            result = subprocess.run(
-                ["wmic", "cpu", "get", "name"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if result.returncode == 0:
-                lines = result.stdout.strip().split("\n")
-                if len(lines) > 1:
-                    cpu_name = lines[1].strip()
+            # Try reading from Windows registry first (fast, provides full name)
+            try:
+                import winreg
+                key = winreg.OpenKey(
+                    winreg.HKEY_LOCAL_MACHINE,
+                    r"HARDWARE\DESCRIPTION\System\CentralProcessor\0"
+                )
+                cpu_name, _ = winreg.QueryValueEx(key, "ProcessorNameString")
+                winreg.CloseKey(key)
+            except Exception:
+                # Fallback to platform.processor() (generic name)
+                proc_name = platform.processor()
+                if proc_name and "unknown" not in proc_name.lower():
+                    cpu_name = proc_name
     except Exception as exc:
         _LOGGER.debug("CPU name detection failed: %s", exc)
     

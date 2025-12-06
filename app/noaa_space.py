@@ -14,10 +14,18 @@ import requests
 import re
 from pandas.api.types import is_datetime64_any_dtype
 
+try:
+    # When running as a package (tests)
+    from app.logging_config import get_logger, log_exception
+except ImportError:  # pragma: no cover - fallback for script execution
+    from logging_config import get_logger, log_exception
+
 SWPC_BASE_URL = "https://services.swpc.noaa.gov/json/"
 REQUEST_TIMEOUT = 10.0
 CACHE_TTL = pd.Timedelta(hours=6)
 NOAA_SPACE_CACHE_DIR = Path(__file__).resolve().parent / "data_cache" / "noaa_space"
+
+_LOGGER = get_logger(__name__)
 
 
 @dataclass(frozen=True, slots=True)
@@ -339,7 +347,7 @@ def _cache_path(spec: NOAASourceSpec) -> Path:
     return NOAA_SPACE_CACHE_DIR / f"{spec.key}.json"
 
 
-def _read_cache(spec: NOAASourceSpec) -> Optional[pd.DataFrame]:
+def _read_cache(spec: NOAASourceSpec, *, allow_stale: bool = False) -> Optional[pd.DataFrame]:
     cache_file = _cache_path(spec)
     if not cache_file.exists():
         return None
@@ -352,7 +360,9 @@ def _read_cache(spec: NOAASourceSpec) -> Optional[pd.DataFrame]:
         return None
     stored_at_raw = payload.get("stored_at")
     stored_at = pd.to_datetime(stored_at_raw, utc=True, errors="coerce")
-    if pd.isna(stored_at) or stored_at + CACHE_TTL < pd.Timestamp.now(tz="UTC"):
+    if pd.isna(stored_at):
+        return None
+    if not allow_stale and stored_at + CACHE_TTL < pd.Timestamp.now(tz="UTC"):
         return None
     data_json = payload.get("data")
     if not isinstance(data_json, str):
@@ -556,10 +566,22 @@ def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADa
         cached = _read_cache(spec)
         if cached is not None:
             return _prepare_frame(spec, cached)
-    raw_df = _download_dataset(spec)
-    bundle = _prepare_frame(spec, raw_df)
-    _write_cache(spec, raw_df)
-    return bundle
+    try:
+        raw_df = _download_dataset(spec)
+        bundle = _prepare_frame(spec, raw_df)
+        _write_cache(spec, raw_df)
+        return bundle
+    except (requests.RequestException, ValueError) as exc:
+        stale = _read_cache(spec, allow_stale=True)
+        if stale is not None:
+            log_exception(
+                _LOGGER,
+                f"NOAA fetch failed for {spec.key}; using stale cache copy",
+                exc,
+            )
+            return _prepare_frame(spec, stale)
+        log_exception(_LOGGER, f"NOAA fetch failed for {spec.key}", exc)
+        raise
 
 
 def load_noaa_space_data(

@@ -5,7 +5,7 @@ Provides persistent file logging for debugging, error tracking, and audit trails
 Logs are written to the `logs/` directory with automatic rotation.
 
 Usage:
-    from logging_config import setup_logging, get_logger
+    from app.logging_config import setup_logging, get_logger
     
     # Call once at app startup
     setup_logging()

@@ -1,14 +1,25 @@
 {
-  // Ensure Cursor/VS Code uses the project .venv interpreter
-  // Uses workspace-relative path that works across different user directories
-  "python.defaultInterpreterPath": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
-  // Point Python tooling at the Miniconda conda.exe to avoid Anaconda conflicts
-  // Note: Update this path to match your Miniconda installation location
-  "python.condaPath": "${env:USERPROFILE}\\Miniconda3\\Scripts\\conda.exe",
-  // Make terminals auto-activate the selected interpreter
+  // Use conda environment 'hrv' instead of .venv
+  "python.defaultInterpreterPath": "${env:USERPROFILE}\\anaconda3\\envs\\hrv\\python.exe",
+  
+  // Point to Anaconda conda.exe
+  "python.condaPath": "${env:USERPROFILE}\\anaconda3\\Scripts\\conda.exe",
+  
+  // Enable conda environment in terminal
   "python.terminal.activateEnvironment": true,
-  // Use local Jupyter server (remove remote config if not using remote server)
+  "python.terminal.activateEnvInCurrentTerminal": true,
+  
+  // Prefer conda environments over venv
+  "python.venvPath": "",
+  "python.pythonPath": "${env:USERPROFILE}\\anaconda3\\envs\\hrv\\python.exe",
+  
+  // Use local Jupyter server
   "jupyter.jupyterServerType": "local",
-  "jupyter.logging.level": "error"
+  "jupyter.logging.level": "error",
+  
+  // Terminal settings - ensure conda activation works
+  "terminal.integrated.env.windows": {
+    "CONDA_DEFAULT_ENV": "hrv"
+  }
 }
 

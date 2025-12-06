@@ -73,7 +73,7 @@ All other tabs show **example data** and **reference values** to help you unders
 
 **Cross-tab correlation:** The Circadian tab now publishes DLMO/CBT markers, ESRI, and light window details to the SAFTE/Fatigue tab. A single click in SAFTE applies the latest circadian sleep window and chronotype offset to fatigue simulations for tighter mission planning.
 
-**Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the database lives alongside the app (`hrv_users.db`) for easy portability.
+**Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. Space Weather and NOAA tabs auto-load cache-first data on open (reusing cached Kp/F10.7/NOAA feeds if offline) even without RR uploads. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the database lives alongside the app (`hrv_users.db`) for easy portability.
 
 ### System Requirements
 
@@ -612,15 +612,56 @@ Mission Control - Flight Surgeon now includes an exploration medical record alig
 
 The UI form includes chronic condition selectors, acute symptom checklists, and free-text notes for operational anomalies. Each submission either creates a new mission-day entry or updates the latest record, enabling high-resolution studies for 22-day isolation missions up to Mars analog campaigns.
 
+#### Exploration Medical Analytics Dashboard
+
+The Clinical Profile tab now exposes an **Exploration Medical Analytics** dashboard that aggregates every ExMC/EIMO entry into actionable indicators:
+
+- **Radiation Gauge**: Displays the highest cumulative dose logged to date, percentage of the NASA 1000 mSv career guideline, and daily accumulation rate to highlight accelerating exposure trends (NASA Human Research Program, 2023).
+- **EVA Workload Cards**: Summaries for average/peak EVA hours (rolling 72 h), days since the last EVA, and a clearance histogram so teams can identify when restrictions cluster around specific mission profiles.
+- **Stress & Behavioral Trends**: Five-entry rolling averages for confinement stress, workload rating, and sleep duration compare against the all-time mean to expose subtle drifts in crew well-being.
+- **Symptom & Behavioral Frequency Tables**: Top acute symptoms and behavioral health flags are tallied automatically, giving medical officers a quick triage list without exporting raw JSON.
+
+All indicators update in real time once a record is saved, giving crews immediate feedback without leaving the Clinical Profile context.
+
 ### Polar AccessLink VO₂max (optional)
 
-If a crew member uses Polar Flow, the NASA Nutrition calculator can import the latest VO₂max via Polar AccessLink. Configure:
+If a crew member uses Polar Flow, the NASA Nutrition calculator can import and track VO₂max via Polar AccessLink. The system now provides **automated sync** with persistent token storage and historical tracking.
+
+#### Quick Setup (Environment Variables)
 
 1. Register an application in the [Polar AccessLink program](https://www.polar.com/accesslink-api/).
 2. Set environment variables (never committed to source control):
-   - `POLAR_ACCESSLINK_TOKEN`
-   - `POLAR_ACCESSLINK_USER_ID`
-3. Restart the app. The calculator exposes a **Use Polar value** toggle to override the manual VO₂max entry.
+   - `POLAR_ACCESSLINK_TOKEN` — OAuth bearer token
+   - `POLAR_ACCESSLINK_USER_ID` — Polar Flow user ID
+3. Restart the app. The NASA Nutrition calculator will show a **🔄 Sync from Polar** button.
+
+#### Automated Sync Features (v1.8.5+)
+
+The new Polar AccessLink automation module provides:
+
+- **Persistent Token Storage**: OAuth tokens are encrypted and stored in the local database per user. No need to reconfigure on each app restart.
+- **VO₂max History Tracking**: Every sync saves to a history table with timestamp, source attribution (Polar vs manual), and Polar fitness class.
+- **Duplicate Detection**: The system avoids saving redundant entries if the value hasn't changed within 24 hours.
+- **Manual Entry Fallback**: Click **💾 Save Manual Entry** to record lab-tested VO₂max values with proper attribution.
+- **History Expander**: View recent VO₂max entries with dates, values, sources, and fitness classifications.
+
+#### VO₂max Source Attribution
+
+The calculator shows the source of the effective VO₂max value:
+- **"Polar AccessLink sync"**: Latest value fetched from Polar API
+- **"History (Polar)"** / **"History (Manual)"**: Value from stored history
+- **"Manual entry"**: Directly entered in the form
+
+#### Fitness Classifications
+
+Based on Polar's methodology, VO₂max values are classified as:
+- Very Poor: <25 mL/kg/min
+- Poor: 25–39 mL/kg/min
+- Fair: 40–44 mL/kg/min
+- Moderate: 45–50 mL/kg/min
+- Good: 51–56 mL/kg/min
+- Very Good: 57–62 mL/kg/min
+- Excellent: ≥63 mL/kg/min
 
 Polar AccessLink provides access to body metrics, exercise intensity, and cardiorespiratory fitness data that have already been uploaded to Polar Flow's cloud infrastructure.
 
@@ -732,6 +773,54 @@ The platform includes scientifically validated instruments for fatigue and sleep
 - ≥5: Severe fatigue impact
 
 **Reference:** Krupp LB, et al. *Arch Neurol.* 1989;46(10):1121-1123.
+
+#### Positive and Negative Affect Schedule (PANAS)
+
+The PANAS is a 20-item self-report measure of affect developed by Watson, Clark, and Tellegen (1988). It is one of the most widely used measures of mood in psychological research.
+
+**Structure:**
+- **Positive Affect (PA):** 10 items measuring extent of enthusiastic, active, alert states
+- **Negative Affect (NA):** 10 items measuring extent of distress, unpleasurable engagement
+
+**Positive Affect Items:** Interested, Excited, Strong, Enthusiastic, Proud, Alert, Inspired, Determined, Attentive, Active
+
+**Negative Affect Items:** Distressed, Upset, Guilty, Scared, Hostile, Irritable, Ashamed, Nervous, Jittery, Afraid
+
+**Response Scale:** 5-point Likert scale
+1. Very slightly or not at all
+2. A little
+3. Moderately
+4. Quite a bit
+5. Extremely
+
+**Scoring:** Sum items for each subscale. Score range: 10-50 for each.
+
+| PA Score | Interpretation |
+|----------|----------------|
+| 10-22 | Low positive affect (sadness, lethargy) |
+| 23-39 | Moderate positive affect |
+| 40-50 | High positive affect (energetic, engaged) |
+
+| NA Score | Interpretation |
+|----------|----------------|
+| 10-14 | Low negative affect (calm, serene) |
+| 15-22 | Moderate negative affect |
+| 23-50 | High negative affect (distress, anxiety) |
+
+**Clinical Significance:**
+- PA and NA are largely independent dimensions
+- High NA is associated with anxiety and depression
+- Low PA is specifically linked to depression (distinct from high NA)
+- Together they provide a comprehensive picture of affective state
+
+**Available Languages:**
+- **English:** Original validation (Watson, Clark, & Tellegen, 1988)
+- **Spanish:** Validated translation (Sandín et al., 1999, Psicothema; α=0.92 PA, α=0.88 NA)
+
+**References:**
+- Watson D, Clark LA, Tellegen A. *Development and validation of brief measures of positive and negative affect: The PANAS scales.* J Pers Soc Psychol. 1988;54(6):1063-1070. DOI: 10.1037/0022-3514.54.6.1063
+- Sandín B, et al. *Escalas PANAS de afecto positivo y negativo: Validación factorial y convergencia transcultural.* Psicothema. 1999;11(1):37-51.
+- Crawford JR, Henry JD. *The Positive and Negative Affect Schedule (PANAS): Construct validity, measurement properties and normative data in a large non-clinical sample.* Br J Clin Psychol. 2004;43(3):245-265.
 
 ### Profile-Adjusted HRV Interpretation
 
@@ -1260,6 +1349,8 @@ Interpretation: Normal (>1.04 in healthy adults)
 
 The Space Weather Impact Predictions feature calculates exact arrival times for different categories of solar energy hitting Earth, providing Polar H10 EKG monitoring recommendations optimized for your research on biological effects.
 
+Data now preloads automatically when you open the Space Weather tab (cache-first). If the network is unavailable, the app serves the last cached Kp/F10.7 snapshot and surfaces a warning; you can still click **🔄 Fetch Impact Predictions** to force a refresh.
+
 ### Energy Categories Tracked
 
 | Category | Symbol | Source | Travel Time | Detection Method |
@@ -1343,8 +1434,8 @@ Ideal time for baseline Polar H10 recording (control data).
 
 **Step 1: Fetch Predictions**
 
-1. Navigate to **Space Weather** tab
-2. Click **"🔄 Fetch Impact Predictions"** button
+1. Navigate to **Space Weather** tab (impact predictions auto-load using cache-first data)
+2. Click **"🔄 Fetch Impact Predictions"** if you want to force a refresh
 3. Wait for data retrieval (~5-10 seconds)
 
 **Step 2: Review Arrival Times Table**
@@ -1423,8 +1514,8 @@ Continue for 3 hours post-arrival for storm response capture.
 **Step 2: Open Space Weather tab**
 
 1. Navigate to **Space Weather** tab
-2. Click "Load SWPC Data" to fetch current solar/geomagnetic indices
-3. Wait for data to load (cached for 6 hours)
+2. The app auto-loads SWPC Kp/F10.7 data cache-first; click **"Fetch space weather data"** if you want to force a refresh
+3. Data is cached for 6 hours; if offline, the last cached copy is shown with a warning
 
 **Step 3: Configure correlation parameters**
 
@@ -1482,6 +1573,8 @@ storm onset. Effect size is modest; individual sensitivity varies.
 | Solar wind | Speed, density, temp | Real-time |
 | X-ray flux | Solar flare activity | 1-min |
 | Proton flux | Radiation storm levels | 5-min |
+
+Data auto-loads when you open the **NOAA Space** tab (cache-first). Use **Fetch NOAA feeds** to refresh, or **Force refresh NOAA feeds** to bypass cache. If NOAA is unreachable, the dashboard shows the last cached snapshot and posts a warning.
 
 **Feature Matrix Builder:**
 
@@ -3486,6 +3579,33 @@ This section outlines completed features and remaining planned enhancements for 
 - Vestibular-autonomic coupling
 - Simulator sickness prediction
 
+#### 19. Exploration Medical Capability (ExMC) Clinical Assessment  
+**Status:** In Progress (Q4 2025)  
+**Description:** Comprehensive clinical profile system aligned with NASA ExMC and EIMO frameworks for deep-space mission autonomy.
+
+**Implemented:**
+- Mission profile taxonomy (LEO through Mars Surface)
+- EIMO autonomy level tracking (ground-supported → full autonomy)
+- Radiation dose and space weather monitoring
+- HRP risk category alignment (chronic/acute symptom catalogs)
+- Countermeasure tracking (exercise, sleep, hydration, nutrition)
+- Behavioral health flags (confinement stress, workload, team dynamics)
+- Medical inventory and resupply logistics
+
+**Planned Enhancements (Q1 2026):**
+- AI-assisted clinical decision support (CDSS) per MEDEA concept (García-Gómez, 2020)
+- Probabilistic risk assessment for medical events
+- Integration with HRV longitudinal trends for fitness-for-duty checks
+- Extended reality (XR) telepresence support annotations
+- Pharmaceutical stability tracking and pharmacokinetics modeling
+- Just-in-time training module cross-links
+
+**Scientific References:**
+- Levin DR, et al. (2023). Enabling Human Space Exploration Missions Through Progressively Earth Independent Medical Operations (EIMO). *IEEE Open J Eng Med Biol.* DOI: 10.1109/OJEMB.2023.3255513
+- Anderson A, et al. (2025). Development of Progressively Earth-Independent Medical Operations to Enable NASA Exploration Missions. *Wilderness Environ Med.* DOI: 10.1177/10806032241310386
+- García-Gómez JM. (2020). Basic principles and concept design of a real-time clinical decision support system for autonomous medical care on missions to Mars based on adaptive deep learning. arXiv:2010.07029
+- Tran KA, et al. (2025). Managing Select Medical Emergencies During Long-Duration Space Missions. *Aerosp Med Hum Perform.* DOI: 10.3357/AMHP.6510.2025
+
 ### Research-Based Feature Ideas (2025-2026)
 
 Based on recent scientific literature, the following features are under consideration:
@@ -3579,8 +3699,10 @@ If you're interested in contributing to any of these developments:
 | Circadian analysis | Q4 2025 | ✅ Completed |
 | User profiles | Q4 2025 | ✅ Completed |
 | Docker deployment | Q4 2025 | ✅ Completed |
+| ExMC Clinical Assessment | Q4 2025 | 🔄 In Progress |
 | Baroreflex sensitivity | Q1 2026 | Planned |
 | Advanced nonlinear | Q1 2026 | Planned |
+| ExMC CDSS / AI support | Q1 2026 | Planned |
 | Mobile app | Q4 2026 | Conceptual |
 
 ---
