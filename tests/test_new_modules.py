@@ -396,6 +396,46 @@ class TestHrvFragmentation:
 
 
 # ---------------------------------------------------------------------------
+# exploration medical analytics tests
+# ---------------------------------------------------------------------------
+
+
+class TestExplorationMedicalAnalytics:
+    """Tests for exploration medical analytics helpers."""
+
+    def test_compute_radiation_rate_returns_expected_delta(self) -> None:
+        """Average daily accumulation should reflect mission day spacing."""
+        from app.user_profile_tab import _compute_radiation_rate
+
+        df = pd.DataFrame({
+            "mission_day": [0, 5, 10],
+            "radiation_dose_msv": [10.0, 20.0, 40.0],
+        })
+
+        rate = _compute_radiation_rate(df)
+
+        assert rate is not None
+        assert pytest.approx(rate, rel=1e-3) == 3.0
+
+    def test_build_frequency_df_counts_list_like_entries(self) -> None:
+        """Frequency helper should aggregate strings, lists, and sets."""
+        from app.user_profile_tab import _build_frequency_df
+
+        values = [
+            ["Headache", "Nausea"],
+            ["Headache"],
+            "Nausea",
+            {"Sleep disruption"},
+            None,
+        ]
+
+        freq_df = _build_frequency_df(values, top_n=2)
+
+        assert not freq_df.empty
+        assert set(freq_df["Label"]) == {"Headache", "Nausea"}
+        assert freq_df["Count"].sum() == 4
+
+# ---------------------------------------------------------------------------
 # sleep_metrics tests
 # ---------------------------------------------------------------------------
 

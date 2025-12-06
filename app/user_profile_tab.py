@@ -20,8 +20,9 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+from collections import Counter
 from datetime import datetime, date, timezone, timedelta
-from typing import Any, Dict, Final, List, Optional
+from typing import Any, Dict, Final, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
@@ -1535,6 +1536,9 @@ def _render_clinical_profile(user: UserProfile) -> None:
     
     with st.expander("🧾 Exploration Medical Record", expanded=False):
         _render_medical_record_form(user)
+    
+    with st.expander("📊 Exploration Medical Analytics", expanded=False):
+        _render_exploration_medical_analytics(user)
 
 
 def _render_data_completeness(user: UserProfile) -> None:
@@ -2026,6 +2030,220 @@ def _render_medical_history_summary(user: UserProfile) -> None:
     else:
         if not user.medical_conditions and not user.medications:
             st.info("No medical history recorded. Edit your profile or use the Exploration Medical Record form.")
+
+
+@st.cache_data(ttl=60, show_spinner=False)
+def _load_medical_history_dataframe(user_id: str) -> pd.DataFrame:
+    """Load exploration medical history entries as a typed DataFrame."""
+    if not user_id:
+        return pd.DataFrame()
+    try:
+        db = get_database()
+        records = db.get_medical_history(user_id, limit=180)
+    except Exception as exc:
+        _LOGGER.warning("Unable to load exploration medical history for %s: %s", user_id, exc)
+        return pd.DataFrame()
+    if not records:
+        return pd.DataFrame()
+    history_df = pd.DataFrame(records)
+    numeric_columns = [
+        "mission_day",
+        "radiation_dose_msv",
+        "eva_hours_72h",
+        "days_since_last_eva",
+        "confinement_stress",
+        "workload_rating",
+        "sleep_hours",
+        "sleep_quality",
+        "exercise_minutes",
+        "hydration_liters",
+        "caloric_intake",
+        "comm_delay_min",
+    ]
+    for column in numeric_columns:
+        if column in history_df.columns:
+            history_df[column] = pd.to_numeric(history_df[column], errors="coerce")
+    if "updated_at" in history_df.columns:
+        history_df["updated_at"] = pd.to_datetime(history_df["updated_at"], errors="coerce")
+        history_df.sort_values("updated_at", inplace=True)
+    elif "mission_day" in history_df.columns:
+        history_df.sort_values("mission_day", inplace=True)
+    history_df.reset_index(drop=True, inplace=True)
+    return history_df
+
+
+def _compute_radiation_rate(history_df: pd.DataFrame) -> Optional[float]:
+    """Compute average cumulative radiation increase per mission day."""
+    if history_df.empty or not {"mission_day", "radiation_dose_msv"}.issubset(history_df.columns):
+        return None
+    valid = history_df.dropna(subset=["mission_day", "radiation_dose_msv"]).sort_values("mission_day")
+    if len(valid) < 2:
+        return None
+    start_day = float(valid["mission_day"].iloc[0])
+    end_day = float(valid["mission_day"].iloc[-1])
+    if start_day == end_day:
+        return None
+    start_dose = float(valid["radiation_dose_msv"].iloc[0])
+    end_dose = float(valid["radiation_dose_msv"].iloc[-1])
+    return (end_dose - start_dose) / (end_day - start_day)
+
+
+def _build_frequency_df(values: Sequence[Any], top_n: int = 5) -> pd.DataFrame:
+    """Aggregate frequency counts for list-like history fields."""
+    counts: Counter[str] = Counter()
+    for entry in values:
+        if entry is None or (isinstance(entry, float) and np.isnan(entry)):
+            continue
+        if isinstance(entry, (list, tuple, set)):
+            for item in entry:
+                text = str(item).strip()
+                if text:
+                    counts[text] += 1
+        elif isinstance(entry, str):
+            text = entry.strip()
+            if text:
+                counts[text] += 1
+        else:
+            text = str(entry).strip()
+            if text:
+                counts[text] += 1
+    if not counts:
+        return pd.DataFrame(columns=["Label", "Count"])
+    most_common = counts.most_common(max(1, top_n))
+    return pd.DataFrame(most_common, columns=["Label", "Count"])
+
+
+def _render_exploration_medical_analytics(user: UserProfile) -> None:
+    """Render exploration medical analytics dashboard with aggregate indicators."""
+    st.markdown("#### 📊 Exploration Medical Analytics Dashboard")
+    history_df = _load_medical_history_dataframe(user.user_id)
+    if history_df.empty:
+        st.info("Log at least one exploration medical record to unlock analytics.")
+        return
+    latest_entry = history_df.iloc[-1]
+
+    # Radiation exposure
+    st.markdown("##### ☢️ Radiation Exposure")
+    rad_series = history_df["radiation_dose_msv"].dropna() if "radiation_dose_msv" in history_df.columns else pd.Series(dtype=float)
+    rad_limit = 1000.0  # NASA career limit guideline for deep-space crews
+    if rad_series.empty:
+        st.warning("No radiation dose entries recorded yet.")
+    else:
+        max_rad = float(rad_series.max())
+        median_rad = float(rad_series.median())
+        rad_rate = _compute_radiation_rate(history_df)
+        remaining = max(rad_limit - max_rad, 0.0)
+        col_r1, col_r2, col_r3 = st.columns(3)
+        col_r1.metric(
+            "Max cumulative dose",
+            f"{max_rad:.1f} mSv",
+            delta=f"{remaining:.1f} mSv below NASA limit",
+        )
+        col_r2.metric(
+            "Median logged dose",
+            f"{median_rad:.1f} mSv",
+            delta=None,
+        )
+        col_r3.metric(
+            "Daily accumulation",
+            f"{rad_rate:.2f} mSv/day" if rad_rate is not None else "—",
+            delta=None if rad_rate is None else "Avg change per mission day",
+        )
+        progress_value = min(max_rad / rad_limit, 1.0)
+        st.progress(progress_value)
+        st.caption(f"{progress_value * 100:.1f}% of NASA 1000 mSv career guideline")
+        if {"mission_day"}.issubset(history_df.columns):
+            chart_df = history_df.dropna(subset=["mission_day", "radiation_dose_msv"]).copy()
+            if not chart_df.empty:
+                chart_df = chart_df.sort_values("mission_day").set_index("mission_day")
+                chart_df.rename(columns={"radiation_dose_msv": "Radiation (mSv)"}, inplace=True)
+                st.line_chart(chart_df[["Radiation (mSv)"]])
+
+    # EVA workload
+    st.markdown("##### 🧑‍🚀 EVA Workload")
+    eva_series = history_df["eva_hours_72h"].dropna() if "eva_hours_72h" in history_df.columns else pd.Series(dtype=float)
+    avg_eva = float(eva_series.mean()) if not eva_series.empty else None
+    peak_eva = float(eva_series.max()) if not eva_series.empty else None
+    days_since_last = latest_entry.get("days_since_last_eva")
+    days_since_last_display = (
+        f"{int(days_since_last)} d" if days_since_last is not None and not np.isnan(days_since_last) else "—"
+    )
+    col_e1, col_e2, col_e3 = st.columns(3)
+    col_e1.metric("Avg EVA hrs (72h)", f"{avg_eva:.1f} h" if avg_eva is not None else "—")
+    col_e2.metric("Peak EVA load", f"{peak_eva:.1f} h" if peak_eva is not None else "—", delta="Rolling 72h window")
+    col_e3.metric("Days since last EVA", days_since_last_display)
+    if "eva_status" in history_df.columns:
+        eva_status_counts = history_df["eva_status"].dropna().value_counts().head(4)
+        if not eva_status_counts.empty:
+            st.bar_chart(eva_status_counts.rename("EVA Clearance States"))
+
+    # Stress and behavioral indicators
+    st.markdown("##### 🧠 Stress & Behavioral Indicators")
+    stress_series = history_df["confinement_stress"].dropna() if "confinement_stress" in history_df.columns else pd.Series(dtype=float)
+    workload_series = history_df["workload_rating"].dropna() if "workload_rating" in history_df.columns else pd.Series(dtype=float)
+    sleep_series = history_df["sleep_hours"].dropna() if "sleep_hours" in history_df.columns else pd.Series(dtype=float)
+    recent_window = history_df.tail(min(len(history_df), 5))
+    recent_stress = (
+        float(recent_window["confinement_stress"].dropna().mean())
+        if "confinement_stress" in recent_window.columns and not recent_window["confinement_stress"].dropna().empty
+        else None
+    )
+    baseline_stress = float(stress_series.mean()) if not stress_series.empty else None
+    stress_delta = (
+        None if baseline_stress is None or recent_stress is None else recent_stress - baseline_stress
+    )
+    recent_workload = (
+        float(recent_window["workload_rating"].dropna().mean())
+        if "workload_rating" in recent_window.columns and not recent_window["workload_rating"].dropna().empty
+        else None
+    )
+    workload_delta = (
+        None
+        if workload_series.empty or recent_workload is None
+        else recent_workload - float(workload_series.mean())
+    )
+    recent_sleep = (
+        float(recent_window["sleep_hours"].dropna().mean())
+        if "sleep_hours" in recent_window.columns and not recent_window["sleep_hours"].dropna().empty
+        else None
+    )
+    col_s1, col_s2, col_s3 = st.columns(3)
+    col_s1.metric(
+        "Confinement stress (last 5)",
+        f"{recent_stress:.1f}/10" if recent_stress is not None else "—",
+        delta=f"{stress_delta:+.1f} vs avg" if stress_delta is not None else None,
+    )
+    col_s2.metric(
+        "Workload rating (last 5)",
+        f"{recent_workload:.1f}/10" if recent_workload is not None else "—",
+        delta=f"{workload_delta:+.1f} vs avg" if workload_delta is not None else None,
+    )
+    col_s3.metric(
+        "Sleep hours (last 5)",
+        f"{recent_sleep:.1f} h" if recent_sleep is not None else "—",
+        delta=None,
+    )
+    symptom_df = _build_frequency_df(
+        history_df["acute_symptoms"].tolist() if "acute_symptoms" in history_df.columns else [],
+        top_n=5,
+    )
+    behavior_df = _build_frequency_df(
+        history_df["behavioral_flags"].tolist() if "behavioral_flags" in history_df.columns else [],
+        top_n=5,
+    )
+    col_b1, col_b2 = st.columns(2)
+    with col_b1:
+        if symptom_df.empty:
+            st.caption("No acute symptom trends logged yet.")
+        else:
+            st.caption("Top acute symptoms (all-time)")
+            st.dataframe(symptom_df, use_container_width=True, hide_index=True)
+    with col_b2:
+        if behavior_df.empty:
+            st.caption("No behavioral flags logged yet.")
+        else:
+            st.caption("Behavioral health flags (frequency)")
+            st.dataframe(behavior_df, use_container_width=True, hide_index=True)
 
 
 @_fragment_if_available
