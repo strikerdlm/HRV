@@ -992,12 +992,15 @@ def get_swpc_solar_radio_flux() -> pd.DataFrame:
                 break
         if df.empty:
             return df
-        # Ensure a unified time column name
-        time_cols = [
-            col
-            for col in df.columns
-            if is_datetime64_any_dtype(df[col])
-        ]
+        # Ensure a unified time column name (robust to tz-aware dtypes)
+        time_cols: List[str] = []
+        for col in df.columns:
+            try:
+                if is_datetime64_any_dtype(df[col]):
+                    time_cols.append(col)
+            except TypeError:
+                # Some pandas/numpy builds raise on tz-aware extension dtypes; ignore
+                continue
         if time_cols:
             main_time = time_cols[0]
             df = df.dropna(subset=[main_time]).sort_values(main_time)
