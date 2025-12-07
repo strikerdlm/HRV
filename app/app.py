@@ -4228,7 +4228,12 @@ def main() -> None:
         # Bind cache to selected user profile to avoid cross-user mixing
         profile_id = None
         if st.session_state.get("current_user_profile"):
-            profile_id = st.session_state["current_user_profile"].get("user_id")
+            prof = st.session_state["current_user_profile"]
+            # Support both dict and dataclass/object with user_id attribute
+            if isinstance(prof, dict):
+                profile_id = prof.get("user_id")
+            else:
+                profile_id = getattr(prof, "user_id", None)
 
         # Check if we can skip computation entirely (same data + settings + profile)
         _skip_compute = False
