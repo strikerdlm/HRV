@@ -4256,29 +4256,31 @@ def main() -> None:
         # Cleaning + metadata with immediate percentage updates (no progress bars)
         total = max(1, len(datasets))
         txt_clean = st.empty()
-        
+        prog_clean = st.progress(0)
         # Only show progress if not using cached results
         if not _skip_compute:
-            txt_clean.text(
-                ("Cleaning datasets... " if apply_clean else "Preparing datasets... ") +
-                "0%")
+            txt_clean.markdown(
+                f"### {'Cleaning' if apply_clean else 'Preparing'} datasets... 0%"
+            )
             logger.info(
                 "Starting %s of %d dataset(s)",
                 "cleaning" if apply_clean else "preparation",
                 total,
             )
         else:
-            txt_clean.text("Loading cached results... 100%")
+            txt_clean.markdown("### Loading cached results... 100%")
+            prog_clean.progress(100)
         
         completed = 0
         for name, up in datasets.items():
             if up.rr_ms.size == 0:
                 completed += 1
                 if not _skip_compute:
-                    txt_clean.text(
-                        ("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
-                        + f"{min(100, int(completed * 100 / total))}%"
+                    percent = min(100, int(completed * 100 / total))
+                    txt_clean.markdown(
+                        f"### {'Cleaning' if apply_clean else 'Preparing'} datasets... {percent}%"
                     )
+                    prog_clean.progress(percent)
                 continue
             if apply_clean:
                 # Use cached cleaning when available for performance
@@ -4333,10 +4335,11 @@ def main() -> None:
             meta_rows.append(meta_entry)
             completed += 1
             if not _skip_compute:
-                txt_clean.text(
-                    ("Cleaning datasets... " if apply_clean else "Preparing datasets... ")
-                    + f"{min(100, int(completed * 100 / total))}%"
+                percent = min(100, int(completed * 100 / total))
+                txt_clean.markdown(
+                    f"### {'Cleaning' if apply_clean else 'Preparing'} datasets... {percent}%"
                 )
+                prog_clean.progress(percent)
         
         if not _skip_compute:
             logger.info(
@@ -4344,9 +4347,10 @@ def main() -> None:
                 "cleaning" if apply_clean else "preparation",
                 total,
             )
-        txt_clean.text(
-            ("Cleaning complete." if apply_clean else "Preparation complete.") +
-            " 100%")
+        txt_clean.markdown(
+            f"### {'Cleaning' if apply_clean else 'Preparation'} complete. 100%"
+        )
+        prog_clean.progress(100)
         
         # Update computation state for next rerun
         if HRV_CACHE_AVAILABLE:
@@ -4365,7 +4369,8 @@ def main() -> None:
         # Windowed metrics computation with optional parallel processing
         windowed_all: List[pd.DataFrame] = []
         txt_win = st.empty()
-        txt_win.text("Computing windowed metrics... 0%")
+        prog_win = st.progress(0)
+        txt_win.markdown("### Computing windowed metrics... 0%")
         total_win = max(1, len(datasets))
         
         # Check if parallel processing should be enabled
@@ -4414,10 +4419,9 @@ def main() -> None:
                     if wdf is not None:
                         windowed_all.append(wdf.assign(source=name))
                     done_win += 1
-                    txt_win.text(
-                        "Computing windowed metrics... "
-                        + f"{min(100, int(done_win * 100 / total_win))}%"
-                    )
+                    percent = min(100, int(done_win * 100 / total_win))
+                    txt_win.markdown(f"### Computing windowed metrics... {percent}%")
+                    prog_win.progress(percent)
         else:
             # Sequential processing (original code path)
             done_win = 0
@@ -4438,10 +4442,9 @@ def main() -> None:
                 if not wdf.empty:
                     windowed_all.append(wdf.assign(source=name))
                 done_win += 1
-                txt_win.text(
-                    "Computing windowed metrics... "
-                    + f"{min(100, int(done_win * 100 / total_win))}%"
-                )
+                percent = min(100, int(done_win * 100 / total_win))
+                txt_win.markdown(f"### Computing windowed metrics... {percent}%")
+                prog_win.progress(percent)
         
         if windowed_all:
             windowed_df = pd.concat(windowed_all, ignore_index=True)
@@ -4474,7 +4477,8 @@ def main() -> None:
                 )
                 state.mark_complete(files_hash, settings_hash, windowed=True)
                 cache_mgr.update_computation_state(state)
-        txt_win.text("Computing windowed metrics... 100%")
+        txt_win.markdown("### Computing windowed metrics... 100%")
+        prog_win.progress(100)
 
         # ML clustering
         if enable_ml and not windowed_df.empty:
@@ -4584,7 +4588,8 @@ def main() -> None:
         multi_results: List[Dict[str, Any]] = []
         ordered_sources: List[str] = []
         txt_full = st.empty()
-        txt_full.text("Computing full-recording metrics... 0%")
+        prog_full = st.progress(0)
+        txt_full.markdown("### Computing full-recording metrics... 0%")
 
         total_full = max(1, len(datasets))
         done_full = 0
@@ -4617,11 +4622,11 @@ def main() -> None:
                 multi_results.append(m)
                 ordered_sources.append(name)
                 done_full += 1
-                txt_full.text(
-                    "Computing full-recording metrics... "
-                    + f"{min(100, int(done_full * 100 / total_full))}%"
-                )
-        txt_full.text("Computing full-recording metrics... 100%")
+                percent = min(100, int(done_full * 100 / total_full))
+                txt_full.markdown(f"### Computing full-recording metrics... {percent}%")
+                prog_full.progress(percent)
+        txt_full.markdown("### Computing full-recording metrics... 100%")
+        prog_full.progress(100)
         multi_results_df = pd.DataFrame(
             multi_results) if multi_results else pd.DataFrame()
 
