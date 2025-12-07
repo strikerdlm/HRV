@@ -480,9 +480,12 @@ class HRVCacheManager:
 # ---------------------------------------------------------------------------
 # Module-Level Cache Instance
 # ---------------------------------------------------------------------------
-@st.cache_resource
-def get_cache_manager() -> HRVCacheManager:
-    """Get or create the global cache manager instance."""
+@st.cache_resource(show_spinner=False)
+def get_cache_manager(_version: str = f"profile-cache-{CACHE_VERSION}") -> HRVCacheManager:
+    """Get or create the global cache manager instance.
+    
+    _version is included to force cache invalidation when cache schema changes.
+    """
     return HRVCacheManager()
 
 
