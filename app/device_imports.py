@@ -17,7 +17,7 @@ import io
 import re
 import tempfile
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -57,6 +57,7 @@ def _parse_timestamp_from_filename(filename: str) -> Optional[datetime]:
     - YYYY-MM-DD_HH-MM-SS.txt
     - YYYYMMDD_HHMMSS.txt
     """
+    file_tz = timezone(timedelta(hours=-5))  # Treat filenames as local UTC-5 and convert to UTC
     patterns = [
         r"(\d{4})-(\d{2})-(\d{2})[\s_](\d{2})-(\d{2})-(\d{2})",
         r"(\d{4})(\d{2})(\d{2})_(\d{2})(\d{2})(\d{2})",
@@ -67,18 +68,29 @@ def _parse_timestamp_from_filename(filename: str) -> Optional[datetime]:
         if match:
             groups = match.groups()
             try:
-                return datetime(
+                parsed = datetime(
                     year=int(groups[0]),
                     month=int(groups[1]),
                     day=int(groups[2]),
                     hour=int(groups[3]),
                     minute=int(groups[4]),
                     second=int(groups[5]),
-                    tzinfo=timezone.utc
+                    tzinfo=file_tz,
                 )
+                return parsed.astimezone(timezone.utc)
             except ValueError:
                 continue
     return None
+
+
+def _build_rr_timestamps(
+    rr_ms: np.ndarray, start_ts: datetime
+) -> np.ndarray:
+    """Build cumulative timestamps from RR intervals."""
+    if rr_ms.size == 0:
+        return np.array([], dtype="datetime64[ns]")
+    rr_cum_s = np.cumsum(rr_ms) / 1000.0
+    return start_ts + pd.to_timedelta(rr_cum_s, unit="s")
 
 
 def _validate_rr_intervals(rr_ms: np.ndarray) -> Tuple[np.ndarray, float]:
@@ -141,8 +153,8 @@ def render_primary_import_section() -> Dict[str, ImportedRRData]:
     
     # Primary: Polar H10/H9 Import
     polar_data = _render_polar_section()
-    if polar_data is not None:
-        imported_data[f"Polar_{polar_data.filename}"] = polar_data
+    for name, data in polar_data.items():
+        imported_data[f"Polar_{name}"] = data
     
     # Secondary: Garmin Import
     garmin_data = _render_garmin_section()
@@ -151,8 +163,8 @@ def render_primary_import_section() -> Dict[str, ImportedRRData]:
     
     # Tertiary: Generic RR file import (collapsed by default)
     generic_data = _render_generic_rr_section()
-    if generic_data is not None:
-        imported_data[f"RR_{generic_data.filename}"] = generic_data
+    for name, data in generic_data.items():
+        imported_data[f"RR_{name}"] = data
     
     # ActiGraph (for activity context)
     actigraph_data = _render_actigraph_section()
@@ -167,8 +179,8 @@ def render_primary_import_section() -> Dict[str, ImportedRRData]:
     return imported_data
 
 
-def _render_polar_section() -> Optional[ImportedRRData]:
-    """Render Polar H10/H9 import section (PRIMARY)."""
+def _render_polar_section() -> Dict[str, ImportedRRData]:
+    """Render Polar H10/H9 import section (PRIMARY). Supports multiple files."""
     
     with st.sidebar.expander("❤️ Polar H10/H9 RR Data", expanded=True):
         st.markdown(
@@ -180,65 +192,68 @@ def _render_polar_section() -> Optional[ImportedRRData]:
             unsafe_allow_html=True
         )
         
-        uploaded_file = st.file_uploader(
-            "Select Polar RR file",
+        uploaded_files = st.file_uploader(
+            "Select Polar RR file(s)",
             type=["txt", "csv"],
             key="polar_rr_upload",
             help="One RR interval (ms) per line. Supports Polar Sensor Logger export.",
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            accept_multiple_files=True,
         )
         
-        if uploaded_file is not None:
-            try:
-                content = uploaded_file.read().decode("utf-8")
-                lines = content.strip().split("\n")
-                
-                # Parse RR intervals
-                rr_values = []
-                for line in lines:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    # Skip header lines
-                    if line.lower().startswith(("rr", "interval", "time", "#")):
-                        continue
-                    try:
-                        # Handle comma-separated or tab-separated
-                        parts = line.replace(",", "\t").split("\t")
-                        value = float(parts[0])
-                        if 200 <= value <= 3000:  # Valid RR range
-                            rr_values.append(value)
-                    except (ValueError, IndexError):
-                        continue
-                
-                if len(rr_values) > 10:
-                    rr_array = np.array(rr_values, dtype=np.float64)
-                    clean_rr, quality = _validate_rr_intervals(rr_array)
+        results: Dict[str, ImportedRRData] = {}
+        if uploaded_files:
+            max_files = 10
+            for uploaded_file in uploaded_files[:max_files]:
+                try:
+                    content = uploaded_file.read().decode("utf-8")
+                    lines = content.strip().split("\n")
                     
-                    # Parse timestamp from filename
-                    recording_start = _parse_timestamp_from_filename(uploaded_file.name)
+                    rr_values = []
+                    for line in lines:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        if line.lower().startswith(("rr", "interval", "time", "#")):
+                            continue
+                        try:
+                            parts = line.replace(",", "\t").split("\t")
+                            value = float(parts[0])
+                            if 200 <= value <= 3000:  # Valid RR range
+                                rr_values.append(value)
+                        except (ValueError, IndexError):
+                            continue
                     
-                    data = ImportedRRData(
-                        source_device="Polar H10/H9",
-                        filename=uploaded_file.name,
-                        rr_intervals_ms=clean_rr,
-                        recording_start=recording_start,
-                        quality_score=quality,
-                        metadata={"original_count": len(rr_values)}
-                    )
-                    
-                    # Show success
-                    st.success(f"✅ Loaded {data.sample_count:,} RR intervals")
-                    _render_import_stats(data)
-                    
-                    return data
-                else:
-                    st.warning("⚠️ Too few valid RR intervals found")
-                    
-            except Exception as e:
-                st.error(f"❌ Error reading file: {e}")
-    
-    return None
+                    if len(rr_values) > 10:
+                        rr_array = np.array(rr_values, dtype=np.float64)
+                        clean_rr, quality = _validate_rr_intervals(rr_array)
+                        
+                        start_ts = _parse_timestamp_from_filename(uploaded_file.name) or datetime.now(timezone.utc)
+                        timestamps = _build_rr_timestamps(clean_rr, start_ts)
+                        
+                        data = ImportedRRData(
+                            source_device="Polar H10/H9",
+                            filename=uploaded_file.name,
+                            rr_intervals_ms=clean_rr,
+                            timestamps=timestamps,
+                            recording_start=start_ts,
+                            quality_score=quality,
+                            metadata={"original_count": len(rr_values)},
+                        )
+                        
+                        st.success(f"✅ Loaded {data.sample_count:,} RR intervals from {uploaded_file.name}")
+                        _render_import_stats(data)
+                        results[uploaded_file.name] = data
+                    else:
+                        st.warning(f"⚠️ Too few valid RR intervals found in {uploaded_file.name}")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error reading file {uploaded_file.name}: {e}")
+            
+            if len(uploaded_files) > max_files:
+                st.warning(f"Processed first {max_files} files; please upload fewer files per batch.")
+        
+        return results
 
 
 def _render_garmin_section() -> Optional[ImportedRRData]:
@@ -324,8 +339,8 @@ def _render_garmin_section() -> Optional[ImportedRRData]:
     return None
 
 
-def _render_generic_rr_section() -> Optional[ImportedRRData]:
-    """Render generic RR interval file import (fallback)."""
+def _render_generic_rr_section() -> Dict[str, ImportedRRData]:
+    """Render generic RR interval file import (fallback). Supports multiple files."""
     
     with st.sidebar.expander("📄 Generic RR File", expanded=False):
         st.markdown(
@@ -337,55 +352,64 @@ def _render_generic_rr_section() -> Optional[ImportedRRData]:
             unsafe_allow_html=True
         )
         
-        uploaded_file = st.file_uploader(
-            "Select RR file",
+        uploaded_files = st.file_uploader(
+            "Select RR file(s)",
             type=["txt", "csv"],
             key="generic_rr_upload",
             help="One RR interval (milliseconds) per line",
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            accept_multiple_files=True,
         )
         
-        if uploaded_file is not None:
-            try:
-                content = uploaded_file.read().decode("utf-8")
-                lines = content.strip().split("\n")
-                
-                rr_values = []
-                for line in lines:
-                    line = line.strip()
-                    if not line or line.startswith(("#", "RR", "rr", "time")):
-                        continue
-                    try:
-                        parts = line.replace(",", "\t").replace(";", "\t").split("\t")
-                        value = float(parts[0])
-                        if 200 <= value <= 3000:
-                            rr_values.append(value)
-                    except (ValueError, IndexError):
-                        continue
-                
-                if len(rr_values) > 10:
-                    rr_array = np.array(rr_values, dtype=np.float64)
-                    clean_rr, quality = _validate_rr_intervals(rr_array)
-                    recording_start = _parse_timestamp_from_filename(uploaded_file.name)
+        results: Dict[str, ImportedRRData] = {}
+        if uploaded_files:
+            max_files = 10
+            for uploaded_file in uploaded_files[:max_files]:
+                try:
+                    content = uploaded_file.read().decode("utf-8")
+                    lines = content.strip().split("\n")
                     
-                    data = ImportedRRData(
-                        source_device="Generic RR File",
-                        filename=uploaded_file.name,
-                        rr_intervals_ms=clean_rr,
-                        recording_start=recording_start,
-                        quality_score=quality,
-                    )
+                    rr_values = []
+                    for line in lines:
+                        line = line.strip()
+                        if not line or line.startswith(("#", "RR", "rr", "time")):
+                            continue
+                        try:
+                            parts = line.replace(",", "\t").replace(";", "\t").split("\t")
+                            value = float(parts[0])
+                            if 200 <= value <= 3000:
+                                rr_values.append(value)
+                        except (ValueError, IndexError):
+                            continue
                     
-                    st.success(f"✅ Loaded {data.sample_count:,} RR intervals")
-                    _render_import_stats(data)
-                    return data
-                else:
-                    st.warning("⚠️ Too few valid RR intervals found")
-                    
-            except Exception as e:
-                st.error(f"❌ Error: {e}")
-    
-    return None
+                    if len(rr_values) > 10:
+                        rr_array = np.array(rr_values, dtype=np.float64)
+                        clean_rr, quality = _validate_rr_intervals(rr_array)
+                        start_ts = _parse_timestamp_from_filename(uploaded_file.name) or datetime.now(timezone.utc)
+                        timestamps = _build_rr_timestamps(clean_rr, start_ts)
+                        
+                        data = ImportedRRData(
+                            source_device="Generic RR File",
+                            filename=uploaded_file.name,
+                            rr_intervals_ms=clean_rr,
+                            timestamps=timestamps,
+                            recording_start=start_ts,
+                            quality_score=quality,
+                        )
+                        
+                        st.success(f"✅ Loaded {data.sample_count:,} RR intervals from {uploaded_file.name}")
+                        _render_import_stats(data)
+                        results[uploaded_file.name] = data
+                    else:
+                        st.warning(f"⚠️ Too few valid RR intervals found in {uploaded_file.name}")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error processing {uploaded_file.name}: {e}")
+            
+            if len(uploaded_files) > max_files:
+                st.warning(f"Processed first {max_files} files; please upload fewer files per batch.")
+        
+        return results
 
 
 def _render_actigraph_section() -> Optional[ImportedRRData]:
@@ -453,7 +477,9 @@ def render_all_device_imports() -> Dict[str, ImportedRRData]:
 
 def render_polar_import_section() -> Optional[ImportedRRData]:
     """Legacy function for standalone Polar import."""
-    return _render_polar_section()
+    # For backward compatibility, return the first imported dataset if present.
+    polar_data = _render_polar_section()
+    return next(iter(polar_data.values()), None)
 
 
 def render_garmin_import_section() -> Optional[ImportedRRData]:
