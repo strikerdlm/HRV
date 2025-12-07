@@ -4225,7 +4225,12 @@ def main() -> None:
         # ===================================================================
         # PERFORMANCE OPTIMIZATION: Use cached cleaning results when available
         # ===================================================================
-        # Check if we can skip computation entirely (same data + settings)
+        # Bind cache to selected user profile to avoid cross-user mixing
+        profile_id = None
+        if st.session_state.get("current_user_profile"):
+            profile_id = st.session_state["current_user_profile"].get("user_id")
+
+        # Check if we can skip computation entirely (same data + settings + profile)
         _skip_compute = False
         if HRV_CACHE_AVAILABLE:
             _skip_compute = should_skip_computation(
@@ -4235,9 +4240,10 @@ def main() -> None:
                 int(median_win),
                 win,
                 step,
+                profile_id=profile_id,
             )
             if _skip_compute:
-                logger.debug("Skipping cleaning - results already cached with same settings")
+                logger.debug("Skipping cleaning - results already cached with same settings/profile")
         
         # Cleaning + metadata with immediate percentage updates (no progress bars)
         total = max(1, len(datasets))
@@ -4338,7 +4344,7 @@ def main() -> None:
         if HRV_CACHE_AVAILABLE:
             cache_mgr = get_cache_manager()
             state = cache_mgr.get_computation_state()
-            files_hash = cache_mgr.compute_all_uploads_hash(datasets)
+            files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
             settings_hash = compute_settings_hash(
                 str(method), float(max_dev), int(median_win), win, step
             )
@@ -4444,6 +4450,16 @@ def main() -> None:
                     z_warn=float(z_warn),
                     z_alert=float(z_alert),
                 )
+            # Mark windowed stage complete for caching
+            if HRV_CACHE_AVAILABLE:
+                cache_mgr = get_cache_manager()
+                state = cache_mgr.get_computation_state()
+                files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
+                settings_hash = compute_settings_hash(
+                    str(method), float(max_dev), int(median_win), win, step
+                )
+                state.mark_complete(files_hash, settings_hash, windowed=True)
+                cache_mgr.update_computation_state(state)
         txt_win.text("Computing windowed metrics... 100%")
 
         # ML clustering
@@ -4643,6 +4659,17 @@ def main() -> None:
         except Exception:
             _noaa_rows = []
         meta_rows_for_context = meta_rows + _noaa_rows if _noaa_rows else meta_rows
+
+        # Mark comprehensive stage complete for caching
+        if HRV_CACHE_AVAILABLE:
+            cache_mgr = get_cache_manager()
+            state = cache_mgr.get_computation_state()
+            files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
+            settings_hash = compute_settings_hash(
+                str(method), float(max_dev), int(median_win), win, step
+            )
+            state.mark_complete(files_hash, settings_hash, comprehensive=True, windowed=True, cleaning=True)
+            cache_mgr.update_computation_state(state)
     else:
         # No data uploaded - set remaining defaults
         pns_mapping = {}
@@ -5908,14 +5935,35 @@ Context (posture, time of day, medications) strongly affects interpretation.*
             
             st.divider()
             
-            # User input for demographics
+            # User input for demographics (prefill from selected profile if available)
+            prof = st.session_state.get("current_user_profile") or {}
+            profile_age_default = st.session_state.get("user_age", 35)
+            profile_sex_default = st.session_state.get("user_sex", "All (combined)")
+            if isinstance(prof, dict):
+                if prof.get("age_years") is not None:
+                    profile_age_default = int(prof["age_years"])
+                elif prof.get("date_of_birth"):
+                    try:
+                        dob = pd.to_datetime(prof["date_of_birth"]).date()
+                        today = pd.Timestamp.utcnow().date()
+                        age_calc = today.year - dob.year - ((today.month, today.day) < (dob.month, dob.day))
+                        profile_age_default = max(10, min(100, age_calc))
+                    except Exception:
+                        pass
+                if prof.get("sex"):
+                    sex_val = str(prof.get("sex", "")).lower()
+                    if sex_val in ("male", "m"):
+                        profile_sex_default = "Male"
+                    elif sex_val in ("female", "f"):
+                        profile_sex_default = "Female"
+
             col_demo1, col_demo2 = st.columns(2)
             with col_demo1:
                 user_age = st.number_input(
                     "Your Age (years)",
                     min_value=10,
                     max_value=100,
-                    value=st.session_state.get("user_age", 35),
+                    value=profile_age_default,
                     help="Age affects normative ranges - HRV typically decreases with age"
                 )
                 st.session_state["user_age"] = user_age
@@ -5924,7 +5972,7 @@ Context (posture, time of day, medications) strongly affects interpretation.*
                 user_sex = st.selectbox(
                     "Biological Sex",
                     options=["All (combined)", "Male", "Female"],
-                    index=0,
+                    index=["All (combined)", "Male", "Female"].index(profile_sex_default),
                     help="Sex affects some HRV norms, particularly vagal metrics"
                 )
                 sex_value = None if user_sex == "All (combined)" else user_sex.lower()
