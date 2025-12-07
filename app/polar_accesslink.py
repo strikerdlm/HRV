@@ -226,7 +226,16 @@ class PolarAccessLinkClient:
     def credentials(self) -> Optional[PolarCredentials]:
         """Get cached or load credentials from database."""
         if self._credentials is None:
-            self._credentials = self.db.get_polar_credentials(self.user_id)
+            if not hasattr(self.db, "get_polar_credentials"):
+                _LOGGER.error(
+                    "UserDatabase missing get_polar_credentials; Polar AccessLink disabled"
+                )
+                return None
+            try:
+                self._credentials = self.db.get_polar_credentials(self.user_id)
+            except Exception as exc:  # pragma: no cover - defensive log path
+                _LOGGER.error("Failed to load Polar credentials: %s", exc)
+                return None
         return self._credentials
     
     def has_credentials(self) -> bool:
