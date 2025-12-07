@@ -4344,7 +4344,10 @@ def main() -> None:
         if HRV_CACHE_AVAILABLE:
             cache_mgr = get_cache_manager()
             state = cache_mgr.get_computation_state()
-            files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
+            try:
+                files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
+            except TypeError:
+                files_hash = cache_mgr.compute_all_uploads_hash(datasets)
             settings_hash = compute_settings_hash(
                 str(method), float(max_dev), int(median_win), win, step
             )
@@ -4454,7 +4457,10 @@ def main() -> None:
             if HRV_CACHE_AVAILABLE:
                 cache_mgr = get_cache_manager()
                 state = cache_mgr.get_computation_state()
-                files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
+                try:
+                    files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
+                except TypeError:
+                    files_hash = cache_mgr.compute_all_uploads_hash(datasets)
                 settings_hash = compute_settings_hash(
                     str(method), float(max_dev), int(median_win), win, step
                 )
@@ -4664,7 +4670,10 @@ def main() -> None:
         if HRV_CACHE_AVAILABLE:
             cache_mgr = get_cache_manager()
             state = cache_mgr.get_computation_state()
-            files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
+            try:
+                files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
+            except TypeError:
+                files_hash = cache_mgr.compute_all_uploads_hash(datasets)
             settings_hash = compute_settings_hash(
                 str(method), float(max_dev), int(median_win), win, step
             )
