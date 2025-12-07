@@ -431,12 +431,13 @@ class HRVCacheManager:
         self._ensure_cache_structures()
         st.session_state[UPLOAD_HASH_KEY][name] = data_hash
     
-    def compute_all_uploads_hash(self, uploads: Dict[str, Any]) -> str:
+    def compute_all_uploads_hash(self, uploads: Dict[str, Any], profile_id: Optional[str] = None) -> str:
         """
         Compute combined hash for all uploaded datasets.
         
         Args:
             uploads: Dictionary of uploaded datasets.
+            profile_id: Optional profile/user identifier to bind caches to a user.
             
         Returns:
             Combined hash string.
@@ -445,11 +446,12 @@ class HRVCacheManager:
             return "no_uploads"
         
         hashes = []
+        profile_tag = f"profile:{profile_id}|" if profile_id else ""
         for name, up in sorted(uploads.items()):
             if hasattr(up, "rr_ms") and up.rr_ms.size > 0:
                 hashes.append(f"{name}:{compute_rr_hash(up.rr_ms)}")
         
-        combined = "|".join(hashes)
+        combined = profile_tag + "|".join(hashes)
         return hashlib.md5(combined.encode()).hexdigest()[:16]
     
     # ---------------------------------------------------------------------------
@@ -546,6 +548,8 @@ def should_skip_computation(
     median_window: int,
     window: str,
     step: str,
+    *,
+    profile_id: Optional[str] = None,
 ) -> bool:
     """
     Check if computation can be skipped (already done with same settings).
@@ -564,7 +568,7 @@ def should_skip_computation(
     cache = get_cache_manager()
     state = cache.get_computation_state()
     
-    files_hash = cache.compute_all_uploads_hash(uploads)
+    files_hash = cache.compute_all_uploads_hash(uploads, profile_id=profile_id)
     settings_hash = compute_settings_hash(method, max_deviation, median_window, window, step)
     
     return (
