@@ -548,6 +548,11 @@ class PolarAccessLinkClient:
         Returns:
             List of VO2maxEntry objects.
         """
+        if not hasattr(self.db, "get_vo2max_history"):
+            _LOGGER.error(
+                "UserDatabase missing get_vo2max_history; returning empty history"
+            )
+            return []
         return self.db.get_vo2max_history(self.user_id, limit=limit)
     
     def get_latest_vo2max(self) -> Optional[VO2maxEntry]:
@@ -556,6 +561,11 @@ class PolarAccessLinkClient:
         Returns:
             Most recent VO2maxEntry or None.
         """
+        if not hasattr(self.db, "get_latest_vo2max"):
+            _LOGGER.error(
+                "UserDatabase missing get_latest_vo2max; returning None"
+            )
+            return None
         return self.db.get_latest_vo2max(self.user_id)
 
 
