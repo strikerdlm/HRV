@@ -4036,9 +4036,13 @@ def main() -> None:
             step=1)
         st.sidebar.markdown("---")
         st.sidebar.subheader("Performance & display")
-        minimal_mode = st.sidebar.checkbox("Minimal mode (fastest)", value=True)
+        minimal_mode = st.sidebar.checkbox("Minimal mode (fastest)", value=False)
         max_datasets = st.sidebar.number_input(
-            "Process first N datasets", min_value=1, value=3, step=1
+            "Process first N datasets (cap 30)",
+            min_value=1,
+            max_value=30,
+            value=30,
+            step=1,
         )
         rr_plot_cap = st.sidebar.selectbox(
             "RR plot point cap per dataset", [
