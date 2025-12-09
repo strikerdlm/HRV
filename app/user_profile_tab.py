@@ -1402,6 +1402,52 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
     """Render wrist-wearable wellness/activity history with gauges."""
     st.markdown("## ⌚ Wrist Monitoring")
 
+    # If sidebar ingestion placed pending metrics, persist them now
+    pending_sidebar = st.session_state.pop("garmin_daily_pending", None)
+    if pending_sidebar:
+        try:
+            pending_df = pd.DataFrame(pending_sidebar)
+            if not pending_df.empty:
+                entries: List[GarminDailyMetrics] = []
+                now_iso = datetime.now(timezone.utc).isoformat()
+                for _, row in pending_df.iterrows():
+                    day_val = row.get("date")
+                    if pd.isna(day_val):
+                        continue
+                    metric_date = pd.to_datetime(day_val).date().isoformat()
+                    avg_hr = _safe_float(row.get("avg_hr_session")) or _safe_float(row.get("avg_hr"))
+                    resting_hr = _safe_float(row.get("resting_hr_bpm")) or _safe_float(row.get("min_hr"))
+                    entries.append(
+                        GarminDailyMetrics(
+                            entry_id=str(uuid.uuid4()),
+                            user_id=user.user_id,
+                            metric_date=metric_date,
+                            steps=_safe_int(row.get("steps")),
+                            distance_km=_safe_float(row.get("distance_km")),
+                            calories_kcal=_safe_float(row.get("calories_kcal")),
+                            avg_hr_bpm=avg_hr,
+                            resting_hr_bpm=resting_hr,
+                            stress_score=_safe_float(row.get("avg_stress")),
+                            sleep_score=_safe_float(row.get("sleep_score")),
+                            sleep_efficiency=_safe_float(row.get("sleep_efficiency")),
+                            sleep_duration_hours=_safe_float(row.get("sleep_duration_hours")),
+                            avg_spo2=_safe_float(row.get("avg_sleep_spo2")) or _safe_float(row.get("avg_spo2")),
+                            avg_respiration_awake=_safe_float(row.get("avg_respiration_awake")),
+                            avg_respiration_sleep=_safe_float(row.get("avg_sleep_respiration")),
+                            body_battery_avg=_safe_float(row.get("body_battery_avg")) or _safe_float(row.get("avg_body_battery")),
+                            body_battery_charge=_safe_float(row.get("body_battery_charge")),
+                            body_battery_drain=_safe_float(row.get("body_battery_drain")),
+                            source="garmin_import_sidebar",
+                            created_at=now_iso,
+                        )
+                    )
+                if entries:
+                    db = get_database()
+                    db.save_garmin_daily_metrics(entries)
+        except Exception as exc:  # noqa: BLE001
+            if log_exception is not None:
+                log_exception(_LOGGER, "Failed to persist sidebar Garmin metrics", exc)
+
     if not GARMIN_IMPORT_AVAILABLE:
         st.info("Garmin import module unavailable. Install fitparse and rerun.")
         return
@@ -1696,6 +1742,13 @@ def _render_garmin_ingest(user: UserProfile) -> None:
 
     entries: List[GarminDailyMetrics] = []
     now_iso = datetime.now(timezone.utc).isoformat()
+
+    # Also persist any pending sidebar ingestion if present
+    pending_sidebar = st.session_state.pop("garmin_daily_pending", None)
+    if pending_sidebar:
+        pending_df = pd.DataFrame(pending_sidebar)
+        if not pending_df.empty:
+            daily_df = pd.concat([daily_df, pending_df], ignore_index=True)
 
     for _, row in daily_df.iterrows():
         day_val = row.get("date")
