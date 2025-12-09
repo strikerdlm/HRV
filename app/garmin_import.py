@@ -632,6 +632,7 @@ def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
     fit_activity_records: list[dict[str, Any]] = []
     fit_resting_hr_records: list[dict[str, Any]] = []
     found_wellness_json = False
+    fit_count = 0
 
     with zipfile.ZipFile(zip_path, "r") as zf:
         for file_type, file_path in _find_wellness_files(zip_path):
@@ -667,6 +668,7 @@ def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
         # Additionally parse any FIT files inside the ZIP (common in wellness exports)
         for name in zf.namelist():
             if name.lower().endswith(".fit"):
+                fit_count += 1
                 try:
                     with zf.open(name) as f_fit:
                         fit_bytes = f_fit.read()
