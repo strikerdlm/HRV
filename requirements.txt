@@ -43,7 +43,8 @@ pygt3x>=0.4  # Uncomment for ActiGraph GT3X file support
 pyedflib>=0.1.30  # Uncomment for EDF file support (Somfit, PSG)
 
 # Garmin Connect (requires auth)
-# garminconnect>=0.2  # Uncomment for Garmin FIT file support
+fitparse>=1.2,<2.0  # Garmin FIT parsing for Vivosmart 5 and wellness FIT files
+# garminconnect>=0.2  # Uncomment for Garmin Connect API access
 
 # ===========================================================================
 # GPU ACCELERATION (Optional - NVIDIA CUDA)
