@@ -1699,12 +1699,16 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
         metrics[key] = value
 
     def _aggregate_monotonic(series: pd.Series) -> float | None:
+        """Aggregate cumulative counter values (steps, distance, calories).
+        
+        For monitoring data, these are cumulative counters that reset daily.
+        Take the maximum value as the daily total.
+        """
         valid = series.dropna()
         if valid.empty:
             return None
-        if valid.is_monotonic_increasing:
-            return float(valid.iloc[-1])
-        return float(valid.sum())
+        # For cumulative counters, the maximum value is the daily total
+        return float(valid.max())
 
     # Process heart rate
     if not data.hr_df.empty and "timestamp" in data.hr_df.columns:
