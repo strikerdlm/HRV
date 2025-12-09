@@ -1486,6 +1486,34 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         df.sort_values("metric_date", ascending=False, inplace=True)
 
     latest = df.iloc[0]
+    
+    # Debug: show what values we have
+    _LOGGER.info(
+        "Wrist monitoring latest day: steps=%s, distance_km=%s, calories=%s, sleep_score=%s, stress=%s",
+        latest.get("steps"), latest.get("distance_km"), latest.get("calories_kcal"),
+        latest.get("sleep_score"), latest.get("stress_score"),
+    )
+    
+    # Show latest day values prominently
+    st.markdown(f"### 📅 Latest Day: {latest.get('metric_date', '—')}")
+    col_a, col_b, col_c, col_d, col_e = st.columns(5)
+    with col_a:
+        steps_val = _safe_float(latest.get("steps"))
+        st.metric("Steps", f"{steps_val:,.0f}" if steps_val else "—")
+    with col_b:
+        dist_val = _safe_float(latest.get("distance_km"))
+        st.metric("Distance", f"{dist_val:.1f} km" if dist_val else "—")
+    with col_c:
+        cal_val = _safe_float(latest.get("calories_kcal"))
+        st.metric("Calories", f"{cal_val:,.0f} kcal" if cal_val else "—")
+    with col_d:
+        sleep_val = _safe_float(latest.get("sleep_score"))
+        st.metric("Sleep Score", f"{sleep_val:.0f}" if sleep_val else "—")
+    with col_e:
+        stress_val = _safe_float(latest.get("stress_score"))
+        st.metric("Stress", f"{stress_val:.0f}" if stress_val else "—")
+    
+    st.markdown("---")
 
     # Summary indicators
     col1, col2, col3, col4 = st.columns(4)
@@ -1493,73 +1521,152 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         st.metric("Days logged", f"{len(df)}")
     with col2:
         if "steps" in df.columns:
-            st.metric("Avg steps", f"{df['steps'].mean():,.0f}")
+            steps_mean = df['steps'].mean()
+            st.metric("Avg steps", f"{steps_mean:,.0f}" if pd.notna(steps_mean) else "—")
     with col3:
         if "sleep_score" in df.columns:
-            st.metric("Avg sleep score", f"{df['sleep_score'].mean():.1f}")
+            sleep_mean = df['sleep_score'].mean()
+            st.metric("Avg sleep score", f"{sleep_mean:.1f}" if pd.notna(sleep_mean) else "—")
     with col4:
         if "stress_score" in df.columns:
-            st.metric("Avg stress", f"{df['stress_score'].mean():.1f}")
+            stress_mean = df['stress_score'].mean()
+            st.metric("Avg stress", f"{stress_mean:.1f}" if pd.notna(stress_mean) else "—")
 
-    gauge_plan = [
+    # Render gauges in organized sections
+    st.markdown("### 🏃 Activity & Movement")
+    cols = st.columns(3)
+    activity_gauges = [
         ("steps", "Steps", latest.get("steps"), "steps"),
-        ("distance_km", "Distance (km)", latest.get("distance_km"), "distance_km"),
+        ("distance_km", "Distance", latest.get("distance_km"), "distance_km"),
         ("calories_kcal", "Calories", latest.get("calories_kcal"), "calories_kcal"),
+    ]
+    for col, (_key, title, value, threshold_key) in zip(cols, activity_gauges):
+        val = _safe_float(value)
+        if val is None or pd.isna(val):
+            with col:
+                st.info(f"No {title} data")
+            continue
+        thresholds = get_gauge_thresholds(threshold_key)
+        if not thresholds:
+            continue
+        option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
+        with col:
+            render_echarts(option, height_px=280)
+    
+    st.markdown("### ❤️ Heart Rate & Stress")
+    cols = st.columns(3)
+    hr_gauges = [
         ("avg_hr_bpm", "Avg HR", latest.get("avg_hr_bpm"), "avg_hr_bpm"),
         ("resting_hr_bpm", "Resting HR", latest.get("resting_hr_bpm"), "resting_hr_bpm"),
         ("stress_score", "Stress", latest.get("stress_score"), "stress_score"),
+    ]
+    for col, (_key, title, value, threshold_key) in zip(cols, hr_gauges):
+        val = _safe_float(value)
+        if val is None or pd.isna(val):
+            with col:
+                st.info(f"No {title} data")
+            continue
+        thresholds = get_gauge_thresholds(threshold_key)
+        if not thresholds:
+            continue
+        option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
+        with col:
+            render_echarts(option, height_px=280)
+    
+    st.markdown("### 😴 Sleep & Recovery")
+    cols = st.columns(3)
+    sleep_gauges = [
         ("sleep_score", "Sleep Score", latest.get("sleep_score"), "sleep_score"),
         ("sleep_efficiency", "Sleep Efficiency", latest.get("sleep_efficiency"), "sleep_efficiency"),
-        ("sleep_duration_hours", "Sleep Duration (h)", latest.get("sleep_duration_hours"), "sleep_duration_hours"),
-        ("avg_spo2", "SpO₂ Avg", latest.get("avg_spo2"), "spo2_pct"),
+        ("sleep_duration_hours", "Sleep Duration", latest.get("sleep_duration_hours"), "sleep_duration_hours"),
+    ]
+    for col, (_key, title, value, threshold_key) in zip(cols, sleep_gauges):
+        val = _safe_float(value)
+        if val is None or pd.isna(val):
+            with col:
+                st.info(f"No {title} data")
+            continue
+        thresholds = get_gauge_thresholds(threshold_key)
+        if not thresholds:
+            continue
+        option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
+        with col:
+            render_echarts(option, height_px=280)
+    
+    st.markdown("### 🫁 Respiration & SpO₂")
+    cols = st.columns(3)
+    resp_gauges = [
+        ("avg_spo2", "SpO₂", latest.get("avg_spo2"), "spo2_pct"),
         ("avg_respiration_awake", "Resp Awake", latest.get("avg_respiration_awake"), "respiration_awake_bpm"),
         ("avg_respiration_sleep", "Resp Sleep", latest.get("avg_respiration_sleep"), "respiration_sleep_bpm"),
-        ("body_battery_avg", "Body Battery Avg", latest.get("body_battery_avg"), "body_battery_avg"),
-        ("body_battery_charge", "Body Battery Charge", latest.get("body_battery_charge"), "body_battery_charge"),
-        ("body_battery_drain", "Body Battery Drain", latest.get("body_battery_drain"), "body_battery_drain"),
     ]
-
-    for i in range(0, len(gauge_plan), 3):
-        cols = st.columns(3)
-        for col, (_key, title, value, threshold_key) in zip(cols, gauge_plan[i:i + 3]):
-            val = _safe_float(value)
-            if val is None:
-                continue
-            thresholds = get_gauge_thresholds(threshold_key) or GaugeThresholds(0, 50, 75, 100, "")
-            option = build_two_ring_gauge(
-                threshold_key,
-                val,
-                title=title,
-                thresholds=thresholds,
-            )
+    for col, (_key, title, value, threshold_key) in zip(cols, resp_gauges):
+        val = _safe_float(value)
+        if val is None or pd.isna(val):
             with col:
-                render_echarts(option, height_px=260)
-
-    st.markdown("### Recent Garmin Metrics (latest 10)")
-    preview_cols = [
-        "metric_date",
-        "steps",
-        "distance_km",
-        "calories_kcal",
-        "avg_hr_bpm",
-        "resting_hr_bpm",
-        "stress_score",
-        "sleep_score",
-        "sleep_efficiency",
-        "sleep_duration_hours",
-        "avg_spo2",
-        "avg_respiration_awake",
-        "avg_respiration_sleep",
-        "body_battery_avg",
-        "body_battery_charge",
-        "body_battery_drain",
+                st.info(f"No {title} data")
+            continue
+        thresholds = get_gauge_thresholds(threshold_key)
+        if not thresholds:
+            continue
+        option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
+        with col:
+            render_echarts(option, height_px=280)
+    
+    st.markdown("### 🔋 Body Battery")
+    cols = st.columns(3)
+    bb_gauges = [
+        ("body_battery_avg", "Avg Level", latest.get("body_battery_avg"), "body_battery_avg"),
+        ("body_battery_charge", "Charged", latest.get("body_battery_charge"), "body_battery_charge"),
+        ("body_battery_drain", "Drained", latest.get("body_battery_drain"), "body_battery_drain"),
     ]
-    existing_cols = [c for c in preview_cols if c in df.columns]
-    st.dataframe(
-        df[existing_cols].head(10).reset_index(drop=True),
-        use_container_width=True,
-        hide_index=True,
-    )
+    for col, (_key, title, value, threshold_key) in zip(cols, bb_gauges):
+        val = _safe_float(value)
+        if val is None or pd.isna(val):
+            with col:
+                st.info(f"No {title} data")
+            continue
+        thresholds = get_gauge_thresholds(threshold_key)
+        if not thresholds:
+            continue
+        option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
+        with col:
+            render_echarts(option, height_px=280)
+
+    st.markdown("---")
+    st.markdown("### 📊 Recent Daily Metrics")
+    
+    with st.expander("View all columns", expanded=False):
+        preview_cols = [
+            "metric_date",
+            "steps",
+            "distance_km",
+            "calories_kcal",
+            "avg_hr_bpm",
+            "resting_hr_bpm",
+            "stress_score",
+            "sleep_score",
+            "sleep_efficiency",
+            "sleep_duration_hours",
+            "avg_spo2",
+            "avg_respiration_awake",
+            "avg_respiration_sleep",
+            "body_battery_avg",
+            "body_battery_charge",
+            "body_battery_drain",
+        ]
+        existing_cols = [c for c in preview_cols if c in df.columns]
+        display_df = df[existing_cols].head(10).copy()
+        
+        # Format for better display
+        if "metric_date" in display_df.columns:
+            display_df["metric_date"] = display_df["metric_date"].dt.strftime("%Y-%m-%d")
+        
+        st.dataframe(
+            display_df.reset_index(drop=True),
+            use_container_width=True,
+            hide_index=True,
+        )
 
 # ---------------------------------------------------------------------------
 # HRV History Section
