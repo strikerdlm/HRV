@@ -1732,32 +1732,31 @@ For live data:
 
 ### Importing into HRV App
 
-**For ZIP export:**
+**For Vivosmart 5 FIT or wellness ZIP (fills Clinical Profile gauges):**
+
+1. Open **User Profile → 📦 Data → Garmin Vivosmart 5 Import**.
+2. Upload either a `.fit` file (Export Original) or the wellness `.zip` export.
+3. The app parses steps, distance, calories, sleep score/efficiency, SpO₂, respiration (awake + sleep), stress, and body battery (charge/drain).
+4. Results are saved to the user's profile and shown as double-ring ECharts gauges in the **📈 History** tab.
+
+**Legacy ZIP import in sidebar (RR only):**
 
 1. Go to sidebar → Garmin Import section
-2. Click "Upload Garmin ZIP"
-3. Select downloaded ZIP file
-4. Wait for parsing (may take 30-60 seconds)
-5. Review imported data summary
-
-**For FIT files:**
-
-1. Go to sidebar → Garmin Import section
-2. Click "Upload FIT File"
-3. Select `.fit` file
-4. Review extracted RR intervals (if available)
+2. Upload `.fit`, `.csv`, or `.zip` if you only need RR intervals for HRV analysis.
 
 ### Available Garmin Data
 
 | Data Type | What it contains | HRV use |
 |-----------|-----------------|---------|
-| Sleep | Stages, duration, scores | Overnight HRV context |
+| Steps & Distance | Daily steps (monotonic or summed) and distance | Activity load context |
+| Calories | Total/active calories | Energy balance context |
+| Sleep | Stages, duration, sleep score, efficiency | Overnight HRV context |
 | HRV | Overnight RMSSD (5-min epochs) | Baseline trends |
-| Heart Rate | Minute-level HR | RR interval derivation |
+| Heart Rate | Avg/Resting HR | Readiness / training load |
 | Stress | Garmin stress score | Correlation with HRV |
-| SpO2 | Pulse oximetry | Sleep apnea screening |
-| Respiration | Breaths per minute | Breathing rate context |
-| Body Battery | Energy level | Recovery tracking |
+| SpO₂ | Pulse oximetry | Sleep apnea screening |
+| Respiration | Awake & sleep averages (sleep flag from Garmin; guardrails: 10–17 rpm for sleep) | Breathing rate context |
+| Body Battery | Daily average plus charge (+) and drain (–) estimates | Recovery tracking |
 
 ### Limitations
 
