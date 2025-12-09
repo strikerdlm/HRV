@@ -1399,8 +1399,8 @@ def _render_assessment_history(user: UserProfile) -> None:
 
 @_fragment_if_available
 def _render_garmin_metrics_history(user: UserProfile) -> None:
-    """Render Garmin wellness/activity history with gauges."""
-    st.markdown("## ⌚ Garmin Wellness History")
+    """Render wrist-wearable wellness/activity history with gauges."""
+    st.markdown("## ⌚ Wrist Monitoring")
 
     if not GARMIN_IMPORT_AVAILABLE:
         st.info("Garmin import module unavailable. Install fitparse and rerun.")
@@ -1409,7 +1409,13 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
     @st.cache_data(ttl=30, show_spinner=False)
     def _load_history(uid: str) -> pd.DataFrame:
         db = get_database()
-        return db.get_garmin_daily_dataframe(uid, limit=180)
+        if hasattr(db, "get_garmin_daily_dataframe"):
+            return db.get_garmin_daily_dataframe(uid, limit=180)  # type: ignore[attr-defined]
+        # Fallback if older DB object is in memory
+        metrics = db.get_garmin_daily_metrics(uid, limit=180)
+        if not metrics:
+            return pd.DataFrame()
+        return pd.DataFrame([m.to_dict() for m in metrics])
 
     try:
         df = _load_history(user.user_id)
@@ -1627,7 +1633,7 @@ def _render_data_management(user: UserProfile) -> None:
 
 def _render_garmin_ingest(user: UserProfile) -> None:
     """Render Garmin Vivosmart 5 ingest to populate clinical gauges."""
-    st.markdown("## ⌚ Garmin Vivosmart 5 Import")
+    st.markdown("## ⌚ Wrist Monitoring (Vivosmart 5)")
     st.caption(
         "Upload a Garmin Vivosmart 5 FIT file or wellness ZIP export. "
         "Steps, distance, sleep score/efficiency, respiration (awake/sleep), "
@@ -1718,6 +1724,7 @@ def _render_garmin_ingest(user: UserProfile) -> None:
     try:
         db = get_database()
         db.save_garmin_daily_metrics(entries)
+        st.cache_data.clear()
         st.success(f"Saved {len(entries)} day(s) of Garmin wellness metrics to the profile.")
         st.dataframe(
             daily_df.sort_values("date", ascending=False).head(5),
