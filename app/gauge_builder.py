@@ -131,6 +131,57 @@ _RR_NORMAL: Final[float] = 15.0
 _RR_HIGH: Final[float] = 20.0
 _RR_MAX: Final[float] = 30.0
 
+# Garmin wellness / activity (Vivosmart 5)
+_STEPS_LOW: Final[float] = 4000.0
+_STEPS_NORMAL: Final[float] = 8000.0
+_STEPS_HIGH: Final[float] = 12000.0
+_STEPS_MAX: Final[float] = 20000.0
+
+_DIST_KM_LOW: Final[float] = 3.0
+_DIST_KM_NORMAL: Final[float] = 5.0
+_DIST_KM_HIGH: Final[float] = 10.0
+_DIST_KM_MAX: Final[float] = 20.0
+
+_CALORIES_LOW: Final[float] = 1200.0
+_CALORIES_NORMAL: Final[float] = 2000.0
+_CALORIES_HIGH: Final[float] = 3200.0
+_CALORIES_MAX: Final[float] = 6000.0
+
+_RESTING_HR_LOW: Final[float] = 45.0
+_RESTING_HR_NORMAL: Final[float] = 60.0
+_RESTING_HR_HIGH: Final[float] = 75.0
+_RESTING_HR_MAX: Final[float] = 120.0
+
+_STRESS_LOW: Final[float] = 10.0
+_STRESS_NORMAL: Final[float] = 30.0
+_STRESS_HIGH: Final[float] = 50.0
+_STRESS_MAX: Final[float] = 100.0
+
+_SPO2_LOW: Final[float] = 90.0
+_SPO2_NORMAL: Final[float] = 95.0
+_SPO2_HIGH: Final[float] = 98.0
+_SPO2_MAX: Final[float] = 100.0
+
+_RESP_AWAKE_LOW: Final[float] = 10.0
+_RESP_AWAKE_NORMAL: Final[float] = 14.0
+_RESP_AWAKE_HIGH: Final[float] = 20.0
+_RESP_AWAKE_MAX: Final[float] = 30.0
+
+_RESP_SLEEP_LOW: Final[float] = 10.0
+_RESP_SLEEP_NORMAL: Final[float] = 13.0
+_RESP_SLEEP_HIGH: Final[float] = 17.0
+_RESP_SLEEP_MAX: Final[float] = 24.0
+
+_BB_ENERGY_LOW: Final[float] = 10.0
+_BB_ENERGY_NORMAL: Final[float] = 40.0
+_BB_ENERGY_HIGH: Final[float] = 70.0
+_BB_ENERGY_MAX: Final[float] = 100.0
+
+_BB_LEVEL_LOW: Final[float] = 25.0
+_BB_LEVEL_NORMAL: Final[float] = 50.0
+_BB_LEVEL_HIGH: Final[float] = 75.0
+_BB_LEVEL_MAX: Final[float] = 100.0
+
 
 # ---------------------------------------------------------------------------
 # Data classes
@@ -210,6 +261,22 @@ _GAUGE_THRESHOLDS: dict[str, GaugeThresholds] = {
 
     # Respiratory
     "respiratory_rate_bpm": GaugeThresholds(_RR_LOW, _RR_NORMAL, _RR_HIGH, _RR_MAX, "br/min"),
+
+    # Garmin wellness & activity
+    "steps": GaugeThresholds(_STEPS_LOW, _STEPS_NORMAL, _STEPS_HIGH, _STEPS_MAX, "steps"),
+    "distance_km": GaugeThresholds(_DIST_KM_LOW, _DIST_KM_NORMAL, _DIST_KM_HIGH, _DIST_KM_MAX, "km"),
+    "calories_kcal": GaugeThresholds(_CALORIES_LOW, _CALORIES_NORMAL, _CALORIES_HIGH, _CALORIES_MAX, "kcal"),
+    "resting_hr_bpm": GaugeThresholds(_RESTING_HR_LOW, _RESTING_HR_NORMAL, _RESTING_HR_HIGH, _RESTING_HR_MAX, "bpm", invert_colors=True),
+    "avg_hr_bpm": GaugeThresholds(_MEAN_HR_LOW, _MEAN_HR_NORMAL, _MEAN_HR_HIGH, _MEAN_HR_MAX, "bpm", invert_colors=True),
+    "stress_score": GaugeThresholds(_STRESS_LOW, _STRESS_NORMAL, _STRESS_HIGH, _STRESS_MAX, "", invert_colors=True),
+    "sleep_score": GaugeThresholds(60.0, 80.0, 90.0, 100.0, ""),
+    "sleep_duration_hours": GaugeThresholds(_TST_LOW, _TST_NORMAL, _TST_HIGH, _TST_MAX, "h"),
+    "spo2_pct": GaugeThresholds(_SPO2_LOW, _SPO2_NORMAL, _SPO2_HIGH, _SPO2_MAX, "%"),
+    "respiration_awake_bpm": GaugeThresholds(_RESP_AWAKE_LOW, _RESP_AWAKE_NORMAL, _RESP_AWAKE_HIGH, _RESP_AWAKE_MAX, "br/min"),
+    "respiration_sleep_bpm": GaugeThresholds(_RESP_SLEEP_LOW, _RESP_SLEEP_NORMAL, _RESP_SLEEP_HIGH, _RESP_SLEEP_MAX, "br/min"),
+    "body_battery_avg": GaugeThresholds(_BB_LEVEL_LOW, _BB_LEVEL_NORMAL, _BB_LEVEL_HIGH, _BB_LEVEL_MAX, ""),
+    "body_battery_charge": GaugeThresholds(_BB_ENERGY_LOW, _BB_ENERGY_NORMAL, _BB_ENERGY_HIGH, _BB_ENERGY_MAX, "", invert_colors=False),
+    "body_battery_drain": GaugeThresholds(_BB_ENERGY_LOW, _BB_ENERGY_NORMAL, _BB_ENERGY_HIGH, _BB_ENERGY_MAX, "", invert_colors=True),
 }
 
 
