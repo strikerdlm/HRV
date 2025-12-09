@@ -5,6 +5,13 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.8] - 2025-12-09
+
+### Fixed
+- Garmin wellness ZIPs that contain only embedded FIT files now parse those FIT files and surface steps, HR/HRV, SpO₂, respiration, stress, body battery, and RR intervals (fallback) instead of reporting “no wellness metrics”.
+
+---
+
 ## [1.8.7] - 2025-12-09
 
 ### Added
