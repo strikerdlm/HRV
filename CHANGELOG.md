@@ -8,7 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.8.8] - 2025-12-09
 
 ### Fixed
-- Garmin wellness ZIPs that contain only embedded FIT files now parse those FIT files and surface steps, HR/HRV, SpO₂, respiration, stress, body battery, and RR intervals (fallback) instead of reporting “no wellness metrics”.
+- **Garmin FIT wellness monitoring data** (`app/garmin_import.py`): 
+  - Now properly extracts heart rate, stress, SpO2, respiration, and body battery from `monitoring` message types in FIT files (24/7 wellness tracking)
+  - Previously only captured activity metrics (steps/calories); now captures ALL physiological data from monitoring messages
+  - Added sleep message parsing (`sleep` and `sleep_level` message types)
+  - Fixed data validation: returns wellness data even when RR intervals are absent (Vivosmart 5 optical sensor limitation)
+  - Added comprehensive logging to track extraction success for each metric type
+- **Garmin ZIP parsing** (`app/garmin_import.py`): 
+  - ZIPs containing only embedded FIT files (no wellness JSON) now parse those FIT files properly
+  - Batch processing of multiple FIT files inside ZIP with merged dataframes
+- **Batch upload support** (`app/device_imports.py`): Sidebar Garmin uploader now accepts multiple FIT/ZIP files and processes all wellness metrics
 
 ---
 
