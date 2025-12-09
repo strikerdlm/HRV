@@ -28,6 +28,8 @@ import streamlit as st
 try:
     from garmin_import import (
         extract_rr_intervals_from_garmin,
+        get_daily_physiology_summary,
+        import_garmin_data,
         parse_fit_file,
     )
     GARMIN_IMPORT_AVAILABLE = True
@@ -300,7 +302,10 @@ def _render_garmin_section() -> Optional[ImportedRRData]:
                         with tempfile.NamedTemporaryFile(delete=False, suffix=".fit") as tmp:
                             tmp.write(uploaded_file.read())
                             tmp_path = Path(tmp.name)
-                        garmin_data = parse_fit_file(tmp_path)
+                        garmin_data = import_garmin_data(fit_path=tmp_path)
+                        daily_df = get_daily_physiology_summary(garmin_data)
+                        if not daily_df.empty:
+                            st.session_state["garmin_daily_pending"] = daily_df.to_dict("records")
                         rr_array = extract_rr_intervals_from_garmin(garmin_data)
                         if rr_array.size == 0 and not garmin_data.hr_df.empty:
                             # Derive RR from HR if present (approximation)
@@ -319,13 +324,37 @@ def _render_garmin_section() -> Optional[ImportedRRData]:
                             st.success(f"✅ Parsed FIT file {file_name} with {data.sample_count:,} RR intervals")
                             _render_import_stats(data)
                             return data
-                        st.info("ℹ️ FIT file parsed but no RR intervals were present.")
+                        st.info("ℹ️ FIT file parsed but no RR intervals were present. Wellness metrics stored.")
                     finally:
                         if tmp_path and tmp_path.exists():
                             try:
                                 tmp_path.unlink()
                             except OSError:
                                 pass
+
+                elif lower_name.endswith(".zip"):
+                    if not GARMIN_IMPORT_AVAILABLE:
+                        st.error("Garmin ZIP parser unavailable.")
+                        return None
+                    tmp_path = None
+                    try:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+                            tmp.write(uploaded_file.read())
+                            tmp_path = Path(tmp.name)
+                        garmin_data = import_garmin_data(zip_path=tmp_path)
+                        daily_df = get_daily_physiology_summary(garmin_data)
+                        if not daily_df.empty:
+                            st.session_state["garmin_daily_pending"] = daily_df.to_dict("records")
+                            st.success(f"✅ Parsed Garmin wellness ZIP {file_name}. Stored {len(daily_df)} day(s) of wrist metrics for the active profile.")
+                        else:
+                            st.info("ZIP parsed but no wellness metrics were detected.")
+                    finally:
+                        if tmp_path and tmp_path.exists():
+                            try:
+                                tmp_path.unlink()
+                            except OSError:
+                                pass
+                    return None
 
                 elif lower_name.endswith(".csv"):
                     df = pd.read_csv(uploaded_file)
