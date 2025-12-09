@@ -25,6 +25,15 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+try:
+    from garmin_import import (
+        extract_rr_intervals_from_garmin,
+        parse_fit_file,
+    )
+    GARMIN_IMPORT_AVAILABLE = True
+except ImportError:
+    GARMIN_IMPORT_AVAILABLE = False
+
 
 @dataclass(slots=True)
 class ImportedRRData:
@@ -271,7 +280,7 @@ def _render_garmin_section() -> Optional[ImportedRRData]:
         
         uploaded_file = st.file_uploader(
             "Select Garmin export file",
-            type=["csv", "json", "zip"],
+            type=["csv", "json", "zip", "fit"],
             key="garmin_upload",
             help="Export from Garmin Connect: Account → Export Your Data",
             label_visibility="collapsed"
@@ -279,7 +288,46 @@ def _render_garmin_section() -> Optional[ImportedRRData]:
         
         if uploaded_file is not None:
             try:
-                if uploaded_file.name.endswith(".csv"):
+                file_name = uploaded_file.name
+                lower_name = file_name.lower()
+
+                if lower_name.endswith(".fit"):
+                    if not GARMIN_IMPORT_AVAILABLE:
+                        st.error("Garmin FIT parser unavailable. Install fitparse and restart.")
+                        return None
+                    tmp_path: Optional[Path] = None
+                    try:
+                        with tempfile.NamedTemporaryFile(delete=False, suffix=".fit") as tmp:
+                            tmp.write(uploaded_file.read())
+                            tmp_path = Path(tmp.name)
+                        garmin_data = parse_fit_file(tmp_path)
+                        rr_array = extract_rr_intervals_from_garmin(garmin_data)
+                        if rr_array.size == 0 and not garmin_data.hr_df.empty:
+                            # Derive RR from HR if present (approximation)
+                            hr_values = garmin_data.hr_df.get("heart_rate", pd.Series(dtype=float)).dropna()
+                            if not hr_values.empty:
+                                rr_array = 60000.0 / hr_values.values
+                        if rr_array.size > 10:
+                            clean_rr, quality = _validate_rr_intervals(rr_array.astype(np.float64))
+                            data = ImportedRRData(
+                                source_device="Garmin Vivosmart 5",
+                                filename=file_name,
+                                rr_intervals_ms=clean_rr,
+                                quality_score=quality,
+                                metadata={"source": garmin_data.source},
+                            )
+                            st.success(f"✅ Parsed FIT file {file_name} with {data.sample_count:,} RR intervals")
+                            _render_import_stats(data)
+                            return data
+                        st.info("ℹ️ FIT file parsed but no RR intervals were present.")
+                    finally:
+                        if tmp_path and tmp_path.exists():
+                            try:
+                                tmp_path.unlink()
+                            except OSError:
+                                pass
+
+                elif lower_name.endswith(".csv"):
                     df = pd.read_csv(uploaded_file)
                     
                     # Look for RR or HR columns
