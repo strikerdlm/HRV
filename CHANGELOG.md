@@ -13,12 +13,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Previously only captured activity metrics (steps/calories); now captures ALL physiological data from monitoring messages
   - Added sleep message parsing (`sleep` and `sleep_level` message types)
   - Fixed data validation: returns wellness data even when RR intervals are absent (Vivosmart 5 optical sensor limitation)
-  - Added comprehensive logging to track extraction success for each metric type
+  - **Fixed daily aggregation**: Steps, distance, and calories now use `max()` instead of sum for cumulative counters (fixes inflated values)
+  - Added comprehensive logging to track extraction success for each metric type and daily summaries
   - Fixed undefined variable error (`fit_count`) in ZIP parsing logging
 - **Garmin ZIP parsing** (`app/garmin_import.py`): 
   - ZIPs containing only embedded FIT files (no wellness JSON) now parse those FIT files properly
   - Batch processing of multiple FIT files inside ZIP with merged dataframes
 - **Batch upload support** (`app/device_imports.py`): Sidebar Garmin uploader now accepts multiple FIT/ZIP files and processes all wellness metrics
+- **Gauge aesthetics** (`app/gauge_builder.py`, `app/user_profile_tab.py`):
+  - Added proper thresholds for all Garmin wellness metrics (steps, distance, calories, SpO2, stress, body battery, respiration, sleep)
+  - Organized gauges into logical sections: Activity & Movement, Heart Rate & Stress, Sleep & Recovery, Respiration & SpO₂, Body Battery
+  - Added prominent display of latest day values with thousand separators for large numbers
+  - Improved layout with consistent two-ring gauge design matching the rest of the app
 
 ---
 
