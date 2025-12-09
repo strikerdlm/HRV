@@ -1401,6 +1401,34 @@ def _render_assessment_history(user: UserProfile) -> None:
 def _render_garmin_metrics_history(user: UserProfile) -> None:
     """Render wrist-wearable wellness/activity history with gauges."""
     st.markdown("## ⌚ Wrist Monitoring")
+    
+    # Help section for complete data export
+    with st.expander("ℹ️ Missing sleep/stress/body battery data? Click here", expanded=False):
+        st.markdown("""
+        **Your current upload shows:** Steps, Distance, Calories ✅  
+        **Missing:** Sleep, Stress, Body Battery, SpO₂, Respiration ❌
+        
+        **Why?** Your ZIP only contains FIT files (activity tracking), not wellness JSON files.
+        
+        **To get ALL wellness metrics:**
+        
+        1. **Go to Garmin Connect Web** (not mobile app): https://connect.garmin.com
+        2. Click your profile icon → **Account Settings**
+        3. Go to **Account Information** → **Export Your Data**
+        4. Click **"Request Data Export"**
+        5. Wait for email (usually 24 hours)
+        6. Download the ZIP file from the email link
+        7. Upload that complete ZIP here
+        
+        **What the complete export includes:**
+        - `DI_CONNECT/DI-Connect-Wellness/YYYY-MM-DD_sleepData.json` → Sleep score, stages, duration
+        - `DI_CONNECT/DI-Connect-Wellness/YYYY-MM-DD_stressData.json` → Stress levels
+        - `DI_CONNECT/DI-Connect-Wellness/YYYY-MM-DD_bodyBatteryData.json` → Body Battery
+        - `DI_CONNECT/DI-Connect-Wellness/YYYY-MM-DD_spo2Data.json` → Pulse oximeter
+        - `DI_CONNECT/DI-Connect-Wellness/YYYY-MM-DD_respirationData.json` → Breathing rate
+        
+        📚 **Reference:** [Garmin Data Export Guide](https://support.garmin.com/en-US/?faq=W1TvTPW8JZ6LfJSfK512Q8)
+        """)
 
     # If sidebar ingestion placed pending metrics, persist them now
     pending_sidebar = st.session_state.pop("garmin_daily_pending", None)
@@ -1813,6 +1841,29 @@ def _render_garmin_ingest(user: UserProfile) -> None:
         "Steps, distance, sleep score/efficiency, respiration (awake/sleep), "
         "SpO₂, stress, calories, and body battery will be stored in your profile history."
     )
+    
+    # Help section for complete data
+    with st.expander("ℹ️ How to get complete wellness data (sleep, stress, body battery)", expanded=False):
+        st.markdown("""
+        **To export ALL wellness metrics from Garmin Connect:**
+        
+        1. Log into **Garmin Connect Web**: https://connect.garmin.com
+        2. Go to **Account Settings** → **Account Information**
+        3. Click **"Export Your Data"**
+        4. Select **"Request Data Export"**
+        5. Wait for email (usually 24 hours)
+        6. Download the ZIP from the email link
+        7. Upload here
+        
+        **Complete export includes:** `DI_CONNECT/DI-Connect-Wellness/` folder with:
+        - `YYYY-MM-DD_sleepData.json` → Sleep score, stages, duration
+        - `YYYY-MM-DD_stressData.json` → Stress levels
+        - `YYYY-MM-DD_bodyBatteryData.json` → Body Battery
+        - `YYYY-MM-DD_spo2Data.json` → Pulse oximeter
+        - `YYYY-MM-DD_respirationData.json` → Breathing rate
+        
+        **Note:** Individual activity FIT files only contain steps/distance/calories.
+        """)
 
     if not GARMIN_IMPORT_AVAILABLE:
         st.info("Garmin import module unavailable. Ensure fitparse is installed and garmin_import.py is present.")
@@ -1907,6 +1958,22 @@ def _render_garmin_ingest(user: UserProfile) -> None:
         db.save_garmin_daily_metrics(entries)
         st.cache_data.clear()
         st.success(f"Saved {len(entries)} day(s) of Garmin wellness metrics to the profile.")
+        
+        # Check what data was captured
+        has_sleep = not data.sleep_df.empty
+        has_stress = not data.stress_df.empty
+        has_body_battery = not data.body_battery_df.empty
+        has_spo2 = not data.spo2_df.empty
+        has_respiration = not data.respiration_df.empty
+        
+        if not (has_sleep or has_stress or has_body_battery or has_spo2 or has_respiration):
+            st.warning(
+                "⚠️ **Only steps/distance/calories were extracted.** "
+                "To get sleep, stress, body battery, SpO₂, and respiration data, "
+                "request a complete 'Export Your Data' from Garmin Connect (not individual activity files). "
+                "See the help section above for instructions."
+            )
+        
         st.dataframe(
             daily_df.sort_values("date", ascending=False).head(5),
             use_container_width=True,
