@@ -280,138 +280,148 @@ def _render_garmin_section() -> Optional[ImportedRRData]:
             unsafe_allow_html=True
         )
         
-        uploaded_file = st.file_uploader(
-            "Select Garmin export file",
+        uploaded_files = st.file_uploader(
+            "Select Garmin export file(s)",
             type=["csv", "json", "zip", "fit"],
             key="garmin_upload",
             help="Export from Garmin Connect: Account → Export Your Data",
-            label_visibility="collapsed"
+            label_visibility="collapsed",
+            accept_multiple_files=True,
         )
         
-        if uploaded_file is not None:
-            try:
-                file_name = uploaded_file.name
-                lower_name = file_name.lower()
+        if uploaded_files:
+            max_files = 25
+            daily_pending: list[dict[str, Any]] = st.session_state.get("garmin_daily_pending", [])
+            rr_result: Optional[ImportedRRData] = None
 
-                if lower_name.endswith(".fit"):
-                    if not GARMIN_IMPORT_AVAILABLE:
-                        st.error("Garmin FIT parser unavailable. Install fitparse and restart.")
-                        return None
-                    tmp_path: Optional[Path] = None
-                    try:
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".fit") as tmp:
-                            tmp.write(uploaded_file.read())
-                            tmp_path = Path(tmp.name)
-                        garmin_data = import_garmin_data(fit_path=tmp_path)
-                        daily_df = get_daily_physiology_summary(garmin_data)
-                        if not daily_df.empty:
-                            st.session_state["garmin_daily_pending"] = daily_df.to_dict("records")
-                        rr_array = extract_rr_intervals_from_garmin(garmin_data)
-                        if rr_array.size == 0 and not garmin_data.hr_df.empty:
-                            # Derive RR from HR if present (approximation)
-                            hr_values = garmin_data.hr_df.get("heart_rate", pd.Series(dtype=float)).dropna()
-                            if not hr_values.empty:
-                                rr_array = 60000.0 / hr_values.values
-                        if rr_array.size > 10:
-                            clean_rr, quality = _validate_rr_intervals(rr_array.astype(np.float64))
-                            data = ImportedRRData(
-                                source_device="Garmin Vivosmart 5",
-                                filename=file_name,
-                                rr_intervals_ms=clean_rr,
-                                quality_score=quality,
-                                metadata={"source": garmin_data.source},
-                            )
-                            st.success(f"✅ Parsed FIT file {file_name} with {data.sample_count:,} RR intervals")
-                            _render_import_stats(data)
-                            return data
-                        st.info("ℹ️ FIT file parsed but no RR intervals were present. Wellness metrics stored.")
-                    finally:
-                        if tmp_path and tmp_path.exists():
-                            try:
-                                tmp_path.unlink()
-                            except OSError:
-                                pass
+            for uploaded_file in uploaded_files[:max_files]:
+                try:
+                    file_name = uploaded_file.name
+                    lower_name = file_name.lower()
 
-                elif lower_name.endswith(".zip"):
-                    if not GARMIN_IMPORT_AVAILABLE:
-                        st.error("Garmin ZIP parser unavailable.")
-                        return None
-                    tmp_path = None
-                    try:
-                        with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
-                            tmp.write(uploaded_file.read())
-                            tmp_path = Path(tmp.name)
-                        garmin_data = import_garmin_data(zip_path=tmp_path)
-                        daily_df = get_daily_physiology_summary(garmin_data)
-                        if not daily_df.empty:
-                            st.session_state["garmin_daily_pending"] = daily_df.to_dict("records")
-                            st.success(f"✅ Parsed Garmin wellness ZIP {file_name}. Stored {len(daily_df)} day(s) of wrist metrics for the active profile.")
-                        else:
-                            st.info("ZIP parsed but no wellness metrics were detected.")
-                    finally:
-                        if tmp_path and tmp_path.exists():
-                            try:
-                                tmp_path.unlink()
-                            except OSError:
-                                pass
-                    return None
+                    if lower_name.endswith(".fit"):
+                        if not GARMIN_IMPORT_AVAILABLE:
+                            st.error("Garmin FIT parser unavailable. Install fitparse (pip install fitparse) and restart.")
+                            continue
+                        tmp_path: Optional[Path] = None
+                        try:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".fit") as tmp:
+                                tmp.write(uploaded_file.read())
+                                tmp_path = Path(tmp.name)
+                            garmin_data = import_garmin_data(fit_path=tmp_path)
+                            daily_df = get_daily_physiology_summary(garmin_data)
+                            if not daily_df.empty:
+                                daily_pending.extend(daily_df.to_dict("records"))
+                            rr_array = extract_rr_intervals_from_garmin(garmin_data)
+                            if rr_array.size == 0 and not garmin_data.hr_df.empty:
+                                hr_values = garmin_data.hr_df.get("heart_rate", pd.Series(dtype=float)).dropna()
+                                if not hr_values.empty:
+                                    rr_array = 60000.0 / hr_values.values
+                            if rr_array.size > 10 and rr_result is None:
+                                clean_rr, quality = _validate_rr_intervals(rr_array.astype(np.float64))
+                                rr_result = ImportedRRData(
+                                    source_device="Garmin Vivosmart 5",
+                                    filename=file_name,
+                                    rr_intervals_ms=clean_rr,
+                                    quality_score=quality,
+                                    metadata={"source": garmin_data.source},
+                                )
+                                st.success(f"✅ Parsed FIT {file_name} with {rr_result.sample_count:,} RR intervals")
+                                _render_import_stats(rr_result)
+                            elif rr_result is None:
+                                st.info(f"ℹ️ {file_name}: no RR intervals; wellness metrics stored.")
+                        finally:
+                            if tmp_path and tmp_path.exists():
+                                try:
+                                    tmp_path.unlink()
+                                except OSError:
+                                    pass
 
-                elif lower_name.endswith(".csv"):
-                    df = pd.read_csv(uploaded_file)
+                    elif lower_name.endswith(".zip"):
+                        if not GARMIN_IMPORT_AVAILABLE:
+                            st.error("Garmin ZIP parser unavailable. Install fitparse (pip install fitparse) and restart.")
+                            continue
+                        tmp_path = None
+                        try:
+                            with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
+                                tmp.write(uploaded_file.read())
+                                tmp_path = Path(tmp.name)
+                            garmin_data = import_garmin_data(zip_path=tmp_path)
+                            daily_df = get_daily_physiology_summary(garmin_data)
+                            if not daily_df.empty:
+                                daily_pending.extend(daily_df.to_dict("records"))
+                                st.success(f"✅ Parsed Garmin wellness ZIP {file_name} with {len(daily_df)} day(s).")
+                            else:
+                                st.info(f"{file_name}: ZIP parsed but no wellness metrics detected.")
+                        finally:
+                            if tmp_path and tmp_path.exists():
+                                try:
+                                    tmp_path.unlink()
+                                except OSError:
+                                    pass
+
+                    elif lower_name.endswith(".csv"):
+                        df = pd.read_csv(uploaded_file)
+                        
+                        rr_col = None
+                        for col in df.columns:
+                            if "rr" in col.lower() or "interval" in col.lower():
+                                rr_col = col
+                                break
+                        
+                        if rr_col is not None:
+                            rr_values = df[rr_col].dropna().values
+                            if len(rr_values) > 10 and rr_result is None:
+                                rr_array = np.array(rr_values, dtype=np.float64)
+                                clean_rr, quality = _validate_rr_intervals(rr_array)
+                                
+                                rr_result = ImportedRRData(
+                                    source_device="Garmin Vivosmart 5",
+                                    filename=uploaded_file.name,
+                                    rr_intervals_ms=clean_rr,
+                                    quality_score=quality,
+                                )
+                                
+                                st.success(f"✅ Loaded {rr_result.sample_count:,} RR intervals")
+                                _render_import_stats(rr_result)
+                                continue
+                        
+                        hr_col = None
+                        for col in df.columns:
+                            if "heart" in col.lower() or "hr" in col.lower():
+                                hr_col = col
+                                break
+                        
+                        if hr_col is not None and rr_result is None:
+                            hr_values = df[hr_col].dropna().values
+                            if len(hr_values) > 10:
+                                rr_from_hr = 60000.0 / hr_values[hr_values > 30]
+                                clean_rr, quality = _validate_rr_intervals(rr_from_hr)
+                                
+                                rr_result = ImportedRRData(
+                                    source_device="Garmin Vivosmart 5 (HR-derived)",
+                                    filename=uploaded_file.name,
+                                    rr_intervals_ms=clean_rr,
+                                    quality_score=quality * 0.7,  # Lower quality for HR-derived
+                                )
+                                
+                                st.warning("⚠️ Using HR-derived RR (less accurate)")
+                                _render_import_stats(rr_result)
+                                continue
+                        
+                        st.info(f"ℹ️ {file_name}: No RR interval data found")
                     
-                    # Look for RR or HR columns
-                    rr_col = None
-                    for col in df.columns:
-                        if "rr" in col.lower() or "interval" in col.lower():
-                            rr_col = col
-                            break
-                    
-                    if rr_col is not None:
-                        rr_values = df[rr_col].dropna().values
-                        if len(rr_values) > 10:
-                            rr_array = np.array(rr_values, dtype=np.float64)
-                            clean_rr, quality = _validate_rr_intervals(rr_array)
-                            
-                            data = ImportedRRData(
-                                source_device="Garmin Vivosmart 5",
-                                filename=uploaded_file.name,
-                                rr_intervals_ms=clean_rr,
-                                quality_score=quality,
-                            )
-                            
-                            st.success(f"✅ Loaded {data.sample_count:,} RR intervals")
-                            _render_import_stats(data)
-                            return data
-                    
-                    # If no RR data, try to derive from HR
-                    hr_col = None
-                    for col in df.columns:
-                        if "heart" in col.lower() or "hr" in col.lower():
-                            hr_col = col
-                            break
-                    
-                    if hr_col is not None:
-                        hr_values = df[hr_col].dropna().values
-                        if len(hr_values) > 10:
-                            # Convert HR to approximate RR (not beat-to-beat)
-                            rr_from_hr = 60000.0 / hr_values[hr_values > 30]
-                            clean_rr, quality = _validate_rr_intervals(rr_from_hr)
-                            
-                            data = ImportedRRData(
-                                source_device="Garmin Vivosmart 5 (HR-derived)",
-                                filename=uploaded_file.name,
-                                rr_intervals_ms=clean_rr,
-                                quality_score=quality * 0.7,  # Lower quality for HR-derived
-                            )
-                            
-                            st.warning("⚠️ Using HR-derived RR (less accurate)")
-                            _render_import_stats(data)
-                            return data
-                    
-                    st.info("ℹ️ No RR interval data found in file")
-                    
-            except Exception as e:
-                st.error(f"❌ Error reading file: {e}")
+                except Exception as e:
+                    st.error(f"❌ Error reading file {uploaded_file.name}: {e}")
+            
+            if daily_pending:
+                st.session_state["garmin_daily_pending"] = daily_pending
+                st.success(f"📥 Stored {len(daily_pending)} day(s) of wrist metrics; open the History → Wrist Monitoring tab to persist them.")
+            
+            if len(uploaded_files) > max_files:
+                st.warning(f"Processed first {max_files} files; upload fewer files per batch.")
+            
+            return rr_result
     
     return None
 
