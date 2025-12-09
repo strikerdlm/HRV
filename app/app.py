@@ -1343,7 +1343,7 @@ def donki_event_series(
     df: pd.DataFrame,
     time_columns: List[str],
     *,
-    freq: str = "H",
+    freq: str = "h",
 ) -> pd.DataFrame:
     timestamps = _collect_donki_times(df, time_columns)
     if timestamps.empty:
@@ -3373,6 +3373,9 @@ def _pearson_r_p(x: np.ndarray, y: np.ndarray) -> Tuple[float, float, int]:
     yv = y[mask]
     n = int(min(xv.size, yv.size))
     if n < 3:
+        return float("nan"), float("nan"), n
+    # Check for constant arrays (std=0) to avoid ConstantInputWarning
+    if np.std(xv) == 0 or np.std(yv) == 0:
         return float("nan"), float("nan"), n
     if _scipy_stats is not None:
         r, p = _scipy_stats.pearsonr(xv, yv)
