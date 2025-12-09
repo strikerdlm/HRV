@@ -277,6 +277,36 @@ class HRVMeasurement:
         return asdict(self)
 
 
+@dataclass
+class GarminDailyMetrics:
+    """Daily Garmin wellness/activity metrics aggregated per date."""
+
+    entry_id: str
+    user_id: str
+    metric_date: str  # ISO date string
+    steps: Optional[int] = None
+    distance_km: Optional[float] = None
+    calories_kcal: Optional[float] = None
+    avg_hr_bpm: Optional[float] = None
+    resting_hr_bpm: Optional[float] = None
+    stress_score: Optional[float] = None
+    sleep_score: Optional[float] = None
+    sleep_efficiency: Optional[float] = None
+    sleep_duration_hours: Optional[float] = None
+    avg_spo2: Optional[float] = None
+    avg_respiration_awake: Optional[float] = None
+    avg_respiration_sleep: Optional[float] = None
+    body_battery_avg: Optional[float] = None
+    body_battery_charge: Optional[float] = None
+    body_battery_drain: Optional[float] = None
+    source: str = "garmin_fit"
+    created_at: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+
 # ---------------------------------------------------------------------------
 # Database Manager
 # ---------------------------------------------------------------------------
@@ -492,6 +522,37 @@ class UserDatabase:
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_users_username
                 ON users(username)
+            """)
+
+            # Garmin daily metrics (wellness/activity aggregates)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS garmin_daily_metrics (
+                    entry_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    metric_date TEXT NOT NULL,
+                    steps INTEGER,
+                    distance_km REAL,
+                    calories_kcal REAL,
+                    avg_hr_bpm REAL,
+                    resting_hr_bpm REAL,
+                    stress_score REAL,
+                    sleep_score REAL,
+                    sleep_efficiency REAL,
+                    sleep_duration_hours REAL,
+                    avg_spo2 REAL,
+                    avg_respiration_awake REAL,
+                    avg_respiration_sleep REAL,
+                    body_battery_avg REAL,
+                    body_battery_charge REAL,
+                    body_battery_drain REAL,
+                    source TEXT,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            cursor.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_garmin_metrics_user_date
+                ON garmin_daily_metrics(user_id, metric_date)
             """)
             
             # Body composition table (extended anthropometrics)
@@ -1497,6 +1558,143 @@ class UserDatabase:
             artifact_percentage=row["artifact_percentage"],
             quality_score=row["quality_score"],
             notes=row["notes"],
+        )
+    
+    # -----------------------------------------------------------------------
+    # Garmin Wellness / Activity Metrics (Vivosmart, etc.)
+    # -----------------------------------------------------------------------
+
+    def save_garmin_daily_metrics(
+        self, metrics: Sequence[GarminDailyMetrics]
+    ) -> None:
+        """Upsert daily Garmin wellness/activity metrics."""
+        if not metrics:
+            return
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            for entry in metrics:
+                entry.entry_id = entry.entry_id or str(uuid.uuid4())
+                created_at = entry.created_at or now
+                cursor.execute(
+                    """
+                    INSERT INTO garmin_daily_metrics (
+                        entry_id, user_id, metric_date, steps, distance_km,
+                        calories_kcal, avg_hr_bpm, resting_hr_bpm, stress_score,
+                        sleep_score, sleep_efficiency, sleep_duration_hours,
+                        avg_spo2, avg_respiration_awake, avg_respiration_sleep,
+                        body_battery_avg, body_battery_charge, body_battery_drain,
+                        source, created_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT(user_id, metric_date) DO UPDATE SET
+                        steps = excluded.steps,
+                        distance_km = excluded.distance_km,
+                        calories_kcal = excluded.calories_kcal,
+                        avg_hr_bpm = excluded.avg_hr_bpm,
+                        resting_hr_bpm = excluded.resting_hr_bpm,
+                        stress_score = excluded.stress_score,
+                        sleep_score = excluded.sleep_score,
+                        sleep_efficiency = excluded.sleep_efficiency,
+                        sleep_duration_hours = excluded.sleep_duration_hours,
+                        avg_spo2 = excluded.avg_spo2,
+                        avg_respiration_awake = excluded.avg_respiration_awake,
+                        avg_respiration_sleep = excluded.avg_respiration_sleep,
+                        body_battery_avg = excluded.body_battery_avg,
+                        body_battery_charge = excluded.body_battery_charge,
+                        body_battery_drain = excluded.body_battery_drain,
+                        source = excluded.source,
+                        created_at = excluded.created_at
+                    """,
+                    (
+                        entry.entry_id,
+                        entry.user_id,
+                        entry.metric_date,
+                        entry.steps,
+                        entry.distance_km,
+                        entry.calories_kcal,
+                        entry.avg_hr_bpm,
+                        entry.resting_hr_bpm,
+                        entry.stress_score,
+                        entry.sleep_score,
+                        entry.sleep_efficiency,
+                        entry.sleep_duration_hours,
+                        entry.avg_spo2,
+                        entry.avg_respiration_awake,
+                        entry.avg_respiration_sleep,
+                        entry.body_battery_avg,
+                        entry.body_battery_charge,
+                        entry.body_battery_drain,
+                        entry.source,
+                        created_at,
+                    ),
+                )
+
+    def get_garmin_daily_metrics(
+        self, user_id: str, limit: int = 90
+    ) -> List[GarminDailyMetrics]:
+        """Return Garmin daily metrics history."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM garmin_daily_metrics
+                WHERE user_id = ?
+                ORDER BY datetime(metric_date) DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            )
+            rows = cursor.fetchall()
+        return [self._row_to_garmin_daily_metrics(row) for row in rows]
+
+    def get_garmin_daily_dataframe(
+        self,
+        user_id: str,
+        *,
+        limit: int = 120,
+    ) -> pd.DataFrame:
+        """Return Garmin daily metrics as DataFrame."""
+        with self._get_connection() as conn:
+            df = pd.read_sql_query(
+                """
+                SELECT *
+                FROM garmin_daily_metrics
+                WHERE user_id = ?
+                ORDER BY datetime(metric_date) DESC
+                LIMIT ?
+                """,
+                conn,
+                params=(user_id, limit),
+            )
+        if not df.empty and "metric_date" in df.columns:
+            df["metric_date"] = pd.to_datetime(df["metric_date"])
+        return df
+
+    def _row_to_garmin_daily_metrics(
+        self, row: sqlite3.Row
+    ) -> GarminDailyMetrics:
+        """Convert row to GarminDailyMetrics."""
+        return GarminDailyMetrics(
+            entry_id=row["entry_id"],
+            user_id=row["user_id"],
+            metric_date=row["metric_date"],
+            steps=row["steps"],
+            distance_km=row["distance_km"],
+            calories_kcal=row["calories_kcal"],
+            avg_hr_bpm=row["avg_hr_bpm"],
+            resting_hr_bpm=row["resting_hr_bpm"],
+            stress_score=row["stress_score"],
+            sleep_score=row["sleep_score"],
+            sleep_efficiency=row["sleep_efficiency"],
+            sleep_duration_hours=row["sleep_duration_hours"],
+            avg_spo2=row["avg_spo2"],
+            avg_respiration_awake=row["avg_respiration_awake"],
+            avg_respiration_sleep=row["avg_respiration_sleep"],
+            body_battery_avg=row["body_battery_avg"],
+            body_battery_charge=row["body_battery_charge"],
+            body_battery_drain=row["body_battery_drain"],
+            source=row["source"],
+            created_at=row["created_at"],
         )
     
     # -----------------------------------------------------------------------
