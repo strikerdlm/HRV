@@ -1411,16 +1411,24 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         db = get_database()
         if hasattr(db, "get_garmin_daily_dataframe"):
             return db.get_garmin_daily_dataframe(uid, limit=180)  # type: ignore[attr-defined]
-        # Fallback if older DB object is in memory
-        metrics = db.get_garmin_daily_metrics(uid, limit=180)
-        if not metrics:
-            return pd.DataFrame()
-        return pd.DataFrame([m.to_dict() for m in metrics])
+        if hasattr(db, "get_garmin_daily_metrics"):
+            metrics = db.get_garmin_daily_metrics(uid, limit=180)  # type: ignore[attr-defined]
+            if not metrics:
+                return pd.DataFrame()
+            return pd.DataFrame([m.to_dict() for m in metrics])
+        return pd.DataFrame()
 
     try:
         df = _load_history(user.user_id)
     except Exception as exc:  # noqa: BLE001
         st.error(f"Unable to load Garmin history: {exc}")
+        return
+
+    if df.empty and not hasattr(get_database(), "get_garmin_daily_metrics"):
+        st.warning(
+            "Wrist monitoring history requires the updated database methods. "
+            "Please restart the app to reload the updated code, or run a fresh session."
+        )
         return
 
     if df.empty:
