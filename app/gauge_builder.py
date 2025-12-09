@@ -131,6 +131,37 @@ _RR_NORMAL: Final[float] = 15.0
 _RR_HIGH: Final[float] = 20.0
 _RR_MAX: Final[float] = 30.0
 
+# Garmin wrist monitoring metrics
+_STEPS_LOW: Final[float] = 3000.0
+_STEPS_NORMAL: Final[float] = 10000.0
+_STEPS_HIGH: Final[float] = 15000.0
+_STEPS_MAX: Final[float] = 30000.0
+
+_DISTANCE_LOW: Final[float] = 2.0
+_DISTANCE_NORMAL: Final[float] = 8.0
+_DISTANCE_HIGH: Final[float] = 15.0
+_DISTANCE_MAX: Final[float] = 30.0
+
+_CALORIES_LOW: Final[float] = 1800.0
+_CALORIES_NORMAL: Final[float] = 2500.0
+_CALORIES_HIGH: Final[float] = 3500.0
+_CALORIES_MAX: Final[float] = 6000.0
+
+_SPO2_LOW: Final[float] = 90.0
+_SPO2_NORMAL: Final[float] = 95.0
+_SPO2_HIGH: Final[float] = 98.0
+_SPO2_MAX: Final[float] = 100.0
+
+_STRESS_LOW: Final[float] = 25.0
+_STRESS_NORMAL: Final[float] = 50.0
+_STRESS_HIGH: Final[float] = 75.0
+_STRESS_MAX: Final[float] = 100.0
+
+_BODY_BATTERY_LOW: Final[float] = 25.0
+_BODY_BATTERY_NORMAL: Final[float] = 50.0
+_BODY_BATTERY_HIGH: Final[float] = 75.0
+_BODY_BATTERY_MAX: Final[float] = 100.0
+
 # Garmin wellness / activity (Vivosmart 5)
 _STEPS_LOW: Final[float] = 4000.0
 _STEPS_NORMAL: Final[float] = 8000.0
@@ -263,10 +294,10 @@ _GAUGE_THRESHOLDS: dict[str, GaugeThresholds] = {
     "respiratory_rate_bpm": GaugeThresholds(_RR_LOW, _RR_NORMAL, _RR_HIGH, _RR_MAX, "br/min"),
 
     # Garmin wellness & activity
-    "steps": GaugeThresholds(_STEPS_LOW, _STEPS_NORMAL, _STEPS_HIGH, _STEPS_MAX, "steps"),
-    "distance_km": GaugeThresholds(_DIST_KM_LOW, _DIST_KM_NORMAL, _DIST_KM_HIGH, _DIST_KM_MAX, "km"),
+    "steps": GaugeThresholds(_STEPS_LOW, _STEPS_NORMAL, _STEPS_HIGH, _STEPS_MAX, ""),
+    "distance_km": GaugeThresholds(_DISTANCE_LOW, _DISTANCE_NORMAL, _DISTANCE_HIGH, _DISTANCE_MAX, "km"),
     "calories_kcal": GaugeThresholds(_CALORIES_LOW, _CALORIES_NORMAL, _CALORIES_HIGH, _CALORIES_MAX, "kcal"),
-    "resting_hr_bpm": GaugeThresholds(_RESTING_HR_LOW, _RESTING_HR_NORMAL, _RESTING_HR_HIGH, _RESTING_HR_MAX, "bpm", invert_colors=True),
+    "resting_hr_bpm": GaugeThresholds(40, 60, 80, 100, "bpm", invert_colors=True),
     "avg_hr_bpm": GaugeThresholds(_MEAN_HR_LOW, _MEAN_HR_NORMAL, _MEAN_HR_HIGH, _MEAN_HR_MAX, "bpm", invert_colors=True),
     "stress_score": GaugeThresholds(_STRESS_LOW, _STRESS_NORMAL, _STRESS_HIGH, _STRESS_MAX, "", invert_colors=True),
     "sleep_score": GaugeThresholds(60.0, 80.0, 90.0, 100.0, ""),
@@ -453,8 +484,8 @@ def build_two_ring_gauge(
         },
         "detail": {
             "show": True,
-            "offsetCenter": [0, "40%"],
-            "fontSize": 28,
+            "offsetCenter": [0, "35%"],
+            "fontSize": 32,
             "fontWeight": "bold",
             "color": value_color,
             "formatter": f"{{value}} {thresh.unit}",
