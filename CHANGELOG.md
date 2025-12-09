@@ -5,6 +5,18 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.6] - 2025-12-09
+
+### Added
+- **Garmin Vivosmart 5 clinical ingest** (`app/garmin_import.py`, `app/user_profile_tab.py`, `app/user_database.py`, `app/device_imports.py`):
+  - FIT and wellness ZIP parsing now captures steps, distance, calories, sleep score/efficiency/duration, stress, SpO₂, respiration (awake/sleep), and body battery charge/drain.
+  - New `garmin_daily_metrics` table with upsert support to store per-day wellness summaries tied to each user profile.
+  - User Profile → Data tab adds a Garmin Vivosmart 5 uploader; History tab shows double-ring ECharts gauges and recent daily metrics.
+  - Sidebar Garmin import now accepts `.fit` for RR extraction from Vivosmart 5 FIT files.
+
+### Documentation
+- **README.md / docs/Manual.md**: Added guidance for the Vivosmart 5 clinical ingest workflow, thresholds (respiration 10–17 rpm), and the new gauges available in the Clinical Profile history.
+
 ## [1.8.5] - 2025-12-06
 
 ### Added
