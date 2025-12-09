@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added sleep message parsing (`sleep` and `sleep_level` message types)
   - Fixed data validation: returns wellness data even when RR intervals are absent (Vivosmart 5 optical sensor limitation)
   - Added comprehensive logging to track extraction success for each metric type
+  - Fixed undefined variable error (`fit_count`) in ZIP parsing logging
 - **Garmin ZIP parsing** (`app/garmin_import.py`): 
   - ZIPs containing only embedded FIT files (no wellness JSON) now parse those FIT files properly
   - Batch processing of multiple FIT files inside ZIP with merged dataframes
