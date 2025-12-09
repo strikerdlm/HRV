@@ -22,11 +22,19 @@ import time
 import uuid
 from collections import Counter
 from datetime import datetime, date, timezone, timedelta
+from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any, Dict, Final, List, Optional, Sequence
 
 import numpy as np
 import pandas as pd
 import streamlit as st
+
+try:
+    from logging_config import get_logger, log_exception
+except ImportError:  # pragma: no cover - fallback if logging_config missing
+    get_logger = None  # type: ignore[assignment]
+    log_exception = None  # type: ignore[assignment]
 
 # Import database module
 try:
@@ -34,6 +42,7 @@ try:
         UserProfile,
         ClinicalScales,
         HRVMeasurement,
+        GarminDailyMetrics,
         UserDatabase,
         get_database,
         get_cached_user_list,
@@ -85,6 +94,20 @@ except ImportError:
     def get_current_language() -> str:  # type: ignore[misc]
         return "en"
 
+# Garmin wellness import (FIT/ZIP)
+try:
+    from garmin_import import (
+        get_daily_physiology_summary,
+        import_garmin_data,
+    )
+    GARMIN_IMPORT_AVAILABLE = True
+except ImportError:
+    GARMIN_IMPORT_AVAILABLE = False
+
+# Visualization helpers
+from echarts_component import render_echarts
+from gauge_builder import GaugeThresholds, build_two_ring_gauge, get_gauge_thresholds
+
 # Import profile module
 try:
     from user_profile import (
@@ -105,7 +128,9 @@ try:
 except ImportError:
     PROFILE_MODULE_AVAILABLE = False
 
-_LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+_LOGGER: Final[logging.Logger] = (
+    get_logger(__name__) if get_logger is not None else logging.getLogger(__name__)
+)
 
 # Check for @st.fragment support (Streamlit 1.37+)
 try:
@@ -223,6 +248,30 @@ def _bmi_category(bmi: Optional[float]) -> str:
     if bmi < 40.0:
         return "Obese II"
     return "Obese III"
+
+
+def _safe_float(value: Any) -> Optional[float]:
+    """Convert to float if valid, otherwise None."""
+    if value is None:
+        return None
+    try:
+        if isinstance(value, (float, int)) and (pd.isna(value)):
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _safe_int(value: Any) -> Optional[int]:
+    """Convert to int if valid, otherwise None."""
+    if value is None:
+        return None
+    try:
+        if isinstance(value, (float, int)) and (pd.isna(value)):
+            return None
+        return int(value)
+    except Exception:
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -1348,6 +1397,110 @@ def _render_assessment_history(user: UserProfile) -> None:
         st.error(f"Failed to load history: {exc}")
 
 
+@_fragment_if_available
+def _render_garmin_metrics_history(user: UserProfile) -> None:
+    """Render Garmin wellness/activity history with gauges."""
+    st.markdown("## ⌚ Garmin Wellness History")
+
+    if not GARMIN_IMPORT_AVAILABLE:
+        st.info("Garmin import module unavailable. Install fitparse and rerun.")
+        return
+
+    @st.cache_data(ttl=30, show_spinner=False)
+    def _load_history(uid: str) -> pd.DataFrame:
+        db = get_database()
+        return db.get_garmin_daily_dataframe(uid, limit=180)
+
+    try:
+        df = _load_history(user.user_id)
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Unable to load Garmin history: {exc}")
+        return
+
+    if df.empty:
+        st.info("No Garmin wellness metrics stored yet. Upload a FIT/ZIP file in the Data tab.")
+        return
+
+    if "metric_date" in df.columns:
+        df["metric_date"] = pd.to_datetime(df["metric_date"])
+        df.sort_values("metric_date", ascending=False, inplace=True)
+
+    latest = df.iloc[0]
+
+    # Summary indicators
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("Days logged", f"{len(df)}")
+    with col2:
+        if "steps" in df.columns:
+            st.metric("Avg steps", f"{df['steps'].mean():,.0f}")
+    with col3:
+        if "sleep_score" in df.columns:
+            st.metric("Avg sleep score", f"{df['sleep_score'].mean():.1f}")
+    with col4:
+        if "stress_score" in df.columns:
+            st.metric("Avg stress", f"{df['stress_score'].mean():.1f}")
+
+    gauge_plan = [
+        ("steps", "Steps", latest.get("steps"), "steps"),
+        ("distance_km", "Distance (km)", latest.get("distance_km"), "distance_km"),
+        ("calories_kcal", "Calories", latest.get("calories_kcal"), "calories_kcal"),
+        ("avg_hr_bpm", "Avg HR", latest.get("avg_hr_bpm"), "avg_hr_bpm"),
+        ("resting_hr_bpm", "Resting HR", latest.get("resting_hr_bpm"), "resting_hr_bpm"),
+        ("stress_score", "Stress", latest.get("stress_score"), "stress_score"),
+        ("sleep_score", "Sleep Score", latest.get("sleep_score"), "sleep_score"),
+        ("sleep_efficiency", "Sleep Efficiency", latest.get("sleep_efficiency"), "sleep_efficiency"),
+        ("sleep_duration_hours", "Sleep Duration (h)", latest.get("sleep_duration_hours"), "sleep_duration_hours"),
+        ("avg_spo2", "SpO₂ Avg", latest.get("avg_spo2"), "spo2_pct"),
+        ("avg_respiration_awake", "Resp Awake", latest.get("avg_respiration_awake"), "respiration_awake_bpm"),
+        ("avg_respiration_sleep", "Resp Sleep", latest.get("avg_respiration_sleep"), "respiration_sleep_bpm"),
+        ("body_battery_avg", "Body Battery Avg", latest.get("body_battery_avg"), "body_battery_avg"),
+        ("body_battery_charge", "Body Battery Charge", latest.get("body_battery_charge"), "body_battery_charge"),
+        ("body_battery_drain", "Body Battery Drain", latest.get("body_battery_drain"), "body_battery_drain"),
+    ]
+
+    for i in range(0, len(gauge_plan), 3):
+        cols = st.columns(3)
+        for col, (_key, title, value, threshold_key) in zip(cols, gauge_plan[i:i + 3]):
+            val = _safe_float(value)
+            if val is None:
+                continue
+            thresholds = get_gauge_thresholds(threshold_key) or GaugeThresholds(0, 50, 75, 100, "")
+            option = build_two_ring_gauge(
+                threshold_key,
+                val,
+                title=title,
+                thresholds=thresholds,
+            )
+            with col:
+                render_echarts(option, height_px=260)
+
+    st.markdown("### Recent Garmin Metrics (latest 10)")
+    preview_cols = [
+        "metric_date",
+        "steps",
+        "distance_km",
+        "calories_kcal",
+        "avg_hr_bpm",
+        "resting_hr_bpm",
+        "stress_score",
+        "sleep_score",
+        "sleep_efficiency",
+        "sleep_duration_hours",
+        "avg_spo2",
+        "avg_respiration_awake",
+        "avg_respiration_sleep",
+        "body_battery_avg",
+        "body_battery_charge",
+        "body_battery_drain",
+    ]
+    existing_cols = [c for c in preview_cols if c in df.columns]
+    st.dataframe(
+        df[existing_cols].head(10).reset_index(drop=True),
+        use_container_width=True,
+        hide_index=True,
+    )
+
 # ---------------------------------------------------------------------------
 # HRV History Section
 # ---------------------------------------------------------------------------
@@ -1423,6 +1576,7 @@ def _render_data_management(user: UserProfile) -> None:
                     "user_profile": user.to_dict(),
                     "clinical_scales": [s.to_dict() for s in db.get_clinical_scales_history(user.user_id)],
                     "hrv_measurements": [m.to_dict() for m in db.get_hrv_history(user.user_id)],
+                    "garmin_daily_metrics": [g.to_dict() for g in db.get_garmin_daily_metrics(user.user_id)],
                 }
                 
                 json_str = json.dumps(export_data, indent=2, default=str)
@@ -1469,6 +1623,110 @@ def _render_data_management(user: UserProfile) -> None:
                     if st.button("Cancel"):
                         st.session_state.pop("confirm_delete", None)
                         st.rerun()
+
+
+def _render_garmin_ingest(user: UserProfile) -> None:
+    """Render Garmin Vivosmart 5 ingest to populate clinical gauges."""
+    st.markdown("## ⌚ Garmin Vivosmart 5 Import")
+    st.caption(
+        "Upload a Garmin Vivosmart 5 FIT file or wellness ZIP export. "
+        "Steps, distance, sleep score/efficiency, respiration (awake/sleep), "
+        "SpO₂, stress, calories, and body battery will be stored in your profile history."
+    )
+
+    if not GARMIN_IMPORT_AVAILABLE:
+        st.info("Garmin import module unavailable. Ensure fitparse is installed and garmin_import.py is present.")
+        return
+
+    uploaded = st.file_uploader(
+        "Select FIT or Garmin wellness ZIP",
+        type=["fit", "zip"],
+        key=f"garmin_ingest_{user.user_id}",
+        accept_multiple_files=False,
+    )
+
+    if uploaded is None:
+        return
+
+    suffix = Path(uploaded.name).suffix.lower()
+    if suffix not in {".fit", ".zip"}:
+        st.error("Unsupported file type. Please upload a .fit or Garmin wellness .zip export.")
+        return
+
+    with st.spinner("Parsing Garmin data..."):
+        temp_path: Optional[Path] = None
+        try:
+            with NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+                tmp.write(uploaded.read())
+                temp_path = Path(tmp.name)
+
+            data = import_garmin_data(
+                fit_path=temp_path if suffix == ".fit" else None,
+                zip_path=temp_path if suffix == ".zip" else None,
+            )
+            daily_df = get_daily_physiology_summary(data)
+        except Exception as exc:  # noqa: BLE001
+            if log_exception is not None:
+                log_exception(_LOGGER, "Garmin ingest failed", exc)
+            st.error(f"Failed to parse Garmin file: {exc}")
+            if temp_path is not None and temp_path.exists():
+                temp_path.unlink(missing_ok=True)
+            return
+        finally:
+            if temp_path is not None and temp_path.exists():
+                temp_path.unlink(missing_ok=True)
+
+    if daily_df.empty:
+        st.warning("No usable Garmin wellness metrics were found in the file.")
+        return
+
+    entries: List[GarminDailyMetrics] = []
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    for _, row in daily_df.iterrows():
+        day_val = row.get("date")
+        if pd.isna(day_val):
+            continue
+        metric_date = pd.to_datetime(day_val).date().isoformat()
+        avg_hr = _safe_float(row.get("avg_hr_session")) or _safe_float(row.get("avg_hr"))
+        resting_hr = _safe_float(row.get("resting_hr_bpm")) or _safe_float(row.get("min_hr"))
+        entries.append(
+            GarminDailyMetrics(
+                entry_id=str(uuid.uuid4()),
+                user_id=user.user_id,
+                metric_date=metric_date,
+                steps=_safe_int(row.get("steps")),
+                distance_km=_safe_float(row.get("distance_km")),
+                calories_kcal=_safe_float(row.get("calories_kcal")),
+                avg_hr_bpm=avg_hr,
+                resting_hr_bpm=resting_hr,
+                stress_score=_safe_float(row.get("avg_stress")),
+                sleep_score=_safe_float(row.get("sleep_score")),
+                sleep_efficiency=_safe_float(row.get("sleep_efficiency")),
+                sleep_duration_hours=_safe_float(row.get("sleep_duration_hours")),
+                avg_spo2=_safe_float(row.get("avg_sleep_spo2")) or _safe_float(row.get("avg_spo2")),
+                avg_respiration_awake=_safe_float(row.get("avg_respiration_awake")),
+                avg_respiration_sleep=_safe_float(row.get("avg_sleep_respiration")),
+                body_battery_avg=_safe_float(row.get("body_battery_avg")) or _safe_float(row.get("avg_body_battery")),
+                body_battery_charge=_safe_float(row.get("body_battery_charge")),
+                body_battery_drain=_safe_float(row.get("body_battery_drain")),
+                source=data.source,
+                created_at=now_iso,
+            )
+        )
+
+    try:
+        db = get_database()
+        db.save_garmin_daily_metrics(entries)
+        st.success(f"Saved {len(entries)} day(s) of Garmin wellness metrics to the profile.")
+        st.dataframe(
+            daily_df.sort_values("date", ascending=False).head(5),
+            use_container_width=True,
+        )
+    except Exception as exc:  # noqa: BLE001
+        if log_exception is not None:
+            log_exception(_LOGGER, "Failed to persist Garmin daily metrics", exc)
+        st.error(f"Unable to save Garmin metrics: {exc}")
 
 
 # ---------------------------------------------------------------------------
@@ -2836,11 +3094,15 @@ def render_user_profile_tab() -> None:
         
         with tab_history:
             _render_assessment_history(current_user)
+            st.markdown("---")
+            _render_garmin_metrics_history(current_user)
         
         with tab_hrv:
             _render_hrv_history(current_user)
         
         with tab_data:
+            _render_garmin_ingest(current_user)
+            st.markdown("---")
             _render_data_management(current_user)
         
         with tab_sessions:
