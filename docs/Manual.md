@@ -1732,10 +1732,10 @@ For live data:
 
 ### Importing into HRV App
 
-**For Vivosmart 5 FIT or wellness ZIP (fills Clinical Profile gauges):**
+**For Vivosmart 5 FIT or wellness ZIP (fills Clinical Profile gauges; batch supported):**
 
 1. Open **User Profile → 📦 Data → Garmin Vivosmart 5 Import**.
-2. Upload either a `.fit` file (Export Original) or the wellness `.zip` export.
+2. Upload one or multiple `.fit` files (Export Original) or the wellness `.zip` export.
 3. The app parses steps, distance, calories, sleep score/efficiency, SpO₂, respiration (awake + sleep), stress, and body battery (charge/drain).
 4. Results are saved to the user's profile and shown as double-ring ECharts gauges in the **📈 History** tab.
 
