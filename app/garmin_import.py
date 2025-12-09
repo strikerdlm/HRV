@@ -40,6 +40,11 @@ from typing import TYPE_CHECKING, Any, Final
 import numpy as np
 import pandas as pd
 
+try:
+    from logging_config import get_logger
+except ImportError:  # Fallback for environments without logging_config
+    get_logger = None  # type: ignore[assignment]
+
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
@@ -47,7 +52,9 @@ if TYPE_CHECKING:
 # Constants
 # ---------------------------------------------------------------------------
 
-_LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+_LOGGER: Final[logging.Logger] = (
+    get_logger(__name__) if get_logger is not None else logging.getLogger(__name__)
+)
 
 # Garmin Connect wellness JSON file patterns (inside DI_CONNECT/DI-Connect-Wellness/)
 _SLEEP_FILE_SUFFIX: Final[str] = "_sleepData.json"
@@ -107,6 +114,9 @@ class GarminWellnessData:
     respiration_df: pd.DataFrame = field(default_factory=pd.DataFrame)
     body_battery_df: pd.DataFrame = field(default_factory=pd.DataFrame)
     rr_intervals_df: pd.DataFrame = field(default_factory=pd.DataFrame)
+    activity_df: pd.DataFrame = field(default_factory=pd.DataFrame)
+    session_df: pd.DataFrame = field(default_factory=pd.DataFrame)
+    resting_hr_df: pd.DataFrame = field(default_factory=pd.DataFrame)
     source: str = "unknown"
 
 
@@ -806,6 +816,10 @@ def parse_fit_file(fit_path: Path) -> GarminWellnessData:
     spo2_records: list[dict[str, Any]] = []
     stress_records: list[dict[str, Any]] = []
     respiration_records: list[dict[str, Any]] = []
+    activity_records: list[dict[str, Any]] = []
+    session_records: list[dict[str, Any]] = []
+    body_battery_records: list[dict[str, Any]] = []
+    resting_hr_records: list[dict[str, Any]] = []
     rr_intervals: list[float] = []
 
     with open(fit_path, "rb") as f:
@@ -836,6 +850,23 @@ def parse_fit_file(fit_path: Path) -> GarminWellnessData:
                         "timestamp": timestamp,
                         "respiration_rate": record_dict.get("respiration_rate"),
                     })
+                if any(
+                    key in record_dict
+                    for key in ("steps", "distance", "calories", "active_calories")
+                ):
+                    activity_records.append({
+                        "timestamp": timestamp,
+                        "steps": record_dict.get("steps"),
+                        "distance_m": record_dict.get("distance"),
+                        "calories": record_dict.get("calories"),
+                        "active_calories": record_dict.get("active_calories"),
+                    })
+                if "body_battery_level" in record_dict or "body_battery" in record_dict:
+                    body_battery_records.append({
+                        "timestamp": timestamp,
+                        "body_battery": record_dict.get("body_battery_level") or record_dict.get("body_battery"),
+                        "status": record_dict.get("body_battery_status"),
+                    })
 
             elif record_type == "hrv":
                 # HRV record with RR intervals
@@ -864,12 +895,56 @@ def parse_fit_file(fit_path: Path) -> GarminWellnessData:
                     "reading_confidence": record_dict.get("reading_confidence"),
                 })
 
+            elif record_type == "monitoring":
+                activity_records.append({
+                    "timestamp": timestamp,
+                    "steps": record_dict.get("steps"),
+                    "distance_m": record_dict.get("distance"),
+                    "calories": record_dict.get("calories"),
+                    "active_calories": record_dict.get("active_calories"),
+                })
+                if "resting_heart_rate" in record_dict:
+                    resting_hr_records.append({
+                        "timestamp": timestamp,
+                        "resting_hr_bpm": record_dict.get("resting_heart_rate"),
+                    })
+                if "body_battery_level" in record_dict or "body_battery" in record_dict:
+                    body_battery_records.append({
+                        "timestamp": timestamp,
+                        "body_battery": record_dict.get("body_battery_level") or record_dict.get("body_battery"),
+                        "status": record_dict.get("body_battery_status"),
+                    })
+
+            elif record_type == "session":
+                session_records.append({
+                    "timestamp": timestamp,
+                    "total_distance_m": record_dict.get("total_distance"),
+                    "total_timer_time_s": record_dict.get("total_timer_time"),
+                    "total_calories": record_dict.get("total_calories"),
+                    "avg_heart_rate": record_dict.get("avg_heart_rate"),
+                    "max_heart_rate": record_dict.get("max_heart_rate"),
+                    "min_heart_rate": record_dict.get("min_heart_rate"),
+                    "total_steps": record_dict.get("total_steps"),
+                    "start_time": record_dict.get("start_time"),
+                })
+
+            elif record_type == "device_info" and "resting_heart_rate" in record_dict:
+                resting_hr_records.append({
+                    "timestamp": timestamp,
+                    "resting_hr_bpm": record_dict.get("resting_heart_rate"),
+                })
+
     # Build DataFrames
     result.hr_df = pd.DataFrame(hr_records) if hr_records else pd.DataFrame()
     result.hrv_df = pd.DataFrame(hrv_records) if hrv_records else pd.DataFrame()
     result.spo2_df = pd.DataFrame(spo2_records) if spo2_records else pd.DataFrame()
     result.stress_df = pd.DataFrame(stress_records) if stress_records else pd.DataFrame()
     result.respiration_df = pd.DataFrame(respiration_records) if respiration_records else pd.DataFrame()
+    result.activity_df = pd.DataFrame(activity_records) if activity_records else pd.DataFrame()
+    result.session_df = pd.DataFrame(session_records) if session_records else pd.DataFrame()
+    result.resting_hr_df = pd.DataFrame(resting_hr_records) if resting_hr_records else pd.DataFrame()
+    if body_battery_records:
+        result.body_battery_df = pd.DataFrame(body_battery_records)
     
     # RR intervals for HRV analysis
     if rr_intervals:
@@ -896,6 +971,9 @@ def parse_fit_bytes(fit_bytes: bytes) -> GarminWellnessData:
     result = GarminWellnessData(source="fit:bytes")
     hr_records: list[dict[str, Any]] = []
     spo2_records: list[dict[str, Any]] = []
+    activity_records: list[dict[str, Any]] = []
+    session_records: list[dict[str, Any]] = []
+    resting_hr_records: list[dict[str, Any]] = []
     rr_intervals: list[float] = []
 
     fit_file = fitparse.FitFile(io.BytesIO(fit_bytes))
@@ -918,14 +996,55 @@ def parse_fit_bytes(fit_bytes: bytes) -> GarminWellnessData:
                     "timestamp": timestamp,
                     "spo2": record_dict.get("saturated_hemoglobin_percent"),
                 })
+            if any(
+                key in record_dict
+                for key in ("steps", "distance", "calories", "active_calories")
+            ):
+                activity_records.append({
+                    "timestamp": timestamp,
+                    "steps": record_dict.get("steps"),
+                    "distance_m": record_dict.get("distance"),
+                    "calories": record_dict.get("calories"),
+                    "active_calories": record_dict.get("active_calories"),
+                })
 
         elif record.name == "hrv":
             time_vals = record_dict.get("time")
             if isinstance(time_vals, (list, tuple)):
                 rr_intervals.extend([t * 1000 if t < 10 else t for t in time_vals if t is not None])
 
+        elif record.name == "monitoring":
+            activity_records.append({
+                "timestamp": timestamp,
+                "steps": record_dict.get("steps"),
+                "distance_m": record_dict.get("distance"),
+                "calories": record_dict.get("calories"),
+                "active_calories": record_dict.get("active_calories"),
+            })
+            if "resting_heart_rate" in record_dict:
+                resting_hr_records.append({
+                    "timestamp": timestamp,
+                    "resting_hr_bpm": record_dict.get("resting_heart_rate"),
+                })
+
+        elif record.name == "session":
+            session_records.append({
+                "timestamp": timestamp,
+                "total_distance_m": record_dict.get("total_distance"),
+                "total_timer_time_s": record_dict.get("total_timer_time"),
+                "total_calories": record_dict.get("total_calories"),
+                "avg_heart_rate": record_dict.get("avg_heart_rate"),
+                "max_heart_rate": record_dict.get("max_heart_rate"),
+                "min_heart_rate": record_dict.get("min_heart_rate"),
+                "total_steps": record_dict.get("total_steps"),
+                "start_time": record_dict.get("start_time"),
+            })
+
     result.hr_df = pd.DataFrame(hr_records) if hr_records else pd.DataFrame()
     result.spo2_df = pd.DataFrame(spo2_records) if spo2_records else pd.DataFrame()
+    result.activity_df = pd.DataFrame(activity_records) if activity_records else pd.DataFrame()
+    result.session_df = pd.DataFrame(session_records) if session_records else pd.DataFrame()
+    result.resting_hr_df = pd.DataFrame(resting_hr_records) if resting_hr_records else pd.DataFrame()
     if rr_intervals:
         result.rr_intervals_df = pd.DataFrame({"rr_interval_ms": rr_intervals})
 
@@ -1310,15 +1429,47 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
     Returns:
         DataFrame with daily aggregated metrics including:
         - date
-        - avg_hr, min_hr, max_hr
+        - avg_hr, min_hr, max_hr, resting_hr
+        - steps, distance_km, calories_kcal
         - avg_hrv_rmssd
         - avg_spo2, min_spo2
         - avg_stress
-        - avg_respiration
-        - avg_body_battery
-        - tst_minutes, sleep_efficiency
+        - avg_respiration (awake), avg_sleep_respiration
+        - body_battery aggregates (avg, charge, drain)
+        - tst_minutes, sleep_efficiency, sleep_score
     """
     daily_metrics: dict[date, dict[str, Any]] = {}
+
+    def _ensure_day(day: date) -> dict[str, Any]:
+        if day not in daily_metrics:
+            daily_metrics[day] = {}
+        return daily_metrics[day]
+
+    def _update_max(day: date, key: str, value: Any) -> None:
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            return
+        metrics = _ensure_day(day)
+        if metrics.get(key) is None:
+            metrics[key] = value
+        else:
+            try:
+                metrics[key] = max(metrics[key], value)
+            except Exception:
+                metrics[key] = value
+
+    def _update_mean(day: date, key: str, value: Any) -> None:
+        if value is None or (isinstance(value, float) and np.isnan(value)):
+            return
+        metrics = _ensure_day(day)
+        metrics[key] = value
+
+    def _aggregate_monotonic(series: pd.Series) -> float | None:
+        valid = series.dropna()
+        if valid.empty:
+            return None
+        if valid.is_monotonic_increasing:
+            return float(valid.iloc[-1])
+        return float(valid.sum())
 
     # Process heart rate
     if not data.hr_df.empty and "timestamp" in data.hr_df.columns:
@@ -1327,11 +1478,10 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
         hr_df["date"] = hr_df["timestamp"].dt.date
         hr_daily = hr_df.groupby("date")["heart_rate"].agg(["mean", "min", "max"])
         for idx, row in hr_daily.iterrows():
-            if idx not in daily_metrics:
-                daily_metrics[idx] = {}
-            daily_metrics[idx]["avg_hr"] = row["mean"]
-            daily_metrics[idx]["min_hr"] = row["min"]
-            daily_metrics[idx]["max_hr"] = row["max"]
+            metrics = _ensure_day(idx)
+            metrics["avg_hr"] = row["mean"]
+            metrics["min_hr"] = row["min"]
+            metrics["max_hr"] = row["max"]
 
     # Process HRV
     if not data.hrv_df.empty:
@@ -1345,9 +1495,7 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
         if "hrv_rmssd" in hrv_df.columns and "date" in hrv_df.columns:
             hrv_daily = hrv_df.groupby("date")["hrv_rmssd"].mean()
             for idx, val in hrv_daily.items():
-                if idx not in daily_metrics:
-                    daily_metrics[idx] = {}
-                daily_metrics[idx]["avg_hrv_rmssd"] = val
+                _update_mean(idx, "avg_hrv_rmssd", val)
 
     # Process SpO2
     if not data.spo2_df.empty and "timestamp" in data.spo2_df.columns:
@@ -1356,10 +1504,9 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
         spo2_df["date"] = spo2_df["timestamp"].dt.date
         spo2_daily = spo2_df.groupby("date")["spo2"].agg(["mean", "min"])
         for idx, row in spo2_daily.iterrows():
-            if idx not in daily_metrics:
-                daily_metrics[idx] = {}
-            daily_metrics[idx]["avg_spo2"] = row["mean"]
-            daily_metrics[idx]["min_spo2"] = row["min"]
+            metrics = _ensure_day(idx)
+            metrics["avg_spo2"] = row["mean"]
+            metrics["min_spo2"] = row["min"]
 
     # Process stress
     if not data.stress_df.empty and "timestamp" in data.stress_df.columns:
@@ -1370,9 +1517,7 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
         stress_df = stress_df[stress_df["stress_level"] >= 0]
         stress_daily = stress_df.groupby("date")["stress_level"].mean()
         for idx, val in stress_daily.items():
-            if idx not in daily_metrics:
-                daily_metrics[idx] = {}
-            daily_metrics[idx]["avg_stress"] = val
+            _update_mean(idx, "avg_stress", val)
 
     # Process respiration
     if not data.respiration_df.empty and "timestamp" in data.respiration_df.columns:
@@ -1381,9 +1526,66 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
         resp_df["date"] = resp_df["timestamp"].dt.date
         resp_daily = resp_df.groupby("date")["respiration_rate"].mean()
         for idx, val in resp_daily.items():
-            if idx not in daily_metrics:
-                daily_metrics[idx] = {}
-            daily_metrics[idx]["avg_respiration"] = val
+            _update_mean(idx, "avg_respiration_awake", val)
+
+    # Process activity (steps, distance, calories)
+    if not data.activity_df.empty and "timestamp" in data.activity_df.columns:
+        act_df = data.activity_df.copy()
+        act_df["timestamp"] = pd.to_datetime(act_df["timestamp"], utc=True)
+        act_df["date"] = act_df["timestamp"].dt.date
+
+        if "steps" in act_df.columns:
+            steps_daily = act_df.groupby("date")["steps"].apply(_aggregate_monotonic)
+            for idx, val in steps_daily.items():
+                if val is not None:
+                    _update_max(idx, "steps", val)
+
+        if "distance_m" in act_df.columns:
+            dist_daily = act_df.groupby("date")["distance_m"].apply(_aggregate_monotonic)
+            for idx, val in dist_daily.items():
+                if val is not None:
+                    _update_max(idx, "distance_km", val / 1000.0)
+
+        # Calories: prefer active_calories if present, else calories
+        calorie_col = "active_calories" if "active_calories" in act_df.columns else "calories"
+        if calorie_col in act_df.columns:
+            cal_daily = act_df.groupby("date")[calorie_col].apply(_aggregate_monotonic)
+            for idx, val in cal_daily.items():
+                if val is not None:
+                    _update_max(idx, "calories_kcal", val)
+
+    # Process session summaries (totals and resting HR if present)
+    if not data.session_df.empty:
+        session_df = data.session_df.copy()
+        time_col = "start_time" if "start_time" in session_df.columns else "timestamp"
+        if time_col in session_df.columns:
+            session_df[time_col] = pd.to_datetime(session_df[time_col], utc=True, errors="coerce")
+            session_df["date"] = session_df[time_col].dt.date
+            if "total_steps" in session_df.columns:
+                for idx, val in session_df.groupby("date")["total_steps"].max().items():
+                    _update_max(idx, "steps", val)
+            if "total_distance_m" in session_df.columns:
+                for idx, val in session_df.groupby("date")["total_distance_m"].max().items():
+                    if pd.notna(val):
+                        _update_max(idx, "distance_km", val / 1000.0)
+            if "total_calories" in session_df.columns:
+                for idx, val in session_df.groupby("date")["total_calories"].max().items():
+                    _update_max(idx, "calories_kcal", val)
+            if "avg_heart_rate" in session_df.columns:
+                for idx, val in session_df.groupby("date")["avg_heart_rate"].mean().items():
+                    _update_mean(idx, "avg_hr_session", val)
+            if "min_heart_rate" in session_df.columns:
+                for idx, val in session_df.groupby("date")["min_heart_rate"].min().items():
+                    _update_mean(idx, "resting_hr_bpm", val)
+
+    # Resting HR records
+    if not data.resting_hr_df.empty and "timestamp" in data.resting_hr_df.columns:
+        rest_df = data.resting_hr_df.copy()
+        rest_df["timestamp"] = pd.to_datetime(rest_df["timestamp"], utc=True)
+        rest_df["date"] = rest_df["timestamp"].dt.date
+        rest_daily = rest_df.groupby("date")["resting_hr_bpm"].mean()
+        for idx, val in rest_daily.items():
+            _update_mean(idx, "resting_hr_bpm", val)
 
     # Process body battery
     if not data.body_battery_df.empty and "timestamp" in data.body_battery_df.columns:
@@ -1392,11 +1594,27 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
         bb_df["date"] = bb_df["timestamp"].dt.date
         bb_daily = bb_df.groupby("date")["body_battery"].agg(["mean", "min", "max"])
         for idx, row in bb_daily.iterrows():
-            if idx not in daily_metrics:
-                daily_metrics[idx] = {}
-            daily_metrics[idx]["avg_body_battery"] = row["mean"]
-            daily_metrics[idx]["min_body_battery"] = row["min"]
-            daily_metrics[idx]["max_body_battery"] = row["max"]
+            metrics = _ensure_day(idx)
+            metrics["avg_body_battery"] = row["mean"]
+            metrics["min_body_battery"] = row["min"]
+            metrics["max_body_battery"] = row["max"]
+            metrics["body_battery_avg"] = row["mean"]
+            metrics["body_battery_min"] = row["min"]
+            metrics["body_battery_max"] = row["max"]
+        # Charge and drain estimates per day
+        for idx, group in bb_df.groupby("date"):
+            sorted_vals = group.sort_values("timestamp")["body_battery"].dropna()
+            if sorted_vals.empty:
+                continue
+            deltas = sorted_vals.diff().dropna()
+            charge = float(deltas[deltas > 0].sum()) if not deltas.empty else 0.0
+            drain = float(abs(deltas[deltas < 0].sum())) if not deltas.empty else 0.0
+            metrics = _ensure_day(idx)
+            metrics["body_battery_charge"] = charge
+            metrics["body_battery_drain"] = drain
+            metrics.setdefault("body_battery_avg", float(sorted_vals.mean()))
+            metrics.setdefault("body_battery_max", float(sorted_vals.max()))
+            metrics.setdefault("body_battery_min", float(sorted_vals.min()))
 
     # Add sleep metrics
     if not data.sleep_df.empty:
@@ -1406,13 +1624,14 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
                 d = row["date"]
                 if isinstance(d, str):
                     d = datetime.strptime(d, "%Y-%m-%d").date()
-                if d not in daily_metrics:
-                    daily_metrics[d] = {}
-                daily_metrics[d]["tst_minutes"] = row.get("tst_minutes")
-                daily_metrics[d]["sleep_efficiency"] = row.get("sleep_efficiency")
-                daily_metrics[d]["sleep_score"] = row.get("sleep_score")
-                daily_metrics[d]["avg_sleep_spo2"] = row.get("avg_spo2")
-                daily_metrics[d]["avg_sleep_respiration"] = row.get("avg_respiration")
+                metrics = _ensure_day(d)
+                metrics["tst_minutes"] = row.get("tst_minutes")
+                metrics["sleep_efficiency"] = row.get("sleep_efficiency")
+                metrics["sleep_score"] = row.get("sleep_score")
+                metrics["avg_sleep_spo2"] = row.get("avg_spo2")
+                metrics["avg_sleep_respiration"] = row.get("avg_respiration")
+                if row.get("tst_minutes") is not None:
+                    metrics["sleep_duration_hours"] = row.get("tst_minutes") / 60.0
 
     # Convert to DataFrame
     if not daily_metrics:
