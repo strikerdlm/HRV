@@ -1634,9 +1634,22 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
             render_echarts(option, height_px=280)
 
     st.markdown("---")
-    st.markdown("### 📊 Recent Daily Metrics")
+    st.markdown("---")
+    st.markdown("### 📊 Statistical Analysis")
     
-    with st.expander("View all columns", expanded=False):
+    # Show trends if we have multiple days
+    if len(df) > 1:
+        trend_cols = ["steps", "distance_km", "calories_kcal", "sleep_score", "stress_score", "body_battery_avg"]
+        available_trend = [c for c in trend_cols if c in df.columns and df[c].notna().sum() > 1]
+        
+        if available_trend:
+            st.markdown("#### Trends Over Time")
+            chart_data = df[["metric_date"] + available_trend].dropna(how="all", subset=available_trend)
+            if not chart_data.empty:
+                chart_data = chart_data.set_index("metric_date")
+                st.line_chart(chart_data)
+    
+    with st.expander("📋 View all daily metrics", expanded=False):
         preview_cols = [
             "metric_date",
             "steps",
