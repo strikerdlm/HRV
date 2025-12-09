@@ -247,5 +247,7 @@ desktop.ini
 # Data files (uncomment if you don't want to track data files)
 # *.csv
 # *.xlsx
-# *.db
-# *.sqlite
+*.db
+*.sqlite
+*.db-shm
+*.db-wal
