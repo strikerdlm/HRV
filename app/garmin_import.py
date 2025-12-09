@@ -589,9 +589,19 @@ def _find_wellness_files(
         _BODY_BATTERY_FILE_SUFFIX: "body_battery",
     }
     with zipfile.ZipFile(zip_path, "r") as zf:
-        for name in zf.namelist():
+        all_files = zf.namelist()
+        _LOGGER.info("ZIP contains %d files total", len(all_files))
+        
+        # Log directory structure
+        wellness_dir_found = any("DI_CONNECT" in name or "DI-Connect" in name for name in all_files)
+        if wellness_dir_found:
+            _LOGGER.info("Found DI_CONNECT/DI-Connect-Wellness directory structure")
+        
+        for name in all_files:
+            # Check for wellness JSON files
             for suffix, file_type in suffixes.items():
                 if name.endswith(suffix):
+                    _LOGGER.info("Found wellness file: %s (type: %s)", name, file_type)
                     yield file_type, name
                     break
 
@@ -669,6 +679,7 @@ def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
         for name in zf.namelist():
             if name.lower().endswith(".fit"):
                 fit_count += 1
+                _LOGGER.info("Parsing embedded FIT file #%d: %s", fit_count, name)
                 try:
                     with zf.open(name) as f_fit:
                         fit_bytes = f_fit.read()
