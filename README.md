@@ -159,6 +159,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | **Multi-Language** | English + Spanish (Colombian-validated scales: ESE-VC, KSS-CO) |
 | **Laboratory Tracking** | CBC/Hemogram, Blood Chemistry, Urinalysis with normal ranges |
 | **Multi-Device Import** | Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, Somfit Pro |
+| **Garmin Vivosmart 5 Clinical Ingest** | Upload FIT/ZIP in User Profile to auto-fill steps, distance, sleep score/quality/duration, SpO₂, respiration (awake/sleep), stress, calories, and body battery charge/drain with ECharts gauges |
 | **Docker Deployment** | Containerized with PostgreSQL/TimescaleDB for production environments |
 | **AI Interpretation** | GPT-5.1 high-reasoning analysis with scientific citations |
 | **Publication Export** | APA 7th edition formatted reports, LaTeX tables, CSV/JSON data |
