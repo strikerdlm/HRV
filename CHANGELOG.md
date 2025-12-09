@@ -20,6 +20,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - ZIPs containing only embedded FIT files (no wellness JSON) now parse those FIT files properly
   - Batch processing of multiple FIT files inside ZIP with merged dataframes
 - **Batch upload support** (`app/device_imports.py`): Sidebar Garmin uploader now accepts multiple FIT/ZIP files and processes all wellness metrics
+- **Gauge aesthetics** (`app/gauge_builder.py`): Reduced ring width from 20px to 8px for cleaner, narrower gauge appearance
+
+### Changed
+- **User guidance** (`app/user_profile_tab.py`, `app/device_imports.py`): Added help sections explaining how to request complete wellness export from Garmin Connect to get sleep, stress, body battery, SpO₂, and respiration JSON files (not available in individual activity FIT exports)
 - **Gauge aesthetics** (`app/gauge_builder.py`, `app/user_profile_tab.py`):
   - Added proper thresholds for all Garmin wellness metrics (steps, distance, calories, SpO2, stress, body battery, respiration, sleep)
   - Organized gauges into logical sections: Activity & Movement, Heart Rate & Stress, Sleep & Recovery, Respiration & SpO₂, Body Battery
