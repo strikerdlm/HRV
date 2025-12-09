@@ -591,17 +591,29 @@ def _find_wellness_files(
     with zipfile.ZipFile(zip_path, "r") as zf:
         all_files = zf.namelist()
         _LOGGER.info("ZIP contains %d files total", len(all_files))
+        _LOGGER.info("Files in ZIP: %s", ", ".join(all_files[:20]))  # Show first 20 files
         
         # Log directory structure
         wellness_dir_found = any("DI_CONNECT" in name or "DI-Connect" in name for name in all_files)
         if wellness_dir_found:
             _LOGGER.info("Found DI_CONNECT/DI-Connect-Wellness directory structure")
+        else:
+            _LOGGER.warning(
+                "No DI_CONNECT/DI-Connect-Wellness directory found. "
+                "This ZIP may not contain wellness JSON files (sleep, stress, body battery, etc.). "
+                "To get complete wellness data, request 'Export Your Data' from Garmin Connect → Account Settings."
+            )
+        
+        # Count JSON vs FIT files
+        json_count = sum(1 for name in all_files if name.lower().endswith(".json"))
+        fit_count_check = sum(1 for name in all_files if name.lower().endswith(".fit"))
+        _LOGGER.info("File breakdown: %d JSON files, %d FIT files", json_count, fit_count_check)
         
         for name in all_files:
             # Check for wellness JSON files
             for suffix, file_type in suffixes.items():
                 if name.endswith(suffix):
-                    _LOGGER.info("Found wellness file: %s (type: %s)", name, file_type)
+                    _LOGGER.info("Found wellness JSON: %s (type: %s)", name, file_type)
                     yield file_type, name
                     break
 
