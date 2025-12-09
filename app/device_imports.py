@@ -350,7 +350,35 @@ def _render_garmin_section() -> Optional[ImportedRRData]:
                             daily_df = get_daily_physiology_summary(garmin_data)
                             if not daily_df.empty:
                                 daily_pending.extend(daily_df.to_dict("records"))
-                                st.success(f"✅ Parsed Garmin wellness ZIP {file_name} with {len(daily_df)} day(s).")
+                                
+                                # Check what data was extracted
+                                has_sleep = not garmin_data.sleep_df.empty
+                                has_stress = not garmin_data.stress_df.empty
+                                has_body_battery = not garmin_data.body_battery_df.empty
+                                has_spo2 = not garmin_data.spo2_df.empty
+                                has_respiration = not garmin_data.respiration_df.empty
+                                
+                                missing_wellness = []
+                                if not has_sleep:
+                                    missing_wellness.append("sleep")
+                                if not has_stress:
+                                    missing_wellness.append("stress")
+                                if not has_body_battery:
+                                    missing_wellness.append("body battery")
+                                if not has_spo2:
+                                    missing_wellness.append("SpO₂")
+                                if not has_respiration:
+                                    missing_wellness.append("respiration")
+                                
+                                if missing_wellness:
+                                    st.warning(
+                                        f"⚠️ Extracted steps/distance/calories from {file_name}, but missing: "
+                                        f"{', '.join(missing_wellness)}. "
+                                        "For complete wellness data (sleep, stress, body battery, SpO₂), "
+                                        "use Garmin Connect → Account Settings → Export Your Data (not individual activity exports)."
+                                    )
+                                else:
+                                    st.success(f"✅ Parsed complete wellness data from {file_name} with {len(daily_df)} day(s).")
                             else:
                                 st.info(f"{file_name}: ZIP parsed but no wellness metrics detected.")
                         finally:
