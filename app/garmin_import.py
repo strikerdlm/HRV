@@ -621,9 +621,21 @@ def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
     spo2_records: list[dict[str, Any]] = []
     respiration_records: list[dict[str, Any]] = []
     body_battery_records: list[dict[str, Any]] = []
+    fit_hr_records: list[dict[str, Any]] = []
+    fit_hrv_records: list[dict[str, Any]] = []
+    fit_spo2_records: list[dict[str, Any]] = []
+    fit_stress_records: list[dict[str, Any]] = []
+    fit_respiration_records: list[dict[str, Any]] = []
+    fit_body_battery_records: list[dict[str, Any]] = []
+    fit_rr_intervals: list[float] = []
+    fit_session_records: list[dict[str, Any]] = []
+    fit_activity_records: list[dict[str, Any]] = []
+    fit_resting_hr_records: list[dict[str, Any]] = []
+    found_wellness_json = False
 
     with zipfile.ZipFile(zip_path, "r") as zf:
         for file_type, file_path in _find_wellness_files(zip_path):
+            found_wellness_json = True
             try:
                 with zf.open(file_path) as f:
                     data = json.load(f)
@@ -652,6 +664,36 @@ def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
                 elif file_type == "body_battery":
                     body_battery_records.extend(_parse_body_battery_record(record))
 
+        # Additionally parse any FIT files inside the ZIP (common in wellness exports)
+        for name in zf.namelist():
+            if name.lower().endswith(".fit"):
+                try:
+                    with zf.open(name) as f_fit:
+                        fit_bytes = f_fit.read()
+                    fit_data = parse_fit_bytes(fit_bytes)
+                    if not fit_data.hr_df.empty:
+                        fit_hr_records.extend(fit_data.hr_df.to_dict(orient="records"))
+                    if not fit_data.hrv_df.empty:
+                        fit_hrv_records.extend(fit_data.hrv_df.to_dict(orient="records"))
+                    if not fit_data.spo2_df.empty:
+                        fit_spo2_records.extend(fit_data.spo2_df.to_dict(orient="records"))
+                    if not fit_data.stress_df.empty:
+                        fit_stress_records.extend(fit_data.stress_df.to_dict(orient="records"))
+                    if not fit_data.respiration_df.empty:
+                        fit_respiration_records.extend(fit_data.respiration_df.to_dict(orient="records"))
+                    if not fit_data.body_battery_df.empty:
+                        fit_body_battery_records.extend(fit_data.body_battery_df.to_dict(orient="records"))
+                    if not fit_data.rr_intervals_df.empty:
+                        fit_rr_intervals.extend(fit_data.rr_intervals_df["rr_interval_ms"].dropna().tolist())
+                    if not fit_data.session_df.empty:
+                        fit_session_records.extend(fit_data.session_df.to_dict(orient="records"))
+                    if not fit_data.activity_df.empty:
+                        fit_activity_records.extend(fit_data.activity_df.to_dict(orient="records"))
+                    if not fit_data.resting_hr_df.empty:
+                        fit_resting_hr_records.extend(fit_data.resting_hr_df.to_dict(orient="records"))
+                except Exception as exc:  # noqa: BLE001
+                    _LOGGER.warning("Failed to parse embedded FIT %s: %s", name, exc)
+
     result.sleep_df = pd.DataFrame(sleep_records) if sleep_records else pd.DataFrame()
     result.hrv_df = pd.DataFrame(hrv_records) if hrv_records else pd.DataFrame()
     result.stress_df = pd.DataFrame(stress_records) if stress_records else pd.DataFrame()
@@ -659,6 +701,37 @@ def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
     result.spo2_df = pd.DataFrame(spo2_records) if spo2_records else pd.DataFrame()
     result.respiration_df = pd.DataFrame(respiration_records) if respiration_records else pd.DataFrame()
     result.body_battery_df = pd.DataFrame(body_battery_records) if body_battery_records else pd.DataFrame()
+    if fit_hr_records:
+        fit_hr_df = pd.DataFrame(fit_hr_records)
+        result.hr_df = pd.concat([result.hr_df, fit_hr_df], ignore_index=True) if not result.hr_df.empty else fit_hr_df
+    if fit_hrv_records:
+        fit_hrv_df = pd.DataFrame(fit_hrv_records)
+        result.hrv_df = pd.concat([result.hrv_df, fit_hrv_df], ignore_index=True) if not result.hrv_df.empty else fit_hrv_df
+    if fit_spo2_records:
+        fit_spo2_df = pd.DataFrame(fit_spo2_records)
+        result.spo2_df = pd.concat([result.spo2_df, fit_spo2_df], ignore_index=True) if not result.spo2_df.empty else fit_spo2_df
+    if fit_stress_records:
+        fit_stress_df = pd.DataFrame(fit_stress_records)
+        result.stress_df = pd.concat([result.stress_df, fit_stress_df], ignore_index=True) if not result.stress_df.empty else fit_stress_df
+    if fit_respiration_records:
+        fit_resp_df = pd.DataFrame(fit_respiration_records)
+        result.respiration_df = pd.concat([result.respiration_df, fit_resp_df], ignore_index=True) if not result.respiration_df.empty else fit_resp_df
+    if fit_body_battery_records:
+        fit_bb_df = pd.DataFrame(fit_body_battery_records)
+        result.body_battery_df = pd.concat([result.body_battery_df, fit_bb_df], ignore_index=True) if not result.body_battery_df.empty else fit_bb_df
+    if fit_rr_intervals:
+        fit_rr_df = pd.DataFrame({"rr_interval_ms": fit_rr_intervals})
+        result.rr_intervals_df = pd.concat([result.rr_intervals_df, fit_rr_df], ignore_index=True) if not result.rr_intervals_df.empty else fit_rr_df
+    if fit_session_records:
+        result.session_df = pd.DataFrame(fit_session_records)
+    if fit_activity_records:
+        result.activity_df = pd.DataFrame(fit_activity_records)
+    if fit_resting_hr_records:
+        result.resting_hr_df = pd.DataFrame(fit_resting_hr_records)
+
+    # If no wellness JSON was found but FIT data exists, mark source
+    if not found_wellness_json and (fit_hr_records or fit_rr_intervals or fit_spo2_records):
+        result.source = f"zip-fit:{zip_path.name}"
 
     return result
 
