@@ -425,7 +425,7 @@ def build_two_ring_gauge(
         },
         "progress": {
             "show": True,
-            "width": 20,
+            "width": 8,
             "roundCap": True,
         },
         "pointer": {
@@ -438,7 +438,7 @@ def build_two_ring_gauge(
         },
         "axisLine": {
             "lineStyle": {
-                "width": 20,
+                "width": 8,
                 "color": axis_line_color,
             },
         },
