@@ -225,7 +225,7 @@ except ImportError:
     HRV_CACHE_AVAILABLE = False
 
 from dataclasses import asdict, dataclass
-from datetime import timezone, timedelta
+from datetime import timezone, timedelta, datetime, date
 from typing import (
     Any,
     Dict,
@@ -247,6 +247,7 @@ import os
 import re
 import sys
 import time
+import uuid
 
 import numpy as np
 import pandas as pd
@@ -255,6 +256,8 @@ import streamlit as st
 from dotenv import load_dotenv
 from pathlib import Path
 from pandas.api.types import is_datetime64_any_dtype
+from user_database import HRVMeasurement, get_database
+from user_data_manager import create_user_manager, parse_filename_date
 
 try:
     # Package import (tests, package mode)
@@ -2316,6 +2319,272 @@ def _compute_file_hash(content: bytes) -> str:
     return hashlib.md5(content).hexdigest()[:16]
 
 
+def _get_user_identity(profile: Any) -> Tuple[Optional[str], str]:
+    """Return (user_id, display_name) from a profile object or dict."""
+    if profile is None:
+        return None, "Guest"
+    if isinstance(profile, dict):
+        user_id = profile.get("user_id")
+        display = profile.get("full_name") or profile.get("username") or "Unknown User"
+        return user_id, display
+    user_id = getattr(profile, "user_id", None)
+    display = (
+        getattr(profile, "full_name", None)
+        or getattr(profile, "username", None)
+        or "Unknown User"
+    )
+    return user_id, display
+
+
+def _resolve_active_profile(logger: logging.Logger) -> Any:
+    """Resolve the active user profile, favoring the author if unset."""
+    existing = st.session_state.get("current_user_profile")
+    if existing:
+        return existing
+    try:
+        db = get_database()
+        users = db.list_users()
+        if not users:
+            return None
+        for user in users:
+            full_name = (user.full_name or "").lower()
+            username = (user.username or "").lower()
+            if "malpica" in full_name or "diego" in full_name or "diego" in username:
+                st.session_state["current_user_profile"] = user
+                st.session_state["current_user_id"] = user.user_id
+                return user
+        if len(users) == 1:
+            st.session_state["current_user_profile"] = users[0]
+            st.session_state["current_user_id"] = users[0].user_id
+            return users[0]
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("Unable to resolve active profile: %s", exc)
+    return None
+
+
+def _build_analysis_settings(
+    *,
+    window: str,
+    step: str,
+    min_rr: int,
+    max_windows: int,
+    apply_clean: bool,
+    method: str,
+    max_dev: float,
+    median_win: int,
+    psd_method: str,
+    fast_windowing: bool,
+    high_compute: bool,
+    apply_dev: bool,
+    dev_metrics: Sequence[str],
+    covariate_enabled: bool,
+    covariate_age: Optional[int],
+    covariate_sex: Optional[str],
+    covariate_bmi: Optional[float],
+    covariate_exercise: Optional[str],
+) -> Dict[str, Any]:
+    """Build a serializable settings payload for persistence."""
+    return {
+        "window": window,
+        "step": step,
+        "min_rr": int(min_rr),
+        "max_windows": int(max_windows),
+        "apply_clean": bool(apply_clean),
+        "method": str(method),
+        "max_dev": float(max_dev),
+        "median_win": int(median_win),
+        "psd_method": str(psd_method),
+        "fast_windowing": bool(fast_windowing),
+        "high_compute": bool(high_compute),
+        "apply_dev": bool(apply_dev),
+        "dev_metrics": list(dev_metrics),
+        "covariate_enabled": bool(covariate_enabled),
+        "covariate_age": int(covariate_age) if covariate_age is not None else None,
+        "covariate_sex": str(covariate_sex) if covariate_sex is not None else None,
+        "covariate_bmi": float(covariate_bmi) if covariate_bmi is not None else None,
+        "covariate_exercise": (
+            str(covariate_exercise) if covariate_exercise is not None else None
+        ),
+    }
+
+
+def _analysis_settings_match(
+    stored: Mapping[str, Any], current: Mapping[str, Any]
+) -> bool:
+    """Return True when stored analysis settings are compatible with current ones."""
+    try:
+        for key, cur_val in current.items():
+            if key not in stored:
+                return False
+            stored_val = stored[key]
+            if isinstance(cur_val, float):
+                if not np.isclose(float(stored_val), float(cur_val), rtol=1e-6, atol=1e-6):
+                    return False
+            else:
+                if str(stored_val) != str(cur_val):
+                    return False
+        return True
+    except Exception:
+        return False
+
+
+def _persist_raw_uploads(
+    logger: logging.Logger, profile: Any, uploads: Dict[str, UploadedRR]
+) -> None:
+    """Persist raw RR uploads immediately for the active profile."""
+    user_id, display_name = _get_user_identity(profile)
+    if user_id is None or not uploads:
+        return
+    try:
+        manager = create_user_manager()
+        manager.set_current_user(
+            user_id=user_id, name=display_name or "User", create_if_missing=True
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.debug("Skipping raw RR persistence; user manager unavailable: %s", exc)
+        return
+
+    for name, up in uploads.items():
+        try:
+            rec_date = (
+                up.recording_start_utc.date()
+                if isinstance(up.recording_start_utc, pd.Timestamp)
+                else parse_filename_date(name)
+            )
+            manager.store_rr_intervals(
+                up.rr_ms,
+                filename=name,
+                recording_date=rec_date or date.today(),
+                overwrite=False,
+            )
+        except FileExistsError:
+            continue
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Unable to store RR file %s: %s", name, exc)
+
+
+def _persist_analysis_results(
+    logger: logging.Logger,
+    profile: Any,
+    uploads: Dict[str, UploadedRR],
+    file_hash_map: Dict[str, str],
+    multi_results_df: pd.DataFrame,
+    windowed_df: pd.DataFrame,
+    analysis_settings: Dict[str, Any],
+) -> None:
+    """Persist raw uploads and computed metrics for the active user."""
+    user_id, display_name = _get_user_identity(profile)
+    if user_id is None or multi_results_df.empty:
+        return
+    try:
+        db = get_database()
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Skipping persistence; database unavailable: %s", exc)
+        return
+    try:
+        manager = create_user_manager()
+        manager.set_current_user(user_id=user_id, name=display_name or "User", create_if_missing=True)
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("Skipping file persistence; user manager unavailable: %s", exc)
+        manager = None
+
+    settings_json = json.dumps(analysis_settings, default=str)
+
+    for _, row in multi_results_df.iterrows():
+        source = str(row.get("source", "unknown"))
+        up = uploads.get(source)
+        file_hash = file_hash_map.get(source)
+        recording_start_iso = None
+        recording_date_iso = datetime.now(timezone.utc).date().isoformat()
+        recording_duration_min = float(row.get("recording_duration_minutes", 0.0)) if "recording_duration_minutes" in row else None
+        artifact_pct = None
+        if up is not None and up.qc_summary:
+            artifact_pct = float(up.qc_summary.get("flagged_pct", 0.0))
+        if up is not None and isinstance(up.recording_start_utc, pd.Timestamp):
+            ts = up.recording_start_utc
+            if ts.tzinfo is None or ts.tzinfo.utcoffset(ts) is None:
+                ts = ts.tz_localize(timezone.utc)
+            else:
+                ts = ts.tz_convert(timezone.utc)
+            recording_start_iso = ts.isoformat()
+            recording_date_iso = ts.date().isoformat()
+
+        measurement = HRVMeasurement(
+            measurement_id=str(uuid.uuid4()),
+            user_id=user_id,
+            measurement_date=recording_date_iso,
+            device_name="RR Upload",
+            source_file=source,
+            file_hash=file_hash,
+            recording_start_utc=recording_start_iso,
+            recording_duration_min=recording_duration_min,
+            recording_context=None,
+            body_position=None,
+            mean_rr_ms=float(row.get("mean_nni", np.nan)) if "mean_nni" in row else None,
+            sdnn_ms=float(row.get("sdnn", np.nan)) if "sdnn" in row else None,
+            rmssd_ms=float(row.get("rmssd", np.nan)) if "rmssd" in row else None,
+            pnn50_pct=float(row.get("pnn50", np.nan)) if "pnn50" in row else None,
+            mean_hr_bpm=float(row.get("mean_hr", np.nan)) if "mean_hr" in row else None,
+            sdhr_bpm=float(row.get("std_hr", np.nan)) if "std_hr" in row else None,
+            vlf_power_ms2=float(row.get("vlf_power", np.nan)) if "vlf_power" in row else None,
+            lf_power_ms2=float(row.get("lf_power", np.nan)) if "lf_power" in row else None,
+            hf_power_ms2=float(row.get("hf_power", np.nan)) if "hf_power" in row else None,
+            lf_hf_ratio=float(row.get("lf_hf_ratio", np.nan)) if "lf_hf_ratio" in row else None,
+            total_power_ms2=float(row.get("total_power", np.nan)) if "total_power" in row else None,
+            sd1_ms=float(row.get("sd1", np.nan)) if "sd1" in row else None,
+            sd2_ms=float(row.get("sd2", np.nan)) if "sd2" in row else None,
+            dfa_alpha1=float(row.get("dfa_alpha1", np.nan)) if "dfa_alpha1" in row else None,
+            dfa_alpha2=float(row.get("dfa_alpha2", np.nan)) if "dfa_alpha2" in row else None,
+            sample_entropy=float(row.get("sampen", np.nan)) if "sampen" in row else None,
+            stress_index=float(row.get("baevsky_stress_index", np.nan)) if "baevsky_stress_index" in row else None,
+            parasympathetic_index=float(row.get("parasympathetic_index", np.nan)) if "parasympathetic_index" in row else None,
+            hrv_score=float(row.get("hrv_score", np.nan)) if "hrv_score" in row else None,
+            rr_intervals_json=json.dumps(up.rr_ms.tolist()) if up is not None else None,
+            artifact_percentage=artifact_pct,
+            quality_score=None,
+            notes=None,
+            analysis_settings_json=settings_json,
+            created_at=datetime.now(timezone.utc).isoformat(),
+        )
+        try:
+            db.save_hrv_measurement(measurement)
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.warning("Failed to persist HRV measurement for %s: %s", source, exc)
+        if manager is not None and up is not None:
+            try:
+                rec_date_obj = datetime.fromisoformat(recording_date_iso).date()
+            except ValueError:
+                rec_date_obj = date.today()
+            try:
+                manager.store_rr_intervals(
+                    up.rr_ms,
+                    filename=source,
+                    recording_date=rec_date_obj,
+                    overwrite=True,
+                )
+            except FileExistsError:
+                pass
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Unable to store RR file for %s: %s", source, exc)
+            # Persist analysis payload for reuse
+            try:
+                source_windowed = windowed_df[windowed_df["source"] == source] if not windowed_df.empty else pd.DataFrame()
+                payload = {
+                    "source": source,
+                    "file_hash": file_hash,
+                    "analysis_settings": analysis_settings,
+                    "multi_results": json.loads(pd.DataFrame([row]).to_json(orient="records"))[0],
+                    "windowed_df": source_windowed.to_dict(orient="list") if not source_windowed.empty else {},
+                    "recording_start_utc": recording_start_iso,
+                }
+                manager.store_hrv_results(
+                    payload,
+                    recording_date=rec_date_obj,
+                    source_file=source,
+                    file_hash=file_hash or "",
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Unable to store analysis payload for %s: %s", source, exc)
 def _upload_section() -> Dict[str, UploadedRR]:
     """
     Handle RR interval file uploads with session state caching.
@@ -3923,6 +4192,31 @@ def main() -> None:
     # Initialize UI state manager for tracking data availability
     if UI_STATE_MANAGER_AVAILABLE:
         update_data_status_from_session()
+    
+    active_profile = _resolve_active_profile(logger)
+    active_user_id, active_display_name = _get_user_identity(active_profile)
+    st.markdown(
+        f"""
+        <div style="
+            display:flex;
+            align-items:center;
+            gap:12px;
+            padding:12px 16px;
+            border-radius:14px;
+            background:linear-gradient(135deg, rgba(255, 245, 157, 0.22), rgba(255, 235, 59, 0.28));
+            border:1px solid rgba(255, 193, 7, 0.35);
+            box-shadow:0 8px 18px rgba(255, 193, 7, 0.18);
+            margin-bottom:12px;
+        ">
+            <span style="font-size:32px;">💡</span>
+            <div>
+                <div style="font-weight:700;color:#7c5b00;">Active Profile for Analysis</div>
+                <div style="font-size:16px;color:#2d2a24;">{active_display_name}</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # Initialize uploads dictionary
     uploads: Dict[str, UploadedRR] = {}
@@ -3957,7 +4251,60 @@ def main() -> None:
         # Legacy device-specific imports (ActiGraph GT3X, Somfit Pro)
         device_uploads = _device_import_section()
         uploads.update(device_uploads)
+
+    # Include queued uploads from the profile tab (stored in session state)
+    queued_profile_uploads = st.session_state.pop("queued_rr_uploads", [])
+    for queued in queued_profile_uploads:
+        try:
+            rr_ms = np.array(queued.get("rr_ms", []), dtype=float)
+            if rr_ms.size < 10:
+                continue
+            start_raw = queued.get("recording_start")
+            start_ts = (
+                pd.to_datetime(start_raw).tz_localize(timezone.utc)
+                if start_raw and pd.to_datetime(start_raw).tzinfo is None
+                else pd.to_datetime(start_raw)
+            )
+            if start_ts is None or not isinstance(start_ts, pd.Timestamp):
+                start_ts = pd.Timestamp.now(tz=timezone.utc)
+            name = queued.get("name") or f"queued_{len(uploads)+1}"
+            df = _to_dataframe(name, rr_ms, start_ts=start_ts)
+            uploads[name] = UploadedRR(
+                name=name,
+                rr_ms=rr_ms,
+                df=df,
+                recording_start_utc=start_ts,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Skipped queued upload due to error: %s", exc)
     
+    _persist_raw_uploads(logger, active_profile, uploads)
+    
+    file_hash_map: Dict[str, str] = {}
+    duplicate_measurements: Dict[str, HRVMeasurement] = {}
+    stored_payloads: Dict[str, Dict[str, Any]] = {}
+    mismatched_cached: List[str] = []
+    reuse_cached_results = False
+    db_instance: Optional[Any] = None
+    if active_user_id:
+        try:
+            db_instance = get_database()
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Database not available for duplicate detection: %s", exc)
+    for name, up in uploads.items():
+        try:
+            rr_hash = compute_rr_hash(up.rr_ms)
+        except Exception:
+            rr_hash = _compute_file_hash(up.rr_ms.tobytes())
+        file_hash_map[name] = rr_hash
+        if db_instance is not None and active_user_id:
+            try:
+                existing_meas = db_instance.get_measurement_by_hash(active_user_id, rr_hash)
+                if existing_meas is not None:
+                    duplicate_measurements[name] = existing_meas
+            except Exception as exc:  # pragma: no cover - defensive
+                logger.debug("Hash lookup failed for %s: %s", name, exc)
+
     # Initialize flag for data availability - used throughout for conditional rendering
     has_hrv_data_uploaded = bool(uploads)
 
@@ -4040,6 +4387,78 @@ def main() -> None:
             max_value=60,
             value=3,
             step=1)
+        analysis_settings = _build_analysis_settings(
+            window=win,
+            step=step,
+            min_rr=int(min_rr),
+            max_windows=int(max_windows),
+            apply_clean=bool(apply_clean),
+            method=str(method),
+            max_dev=float(max_dev),
+            median_win=int(median_win),
+            psd_method=str(psd_method),
+            fast_windowing=bool(fast_windowing),
+            high_compute=bool(high_compute),
+            apply_dev=bool(apply_dev),
+            dev_metrics=dev_metrics,
+            covariate_enabled=bool(enable_cov),
+            covariate_age=int(age_years),
+            covariate_sex=str(sex),
+            covariate_bmi=float(bmi),
+            covariate_exercise=str(exercise),
+        )
+        if duplicate_measurements:
+            st.sidebar.warning(
+                "These files were already analyzed for the active profile. "
+                "You can still recompute or proceed to reuse stored results."
+            )
+            for dup_name, dup_meas in duplicate_measurements.items():
+                st.sidebar.caption(
+                    f"• {dup_name} (analyzed {dup_meas.measurement_date})"
+                )
+            reuse_cached_results = st.sidebar.checkbox(
+                "Reuse stored HRV results when the file hash matches",
+                value=True,
+                help="If enabled, previously computed HRV results with the same file hash and settings are reloaded instead of recomputed.",
+            )
+            if reuse_cached_results and active_user_id:
+                try:
+                    reuse_manager = create_user_manager()
+                    reuse_manager.set_current_user(
+                        user_id=active_user_id,
+                        name=active_display_name or "User",
+                        create_if_missing=True,
+                    )
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.debug("Unable to load cached HRV results: %s", exc)
+                    reuse_cached_results = False
+                    reuse_manager = None
+                if reuse_cached_results and reuse_manager is not None:
+                    for dup_name in duplicate_measurements:
+                        file_hash = file_hash_map.get(dup_name)
+                        if not file_hash:
+                            continue
+                        try:
+                            payload = reuse_manager.load_hrv_results_by_hash(file_hash)
+                        except Exception as exc:  # pragma: no cover - defensive
+                            logger.debug(
+                                "Failed to read cached results for %s: %s", dup_name, exc
+                            )
+                            continue
+                        if payload and _analysis_settings_match(
+                            payload.get("analysis_settings", {}), analysis_settings
+                        ):
+                            stored_payloads[dup_name] = payload
+                        elif payload:
+                            mismatched_cached.append(dup_name)
+            if stored_payloads:
+                st.sidebar.info(
+                    f"Reusing stored analysis for: {', '.join(sorted(stored_payloads))}"
+                )
+            if mismatched_cached:
+                st.sidebar.warning(
+                    "Stored results exist but analysis settings changed; those files will be recomputed."
+                )
         st.sidebar.markdown("---")
         st.sidebar.subheader("Performance & display")
         minimal_mode = st.sidebar.checkbox("Minimal mode (fastest)", value=False)
@@ -4387,6 +4806,8 @@ def main() -> None:
                 max_workers = min(adaptive.n_workers, len(datasets), os.cpu_count() or 2)
             except Exception:
                 pass
+        if stored_payloads:
+            use_parallel = False
         
         if use_parallel and max_workers > 1:
             # Parallel processing for multiple datasets
@@ -4429,6 +4850,26 @@ def main() -> None:
             # Sequential processing (original code path)
             done_win = 0
             for name, up in datasets.items():
+                reuse_success = False
+                if reuse_cached_results and name in stored_payloads:
+                    cached_windowed = stored_payloads[name].get("windowed_df", {})
+                    if cached_windowed:
+                        try:
+                            wdf = pd.DataFrame(cached_windowed)
+                            if not wdf.empty:
+                                windowed_all.append(wdf.assign(source=name))
+                                reuse_success = True
+                        except Exception as exc:  # pragma: no cover - defensive
+                            logger.debug(
+                                "Cached windowed results invalid for %s: %s", name, exc
+                            )
+                if reuse_success:
+                    done_win += 1
+                    percent = min(100, int(done_win * 100 / total_win))
+                    txt_win.markdown(f"### Computing windowed metrics... {percent}%")
+                    prog_win.progress(percent)
+                    continue
+
                 wdf = _cached_windowed(
                     up.df,
                     rr_col=(
@@ -4598,6 +5039,20 @@ def main() -> None:
         done_full = 0
         for name, up in datasets.items():
             if up.rr_ms.size >= 10:
+                if reuse_cached_results and name in stored_payloads:
+                    cached_multi = stored_payloads[name].get("multi_results")
+                    if cached_multi:
+                        m = dict(cached_multi)
+                        m["source"] = name
+                        multi_results.append(m)
+                        ordered_sources.append(name)
+                        done_full += 1
+                        percent = min(100, int(done_full * 100 / total_full))
+                        txt_full.markdown(
+                            f"### Computing full-recording metrics... {percent}%"
+                        )
+                        prog_full.progress(percent)
+                        continue
                 use_rr = (
                     up.rr_ms_clean
                     if (apply_clean and up.rr_ms_clean is not None)
@@ -4681,6 +5136,20 @@ def main() -> None:
         except Exception:
             _noaa_rows = []
         meta_rows_for_context = meta_rows + _noaa_rows if _noaa_rows else meta_rows
+
+        # Persist analysis outputs for reuse per active user
+        try:
+            _persist_analysis_results(
+                logger,
+                active_profile,
+                datasets,
+                file_hash_map,
+                multi_results_df,
+                windowed_df,
+                analysis_settings,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Persistence skipped: %s", exc)
 
         # Mark comprehensive stage complete for caching
         if HRV_CACHE_AVAILABLE:

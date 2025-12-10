@@ -231,6 +231,9 @@ class HRVMeasurement:
     
     # Recording metadata
     device_name: Optional[str] = None
+    source_file: Optional[str] = None
+    file_hash: Optional[str] = None
+    recording_start_utc: Optional[str] = None
     recording_duration_min: Optional[float] = None
     recording_context: Optional[str] = None  # rest, sleep, exercise, recovery
     body_position: Optional[str] = None  # supine, seated, standing
@@ -271,6 +274,10 @@ class HRVMeasurement:
     
     # Notes
     notes: Optional[str] = None
+    
+    # Analysis metadata
+    analysis_settings_json: Optional[str] = None
+    created_at: Optional[str] = None
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
@@ -391,6 +398,19 @@ class UserDatabase:
             conn.rollback()
             raise
     
+    def close(self) -> None:
+        """Close the persistent SQLite connection for this instance."""
+        conn_key = f"conn_{id(self)}"
+        conn = getattr(_thread_local, conn_key, None)
+        if conn is None:
+            return
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
+        finally:
+            setattr(_thread_local, conn_key, None)
+    
     def _init_database(self) -> None:
         """Initialize database schema (called once per database file)."""
         # Use a direct connection for initialization to avoid recursion
@@ -479,6 +499,9 @@ class UserDatabase:
                     user_id TEXT NOT NULL,
                     measurement_date TEXT NOT NULL,
                     device_name TEXT,
+                    source_file TEXT,
+                    file_hash TEXT,
+                    recording_start_utc TEXT,
                     recording_duration_min REAL,
                     recording_context TEXT,
                     body_position TEXT,
@@ -505,14 +528,34 @@ class UserDatabase:
                     artifact_percentage REAL,
                     quality_score REAL,
                     notes TEXT,
+                    analysis_settings_json TEXT,
+                    created_at TEXT,
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """)
+            # Migrations for existing databases
+            for column_def in [
+                ("source_file", "TEXT"),
+                ("file_hash", "TEXT"),
+                ("recording_start_utc", "TEXT"),
+                ("analysis_settings_json", "TEXT"),
+                ("created_at", "TEXT"),
+            ]:
+                try:
+                    cursor.execute(
+                        f"ALTER TABLE hrv_measurements ADD COLUMN {column_def[0]} {column_def[1]}"
+                    )
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
             
             # Create indices for faster queries
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_measurements_user_date 
                 ON hrv_measurements(user_id, measurement_date)
+            """)
+            cursor.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS idx_measurements_user_hash
+                ON hrv_measurements(user_id, file_hash)
             """)
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_scales_user_date 
@@ -1414,16 +1457,22 @@ class UserDatabase:
             cursor.execute("""
                 INSERT OR REPLACE INTO hrv_measurements (
                     measurement_id, user_id, measurement_date, device_name,
+                    source_file, file_hash, recording_start_utc,
                     recording_duration_min, recording_context, body_position,
                     mean_rr_ms, sdnn_ms, rmssd_ms, pnn50_pct, mean_hr_bpm, sdhr_bpm,
                     vlf_power_ms2, lf_power_ms2, hf_power_ms2, lf_hf_ratio, total_power_ms2,
                     sd1_ms, sd2_ms, dfa_alpha1, dfa_alpha2, sample_entropy,
                     stress_index, parasympathetic_index, hrv_score,
-                    rr_intervals_json, artifact_percentage, quality_score, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    rr_intervals_json, artifact_percentage, quality_score, notes,
+                    analysis_settings_json, created_at
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                )
             """, (
                 measurement.measurement_id, measurement.user_id, measurement.measurement_date,
-                measurement.device_name, measurement.recording_duration_min,
+                measurement.device_name, measurement.source_file, measurement.file_hash,
+                measurement.recording_start_utc, measurement.recording_duration_min,
                 measurement.recording_context, measurement.body_position,
                 measurement.mean_rr_ms, measurement.sdnn_ms, measurement.rmssd_ms,
                 measurement.pnn50_pct, measurement.mean_hr_bpm, measurement.sdhr_bpm,
@@ -1433,7 +1482,8 @@ class UserDatabase:
                 measurement.dfa_alpha2, measurement.sample_entropy,
                 measurement.stress_index, measurement.parasympathetic_index,
                 measurement.hrv_score, measurement.rr_intervals_json,
-                measurement.artifact_percentage, measurement.quality_score, measurement.notes
+                measurement.artifact_percentage, measurement.quality_score, measurement.notes,
+                measurement.analysis_settings_json, measurement.created_at
             ))
         
         return measurement.measurement_id
@@ -1453,6 +1503,26 @@ class UserDatabase:
             rows = cursor.fetchall()
             
             return [self._row_to_hrv_measurement(row) for row in rows]
+    
+    def get_measurement_by_hash(
+        self, user_id: str, file_hash: str
+    ) -> Optional[HRVMeasurement]:
+        """Return the first HRV measurement matching a stored file hash."""
+        if not file_hash:
+            return None
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT * FROM hrv_measurements
+                WHERE user_id = ? AND file_hash = ?
+                ORDER BY datetime(created_at) DESC
+                LIMIT 1
+                """,
+                (user_id, file_hash),
+            )
+            row = cursor.fetchone()
+        return self._row_to_hrv_measurement(row) if row else None
     
     def get_hrv_dataframe(
         self,
@@ -1476,6 +1546,9 @@ class UserDatabase:
             "user_id",
             "measurement_date",
             "device_name",
+            "source_file",
+            "file_hash",
+            "recording_start_utc",
             "recording_duration_min",
             "recording_context",
             "body_position",
@@ -1500,6 +1573,8 @@ class UserDatabase:
             "hrv_score",
             "artifact_percentage",
             "quality_score",
+            "analysis_settings_json",
+            "created_at",
             "notes",
         ]
 
@@ -1532,6 +1607,9 @@ class UserDatabase:
             user_id=row["user_id"],
             measurement_date=row["measurement_date"],
             device_name=row["device_name"],
+            source_file=row["source_file"],
+            file_hash=row["file_hash"],
+            recording_start_utc=row["recording_start_utc"],
             recording_duration_min=row["recording_duration_min"],
             recording_context=row["recording_context"],
             body_position=row["body_position"],
@@ -1558,6 +1636,8 @@ class UserDatabase:
             artifact_percentage=row["artifact_percentage"],
             quality_score=row["quality_score"],
             notes=row["notes"],
+            analysis_settings_json=row["analysis_settings_json"],
+            created_at=row["created_at"],
         )
     
     # -----------------------------------------------------------------------
@@ -2103,5 +2183,6 @@ __all__ = [
     "get_cached_user_list",
     "get_cached_user_by_id",
     "clear_user_cache",
+    "get_measurement_by_hash",
 ]
 
