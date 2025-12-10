@@ -56,7 +56,10 @@ def temp_db() -> Generator[UserDatabase, None, None]:
     with tempfile.TemporaryDirectory() as tmpdir:
         db_path = Path(tmpdir) / "test_polar.db"
         db = UserDatabase(db_path)
-        yield db
+        try:
+            yield db
+        finally:
+            db.close()
 
 
 @pytest.fixture
