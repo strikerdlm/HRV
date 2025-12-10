@@ -5,6 +5,14 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.15] - 2025-12-10
+
+### Added
+- Sleep Analysis sidebar login and device import controls now run inside debounced forms with explicit submit buttons, reducing unnecessary reruns and completing the roadmap's batch submission objective for this tab.
+
+### Fixed
+- Garmin/ActiGraph/Somfit uploads no longer reprocess the same file on every rerun; imports execute only when the user presses the corresponding button and the uploader state is cleared afterwards to prevent duplicate data entries.
+
 ## [1.8.14] - 2025-12-10
 
 ### Added

@@ -20,6 +20,7 @@ National University of Colombia | Colombian Aerospace Force
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import date, datetime, timedelta, timezone
@@ -117,36 +118,43 @@ def _render_user_login_section() -> UserInfo | None:
 
         return user
 
-    # Login/Register form
-    with st.sidebar.expander("🔐 Login / Register", expanded=True):
-        user_id = st.text_input(
-            "Identification Number (Cedula/ID)",
-            key="user_id_input",
-            help="Enter your unique identification number",
-        )
-        user_name = st.text_input(
-            "Full Name",
-            key="user_name_input",
-            help="Enter your full name",
-        )
-
-        col1, col2 = st.columns(2)
-        with col1:
-            user_age = st.number_input(
-                "Age",
-                min_value=1,
-                max_value=120,
-                value=30,
-                key="user_age_input",
+    # Login/Register form with debounced submission
+    login_expander = st.sidebar.expander("🔐 Login / Register", expanded=True)
+    with login_expander:
+        with st.form("sleep_login_form", clear_on_submit=False):
+            user_id = st.text_input(
+                "Identification Number (Cedula/ID)",
+                key="user_id_input",
+                help="Enter your unique identification number",
             )
-        with col2:
-            user_sex = st.selectbox(
-                "Sex",
-                options=["Male", "Female", "Other"],
-                key="user_sex_input",
+            user_name = st.text_input(
+                "Full Name",
+                key="user_name_input",
+                help="Enter your full name",
             )
 
-        if st.button("🔑 Login / Create Account", key="login_btn", type="primary"):
+            col1, col2 = st.columns(2)
+            with col1:
+                user_age = st.number_input(
+                    "Age",
+                    min_value=1,
+                    max_value=120,
+                    value=30,
+                    key="user_age_input",
+                )
+            with col2:
+                user_sex = st.selectbox(
+                    "Sex",
+                    options=["Male", "Female", "Other"],
+                    key="user_sex_input",
+                )
+
+            login_submitted = st.form_submit_button(
+                "🔑 Login / Create Account",
+                use_container_width=True,
+            )
+
+        if login_submitted:
             if user_id and user_name:
                 try:
                     manager = _get_user_manager()
@@ -160,8 +168,8 @@ def _render_user_login_section() -> UserInfo | None:
                     st.session_state[_SESSION_CURRENT_USER] = user
                     st.success(f"Welcome, {user.name}!")
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Login failed: {e}")
+                except Exception as exc:
+                    st.error(f"Login failed: {exc}")
             else:
                 st.warning("Please enter both ID and name")
 
@@ -281,68 +289,99 @@ def _render_device_import_section(user: UserInfo) -> None:
     manager.set_current_user(user.user_id, user.name)
 
     # Garmin import
-    with st.sidebar.expander("Garmin Data"):
-        garmin_file = st.file_uploader(
-            "Upload Garmin Sleep JSON/ZIP",
-            type=["json", "zip"],
-            key="garmin_sleep_upload",
-        )
-        if garmin_file:
-            try:
-                import json
-                content = garmin_file.getvalue()
+    garmin_expander = st.sidebar.expander("Garmin Data")
+    with garmin_expander:
+        with st.form("garmin_import_form", clear_on_submit=True):
+            garmin_file = st.file_uploader(
+                "Upload Garmin Sleep JSON/ZIP",
+                type=["json", "zip"],
+                key="garmin_sleep_upload",
+                help="Upload Garmin Connect sleep JSON or full ZIP exports.",
+            )
+            garmin_submit = st.form_submit_button("📥 Import Garmin Sleep Data")
 
-                if garmin_file.name.endswith(".json"):
-                    sleep_data = json.loads(content.decode("utf-8"))
-                    # Try to extract date from data
-                    rec_date = date.today()
-                    if "calendarDate" in sleep_data:
-                        rec_date = date.fromisoformat(sleep_data["calendarDate"])
+        if garmin_submit:
+            if garmin_file is None:
+                st.warning("Please select a Garmin JSON or ZIP file before importing.")
+            else:
+                with st.spinner("Processing Garmin data..."):
+                    try:
+                        content = garmin_file.getvalue()
+                        filename = garmin_file.name.lower()
 
-                    # Store the data
-                    manager.store_sleep_data(sleep_data, rec_date, source="garmin")
-                    st.success(f"Stored Garmin sleep data for {rec_date}")
+                        if filename.endswith(".json"):
+                            sleep_data = json.loads(content.decode("utf-8"))
+                            rec_date = date.today()
+                            if "calendarDate" in sleep_data:
+                                rec_date = date.fromisoformat(sleep_data["calendarDate"])
 
-                    # Store raw file
-                    manager.store_device_file(content, garmin_file.name, device_type="garmin")
+                            manager.store_sleep_data(sleep_data, rec_date, source="garmin")
+                            manager.store_device_file(content, garmin_file.name, device_type="garmin")
+                            st.success(f"Stored Garmin sleep data for {rec_date}")
 
-                elif garmin_file.name.endswith(".zip"):
-                    # Store raw file for later processing
-                    manager.store_device_file(content, garmin_file.name, device_type="garmin")
-                    st.success("Stored Garmin ZIP file for processing")
-
-            except Exception as e:
-                st.error(f"Error processing Garmin data: {e}")
+                        elif filename.endswith(".zip"):
+                            manager.store_device_file(content, garmin_file.name, device_type="garmin")
+                            st.success("Stored Garmin ZIP file for processing")
+                        else:
+                            st.warning("Unsupported Garmin file type. Please upload .json or .zip.")
+                    except json.JSONDecodeError as exc:
+                        st.error(f"Invalid Garmin JSON file: {exc}")
+                    except Exception as exc:  # noqa: BLE001
+                        st.error(f"Error processing Garmin data: {exc}")
+                    finally:
+                        st.session_state.pop("garmin_sleep_upload", None)
 
     # ActiGraph import
-    with st.sidebar.expander("ActiGraph Data"):
-        actigraph_file = st.file_uploader(
-            "Upload ActiGraph File",
-            type=["gt3x", "agd", "csv"],
-            key="actigraph_sleep_upload",
-        )
-        if actigraph_file:
-            try:
-                content = actigraph_file.getvalue()
-                manager.store_device_file(content, actigraph_file.name, device_type="actigraph")
-                st.success("Stored ActiGraph file")
-            except Exception as e:
-                st.error(f"Error: {e}")
+    actigraph_expander = st.sidebar.expander("ActiGraph Data")
+    with actigraph_expander:
+        with st.form("actigraph_import_form", clear_on_submit=True):
+            actigraph_file = st.file_uploader(
+                "Upload ActiGraph File",
+                type=["gt3x", "agd", "csv"],
+                key="actigraph_sleep_upload",
+                help="Supports GT3X, AGD, or CSV exports.",
+            )
+            actigraph_submit = st.form_submit_button("📥 Import ActiGraph Data")
+
+        if actigraph_submit:
+            if actigraph_file is None:
+                st.warning("Select an ActiGraph file before importing.")
+            else:
+                with st.spinner("Storing ActiGraph file..."):
+                    try:
+                        content = actigraph_file.getvalue()
+                        manager.store_device_file(content, actigraph_file.name, device_type="actigraph")
+                        st.success("Stored ActiGraph file.")
+                    except Exception as exc:  # noqa: BLE001
+                        st.error(f"Error storing ActiGraph file: {exc}")
+                    finally:
+                        st.session_state.pop("actigraph_sleep_upload", None)
 
     # Somfit Pro import
-    with st.sidebar.expander("Somfit Pro Data"):
-        somfit_file = st.file_uploader(
-            "Upload Somfit EDF/CSV",
-            type=["edf", "csv"],
-            key="somfit_sleep_upload",
-        )
-        if somfit_file:
-            try:
-                content = somfit_file.getvalue()
-                manager.store_device_file(content, somfit_file.name, device_type="somfit")
-                st.success("Stored Somfit file")
-            except Exception as e:
-                st.error(f"Error: {e}")
+    somfit_expander = st.sidebar.expander("Somfit Pro Data")
+    with somfit_expander:
+        with st.form("somfit_import_form", clear_on_submit=True):
+            somfit_file = st.file_uploader(
+                "Upload Somfit EDF/CSV",
+                type=["edf", "csv"],
+                key="somfit_sleep_upload",
+                help="Upload EDF or CSV exports from Somfit Pro.",
+            )
+            somfit_submit = st.form_submit_button("📥 Import Somfit Data")
+
+        if somfit_submit:
+            if somfit_file is None:
+                st.warning("Select a Somfit file before importing.")
+            else:
+                with st.spinner("Storing Somfit file..."):
+                    try:
+                        content = somfit_file.getvalue()
+                        manager.store_device_file(content, somfit_file.name, device_type="somfit")
+                        st.success("Stored Somfit file.")
+                    except Exception as exc:  # noqa: BLE001
+                        st.error(f"Error storing Somfit file: {exc}")
+                    finally:
+                        st.session_state.pop("somfit_sleep_upload", None)
 
 
 # ---------------------------------------------------------------------------
