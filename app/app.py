@@ -22,6 +22,10 @@ from hrv_core import (
 from ml_enhancements import run_windowed_kmeans
 from export_utils import ExportConfiguration, ExportScope, build_markdown_report
 from echarts_component import EChartsConfig, render_echarts
+from space_weather_alignment import (
+    align_space_weather_series,
+    align_space_weather_columns,
+)
 from noaa_space import NOAADataBundle, load_noaa_space_data, get_noaa_metric_explanations, explain_noaa_metric
 
 # Scientific charts for unified timeline and ML pattern visualization
@@ -1667,26 +1671,33 @@ def _merge_series_with_lags(
     series = series.dropna(subset=[time_col]).sort_values(time_col)
     if series.empty:
         return pd.DataFrame(index=base_times.index)
-    base_sorted = base_times[["window_start"]].sort_values("window_start")
-    tolerance = pd.Timedelta(minutes=int(tolerance_minutes))
+    window_index = pd.to_datetime(
+        base_times["window_start"], errors="coerce", utc=True
+    )
+    valid_mask = window_index.notna()
     feature_frames: Dict[str, pd.Series] = {}
     for lag in lags_hours:
-        shifted = series.copy()
-        if lag:
-            shift_delta = pd.Timedelta(hours=int(lag))
-            shifted[time_col] = shifted[time_col] + shift_delta
-        merged = pd.merge_asof(
-            base_sorted,
-            shifted,
-            left_on="window_start",
-            right_on=time_col,
-            direction="nearest",
-            tolerance=tolerance,
+        aligned = align_space_weather_series(
+            reference_times=window_index,
+            predictor_df=series,
+            predictor_time_col=time_col,
+            predictor_value_col=value_col,
+            lag_hours=int(lag),
+            max_gap_minutes=int(tolerance_minutes),
         )
         col_name = _safe_feature_name(f"{prefix}_lag_{lag:+d}h")
-        feature_frames[col_name] = merged[value_col]
-    feature_df = pd.DataFrame(feature_frames, index=base_sorted.index)
-    return feature_df.reindex(base_times.index)
+        if aligned.empty or not valid_mask.any():
+            feature_frames[col_name] = pd.Series(
+                np.nan, index=base_times.index, dtype=float
+            )
+            continue
+        ordered_aligned = aligned.reindex(window_index[valid_mask])
+        values = pd.Series(np.nan, index=base_times.index, dtype=float)
+        values.loc[valid_mask] = ordered_aligned.to_numpy()
+        feature_frames[col_name] = values
+    if not feature_frames:
+        return pd.DataFrame(index=base_times.index)
+    return pd.DataFrame(feature_frames, index=base_times.index)
 
 
 def _build_space_weather_feature_matrix(
@@ -2992,6 +3003,55 @@ def _render_dataset_info_header(
             st.markdown(f"• {item}")
 
 
+def _select_rr_files_for_tab(
+    datasets: Dict[str, UploadedRR],
+    *,
+    tab_key: str,
+    label: str,
+) -> Dict[str, UploadedRR]:
+    """Return the subset of datasets selected for a visualization tab."""
+    if not datasets:
+        return {}
+    options = list(datasets.keys())
+    active_key = f"{tab_key}_active_files"
+    picker_key = f"{tab_key}_file_picker"
+    # Initialize selected lists and drop files no longer present
+    current_active = [
+        name for name in st.session_state.get(active_key, options) if name in options
+    ]
+    if not current_active:
+        current_active = options
+    picker_selection = st.session_state.get(picker_key)
+    if picker_selection is None:
+        st.session_state[picker_key] = current_active
+    else:
+        filtered = [name for name in picker_selection if name in options]
+        st.session_state[picker_key] = filtered or current_active
+    with st.expander(f"📂 Load RR files for {label}", expanded=False):
+        st.caption(
+            "Select which uploaded recordings to load into this analysis tab. "
+            "This does not modify the sidebar uploads; it only filters the "
+            "visualizations shown below."
+        )
+        selection = st.multiselect(
+            "RR files ready for analysis",
+            options=options,
+            key=picker_key,
+        )
+        if st.button("Load selected files", key=f"{tab_key}_load_button"):
+            st.session_state[active_key] = selection or []
+            if selection:
+                st.success(f"Loaded {len(selection)} file(s) for {label}.")
+            else:
+                st.warning("Select at least one file to analyze.")
+    active_names = [
+        name for name in st.session_state.get(active_key, current_active) if name in datasets
+    ]
+    if not active_names:
+        return {}
+    return {name: datasets[name] for name in active_names}
+
+
 def _plot_rr_timeseries(
     datasets: Dict[str, UploadedRR],
     dev_windows: Optional[pd.DataFrame] = None,
@@ -3794,7 +3854,6 @@ def _compute_noaa_correlations(
     if not metric_columns:
         return []
 
-    tolerance = pd.Timedelta(minutes=int(merge_tolerance_minutes))
     lag_values = list(lags_hours) if lags_hours else [0]
     results: List[NOAACorrelationSummary] = []
 
@@ -3815,25 +3874,26 @@ def _compute_noaa_correlations(
 
         for lag in lag_values:
             lag_int = int(lag)
-            shifted = predictor.copy()
-            shifted[bundle.time_column] = shifted[bundle.time_column] + pd.to_timedelta(
-                lag_int, unit="h"
+            aligned = align_space_weather_series(
+                reference_times=hrv["start"],
+                predictor_df=predictor,
+                predictor_time_col=bundle.time_column,
+                predictor_value_col=value_column,
+                lag_hours=lag_int,
+                max_gap_minutes=int(merge_tolerance_minutes),
             )
-            merged = pd.merge_asof(
-                hrv.sort_values("start"),
-                shifted[[bundle.time_column, value_column]].sort_values(
-                    bundle.time_column
-                ),
-                left_on="start",
-                right_on=bundle.time_column,
-                direction="nearest",
-                tolerance=tolerance,
+            if aligned.empty:
+                continue
+            merged = (
+                hrv.set_index("start")
+                .join(aligned.rename(value_column), how="inner")
+                .dropna(subset=[value_column])
             )
-            merged = merged.dropna(subset=[value_column])
             if merged.empty:
                 continue
-
-            corr_df = _corr_table(merged, value_column, list(metric_columns))
+            corr_df = _corr_table(
+                merged.reset_index(drop=True), value_column, list(metric_columns)
+            )
             if corr_df.empty:
                 continue
 
@@ -3958,22 +4018,24 @@ def _scan_lag_correlations(
     if k.empty:
         return pd.DataFrame()
     for lag in lags_hours:
-        k_shift = k.copy()
-        time_idx = pd.DatetimeIndex(k_shift["time_tag"].to_list())
-        time_idx = time_idx + pd.to_timedelta(int(lag), unit="h")
-        k_shift["time_tag"] = time_idx
-        merged = pd.merge_asof(
-            w.sort_values("start"),
-            k_shift[["time_tag", "kp_index"]].sort_values("time_tag"),
-            left_on="start",
-            right_on="time_tag",
-            direction="nearest",
-            tolerance=pd.Timedelta(minutes=int(merge_tolerance_minutes)),
+        aligned = align_space_weather_series(
+            reference_times=w["start"],
+            predictor_df=k,
+            predictor_time_col="time_tag",
+            predictor_value_col="kp_index",
+            lag_hours=int(lag),
+            max_gap_minutes=int(merge_tolerance_minutes),
         )
-        merged = merged.dropna(subset=["kp_index"])
+        if aligned.empty:
+            continue
+        merged = (
+            w.set_index("start")
+            .join(aligned.rename("kp_index"), how="inner")
+            .dropna(subset=["kp_index"])
+        )
         if merged.empty:
             continue
-        corr_df = _corr_table(merged, "kp_index", metrics)
+        corr_df = _corr_table(merged.reset_index(drop=True), "kp_index", metrics)
         corr_df["lag_hours"] = int(lag)
         results.append(corr_df)
     return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
@@ -5374,19 +5436,25 @@ def main() -> None:
                 ```
                 """)
         else:
-            st.markdown("### 📈 Time Series Analysis")
-            _render_dataset_info_header(datasets, title="Recordings Displayed")
-            max_pts = None if rr_plot_cap == "No limit" else int(rr_plot_cap)
-            _plot_rr_timeseries(
-                datasets,
-                dev_windows=(
-                    windowed_df
-                    if (apply_dev and "dev_level" in windowed_df.columns)
-                    else None
-                ),
-                max_points=max_pts,
+            ts_datasets = _select_rr_files_for_tab(
+                datasets, tab_key="tab_ts", label="Time Series Analysis"
             )
-            _plot_hr_timeseries(datasets)
+            if not ts_datasets:
+                st.warning("Select at least one RR file to load into the Time Series tab.")
+            else:
+                st.markdown("### 📈 Time Series Analysis")
+                _render_dataset_info_header(ts_datasets, title="Recordings Displayed")
+                max_pts = None if rr_plot_cap == "No limit" else int(rr_plot_cap)
+                _plot_rr_timeseries(
+                    ts_datasets,
+                    dev_windows=(
+                        windowed_df
+                        if (apply_dev and "dev_level" in windowed_df.columns)
+                        else None
+                    ),
+                    max_points=max_pts,
+                )
+                _plot_hr_timeseries(ts_datasets)
         st.markdown(
             "**Scientific notes (time series)**  \n"
             "- RR intervals (ms) are beat-to-beat times; healthy resting dynamics are irregular and complex.  \n"
@@ -5420,9 +5488,15 @@ def main() -> None:
         elif skip_freq:
             st.info("Frequency overlay disabled (Performance & display).")
         else:
-            st.markdown("### 🌊 Frequency Domain Analysis")
-            _render_dataset_info_header(datasets, title="Recordings Analyzed")
-            _plot_psd_overlay(datasets, method=psd_method)
+            freq_datasets = _select_rr_files_for_tab(
+                datasets, tab_key="tab_freq", label="Frequency Domain"
+            )
+            if not freq_datasets:
+                st.warning("Select at least one RR file to load into the Frequency tab.")
+            else:
+                st.markdown("### 🌊 Frequency Domain Analysis")
+                _render_dataset_info_header(freq_datasets, title="Recordings Analyzed")
+                _plot_psd_overlay(freq_datasets, method=psd_method)
         st.markdown(
             "**Scientific notes (frequency domain)**  \n"
             "- Bands: VLF 0.0033–0.04 Hz, LF 0.04–0.15 Hz, HF 0.15–0.40 Hz.  \n"
@@ -5458,9 +5532,15 @@ def main() -> None:
         elif skip_poincare:
             st.info("Poincaré plot disabled (Performance & display).")
         else:
-            st.markdown("### 🔀 Nonlinear Dynamics")
-            _render_dataset_info_header(datasets, title="Recordings Analyzed")
-            _plot_poincare(datasets)
+            nl_datasets = _select_rr_files_for_tab(
+                datasets, tab_key="tab_nl", label="Nonlinear Dynamics"
+            )
+            if not nl_datasets:
+                st.warning("Select at least one RR file to load into the Nonlinear tab.")
+            else:
+                st.markdown("### 🔀 Nonlinear Dynamics")
+                _render_dataset_info_header(nl_datasets, title="Recordings Analyzed")
+                _plot_poincare(nl_datasets)
         st.markdown(
             "**Scientific notes (nonlinear)**  \n"
             "- Poincaré SD1 ≈ RMSSD (short-term vagal modulation); SD2 relates to longer-term variability.  \n"
@@ -8862,34 +8942,22 @@ that predicts cognitive performance based on:
                     except requests.RequestException as exc:
                         st.warning(f"Weather API error: {exc}")
                 if not cov_df.empty:
-                    # align covariates to HRV window starts (ensure
-                    # timezone-aware)
-                    align_df = windowed_df[["start"]].copy()
-                    align_df["align_time"] = pd.to_datetime(
-                        align_df["start"], errors="coerce"
+                    start_index = pd.to_datetime(
+                        windowed_df["start"], errors="coerce", utc=True
                     )
-                    if align_df["align_time"].dt.tz is None:
-                        align_df["align_time"] = align_df["align_time"].dt.tz_localize(
-                            "UTC")
-                    else:
-                        align_df["align_time"] = align_df["align_time"].dt.tz_convert(
-                            "UTC")
-                    align_df = align_df.drop(columns=["start"]).dropna(
-                        subset=["align_time"]
-                    )
-
                     cov_df = cov_df.copy()
                     if cov_df["weather_time"].dt.tz is None:
                         cov_df["weather_time"] = cov_df["weather_time"].dt.tz_localize(
-                            "UTC")
+                            "UTC"
+                        )
                     else:
                         cov_df["weather_time"] = cov_df["weather_time"].dt.tz_convert(
-                            "UTC")
+                            "UTC"
+                        )
 
-                    cov_cols_available = [
+                    value_columns = [
                         c
                         for c in [
-                            "weather_time",
                             "temp_c",
                             "rh_pct",
                             "pressure_hpa",
@@ -8899,24 +8967,21 @@ that predicts cognitive performance based on:
                         ]
                         if c in cov_df.columns
                     ]
-                    cov_aligned = pd.merge_asof(
-                        align_df.sort_values("align_time"),
-                        cov_df.sort_values("weather_time")[cov_cols_available],
-                        left_on="align_time",
-                        right_on="weather_time",
-                        direction="nearest",
-                        tolerance=pd.Timedelta(minutes=int(merge_tol)),
+                    cov_aligned = align_space_weather_columns(
+                        reference_times=start_index,
+                        predictor_df=cov_df,
+                        predictor_time_col="weather_time",
+                        value_columns=value_columns,
+                        max_gap_minutes=int(merge_tol),
                     )
-                    cov_aligned = cov_aligned.drop(
-                        columns=["align_time", "weather_time"], errors="ignore"
-                    )
-                    windowed_df = pd.concat(
-                        [
-                            windowed_df.reset_index(drop=True),
-                            cov_aligned.reset_index(drop=True),
-                        ],
-                        axis=1,
-                    )
+                    if not cov_aligned.empty:
+                        cov_aligned = cov_aligned.rename_axis("_align_time")
+                        windowed_df = (
+                            windowed_df.assign(_align_time=start_index)
+                            .set_index("_align_time")
+                            .join(cov_aligned, how="left")
+                            .reset_index(drop=True)
+                        )
 
             with st.spinner("Computing correlations..."):
                 lag_results = _scan_lag_correlations(
@@ -11514,24 +11579,26 @@ def _scan_lag_correlations_generic(
         return pd.DataFrame()
     rows: List[pd.DataFrame] = []
     for lag in lags_hours:
-        shifted = pred.copy()
-        time_idx = pd.DatetimeIndex(shifted[predictor_time_col].to_list())
-        time_idx = time_idx + pd.to_timedelta(int(lag), unit="h")
-        shifted[predictor_time_col] = time_idx
-        merged = pd.merge_asof(
-            w,
-            shifted[[predictor_time_col, predictor_value_col]].sort_values(
-                predictor_time_col
-            ),
-            left_on="start",
-            right_on=predictor_time_col,
-            direction="nearest",
-            tolerance=pd.Timedelta(minutes=int(merge_tolerance_minutes)),
+        aligned = align_space_weather_series(
+            reference_times=w["start"],
+            predictor_df=pred,
+            predictor_time_col=predictor_time_col,
+            predictor_value_col=predictor_value_col,
+            lag_hours=int(lag),
+            max_gap_minutes=int(merge_tolerance_minutes),
         )
-        merged = merged.dropna(subset=[predictor_value_col])
+        if aligned.empty:
+            continue
+        merged = (
+            w.set_index("start")
+            .join(aligned.rename(predictor_value_col), how="inner")
+            .dropna(subset=[predictor_value_col])
+        )
         if merged.empty:
             continue
-        corr_df = _corr_table(merged, predictor_value_col, metrics)
+        corr_df = _corr_table(
+            merged.reset_index(drop=True), predictor_value_col, metrics
+        )
         corr_df["lag_hours"] = int(lag)
         rows.append(corr_df)
     return pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()

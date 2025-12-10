@@ -5,6 +5,20 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.14] - 2025-12-10
+
+### Added
+- **📂 Load RR files** controls inside the Time, Frequency, and Nonlinear tabs so analysts can explicitly load a subset of uploaded RR recordings per visualization without touching the sidebar cache.
+- Apache ECharts timelines across the User Profile (assessment history, Garmin wellness, HRV history, Exploration Medical analytics) for consistent, publication-ready styling.
+- Unit tests covering the new space-weather alignment helpers.
+
+### Changed
+- Space weather correlations now resample NOAA/DONKI predictors onto the exact HRV window timestamps (bounded interpolation, no nearest-neighbor drift), matching heliobiology best practices.
+- Weather covariates and the feature-matrix builder reuse the same alignment helper, ensuring every predictor/HRV pair references the same instant before statistics are computed.
+
+### Fixed
+- Prevented mismatched timestamps from contaminating Kp/NOAA correlation coefficients; empty joins now warn users instead of quietly reusing stale data.
+
 ## [1.8.13] - 2025-12-10
 
 ### Added

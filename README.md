@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.12-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.14-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
@@ -18,6 +18,8 @@ Contributing to **AsterPhysiology** Research Initiative
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.8.14**: Each Time, Frequency, and Nonlinear tab now includes a dedicated RR file loader plus production ECharts visualizations in the User Profile, and space-weather correlations enforce exact timestamp alignment for Q1 journal submissions.
 
 **NEW in v1.8.5**: Polar AccessLink automation with persistent OAuth tokens and VO2max history tracking. Sync your cardiorespiratory fitness data with one click and track changes over time.
 
@@ -135,9 +137,9 @@ All other tabs show **example data** and **reference values** to help you unders
 
 | Feature                                      | Description                                                                                                                                                                                        |
 | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Time-Domain Metrics**                | SDNN, RMSSD, pNN50, Mean HR, CVNN, and more                                                                                                                                                        |
-| **Frequency-Domain Analysis**          | VLF/LF/HF power, normalized units, LF/HF ratio via Welch, Periodogram, or AR methods                                                                                                               |
-| **Nonlinear Metrics**                  | Poincaré SD1/SD2, DFA α1/α2, Sample/Approximate Entropy                                                                                                                                         |
+| **Time-Domain Metrics**                | SDNN, RMSSD, pNN50, Mean HR, CVNN, plus per-tab RR file loaders so you can select the exact recordings rendered in each visualization                                                             |
+| **Frequency-Domain Analysis**          | VLF/LF/HF power, normalized units, LF/HF ratio via Welch, Periodogram, or AR methods with on-tab RR file selection                                                                                |
+| **Nonlinear Metrics**                  | Poincaré SD1/SD2, DFA α1/α2, Sample/Approximate Entropy with on-demand RR loaders for publication-grade plots                                                                                    |
 | **Heart Rate Fragmentation**           | PIP, IALS, PSS per PROOF-AF methodology                                                                                                                                                            |
 | **Geometric Metrics**                  | HRV Triangular Index, TINN, Baevsky Stress Index                                                                                                                                                   |
 | **Population Norms**                   | Age/sex-stratified comparison against Nunan et al., Ortega et al., MESA Study data                                                                                                                 |
@@ -146,14 +148,14 @@ All other tabs show **example data** and **reference values** to help you unders
 | **Sliding Window Analysis**            | Configurable windows with deviation detection and anomaly episodes                                                                                                                                 |
 | **Autonomic Function Tests**           | Valsalva ratio, Deep breathing E:I response, 30:15 standing ratio                                                                                                                                  |
 | **Readiness Scoring**                  | Kubios-style parasympathetic index with historical baseline comparison                                                                                                                             |
-| **Space Weather Correlation**          | NOAA Kp, Dst, F10.7, solar wind, X-ray flux with lag-aware correlations                                                                                                                            |
+| **Space Weather Correlation**          | NOAA Kp, Dst, F10.7, solar wind, and X-ray flux correlations using exact timestamp synchronization (no nearest-neighbor drift) with configurable lags                                            |
 | **Space Weather Impact Predictions**   | Exact arrival times for photons, SEPs, solar wind plasma, with Polar H10 timing recommendations                                                                                                    |
 | **NASA DONKI Integration**             | Flares, CMEs, geomagnetic storms, radiation belt enhancements                                                                                                                                      |
 | **Fatigue Prediction**                 | SAFTE biomathematical model for cognitive performance                                                                                                                                              |
 | **HRV Biofeedback**                    | Real-time coherence training with paced breathing                                                                                                                                                  |
 | **CPU Performance Mode**               | Adjustable presets (Fast/Balanced/Quality) with smart downsampling                                                                                                                                 |
 | **GPU Acceleration**                   | NVIDIA CUDA support (RTX 5070/4090/3080) for heavy computations                                                                                                                                    |
-| **User Profile System**                | Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS), history tracking                                                                                                                 |
+| **User Profile System**                | Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS), history tracking with ECharts timelines for assessments, Garmin wellness, HRV history, and exploration medicine dashboards      |
 | **Active User Context Sync**           | Circadian and SAFTE tabs auto-fill age, chronotype, sleep debt, and mission schedules from the selected profile with a single sync button                                                          |
 | **Clinical Profiles**                  | Astronaut-grade assessment: BMR, TDEE, NASA nutrition, body composition                                                                                                                            |
 | **Exploration Medical Record**         | NASA isolation/mission log with EVA, radiation, stress, and behavioral metrics                                                                                                                     |
