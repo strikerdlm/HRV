@@ -5,6 +5,13 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.9] - 2025-12-10
+
+### Documentation
+- **README.md**: Added the OpenAI Agents SDK integration blueprint outlining MCP bridges, toolchain activation (code interpreter, file/web search, Wolfram Alpha, E2B), and aerospace medicine use cases for autonomous agents.
+
+---
+
 ## [1.8.8] - 2025-12-09
 
 ### Fixed
