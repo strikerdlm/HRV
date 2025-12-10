@@ -289,6 +289,18 @@ The app will:
 - Garmin CSV uploads are also stored under the active profile for later use.
 - Conversion uses bounded parsing (fitparse) and surfaces a 10-row preview for quick verification.
 
+### Sleep Tab Login & Device Imports
+
+- The **Sleep Analysis** sidebar now batches inputs inside forms. Typing your ID/name no longer triggers a rerun; press **`🔑 Login / Create Account`** once to authenticate or register.
+- Garmin, ActiGraph, and Somfit uploaders each include a dedicated **Import** button. Files are only processed when you click the button, preventing duplicate ingests on rerun.
+- After a successful import, the uploader clears automatically so you can stage the next file without reprocessing the previous one.
+
+**Workflow tip:**
+1. Open **Sleep Analysis → Sidebar**.
+2. Expand **🔐 Login / Register**, complete the form, and click **Login / Create Account**.
+3. Expand a device section (Garmin / ActiGraph / Somfit), choose a file, and click the matching **📥 Import** button.
+4. Use **📥 Load All Stored Data** to refresh the main Sleep Analysis tabs with the newly stored records.
+
 ### Example: Sample Data
 
 If you don't have real data, create a test file:
