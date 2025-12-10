@@ -13,14 +13,13 @@ Author: Dr. Diego L. Malpica, MD - Aerospace Medicine Specialist
 
 from __future__ import annotations
 
-import os
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 import streamlit as st
 
-from version_info import get_app_release_date, get_app_version
+from agent_runtime import AgentRuntimeConfig, build_default_agent_runtime_config
+from version_info import get_app_release_date, get_app_version, get_git_metadata
 
 # Application metadata
 APP_VERSION = get_app_version()
@@ -32,6 +31,8 @@ APP_INSTITUTION = "National University of Colombia"
 APP_GITHUB = "https://github.com/strikerdlm/HRV"
 APP_ORCID = "0000-0002-2257-4940"
 APP_LINKEDIN = "https://www.linkedin.com/in/diegolmalpica/"
+GIT_METADATA = get_git_metadata()
+AGENT_RUNTIME_CONFIG = build_default_agent_runtime_config()
 
 
 def _load_file_content(filename: str) -> str:
@@ -64,6 +65,7 @@ def _load_file_content(filename: str) -> str:
 
 def _render_version_badge() -> str:
     """Create a styled version badge HTML."""
+    dirty_label = " • dirty" if GIT_METADATA.is_dirty else ""
     return f"""
     <div style="display: inline-flex; align-items: center; gap: 8px; margin-bottom: 1rem;">
         <span style="
@@ -83,6 +85,14 @@ def _render_version_badge() -> str:
             font-size: 0.8rem;
             font-weight: 500;
         ">Released {APP_RELEASE_DATE}</span>
+        <span style="
+            background: rgba(255, 255, 255, 0.08);
+            color: #d1d5db;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        ">{GIT_METADATA.branch} @ {GIT_METADATA.short_hash}{dirty_label}</span>
     </div>
     """
 
@@ -290,6 +300,40 @@ def _render_stats_cards(manual_lines: int, changelog_lines: int) -> str:
     """
 
 
+def _render_agents_blueprint(config: AgentRuntimeConfig) -> None:
+    """Render a compact summary of the OpenAI Agents SDK roadmap."""
+    with st.expander("🤖 OpenAI Agents SDK Roadmap", expanded=False):
+        st.markdown(
+            "Initial agent scaffolding now lives in `app/agent_runtime.py`, "
+            "mirroring the blueprint from README.md. Each persona enforces "
+            "bounded tool access, MCP-scoped storage, and deterministic outputs."
+        )
+
+        st.markdown("**Mission Personas**")
+        for persona in config.personas.values():
+            tool_list = ", ".join(f"`{tool}`" for tool in persona.tools)
+            st.markdown(
+                f"- **{persona.display_name}** — {persona.summary}  \n"
+                f"  Tools: {tool_list}"
+            )
+
+        st.markdown("**Model Context Protocol Servers**")
+        for server in config.mcp_servers:
+            st.markdown(
+                f"- `{server.identifier}` ({server.mode}) → {server.description}"
+            )
+
+        st.markdown("**Tool Belt**")
+        table_header = "| Tool | Type | Env Vars | Description |\n| --- | --- | --- | --- |\n"
+        rows = []
+        for tool in config.toolbelt.values():
+            env_vars = ", ".join(tool.requires_env) if tool.requires_env else "—"
+            rows.append(
+                f"| `{tool.name}` | {tool.tool_type} | {env_vars} | {tool.description} |"
+            )
+        st.markdown(table_header + "\n".join(rows))
+
+
 def render_about_tab() -> None:
     """Render the complete About tab with professional styling."""
     # Custom CSS for the about page
@@ -359,6 +403,7 @@ def render_about_tab() -> None:
     
     # Statistics cards
     st.markdown(_render_stats_cards(manual_lines, changelog_lines), unsafe_allow_html=True)
+    _render_agents_blueprint(AGENT_RUNTIME_CONFIG)
     
     # Tabbed content for Manual and Changelog
     doc_tab1, doc_tab2, doc_tab3 = st.tabs(["📖 User Manual", "📋 Changelog", "⚙️ Technical Info"])
