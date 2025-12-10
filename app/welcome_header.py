@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import streamlit as st
 
-from version_info import get_app_version
+from version_info import get_app_release_date, get_app_version, get_git_metadata
 
 # Application metadata
 APP_VERSION = get_app_version()
+APP_RELEASE_DATE = get_app_release_date()
+GIT_METADATA = get_git_metadata()
 GITHUB_REPO = "https://github.com/strikerdlm/HRV"
 
 
@@ -49,13 +51,30 @@ def render_welcome_header() -> None:
         margin-bottom: 0.5rem;
     }
     .welcome-version {
-        display: inline-block;
+        display: inline-flex;
+        gap: 4px;
+        align-items: center;
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         padding: 6px 16px;
         border-radius: 20px;
         font-size: 0.85rem;
         font-weight: 600;
+    }
+    .welcome-chip {
+        display: inline-block;
+        padding: 5px 14px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    .welcome-chip-muted {
+        background: rgba(255,255,255,0.08);
+        color: #d1d5db;
+    }
+    .welcome-chip-outline {
+        border: 1px solid rgba(255,255,255,0.2);
+        color: #f3f4f6;
     }
     .welcome-github {
         display: inline-flex;
@@ -107,6 +126,12 @@ def render_welcome_header() -> None:
         </div>
         <div style="text-align: center; margin: 1rem 0;">
             <span class="welcome-version">v{APP_VERSION}</span>
+        </div>
+        <div style="text-align: center; margin-bottom: 1rem;">
+            <span class="welcome-chip welcome-chip-muted">{APP_RELEASE_DATE}</span>
+            <span class="welcome-chip welcome-chip-outline">
+                {GIT_METADATA.branch} @ {GIT_METADATA.short_hash}{' • dirty' if GIT_METADATA.is_dirty else ''}
+            </span>
             <a href="{GITHUB_REPO}" target="_blank" class="welcome-github">
                 <svg width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
                     <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
