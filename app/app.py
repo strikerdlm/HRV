@@ -4387,78 +4387,6 @@ def main() -> None:
             max_value=60,
             value=3,
             step=1)
-        analysis_settings = _build_analysis_settings(
-            window=win,
-            step=step,
-            min_rr=int(min_rr),
-            max_windows=int(max_windows),
-            apply_clean=bool(apply_clean),
-            method=str(method),
-            max_dev=float(max_dev),
-            median_win=int(median_win),
-            psd_method=str(psd_method),
-            fast_windowing=bool(fast_windowing),
-            high_compute=bool(high_compute),
-            apply_dev=bool(apply_dev),
-            dev_metrics=dev_metrics,
-            covariate_enabled=bool(enable_cov),
-            covariate_age=int(age_years),
-            covariate_sex=str(sex),
-            covariate_bmi=float(bmi),
-            covariate_exercise=str(exercise),
-        )
-        if duplicate_measurements:
-            st.sidebar.warning(
-                "These files were already analyzed for the active profile. "
-                "You can still recompute or proceed to reuse stored results."
-            )
-            for dup_name, dup_meas in duplicate_measurements.items():
-                st.sidebar.caption(
-                    f"• {dup_name} (analyzed {dup_meas.measurement_date})"
-                )
-            reuse_cached_results = st.sidebar.checkbox(
-                "Reuse stored HRV results when the file hash matches",
-                value=True,
-                help="If enabled, previously computed HRV results with the same file hash and settings are reloaded instead of recomputed.",
-            )
-            if reuse_cached_results and active_user_id:
-                try:
-                    reuse_manager = create_user_manager()
-                    reuse_manager.set_current_user(
-                        user_id=active_user_id,
-                        name=active_display_name or "User",
-                        create_if_missing=True,
-                    )
-                except Exception as exc:  # pragma: no cover - defensive
-                    logger.debug("Unable to load cached HRV results: %s", exc)
-                    reuse_cached_results = False
-                    reuse_manager = None
-                if reuse_cached_results and reuse_manager is not None:
-                    for dup_name in duplicate_measurements:
-                        file_hash = file_hash_map.get(dup_name)
-                        if not file_hash:
-                            continue
-                        try:
-                            payload = reuse_manager.load_hrv_results_by_hash(file_hash)
-                        except Exception as exc:  # pragma: no cover - defensive
-                            logger.debug(
-                                "Failed to read cached results for %s: %s", dup_name, exc
-                            )
-                            continue
-                        if payload and _analysis_settings_match(
-                            payload.get("analysis_settings", {}), analysis_settings
-                        ):
-                            stored_payloads[dup_name] = payload
-                        elif payload:
-                            mismatched_cached.append(dup_name)
-            if stored_payloads:
-                st.sidebar.info(
-                    f"Reusing stored analysis for: {', '.join(sorted(stored_payloads))}"
-                )
-            if mismatched_cached:
-                st.sidebar.warning(
-                    "Stored results exist but analysis settings changed; those files will be recomputed."
-                )
         st.sidebar.markdown("---")
         st.sidebar.subheader("Performance & display")
         minimal_mode = st.sidebar.checkbox("Minimal mode (fastest)", value=False)
@@ -4544,6 +4472,79 @@ def main() -> None:
             st.sidebar.caption(
                 "Minimal mode: processing 1 dataset, fast time-domain windowing, heavy plots/tabs skipped."
             )
+
+        analysis_settings = _build_analysis_settings(
+            window=win,
+            step=step,
+            min_rr=int(min_rr),
+            max_windows=int(max_windows),
+            apply_clean=bool(apply_clean),
+            method=str(method),
+            max_dev=float(max_dev),
+            median_win=int(median_win),
+            psd_method=str(psd_method),
+            fast_windowing=bool(fast_windowing),
+            high_compute=bool(high_compute),
+            apply_dev=bool(apply_dev),
+            dev_metrics=dev_metrics,
+            covariate_enabled=bool(enable_cov),
+            covariate_age=int(age_years),
+            covariate_sex=str(sex),
+            covariate_bmi=float(bmi),
+            covariate_exercise=str(exercise),
+        )
+        if duplicate_measurements:
+            st.sidebar.warning(
+                "These files were already analyzed for the active profile. "
+                "You can still recompute or proceed to reuse stored results."
+            )
+            for dup_name, dup_meas in duplicate_measurements.items():
+                st.sidebar.caption(
+                    f"• {dup_name} (analyzed {dup_meas.measurement_date})"
+                )
+            reuse_cached_results = st.sidebar.checkbox(
+                "Reuse stored HRV results when the file hash matches",
+                value=True,
+                help="If enabled, previously computed HRV results with the same file hash and settings are reloaded instead of recomputed.",
+            )
+            if reuse_cached_results and active_user_id:
+                try:
+                    reuse_manager = create_user_manager()
+                    reuse_manager.set_current_user(
+                        user_id=active_user_id,
+                        name=active_display_name or "User",
+                        create_if_missing=True,
+                    )
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.debug("Unable to load cached HRV results: %s", exc)
+                    reuse_cached_results = False
+                    reuse_manager = None
+                if reuse_cached_results and reuse_manager is not None:
+                    for dup_name in duplicate_measurements:
+                        file_hash = file_hash_map.get(dup_name)
+                        if not file_hash:
+                            continue
+                        try:
+                            payload = reuse_manager.load_hrv_results_by_hash(file_hash)
+                        except Exception as exc:  # pragma: no cover - defensive
+                            logger.debug(
+                                "Failed to read cached results for %s: %s", dup_name, exc
+                            )
+                            continue
+                        if payload and _analysis_settings_match(
+                            payload.get("analysis_settings", {}), analysis_settings
+                        ):
+                            stored_payloads[dup_name] = payload
+                        elif payload:
+                            mismatched_cached.append(dup_name)
+            if stored_payloads:
+                st.sidebar.info(
+                    f"Reusing stored analysis for: {', '.join(sorted(stored_payloads))}"
+                )
+            if mismatched_cached:
+                st.sidebar.warning(
+                    "Stored results exist but analysis settings changed; those files will be recomputed."
+                )
     else:
         # Default values when no data uploaded - needed for tab rendering
         # All defaults set for FAST MODE to maximize performance
