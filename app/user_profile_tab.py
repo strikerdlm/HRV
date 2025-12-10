@@ -20,6 +20,7 @@ from __future__ import annotations
 import logging
 import time
 import uuid
+import io
 from collections import Counter
 from datetime import datetime, date, timezone, timedelta
 from pathlib import Path
@@ -99,6 +100,7 @@ try:
     from garmin_import import (
         get_daily_physiology_summary,
         import_garmin_data,
+        convert_fit_to_csv,
     )
     GARMIN_IMPORT_AVAILABLE = True
 except ImportError:
@@ -1899,6 +1901,114 @@ def _render_data_management(user: UserProfile) -> None:
                         st.rerun()
 
 
+def _render_fit_csv_tools(user: UserProfile) -> None:
+    """Provide FIT→CSV conversion and CSV ingestion within the Data tab."""
+    st.markdown("## 🗂️ FIT ↔ CSV Tools")
+    st.caption(
+        "Convert Garmin FIT to CSV for quick sharing, and ingest existing Garmin CSVs into this profile."
+    )
+
+    if not GARMIN_IMPORT_AVAILABLE:
+        st.info(
+            "FIT conversion requires the Garmin import module and fitparse. "
+            "Install `fitparse` to enable this feature."
+        )
+        return
+
+    try:
+        manager = create_user_manager()
+        manager.set_current_user(
+            user_id=user.user_id,
+            name=user.full_name or user.username or "User",
+            create_if_missing=True,
+        )
+    except Exception as exc:  # pragma: no cover - defensive
+        st.error(f"Unable to prepare storage for this profile: {exc}")
+        return
+
+    col_conv, col_csv = st.columns(2)
+
+    with col_conv:
+        st.subheader("Convert FIT to CSV")
+        fit_file = st.file_uploader(
+            "Upload FIT",
+            type=["fit"],
+            key=f"fit_to_csv_{user.user_id}",
+            accept_multiple_files=False,
+        )
+        if fit_file is not None:
+            tmp_path: Optional[Path] = None
+            fit_bytes = fit_file.read()
+            try:
+                with NamedTemporaryFile(delete=False, suffix=".fit") as tmp:
+                    tmp.write(fit_bytes)
+                    tmp_path = Path(tmp.name)
+                df, csv_bytes = convert_fit_to_csv(tmp_path)
+            except Exception as exc:  # noqa: BLE001
+                if log_exception is not None:
+                    log_exception(_LOGGER, "FIT→CSV conversion failed", exc)
+                st.error(f"Conversion failed: {exc}")
+                if tmp_path is not None and tmp_path.exists():
+                    tmp_path.unlink(missing_ok=True)
+            else:
+                if tmp_path is not None and tmp_path.exists():
+                    tmp_path.unlink(missing_ok=True)
+                csv_name = f"{Path(fit_file.name).stem}.csv"
+                preview = df.head(10) if not df.empty else pd.DataFrame()
+                if not preview.empty:
+                    st.dataframe(preview, use_container_width=True)
+                st.download_button(
+                    "⬇️ Download CSV",
+                    data=csv_bytes,
+                    file_name=csv_name,
+                    mime="text/csv",
+                    use_container_width=True,
+                )
+                try:
+                    manager.store_device_file(
+                        fit_bytes, fit_file.name, device_type="garmin_fit"
+                    )
+                    manager.store_device_file(
+                        csv_bytes, csv_name, device_type="garmin_csv"
+                    )
+                    st.success("FIT and converted CSV saved to this profile.")
+                except Exception as exc:  # pragma: no cover - defensive
+                    _LOGGER.warning("Failed to store converted files: %s", exc)
+                    st.warning(
+                        "Conversion succeeded, but saving to profile storage failed."
+                    )
+
+    with col_csv:
+        st.subheader("Import Garmin CSV")
+        csv_file = st.file_uploader(
+            "Upload Garmin CSV",
+            type=["csv"],
+            key=f"garmin_csv_import_{user.user_id}",
+            accept_multiple_files=False,
+        )
+        if csv_file is not None:
+            csv_bytes = csv_file.read()
+            try:
+                preview_df = pd.read_csv(
+                    io.BytesIO(csv_bytes),
+                    nrows=200,
+                    low_memory=False,
+                )
+                if not preview_df.empty:
+                    st.dataframe(preview_df.head(10), use_container_width=True)
+            except Exception as exc:  # noqa: BLE001
+                st.error(f"Unable to read CSV: {exc}")
+                preview_df = None
+            try:
+                manager.store_device_file(
+                    csv_bytes, csv_file.name, device_type="garmin_csv"
+                )
+                st.success("CSV stored under this profile.")
+            except Exception as exc:  # pragma: no cover - defensive
+                _LOGGER.warning("Failed to store CSV import: %s", exc)
+                st.warning("Stored preview only; saving to disk failed.")
+
+
 def _render_garmin_ingest(user: UserProfile) -> None:
     """Render Garmin Vivosmart 5 ingest to populate clinical gauges."""
     st.markdown("## ⌚ Wrist Monitoring (Vivosmart 5)")
@@ -3424,6 +3534,8 @@ def render_user_profile_tab() -> None:
             _render_hrv_history(current_user)
         
         with tab_data:
+            _render_fit_csv_tools(current_user)
+            st.markdown("---")
             _render_garmin_ingest(current_user)
             st.markdown("---")
             _render_data_management(current_user)
