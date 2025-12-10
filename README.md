@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.11-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.12-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
@@ -100,6 +100,8 @@ The app will open in your default browser at `http://localhost:8501`.
 
 **Per-user persistence:** RR uploads are saved with the active profile (see the light-bulb banner) and immediately written to `data/{user}/rr_intervals`. The app warns when you re-upload a previously analyzed file and can reuse stored HRV results when the file hash and analysis settings match (toggle in the sidebar) or let you recompute. Sidebar uploads target the active profile (Diego by default); uploads from the User Profile tab are scoped to that user and set that profile active.
 
+**FIT ↔ CSV tools (Data tab):** Convert Garmin FIT files to CSV directly inside the User Profile → Data tab, download the CSV, and store both FIT and CSV under the active profile. You can also upload Garmin CSVs to keep them with your profile.
+
 ### Polar AccessLink (optional VO2max sync)
 
 Mission Control - Flight Surgeon can pull VO2max estimates from Polar Flow via the AccessLink API for higher-fidelity exercise compensation:
@@ -160,6 +162,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | **Multi-Language**                     | English + Spanish (Colombian-validated scales: ESE-VC, KSS-CO)                                                                                                                                     |
 | **Laboratory Tracking**                | CBC/Hemogram, Blood Chemistry, Urinalysis with normal ranges                                                                                                                                       |
 | **Multi-Device Import**                | Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, Somfit Pro                                                                                                                                          |
+| **FIT ↔ CSV Tools**                    | Convert Garmin FIT to CSV inside the Data tab, download, and store both FIT/CSV per profile; import Garmin CSVs into the active profile                                                          |
 | **Garmin Vivosmart 5 Clinical Ingest** | Upload FIT/ZIP (batch supported) to auto-fill steps, distance, sleep score/quality/duration, SpO₂, respiration (awake/sleep), stress, calories, and body battery charge/drain with ECharts gauges |
 | **Docker Deployment**                  | Containerized with PostgreSQL/TimescaleDB for production environments                                                                                                                              |
 | **AI Interpretation**                  | GPT-5.1 high-reasoning analysis with scientific citations                                                                                                                                          |
