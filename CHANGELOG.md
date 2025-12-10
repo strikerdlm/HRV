@@ -5,6 +5,14 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.13] - 2025-12-10
+
+### Changed
+- Default analysis settings now enable Frequency plots, Poincaré, Spectrogram, Gauges, and ML-assisted deviation clustering for a richer out-of-the-box experience.
+
+### Fixed
+- Fixed pandas `MergeError` when reusing cached results that already contain `sdann_5min`/`sdnnidx_5min` columns; duplicate columns are dropped before merge.
+
 ## [1.8.12] - 2025-12-10
 
 ### Added
