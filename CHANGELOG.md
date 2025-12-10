@@ -5,6 +5,28 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.11] - 2025-12-10
+
+### Added
+- Optional reuse of cached HRV results by file hash + analysis settings with a sidebar toggle; warns when settings differ so you can recompute.
+- Raw RR uploads now persist immediately to `data/{user}/rr_intervals` for the active profile (sidebar and profile uploads) so tracings are never lost between runs.
+
+### Changed
+- Analysis settings persistence now records covariate inputs (age/sex/BMI/exercise) and validates them before reusing cached results.
+- Profile-tab RR uploads now set the active profile automatically to prevent cross-user mixing during analysis.
+
+## [1.8.10] - 2025-12-10
+
+### Added
+- Per-user RR upload persistence and duplicate detection: RR uploads now store raw files and computed HRV results keyed by file hash per active profile, with sidebar warnings when a file was already analyzed.
+- Profile-tab RR uploads: users can upload RR files directly inside the User Profile tab; files are saved to their data folder and queued for analysis without using the sidebar.
+- Active profile indicator: a prominent light-bulb banner shows which profile is currently driving HRV analyses to prevent cross-user mix-ups.
+
+### Changed
+- HRV measurements table now tracks `source_file`, `file_hash`, `recording_start_utc`, `analysis_settings_json`, and `created_at` to bind analyses to uploads and settings.
+
+---
+
 ## [1.8.9] - 2025-12-10
 
 ### Documentation
