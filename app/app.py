@@ -4400,10 +4400,10 @@ def main() -> None:
         rr_plot_cap = st.sidebar.selectbox(
             "RR plot point cap per dataset", [
                 "500", "2000", "10000", "No limit"], index=1)
-        skip_freq = st.sidebar.checkbox("Skip Frequency overlay plot", value=True)
-        skip_poincare = st.sidebar.checkbox("Skip Poincaré plot", value=True)
-        skip_spectrogram = st.sidebar.checkbox("Skip Spectrogram", value=True)
-        skip_gauges = st.sidebar.checkbox("Skip Gauges", value=True)
+        skip_freq = st.sidebar.checkbox("Skip Frequency overlay plot", value=False)
+        skip_poincare = st.sidebar.checkbox("Skip Poincaré plot", value=False)
+        skip_spectrogram = st.sidebar.checkbox("Skip Spectrogram", value=False)
+        skip_gauges = st.sidebar.checkbox("Skip Gauges", value=False)
         show_debug = st.sidebar.checkbox(
             "Show detailed progress logs", value=False)
         # Adjust runtime log verbosity from sidebar preference
@@ -4413,7 +4413,7 @@ def main() -> None:
 
         st.sidebar.subheader("ML enhancements")
         enable_ml = st.sidebar.checkbox(
-            "Enable ML-assisted deviation clustering", value=False
+            "Enable ML-assisted deviation clustering", value=True
         )
         
         # Performance settings (CPU optimization)
@@ -5115,6 +5115,10 @@ def main() -> None:
                 .reset_index()
             )
             if not multi_results_df.empty:
+                # Drop existing long-term columns to avoid merge duplication errors
+                for col in ("sdann_5min", "sdnnidx_5min"):
+                    if col in multi_results_df.columns:
+                        multi_results_df = multi_results_df.drop(columns=[col])
                 multi_results_df = multi_results_df.merge(
                     lts, on="source", how="left")
 
