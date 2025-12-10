@@ -2970,6 +2970,28 @@ def _parse_float(raw_value: float | int | str, label: str) -> float:
     return value
 
 
+def _render_dataset_info_header(
+    datasets: Dict[str, "UploadedRR"],
+    *,
+    title: str = "Files Being Analyzed",
+) -> None:
+    """Display a prominent header showing which files are being analyzed with dates."""
+    if not datasets:
+        return
+    items: List[str] = []
+    for name, up in datasets.items():
+        ts = up.recording_start_utc
+        if ts is not None and isinstance(ts, pd.Timestamp):
+            date_str = ts.strftime("%Y-%m-%d %H:%M")
+        else:
+            date_str = "Unknown date"
+        duration_min = len(up.rr_ms) * (np.mean(up.rr_ms) / 60000.0) if up.rr_ms is not None and len(up.rr_ms) > 0 else 0
+        items.append(f"**{name}** — {date_str} ({duration_min:.1f} min, {len(up.rr_ms):,} beats)")
+    with st.expander(f"📂 {title} ({len(datasets)} file{'s' if len(datasets) != 1 else ''})", expanded=True):
+        for item in items:
+            st.markdown(f"• {item}")
+
+
 def _plot_rr_timeseries(
     datasets: Dict[str, UploadedRR],
     dev_windows: Optional[pd.DataFrame] = None,
@@ -5352,6 +5374,8 @@ def main() -> None:
                 ```
                 """)
         else:
+            st.markdown("### 📈 Time Series Analysis")
+            _render_dataset_info_header(datasets, title="Recordings Displayed")
             max_pts = None if rr_plot_cap == "No limit" else int(rr_plot_cap)
             _plot_rr_timeseries(
                 datasets,
@@ -5396,6 +5420,8 @@ def main() -> None:
         elif skip_freq:
             st.info("Frequency overlay disabled (Performance & display).")
         else:
+            st.markdown("### 🌊 Frequency Domain Analysis")
+            _render_dataset_info_header(datasets, title="Recordings Analyzed")
             _plot_psd_overlay(datasets, method=psd_method)
         st.markdown(
             "**Scientific notes (frequency domain)**  \n"
@@ -5432,6 +5458,8 @@ def main() -> None:
         elif skip_poincare:
             st.info("Poincaré plot disabled (Performance & display).")
         else:
+            st.markdown("### 🔀 Nonlinear Dynamics")
+            _render_dataset_info_header(datasets, title="Recordings Analyzed")
             _plot_poincare(datasets)
         st.markdown(
             "**Scientific notes (nonlinear)**  \n"
@@ -5452,6 +5480,8 @@ def main() -> None:
         elif skip_spectrogram:
             st.info("Spectrogram disabled (Performance & display).")
         else:
+            st.markdown("### 📉 Spectrogram (Time-Frequency)")
+            _render_dataset_info_header(datasets, title="Recordings Analyzed")
             _plot_spectrogram(datasets)
         st.markdown(
             "**Scientific notes (time–frequency)**  \n"
@@ -6018,6 +6048,7 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
         elif skip_gauges:
             st.info("Gauges disabled (Performance & display).")
         else:
+            _render_dataset_info_header(datasets, title="Recordings Available")
             _render_normogram_gauges(multi_results_df)
         
         with st.expander("📖 **Understanding the Gauges**", expanded=False):
