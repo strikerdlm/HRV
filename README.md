@@ -9,11 +9,11 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.5-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.11-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2025--12--06-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2025--12--10-blue)](CHANGELOG.md)
 
 ---
 
@@ -97,6 +97,8 @@ The app will open in your default browser at `http://localhost:8501`.
 2. **Upload**: Click "Browse files" in the sidebar and select your RR file(s)
 3. **Explore tabs**: Start with **Overview** for summary statistics, then explore **Gauges** for visual benchmarks
 4. **Export**: Go to **Export** tab to download a comprehensive Markdown report
+
+**Per-user persistence:** RR uploads are saved with the active profile (see the light-bulb banner) and immediately written to `data/{user}/rr_intervals`. The app warns when you re-upload a previously analyzed file and can reuse stored HRV results when the file hash and analysis settings match (toggle in the sidebar) or let you recompute. Sidebar uploads target the active profile (Diego by default); uploads from the User Profile tab are scoped to that user and set that profile active.
 
 ### Polar AccessLink (optional VO2max sync)
 
