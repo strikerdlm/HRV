@@ -402,6 +402,8 @@ Artifacts: 2.3%
 
 **Purpose:** Visualize raw and cleaned RR intervals
 
+**Loader tip:** Open the **📂 Load RR files** expander at the top of the tab to pick which uploaded recordings feed this view. The selection only affects this tab, so you can isolate a single recording when multiple RR files are staged.
+
 **What you see:**
 - Top chart: RR intervals over time
 - Bottom chart: Heart rate over time
@@ -419,6 +421,8 @@ Artifacts: 2.3%
 ### Frequency Tab
 
 **Purpose:** Analyze frequency components of HRV
+
+**Loader tip:** Use **📂 Load RR files** to explicitly choose which recordings are included in the PSD overlay. Narrowing the selection keeps Welch/AR plots readable when dozens of files are uploaded.
 
 **What you see:**
 - Power Spectral Density (PSD) curve
@@ -448,6 +452,8 @@ LF/HF: 0.67 → Vagal predominance (typical at rest)
 ### Nonlinear Tab
 
 **Purpose:** Visualize beat-to-beat dynamics
+
+**Loader tip:** Select the recording for Poincaré and entropy plots via **📂 Load RR files**. This avoids mixing unrelated datasets when batch uploads are queued.
 
 **What you see:**
 - Poincaré plot: Each point is (RRₙ, RRₙ₊₁)
@@ -551,6 +557,8 @@ LF/HF: 0.67 → Vagal predominance (typical at rest)
 ## User Profiles and Clinical Scales
 
 This feature enables personalized HRV analysis and fatigue assessment by incorporating user-specific biometric data and validated clinical questionnaires.
+
+All longitudinal plots inside the profile (assessment history, Garmin wellness trends, HRV history, and Exploration Medical Analytics) now render with Apache ECharts for consistent styling and publication-ready exports.
 
 ### Batched Clinical Assessments (December 2025 Sprint)
 
@@ -1543,6 +1551,8 @@ Continue for 3 hours post-arrival for storm response capture.
    - p-value (statistical significance)
    - q-value (FDR-adjusted for multiple comparisons)
    - Optimal lag (hours before/after HRV measurement)
+
+**Time alignment:** HRV windows and NOAA predictors are synchronized to the exact same timestamp before computing correlations—no nearest-neighbor merges. The app resamples solar/geomagnetic data onto the HRV window start times with bounded interpolation (default tolerance 90 min) so that each sample pair represents the same instant, mirroring the methodology recommended by McCraty et al. (2017) for peer-reviewed heliobiology studies.
 
 ### Interpreting Space Weather Correlations
 

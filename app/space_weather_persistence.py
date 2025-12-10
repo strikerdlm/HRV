@@ -24,6 +24,8 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+from space_weather_alignment import align_space_weather_series
+
 # Try to import database libraries
 try:
     import sqlalchemy
@@ -735,29 +737,39 @@ def align_space_weather_with_hrv(
     """
     if hrv_df.empty or space_weather_df.empty:
         return pd.DataFrame()
-    
-    # Filter to requested metric
+    if "timestamp" not in hrv_df.columns:
+        return pd.DataFrame()
+    hrv = hrv_df.copy()
+    hrv["timestamp"] = pd.to_datetime(hrv["timestamp"], errors="coerce", utc=True)
+    hrv = hrv.dropna(subset=["timestamp"]).sort_values("timestamp")
+    if hrv.empty:
+        return pd.DataFrame()
     sw_metric = space_weather_df[space_weather_df["metric_name"] == metric_name].copy()
     if sw_metric.empty:
         return pd.DataFrame()
-    
-    # Apply lag
-    if lag_hours != 0:
-        sw_metric["timestamp"] = sw_metric["timestamp"] + timedelta(hours=lag_hours)
-    
-    # Rename value column
-    sw_metric = sw_metric.rename(columns={"value": f"sw_{metric_name}"})
-    sw_metric = sw_metric[["timestamp", f"sw_{metric_name}"]]
-    
-    # Merge using nearest timestamp
-    merged = pd.merge_asof(
-        hrv_df.sort_values("timestamp"),
-        sw_metric.sort_values("timestamp"),
-        on="timestamp",
-        direction="nearest",
-        tolerance=pd.Timedelta(hours=3),  # Max 3 hour gap
+    sw_metric["timestamp"] = pd.to_datetime(
+        sw_metric["timestamp"], errors="coerce", utc=True
     )
-    
+    sw_metric["value"] = pd.to_numeric(sw_metric["value"], errors="coerce")
+    sw_metric = sw_metric.dropna(subset=["timestamp", "value"]).sort_values("timestamp")
+    if sw_metric.empty:
+        return pd.DataFrame()
+    aligned = align_space_weather_series(
+        reference_times=hrv["timestamp"],
+        predictor_df=sw_metric,
+        predictor_time_col="timestamp",
+        predictor_value_col="value",
+        lag_hours=lag_hours,
+        max_gap_minutes=180,
+    )
+    if aligned.empty:
+        return pd.DataFrame()
+    sw_col = f"sw_{metric_name}"
+    merged = (
+        hrv.set_index("timestamp")
+        .join(aligned.rename(sw_col), how="left")
+        .reset_index()
+    )
     return merged
 
 
