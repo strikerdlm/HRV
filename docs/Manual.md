@@ -283,6 +283,12 @@ The app will:
 - Re-uploads with the same file hash trigger a sidebar warning; you can reuse stored results when the settings match (toggle in the sidebar) or force recomputation if settings changed.
 - Sidebar uploads target the active profile (Diego by default). Uploading from **User Profile → HRV** scopes files to that user and sets that profile active before queuing them for analysis.
 
+### FIT ↔ CSV Tools (User Profile → Data tab)
+
+- Convert Garmin FIT files to CSV in-app, download the CSV, and automatically store both FIT and CSV under the active profile.
+- Garmin CSV uploads are also stored under the active profile for later use.
+- Conversion uses bounded parsing (fitparse) and surfaces a 10-row preview for quick verification.
+
 ### Example: Sample Data
 
 If you don't have real data, create a test file:
