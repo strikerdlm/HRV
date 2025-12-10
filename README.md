@@ -2,10 +2,10 @@
 
 ## Author
 
-**Dr. Diego Leonel Malpica Hincapié, MD**  
-*Aerospace Medicine Specialist*  
-National University of Colombia  
-Physiology Instructor, Colombian Aerospace Force  
+**Dr. Diego Leonel Malpica Hincapié, MD**
+*Aerospace Medicine Specialist*
+National University of Colombia
+Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
@@ -83,6 +83,7 @@ The app will open in your default browser at `http://localhost:8501`.
 ### Your First Analysis (5 Minutes)
 
 1. **Prepare your data**: Create a text file with one RR interval (in milliseconds) per line:
+
    ```
    1027
    1007
@@ -91,12 +92,10 @@ The app will open in your default browser at `http://localhost:8501`.
    1020
    ...
    ```
+
    Name it with a timestamp for automatic time alignment: `2025-11-06 00-43-42.txt`
-
 2. **Upload**: Click "Browse files" in the sidebar and select your RR file(s)
-
 3. **Explore tabs**: Start with **Overview** for summary statistics, then explore **Gauges** for visual benchmarks
-
 4. **Export**: Go to **Export** tab to download a comprehensive Markdown report
 
 ### Polar AccessLink (optional VO2max sync)
@@ -117,12 +116,12 @@ If the env vars are omitted the calculator falls back to the VO2max stored in th
 
 The app is fully navigable **without uploading HRV data**. These features work immediately:
 
-| Module | What You Can Do |
-|--------|-----------------|
-| 🌍 **Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing |
-| ☀️ **Circadian** | Simulate circadian rhythms with different light schedules |
-| 😴 **SAFTE/Fatigue** | Model how sleep debt affects cognitive performance |
-| 🫀 **Biofeedback** | Try the paced breathing demo |
+| Module                    | What You Can Do                                                              |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| 🌍**Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing |
+| ☀️**Circadian**   | Simulate circadian rhythms with different light schedules                    |
+| 😴**SAFTE/Fatigue** | Model how sleep debt affects cognitive performance                           |
+| 🫀**Biofeedback**   | Try the paced breathing demo                                                 |
 
 All other tabs show **example data** and **reference values** to help you understand what's available before uploading your own recordings.
 
@@ -130,39 +129,39 @@ All other tabs show **example data** and **reference values** to help you unders
 
 ## 📋 Features Overview
 
-| Feature | Description |
-|---------|-------------|
-| **Time-Domain Metrics** | SDNN, RMSSD, pNN50, Mean HR, CVNN, and more |
-| **Frequency-Domain Analysis** | VLF/LF/HF power, normalized units, LF/HF ratio via Welch, Periodogram, or AR methods |
-| **Nonlinear Metrics** | Poincaré SD1/SD2, DFA α1/α2, Sample/Approximate Entropy |
-| **Heart Rate Fragmentation** | PIP, IALS, PSS per PROOF-AF methodology |
-| **Geometric Metrics** | HRV Triangular Index, TINN, Baevsky Stress Index |
-| **Population Norms** | Age/sex-stratified comparison against Nunan et al., Ortega et al., MESA Study data |
-| **Blood Pressure Variability** | BPV metrics (SD, CV, ARV, SV) with HRV-BPV correlation analysis |
-| **Circadian Physiology** | Forger99, Jewett99, Hannay19 models with ESRI and light schedule simulation |
-| **Sliding Window Analysis** | Configurable windows with deviation detection and anomaly episodes |
-| **Autonomic Function Tests** | Valsalva ratio, Deep breathing E:I response, 30:15 standing ratio |
-| **Readiness Scoring** | Kubios-style parasympathetic index with historical baseline comparison |
-| **Space Weather Correlation** | NOAA Kp, Dst, F10.7, solar wind, X-ray flux with lag-aware correlations |
-| **Space Weather Impact Predictions** | Exact arrival times for photons, SEPs, solar wind plasma, with Polar H10 timing recommendations |
-| **NASA DONKI Integration** | Flares, CMEs, geomagnetic storms, radiation belt enhancements |
-| **Fatigue Prediction** | SAFTE biomathematical model for cognitive performance |
-| **HRV Biofeedback** | Real-time coherence training with paced breathing |
-| **CPU Performance Mode** | Adjustable presets (Fast/Balanced/Quality) with smart downsampling |
-| **GPU Acceleration** | NVIDIA CUDA support (RTX 5070/4090/3080) for heavy computations |
-| **User Profile System** | Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS), history tracking |
-| **Active User Context Sync** | Circadian and SAFTE tabs auto-fill age, chronotype, sleep debt, and mission schedules from the selected profile with a single sync button |
-| **Clinical Profiles** | Astronaut-grade assessment: BMR, TDEE, NASA nutrition, body composition |
-| **Exploration Medical Record** | NASA isolation/mission log with EVA, radiation, stress, and behavioral metrics |
-| **Exploration Medical Analytics** | Radiation/EVA/stress dashboards with trend cards sourced from ExMC logs |
-| **Polar AccessLink VO2 Integration** | Optional VO2max sync for exercise compensation via AccessLink API |
-| **Multi-Language** | English + Spanish (Colombian-validated scales: ESE-VC, KSS-CO) |
-| **Laboratory Tracking** | CBC/Hemogram, Blood Chemistry, Urinalysis with normal ranges |
-| **Multi-Device Import** | Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, Somfit Pro |
+| Feature                                      | Description                                                                                                                                                                                        |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Time-Domain Metrics**                | SDNN, RMSSD, pNN50, Mean HR, CVNN, and more                                                                                                                                                        |
+| **Frequency-Domain Analysis**          | VLF/LF/HF power, normalized units, LF/HF ratio via Welch, Periodogram, or AR methods                                                                                                               |
+| **Nonlinear Metrics**                  | Poincaré SD1/SD2, DFA α1/α2, Sample/Approximate Entropy                                                                                                                                         |
+| **Heart Rate Fragmentation**           | PIP, IALS, PSS per PROOF-AF methodology                                                                                                                                                            |
+| **Geometric Metrics**                  | HRV Triangular Index, TINN, Baevsky Stress Index                                                                                                                                                   |
+| **Population Norms**                   | Age/sex-stratified comparison against Nunan et al., Ortega et al., MESA Study data                                                                                                                 |
+| **Blood Pressure Variability**         | BPV metrics (SD, CV, ARV, SV) with HRV-BPV correlation analysis                                                                                                                                    |
+| **Circadian Physiology**               | Forger99, Jewett99, Hannay19 models with ESRI and light schedule simulation                                                                                                                        |
+| **Sliding Window Analysis**            | Configurable windows with deviation detection and anomaly episodes                                                                                                                                 |
+| **Autonomic Function Tests**           | Valsalva ratio, Deep breathing E:I response, 30:15 standing ratio                                                                                                                                  |
+| **Readiness Scoring**                  | Kubios-style parasympathetic index with historical baseline comparison                                                                                                                             |
+| **Space Weather Correlation**          | NOAA Kp, Dst, F10.7, solar wind, X-ray flux with lag-aware correlations                                                                                                                            |
+| **Space Weather Impact Predictions**   | Exact arrival times for photons, SEPs, solar wind plasma, with Polar H10 timing recommendations                                                                                                    |
+| **NASA DONKI Integration**             | Flares, CMEs, geomagnetic storms, radiation belt enhancements                                                                                                                                      |
+| **Fatigue Prediction**                 | SAFTE biomathematical model for cognitive performance                                                                                                                                              |
+| **HRV Biofeedback**                    | Real-time coherence training with paced breathing                                                                                                                                                  |
+| **CPU Performance Mode**               | Adjustable presets (Fast/Balanced/Quality) with smart downsampling                                                                                                                                 |
+| **GPU Acceleration**                   | NVIDIA CUDA support (RTX 5070/4090/3080) for heavy computations                                                                                                                                    |
+| **User Profile System**                | Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS), history tracking                                                                                                                 |
+| **Active User Context Sync**           | Circadian and SAFTE tabs auto-fill age, chronotype, sleep debt, and mission schedules from the selected profile with a single sync button                                                          |
+| **Clinical Profiles**                  | Astronaut-grade assessment: BMR, TDEE, NASA nutrition, body composition                                                                                                                            |
+| **Exploration Medical Record**         | NASA isolation/mission log with EVA, radiation, stress, and behavioral metrics                                                                                                                     |
+| **Exploration Medical Analytics**      | Radiation/EVA/stress dashboards with trend cards sourced from ExMC logs                                                                                                                            |
+| **Polar AccessLink VO2 Integration**   | Optional VO2max sync for exercise compensation via AccessLink API                                                                                                                                  |
+| **Multi-Language**                     | English + Spanish (Colombian-validated scales: ESE-VC, KSS-CO)                                                                                                                                     |
+| **Laboratory Tracking**                | CBC/Hemogram, Blood Chemistry, Urinalysis with normal ranges                                                                                                                                       |
+| **Multi-Device Import**                | Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, Somfit Pro                                                                                                                                          |
 | **Garmin Vivosmart 5 Clinical Ingest** | Upload FIT/ZIP (batch supported) to auto-fill steps, distance, sleep score/quality/duration, SpO₂, respiration (awake/sleep), stress, calories, and body battery charge/drain with ECharts gauges |
-| **Docker Deployment** | Containerized with PostgreSQL/TimescaleDB for production environments |
-| **AI Interpretation** | GPT-5.1 high-reasoning analysis with scientific citations |
-| **Publication Export** | APA 7th edition formatted reports, LaTeX tables, CSV/JSON data |
+| **Docker Deployment**                  | Containerized with PostgreSQL/TimescaleDB for production environments                                                                                                                              |
+| **AI Interpretation**                  | GPT-5.1 high-reasoning analysis with scientific citations                                                                                                                                          |
+| **Publication Export**                 | APA 7th edition formatted reports, LaTeX tables, CSV/JSON data                                                                                                                                     |
 
 ---
 
@@ -170,30 +169,32 @@ All other tabs show **example data** and **reference values** to help you unders
 
 ### Current Sprint (December 2025)
 
-| Priority | Feature | Status |
-|----------|---------|--------|
-| ✅ DONE | Multi-user sessions (1-13 concurrent) | Complete |
-| ✅ DONE | CPU optimization for non-GPU systems | Complete |
-| ✅ DONE | Smart CPU auto-detection & tuning | Complete |
-| ✅ DONE | Clinical Profile UI visualization | Complete (batched forms + debounced saves) |
-| ✅ DONE | Move Circadian settings to tab | Complete |
-| ✅ DONE | Active user context sync across mission tabs | Complete (Circadian + SAFTE auto-populate) |
-| ✅ DONE | Per-tab settings persistence | Complete (TabSettingsManager) |
-| ✅ DONE | Cross-tab correlation (Circadian → Fatigue) | Complete (shared broker + auto-applied sleep window) |
-| ✅ DONE | Polar AccessLink automation | Complete (persistent OAuth tokens + VO2max history) |
-| ✅ DONE | Exploration Medical Analytics dashboards | Complete (radiation/EVA/stress cards in Clinical tab) |
+| Priority | Feature                                      | Status                                                |
+| -------- | -------------------------------------------- | ----------------------------------------------------- |
+| ✅ DONE  | Multi-user sessions (1-13 concurrent)        | Complete                                              |
+| ✅ DONE  | CPU optimization for non-GPU systems         | Complete                                              |
+| ✅ DONE  | Smart CPU auto-detection & tuning            | Complete                                              |
+| ✅ DONE  | Clinical Profile UI visualization            | Complete (batched forms + debounced saves)            |
+| ✅ DONE  | Move Circadian settings to tab               | Complete                                              |
+| ✅ DONE  | Active user context sync across mission tabs | Complete (Circadian + SAFTE auto-populate)            |
+| ✅ DONE  | Per-tab settings persistence                 | Complete (TabSettingsManager)                         |
+| ✅ DONE  | Cross-tab correlation (Circadian → Fatigue) | Complete (shared broker + auto-applied sleep window)  |
+| ✅ DONE  | Polar AccessLink automation                  | Complete (persistent OAuth tokens + VO2max history)   |
+| ✅ DONE  | Exploration Medical Analytics dashboards     | Complete (radiation/EVA/stress cards in Clinical tab) |
 
 **Best next task:** Group Summaries (cohort-level med/HRV exports).
 
 ### Planned Features (Q1 2026)
 
 #### Longitudinal Study Support
+
 - **Baseline + 22 Measurements**: Track subjects over time (T0 → T21)
 - **Intra-Subject Analysis**: Within-individual change detection, trend analysis
 - **Inter-Subject Analysis**: Between-group comparisons, effect sizes
 - **Mixed-Effects Models**: Random subject intercepts, repeated measures
 
 #### Group Analysis Framework
+
 ```
 Study Design:
 ├── Control Group (n subjects)
@@ -203,8 +204,9 @@ Study Design:
 ```
 
 **Analysis Types**:
+
 - Per-subject time series with individual baselines
-- Per-group aggregated statistics at each timepoint  
+- Per-group aggregated statistics at each timepoint
 - Group × Time interaction effects
 - Responder vs non-responder classification
 - Effect size calculations (Cohen's d, η²)
@@ -227,15 +229,19 @@ The app accepts text files with one RR interval per line in **milliseconds**:
 ```
 
 **Filename convention**: `YYYY-MM-DD HH-MM-SS.txt` (e.g., `2025-11-06 00-43-42.txt`)
+
 - The timestamp is parsed to align HRV windows with space weather data
 - Timezone is assumed GMT-5 (adjustable)
 - Values outside 300–2000 ms are automatically filtered
 
 ### Garmin Data Sources
 
-1. **Wellness Export ZIP**: Download from Garmin Connect → Account Settings → Export Wellness Data
-2. **FIT Files**: Export individual activities from Garmin Connect web
-3. **API Access**: Configure `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env`
+* **Wellness Export ZIP**: Download from Garmin Connect → Account Settings → Export Wellness Data
+  ```
+  https://connect.garmin.com/modern/settings/accountInformation
+  ```
+* **FIT Files**: Export individual activities from Garmin Connect web
+* **API Access**: Configure `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env`
 
 ### ActiGraph GT3X Files
 
@@ -264,66 +270,79 @@ project/
 ## 🖥️ Application Tabs
 
 ### Overview Tab
+
 - Dataset metadata: beat count, duration, mean HR, artifact percentage
 - Respiratory rate estimate from HF spectral peak
 - Summary table with green/yellow/red deviation flags
 
 ### Time Series Tab
+
 - RR intervals and heart rate over time
 - QC overlays: cleaned series (green), flagged artifacts (red)
 - Interactive zoom and pan
 
 ### Frequency Tab
+
 - Power Spectral Density (PSD) with VLF/LF/HF band highlighting
 - Methods: Welch (default), Periodogram, AR (Yule-Walker)
 - Band power comparison across datasets
 
 ### Nonlinear Tab
+
 - Poincaré plot with SD1/SD2 ellipse
 - DFA scaling exponents (α1: short-term, α2: long-term)
 - Entropy metrics visualization
 
 ### Spectrogram Tab
+
 - Time-frequency heatmap showing spectral dynamics
 - Track HF (breathing) and LF (baroreflex) power evolution
 - Useful for identifying non-stationary segments
 
 ### Windowed Tab
+
 - Sliding-window metrics (default: 5-min window, 1-min step)
 - Deviation detection with configurable z-score thresholds
 - Anomaly episode timeline with contiguous run detection
 
 ### Metrics Tab
+
 - Complete table of all computed metrics across domains
 - Advanced analytics: fragmentation, PRSA, symbolic dynamics, multifractal DFA
 - Covariate-adjusted values when patient profile is configured
 
 ### ANS Function Tests Tab
+
 - **Valsalva Ratio**: Phase II (strain) vs Phase IV (recovery)
 - **Deep Breathing**: E:I difference and ratio across paced breathing cycles
 - **30:15 Ratio**: Orthostatic response after standing
 
 ### Readiness Tab
+
 - Parasympathetic index from HF, RMSSD, pNN50, SD1
 - Historical baseline comparison (requires ≥7 sessions)
 - Kubios-style categories: VERY LOW / LOW / NORMAL / HIGH
 
 ### Gauges Tab
+
 - 30+ metric gauges with clinical reference ranges
 - Two-ring design with color-coded zones (green/yellow/red)
 - Based on published normative data (Nunan 2010, Shaffer 2017, PROOF-AF 2025)
 
 ### Unified Timeline Tab
+
 - Time-synchronized view of all physiological metrics
 - ML pattern detection: anomalies, trends, change points
 - Correlation matrix heatmap
 
 ### Biofeedback Tab
+
 - Real-time HRV streaming (simulated or from device)
 - Paced breathing guide with configurable breath rate
 - Coherence score tracking
 
 ### Fatigue Tab
+
 - SAFTE model for cognitive performance prediction
 - Sleep schedule and work schedule inputs
 - Risk assessment with factor breakdown
@@ -331,6 +350,7 @@ project/
 - One-click **Sync with active profile** button pulls age, chronotype, sleep debt, and mission schedule directly from the selected astronaut's medical log
 
 ### Space Weather Tab
+
 - **Impact Predictions**: Exact arrival times for all energy categories in Bogotá (UTC-5)
   - Photon/X-ray events (instantaneous)
   - Solar Energetic Particles (SEPs)
@@ -344,6 +364,7 @@ project/
 - Partial correlations controlling for weather covariates
 
 ### NOAA Space Tab
+
 - Comprehensive NOAA SWPC data feeds
 - Auto-fetches with cache-first fallback so feeds stay available even offline; manual refresh is still available
 - Interactive gauges for all space weather metrics
@@ -351,12 +372,14 @@ project/
 - Feature matrix builder for predictive modeling
 
 ### Export Tab
+
 - Markdown report with all metrics and interpretations
 - CSV/JSON data export
 - LaTeX tables for publications
 - GPT-5.1 AI interpretation (requires API key)
 
 ### Circadian Physiology Tab
+
 - Multiple mathematical models: Forger99, Jewett99, Hannay19, Hannay19TP
 - Light schedule generation (Regular, Shift Work, Slam Shift, Social Jetlag)
 - Entrainment Signal Regularity Index (ESRI) calculation
@@ -366,6 +389,7 @@ project/
 - Based on Arcascope circadian package (Tavella, Hannay, Walch)
 
 ### Population Norms Tab
+
 - Compare HRV metrics against published population norms
 - Age and sex-stratified reference values
 - Sources: Nunan et al. (2010), Ortega et al. (2024), MESA Study, Task Force 1996
@@ -373,6 +397,7 @@ project/
 - Full scientific citations with PMID links
 
 ### BPV Analysis Tab
+
 - Blood Pressure Variability metrics: SD, CV, ARV, SV
 - Pulse pressure and MAP calculations
 - Risk assessment based on clinical literature
@@ -380,6 +405,7 @@ project/
 - References: Parati et al. (2018), Rothwell et al. (2010), Saren et al. (2024)
 
 ### About Tab
+
 - Author information and professional profiles
 - Contributing authors (Circadian: Arcascope; SAFTE: IBR/USAF)
 - Version history and changelog
@@ -413,15 +439,15 @@ ACCUWEATHER_API_KEY=your_key
 
 ### Sidebar Settings
 
-| Setting | Default | Description |
-|---------|---------|-------------|
-| **Window size** | 5 min | Sliding window duration for windowed analysis |
-| **Step size** | 1 min | Window overlap/step |
-| **Min RR count** | 60 | Minimum beats per window |
-| **QC method** | threshold_median | Artifact detection algorithm |
-| **Max deviation** | 0.2 | Artifact threshold (20% deviation) |
-| **Median window** | 11 | Rolling median window for QC |
-| **PSD method** | Welch | Spectral estimation method |
+| Setting                 | Default          | Description                                   |
+| ----------------------- | ---------------- | --------------------------------------------- |
+| **Window size**   | 5 min            | Sliding window duration for windowed analysis |
+| **Step size**     | 1 min            | Window overlap/step                           |
+| **Min RR count**  | 60               | Minimum beats per window                      |
+| **QC method**     | threshold_median | Artifact detection algorithm                  |
+| **Max deviation** | 0.2              | Artifact threshold (20% deviation)            |
+| **Median window** | 11               | Rolling median window for QC                  |
+| **PSD method**    | Welch            | Spectral estimation method                    |
 
 ---
 
@@ -601,6 +627,7 @@ docker-compose --profile admin up -d
 ```
 
 **Environment Variables** (create `.env` file):
+
 ```env
 POSTGRES_PASSWORD=your_secure_password
 OPENAI_API_KEY=sk-your-key
