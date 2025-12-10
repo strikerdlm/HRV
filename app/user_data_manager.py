@@ -535,6 +535,7 @@ class UserDataManager:
         hrv_metrics: dict[str, Any],
         recording_date: date,
         source_file: str = "",
+        file_hash: str | None = None,
     ) -> Path:
         """Store computed HRV results for current user.
 
@@ -542,6 +543,7 @@ class UserDataManager:
             hrv_metrics: Dictionary with computed HRV metrics.
             recording_date: Date of recording.
             source_file: Source filename.
+            file_hash: Optional hash to enable deduplication lookup.
 
         Returns:
             Path to stored file.
@@ -554,10 +556,15 @@ class UserDataManager:
         results_dir.mkdir(parents=True, exist_ok=True)
 
         timestamp = datetime.now(tz=timezone.utc).strftime("%H%M%S")
-        target_file = results_dir / f"{recording_date.isoformat()}_{timestamp}_hrv.json"
+        if file_hash:
+            target_file = results_dir / f"{recording_date.isoformat()}_{file_hash}_hrv.json"
+        else:
+            target_file = results_dir / f"{recording_date.isoformat()}_{timestamp}_hrv.json"
 
         hrv_metrics["_recording_date"] = recording_date.isoformat()
         hrv_metrics["_source_file"] = source_file
+        if file_hash:
+            hrv_metrics["_file_hash"] = file_hash
         hrv_metrics["_computed_at"] = datetime.now(tz=timezone.utc).isoformat()
 
         with open(target_file, "w", encoding="utf-8") as f:
@@ -565,6 +572,28 @@ class UserDataManager:
 
         _LOGGER.info("Stored HRV results: %s", target_file)
         return target_file
+
+    def load_hrv_results_by_hash(self, file_hash: str) -> dict[str, Any] | None:
+        """Load the most recent HRV analysis JSON for a given hash."""
+        if self._current_user_path is None:
+            return None
+        results_dir = self._current_user_path / _HRV_RESULTS_DIR
+        if not results_dir.exists():
+            return None
+        candidates = list(results_dir.glob(f"*{file_hash}*_hrv.json"))
+        # Fall back to all files if none match filename pattern
+        if not candidates:
+            candidates = list(results_dir.glob("*.json"))
+        for path in sorted(candidates, key=lambda p: p.stat().st_mtime, reverse=True):
+            try:
+                with open(path, encoding="utf-8") as f:
+                    data = json.load(f)
+                if data.get("_file_hash") == file_hash:
+                    data["_filepath"] = str(path)
+                    return data
+            except (json.JSONDecodeError, OSError):
+                continue
+        return None
 
     def store_device_file(
         self,
