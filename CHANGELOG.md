@@ -9,9 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - Sleep Analysis sidebar login and device import controls now run inside debounced forms with explicit submit buttons, reducing unnecessary reruns and completing the roadmap's batch submission objective for this tab.
+- `app/agent_runtime.py`: structured OpenAI Agents SDK scaffold (tool belt, MCP servers, and personas) plus an About-tab expander so flight surgeons can audit forthcoming autonomous copilots.
+
+### Changed
+- Welcome header, sidebar branding, and the About tab now surface release date + git branch/commit metadata derived from `CHANGELOG.md`, ensuring the UI always mirrors the current build without restarting Streamlit.
+- README.md and docs/Manual.md highlight the new release-awareness chips and link directly to the Agents SDK blueprint that is now backed by code.
 
 ### Fixed
 - Garmin/ActiGraph/Somfit uploads no longer reprocess the same file on every rerun; imports execute only when the user presses the corresponding button and the uploader state is cleared afterwards to prevent duplicate data entries.
+- `version_info.py` reloads when `CHANGELOG.md` changes instead of relying on a one-time cache, so Streamlit reruns instantly pick up new versions/badges.
+
+### Documentation
+- README.md: Added v1.8.15 highlights plus a status note that the agent blueprint now lives in code.
+- docs/Manual.md: Updated version banner, release-awareness note, and a new section describing the agent runtime roadmap.
 
 ## [1.8.14] - 2025-12-10
 
