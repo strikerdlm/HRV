@@ -5,6 +5,16 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.12] - 2025-12-10
+
+### Added
+- Data tab tools to convert Garmin FIT → CSV inside the User Profile and download the result.
+- CSV ingestion in the Data tab: upload Garmin CSV files to store them under the active profile.
+- FIT → CSV conversion uses bounded parsing (fitparse) with per-profile storage of both raw FIT and generated CSV.
+
+### Changed
+- Data tab now surfaces FIT/CSV utilities before Garmin ingest for a streamlined workflow.
+
 ## [1.8.11] - 2025-12-10
 
 ### Added
