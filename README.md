@@ -215,6 +215,72 @@ Study Design:
 
 ---
 
+## 🤖 OpenAI Agents SDK Integration Blueprint
+
+Mission Control - Flight Surgeon already uses GPT-5.1 high-reasoning summaries; the next leap is to embed OpenAI Agents SDK with code interpreter, Model Context Protocol (MCP), web/file search, Wolfram Alpha reasoning, and E2B secure sandboxes so every astronaut profile benefits from autonomous, tool-using copilots. This blueprint stays aligned with the v2.0 roadmap and keeps all healthcare data on-device while letting agents reason over HRV, space weather, and wearable signals in near real time.
+
+### Strategic Outcomes
+- Close the loop between RR uploads, NOAA/SWPC feeds, and mission decisions through MCP-enabled agents rather than ad-hoc scripts.
+- Deliver reproducible science packages (not just prose) by combining `code_interpreter` outputs, Wolfram Alpha derivations, and sandboxed E2B notebooks per analysis.
+- Expose mission-ready automations (fatigue clearance, EVA go/no-go, radiation countermeasure planning) that adapt to simple wearable inputs plus atmospheric/space-weather loads.
+- Keep compliance: secrets in `.env`, deterministic Python hand-offs, logging via `logging_config.py`, and audit trails in `logs/`.
+
+### Architecture Snapshot
+- **Agent Runtime**: `openai.agents` service (GPT-5.1 High Reasoning) deployed as a sidecar service (`app/agent_router.py`, future) to keep Streamlit reruns clean.
+- **Context Graph (MCP)**: Servers for `hrv_users.db`, `docs/Manual.md`, `logs/app.log`, NOAA cache folders, and structured exports. Each server enforces read-only scopes per agent.
+- **Tool Belt**:
+  - `code_interpreter` for bounded analytics on uploaded RR arrays (cap output to `/tmp/agents/<session>` and delete per request).
+  - `file_search` indexing curated corpora (Manual, WARP, NASA/NOAA references, exploration medical SOPs).
+  - `web_search` with mission-safe providers (NASA ADS, SWPC, PubMed) for fresh solar/anatomic insights.
+  - **Wolfram Alpha API** via custom tool spec for symbolic math (ionospheric absorption, radiation transport) with AppID stored in `.env`.
+  - **E2B workspace** for heavy simulations (multi-hour circadian entrainment, Monte Carlo radiation) while keeping deterministic seeds.
+  - NOAA/DONKI/SpaceWeatherLive fetchers exposed as callable tools rather than Streamlit callbacks so agents can refresh data on demand.
+
+### Step-by-Step Implementation Plan
+1. **Stabilize Data & Logging (Week 0)**
+   - Confirm `hrv_users.db` migrations are current; add read-only SQLite roles for agents (`sqlite3.connect(..., uri=True, mode=ro)` in planned `agent_data_bridge.py`).
+   - Harden logging: ensure `logs/app.log` and `logs/errors.log` rotate at 10 MB, then register them with MCP so agents can cite trace IDs when recommending actions.
+   - Capture wearables ingest health (Garmin, Polar) in a single `data_ingest_status.json` so agents know whether they can rely on the latest VO₂max/sleep metrics.
+2. **Model Context Protocol Bridges (Week 1)**
+   - Stand up MCP servers (e.g., `mcp://hrv-db`, `mcp://docs`, `mcp://space-weather-cache`) using the OpenAI MCP SDK; map each to deterministic selectors:
+     1. `hrv-db`: parameterized SQL views (recent RR sessions, cohort aggregates, radiation dose log).
+     2. `docs`: pinned commit of `docs/Manual.md`, `WARP.md`, scientific PDFs.
+     3. `space-weather-cache`: JSON snapshots under `app/data_cache/noaa_space/` with TTL metadata.
+   - Define per-agent policies (read vs. write) and include mission tags (`user_id`, `session_id`) so every tool call is auditable.
+3. **Toolchain Enablement (Week 1–2)**
+   - **code_interpreter**: configure 512 MB sandbox, mount-only `/tmp/mission_control/agents/<cedula>`; prevent network, allow `numpy`, `pandas`, `scipy`, `statsmodels`, `plotly`. Pipe outputs back as Markdown tables and PNGs for Streamlit tabs.
+   - **file_search**: run nightly embeddings over `docs/`, `CHANGELOG.md`, and curated PDFs; store vector store in `app/data_cache/vector_db/` with mission-specific namespaces.
+   - **web_search**: whitelist NASA ADS, SWPC, NOAA, ESA Space Weather, PubMed; default to 3 snippets with citation metadata so reports remain evidence-backed.
+   - **Wolfram Alpha**: create `wolfram_alpha` tool definition referencing `.env` `WOLFRAM_APP_ID`; restrict queries to mission physics (solar wind propagation, Schumann resonances, barometric modeling).
+   - **E2B**: template E2B sandboxes (Python 3.12) loaded with `requirements.txt`; expose `launch_e2b_simulation(params)` tool returning signed artifact URLs for downstream inclusion.
+   - **Other APIs**: add NOAA/SpaceWeatherLive tool specs so the agents call the same deterministic fetch routines used in `app/noaa_space.py` rather than inventing new HTTP clients.
+4. **Mission-Focused Agent Definitions (Week 2)**
+   - **Solar-Physiology Correlator**: Automates RR↔space-weather lag scans via `code_interpreter`, writes results into MCP `correlation_reports` table, escalates anomalies when `|r|>0.6` and FDR q<0.05.
+   - **Wearable Recovery Concierge**: Uses `file_search` (Manual norms) + `hrv-db` views + Wolfram Alpha to translate Garmin/Polar data into operational prescriptions (hydration, EVA scheduling).
+   - **Environmental Threat Watcher**: Combines `web_search`, NOAA tools, and E2B radiation Monte Carlo runs to predict when atmospheric or geomagnetic disturbances degrade HRV readiness; posts alerts into Streamlit notification center.
+   - Each agent uses GPT-5.1 High Reasoning for responses, with `instructions` embedding the deterministic rules (bounded loops, type-safe outputs, cite NOAA/peer-reviewed sources).
+5. **Experience Integration (Week 3)**
+   - Extend `app/gpt_interpretation.py` to call the Agent Router: user selects “Autonomous Analysis” → app posts mission context (user profile, selected sessions, NOAA bundle IDs) to the chosen agent.
+   - Surface multi-modal outputs: Markdown summary, structured JSON (metrics, decision, confidence), and optional PNGs/CSVs from `code_interpreter` or E2B.
+   - Log every agent call using `log_user_action("agent_run", {...})` with toolchain metadata for HIPAA-like traceability.
+6. **Validation & Flight Readiness (Week 4)**
+   - Run regression notebooks (pytest + hypothesis) to confirm agent-generated code never mutates data outside `/tmp`.
+   - Simulate degraded comms: disable WAN and ensure MCP/file_search fallbacks still produce actionable guidance.
+   - Conduct SME review sessions (flight surgeons, biomed engineers) to vet recommendations before enabling in production tabs.
+
+### Disruptive Opportunities in Aerospace Medicine
+- **Closed-loop EVA readiness**: Agents correlate HRV drops, atmospheric pressure swings, and predicted Kp surges to recommend countermeasures before EVA windows open.
+- **Adaptive countermeasure playlists**: E2B sandboxes prototype breathing/light protocols, while code_interpreter validates HRV improvements on-the-fly.
+- **Personalized atmospheric risk scoring**: Wolfram Alpha tool computes ionospheric absorption paths customized to mission latitude, feeding fatigue risk dashboards.
+- **Rapid research translation**: web_search + file_search let agents cite fresh literature (Task Force updates, ExMC memos) while maintaining deterministic sourcing.
+
+### Future Potential
+- Multi-agent swarms (circadian planner + fatigue guardian) negotiating mission trade-offs via MCP shared memory.
+- Automated publication drafts combining code_interpreter figures, Agents SDK narrative, and NASA-standard tables for journals.
+- Voice-enabled mission control where wearables stream into agents that reason aloud about human performance vs. solar storms.
+
+---
+
 ## 📁 Input Data Format
 
 ### Polar-Style RR Text Files
