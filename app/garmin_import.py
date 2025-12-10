@@ -35,7 +35,7 @@ import zipfile
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Final
+from typing import TYPE_CHECKING, Any, Final, Iterable, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -70,6 +70,22 @@ _MAX_FETCH_DAYS: Final[int] = 30
 
 # Timeout for HTTP requests (seconds)
 _REQUEST_TIMEOUT: Final[int] = 30
+
+_DEFAULT_FIT_FIELDS: Final[tuple[str, ...]] = (
+    "timestamp",
+    "heart_rate",
+    "cadence",
+    "distance",
+    "speed",
+    "enhanced_speed",
+    "altitude",
+    "enhanced_altitude",
+    "temperature",
+    "position_lat",
+    "position_long",
+    "fractional_cadence",
+)
+_MAX_FIT_RECORDS: Final[int] = 200_000
 
 
 # ---------------------------------------------------------------------------
@@ -147,6 +163,84 @@ class SynchronizedPhysiologyData:
     body_battery: pd.Series
     rr_intervals: pd.Series | None = None
     quality_flags: dict[str, pd.Series] = field(default_factory=dict)
+
+
+# ---------------------------------------------------------------------------
+# FIT conversion utilities
+# ---------------------------------------------------------------------------
+
+
+def convert_fit_to_csv(
+    fit_path: Path,
+    *,
+    allowed_fields: Sequence[str] | None = None,
+    max_records: int = _MAX_FIT_RECORDS,
+) -> Tuple[pd.DataFrame, bytes]:
+    """Convert a FIT file to CSV bytes with selected fields.
+
+    Args:
+        fit_path: Path to the FIT file.
+        allowed_fields: Optional list of FIT record fields to include. Defaults to common activity fields.
+        max_records: Maximum number of records to process (safety bound).
+
+    Returns:
+        Tuple of (DataFrame of parsed records, CSV bytes).
+
+    Raises:
+        FileNotFoundError: If the FIT file does not exist.
+        ImportError: If fitparse is not installed.
+        ValueError: If max_records is not positive.
+    """
+    path = Path(fit_path)
+    if not path.exists():
+        msg = f"FIT file not found: {path}"
+        raise FileNotFoundError(msg)
+    if max_records <= 0:
+        raise ValueError("max_records must be positive")
+
+    fields: Iterable[str] = allowed_fields or _DEFAULT_FIT_FIELDS
+
+    try:
+        from fitparse import FitFile
+    except ImportError as exc:  # pragma: no cover - environment dependent
+        raise ImportError(
+            "fitparse is required for FIT conversion. Install via `pip install fitparse`."
+        ) from exc
+
+    rows: list[dict[str, Any]] = []
+    fit_file = FitFile(str(path))
+    for msg in fit_file.get_messages("record"):
+        if len(rows) >= max_records:
+            break
+        record: dict[str, Any] = {}
+        found = False
+        for field in fields:
+            value = msg.get_value(field)
+            if value is None:
+                continue
+            if field == "timestamp":
+                try:
+                    ts = pd.to_datetime(value)
+                    if ts.tzinfo is None or ts.tzinfo.utcoffset(ts) is None:
+                        ts = ts.tz_localize(timezone.utc)
+                    else:
+                        ts = ts.tz_convert(timezone.utc)
+                    record[field] = ts
+                except Exception:
+                    record[field] = value
+            else:
+                record[field] = value
+            found = True
+        if found:
+            rows.append(record)
+
+    df = pd.DataFrame(rows)
+    if not df.empty and "timestamp" in df.columns:
+        df["timestamp"] = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+
+    csv_buffer = io.StringIO()
+    df.to_csv(csv_buffer, index=False)
+    return df, csv_buffer.getvalue().encode("utf-8")
 
 
 # ---------------------------------------------------------------------------
