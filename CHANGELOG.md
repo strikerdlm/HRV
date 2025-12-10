@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.8.13] - 2025-12-10
 
+### Added
+- Dataset info headers in Time Series, Frequency, Nonlinear, Spectrogram, and Gauges tabs showing file names, recording dates, durations, and beat counts for clearer analysis context.
+
 ### Changed
 - Default analysis settings now enable Frequency plots, Poincaré, Spectrogram, Gauges, and ML-assisted deviation clustering for a richer out-of-the-box experience.
 
