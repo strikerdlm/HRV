@@ -155,6 +155,133 @@ def _fragment_if_available(func: Any) -> Any:
     return func
 
 
+def _format_series_label(name: str) -> str:
+    """Convert internal column names to human-readable legend labels."""
+    label = name.replace("_", " ").strip().title()
+    replacements = {
+        "Rmssd": "RMSSD",
+        "Sdnn": "SDNN",
+        "Pnn50": "pNN50",
+        "Pnn20": "pNN20",
+        "Hr": "HR",
+        "Spo2": "SpO₂",
+    }
+    for key, value in replacements.items():
+        label = label.replace(key, value)
+    return label
+
+
+def _format_axis_label(value: object, date_format: str) -> str:
+    """Format timestamps or categorical values for ECharts axes."""
+    if isinstance(value, pd.Timestamp):
+        ts = value.tz_convert(timezone.utc) if value.tzinfo else value.tz_localize(timezone.utc)
+        return ts.strftime(date_format)
+    if isinstance(value, datetime):
+        ts = value.astimezone(timezone.utc) if value.tzinfo else value.replace(tzinfo=timezone.utc)
+        return ts.strftime(date_format)
+    if isinstance(value, np.datetime64):
+        ts = pd.Timestamp(value).tz_localize(timezone.utc)
+        return ts.strftime(date_format)
+    return str(value)
+
+
+def _render_profile_line_chart(
+    df: pd.DataFrame,
+    *,
+    title: str,
+    y_axis_label: str,
+    height_px: int = 320,
+    date_format: str = "%Y-%m-%d",
+) -> None:
+    """Render a multi-series line chart with ECharts."""
+    if df.empty:
+        st.info("No data to visualize yet.")
+        return
+    chart_df = df.dropna(how="all")
+    if chart_df.empty:
+        st.info("No valid rows to plot.")
+        return
+    try:
+        chart_df = chart_df.sort_index()
+    except TypeError:
+        pass  # Leave as-is when index types are mixed
+    numeric_columns = [
+        col for col in chart_df.columns if pd.api.types.is_numeric_dtype(chart_df[col])
+    ]
+    if not numeric_columns:
+        st.info("No numeric series available for visualization.")
+        return
+    chart_df = chart_df[numeric_columns]
+    x_labels = [_format_axis_label(val, date_format) for val in chart_df.index]
+    series_payload = []
+    for col in chart_df.columns:
+        values = [
+            None if pd.isna(val) else float(val)
+            for val in chart_df[col].to_list()
+        ]
+        series_payload.append(
+            {
+                "name": _format_series_label(col),
+                "type": "line",
+                "smooth": True,
+                "showSymbol": False,
+                "connectNulls": False,
+                "data": values,
+            }
+        )
+    option = {
+        "title": {"text": title},
+        "tooltip": {"trigger": "axis"},
+        "legend": {"type": "scroll"},
+        "grid": {"left": 60, "right": 20, "top": 50, "bottom": 40},
+        "xAxis": {
+            "type": "category",
+            "data": x_labels,
+            "boundaryGap": False,
+            "axisLabel": {"rotate": 0},
+        },
+        "yAxis": {"type": "value", "name": y_axis_label, "scale": True},
+        "series": series_payload,
+    }
+    render_echarts(option, height_px=height_px)
+
+
+def _render_profile_bar_chart(
+    series: pd.Series,
+    *,
+    title: str,
+    x_axis_label: str = "",
+    y_axis_label: str = "Count",
+    height_px: int = 320,
+) -> None:
+    """Render a categorical bar chart for frequency distributions."""
+    if series.empty:
+        st.info("No categorical data to display.")
+        return
+    counts = series.dropna()
+    if counts.empty:
+        st.info("No categorical data to display.")
+        return
+    x_labels = [str(idx) for idx in counts.index]
+    y_values = [float(val) for val in counts.to_numpy(dtype=float)]
+    option = {
+        "title": {"text": title},
+        "tooltip": {"trigger": "axis"},
+        "grid": {"left": 60, "right": 20, "top": 40, "bottom": 40},
+        "xAxis": {"type": "category", "data": x_labels, "name": x_axis_label},
+        "yAxis": {"type": "value", "name": y_axis_label},
+        "series": [
+            {
+                "name": title,
+                "type": "bar",
+                "data": y_values,
+                "itemStyle": {"color": "#2563eb"},
+            }
+        ],
+    }
+    render_echarts(option, height_px=height_px)
+
+
 # ---------------------------------------------------------------------------
 # Session State Keys
 # ---------------------------------------------------------------------------
@@ -1370,7 +1497,11 @@ def _render_assessment_history(user: UserProfile) -> None:
                 chart_data = df[["assessment_date"] + available_cols].dropna(how="all", subset=available_cols)
                 if not chart_data.empty:
                     chart_data = chart_data.set_index("assessment_date")
-                    st.line_chart(chart_data)
+                    _render_profile_line_chart(
+                        chart_data,
+                        title="Fatigue & Sleepiness Trends",
+                        y_axis_label="Score",
+                    )
             
             # PANAS Trend chart
             panas_cols = ["panas_positive_affect", "panas_negative_affect"]
@@ -1380,7 +1511,11 @@ def _render_assessment_history(user: UserProfile) -> None:
                 panas_data = df[["assessment_date"] + available_panas].dropna(how="all", subset=available_panas)
                 if not panas_data.empty:
                     panas_data = panas_data.set_index("assessment_date")
-                    st.line_chart(panas_data)
+                    _render_profile_line_chart(
+                        panas_data,
+                        title="PANAS Affect Trends",
+                        y_axis_label="Score",
+                    )
         
         # Data table
         with st.expander("📊 All Assessment Data"):
@@ -1680,7 +1815,11 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
             chart_data = df[["metric_date"] + available_trend].dropna(how="all", subset=available_trend)
             if not chart_data.empty:
                 chart_data = chart_data.set_index("metric_date")
-                st.line_chart(chart_data)
+                _render_profile_line_chart(
+                    chart_data,
+                    title="Daily Wellness Trends",
+                    y_axis_label="Value",
+                )
     
     with st.expander("📋 View all daily metrics", expanded=False):
         preview_cols = [
@@ -1819,7 +1958,11 @@ def _render_hrv_history(user: UserProfile) -> None:
             available_cols = [c for c in chart_cols if c in df.columns]
             if available_cols:
                 chart_data = df.set_index("measurement_date")[available_cols]
-                st.line_chart(chart_data)
+                _render_profile_line_chart(
+                    chart_data,
+                    title="HRV History",
+                    y_axis_label="ms",
+                )
         
         # Full data table
         with st.expander("📊 All HRV Measurements"):
@@ -2846,7 +2989,11 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
             if not chart_df.empty:
                 chart_df = chart_df.sort_values("mission_day").set_index("mission_day")
                 chart_df.rename(columns={"radiation_dose_msv": "Radiation (mSv)"}, inplace=True)
-                st.line_chart(chart_df[["Radiation (mSv)"]])
+                _render_profile_line_chart(
+                    chart_df[["Radiation (mSv)"]],
+                    title="Radiation Dose vs. Mission Day",
+                    y_axis_label="mSv",
+                )
 
     # EVA workload
     st.markdown("##### 🧑‍🚀 EVA Workload")
@@ -2864,7 +3011,11 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
     if "eva_status" in history_df.columns:
         eva_status_counts = history_df["eva_status"].dropna().value_counts().head(4)
         if not eva_status_counts.empty:
-            st.bar_chart(eva_status_counts.rename("EVA Clearance States"))
+            _render_profile_bar_chart(
+                eva_status_counts.rename("EVA Clearance States"),
+                title="EVA Clearance States",
+                y_axis_label="Count",
+            )
 
     # Stress and behavioral indicators
     st.markdown("##### 🧠 Stress & Behavioral Indicators")
