@@ -128,6 +128,9 @@ try:
 except ImportError:
     PROFILE_MODULE_AVAILABLE = False
 
+from user_data_manager import create_user_manager, parse_filename_date
+from hrv_core import load_rr_intervals_from_text
+
 _LOGGER: Final[logging.Logger] = (
     get_logger(__name__) if get_logger is not None else logging.getLogger(__name__)
 )
@@ -1712,6 +1715,69 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
 # ---------------------------------------------------------------------------
 # HRV History Section
 # ---------------------------------------------------------------------------
+
+
+def _render_profile_rr_uploads(user: UserProfile) -> None:
+    """Allow uploading RR files directly from the profile tab."""
+    st.markdown("## 📂 HRV File Uploads")
+    st.caption(
+        "Upload RR interval .txt files here to store them under this profile. "
+        "They will be queued for analysis without needing the sidebar uploader."
+    )
+    uploaded_files = st.file_uploader(
+        "Upload RR (.txt)",
+        type=["txt"],
+        accept_multiple_files=True,
+        key=f"profile_rr_upload_{user.user_id}",
+    )
+    if not uploaded_files:
+        return
+    try:
+        manager = create_user_manager()
+        manager.set_current_user(
+            user_id=user.user_id,
+            name=user.full_name or user.username or "User",
+            create_if_missing=True,
+        )
+        _set_current_user(user)
+    except Exception as exc:  # pragma: no cover - defensive
+        st.error(f"Unable to prepare storage for uploads: {exc}")
+        return
+
+    queued: list[dict[str, Any]] = st.session_state.get("queued_rr_uploads", [])
+    stored_any = False
+    for uploaded in uploaded_files:
+        try:
+            content = uploaded.read().decode("utf-8", errors="ignore")
+            rr_ms = load_rr_intervals_from_text(uploaded.name, content)
+            if rr_ms.size < 10:
+                st.warning(f"{uploaded.name}: not enough RR intervals to store.")
+                continue
+            start_date = parse_filename_date(uploaded.name) or date.today()
+            start_ts = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+            try:
+                manager.store_rr_intervals(
+                    rr_ms,
+                    filename=uploaded.name,
+                    recording_date=start_date,
+                    overwrite=True,
+                )
+            except FileExistsError:
+                # Already stored; continue to queue for analysis
+                pass
+            queued.append(
+                {
+                    "name": uploaded.name,
+                    "rr_ms": rr_ms,
+                    "recording_start": start_ts.isoformat(),
+                }
+            )
+            stored_any = True
+        except Exception as exc:  # pragma: no cover - defensive
+            st.error(f"Failed to store {uploaded.name}: {exc}")
+    st.session_state["queued_rr_uploads"] = queued
+    if stored_any:
+        st.success("Files stored under this profile and queued for analysis.")
 
 
 def _render_hrv_history(user: UserProfile) -> None:
@@ -3353,6 +3419,8 @@ def render_user_profile_tab() -> None:
             _render_garmin_metrics_history(current_user)
         
         with tab_hrv:
+            _render_profile_rr_uploads(current_user)
+            st.markdown("---")
             _render_hrv_history(current_user)
         
         with tab_data:
