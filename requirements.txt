@@ -30,7 +30,7 @@ psutil>=5.9,<6  # CPU detection and process priority management
 # ===========================================================================
 # DATA VISUALIZATION
 # ===========================================================================
-# streamlit-echarts>=0.4  # Advanced ECharts integration
+# 
 
 # ===========================================================================
 # DEVICE INTEGRATIONS (Optional)
