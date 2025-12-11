@@ -274,6 +274,11 @@ try:
 except ImportError:  # pragma: no cover - Streamlit execution fallback
     from agent_insights import AgentInsightManager  # type: ignore
 
+try:
+    from app.agent_audio import synthesize_agent_speech
+except ImportError:  # pragma: no cover - Streamlit execution fallback
+    from agent_audio import synthesize_agent_speech  # type: ignore
+
 # Default active-user context used when user profile data is unavailable
 def _guest_user_context() -> Dict[str, Any]:
     return {
@@ -2280,6 +2285,7 @@ def _render_gpt_high_interpretation(
         state["markdown"] = result.markdown
         state["sources"] = result.sources
         state["reasoning_encrypted"] = result.reasoning_encrypted
+        st.session_state["gpt5_tts_audio"] = b""
     if not state["markdown"]:
         body_container.info(
             "GPT-5 interpretation will appear here once generated.")
@@ -5709,6 +5715,8 @@ def main() -> None:
                     "agent_payload": None,
                     "agent_error": "",
                     "used_agent": False,
+                    "markdown_appendix": "",
+                    "tts_audio": b"",
                 },
             )
             metrics_signature = hashlib.sha256(
@@ -5756,6 +5764,8 @@ def main() -> None:
                 metric_explainer_state["agent_payload"] = payload_display
                 metric_explainer_state["agent_error"] = result.agent_error or ""
                 metric_explainer_state["used_agent"] = result.used_agent
+                metric_explainer_state["markdown_appendix"] = result.markdown_appendix
+                metric_explainer_state["tts_audio"] = b""
             explanations = metric_explainer_state.get("explanations", [])
             if explanations:
                 explanation_df = pd.DataFrame(explanations)
@@ -5788,6 +5798,41 @@ def main() -> None:
             if payload_preview:
                 with st.expander("View GPT-5.1 metric explanation request payload"):
                     st.json(payload_preview)
+
+            appendix_markdown = metric_explainer_state.get("markdown_appendix", "")
+            if appendix_markdown:
+                with st.expander("⬇️ Markdown appendix ready for export", expanded=False):
+                    st.text_area(
+                        "Metric Explainability Appendix",
+                        appendix_markdown,
+                        height=240,
+                        key="metric_explainer_markdown_preview",
+                    )
+                file_name = (
+                    f"metric_explainability_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.md"
+                )
+                st.download_button(
+                    "Download metric explanations (Markdown)",
+                    data=appendix_markdown.encode("utf-8"),
+                    file_name=file_name,
+                    mime="text/markdown",
+                    key="metric_explainer_markdown_download",
+                )
+                audio_trigger = st.button(
+                    "Generate discrete audio playback (tts-hd)",
+                    key="metric_explainer_tts_button",
+                )
+                if audio_trigger:
+                    try:
+                        audio_bytes = synthesize_agent_speech(appendix_markdown)
+                    except Exception as exc:
+                        st.warning(f"TTS generation failed: {exc}")
+                    else:
+                        metric_explainer_state["tts_audio"] = audio_bytes
+                        st.success("Audio generated successfully.")
+                audio_bytes = metric_explainer_state.get("tts_audio")
+                if isinstance(audio_bytes, (bytes, bytearray)) and audio_bytes:
+                    st.audio(audio_bytes, format="audio/mp3")
         else:
             st.info("No metrics to display.")
     with tab_ans:
@@ -9884,6 +9929,21 @@ that predicts cognitive performance based on:
                 file_name=gpt_file_name,
                 mime="text/markdown",
             )
+            tts_button = st.button(
+                "Generate GPT-5 audio playback (tts-hd)",
+                key="gpt5_tts_button",
+            )
+            if tts_button:
+                try:
+                    audio_bytes = synthesize_agent_speech(gpt_report_md)
+                except Exception as exc:
+                    st.warning(f"TTS generation failed: {exc}")
+                else:
+                    st.session_state["gpt5_tts_audio"] = audio_bytes
+                    st.success("GPT-5 interpretation audio ready.")
+            audio_payload = st.session_state.get("gpt5_tts_audio")
+            if isinstance(audio_payload, (bytes, bytearray)) and audio_payload:
+                st.audio(audio_payload, format="audio/mp3")
         elif gpt_high_enabled:
             st.info(
                 "GPT-5 interpretation is enabled; trigger the analysis to populate this section."
