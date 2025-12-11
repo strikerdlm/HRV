@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import numpy as np
 import pandas as pd
 
+from app.app import _corr_table
 from app.space_weather_alignment import (
     align_space_weather_series,
     align_space_weather_columns,
@@ -79,3 +81,28 @@ def test_align_space_weather_columns_returns_multiple_series() -> None:
     assert list(aligned.columns) == ["a", "b"]
     assert aligned.iloc[1]["a"] == 2.0
     assert aligned.iloc[1]["b"] == 20.0
+
+
+def test_corr_table_uses_partial_correlation_when_covariates_present() -> None:
+    """Partial correlations should remove shared weather covariance."""
+    rng = np.random.default_rng(42)
+    base = rng.normal(loc=0.0, scale=1.0, size=500)
+    predictor = base + rng.normal(scale=0.05, size=500)
+    target = base + rng.normal(scale=0.05, size=500)
+    weather = base + rng.normal(scale=0.02, size=500)
+    df = pd.DataFrame(
+        {
+            "predictor": predictor,
+            "target": target,
+            "temp_c": weather,
+        }
+    )
+    no_cov = _corr_table(df, "predictor", ["target"])
+    with_cov = _corr_table(
+        df,
+        "predictor",
+        ["target"],
+        covariate_cols=["temp_c"],
+    )
+    assert no_cov.iloc[0]["pearson_r"] > 0.8
+    assert abs(with_cov.iloc[0]["pearson_r"]) < 0.2
