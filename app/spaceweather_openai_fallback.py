@@ -8,6 +8,8 @@ import os
 
 from openai import OpenAI
 
+from agent_logging import log_agent_output
+
 try:
 	from spaceweatherlive_client import (
 		CMERecord,
@@ -224,7 +226,7 @@ def extract_spaceweather_with_openai(
 			else None,
 		)
 
-	return SpaceWeatherSnapshot(
+	snapshot = SpaceWeatherSnapshot(
 		timestamp_utc=datetime.now(timezone.utc),
 		kp_forecast=kp,
 		solar_wind_speed_kms=_num_or_none(payload.get("solar_wind_speed_kms")) if isinstance(payload, dict) else None,
@@ -237,5 +239,13 @@ def extract_spaceweather_with_openai(
 		cme_records=cme_entries,
 		sidc_report=sidc_report,
 	)
+
+	log_agent_output(
+		"spaceweather_openai_fallback",
+		json.dumps(asdict(snapshot), default=str),
+		metadata={"model": model},
+	)
+
+	return snapshot
 
 

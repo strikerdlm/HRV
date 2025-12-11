@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.8.15  
-**Last Updated:** 2025-12-10
+**Version:** 1.8.17  
+**Last Updated:** 2025-12-11
 
 ---
 
@@ -2074,6 +2074,16 @@ Important caveats...
 ## References
 Cited literature...
 ```
+
+### Logging & Audit Trail
+
+- Every OpenAI persona (Metric Explainability Specialist, GPT-5 interpretation, SpaceWeatherLive fallback) now records both the request payload and the full markdown answer to `logs/app.log` via `app/agent_logging.py`. Audit metadata (persona, mission context hash, citation count) is also routed through `log_user_action(...)` so crews can correlate recommendations with uploaded RR files and NOAA bundles.
+- Responses must call the `web_search` tool before finalizing conclusions. The developer instructions enforce APA citations plus a trailing `## Sources` section that lists DOI/PMID or official NASA/NOAA links.
+
+### Markdown & Audio Export
+
+- The Metrics tab exposes a **Metric Explainability Appendix** download that merges deterministic Task Force (1996) ranges with the GPT narrative. Use the "Download metric explanations (Markdown)" button for publication-ready inserts.
+- Both the metrics appendix and GPT-5 interpretation panels include **Generate tts-hd audio** controls (OpenAI `tts-1-hd` via `app/agent_audio.py`). This produces a discreet MP3 clip for headset playback during mission briefs, with every synthesis event logged for compliance.
 
 ### Fallback Mode
 

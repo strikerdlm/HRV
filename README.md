@@ -9,15 +9,17 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.15-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.17-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2025--12--10-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2025--12--11-blue)](CHANGELOG.md)
 
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.8.17**: OpenAI personas now log every request/answer with enforced `web_search` citations, the Metrics tab ships a one-click markdown appendix + tts-hd audio playback, and GPT-5 interpretations gain the same doctorate-level export/audio tooling for flight surgeon handovers.
 
 **NEW in v1.8.15**: Sleep Analysis login + device import controls now run inside debounced sidebar forms to stop redundant reruns, the welcome/header + About tab badge the live release date and git commit directly from `CHANGELOG.md`, and `app/agent_runtime.py` seeds the OpenAI Agents SDK plan (personas, MCP servers, tool belt) with a new About tab expander describing the rollout.
 
@@ -169,7 +171,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | **FIT ↔ CSV Tools**                    | Convert Garmin FIT to CSV inside the Data tab, download, and store both FIT/CSV per profile; import Garmin CSVs into the active profile                                                          |
 | **Garmin Vivosmart 5 Clinical Ingest** | Upload FIT/ZIP (batch supported) to auto-fill steps, distance, sleep score/quality/duration, SpO₂, respiration (awake/sleep), stress, calories, and body battery charge/drain with ECharts gauges |
 | **Docker Deployment**                  | Containerized with PostgreSQL/TimescaleDB for production environments                                                                                                                              |
-| **AI Interpretation**                  | GPT-5.1 high-reasoning analysis with scientific citations                                                                                                                                          |
+| **AI Interpretation**                  | GPT-5.1 high-reasoning analysis with enforced `web_search` citations, mission logging, markdown appendix, and optional tts-hd audio playback                                                      |
 | **Publication Export**                 | APA 7th edition formatted reports, LaTeX tables, CSV/JSON data                                                                                                                                     |
 
 ---
@@ -229,6 +231,8 @@ Study Design:
 Mission Control - Flight Surgeon already uses GPT-5.1 high-reasoning summaries; the next leap is to embed OpenAI Agents SDK with code interpreter, Model Context Protocol (MCP), web/file search, Wolfram Alpha reasoning, and E2B secure sandboxes so every astronaut profile benefits from autonomous, tool-using copilots. This blueprint stays aligned with the v2.0 roadmap and keeps all healthcare data on-device while letting agents reason over HRV, space weather, and wearable signals in near real time.
 
 > **Implementation status**: `app/agent_runtime.py` now defines the tool belt, MCP scopes, and all three personas; the About tab includes an expander that surfaces this configuration for mission leads.
+
+> **v1.8.17 update**: Every persona now enforces `web_search`-backed citations, logs its request/response payloads to `logs/app.log`, and exposes Markdown + tts-hd exports (Metrics tab + Export tab) so doctor-level answers can be reviewed offline or played back discreetly during mission briefs.
 
 ### Strategic Outcomes
 - Close the loop between RR uploads, NOAA/SWPC feeds, and mission decisions through MCP-enabled agents rather than ad-hoc scripts.

@@ -52,3 +52,5 @@ def test_metric_insight_manager_classifies_values() -> None:
     assert result.agent_payload is not None
     assert result.agent_payload["metadata"]["persona"] == "metric_explainer"
     assert result.used_agent is False
+    assert "Metric Explainability Specialist" in result.markdown_appendix
+    assert "session_a" in result.markdown_appendix

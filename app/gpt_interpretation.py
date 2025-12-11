@@ -39,6 +39,8 @@ except ImportError:
     RateLimitError = Exception  # type: ignore[misc, assignment]
     APIConnectionError = Exception  # type: ignore[misc, assignment]
 
+from agent_logging import log_agent_output
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
@@ -246,7 +248,10 @@ def _build_gpt5_messages(analysis_payload: str) -> list[dict[str, Any]]:
         "- DFA α1: 0.75-1.25 (healthy fractal dynamics)\n"
         "- Sample Entropy: 1.0-2.0 (healthy complexity)\n\n"
         "OUTPUT FORMAT: Structured markdown with clear sections, tables where appropriate, "
-        "and a final summary with actionable recommendations."
+        "and a final summary with actionable recommendations.\n\n"
+        "CITATIONS: Use the `web_search` tool to retrieve peer-reviewed or NASA/NOAA sources "
+        "for every novel claim. Present citations in APA format with DOI/URL under a `## Sources` "
+        "section."
     )
     user_prompt = (
         "Analyze the following comprehensive HRV study output and produce a "
@@ -281,14 +286,12 @@ def _request_gpt5_high_reasoning(
     response = client.responses.create(
         model=_MODEL,
         input=_build_gpt5_messages(analysis_payload),
-        text={
-            "format": {"type": "text"},
-        },
+        text={"format": {"type": "text"}},
         reasoning={
             "effort": "high",
             "summary": "detailed",
         },
-        tools=[],
+        tools=[{"type": "web_search", "web_search": {"mode": "auto"}}],
         store=False,
         include=["reasoning.encrypted_content"],
     )
@@ -325,12 +328,26 @@ def request_interpretation(
 
     if not OPENAI_AVAILABLE:
         _LOGGER.warning("OpenAI library not available; using local fallback.")
-        return _generate_local_interpretation(analysis_payload)
+        fallback_result = _generate_local_interpretation(analysis_payload)
+        log_agent_output(
+            "gpt5_interpretation",
+            fallback_result.markdown,
+            citations=fallback_result.sources,
+            metadata={"mode": fallback_result.mode.value},
+        )
+        return fallback_result
 
     api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
         _LOGGER.warning("OPENAI_API_KEY not set; using local fallback.")
-        return _generate_local_interpretation(analysis_payload)
+        fallback_result = _generate_local_interpretation(analysis_payload)
+        log_agent_output(
+            "gpt5_interpretation",
+            fallback_result.markdown,
+            citations=fallback_result.sources,
+            metadata={"mode": fallback_result.mode.value},
+        )
+        return fallback_result
 
     client = OpenAI(timeout=timeout)
     last_error: Exception | None = None
@@ -348,14 +365,21 @@ def request_interpretation(
 
             _LOGGER.info("GPT-5.1 interpretation completed successfully.")
 
-            return InterpretationResult(
-                markdown=markdown,
+            result = InterpretationResult(
+                markdown=_append_sources_section(markdown, sources),
                 reasoning_encrypted=reasoning,
                 sources=sources,
                 model_used=_MODEL,
                 mode=InterpretationMode.API,
                 confidence=1.0,
             )
+            log_agent_output(
+                "gpt5_interpretation",
+                result.markdown,
+                citations=result.sources,
+                metadata={"mode": result.mode.value},
+            )
+            return result
 
         except RateLimitError as exc:
             _LOGGER.warning(f"Rate limit hit (attempt {attempt + 1}): {exc}")
@@ -390,7 +414,14 @@ def request_interpretation(
         f"GPT-5.1 API failed after {max_retries} attempts; using local fallback. "
         f"Last error: {last_error}"
     )
-    return _generate_local_interpretation(analysis_payload)
+    fallback_result = _generate_local_interpretation(analysis_payload)
+    log_agent_output(
+        "gpt5_interpretation",
+        fallback_result.markdown,
+        citations=fallback_result.sources,
+        metadata={"mode": fallback_result.mode.value},
+    )
+    return fallback_result
 
 
 def _extract_markdown_gpt5(response: Any) -> str:
@@ -437,6 +468,16 @@ def _extract_sources(response: Any) -> list[str]:
     if not sources:
         return []
     return [str(source) for source in sources]
+
+
+def _append_sources_section(markdown: str, sources: list[str]) -> str:
+    """Append a Sources section when the API returns citation metadata."""
+    if not sources:
+        return markdown
+    lines = [markdown.rstrip(), "", "## Sources", ""]
+    for idx, source in enumerate(sources, 1):
+        lines.append(f"{idx}. {source}")
+    return "\n".join(lines).strip()
 
 
 # ---------------------------------------------------------------------------
