@@ -19,12 +19,15 @@ Version: 1.0.0
 from __future__ import annotations
 
 import base64
+import json
 import hashlib
 import logging
 import os
 import secrets
+import time
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
+from pathlib import Path
 from typing import Any, Dict, Final, List, Optional, Tuple
 
 import requests
@@ -61,6 +64,7 @@ ENV_POLAR_USER_ID: Final[str] = "POLAR_ACCESSLINK_USER_ID"
 ENV_POLAR_CLIENT_ID: Final[str] = "POLAR_CLIENT_ID"
 ENV_POLAR_CLIENT_SECRET: Final[str] = "POLAR_CLIENT_SECRET"
 ENV_ENCRYPTION_KEY: Final[str] = "POLAR_ENCRYPTION_KEY"
+DEBUG_LOG_PATH: Final[Path] = Path(__file__).resolve().parents[1] / ".cursor" / "debug.log"
 
 # Polar Fitness Classifications (per Polar documentation)
 POLAR_FITNESS_CLASSES: Dict[str, Tuple[int, int]] = {
@@ -72,6 +76,29 @@ POLAR_FITNESS_CLASSES: Dict[str, Tuple[int, int]] = {
     "Very Good": (62, 67),
     "Excellent": (68, 100),
 }
+
+
+def _agent_debug_log(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: Dict[str, Any],
+) -> None:
+    """Append NDJSON instrumentation logs for debug investigations."""
+    payload = {
+        "sessionId": "debug-session",
+        "runId": "pre-fix",
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000),
+    }
+    try:
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as log_file:
+            log_file.write(json.dumps(payload, default=str) + "\n")
+    except OSError:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -226,15 +253,53 @@ class PolarAccessLinkClient:
     def credentials(self) -> Optional[PolarCredentials]:
         """Get cached or load credentials from database."""
         if self._credentials is None:
+            #region agent log
+            _agent_debug_log(
+                "H3",
+                "polar_accesslink:credentials",
+                "credentials_lookup_start",
+                {
+                    "db_type": type(self.db).__name__,
+                    "has_get_polar_credentials": hasattr(self.db, "get_polar_credentials"),
+                },
+            )
+            #endregion
             if not hasattr(self.db, "get_polar_credentials"):
                 _LOGGER.error(
                     "UserDatabase missing get_polar_credentials; Polar AccessLink disabled"
                 )
+                #region agent log
+                _agent_debug_log(
+                    "H3",
+                    "polar_accesslink:credentials",
+                    "db_missing_methods",
+                    {"db_type": type(self.db).__name__},
+                )
+                #endregion
                 return None
             try:
                 self._credentials = self.db.get_polar_credentials(self.user_id)
+                #region agent log
+                _agent_debug_log(
+                    "H3",
+                    "polar_accesslink:credentials",
+                    "credentials_loaded",
+                    {
+                        "found": self._credentials is not None,
+                        "db_type": type(self.db).__name__,
+                    },
+                )
+                #endregion
             except Exception as exc:  # pragma: no cover - defensive log path
                 _LOGGER.error("Failed to load Polar credentials: %s", exc)
+                #region agent log
+                _agent_debug_log(
+                    "H3",
+                    "polar_accesslink:credentials",
+                    "credentials_load_failed",
+                    {"error": str(exc), "db_type": type(self.db).__name__},
+                )
+                #endregion
                 return None
         return self._credentials
     
