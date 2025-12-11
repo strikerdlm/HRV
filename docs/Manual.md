@@ -1566,6 +1566,8 @@ Continue for 3 hours post-arrival for storm response capture.
    - q-value (FDR-adjusted for multiple comparisons)
    - Optimal lag (hours before/after HRV measurement)
 
+> **Weather covariates & partial r:** When you enable **Include weather covariates (Bogotá)** the app fetches ERA5 temperature, humidity, pressure, wind, precipitation, and cloud-cover from Open-Meteo for the exact HRV timestamps. Each correlation is then recomputed as a **partial Pearson r**, removing the shared variance explained by those weather variables. This isolates geomagnetic/solar effects from local meteorology so you can distinguish heliobiology signals from hot/cold-day confounders.
+
 **Time alignment:** HRV windows and NOAA predictors are synchronized to the exact same timestamp before computing correlations—no nearest-neighbor merges. The app resamples solar/geomagnetic data onto the HRV window start times with bounded interpolation (default tolerance 90 min) so that each sample pair represents the same instant, mirroring the methodology recommended by McCraty et al. (2017) for peer-reviewed heliobiology studies.
 
 ### Interpreting Space Weather Correlations

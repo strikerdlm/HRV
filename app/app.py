@@ -4079,18 +4079,43 @@ def _build_noaa_correlations(
 
 
 def _corr_table(
-    merged: pd.DataFrame, predictor_col: str, target_cols: List[str]
+    merged: pd.DataFrame,
+    predictor_col: str,
+    target_cols: List[str],
+    covariate_cols: Optional[Sequence[str]] = None,
 ) -> pd.DataFrame:
     rows: List[Dict[str, Any]] = []
+    covariate_list: List[str] = []
+    if covariate_cols:
+        for column in covariate_cols:
+            if (
+                column in merged.columns
+                and pd.api.types.is_numeric_dtype(merged[column])
+            ):
+                covariate_list.append(column)
+    cov_matrix = (
+        merged[covariate_list].to_numpy(dtype=float)
+        if covariate_list
+        else None
+    )
     for col in target_cols:
         if col == predictor_col:
             continue
         if col not in merged.columns:
             continue
-        r, p, n = _pearson_r_p(
-            merged[predictor_col].to_numpy(dtype=float),
-            merged[col].to_numpy(dtype=float),
-        )
+        predictor_values = merged[predictor_col].to_numpy(dtype=float)
+        target_values = merged[col].to_numpy(dtype=float)
+        if cov_matrix is not None:
+            r, p, n = partial_pearson_r_p(
+                predictor_values,
+                target_values,
+                cov_matrix,
+            )
+        else:
+            r, p, n = _pearson_r_p(
+                predictor_values,
+                target_values,
+            )
         rows.append({"metric": col, "pearson_r": r, "p_value": p, "n": n})
     return pd.DataFrame(rows)
 
@@ -4101,6 +4126,7 @@ def _scan_lag_correlations(
     metrics: List[str],
     lags_hours: List[int],
     merge_tolerance_minutes: int = 90,
+    covariate_cols: Optional[Sequence[str]] = None,
 ) -> pd.DataFrame:
     results: List[Dict[str, Any]] = []
     if (
@@ -4137,7 +4163,12 @@ def _scan_lag_correlations(
         )
         if merged.empty:
             continue
-        corr_df = _corr_table(merged.reset_index(drop=True), "kp_index", metrics)
+        corr_df = _corr_table(
+            merged.reset_index(drop=True),
+            "kp_index",
+            metrics,
+            covariate_cols=covariate_cols,
+        )
         corr_df["lag_hours"] = int(lag)
         results.append(corr_df)
     return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
@@ -9318,6 +9349,7 @@ that predicts cognitive performance based on:
         if can_compute_corr and compute_corr_clicked:
             # optional weather covariates fetched for time span of HRV windows
             cov_df = pd.DataFrame()
+            covariate_cols: List[str] = []
             if use_weather:
                 start_dt = pd.to_datetime(
                     windowed_df["start"], errors="coerce", utc=True
@@ -9365,6 +9397,7 @@ that predicts cognitive performance based on:
                     )
                     if not cov_aligned.empty:
                         cov_aligned = cov_aligned.rename_axis("_align_time")
+                        covariate_cols = list(cov_aligned.columns)
                         windowed_df = (
                             windowed_df.assign(_align_time=start_index)
                             .set_index("_align_time")
@@ -9379,6 +9412,12 @@ that predicts cognitive performance based on:
                     metric_list,
                     lags,
                     merge_tolerance_minutes=int(merge_tol),
+                    covariate_cols=covariate_cols or None,
+                )
+            if covariate_cols:
+                st.caption(
+                    "Weather covariates (%s) were included via partial correlations."
+                    % ", ".join(covariate_cols)
                 )
             if lag_results.empty:
                 st.info(
