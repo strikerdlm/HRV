@@ -5,6 +5,21 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.16] - 2025-12-11
+
+### Added
+- **Metric Explainability Specialist** (`app/agent_runtime.py`, `app/agent_insights.py`, `app/app.py`): GPT-5.1 high-reasoning persona paired with `code_interpreter` plus a deterministic fallback panel inside the Metrics tab so every SDNN, RMSSD, pNN50, LF/HF, HF power, and mean HR value now includes a citation-backed explanation.
+- **Unit tests** (`tests/test_agent_insights.py`): Coverage for the new agent insight manager to ensure per-metric classifications stay synchronized with Task Force (1996) and Shaffer & Ginsberg (2017) ranges.
+
+### Changed
+- Metrics tab now hashes its dataset snapshot and auto-refreshes the explanation panel when values change, ensuring users always read up-to-date interpretations before invoking the agent.
+
+### Fixed
+- Addressed the missing per-metric guidance in the Metrics tab by adding a deterministic explainer so users can always read contextual analysis even when the Agents SDK is offline or API keys are absent.
+
+### Documentation
+- README.md / docs/Manual.md: Documented the Metric Explainability Specialist persona, the new Metrics-tab panel, and how it ties into the Agents SDK rollout.
+
 ## [1.8.15] - 2025-12-10
 
 ### Added

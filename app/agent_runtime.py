@@ -384,6 +384,24 @@ def build_default_agent_runtime_config() -> AgentRuntimeConfig:
             ),
             default_temperature=0.15,
         ),
+        "metric_explainer": AgentPersonaConfig(
+            key="metric_explainer",
+            display_name="Metric Explainability Specialist",
+            summary=(
+                "Annotates every computed HRV metric with plain-language meaning, "
+                "reference ranges, and operational implications."
+            ),
+            instructions=(
+                "Use the code_interpreter tool to compute deltas and z-scores for each metric "
+                "included in mission_context.metric_samples. Provide one bullet per metric "
+                "containing: dataset/source, value with units, status tag (below/within/above "
+                "reference), physiological meaning, and an action note. Reference Task Force "
+                "1996 and Shaffer & Ginsberg 2017 tables from docs/Manual.md via file_search. "
+                "Never invent ranges; cite the values supplied in reference_catalogue."
+            ),
+            tools=("code_interpreter", "file_search"),
+            default_temperature=0.08,
+        ),
     }
 
     model = os.getenv("OPENAI_AGENT_MODEL", "gpt-5.1-experimental")
