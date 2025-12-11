@@ -16,6 +16,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -25,6 +26,8 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+
+from app import fatigue_integration as fi  # pylint: disable=wrong-import-position
 
 # ---------------------------------------------------------------------------
 # gauge_builder tests
@@ -393,6 +396,95 @@ class TestHrvFragmentation:
 
         # Should handle gracefully
         assert metrics is not None
+
+
+# ---------------------------------------------------------------------------
+# fatigue_integration tests
+# ---------------------------------------------------------------------------
+
+
+class _StubDatabase:
+    """Minimal stub to emulate wrist/clinical history for fatigue tests."""
+
+    def __init__(
+        self,
+        wrist_df: pd.DataFrame | None = None,
+        clinical_history: list | None = None,
+    ) -> None:
+        self._wrist_df = wrist_df
+        self._clinical_history = clinical_history or []
+
+    def get_garmin_daily_dataframe(self, user_id: str, limit: int = 30) -> pd.DataFrame | None:  # noqa: ARG002
+        if self._wrist_df is None:
+            return None
+        return self._wrist_df.copy()
+
+    def get_clinical_scales_history(self, user_id: str, limit: int = 1) -> list:  # noqa: ARG002
+        return list(self._clinical_history)
+
+
+class TestFatigueIntegration:
+    """Tests covering assessment-driven SAFTE automation."""
+
+    def test_run_assessment_prefers_wrist_monitoring(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Wrist monitoring should be used ahead of clinical fallbacks."""
+        wrist_df = pd.DataFrame(
+            {
+                "metric_date": pd.to_datetime(["2025-12-10"]),
+                "sleep_duration_hours": [6.5],
+                "sleep_score": [82],
+                "sleep_efficiency": [90],
+                "stress_score": [45],
+            }
+        )
+        db = _StubDatabase(wrist_df=wrist_df)
+        monkeypatch.setattr(fi, "get_database", lambda: db)
+        sentinel_result = object()
+        captured_kwargs: dict = {}
+
+        def _fake_run(**kwargs):
+            captured_kwargs.update(kwargs)
+            return sentinel_result
+
+        monkeypatch.setattr(fi, "run_integrated_fatigue_analysis", _fake_run)
+
+        result, source, returned_wrist = fi.run_assessment_fatigue_prediction(
+            user_context={"age_years": 40, "sex": "male"},
+            user_id="demo",
+            prediction_days=1,
+            model_type="advanced",
+        )
+
+        assert result is sentinel_result
+        assert source == "wrist_monitoring"
+        assert returned_wrist is not None
+        assert not returned_wrist.empty
+        sleep_schedule = captured_kwargs["sleep_schedule"]
+        assert pytest.approx(sleep_schedule.duration, rel=1e-3) == 6.5
+
+    def test_run_assessment_falls_back_to_clinical(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Clinical assessment should be used when wrist data is missing."""
+        clinical = [
+            SimpleNamespace(
+                pittsburgh_sleep_quality_index=4,
+                epworth_sleepiness_scale=12,
+            )
+        ]
+        db = _StubDatabase(wrist_df=None, clinical_history=clinical)
+        monkeypatch.setattr(fi, "get_database", lambda: db)
+        sentinel_result = object()
+        monkeypatch.setattr(fi, "run_integrated_fatigue_analysis", lambda **_: sentinel_result)
+
+        result, source, wrist_df = fi.run_assessment_fatigue_prediction(
+            user_context={"age_years": 35, "sex": "female"},
+            user_id="demo",
+            prediction_days=1,
+            model_type="advanced",
+        )
+
+        assert result is sentinel_result
+        assert source == "clinical_assessment"
+        assert wrist_df is None
 
 
 # ---------------------------------------------------------------------------
