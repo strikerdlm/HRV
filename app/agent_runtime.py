@@ -34,6 +34,8 @@ try:
 except ImportError:  # pragma: no cover - fallback for utilities
     from logging_config import get_logger, log_exception  # type: ignore
 
+from agent_logging import log_agent_output, log_agent_payload
+
 _LOGGER = get_logger(__name__)
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -47,11 +49,15 @@ class AgentToolConfig:
     description: str
     parameters: Mapping[str, Any] = field(default_factory=dict)
     requires_env: tuple[str, ...] = field(default_factory=tuple)
+    config: Mapping[str, Any] | None = None
 
     def to_openai_spec(self) -> Dict[str, Any]:
         """Return the tool specification expected by the OpenAI API."""
         if self.tool_type == "builtin":
-            return {"type": self.name}
+            spec: Dict[str, Any] = {"type": self.name}
+            if self.config:
+                spec[self.name] = dict(self.config)
+            return spec
 
         param_schema: Mapping[str, Any] = (
             self.parameters
@@ -156,8 +162,11 @@ class AgentRuntime:
         instructions = (
             f"{persona.instructions}\n\n"
             f"Mission Context:\n{serialized_context}\n\n"
-            "Respond with deterministic, fully-cited reasoning. "
-            "Log every action you recommend."
+            "Respond with doctoral-level reasoning. "
+            "Call the `web_search` tool before finalizing conclusions so every "
+            "assertion references at least two peer-reviewed or NASA/NOAA "
+            "sources with APA citations (DOI, PMID, or official URL). "
+            "Close with a `## Sources` section listing every citation."
         )
 
         metadata: Dict[str, Any] = {
@@ -165,19 +174,33 @@ class AgentRuntime:
             "tools": list(persona.tools),
             "mission_context": dict(mission_context),
             "release": self._config.model,
+            "requires_citations": True,
         }
 
-        return {
+        messages = [
+            {
+                "role": "developer",
+                "content": [{"type": "input_text", "text": instructions}],
+            },
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": user_prompt}],
+            },
+        ]
+
+        payload = {
             "model": self._config.model,
             "instructions": instructions,
             "tools": tool_specs,
-            "messages": [
-                {"role": "system", "content": instructions},
-                {"role": "user", "content": user_prompt},
-            ],
+            "messages": messages,
             "metadata": metadata,
             "temperature": persona.default_temperature,
+            "reasoning": {"effort": "high"},
         }
+
+        log_agent_payload(persona.key, payload)
+
+        return payload
 
     def run_agent(
         self,
@@ -194,21 +217,28 @@ class AgentRuntime:
                 "Set OPENAI_API_KEY to enable agent executions."
             )
 
-        persona = self._select_persona(persona_name)
         payload = self.build_request_payload(persona_name, mission_context, user_prompt)
+        persona = self._select_persona(persona_name)
 
         try:
             response = self._client.responses.create(
                 model=self._config.model,
-                instructions=payload["instructions"],
-                input=[{"role": "user", "content": user_prompt}],
+                input=payload["messages"],
                 tools=payload["tools"],
                 metadata=payload["metadata"],
                 temperature=persona.default_temperature,
+                reasoning={"effort": "high"},
             )
         except Exception as exc:  # pragma: no cover - network/runtime failures
             log_exception(_LOGGER, "OpenAI Agents SDK request failed", exc)
             raise RuntimeError("OpenAI Agents SDK request failed") from exc
+
+        response_text = _coerce_response_text(response)
+        log_agent_output(
+            persona.key,
+            response_text,
+            metadata={"persona": persona.key, "runtime": self._config.model},
+        )
 
         return response
 
@@ -237,6 +267,7 @@ def build_default_agent_runtime_config() -> AgentRuntimeConfig:
             name="web_search",
             tool_type="builtin",
             description="Mission-safe search (NASA ADS, SWPC, PubMed).",
+            config={"mode": "auto"},
         ),
         "wolfram_alpha": AgentToolConfig(
             name="wolfram_alpha",
@@ -423,3 +454,26 @@ __all__ = [
     "MCPServerConfig",
     "build_default_agent_runtime_config",
 ]
+
+
+def _coerce_response_text(response: Any) -> str:
+    """
+    Extract human-readable text from a Responses API object.
+    """
+    if response is None:
+        return ""
+    output_text = getattr(response, "output_text", None)
+    if isinstance(output_text, str) and output_text.strip():
+        return output_text.strip()
+    output = getattr(response, "output", None)
+    if output:
+        segments: list[str] = []
+        for item in output:
+            content = getattr(item, "content", []) or []
+            for fragment in content:
+                text_value = getattr(fragment, "text", None)
+                if isinstance(text_value, str) and text_value.strip():
+                    segments.append(text_value.strip())
+        if segments:
+            return "\n\n".join(segments)
+    return str(response)

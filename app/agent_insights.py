@@ -21,6 +21,7 @@ except ImportError:  # pragma: no cover - Streamlit execution fallback
     from logging_config import get_logger, log_exception  # type: ignore
 
 from agent_runtime import AgentRuntime
+from agent_logging import log_agent_output
 
 _LOGGER = get_logger(__name__)
 
@@ -61,6 +62,7 @@ class MetricInsightResult:
     agent_payload: Optional[Dict[str, Any]]
     agent_error: Optional[str]
     used_agent: bool
+    markdown_appendix: str
 
 
 _DEFAULT_REFERENCES: Mapping[str, MetricReference] = {
@@ -305,6 +307,7 @@ class AgentInsightManager:
                 agent_payload=None,
                 agent_error=None,
                 used_agent=False,
+                markdown_appendix="",
             )
 
         mission_context = {
@@ -356,12 +359,28 @@ class AgentInsightManager:
                 )
                 agent_error = str(exc)
 
+        markdown_appendix = _build_markdown_appendix(explanations, agent_markdown)
+        if agent_markdown:
+            log_agent_output(
+                "metric_explainer",
+                agent_markdown,
+                metadata={"channel": "agent_markdown"},
+            )
+        if markdown_appendix:
+            log_agent_output(
+                "metric_explainer",
+                markdown_appendix,
+                citations=_collect_citations(explanations),
+                metadata={"channel": "appendix"},
+            )
+
         return MetricInsightResult(
             explanations=explanations,
             agent_markdown=agent_markdown,
             agent_payload=agent_payload,
             agent_error=agent_error,
             used_agent=used_agent,
+            markdown_appendix=markdown_appendix,
         )
 
 
@@ -382,6 +401,64 @@ def _coerce_response_text(response: Any) -> str:
     if isinstance(content, str) and content.strip():
         return content.strip()
     return str(response)
+
+
+def _collect_citations(explanations: Sequence[MetricExplanation]) -> List[str]:
+    """Return deduplicated citation list from deterministic explanations."""
+    citations: List[str] = []
+    for explanation in explanations:
+        if explanation.citation and explanation.citation not in citations:
+            citations.append(explanation.citation)
+    return citations
+
+
+def _build_markdown_appendix(
+    explanations: Sequence[MetricExplanation],
+    agent_markdown: Optional[str],
+) -> str:
+    """Create a markdown bundle that can be exported/downloaded."""
+    if not explanations and not agent_markdown:
+        return ""
+
+    lines: List[str] = [
+        "## Metric Explainability Specialist Appendix",
+        "",
+        f"- Generated: {datetime.now(timezone.utc).isoformat()}",
+        f"- Deterministic explanations: {len(explanations)}",
+        f"- GPT persona invoked: {'yes' if agent_markdown else 'no'}",
+        "",
+    ]
+
+    if explanations:
+        lines.append("### Deterministic References")
+        lines.append("")
+        lines.append("| Dataset | Metric | Value | Status | Citation |")
+        lines.append("| --- | --- | --- | --- | --- |")
+        for expl in explanations:
+            lines.append(
+                "| {dataset} | {metric} | {value} {unit} | {status} | {citation} |".format(
+                    dataset=expl.dataset,
+                    metric=expl.display_name,
+                    value=f"{expl.value:.2f}",
+                    unit=expl.unit,
+                    status=expl.status.replace("_", " "),
+                    citation=expl.citation,
+                )
+            )
+        lines.append("")
+        lines.append("#### Narrative")
+        lines.append("")
+        for expl in explanations:
+            lines.append(f"- **{expl.dataset} · {expl.display_name}:** {expl.explanation} ({expl.citation})")
+        lines.append("")
+
+    if agent_markdown:
+        lines.append("### GPT-5.1 Narrative")
+        lines.append("")
+        lines.append(agent_markdown)
+        lines.append("")
+
+    return "\n".join(lines).strip()
 
 
 __all__ = [
