@@ -42,6 +42,11 @@ except ImportError:  # pragma: no cover - fallback for relative imports
         load_credentials_from_env,
     )
 
+try:
+    from user_database import get_database  # type: ignore
+except Exception:  # pragma: no cover - optional during limited environments
+    get_database = None  # type: ignore[assignment]
+
 # Local imports
 try:
     from .fatigue_calculator.core import (
