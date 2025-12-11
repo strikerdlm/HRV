@@ -25,6 +25,23 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 
+try:
+    from garmin_import import (
+        GarminCredentials,
+        GarminWellnessData,
+        get_daily_physiology_summary,
+        import_garmin_data,
+        load_credentials_from_env,
+    )
+except ImportError:  # pragma: no cover - fallback for relative imports
+    from .garmin_import import (  # type: ignore
+        GarminCredentials,
+        GarminWellnessData,
+        get_daily_physiology_summary,
+        import_garmin_data,
+        load_credentials_from_env,
+    )
+
 # Local imports
 try:
     from .fatigue_calculator.core import (
@@ -556,6 +573,128 @@ def generate_recommendations(
 
 
 # =============================================================================
+# Automated Garmin-driven prediction
+# =============================================================================
+
+
+def _build_user_profile_from_context(
+    user_context: Dict[str, Any] | None,
+) -> UserProfile:
+    """Build UserProfile from active user context."""
+    age = int(user_context.get("age_years", 30)) if user_context else 30
+    sex = str(user_context.get("sex", "other")) if user_context else "other"
+    chronotype = (
+        float(user_context.get("chronotype_offset", 0.0)) if user_context else 0.0
+    )
+    genetic_profile = tuple(user_context.get("genetic_profile", ())) if user_context else tuple()
+    return UserProfile(
+        age=age,
+        sex=sex,
+        chronotype_offset=chronotype,
+        genetic_profile=genetic_profile,
+    )
+
+
+def _normalize_sleep_minutes(sleep_df: pd.DataFrame) -> pd.DataFrame:
+    """Ensure total sleep minutes column is available for schedule derivation."""
+    df = sleep_df.copy()
+    if "total_sleep_minutes" not in df.columns:
+        if "tst_minutes" in df.columns:
+            df["total_sleep_minutes"] = df["tst_minutes"]
+        elif "total_sleep_seconds" in df.columns:
+            df["total_sleep_minutes"] = df["total_sleep_seconds"].fillna(0) / 60.0
+    return df
+
+
+def run_garmin_fatigue_prediction(
+    *,
+    user_context: Dict[str, Any] | None = None,
+    credentials: GarminCredentials | None = None,
+    prediction_days: int = 5,
+    lookback_days: int = 2,
+    include_spo2: bool = True,
+    include_respiration: bool = True,
+    include_body_battery: bool = True,
+    model_type: str = "advanced",
+) -> Tuple[FatigueAnalysisResult, GarminWellnessData, pd.DataFrame]:
+    """Fetch latest Garmin data and run a fatigue prediction.
+
+    Args:
+        user_context: Active user profile context (age_years, sex, chronotype_offset).
+        credentials: Garmin Connect credentials. Falls back to environment variables.
+        prediction_days: Number of days to forecast (default 5).
+        lookback_days: Number of past days to fetch from Garmin (>=1).
+        include_spo2: Whether to request SpO₂ data.
+        include_respiration: Whether to request respiration data.
+        include_body_battery: Whether to request body battery data.
+        model_type: "advanced" (default) or "classic" SAFTE.
+
+    Returns:
+        Tuple of (FatigueAnalysisResult, GarminWellnessData, daily_summary_df).
+
+    Raises:
+        RuntimeError: If credentials are missing.
+        ValueError: If no sleep data is returned.
+    """
+    if lookback_days <= 0:
+        raise ValueError("lookback_days must be positive")
+
+    garmin_credentials = credentials or load_credentials_from_env()
+    if garmin_credentials is None:
+        msg = "GARMIN_EMAIL and GARMIN_PASSWORD must be set in the environment or provided explicitly."
+        raise RuntimeError(msg)
+
+    end_date = datetime.date.today()
+    start_date = end_date - datetime.timedelta(days=lookback_days - 1)
+
+    _LOGGER.info(
+        "Fetching Garmin data for %s to %s (lookback=%d days)",
+        start_date,
+        end_date,
+        lookback_days,
+    )
+
+    garmin_data = import_garmin_data(
+        credentials=garmin_credentials,
+        start_date=start_date,
+        end_date=end_date,
+        include_spo2=include_spo2,
+        include_respiration=include_respiration,
+        include_body_battery=include_body_battery,
+    )
+
+    if garmin_data.sleep_df.empty:
+        raise ValueError("No Garmin sleep data available for the requested window.")
+
+    garmin_data.sleep_df = _normalize_sleep_minutes(garmin_data.sleep_df)
+
+    sleep_schedule, _ = garmin_sleep_to_schedule(
+        garmin_data.sleep_df,
+        start_date=end_date,
+        days=prediction_days,
+    )
+    work_schedule = garmin_stress_to_workload(
+        garmin_data.stress_df,
+        garmin_data.activity_df,
+    )
+    user_profile = _build_user_profile_from_context(user_context)
+
+    result = run_integrated_fatigue_analysis(
+        garmin_sleep_df=garmin_data.sleep_df,
+        garmin_stress_df=garmin_data.stress_df,
+        garmin_activity_df=garmin_data.activity_df,
+        user_profile=user_profile,
+        sleep_schedule=sleep_schedule,
+        work_schedule=work_schedule,
+        prediction_days=prediction_days,
+        model_type=model_type,
+    )
+
+    daily_summary = get_daily_physiology_summary(garmin_data)
+    return result, garmin_data, daily_summary
+
+
+# =============================================================================
 # DataFrame Building
 # =============================================================================
 
@@ -716,6 +855,7 @@ __all__ = [
     "generate_recommendations",
     "build_fatigue_dataframe",
     "run_integrated_fatigue_analysis",
+    "run_garmin_fatigue_prediction",
     # Re-exports from fatigue_calculator
     "enhanced_circadian_process",
     "SleepEpisode",
