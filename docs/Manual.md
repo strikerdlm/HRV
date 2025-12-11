@@ -2091,6 +2091,7 @@ If API is unavailable, the app provides:
   - **MCP Servers** — `mcp://hrv-db`, `mcp://docs`, and `mcp://space-weather-cache`, each scoped read-only for agents.
 - The About tab includes an expander that mirrors this configuration so mission directors can audit which files/APIs every persona can touch before the SDK goes live.
 - Agent payloads now include mission context snapshots, ensuring every autonomous analysis cites the exact RR uploads, NOAA bundle timestamps, and profile metadata it used.
+- **NEW:** The **Metric Explainability Specialist** persona feeds the Metrics tab's "Metric Explanations (Agent SDK)" panel via `app/agent_insights.py`, delivering Task Force (1996) / Shaffer & Ginsberg (2017) comparisons locally and invoking GPT-5.1 + `code_interpreter` when `OPENAI_API_KEY` is set.
 
 ---
 

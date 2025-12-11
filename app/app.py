@@ -269,6 +269,11 @@ try:
 except ImportError:  # pragma: no cover - fallback for Streamlit script execution
     from logging_config import get_logger, log_exception
 
+try:
+    from app.agent_insights import AgentInsightManager
+except ImportError:  # pragma: no cover - Streamlit execution fallback
+    from agent_insights import AgentInsightManager  # type: ignore
+
 # Default active-user context used when user profile data is unavailable
 def _guest_user_context() -> Dict[str, Any]:
     return {
@@ -5688,6 +5693,101 @@ def main() -> None:
                     if c in multi_results_df.columns:
                         cols_to_show.append(c)
                 st.dataframe(multi_results_df[cols_to_show])
+            st.divider()
+            st.markdown("### 🔍 Metric Explanations (Agent SDK)")
+            st.caption(
+                "Generates per-metric explanations with GPT-5.1 high reasoning and "
+                "code_interpreter; falls back to deterministic Task Force/Shaffer "
+                "ranges when the agent is offline."
+            )
+            metric_explainer_state = st.session_state.setdefault(
+                "metric_explainer_state",
+                {
+                    "signature": "",
+                    "explanations": [],
+                    "agent_markdown": "",
+                    "agent_payload": None,
+                    "agent_error": "",
+                    "used_agent": False,
+                },
+            )
+            metrics_signature = hashlib.sha256(
+                multi_results_df.to_json(
+                    orient="split",
+                    date_format="iso",
+                ).encode("utf-8")
+            ).hexdigest()
+            auto_refresh = st.checkbox(
+                "Auto-refresh explanations when metrics change",
+                value=True,
+                key="metric_explainer_auto_refresh",
+            )
+            run_agent_checkbox = st.checkbox(
+                "Use GPT-5.1 agent (requires OPENAI_API_KEY)",
+                value=False,
+                key="metric_explainer_run_agent",
+            )
+            trigger_generation = st.button(
+                "Generate metric explanations",
+                key="metric_explainer_generate",
+            )
+            if trigger_generation or (
+                auto_refresh and metric_explainer_state["signature"] != metrics_signature
+            ):
+                manager = AgentInsightManager()
+                result = manager.generate_metric_insights(
+                    multi_results_df,
+                    user_context=active_user_context,
+                    run_agent=bool(run_agent_checkbox),
+                )
+                payload_display = None
+                if result.agent_payload is not None:
+                    try:
+                        payload_display = json.loads(
+                            json.dumps(result.agent_payload, default=str)
+                        )
+                    except (TypeError, ValueError):
+                        payload_display = result.agent_payload
+                metric_explainer_state["signature"] = metrics_signature
+                metric_explainer_state["explanations"] = [
+                    asdict(expl) for expl in result.explanations
+                ]
+                metric_explainer_state["agent_markdown"] = result.agent_markdown or ""
+                metric_explainer_state["agent_payload"] = payload_display
+                metric_explainer_state["agent_error"] = result.agent_error or ""
+                metric_explainer_state["used_agent"] = result.used_agent
+            explanations = metric_explainer_state.get("explanations", [])
+            if explanations:
+                explanation_df = pd.DataFrame(explanations)
+                st.dataframe(
+                    explanation_df[
+                        [
+                            "dataset",
+                            "display_name",
+                            "value",
+                            "unit",
+                            "status",
+                            "explanation",
+                            "citation",
+                        ]
+                    ],
+                    use_container_width=True,
+                )
+            else:
+                st.info(
+                    "Run the explainer to annotate each metric with context-rich "
+                    "interpretations and reference citations."
+                )
+            agent_md = metric_explainer_state.get("agent_markdown", "")
+            if agent_md:
+                st.markdown("#### GPT-5.1 Agent Narrative")
+                st.markdown(agent_md)
+            if metric_explainer_state.get("agent_error"):
+                st.warning(metric_explainer_state["agent_error"])
+            payload_preview = metric_explainer_state.get("agent_payload")
+            if payload_preview:
+                with st.expander("View GPT-5.1 metric explanation request payload"):
+                    st.json(payload_preview)
         else:
             st.info("No metrics to display.")
     with tab_ans:

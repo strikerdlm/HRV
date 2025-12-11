@@ -279,6 +279,11 @@ Mission Control - Flight Surgeon already uses GPT-5.1 high-reasoning summaries; 
    - Simulate degraded comms: disable WAN and ensure MCP/file_search fallbacks still produce actionable guidance.
    - Conduct SME review sessions (flight surgeons, biomed engineers) to vet recommendations before enabling in production tabs.
 
+### Metric Explainability Specialist (NEW)
+- `app/agent_runtime.py` now includes a **Metric Explainability Specialist** persona that binds GPT-5.1 high reasoning + `code_interpreter` to per-metric narrative output.
+- `app/agent_insights.py` packages mission context (`metric_samples`, reference catalogue, active user profile) and gracefully falls back to deterministic Task Force (1996) / Shaffer & Ginsberg (2017) comparisons when the API key is missing.
+- The **Metrics** tab surfaces a new "Metric Explanations (Agent SDK)" panel so every SDNN, RMSSD, pNN50, LF/HF, HF power, and mean HR value includes a human-readable status + citation even before the agent executes.
+
 ### Disruptive Opportunities in Aerospace Medicine
 - **Closed-loop EVA readiness**: Agents correlate HRV drops, atmospheric pressure swings, and predicted Kp surges to recommend countermeasures before EVA windows open.
 - **Adaptive countermeasure playlists**: E2B sandboxes prototype breathing/light protocols, while code_interpreter validates HRV improvements on-the-fly.
@@ -387,6 +392,7 @@ project/
 - Complete table of all computed metrics across domains
 - Advanced analytics: fragmentation, PRSA, symbolic dynamics, multifractal DFA
 - Covariate-adjusted values when patient profile is configured
+- **NEW:** "Metric Explanations (Agent SDK)" panel that annotates each SDNN/RMSSD/pNN50/LF/HF/Mean HR value with Task Force/Shaffer ranges, plus optional GPT-5.1 agent narratives that leverage `code_interpreter`.
 
 ### ANS Function Tests Tab
 
