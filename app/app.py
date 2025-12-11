@@ -307,6 +307,30 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 _LOGGER = get_logger(__name__)
 NASA_API_KEY = os.getenv("NASA_API_KEY", "")
 ACCUWEATHER_API_KEY = os.getenv("ACCUWEATHER_API_KEY", "")
+DEBUG_LOG_PATH = Path(__file__).resolve().parents[1] / ".cursor" / "debug.log"
+
+
+def _agent_debug_log(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: Mapping[str, Any],
+) -> None:
+    """Append NDJSON instrumentation logs for debug runs."""
+    payload = {
+        "sessionId": "debug-session",
+        "runId": "pre-fix",
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": int(time.time() * 1000),
+    }
+    try:
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as log_file:
+            log_file.write(json.dumps(payload, default=str) + "\n")
+    except OSError:
+        pass
 
 # Windows console safety to mitigate Colorama/Click re-entrancy during shutdown
 if os.name == "nt":
@@ -341,6 +365,7 @@ try:
         WorkScheduleInput,
         FatigueAnalysisResult,
         run_integrated_fatigue_analysis,
+        run_garmin_fatigue_prediction,
         build_fatigue_dataframe,
         compute_fatigue_analysis,
         compute_risk_assessment,
@@ -1011,13 +1036,27 @@ def get_swpc_solar_radio_flux() -> pd.DataFrame:
             return df
         # Ensure a unified time column name (robust to tz-aware dtypes)
         time_cols: List[str] = []
+        dtype_summary = {col: str(df[col].dtype) for col in df.columns}
         for col in df.columns:
             try:
                 if is_datetime64_any_dtype(df[col]):
                     time_cols.append(col)
-            except TypeError:
-                # Some pandas/numpy builds raise on tz-aware extension dtypes; ignore
+            except TypeError as exc:
+                # Some pandas/numpy builds raise on tz-aware extension dtypes; log and ignore
+                #region agent log
+                _agent_debug_log(
+                    "H1",
+                    "app.py:get_swpc_solar_radio_flux",
+                    "time_col_detection_type_error",
+                    {
+                        "column": col,
+                        "dtype": str(df[col].dtype),
+                        "error": str(exc),
+                    },
+                )
+                #endregion
                 continue
+        main_time: Optional[str] = None
         if time_cols:
             main_time = time_cols[0]
             df = df.dropna(subset=[main_time]).sort_values(main_time)
@@ -1027,6 +1066,20 @@ def get_swpc_solar_radio_flux() -> pd.DataFrame:
             df["time_tag"] = pd.to_datetime(
                 df.iloc[:, 0], errors="coerce", utc=True)
             df = df.dropna(subset=["time_tag"]).sort_values("time_tag")
+        #region agent log
+        _agent_debug_log(
+            "H1",
+            "app.py:get_swpc_solar_radio_flux",
+            "time_columns_processed",
+            {
+                "time_cols": time_cols,
+                "main_time": main_time,
+                "dtype_summary": dtype_summary,
+                "row_count": int(df.shape[0]),
+                "col_count": int(df.shape[1]),
+            },
+        )
+        #endregion
         # Identify numeric flux columns
         numeric_cols = [col for col in df.columns if df[col].dtype.kind in "fcid"]
         flux_candidates = [
@@ -1069,7 +1122,23 @@ def get_swpc_solar_probabilities() -> pd.DataFrame:
 @st.cache_data(show_spinner=False)
 def _cached_comprehensive(
         rr: np.ndarray, include_advanced: bool) -> Dict[str, Any]:
-    return compute_comprehensive_hrv(rr, include_advanced=include_advanced)
+    start_time = time.perf_counter()
+    result = compute_comprehensive_hrv(
+        rr, include_advanced=include_advanced)
+    duration_ms = (time.perf_counter() - start_time) * 1000.0
+    #region agent log
+    _agent_debug_log(
+        "H4",
+        "app.py:_cached_comprehensive",
+        "hrv_cached_compute",
+        {
+            "rr_count": int(len(rr)),
+            "include_advanced": bool(include_advanced),
+            "duration_ms": duration_ms,
+        },
+    )
+    #endregion
+    return result
 
 
 @st.cache_data(show_spinner=False)
@@ -2155,13 +2224,19 @@ def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
     state["kp_error"] = ""
     state["flux_df"] = pd.DataFrame()
     state["flux_error"] = ""
+    kp_duration_ms: Optional[float] = None
+    flux_duration_ms: Optional[float] = None
     try:
+        kp_start = time.perf_counter()
         state["kp_df"] = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
+        kp_duration_ms = (time.perf_counter() - kp_start) * 1000.0
     except (requests.RequestException, ValueError) as exc:
         log_exception(_LOGGER, "Failed to fetch SWPC K-index", exc)
         state["kp_error"] = f"Failed to retrieve K-index data: {exc}"
     try:
+        flux_start = time.perf_counter()
         state["flux_df"] = get_swpc_solar_radio_flux()
+        flux_duration_ms = (time.perf_counter() - flux_start) * 1000.0
     except (requests.RequestException, ValueError) as exc:
         log_exception(_LOGGER, "Failed to fetch SWPC solar radio flux", exc)
         state["flux_error"] = f"Failed to retrieve solar radio flux: {exc}"
@@ -2170,6 +2245,21 @@ def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
         (isinstance(state.get("kp_df"), pd.DataFrame) and not state["kp_df"].empty)
         or (isinstance(state.get("flux_df"), pd.DataFrame) and not state["flux_df"].empty)
     )
+    #region agent log
+    _agent_debug_log(
+        "H1",
+        "app.py:_fetch_space_weather_datasets",
+        "space_weather_fetch_complete",
+        {
+            "kp_rows": int(state["kp_df"].shape[0]) if isinstance(state.get("kp_df"), pd.DataFrame) else 0,
+            "flux_rows": int(state["flux_df"].shape[0]) if isinstance(state.get("flux_df"), pd.DataFrame) else 0,
+            "kp_error": state.get("kp_error", ""),
+            "flux_error": state.get("flux_error", ""),
+            "kp_duration_ms": kp_duration_ms,
+            "flux_duration_ms": flux_duration_ms,
+        },
+    )
+    #endregion
 
 
 def _request_interpretation_with_progress(
@@ -4720,11 +4810,29 @@ def main() -> None:
     
     # Require explicit user action to run HRV analysis
     hrv_analysis_ready = st.session_state.get("hrv_analysis_ready", False)
+    hrv_complete_sig = st.session_state.get("hrv_analysis_complete_signature")
     upload_signature = tuple(sorted(uploads.keys())) if has_hrv_data_uploaded else tuple()
     if st.session_state.get("hrv_analysis_signature") != upload_signature:
         st.session_state["hrv_analysis_signature"] = upload_signature
         hrv_analysis_ready = False
         st.session_state["hrv_analysis_ready"] = False
+    # Prevent repeated runs for the same upload set once completed
+    if has_hrv_data_uploaded and hrv_complete_sig == upload_signature:
+        hrv_analysis_ready = False
+        st.session_state["hrv_analysis_ready"] = False
+        st.info("HRV analysis already completed for this upload set. Click Run again to recompute.")
+        #region agent log
+        _agent_debug_log(
+            "H6",
+            "app.py:hrv_analysis",
+            "skip_already_completed",
+            {
+                "upload_signature": upload_signature,
+                "hrv_complete_sig": hrv_complete_sig,
+            },
+        )
+        #endregion
+        return
     
     if has_hrv_data_uploaded and not hrv_analysis_ready:
         st.info("HRV data uploaded. Click **Run HRV Analysis** to start processing.")
@@ -4788,6 +4896,21 @@ def main() -> None:
         else:
             txt_clean.markdown("### Loading cached results... 100%")
             prog_clean.progress(100)
+        #region agent log
+        _agent_debug_log(
+            "H6",
+            "app.py:hrv_analysis",
+            "clean_phase_start",
+            {
+                "dataset_count": len(datasets),
+                "skip_compute": bool(_skip_compute),
+                "apply_clean": bool(apply_clean),
+                "win": win,
+                "step": step,
+                "max_datasets": int(max_datasets),
+            },
+        )
+        #endregion
         
         completed = 0
         for name, up in datasets.items():
@@ -5133,7 +5256,21 @@ def main() -> None:
 
         total_full = max(1, len(datasets))
         done_full = 0
+        #region agent log
+        _agent_debug_log(
+            "H6",
+            "app.py:hrv_analysis",
+            "full_metrics_start",
+            {
+                "dataset_count": len(datasets),
+                "apply_clean": bool(apply_clean),
+                "high_compute": bool(high_compute),
+                "reuse_cached_results": bool(reuse_cached_results),
+            },
+        )
+        #endregion
         for name, up in datasets.items():
+            _dataset_start = time.perf_counter()
             if up.rr_ms.size >= 10:
                 if reuse_cached_results and name in stored_payloads:
                     cached_multi = stored_payloads[name].get("multi_results")
@@ -5154,8 +5291,10 @@ def main() -> None:
                     if (apply_clean and up.rr_ms_clean is not None)
                     else up.rr_ms
                 )
+                _compute_start = time.perf_counter()
                 m = _cached_comprehensive(
                     use_rr, include_advanced=bool(high_compute))
+                _compute_ms = (time.perf_counter() - _compute_start) * 1000.0
                 m["source"] = name
                 if apply_clean and up.qc_summary:
                     m["qc_flagged_pct"] = float(
@@ -5179,6 +5318,32 @@ def main() -> None:
                 percent = min(100, int(done_full * 100 / total_full))
                 txt_full.markdown(f"### Computing full-recording metrics... {percent}%")
                 prog_full.progress(percent)
+                #region agent log
+                _agent_debug_log(
+                    "H6",
+                    "app.py:hrv_analysis",
+                    "full_metrics_done",
+                    {
+                        "source": name,
+                        "rr_count": int(use_rr.size),
+                        "compute_ms": _compute_ms,
+                        "elapsed_ms": (time.perf_counter() - _dataset_start) * 1000.0,
+                        "cached": False,
+                    },
+                )
+                #endregion
+            else:
+                #region agent log
+                _agent_debug_log(
+                    "H6",
+                    "app.py:hrv_analysis",
+                    "skip_dataset_too_short",
+                    {
+                        "source": name,
+                        "rr_count": int(up.rr_ms.size),
+                    },
+                )
+                #endregion
         txt_full.markdown("### Computing full-recording metrics... 100%")
         prog_full.progress(100)
         multi_results_df = pd.DataFrame(
@@ -5250,6 +5415,22 @@ def main() -> None:
             )
         except Exception as exc:  # pragma: no cover - defensive
             logger.debug("Persistence skipped: %s", exc)
+        # Mark comprehensive stage complete to avoid auto-reruns on the same upload set
+        st.session_state["hrv_analysis_ready"] = False
+        st.session_state["hrv_analysis_complete_signature"] = upload_signature
+        #region agent log
+        _agent_debug_log(
+            "H6",
+            "app.py:hrv_analysis",
+            "analysis_completed",
+            {
+                "upload_signature": upload_signature,
+                "dataset_count": len(datasets),
+                "multi_results_rows": int(multi_results_df.shape[0]),
+                "windowed_rows": int(windowed_df.shape[0]),
+            },
+        )
+        #endregion
 
         # Mark comprehensive stage complete for caching
         if HRV_CACHE_AVAILABLE:
@@ -7490,6 +7671,16 @@ that predicts cognitive performance based on:
                     type="primary",
                     key="run_fatigue_btn"
                 )
+                auto_run_garmin = st.button(
+                    "⌚ Auto-run Garmin (5-day forecast)",
+                    type="secondary",
+                    key="run_fatigue_garmin_btn",
+                    help=(
+                        "Fetches the most recent Garmin sleep/stress data using "
+                        "GARMIN_EMAIL/GARMIN_PASSWORD and runs a 5-day performance forecast "
+                        "with the active user profile."
+                    ),
+                )
 
             current_fatigue_settings: Dict[str, Any] = {
                 "fatigue_age": int(fatigue_age),
@@ -7563,6 +7754,7 @@ that predicts cognitive performance based on:
                         
                         # Store in session state
                         st.session_state["fatigue_result"] = result
+                        st.session_state.pop("fatigue_garmin_daily", None)
                         st.success("✅ Fatigue prediction completed!")
 
                         cross_tab_broker.publish(
@@ -7583,6 +7775,27 @@ that predicts cognitive performance based on:
                     except Exception as e:
                         st.error(f"Error running fatigue simulation: {e}")
                         _LOGGER.exception("Fatigue simulation failed")
+            
+            if auto_run_garmin:
+                with st.spinner("Fetching Garmin sleep and running 5-day forecast..."):
+                    try:
+                        auto_result, _, garmin_daily = run_garmin_fatigue_prediction(
+                            user_context=active_user_context,
+                            prediction_days=5,
+                            lookback_days=2,
+                            model_type="advanced",
+                        )
+                        st.session_state["fatigue_result"] = auto_result
+                        if garmin_daily is not None and not garmin_daily.empty:
+                            st.session_state["fatigue_garmin_daily"] = (
+                                garmin_daily.sort_values("date", ascending=False).head(5)
+                            )
+                        else:
+                            st.session_state.pop("fatigue_garmin_daily", None)
+                        st.success("✅ Garmin-based 5-day performance forecast completed!")
+                    except Exception as exc:
+                        st.error(f"Garmin fatigue automation failed: {exc}")
+                        _LOGGER.exception("Garmin fatigue automation failed")
             
             # Display results if available
             if "fatigue_result" in st.session_state:
@@ -7687,6 +7900,26 @@ that predicts cognitive performance based on:
                         "Risk Score",
                         f"{analysis['risk']:.1f}%",
                         help="Percentage of time in poor/critical zones"
+                    )
+                
+                garmin_daily_df = st.session_state.get("fatigue_garmin_daily")
+                if garmin_daily_df is not None and not garmin_daily_df.empty:
+                    st.markdown("#### ⌚ Latest Garmin sleep summary used")
+                    display_cols = [
+                        col
+                        for col in garmin_daily_df.columns
+                        if col
+                        in {
+                            "date",
+                            "sleep_score",
+                            "sleep_efficiency",
+                            "sleep_duration_hours",
+                            "avg_spo2",
+                        }
+                    ]
+                    st.dataframe(
+                        garmin_daily_df[display_cols],
+                        use_container_width=True,
                     )
                 
                 # Performance zone distribution
