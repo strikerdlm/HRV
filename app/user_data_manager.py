@@ -38,6 +38,7 @@ import pandas as pd
 # ---------------------------------------------------------------------------
 
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+DEBUG_LOG_PATH: Final[Path] = Path(__file__).resolve().parents[1] / ".cursor" / "debug.log"
 
 # Data folder structure
 _DATA_ROOT: Final[str] = "data"
@@ -57,6 +58,32 @@ _RR_EXTENSIONS: Final[tuple[str, ...]] = (".txt", ".csv")
 _SLEEP_EXTENSIONS: Final[tuple[str, ...]] = (".json", ".csv", ".edf")
 _ACTIVITY_EXTENSIONS: Final[tuple[str, ...]] = (".json", ".csv", ".gt3x", ".agd")
 _DEVICE_EXTENSIONS: Final[tuple[str, ...]] = (".zip", ".fit", ".edf", ".gt3x", ".agd")
+
+
+# ---------------------------------------------------------------------------
+# Debug instrumentation helper (NDJSON to .cursor/debug.log)
+# ---------------------------------------------------------------------------
+def _agent_debug_log(
+    hypothesis_id: str,
+    location: str,
+    message: str,
+    data: dict[str, Any],
+) -> None:
+    payload = {
+        "sessionId": "debug-session",
+        "runId": "pre-fix",
+        "hypothesisId": hypothesis_id,
+        "location": location,
+        "message": message,
+        "data": data,
+        "timestamp": int(datetime.now(tz=timezone.utc).timestamp() * 1000),
+    }
+    try:
+        DEBUG_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as log_file:
+            log_file.write(json.dumps(payload, default=str) + "\n")
+    except OSError:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -441,6 +468,19 @@ class UserDataManager:
         # Save as text file (one value per line)
         np.savetxt(target_file, rr_ms, fmt="%d")
         _LOGGER.info("Stored RR intervals: %s (%d values)", target_file, len(rr_ms))
+        #region agent log
+        _agent_debug_log(
+            "H5",
+            "user_data_manager:store_rr_intervals",
+            "rr_stored",
+            {
+                "target_file": str(target_file),
+                "count": int(len(rr_ms)),
+                "recording_date": file_date.isoformat(),
+                "overwrite": bool(overwrite),
+            },
+        )
+        #endregion
 
         return target_file
 
@@ -571,6 +611,21 @@ class UserDataManager:
             json.dump(hrv_metrics, f, indent=2, default=str)
 
         _LOGGER.info("Stored HRV results: %s", target_file)
+        #region agent log
+        _agent_debug_log(
+            "H5",
+            "user_data_manager:store_hrv_results",
+            "hrv_stored",
+            {
+                "target_file": str(target_file),
+                "recording_date": recording_date.isoformat(),
+                "source_file": source_file,
+                "file_hash": file_hash,
+                "metric_keys": list(hrv_metrics.keys())[:12],
+                "metric_count": len(hrv_metrics),
+            },
+        )
+        #endregion
         return target_file
 
     def load_hrv_results_by_hash(self, file_hash: str) -> dict[str, Any] | None:
