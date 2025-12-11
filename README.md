@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.14-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.15-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
@@ -18,6 +18,8 @@ Contributing to **AsterPhysiology** Research Initiative
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.8.15**: Sleep Analysis login + device import controls now run inside debounced sidebar forms to stop redundant reruns, the welcome/header + About tab badge the live release date and git commit directly from `CHANGELOG.md`, and `app/agent_runtime.py` seeds the OpenAI Agents SDK plan (personas, MCP servers, tool belt) with a new About tab expander describing the rollout.
 
 **NEW in v1.8.14**: Each Time, Frequency, and Nonlinear tab now includes a dedicated RR file loader plus production ECharts visualizations in the User Profile, and space-weather correlations enforce exact timestamp alignment for Q1 journal submissions.
 
@@ -225,6 +227,8 @@ Study Design:
 ## 🤖 OpenAI Agents SDK Integration Blueprint
 
 Mission Control - Flight Surgeon already uses GPT-5.1 high-reasoning summaries; the next leap is to embed OpenAI Agents SDK with code interpreter, Model Context Protocol (MCP), web/file search, Wolfram Alpha reasoning, and E2B secure sandboxes so every astronaut profile benefits from autonomous, tool-using copilots. This blueprint stays aligned with the v2.0 roadmap and keeps all healthcare data on-device while letting agents reason over HRV, space weather, and wearable signals in near real time.
+
+> **Implementation status**: `app/agent_runtime.py` now defines the tool belt, MCP scopes, and all three personas; the About tab includes an expander that surfaces this configuration for mission leads.
 
 ### Strategic Outcomes
 - Close the loop between RR uploads, NOAA/SWPC feeds, and mission decisions through MCP-enabled agents rather than ad-hoc scripts.

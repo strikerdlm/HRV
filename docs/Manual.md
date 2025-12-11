@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.8.0  
-**Last Updated:** 2025-12-05
+**Version:** 1.8.15  
+**Last Updated:** 2025-12-10
 
 ---
 
@@ -74,6 +74,8 @@ All other tabs show **example data** and **reference values** to help you unders
 **Cross-tab correlation:** The Circadian tab now publishes DLMO/CBT markers, ESRI, and light window details to the SAFTE/Fatigue tab. A single click in SAFTE applies the latest circadian sleep window and chronotype offset to fatigue simulations for tighter mission planning.
 
 **Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. Space Weather and NOAA tabs auto-load cache-first data on open (reusing cached Kp/F10.7/NOAA feeds if offline) even without RR uploads. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the database lives alongside the app (`hrv_users.db`) for easy portability.
+
+**Release awareness:** The welcome header and About tab now read version, release date, and git commit metadata directly from `CHANGELOG.md`, so flight surgeons can confirm they are on v1.8.15 (or later) without leaving the UI. The indicator flips to “dirty” whenever the working tree has uncommitted changes.
 
 ### System Requirements
 
@@ -2080,6 +2082,15 @@ If API is unavailable, the app provides:
 - Pre-defined thresholds
 - Lower confidence score
 - Core findings without nuance
+
+### OpenAI Agents SDK Roadmap
+
+- `app/agent_runtime.py` now codifies the blueprint from README.md with immutable dataclasses for:
+  - **Personas** — Solar-Physiology Correlator, Wearable Recovery Concierge, Environmental Threat Watcher (each with tool lists, mission summaries, and deterministic instructions).
+  - **Tool Belt** — Built-in `code_interpreter`, `file_search`, `web_search`, plus custom Wolfram Alpha, NOAA gateway, and E2B sandbox functions with explicit JSON schemas.
+  - **MCP Servers** — `mcp://hrv-db`, `mcp://docs`, and `mcp://space-weather-cache`, each scoped read-only for agents.
+- The About tab includes an expander that mirrors this configuration so mission directors can audit which files/APIs every persona can touch before the SDK goes live.
+- Agent payloads now include mission context snapshots, ensuring every autonomous analysis cites the exact RR uploads, NOAA bundle timestamps, and profile metadata it used.
 
 ---
 
