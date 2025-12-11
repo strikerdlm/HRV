@@ -366,6 +366,7 @@ try:
         FatigueAnalysisResult,
         run_integrated_fatigue_analysis,
         run_garmin_fatigue_prediction,
+        run_assessment_fatigue_prediction,
         build_fatigue_dataframe,
         compute_fatigue_analysis,
         compute_risk_assessment,
@@ -7754,7 +7755,8 @@ that predicts cognitive performance based on:
                         
                         # Store in session state
                         st.session_state["fatigue_result"] = result
-                        st.session_state.pop("fatigue_garmin_daily", None)
+                        st.session_state.pop("fatigue_assessment_df", None)
+                        st.session_state.pop("fatigue_source_label", None)
                         st.success("✅ Fatigue prediction completed!")
 
                         cross_tab_broker.publish(
@@ -7777,25 +7779,31 @@ that predicts cognitive performance based on:
                         _LOGGER.exception("Fatigue simulation failed")
             
             if auto_run_garmin:
-                with st.spinner("Fetching Garmin sleep and running 5-day forecast..."):
-                    try:
-                        auto_result, _, garmin_daily = run_garmin_fatigue_prediction(
-                            user_context=active_user_context,
-                            prediction_days=5,
-                            lookback_days=2,
-                            model_type="advanced",
-                        )
-                        st.session_state["fatigue_result"] = auto_result
-                        if garmin_daily is not None and not garmin_daily.empty:
-                            st.session_state["fatigue_garmin_daily"] = (
-                                garmin_daily.sort_values("date", ascending=False).head(5)
+                if not active_user_context.get("has_user"):
+                    st.warning("Please select or log in a user to run assessment-based fatigue.")
+                else:
+                    with st.spinner("Using assessment data (wrist → clinical) for 5-day forecast..."):
+                        try:
+                            auto_result, source_label, wrist_df = run_assessment_fatigue_prediction(
+                                user_context=active_user_context,
+                                user_id=active_user_context.get("user_id"),
+                                prediction_days=5,
+                                model_type="advanced",
                             )
-                        else:
-                            st.session_state.pop("fatigue_garmin_daily", None)
-                        st.success("✅ Garmin-based 5-day performance forecast completed!")
-                    except Exception as exc:
-                        st.error(f"Garmin fatigue automation failed: {exc}")
-                        _LOGGER.exception("Garmin fatigue automation failed")
+                            st.session_state["fatigue_result"] = auto_result
+                            st.session_state["fatigue_source_label"] = source_label
+                            if wrist_df is not None and not wrist_df.empty:
+                                st.session_state["fatigue_assessment_df"] = wrist_df.sort_values(
+                                    "metric_date", ascending=False
+                                ).head(5)
+                            else:
+                                st.session_state.pop("fatigue_assessment_df", None)
+                            st.success(
+                                f"✅ 5-day forecast completed using {source_label.replace('_', ' ')} data."
+                            )
+                        except Exception as exc:
+                            st.error(f"Assessment-based fatigue automation failed: {exc}")
+                            _LOGGER.exception("Assessment-based fatigue automation failed")
             
             # Display results if available
             if "fatigue_result" in st.session_state:
@@ -7902,15 +7910,18 @@ that predicts cognitive performance based on:
                         help="Percentage of time in poor/critical zones"
                     )
                 
-                garmin_daily_df = st.session_state.get("fatigue_garmin_daily")
-                if garmin_daily_df is not None and not garmin_daily_df.empty:
-                    st.markdown("#### ⌚ Latest Garmin sleep summary used")
+                source_label = st.session_state.get("fatigue_source_label")
+                assessment_df = st.session_state.get("fatigue_assessment_df")
+                if source_label is not None:
+                    st.info(f"Source used for auto forecast: {source_label.replace('_', ' ')}")
+                if assessment_df is not None and not assessment_df.empty:
+                    st.markdown("#### ⌚ Latest wrist monitoring summary used")
                     display_cols = [
                         col
-                        for col in garmin_daily_df.columns
+                        for col in assessment_df.columns
                         if col
                         in {
-                            "date",
+                            "metric_date",
                             "sleep_score",
                             "sleep_efficiency",
                             "sleep_duration_hours",
@@ -7918,7 +7929,7 @@ that predicts cognitive performance based on:
                         }
                     ]
                     st.dataframe(
-                        garmin_daily_df[display_cols],
+                        assessment_df[display_cols],
                         use_container_width=True,
                     )
                 
