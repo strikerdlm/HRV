@@ -1660,6 +1660,8 @@ The Sleep, Activity, Fatigue, and Task Effectiveness (SAFTE) model predicts cogn
 4. Read recommendations
 
 > **One-click Garmin automation:** Press **Auto-run Garmin (5-day forecast)** to fetch the latest Garmin sleep/stress data (requires `GARMIN_EMAIL` and `GARMIN_PASSWORD` in your `.env`) and run a 5-day SAFTE forecast with the active user profile. The tab also shows the Garmin summary used for traceability.
+>
+> **Data priority:** The 5-day automation first uses wrist monitoring data saved in the Assessment tab. If none exists, it uses the subjective clinical sleep quality from the same tab. Only if both are missing will it attempt a live Garmin Connect fetch (requires `.env` credentials). The source used is shown after the run.
 
 **Example scenario:**
 ```
