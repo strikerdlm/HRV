@@ -344,7 +344,13 @@ def compute_comprehensive_hrv(
 	results.update(compute_time_domain_metrics(rr_intervals))
 	results.update(compute_frequency_domain_metrics(rr_intervals))
 	results.update(compute_poincare_metrics(rr_intervals))
-	results.update(compute_dfa_metrics(rr_intervals))
+	# DFA is relatively expensive (loop-based); skip it in non-advanced mode for very long series.
+	should_compute_dfa = include_advanced or rr_intervals.size <= 20000
+	if should_compute_dfa:
+		results.update(compute_dfa_metrics(rr_intervals))
+	else:
+		results["dfa_alpha1"] = np.nan
+		results["dfa_alpha2"] = np.nan
 	results.update(compute_geometric_metrics(rr_intervals))
 	# Entropy metrics are computationally heavy (O(n^2)); treat as advanced.
 	if include_advanced:
