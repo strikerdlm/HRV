@@ -5,6 +5,27 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+# Changelog
+
+All notable changes to the Mission Control - Flight Surgeon are documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.8.17] - 2025-12-11
+
+### Added
+- **Agent telemetry logging** (`app/agent_logging.py`, `app/agent_runtime.py`, `app/agent_insights.py`, `app/gpt_interpretation.py`, `app/spaceweather_openai_fallback.py`): every OpenAI persona now records request payloads, doctor-level answers, and citation metadata to the rotating log/audit trail so flight surgeons can reconstruct each recommendation.
+- **Markdown + audio exports** (`app/agent_insights.py`, `app/app.py`, `app/agent_audio.py`): metric explanations and GPT-5 interpretations can be downloaded as publication-grade markdown and rendered to discrete tts-hd audio clips for hands-free playback on-console.
+- **TTS helper** (`app/agent_audio.py`): hardened HTTPS client for OpenAI `tts-1-hd` endpoints with configurable voice/model plus audit logging of synthesized clips.
+
+### Changed
+- **Agents SDK enforcement** (`app/agent_runtime.py`, `app/gpt_interpretation.py`): Personas now require `web_search` citations, append `## Sources` to every report, and run with high-effort reasoning so exported markdown stays doctorate-level and evidence based.
+- **Metrics tab UI** (`app/app.py`): Agent appendix preview plus download/audio controls live alongside the explainability table, ensuring the reporting pipeline stays within a single workflow.
+
+### Fixed
+- Metric explainability exports previously lacked a consolidated appendix, making downstream reporting manual; the new markdown assembler guarantees deterministic references even without API keys.
+
 ## [1.8.16] - 2025-12-11
 
 ### Added
