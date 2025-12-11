@@ -12,6 +12,14 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.18] - 2025-12-11
+
+### Added
+- **Garmin → SAFTE auto-forecast** (`app/fatigue_integration.py`, `app/app.py`): new "Auto-run Garmin (5-day forecast)" button pulls the latest Garmin sleep/stress data via `GARMIN_EMAIL`/`GARMIN_PASSWORD`, builds the sleep/work inputs from the active user profile, and runs a 5-day SAFTE prediction while surfacing the Garmin summary used.
+
+### Documentation
+- README.md and docs/Manual.md now describe the Garmin auto-run flow and the `.env` variables it depends on.
+
 ## [1.8.17] - 2025-12-11
 
 ### Added
