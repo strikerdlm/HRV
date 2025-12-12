@@ -1,14 +1,14 @@
-"""GPT-5.1 interpretation module for HRV analysis.
+"""GPT-5.2 interpretation module for HRV analysis.
 
 This module provides AI-powered interpretation of HRV analysis results using
-OpenAI's GPT-5.1 model with high reasoning capabilities. It includes:
-- GPT-5.1 with high reasoning effort for doctoral-level analysis
+OpenAI's GPT-5.2 model with high reasoning capabilities. It includes:
+- GPT-5.2 with high reasoning effort for doctoral-level analysis
 - Robust error handling with retry logic
 - Rate limiting and timeout management
 - Local rule-based fallback when API unavailable
 
 Design principles:
-- Uses only GPT-5.1 for maximum interpretation quality
+- Uses only GPT-5.2 for maximum interpretation quality
 - High reasoning effort for complex HRV analysis
 - Graceful degradation when API is unavailable
 - Deterministic fallback interpretations
@@ -47,8 +47,8 @@ from agent_logging import log_agent_output
 
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
-# GPT-5.1 is the only model used for interpretation
-_MODEL: Final[str] = "gpt-5.1"
+# GPT-5.2 is the only model used for interpretation
+_MODEL: Final[str] = "gpt-5.2"
 
 _DEFAULT_TIMEOUT: Final[float] = 120.0  # Increased for high reasoning
 _MAX_RETRIES: Final[int] = 3
@@ -68,9 +68,9 @@ class InterpretationResult:
 
     Attributes:
         markdown: Formatted interpretation text.
-        reasoning_encrypted: Encrypted reasoning from GPT-5.1.
+        reasoning_encrypted: Encrypted reasoning from GPT-5.2.
         sources: List of cited sources.
-        model_used: Model that generated the interpretation (always gpt-5.1 for API).
+        model_used: Model that generated the interpretation (always gpt-5.2 for API).
         mode: Whether API or local fallback was used.
         confidence: Confidence level (1.0 for API, lower for local).
     """
@@ -220,7 +220,7 @@ def _clean_scalar_dict(row: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _build_gpt5_messages(analysis_payload: str) -> list[dict[str, Any]]:
-    """Build messages for GPT-5.1 Responses API format with high reasoning."""
+    """Build messages for GPT-5.2 Responses API format with high reasoning."""
     developer_prompt = (
         "You are a doctoral-level biomedical research assistant specializing in "
         "heart rate variability (HRV) analysis for publication in Q1 scientific journals. "
@@ -274,7 +274,7 @@ def _request_gpt5_high_reasoning(
     client: Any,
     analysis_payload: str,
 ) -> tuple[str, str | None, list[str]]:
-    """Request interpretation using GPT-5.1 with high reasoning effort.
+    """Request interpretation using GPT-5.2 with high reasoning effort.
 
     Args:
         client: OpenAI client instance.
@@ -309,9 +309,9 @@ def request_interpretation(
     timeout: float = _DEFAULT_TIMEOUT,
     max_retries: int = _MAX_RETRIES,
 ) -> InterpretationResult:
-    """Request AI interpretation using GPT-5.1 with high reasoning.
+    """Request AI interpretation using GPT-5.2 with high reasoning.
 
-    This function uses only GPT-5.1 with high reasoning effort for maximum
+    This function uses only GPT-5.2 with high reasoning effort for maximum
     interpretation quality. If the API is unavailable, it falls back to
     local rule-based interpretation.
 
@@ -355,7 +355,7 @@ def request_interpretation(
     for attempt in range(max_retries):
         try:
             _LOGGER.info(
-                f"Requesting GPT-5.1 interpretation with high reasoning "
+                f"Requesting GPT-5.2 interpretation with high reasoning "
                 f"(attempt {attempt + 1}/{max_retries})"
             )
 
@@ -363,7 +363,7 @@ def request_interpretation(
                 client, analysis_payload
             )
 
-            _LOGGER.info("GPT-5.1 interpretation completed successfully.")
+            _LOGGER.info("GPT-5.2 interpretation completed successfully.")
 
             result = InterpretationResult(
                 markdown=_append_sources_section(markdown, sources),
@@ -411,7 +411,7 @@ def request_interpretation(
 
     # API failed; use local fallback
     _LOGGER.warning(
-        f"GPT-5.1 API failed after {max_retries} attempts; using local fallback. "
+        f"GPT-5.2 API failed after {max_retries} attempts; using local fallback. "
         f"Last error: {last_error}"
     )
     fallback_result = _generate_local_interpretation(analysis_payload)
@@ -425,7 +425,7 @@ def request_interpretation(
 
 
 def _extract_markdown_gpt5(response: Any) -> str:
-    """Extract markdown from GPT-5.1 Responses API response."""
+    """Extract markdown from GPT-5.2 Responses API response."""
     output_text = getattr(response, "output_text", None)
     if isinstance(output_text, str) and output_text.strip():
         return output_text.strip()
@@ -449,7 +449,7 @@ def _extract_markdown_gpt5(response: Any) -> str:
 
 
 def _extract_reasoning_encrypted(response: Any) -> str | None:
-    """Extract encrypted reasoning from GPT-5.1 response."""
+    """Extract encrypted reasoning from GPT-5.2 response."""
     reasoning = getattr(response, "reasoning", None)
     if not reasoning:
         return None
@@ -457,7 +457,7 @@ def _extract_reasoning_encrypted(response: Any) -> str | None:
 
 
 def _extract_sources(response: Any) -> list[str]:
-    """Extract web search sources from GPT-5.1 response."""
+    """Extract web search sources from GPT-5.2 response."""
     web_actions = getattr(response, "web_search_call", None)
     if not web_actions:
         return []
@@ -511,7 +511,7 @@ def _generate_local_interpretation(payload_json: str) -> InterpretationResult:
         "# HRV Analysis Interpretation",
         "",
         "> **Note:** This interpretation was generated using local rule-based analysis "
-        "because the GPT-5.1 API was unavailable. For comprehensive AI-powered analysis, "
+        "because the GPT-5.2 API was unavailable. For comprehensive AI-powered analysis, "
         "ensure OPENAI_API_KEY is configured.",
         "",
     ]

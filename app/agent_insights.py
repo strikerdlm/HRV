@@ -453,7 +453,7 @@ def _build_markdown_appendix(
         lines.append("")
 
     if agent_markdown:
-        lines.append("### GPT-5.1 Narrative")
+        lines.append("### GPT-5.2 Narrative")
         lines.append("")
         lines.append(agent_markdown)
         lines.append("")
