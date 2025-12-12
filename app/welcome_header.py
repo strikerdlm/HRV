@@ -417,7 +417,7 @@ def render_getting_started_guide() -> None:
             #### 💡 Pro Tips:
             - Record 5-minute sessions, seated, at the same time daily
             - Uncheck "Minimal mode" in sidebar for full analysis
-            - Enable "GPT-5.1 Interpretation" for doctoral-level insights
+            - Enable "GPT-5.2 Interpretation" for doctoral-level insights
             
             📚 [GitHub Repository](https://github.com/strikerdlm/HRV) • 
             📖 [Documentation](https://github.com/strikerdlm/HRV/blob/main/docs/Manual.md)

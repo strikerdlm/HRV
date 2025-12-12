@@ -1,5 +1,31 @@
 # flake8: noqa
 from __future__ import annotations
+
+# NOTE:
+# This file is both a Streamlit entrypoint (`streamlit run app/app.py`) and is
+# imported by the unit tests as a module (`import app.app`). Streamlit execution
+# typically adds the script directory to `sys.path`, but importing as `app.app`
+# does not. We insert the local `app/` directory onto `sys.path` so the existing
+# intra-app absolute imports (e.g., `import hrv_core`) remain resolvable in both
+# contexts.
+#
+# This is deterministic, bounded, and required for testability.
+import sys
+from pathlib import Path
+
+_APP_DIR = Path(__file__).resolve().parent
+if str(_APP_DIR) not in sys.path:
+    sys.path.insert(0, str(_APP_DIR))
+
+# Pytest environments sometimes place `app/` on `sys.path` directly, causing
+# `import app` to resolve to this file (`app/app.py`) instead of the package
+# (`app/__init__.py`). In that case, make this module behave like a package so
+# imports like `from app import noaa_space` and `from app.multiday_tracker import ...`
+# continue to work, and alias `app.app` to this module for compatibility.
+if __name__ == "app":
+    __path__ = [str(_APP_DIR)]  # type: ignore[name-defined]
+    sys.modules.setdefault("app.app", sys.modules[__name__])
+
 from gpt_interpretation import (
     GPT5InterpretationError,
     InterpretationResult,
@@ -4653,9 +4679,9 @@ def main() -> None:
         st.sidebar.markdown("---")
         st.sidebar.subheader("AI interpretation")
         gpt_high_enabled = st.sidebar.toggle(
-            "GPT-5.1 High Reasoning Interpretation",
+            "GPT-5.2 High Reasoning Interpretation",
             value=False,
-            help="Send analysis outputs to OpenAI GPT-5.1 with high reasoning effort to obtain a doctoral-level markdown report. Requires OPENAI_API_KEY in the .env file.",
+            help="Send analysis outputs to OpenAI GPT-5.2 with high reasoning effort to obtain a doctoral-level markdown report. Requires OPENAI_API_KEY in the .env file.",
         )
 
         st.sidebar.markdown("---")
@@ -5915,7 +5941,7 @@ def main() -> None:
             st.divider()
             st.markdown("### 🔍 Metric Explanations (Agent SDK)")
             st.caption(
-                "Generates per-metric explanations with GPT-5.1 high reasoning and "
+                "Generates per-metric explanations with GPT-5.2 high reasoning and "
                 "code_interpreter; falls back to deterministic Task Force/Shaffer "
                 "ranges when the agent is offline."
             )
@@ -5944,7 +5970,7 @@ def main() -> None:
                 key="metric_explainer_auto_refresh",
             )
             run_agent_checkbox = st.checkbox(
-                "Use GPT-5.1 agent (requires OPENAI_API_KEY)",
+                "Use GPT-5.2 agent (requires OPENAI_API_KEY)",
                 value=False,
                 key="metric_explainer_run_agent",
             )
@@ -6003,13 +6029,13 @@ def main() -> None:
                 )
             agent_md = metric_explainer_state.get("agent_markdown", "")
             if agent_md:
-                st.markdown("#### GPT-5.1 Agent Narrative")
+                st.markdown("#### GPT-5.2 Agent Narrative")
                 st.markdown(agent_md)
             if metric_explainer_state.get("agent_error"):
                 st.warning(metric_explainer_state["agent_error"])
             payload_preview = metric_explainer_state.get("agent_payload")
             if payload_preview:
-                with st.expander("View GPT-5.1 metric explanation request payload"):
+                with st.expander("View GPT-5.2 metric explanation request payload"):
                     st.json(payload_preview)
 
             appendix_markdown = metric_explainer_state.get("markdown_appendix", "")
