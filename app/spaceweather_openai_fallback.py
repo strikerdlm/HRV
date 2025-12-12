@@ -84,7 +84,7 @@ def _parse_iso_datetime(value: object) -> Optional[datetime]:
 
 def extract_spaceweather_with_openai(
 	html_sections: Mapping[str, str],
-	model: str = "gpt-5",
+	model: str = "gpt-5.2",
 ) -> Optional[SpaceWeatherSnapshot]:
 	"""
 	Fallback extraction: ask OpenAI Responses API to parse SpaceWeatherLive HTML into a JSON payload,
@@ -95,7 +95,7 @@ def extract_spaceweather_with_openai(
 	html_sections : Mapping[str, str]
 		Dictionary with HTML snippets keyed by page name (e.g. {"home": "<html...>", "solar_activity": "<html...>"}).
 	model : str
-		OpenAI model name (default: "gpt-5").
+		OpenAI model name (default: "gpt-5.2").
 
 	Returns
 	-------
