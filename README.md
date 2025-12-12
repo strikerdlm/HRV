@@ -171,7 +171,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | **FIT ↔ CSV Tools**                    | Convert Garmin FIT to CSV inside the Data tab, download, and store both FIT/CSV per profile; import Garmin CSVs into the active profile                                                          |
 | **Garmin Vivosmart 5 Clinical Ingest** | Upload FIT/ZIP (batch supported) to auto-fill steps, distance, sleep score/quality/duration, SpO₂, respiration (awake/sleep), stress, calories, and body battery charge/drain with ECharts gauges |
 | **Docker Deployment**                  | Containerized with PostgreSQL/TimescaleDB for production environments                                                                                                                              |
-| **AI Interpretation**                  | GPT-5.1 high-reasoning analysis with enforced `web_search` citations, mission logging, markdown appendix, and optional tts-hd audio playback                                                      |
+| **AI Interpretation**                  | GPT-5.2 high-reasoning analysis with enforced `web_search` citations, mission logging, markdown appendix, and optional tts-hd audio playback                                                      |
 | **Publication Export**                 | APA 7th edition formatted reports, LaTeX tables, CSV/JSON data                                                                                                                                     |
 
 ---
@@ -228,7 +228,7 @@ Study Design:
 
 ## 🤖 OpenAI Agents SDK Integration Blueprint
 
-Mission Control - Flight Surgeon already uses GPT-5.1 high-reasoning summaries; the next leap is to embed OpenAI Agents SDK with code interpreter, Model Context Protocol (MCP), web/file search, Wolfram Alpha reasoning, and E2B secure sandboxes so every astronaut profile benefits from autonomous, tool-using copilots. This blueprint stays aligned with the v2.0 roadmap and keeps all healthcare data on-device while letting agents reason over HRV, space weather, and wearable signals in near real time.
+Mission Control - Flight Surgeon already uses GPT-5.2 high-reasoning summaries; the next leap is to embed OpenAI Agents SDK with code interpreter, Model Context Protocol (MCP), web/file search, Wolfram Alpha reasoning, and E2B secure sandboxes so every astronaut profile benefits from autonomous, tool-using copilots. This blueprint stays aligned with the v2.0 roadmap and keeps all healthcare data on-device while letting agents reason over HRV, space weather, and wearable signals in near real time.
 
 > **Implementation status**: `app/agent_runtime.py` now defines the tool belt, MCP scopes, and all three personas; the About tab includes an expander that surfaces this configuration for mission leads.
 
@@ -241,7 +241,7 @@ Mission Control - Flight Surgeon already uses GPT-5.1 high-reasoning summaries; 
 - Keep compliance: secrets in `.env`, deterministic Python hand-offs, logging via `logging_config.py`, and audit trails in `logs/`.
 
 ### Architecture Snapshot
-- **Agent Runtime**: `openai.agents` service (GPT-5.1 High Reasoning) deployed as a sidecar service (`app/agent_router.py`, future) to keep Streamlit reruns clean.
+- **Agent Runtime**: `openai.agents` service (GPT-5.2 High Reasoning) deployed as a sidecar service (`app/agent_router.py`, future) to keep Streamlit reruns clean.
 - **Context Graph (MCP)**: Servers for `hrv_users.db`, `docs/Manual.md`, `logs/app.log`, NOAA cache folders, and structured exports. Each server enforces read-only scopes per agent.
 - **Tool Belt**:
   - `code_interpreter` for bounded analytics on uploaded RR arrays (cap output to `/tmp/agents/<session>` and delete per request).
@@ -273,7 +273,7 @@ Mission Control - Flight Surgeon already uses GPT-5.1 high-reasoning summaries; 
    - **Solar-Physiology Correlator**: Automates RR↔space-weather lag scans via `code_interpreter`, writes results into MCP `correlation_reports` table, escalates anomalies when `|r|>0.6` and FDR q<0.05.
    - **Wearable Recovery Concierge**: Uses `file_search` (Manual norms) + `hrv-db` views + Wolfram Alpha to translate Garmin/Polar data into operational prescriptions (hydration, EVA scheduling).
    - **Environmental Threat Watcher**: Combines `web_search`, NOAA tools, and E2B radiation Monte Carlo runs to predict when atmospheric or geomagnetic disturbances degrade HRV readiness; posts alerts into Streamlit notification center.
-   - Each agent uses GPT-5.1 High Reasoning for responses, with `instructions` embedding the deterministic rules (bounded loops, type-safe outputs, cite NOAA/peer-reviewed sources).
+  - Each agent uses GPT-5.2 High Reasoning for responses, with `instructions` embedding the deterministic rules (bounded loops, type-safe outputs, cite NOAA/peer-reviewed sources).
 5. **Experience Integration (Week 3)**
    - Extend `app/gpt_interpretation.py` to call the Agent Router: user selects “Autonomous Analysis” → app posts mission context (user profile, selected sessions, NOAA bundle IDs) to the chosen agent.
    - Surface multi-modal outputs: Markdown summary, structured JSON (metrics, decision, confidence), and optional PNGs/CSVs from `code_interpreter` or E2B.
@@ -284,7 +284,7 @@ Mission Control - Flight Surgeon already uses GPT-5.1 high-reasoning summaries; 
    - Conduct SME review sessions (flight surgeons, biomed engineers) to vet recommendations before enabling in production tabs.
 
 ### Metric Explainability Specialist (NEW)
-- `app/agent_runtime.py` now includes a **Metric Explainability Specialist** persona that binds GPT-5.1 high reasoning + `code_interpreter` to per-metric narrative output.
+- `app/agent_runtime.py` now includes a **Metric Explainability Specialist** persona that binds GPT-5.2 high reasoning + `code_interpreter` to per-metric narrative output.
 - `app/agent_insights.py` packages mission context (`metric_samples`, reference catalogue, active user profile) and gracefully falls back to deterministic Task Force (1996) / Shaffer & Ginsberg (2017) comparisons when the API key is missing.
 - The **Metrics** tab surfaces a new "Metric Explanations (Agent SDK)" panel so every SDNN, RMSSD, pNN50, LF/HF, HF power, and mean HR value includes a human-readable status + citation even before the agent executes.
 
@@ -396,7 +396,7 @@ project/
 - Complete table of all computed metrics across domains
 - Advanced analytics: fragmentation, PRSA, symbolic dynamics, multifractal DFA
 - Covariate-adjusted values when patient profile is configured
-- **NEW:** "Metric Explanations (Agent SDK)" panel that annotates each SDNN/RMSSD/pNN50/LF/HF/Mean HR value with Task Force/Shaffer ranges, plus optional GPT-5.1 agent narratives that leverage `code_interpreter`.
+- **NEW:** "Metric Explanations (Agent SDK)" panel that annotates each SDNN/RMSSD/pNN50/LF/HF/Mean HR value with Task Force/Shaffer ranges, plus optional GPT-5.2 agent narratives that leverage `code_interpreter`.
 
 ### ANS Function Tests Tab
 
@@ -464,7 +464,7 @@ project/
 - Markdown report with all metrics and interpretations
 - CSV/JSON data export
 - LaTeX tables for publications
-- GPT-5.1 AI interpretation (requires API key)
+- GPT-5.2 AI interpretation (requires API key)
 
 ### Circadian Physiology Tab
 
@@ -668,7 +668,7 @@ HRV/
 │   ├── ui_state_manager.py         # Centralized UI state
 │   ├── welcome_header.py           # Professional welcome page
 │   ├── gauge_builder.py            # Gauge visualization builder
-│   ├── gpt_interpretation.py       # GPT-5.1 AI interpretation
+│   ├── gpt_interpretation.py       # GPT-5.2 AI interpretation
 │   ├── gpu_processing.py           # NVIDIA CUDA GPU acceleration
 │   ├── noaa_space.py               # NOAA space weather data
 │   ├── performance_utils.py        # CPU performance optimization utilities

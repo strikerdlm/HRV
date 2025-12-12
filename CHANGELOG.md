@@ -12,6 +12,11 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.20] - 2025-12-12
+
+### Changed
+- **OpenAI models**: Updated all OpenAI *language-model* calls to use `gpt-5.2` with high reasoning effort (`reasoning.effort="high"`) for interpretation, Agents SDK personas, and the SpaceWeatherLive extraction fallback (`app/gpt_interpretation.py`, `app/agent_runtime.py`, `app/spaceweather_openai_fallback.py`, `app/app.py`).
+
 ## [1.8.19] - 2025-12-11
 
 ### Fixed
