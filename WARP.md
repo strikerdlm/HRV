@@ -630,7 +630,7 @@ The app includes Windows console safety workarounds (Colorama fix) in `app/app.p
 ### OpenAI API errors
 - Verify `OPENAI_API_KEY` in `.env`
 - Check OpenAI service status and API quota
-- Fallback interpretation disabled if key missing; app will skip GPT-5.1 report
+- Fallback interpretation disabled if key missing; app will skip GPT-5.2 report
 - Check `logs/app.log` for API response details
 
 ### NOAA feed fetch timeout
