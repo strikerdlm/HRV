@@ -7730,13 +7730,13 @@ that predicts cognitive performance based on:
                     key="run_fatigue_btn"
                 )
                 auto_run_garmin = st.button(
-                    "⌚ Auto-run Garmin (5-day forecast)",
+                    "⌚ Auto-run (wrist/clinical/Garmin) (5-day forecast)",
                     type="secondary",
                     key="run_fatigue_garmin_btn",
                     help=(
-                        "Fetches the most recent Garmin sleep/stress data using "
-                        "GARMIN_EMAIL/GARMIN_PASSWORD and runs a 5-day performance forecast "
-                        "with the active user profile."
+                        "Runs a 5-day performance forecast with the active user profile, using "
+                        "wrist monitoring history if available, then clinical sleep scales, then "
+                        "Garmin Connect (GARMIN_EMAIL/GARMIN_PASSWORD) if configured."
                     ),
                 )
 
@@ -7837,9 +7837,9 @@ that predicts cognitive performance based on:
             
             if auto_run_garmin:
                 if not active_user_context.get("has_user"):
-                    st.warning("Please select or log in a user to run assessment-based fatigue.")
+                    st.warning("Please select or log in a user to run auto fatigue forecast.")
                 else:
-                    with st.spinner("Using assessment data (wrist → clinical) for 5-day forecast..."):
+                    with st.spinner("Running auto fatigue forecast (wrist → clinical → Garmin)..."):
                         try:
                             auto_result, source_label, wrist_df = run_assessment_fatigue_prediction(
                                 user_context=active_user_context,
@@ -7860,7 +7860,7 @@ that predicts cognitive performance based on:
                             )
                         except Exception as exc:
                             st.error(f"Assessment-based fatigue automation failed: {exc}")
-                            _LOGGER.exception("Assessment-based fatigue automation failed")
+                            log_exception(_LOGGER, "Assessment-based fatigue automation failed", exc)
             
             # Display results if available
             if "fatigue_result" in st.session_state:
