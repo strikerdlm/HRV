@@ -26,6 +26,11 @@ import numpy as np
 import pandas as pd
 
 try:
+    from logging_config import get_logger, log_exception
+except ImportError:  # pragma: no cover - fallback for relative imports
+    from .logging_config import get_logger, log_exception  # type: ignore
+
+try:
     from garmin_import import (
         GarminCredentials,
         GarminWellnessData,
@@ -86,7 +91,7 @@ except ImportError:
         schedule_from_epoch_table,
     )
 
-_LOGGER = logging.getLogger(__name__)
+_LOGGER = get_logger(__name__)
 
 # =============================================================================
 # Data Classes
@@ -793,7 +798,8 @@ def run_assessment_fatigue_prediction(
     Priority:
     1) Wrist monitoring (garmin_daily_metrics) if available.
     2) Clinical subjective assessment if wrist data is missing.
-    3) Default schedule if neither is available.
+    3) Garmin Connect fetch (GARMIN_EMAIL/GARMIN_PASSWORD) if configured.
+    4) Default schedule if neither is available.
 
     Returns:
         result, source_label, wrist_dataframe_or_none
@@ -830,7 +836,26 @@ def run_assessment_fatigue_prediction(
         except Exception:
             pass
 
-    # 3) Default fallback
+    # 3) Garmin Connect fallback (only if credentials are configured)
+    if sleep_schedule is None:
+        garmin_credentials = load_credentials_from_env()
+        if garmin_credentials is not None:
+            try:
+                garmin_result, _garmin_data, daily_summary_df = run_garmin_fatigue_prediction(
+                    user_context=user_context,
+                    credentials=garmin_credentials,
+                    prediction_days=prediction_days,
+                    lookback_days=2,
+                    model_type=model_type,
+                )
+                return garmin_result, "garmin_connect", daily_summary_df
+            except ValueError as exc:
+                # Common, non-fatal: no data returned for requested window
+                _LOGGER.warning("Garmin Connect fatigue fallback unavailable: %s", exc)
+            except Exception as exc:  # pragma: no cover - network/provider variability
+                log_exception(_LOGGER, "Garmin Connect fatigue fallback failed", exc)
+
+    # 4) Default fallback
     if sleep_schedule is None:
         sleep_schedule = SleepScheduleInput()
         work_schedule = WorkScheduleInput()
