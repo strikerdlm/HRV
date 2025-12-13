@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.8.18] - 2025-12-11
 
 ### Added
-- **Garmin → SAFTE auto-forecast** (`app/fatigue_integration.py`, `app/app.py`): new "Auto-run Garmin (5-day forecast)" button pulls the latest Garmin sleep/stress data via `GARMIN_EMAIL`/`GARMIN_PASSWORD`, builds the sleep/work inputs from the active user profile, and runs a 5-day SAFTE prediction while surfacing the Garmin summary used.
+- **Assessment-aware SAFTE auto-forecast** (`app/fatigue_integration.py`, `app/app.py`): the 5-day automation now prioritizes wrist monitoring data from the Assessment tab, falls back to subjective clinical sleep quality if wrist data is absent, and only then attempts a Garmin Connect fetch (`GARMIN_EMAIL`/`GARMIN_PASSWORD`). The source used and summary are displayed for traceability.
 
 ### Documentation
 - README.md and docs/Manual.md now describe the Garmin auto-run flow and the `.env` variables it depends on.
