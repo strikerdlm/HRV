@@ -435,7 +435,7 @@ project/
 - Risk assessment with factor breakdown
 - Recommendations based on fatigue level
 - One-click **Sync with active profile** button pulls age, chronotype, sleep debt, and mission schedule directly from the selected astronaut's medical log
-- **Auto-run Garmin (5-day forecast)** pulls the most recent Garmin sleep/stress data (GARMIN_EMAIL/GARMIN_PASSWORD in `.env`), runs SAFTE with the active user profile defaults, and surfaces the Garmin summary used in the prediction.
+- **Auto-run assessment (5-day forecast)** uses wrist monitoring data from the Assessment tab when present, falls back to subjective clinical sleep quality if wrist data is absent, and only falls back to Garmin Connect API (requires `GARMIN_EMAIL`/`GARMIN_PASSWORD`) when neither is available; the summary used in the prediction is displayed for traceability.
 
 ### Space Weather Tab
 
