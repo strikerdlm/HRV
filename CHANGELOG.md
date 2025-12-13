@@ -12,6 +12,22 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.20] - 2025-12-12
+
+### Changed
+- **OpenAI models**: Updated all OpenAI *language-model* calls to use `gpt-5.2` with high reasoning effort (`reasoning.effort="high"`) for interpretation, Agents SDK personas, and the SpaceWeatherLive extraction fallback (`app/gpt_interpretation.py`, `app/agent_runtime.py`, `app/spaceweather_openai_fallback.py`, `app/app.py`).
+
+## [1.8.19] - 2025-12-11
+
+### Fixed
+- **Space Weather correlations** (`app/app.py`): the “Include weather covariates (Bogotá)” toggle now performs partial Pearson correlations that regress out ERA5 temperature, humidity, pressure, wind, precipitation, and cloud cover before computing HRV↔space-weather statistics. Previously the checkbox fetched data but never influenced the coefficients, leaving meteorological confounds in place.
+
+### Tests
+- Added regression tests to ensure (a) the new partial-correlation path actually dampens shared-weather artefacts and (b) the assessment-driven SAFTE automation keeps prioritizing wrist monitoring data ahead of clinical fallbacks (`tests/test_space_weather_alignment.py`, `tests/test_new_modules.py`).
+
+### Documentation
+- `docs/Manual.md`: documented how enabling weather covariates swaps the correlation engine into partial-r mode so analysts know when geomagnetic findings already control for local meteorology.
+
 ## [1.8.18] - 2025-12-11
 
 ### Added

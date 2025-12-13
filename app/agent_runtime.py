@@ -435,7 +435,7 @@ def build_default_agent_runtime_config() -> AgentRuntimeConfig:
         ),
     }
 
-    model = os.getenv("OPENAI_AGENT_MODEL", "gpt-5.1-experimental")
+    model = os.getenv("OPENAI_AGENT_MODEL", "gpt-5.2")
 
     return AgentRuntimeConfig(
         model=model,
