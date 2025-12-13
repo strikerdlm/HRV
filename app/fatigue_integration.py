@@ -700,6 +700,157 @@ def run_garmin_fatigue_prediction(
 
 
 # =============================================================================
+# Assessment-driven prediction (wrist monitoring preferred, clinical fallback)
+# =============================================================================
+
+
+def _clamp_quality(value: float) -> float:
+    """Clamp sleep quality to a safe 0.3–1.0 range."""
+    return float(max(0.3, min(1.0, value)))
+
+
+def _build_sleep_from_wrist_row(row: pd.Series) -> SleepScheduleInput:
+    """Construct sleep schedule from wrist monitoring metrics."""
+    duration = float(row.get("sleep_duration_hours", 0.0) or 0.0)
+    quality_candidates: list[float] = []
+    if pd.notna(row.get("sleep_score")):
+        quality_candidates.append(float(row["sleep_score"]) / 100.0)
+    if pd.notna(row.get("sleep_efficiency")):
+        quality_candidates.append(float(row["sleep_efficiency"]) / 100.0)
+    quality = _clamp_quality(quality_candidates[0] if quality_candidates else 0.8)
+    sleep_debt = max(0.0, (7.0 - duration)) if duration > 0 else 0.0
+    return SleepScheduleInput(
+        quality=quality,
+        duration=duration if duration > 0 else 7.0,
+        bedtime=23,
+        waketime=7,
+        total_sleep_debt=sleep_debt,
+    )
+
+
+def _build_work_from_wrist_row(row: pd.Series) -> WorkScheduleInput:
+    """Construct work schedule using wrist stress/activity proxies."""
+    cognitive_load = 1
+    try:
+        stress_val = float(row.get("stress_score"))
+        if stress_val < 25:
+            cognitive_load = 0
+        elif stress_val < 50:
+            cognitive_load = 1
+        elif stress_val < 75:
+            cognitive_load = 2
+        else:
+            cognitive_load = 3
+    except Exception:
+        cognitive_load = 1
+    return WorkScheduleInput(
+        has_work=True,
+        work_start=9,
+        work_end=17,
+        work_hours=8,
+        cognitive_load=cognitive_load,
+    )
+
+
+def _build_sleep_from_clinical(scales: Any) -> SleepScheduleInput:
+    """Construct sleep schedule from clinical subjective assessment."""
+    psqi = getattr(scales, "pittsburgh_sleep_quality_index", None)
+    if psqi is None:
+        quality = 0.8
+    else:
+        try:
+            quality = _clamp_quality(1.0 - float(psqi) / 21.0)
+        except Exception:
+            quality = 0.8
+
+    epworth = getattr(scales, "epworth_sleepiness_scale", None)
+    sleep_debt = 0.0
+    if epworth is not None:
+        try:
+            epw = float(epworth)
+            sleep_debt = max(0.0, min(8.0, (epw - 8.0) * 0.25))
+        except Exception:
+            sleep_debt = 0.0
+
+    return SleepScheduleInput(
+        quality=quality,
+        duration=7.0,
+        bedtime=23,
+        waketime=7,
+        total_sleep_debt=sleep_debt,
+    )
+
+
+def run_assessment_fatigue_prediction(
+    *,
+    user_context: Dict[str, Any] | None,
+    user_id: str | None,
+    prediction_days: int = 5,
+    model_type: str = "advanced",
+) -> Tuple[FatigueAnalysisResult, str, pd.DataFrame | None]:
+    """Run fatigue forecast using assessment data with priority rules.
+
+    Priority:
+    1) Wrist monitoring (garmin_daily_metrics) if available.
+    2) Clinical subjective assessment if wrist data is missing.
+    3) Default schedule if neither is available.
+
+    Returns:
+        result, source_label, wrist_dataframe_or_none
+    """
+    user_profile = _build_user_profile_from_context(user_context)
+    sleep_schedule: SleepScheduleInput | None = None
+    work_schedule: WorkScheduleInput | None = None
+    wrist_df: pd.DataFrame | None = None
+    source = "default"
+
+    db = get_database() if get_database is not None else None
+
+    # 1) Wrist monitoring (assessment tab → wrist monitoring history)
+    if db is not None and user_id:
+        try:
+            wrist_df = db.get_garmin_daily_dataframe(user_id, limit=30)
+            if wrist_df is not None and not wrist_df.empty:
+                wrist_df = wrist_df.sort_values("metric_date", ascending=False)
+                latest = wrist_df.iloc[0]
+                sleep_schedule = _build_sleep_from_wrist_row(latest)
+                work_schedule = _build_work_from_wrist_row(latest)
+                source = "wrist_monitoring"
+        except Exception:
+            wrist_df = None
+
+    # 2) Subjective clinical assessment (sleep quality)
+    if sleep_schedule is None and db is not None and user_id:
+        try:
+            scales_history = db.get_clinical_scales_history(user_id, limit=1)
+            if scales_history:
+                sleep_schedule = _build_sleep_from_clinical(scales_history[0])
+                work_schedule = WorkScheduleInput()
+                source = "clinical_assessment"
+        except Exception:
+            pass
+
+    # 3) Default fallback
+    if sleep_schedule is None:
+        sleep_schedule = SleepScheduleInput()
+        work_schedule = WorkScheduleInput()
+        source = "default"
+
+    result = run_integrated_fatigue_analysis(
+        garmin_sleep_df=None,
+        garmin_stress_df=None,
+        garmin_activity_df=None,
+        user_profile=user_profile,
+        sleep_schedule=sleep_schedule,
+        work_schedule=work_schedule,
+        prediction_days=prediction_days,
+        model_type=model_type,
+    )
+
+    return result, source, wrist_df
+
+
+# =============================================================================
 # DataFrame Building
 # =============================================================================
 
