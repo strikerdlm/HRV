@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **OpenAI models**: Updated all OpenAI *language-model* calls to use `gpt-5.2` with high reasoning effort (`reasoning.effort="high"`) for interpretation, Agents SDK personas, and the SpaceWeatherLive extraction fallback (`app/gpt_interpretation.py`, `app/agent_runtime.py`, `app/spaceweather_openai_fallback.py`, `app/app.py`).
 
+### Fixed
+- **Fatigue tab auto-run** (`app/app.py`, `app/fatigue_integration.py`): the 5-day “Auto-run” button now matches the actual data priority (wrist → clinical → Garmin Connect) and attempts Garmin Connect only when credentials are configured, avoiding spurious error logs when `GARMIN_EMAIL`/`GARMIN_PASSWORD` are unset.
+
 ## [1.8.19] - 2025-12-11
 
 ### Fixed
