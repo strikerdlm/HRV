@@ -46,7 +46,14 @@ from hrv_core import (
     spectrogram_rr,
 )
 from ml_enhancements import run_windowed_kmeans
-from export_utils import ExportConfiguration, ExportScope, build_markdown_report
+from export_utils import (
+    CohortExportConfiguration,
+    ExportConfiguration,
+    ExportScope,
+    build_cohort_markdown_report,
+    build_markdown_report,
+    compute_cohort_summary_stats,
+)
 from echarts_component import EChartsConfig, render_echarts
 from space_weather_alignment import (
     align_space_weather_series,
@@ -154,6 +161,7 @@ try:
         render_user_profile_tab,
         get_current_user_data,
         get_active_user_context,
+        get_all_active_users,
     )
     USER_PROFILE_TAB_AVAILABLE = True
 except ImportError:
@@ -10077,6 +10085,238 @@ that predicts cognitive performance based on:
                     st.markdown("\n".join(summary_lines))
 
     with tab_export:
+        st.subheader("Group summaries (cohort export)")
+        if not USER_PROFILE_TAB_AVAILABLE:
+            st.info("Cohort export requires the User Profile module.")
+        else:
+            active_users = get_all_active_users()
+            if not active_users:
+                st.info(
+                    "No active cohort detected. Open 2+ user sessions (User Profile) to enable cohort export."
+                )
+            else:
+                # Build label map for selection UI
+                user_label_map: Dict[str, str] = {}
+                user_ids: List[str] = []
+                for row in active_users:
+                    uid = str(row.get("user_id", "")).strip()
+                    if not uid:
+                        continue
+                    name = (
+                        str(row.get("full_name") or row.get("username") or uid)
+                        .strip()
+                    )
+                    user_label_map[uid] = name
+                    user_ids.append(uid)
+                user_ids = sorted(user_ids, key=lambda k: user_label_map.get(k, k))
+
+                selected_user_ids = st.multiselect(
+                    "Active users to include",
+                    options=user_ids,
+                    default=user_ids,
+                    format_func=lambda uid: user_label_map.get(uid, uid),
+                    key="cohort_export_user_select",
+                )
+                cohort_notes = st.text_area(
+                    "Cohort notes (optional)",
+                    placeholder="Protocol notes, cohort definition, inclusion/exclusion, etc.",
+                    height=90,
+                    key="cohort_export_notes",
+                )
+
+                generate_cohort = st.button(
+                    "Generate cohort summary",
+                    key="cohort_export_generate",
+                )
+                if generate_cohort:
+                    if not selected_user_ids:
+                        st.warning("Select at least one user to continue.")
+                    else:
+                        db = get_database()
+                        cohort_rows: List[Dict[str, Any]] = []
+
+                        # Use a bounded loop over selected users only
+                        for uid in selected_user_ids:
+                            try:
+                                user = db.get_user(uid)
+                            except Exception:
+                                user = None
+                            if user is None:
+                                continue
+
+                            # Latest HRV snapshot (no RR payload)
+                            hrv_cols = [
+                                "measurement_date",
+                                "rmssd_ms",
+                                "sdnn_ms",
+                                "mean_hr_bpm",
+                                "hf_power_ms2",
+                                "lf_hf_ratio",
+                                "parasympathetic_index",
+                                "hrv_score",
+                                "artifact_percentage",
+                                "quality_score",
+                            ]
+                            try:
+                                hrv_latest = db.get_hrv_dataframe(
+                                    uid,
+                                    limit=1,
+                                    include_rr=False,
+                                    columns=hrv_cols,
+                                )
+                            except Exception:
+                                hrv_latest = pd.DataFrame()
+
+                            hrv_row: Dict[str, Any] = {}
+                            if isinstance(hrv_latest, pd.DataFrame) and not hrv_latest.empty:
+                                hrv_row = (
+                                    hrv_latest.iloc[0].to_dict()
+                                    if len(hrv_latest.index) > 0
+                                    else {}
+                                )
+
+                            # Latest clinical scales
+                            try:
+                                scales = db.get_clinical_scales_history(uid, limit=1)
+                            except Exception:
+                                scales = []
+                            scales_row: Dict[str, Any] = {}
+                            if scales:
+                                scales_row = scales[0].to_dict()
+
+                            # Latest medical record (Exploration Medical / ExMC)
+                            try:
+                                med_rows = db.get_medical_history(uid, limit=1)
+                            except Exception:
+                                med_rows = []
+                            med_row: Dict[str, Any] = med_rows[0] if med_rows else {}
+
+                            cohort_rows.append(
+                                {
+                                    "user_id": user.user_id,
+                                    "username": user.username,
+                                    "full_name": user.full_name,
+                                    "sex": user.sex,
+                                    "age_years": user.age_years,
+                                    "bmi": user.bmi,
+                                    # HRV (latest)
+                                    "hrv_date": hrv_row.get("measurement_date"),
+                                    "rmssd_ms": hrv_row.get("rmssd_ms"),
+                                    "sdnn_ms": hrv_row.get("sdnn_ms"),
+                                    "mean_hr_bpm": hrv_row.get("mean_hr_bpm"),
+                                    "hf_power_ms2": hrv_row.get("hf_power_ms2"),
+                                    "lf_hf_ratio": hrv_row.get("lf_hf_ratio"),
+                                    "parasympathetic_index": hrv_row.get("parasympathetic_index"),
+                                    "hrv_score": hrv_row.get("hrv_score"),
+                                    "artifact_pct": hrv_row.get("artifact_percentage"),
+                                    "quality_score": hrv_row.get("quality_score"),
+                                    # Clinical scales (latest)
+                                    "scales_date": scales_row.get("assessment_date"),
+                                    "ess": scales_row.get("epworth_sleepiness_scale"),
+                                    "kss": scales_row.get("karolinska_sleepiness_scale"),
+                                    "samn_perelli": scales_row.get("samn_perelli_fatigue"),
+                                    "vas_fatigue": scales_row.get("vas_fatigue"),
+                                    "panas_pa": scales_row.get("panas_positive_affect"),
+                                    "panas_na": scales_row.get("panas_negative_affect"),
+                                    # Exploration medical record (latest)
+                                    "medical_updated_at": med_row.get("updated_at"),
+                                    "mission_day": med_row.get("mission_day"),
+                                    "radiation_dose_msv": med_row.get("radiation_dose_msv"),
+                                    "eva_hours_72h": med_row.get("eva_hours_72h"),
+                                    "days_since_last_eva": med_row.get("days_since_last_eva"),
+                                    "confinement_stress": med_row.get("confinement_stress"),
+                                    "workload_rating": med_row.get("workload_rating"),
+                                }
+                            )
+
+                        cohort_df = pd.DataFrame(cohort_rows)
+                        if cohort_df.empty:
+                            st.warning("No cohort rows could be assembled from the selected users.")
+                        else:
+                            stats_cols = [
+                                "age_years",
+                                "bmi",
+                                "rmssd_ms",
+                                "sdnn_ms",
+                                "mean_hr_bpm",
+                                "hf_power_ms2",
+                                "lf_hf_ratio",
+                                "parasympathetic_index",
+                                "hrv_score",
+                                "artifact_pct",
+                                "quality_score",
+                                "ess",
+                                "kss",
+                                "samn_perelli",
+                                "vas_fatigue",
+                                "panas_pa",
+                                "panas_na",
+                                "mission_day",
+                                "radiation_dose_msv",
+                                "eva_hours_72h",
+                                "days_since_last_eva",
+                                "confinement_stress",
+                                "workload_rating",
+                            ]
+                            cohort_stats_df = compute_cohort_summary_stats(
+                                cohort_df,
+                                numeric_columns=stats_cols,
+                            )
+
+                            st.session_state["cohort_export_df"] = cohort_df
+                            st.session_state["cohort_export_stats_df"] = cohort_stats_df
+                            st.success("Cohort summary generated.")
+
+                cohort_df = st.session_state.get("cohort_export_df")
+                cohort_stats_df = st.session_state.get("cohort_export_stats_df")
+                if isinstance(cohort_df, pd.DataFrame) and not cohort_df.empty:
+                    st.markdown("##### Cohort roster preview")
+                    st.dataframe(cohort_df, use_container_width=True)
+                    csv_bytes = cohort_df.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "Download cohort roster (CSV)",
+                        data=csv_bytes,
+                        file_name=f"cohort_roster_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                        mime="text/csv",
+                        key="download_cohort_roster_csv",
+                    )
+                if isinstance(cohort_stats_df, pd.DataFrame) and not cohort_stats_df.empty:
+                    st.markdown("##### Cohort descriptive stats preview")
+                    st.dataframe(cohort_stats_df, use_container_width=True)
+                    csv_bytes = cohort_stats_df.to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "Download cohort stats (CSV)",
+                        data=csv_bytes,
+                        file_name=f"cohort_stats_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                        mime="text/csv",
+                        key="download_cohort_stats_csv",
+                    )
+                if isinstance(cohort_df, pd.DataFrame) and not cohort_df.empty:
+                    cohort_md_config = CohortExportConfiguration(scope=ExportScope.SUMMARY)
+                    try:
+                        cohort_md = build_cohort_markdown_report(
+                            cohort_df=cohort_df,
+                            cohort_stats_df=(
+                                cohort_stats_df
+                                if isinstance(cohort_stats_df, pd.DataFrame)
+                                else pd.DataFrame()
+                            ),
+                            config=cohort_md_config,
+                            additional_notes=cohort_notes,
+                        )
+                    except Exception as exc:
+                        st.warning(f"Cohort markdown export failed: {exc}")
+                    else:
+                        st.text_area("Cohort report preview", cohort_md, height=280)
+                        st.download_button(
+                            "Download cohort report (Markdown)",
+                            data=cohort_md.encode("utf-8"),
+                            file_name=f"cohort_report_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.md",
+                            mime="text/markdown",
+                            key="download_cohort_report_md",
+                        )
+
+        st.divider()
         st.subheader("Export report")
         if not meta_rows and multi_results_df.empty:
             st.info("Run an analysis to enable export.")

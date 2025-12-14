@@ -12,6 +12,17 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.21] - 2025-12-14
+
+### Added
+- **Cohort / Group Summaries export** (`app/app.py`, `app/export_utils.py`): the Export tab now supports cohort-level exports for multi-user sessions, including a per-subject “latest snapshot” roster (HRV + clinical scales + exploration medical record fields when present) plus cohort descriptive statistics. CSV and Markdown downloads are provided.
+
+### Tests
+- Added regression coverage for cohort export utilities (`tests/test_cohort_export_utils.py`).
+
+### Documentation
+- Updated `WARP.md`, `README.md`, and `docs/Manual.md` to mark Group Summaries complete and describe the new cohort export workflow.
+
 ## [1.8.20] - 2025-12-12
 
 ### Changed

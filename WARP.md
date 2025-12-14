@@ -112,7 +112,7 @@ Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations c
 #### Phase 4: Integrations & Analytics (Priority: MEDIUM)
 - [x] **Polar AccessLink Automation**: Persist OAuth tokens securely and sync VO2max history (v1.8.5)
 - [x] **Exploration Medical Analytics**: Radiation/EVA/stress dashboards derived from ExMC logs inside Clinical Profile tab
-- [ ] **Group Summaries**: Begin exposing cohort-level med/HRV stats in export tab
+- [x] **Group Summaries**: Cohort-level med/HRV snapshot + descriptive stats exports in Export tab (v1.8.21)
 
 ### Planned Features (Q1 2026)
 
