@@ -9,11 +9,11 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.17-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.21-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2025--12--11-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2025--12--14-blue)](CHANGELOG.md)
 
 ---
 
@@ -193,7 +193,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE  | Polar AccessLink automation                  | Complete (persistent OAuth tokens + VO2max history)   |
 | ✅ DONE  | Exploration Medical Analytics dashboards     | Complete (radiation/EVA/stress cards in Clinical tab) |
 
-**Best next task:** Group Summaries (cohort-level med/HRV exports).
+**Best next task:** Longitudinal study timepoints (T0–T21) + baseline/change analytics.
 
 ### Planned Features (Q1 2026)
 

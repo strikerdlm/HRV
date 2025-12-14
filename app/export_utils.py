@@ -71,6 +71,126 @@ def _filter_sources(df: pd.DataFrame, sources: Sequence[str]) -> pd.DataFrame:
 	return df[df["source"].isin(sources)].copy()
 
 
+@dataclass(frozen=True, slots=True)
+class CohortExportConfiguration:
+	"""Configuration for cohort (group) summary exports."""
+
+	scope: ExportScope = ExportScope.SUMMARY
+	max_rows_individual: int = 50
+
+
+def compute_cohort_summary_stats(
+	cohort_df: pd.DataFrame,
+	*,
+	numeric_columns: Sequence[str],
+) -> pd.DataFrame:
+	"""Compute descriptive statistics across a cohort table.
+
+	This helper is designed for cohort exports where each row is a user snapshot
+	(e.g., latest HRV + latest clinical scales + latest medical record).
+
+	Args:
+		cohort_df: DataFrame containing per-user rows.
+		numeric_columns: Column names to treat as numeric for aggregation.
+
+	Returns:
+		A DataFrame with one row per metric and columns:
+		`metric`, `n`, `mean`, `std`, `median`, `min`, `max`.
+
+	Raises:
+		TypeError: If cohort_df is not a DataFrame.
+	"""
+	if not isinstance(cohort_df, pd.DataFrame):
+		raise TypeError("cohort_df must be a pandas DataFrame.")
+	if cohort_df.empty or not numeric_columns:
+		return pd.DataFrame(
+			columns=["metric", "n", "mean", "std", "median", "min", "max"]
+		)
+
+	rows: list[dict[str, Any]] = []
+	for col in numeric_columns:
+		if col not in cohort_df.columns:
+			continue
+		series = pd.to_numeric(cohort_df[col], errors="coerce").dropna()
+		if series.empty:
+			continue
+		rows.append(
+			{
+				"metric": col,
+				"n": int(series.shape[0]),
+				"mean": float(series.mean()),
+				"std": float(series.std(ddof=1)) if series.shape[0] > 1 else float("nan"),
+				"median": float(series.median()),
+				"min": float(series.min()),
+				"max": float(series.max()),
+			}
+		)
+	return pd.DataFrame(rows)
+
+
+def build_cohort_markdown_report(
+	*,
+	cohort_df: pd.DataFrame,
+	cohort_stats_df: pd.DataFrame,
+	config: CohortExportConfiguration,
+	additional_notes: str = "",
+) -> str:
+	"""Build a markdown report for cohort-level exports.
+
+	Args:
+		cohort_df: Per-user cohort snapshot table.
+		cohort_stats_df: Cohort-level descriptive stats computed from cohort_df.
+		config: CohortExportConfiguration controlling output shape.
+		additional_notes: Optional analyst notes.
+
+	Returns:
+		A markdown string suitable for export/download.
+
+	Raises:
+		ValueError: If cohort_df is empty.
+	"""
+	if not isinstance(cohort_df, pd.DataFrame) or cohort_df.empty:
+		raise ValueError("No cohort rows available to export.")
+
+	lines: list[str] = []
+	timestamp = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat()
+	lines.append("# Cohort Summary Report")
+	lines.append("")
+	lines.append(f"- Generated: `{timestamp}`")
+	lines.append(f"- Scope: `{config.scope.value}`")
+	lines.append(f"- Subjects: `{int(cohort_df.shape[0])}`")
+	lines.append("")
+
+	lines.append("## Cohort roster (latest snapshot per subject)")
+	lines.append("")
+	lines.append(
+		_dataframe_to_markdown(
+			cohort_df,
+			max_rows=(
+				int(config.max_rows_individual)
+				if config.scope == ExportScope.SUMMARY
+				else None
+			),
+		)
+	)
+	lines.append("")
+
+	if isinstance(cohort_stats_df, pd.DataFrame) and not cohort_stats_df.empty:
+		lines.append("## Cohort descriptive statistics")
+		lines.append("")
+		lines.append(_dataframe_to_markdown(cohort_stats_df, max_rows=None))
+		lines.append("")
+
+	if additional_notes.strip():
+		lines.append("## Analyst Notes")
+		lines.append("")
+		lines.append(additional_notes.strip())
+		lines.append("")
+
+	lines.append("_End of report._")
+	return "\n".join(lines)
+
+
 def build_markdown_report(
 	*,
 	meta_rows: Sequence[Mapping[str, Any]],
@@ -106,7 +226,7 @@ def build_markdown_report(
 		raise ValueError("No analysis results available to export.")
 
 	lines: list[str] = []
-	timestamp = _dt.datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+	timestamp = _dt.datetime.now(_dt.timezone.utc).replace(microsecond=0).isoformat()
 	lines.append("# HRV Analysis Report")
 	lines.append("")
 	lines.append(f"- Generated: `{timestamp}`")
