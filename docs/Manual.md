@@ -2123,6 +2123,12 @@ If API is unavailable, the app provides:
 
 **Step 2: Go to Export tab**
 
+**Group summaries (cohort export)**  
+If you have multiple active users open (study group workflow), the Export tab now includes a **Group summaries (cohort export)** panel that generates:
+- A **per-subject “latest snapshot” roster** (latest HRV measurement + latest clinical scales + latest Exploration Medical record when available)
+- **Cohort-level descriptive statistics** (n, mean, SD, median, min, max) for common HRV, scale, and mission variables
+- Download options for **CSV** (roster + stats) and a **Markdown cohort report**
+
 1. Select export format:
    - Markdown (for Word/docs)
    - LaTeX (for academic papers)
