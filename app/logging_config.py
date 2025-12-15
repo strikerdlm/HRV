@@ -1,15 +1,16 @@
 """
 Centralized logging configuration for Mission Control - Flight Surgeon.
 
-Provides persistent file logging for debugging, error tracking, and audit trails.
+Provides persistent file logging for debugging, error tracking, and audit
+trails.
 Logs are written to the `logs/` directory with automatic rotation.
 
 Usage:
     from app.logging_config import setup_logging, get_logger
-    
+
     # Call once at app startup
     setup_logging()
-    
+
     # Get module-specific logger
     logger = get_logger(__name__)
     logger.info("Processing started")
@@ -52,6 +53,40 @@ _logging_initialized: bool = False
 # ---------------------------------------------------------------------------
 
 
+class _SuppressAsyncioWebSocketClosed(logging.Filter):
+    """Suppress benign Tornado WebSocketClosedError noise from asyncio.
+
+    Streamlit uses Tornado websockets. When a browser tab refreshes/closes,
+    Tornado can schedule a websocket write that races with the client disconnect.
+    In that case, Tornado raises WebSocketClosedError (or StreamClosedError) and
+    asyncio logs: "Task exception was never retrieved" at ERROR level.
+
+    This is typically benign and can spam `logs/errors.log`. We suppress only this
+    exact pattern so real asyncio errors remain visible.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+        if record.levelno < logging.ERROR:
+            return True
+        if record.name != "asyncio":
+            return True
+        try:
+            message = record.getMessage()
+        except Exception:
+            return True
+        if "Task exception was never retrieved" not in message:
+            return True
+
+        exc_info = record.exc_info
+        if not exc_info or exc_info[0] is None:
+            return True
+        exc_type = exc_info[0]
+        exc_name = getattr(exc_type, "__name__", "")
+        if exc_name in {"WebSocketClosedError", "StreamClosedError"}:
+            return False
+        return True
+
+
 def setup_logging(
     *,
     log_level_file: int = _LOG_LEVEL_FILE,
@@ -60,49 +95,52 @@ def setup_logging(
 ) -> Path:
     """
     Initialize centralized logging with file and console handlers.
-    
+
     Creates the logs directory if it doesn't exist. Sets up:
     - Rotating file handler for persistent debugging (app.log)
     - Separate error log for critical issues (errors.log)
     - Console handler for real-time feedback
-    
+
     Args:
         log_level_file: Logging level for file output (default: DEBUG)
         log_level_console: Logging level for console output (default: INFO)
         log_dir: Custom log directory (default: project_root/logs/)
-    
+
     Returns:
         Path to the log directory.
-    
+
     Raises:
         OSError: If log directory cannot be created.
     """
     global _logging_initialized  # noqa: PLW0603
-    
+
     if _logging_initialized:
         return _LOG_DIR if log_dir is None else log_dir
-    
+
     target_dir = log_dir if log_dir is not None else _LOG_DIR
-    
+
     # Create logs directory
     try:
         target_dir.mkdir(parents=True, exist_ok=True)
     except OSError as exc:
         # Fall back to console-only if we can't create logs dir
-        sys.stderr.write(f"Warning: Cannot create log directory {target_dir}: {exc}\n")
+        sys.stderr.write(
+            f"Warning: Cannot create log directory {target_dir}: {exc}\n"
+        )
         _setup_console_only(log_level_console)
         _logging_initialized = True
         return target_dir
-    
+
     # Get root logger
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.DEBUG)  # Capture all; handlers filter
-    
+
     # Clear existing handlers to prevent duplicates on Streamlit rerun
     root_logger.handlers.clear()
-    
+
     formatter = logging.Formatter(_LOG_FORMAT, datefmt=_DATE_FORMAT)
-    
+    suppress_ws_closed = _SuppressAsyncioWebSocketClosed()
+
     # 1. Main application log (rotating)
     app_log_path = target_dir / "app.log"
     app_handler = RotatingFileHandler(
@@ -113,8 +151,9 @@ def setup_logging(
     )
     app_handler.setLevel(log_level_file)
     app_handler.setFormatter(formatter)
+    app_handler.addFilter(suppress_ws_closed)
     root_logger.addHandler(app_handler)
-    
+
     # 2. Error-only log (for critical issues)
     error_log_path = target_dir / "errors.log"
     error_handler = RotatingFileHandler(
@@ -125,14 +164,16 @@ def setup_logging(
     )
     error_handler.setLevel(logging.ERROR)
     error_handler.setFormatter(formatter)
+    error_handler.addFilter(suppress_ws_closed)
     root_logger.addHandler(error_handler)
-    
+
     # 3. Console handler
     console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(log_level_console)
     console_handler.setFormatter(formatter)
+    console_handler.addFilter(suppress_ws_closed)
     root_logger.addHandler(console_handler)
-    
+
     # Log startup
     startup_msg = (
         f"Logging initialized | Dir: {target_dir} | "
@@ -140,7 +181,7 @@ def setup_logging(
         f"Console level: {logging.getLevelName(log_level_console)}"
     )
     root_logger.info(startup_msg)
-    
+
     _logging_initialized = True
     return target_dir
 
@@ -148,10 +189,10 @@ def setup_logging(
 def get_logger(name: str) -> logging.Logger:
     """
     Get a named logger for a module.
-    
+
     Args:
         name: Logger name (typically __name__)
-    
+
     Returns:
         Configured Logger instance.
     """
@@ -167,7 +208,7 @@ def log_exception(
 ) -> None:
     """
     Log an exception with consistent formatting.
-    
+
     Args:
         logger: Logger instance to use
         message: Context message
@@ -183,7 +224,7 @@ def log_exception(
 def get_session_log_path() -> Path:
     """
     Get path for a session-specific log file.
-    
+
     Returns:
         Path for a timestamped session log.
     """
@@ -194,9 +235,9 @@ def get_session_log_path() -> Path:
 def log_user_action(action: str, details: dict | None = None) -> None:
     """
     Log a user action for audit trail.
-    
+
     Args:
-        action: Description of the action (e.g., "uploaded_file", "ran_analysis")
+        action: Description of the action (e.g., "uploaded_file" or "ran_analysis")
         details: Optional dictionary with action details
     """
     audit_logger = logging.getLogger("hrv_audit")
@@ -214,10 +255,11 @@ def _setup_console_only(level: int) -> None:
     root_logger = logging.getLogger()
     root_logger.setLevel(level)
     root_logger.handlers.clear()
-    
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setLevel(level)
     handler.setFormatter(logging.Formatter(_LOG_FORMAT, datefmt=_DATE_FORMAT))
+    handler.addFilter(_SuppressAsyncioWebSocketClosed())
     root_logger.addHandler(handler)
 
 
