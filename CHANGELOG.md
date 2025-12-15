@@ -5,21 +5,6 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-# Changelog
-
-All notable changes to the Mission Control - Flight Surgeon are documented in this file.
-
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-
-### Added
-- **Longitudinal timepoints (T0–T21)** (`app/user_database.py`, `app/user_profile_tab.py`, `app/app.py`): Added a `measurement_timepoints` table and UI controls to tag new HRV measurements and clinical assessments to a study timepoint so baseline/Δ workflows can be built deterministically.
-
-### Tests
-- Added regression coverage for timepoint persistence and database backups (`tests/test_longitudinal_timepoints.py`).
-
 ## [1.8.21] - 2025-12-14
 
 ### Added
@@ -30,6 +15,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 - Updated `WARP.md`, `README.md`, and `docs/Manual.md` to mark Group Summaries complete and describe the new cohort export workflow.
+
+## [Unreleased]
+
+### Added
+- **Longitudinal timepoints (T0–T21)** (`app/user_database.py`, `app/user_profile_tab.py`, `app/app.py`): Added a `measurement_timepoints` table and UI controls to tag new HRV measurements and clinical assessments to a study timepoint so baseline/Δ workflows can be built deterministically.
+
+### Fixed
+- **User Profile** (`app/user_profile_tab.py`): Fixed Streamlit duplicate form-key crash by rendering the longitudinal timepoint selector once above the profile sub-tabs (instead of inside multiple tab panels).
+
+### Tests
+- Added regression coverage for timepoint persistence and database backups (`tests/test_longitudinal_timepoints.py`).
 
 ## [1.8.20] - 2025-12-12
 
