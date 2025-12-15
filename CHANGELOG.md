@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **User Profile** (`app/user_profile_tab.py`): Fixed Streamlit duplicate form-key crash by rendering the longitudinal timepoint selector once above the profile sub-tabs (instead of inside multiple tab panels).
+- **Logging** (`app/logging_config.py`): Suppressed benign Streamlit/Tornado `WebSocketClosedError` “Task exception was never retrieved” noise so `logs/errors.log` stays actionable.
 
 ### Tests
 - Added regression coverage for timepoint persistence and database backups (`tests/test_longitudinal_timepoints.py`).
