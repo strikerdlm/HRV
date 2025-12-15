@@ -44,6 +44,7 @@ try:
         ClinicalScales,
         HRVMeasurement,
         GarminDailyMetrics,
+        MeasurementTimepoint,
         UserDatabase,
         get_database,
         get_cached_user_list,
@@ -153,6 +154,117 @@ def _fragment_if_available(func: Any) -> Any:
     if _HAS_FRAGMENT:
         return st.fragment(func)
     return func
+
+
+_TIMEPOINT_ID_SESSION_PREFIX: Final[str] = "longitudinal_timepoint_id:"
+_TIMEPOINT_LABEL_SESSION_PREFIX: Final[str] = "longitudinal_timepoint_label:"
+
+
+def _timepoint_id_key(user_id: str) -> str:
+    """Session-state key for the active longitudinal timepoint id."""
+    return f"{_TIMEPOINT_ID_SESSION_PREFIX}{user_id}"
+
+
+def _timepoint_label_key(user_id: str) -> str:
+    """Session-state key for the active longitudinal timepoint label."""
+    return f"{_TIMEPOINT_LABEL_SESSION_PREFIX}{user_id}"
+
+
+def _build_timepoint_label_options() -> list[str]:
+    """Return the bounded list of longitudinal timepoint labels."""
+    options = ["— (Unassigned)", "T0_baseline"]
+    options.extend([f"T{i}" for i in range(1, 22)])
+    return options
+
+
+def _render_longitudinal_timepoint_controls(user_id: str) -> Optional[str]:
+    """Render longitudinal timepoint selection + persistence and return timepoint_id.
+
+    Stores the selected timepoint id in Streamlit session state so other tabs
+    (and the main analysis pipeline) can tag saved records consistently.
+    """
+    if not user_id:
+        return None
+
+    st.markdown("### 🧪 Longitudinal timepoint (T0–T21)")
+    st.caption(
+        "Select the study timepoint for new entries in this tab. "
+        "Saved HRV measurements and assessments can be tagged to enable baseline/Δ analytics."
+    )
+
+    options = _build_timepoint_label_options()
+    default_label = st.session_state.get(_timepoint_label_key(user_id), "— (Unassigned)")
+    if default_label not in options:
+        default_label = "— (Unassigned)"
+
+    with st.form(f"longitudinal_timepoint_form_{user_id}"):
+        label = st.selectbox(
+            "Timepoint label",
+            options=options,
+            index=options.index(default_label),
+            key=f"longitudinal_timepoint_label_select_{user_id}",
+        )
+
+        if label == "— (Unassigned)":
+            st.info("New entries will not be linked to a study timepoint.")
+            submitted = st.form_submit_button("Apply", use_container_width=True)
+            if submitted:
+                st.session_state[_timepoint_id_key(user_id)] = None
+                st.session_state[_timepoint_label_key(user_id)] = label
+            return st.session_state.get(_timepoint_id_key(user_id))
+
+        # Load existing timepoint (if present) to prefill date/notes.
+        try:
+            db = get_database()
+            existing = db.get_measurement_timepoint_by_label(user_id, label)
+        except Exception:
+            existing = None
+
+        existing_date = None
+        if existing is not None:
+            try:
+                existing_date = datetime.fromisoformat(existing.measurement_date).date()
+            except ValueError:
+                existing_date = None
+
+        measurement_date = st.date_input(
+            "Measurement date",
+            value=existing_date or date.today(),
+            key=f"longitudinal_timepoint_date_{user_id}",
+        )
+        notes = st.text_area(
+            "Timepoint notes (optional)",
+            value=existing.notes if existing is not None and existing.notes else "",
+            max_chars=500,
+            key=f"longitudinal_timepoint_notes_{user_id}",
+        )
+        is_baseline_default = label.startswith("T0")
+        is_baseline = st.checkbox(
+            "Mark as baseline (T0)",
+            value=bool(existing.is_baseline) if existing is not None else is_baseline_default,
+            key=f"longitudinal_timepoint_is_baseline_{user_id}",
+        )
+
+        submitted = st.form_submit_button("💾 Save / Apply timepoint", type="primary", use_container_width=True)
+        if submitted:
+            try:
+                timepoint = MeasurementTimepoint(
+                    timepoint_id=existing.timepoint_id if existing is not None else str(uuid.uuid4()),
+                    user_id=user_id,
+                    timepoint_label=label,
+                    measurement_date=measurement_date.isoformat(),
+                    measurement_number=0 if label.startswith("T0") else int(label[1:]) if label.startswith("T") and label[1:].isdigit() else None,
+                    is_baseline=is_baseline,
+                    notes=notes.strip() or None,
+                )
+                db.upsert_measurement_timepoint(timepoint)
+                st.session_state[_timepoint_id_key(user_id)] = timepoint.timepoint_id
+                st.session_state[_timepoint_label_key(user_id)] = label
+                st.success(f"Timepoint applied: {label}")
+            except Exception as exc:
+                st.error(f"Failed to save timepoint: {exc}")
+
+    return st.session_state.get(_timepoint_id_key(user_id))
 
 
 def _format_series_label(name: str) -> str:
@@ -1265,6 +1377,8 @@ def _render_clinical_assessment(user: UserProfile) -> None:
     }
     
     st.caption("⚡ Inputs are batched — use Preview or Save to refresh scores without full reruns.")
+
+    active_timepoint_id = _render_longitudinal_timepoint_controls(user.user_id)
     
     selected_scales = st.multiselect(
         t('select_scales'),
@@ -1369,6 +1483,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                 assessment_id=str(uuid.uuid4()),
                 user_id=user.user_id,
                 assessment_date=datetime.now(timezone.utc).isoformat(),
+                timepoint_id=active_timepoint_id,
                 epworth_sleepiness_scale=results.get("ess"),
                 karolinska_sleepiness_scale=results.get("kss"),
                 samn_perelli_fatigue=results.get("samn_perelli"),
@@ -1865,6 +1980,7 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
         "Upload RR interval .txt files here to store them under this profile. "
         "They will be queued for analysis without needing the sidebar uploader."
     )
+    _ = _render_longitudinal_timepoint_controls(user.user_id)
     uploaded_files = st.file_uploader(
         "Upload RR (.txt)",
         type=["txt"],
