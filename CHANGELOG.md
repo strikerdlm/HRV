@@ -12,6 +12,14 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+- **Longitudinal timepoints (T0–T21)** (`app/user_database.py`, `app/user_profile_tab.py`, `app/app.py`): Added a `measurement_timepoints` table and UI controls to tag new HRV measurements and clinical assessments to a study timepoint so baseline/Δ workflows can be built deterministically.
+
+### Tests
+- Added regression coverage for timepoint persistence and database backups (`tests/test_longitudinal_timepoints.py`).
+
 ## [1.8.21] - 2025-12-14
 
 ### Added
@@ -67,7 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.8.16] - 2025-12-11
 
 ### Added
-- **Metric Explainability Specialist** (`app/agent_runtime.py`, `app/agent_insights.py`, `app/app.py`): GPT-5.1 high-reasoning persona paired with `code_interpreter` plus a deterministic fallback panel inside the Metrics tab so every SDNN, RMSSD, pNN50, LF/HF, HF power, and mean HR value now includes a citation-backed explanation.
+- **Metric Explainability Specialist** (`app/agent_runtime.py`, `app/agent_insights.py`, `app/app.py`): GPT-5.2 high-reasoning persona paired with `code_interpreter` plus a deterministic fallback panel inside the Metrics tab so every SDNN, RMSSD, pNN50, LF/HF, HF power, and mean HR value now includes a citation-backed explanation.
 - **Unit tests** (`tests/test_agent_insights.py`): Coverage for the new agent insight manager to ensure per-metric classifications stay synchronized with Task Force (1996) and Shaffer & Ginsberg (2017) ranges.
 
 ### Changed
@@ -643,7 +651,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - User Profile tab now supports language preference (EN/ES)
 - Clinical scales render with translated strings based on user language
 - Database schema version updated with migration support
-- GPT-5.1 high reasoning workflow now lives inside the Export tab and consumes the rendered statistical report payload.
+- GPT-5.2 high reasoning workflow now lives inside the Export tab and consumes the rendered statistical report payload.
 
 ### Technical
 - Database connection pooling with persistent connections
