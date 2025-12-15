@@ -192,8 +192,9 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE  | Cross-tab correlation (Circadian → Fatigue) | Complete (shared broker + auto-applied sleep window)  |
 | ✅ DONE  | Polar AccessLink automation                  | Complete (persistent OAuth tokens + VO2max history)   |
 | ✅ DONE  | Exploration Medical Analytics dashboards     | Complete (radiation/EVA/stress cards in Clinical tab) |
+| ✅ DONE  | Longitudinal timepoints (T0–T21)             | Complete (tag HRV + assessments to study timepoints)  |
 
-**Best next task:** Longitudinal study timepoints (T0–T21) + baseline/change analytics.
+**Best next task:** Baseline/change analytics using tagged T0–T21 timepoints.
 
 ### Planned Features (Q1 2026)
 
