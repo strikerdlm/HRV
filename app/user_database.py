@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import sqlite3
+import shutil
 import threading
 import uuid
 from contextlib import contextmanager
@@ -35,11 +36,17 @@ from typing import Any, Dict, Generator, List, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 
-_LOGGER = logging.getLogger(__name__)
+try:
+    from logging_config import get_logger, log_exception
+except ImportError:  # pragma: no cover - fallback for non-app contexts
+    get_logger = None  # type: ignore[assignment]
+    log_exception = None  # type: ignore[assignment]
+
+_LOGGER = get_logger(__name__) if get_logger is not None else logging.getLogger(__name__)
 
 # Database configuration
 DEFAULT_DB_NAME = "hrv_users.db"
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Thread-local storage for connection reuse
 _thread_local = threading.local()
@@ -150,6 +157,7 @@ class ClinicalScales:
     assessment_id: str
     user_id: str
     assessment_date: str  # ISO format
+    timepoint_id: Optional[str] = None  # Links to measurement_timepoints.timepoint_id
     
     # Sleep scales
     epworth_sleepiness_scale: Optional[int] = None  # ESS: 0-24
@@ -228,6 +236,7 @@ class HRVMeasurement:
     measurement_id: str
     user_id: str
     measurement_date: str  # ISO format
+    timepoint_id: Optional[str] = None  # Links to measurement_timepoints.timepoint_id
     
     # Recording metadata
     device_name: Optional[str] = None
@@ -314,6 +323,55 @@ class GarminDailyMetrics:
         return asdict(self)
 
 
+@dataclass
+class MeasurementTimepoint:
+    """A labeled longitudinal study timepoint (T0..T21) for a user."""
+
+    timepoint_id: str
+    user_id: str
+    timepoint_label: str  # e.g. 'T0_baseline', 'T1', 'T2'
+    measurement_date: str  # ISO date (YYYY-MM-DD) or ISO datetime
+    measurement_number: Optional[int] = None  # 0..21 when available
+    is_baseline: bool = False
+    notes: Optional[str] = None
+    created_at: Optional[str] = None
+    updated_at: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+
+@dataclass
+class StudyGroup:
+    """A study group definition (e.g., control vs intervention)."""
+
+    group_id: str
+    study_id: str
+    group_name: str
+    description: Optional[str] = None
+    created_at: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+
+@dataclass
+class StudyAssignment:
+    """Assign a user to a study group."""
+
+    assignment_id: str
+    user_id: str
+    group_id: str
+    assignment_date: str  # ISO format
+    created_at: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+
 # ---------------------------------------------------------------------------
 # Database Manager
 # ---------------------------------------------------------------------------
@@ -331,6 +389,7 @@ class UserDatabase:
     # Class-level tracking of initialized databases
     _initialized_dbs: set[str] = set()
     _init_lock = threading.Lock()
+    _backed_up_dbs: set[str] = set()
     
     def __init__(self, db_path: Optional[Path] = None) -> None:
         """Initialize database connection.
@@ -413,6 +472,9 @@ class UserDatabase:
     
     def _init_database(self) -> None:
         """Initialize database schema (called once per database file)."""
+        # Backup before any schema changes (required for production research stability).
+        self._backup_database_file_if_needed()
+
         # Use a direct connection for initialization to avoid recursion
         conn = sqlite3.connect(self._db_path_str, timeout=30.0)
         conn.row_factory = sqlite3.Row
@@ -463,6 +525,7 @@ class UserDatabase:
                     assessment_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     assessment_date TEXT NOT NULL,
+                    timepoint_id TEXT,
                     epworth_sleepiness_scale INTEGER,
                     pittsburgh_sleep_quality_index INTEGER,
                     insomnia_severity_index INTEGER,
@@ -481,6 +544,12 @@ class UserDatabase:
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """)
+
+            # Migration: add timepoint_id to clinical_scales if missing
+            try:
+                cursor.execute("ALTER TABLE clinical_scales ADD COLUMN timepoint_id TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
             
             # Migration: Add PANAS columns if they don't exist (for existing databases)
             try:
@@ -498,6 +567,7 @@ class UserDatabase:
                     measurement_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     measurement_date TEXT NOT NULL,
+                    timepoint_id TEXT,
                     device_name TEXT,
                     source_file TEXT,
                     file_hash TEXT,
@@ -535,6 +605,7 @@ class UserDatabase:
             """)
             # Migrations for existing databases
             for column_def in [
+                ("timepoint_id", "TEXT"),
                 ("source_file", "TEXT"),
                 ("file_hash", "TEXT"),
                 ("recording_start_utc", "TEXT"),
@@ -552,6 +623,10 @@ class UserDatabase:
             cursor.execute("""
                 CREATE INDEX IF NOT EXISTS idx_measurements_user_date 
                 ON hrv_measurements(user_id, measurement_date)
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_measurements_timepoint
+                ON hrv_measurements(user_id, timepoint_id)
             """)
             cursor.execute("""
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_measurements_user_hash
@@ -604,6 +679,7 @@ class UserDatabase:
                     composition_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     measurement_date TEXT NOT NULL,
+                    timepoint_id TEXT,
                     height_cm REAL,
                     weight_kg REAL,
                     body_fat_pct REAL,
@@ -624,6 +700,10 @@ class UserDatabase:
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """)
+            try:
+                cursor.execute("ALTER TABLE body_composition ADD COLUMN timepoint_id TEXT")
+            except sqlite3.OperationalError:
+                pass
             
             # Medical history table
             cursor.execute("""
@@ -642,6 +722,7 @@ class UserDatabase:
                     lab_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     test_date TEXT NOT NULL,
+                    timepoint_id TEXT,
                     laboratory TEXT,
                     rbc_million_ul REAL,
                     hemoglobin_g_dl REAL,
@@ -662,6 +743,10 @@ class UserDatabase:
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """)
+            try:
+                cursor.execute("ALTER TABLE lab_cbc ADD COLUMN timepoint_id TEXT")
+            except sqlite3.OperationalError:
+                pass
             
             # Laboratory results - Blood Chemistry
             cursor.execute("""
@@ -669,6 +754,7 @@ class UserDatabase:
                     lab_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     test_date TEXT NOT NULL,
+                    timepoint_id TEXT,
                     fasting INTEGER,
                     laboratory TEXT,
                     glucose_mg_dl REAL,
@@ -702,6 +788,10 @@ class UserDatabase:
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """)
+            try:
+                cursor.execute("ALTER TABLE lab_chemistry ADD COLUMN timepoint_id TEXT")
+            except sqlite3.OperationalError:
+                pass
             
             # Laboratory results - Urinalysis
             cursor.execute("""
@@ -709,6 +799,7 @@ class UserDatabase:
                     lab_id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,
                     test_date TEXT NOT NULL,
+                    timepoint_id TEXT,
                     collection_method TEXT,
                     color TEXT,
                     appearance TEXT,
@@ -730,6 +821,10 @@ class UserDatabase:
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """)
+            try:
+                cursor.execute("ALTER TABLE lab_urinalysis ADD COLUMN timepoint_id TEXT")
+            except sqlite3.OperationalError:
+                pass
             
             # Physiological calculations (cached results)
             cursor.execute("""
@@ -802,6 +897,48 @@ class UserDatabase:
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """)
+
+            # Longitudinal study timepoints (T0..T21) and cohort grouping.
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS measurement_timepoints (
+                    timepoint_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    timepoint_label TEXT NOT NULL,
+                    measurement_date TEXT NOT NULL,
+                    measurement_number INTEGER,
+                    is_baseline INTEGER DEFAULT 0,
+                    notes TEXT,
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    UNIQUE(user_id, timepoint_label),
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            cursor.execute("""
+                CREATE INDEX IF NOT EXISTS idx_timepoints_user_label
+                ON measurement_timepoints(user_id, timepoint_label)
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS study_groups (
+                    group_id TEXT PRIMARY KEY,
+                    study_id TEXT NOT NULL,
+                    group_name TEXT NOT NULL,
+                    description TEXT,
+                    created_at TEXT NOT NULL
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS study_assignments (
+                    assignment_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    group_id TEXT NOT NULL,
+                    assignment_date TEXT NOT NULL,
+                    created_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id),
+                    FOREIGN KEY (group_id) REFERENCES study_groups(group_id)
+                )
+            """)
             
             # Create indices for Polar tables
             cursor.execute("""
@@ -828,6 +965,42 @@ class UserDatabase:
             _LOGGER.info("Database schema initialized: %s", self._db_path_str)
         finally:
             conn.close()
+
+    def _backup_database_file_if_needed(self) -> None:
+        """Create a timestamped backup before applying schema changes.
+
+        Raises:
+            RuntimeError: If a backup was required but could not be created.
+        """
+        # NOTE: This method is called from within `UserDatabase._init_lock`.
+        # Do not re-acquire the same lock here (non-reentrant), or the app will deadlock.
+        if self._db_path_str in UserDatabase._backed_up_dbs:
+            return
+        if not self.db_path.exists():
+            UserDatabase._backed_up_dbs.add(self._db_path_str)
+            return
+        try:
+            if self.db_path.stat().st_size == 0:
+                UserDatabase._backed_up_dbs.add(self._db_path_str)
+                return
+        except OSError as exc:
+            if log_exception is not None:
+                log_exception(_LOGGER, "Unable to stat database before backup", exc)
+            raise RuntimeError("Unable to verify database file before backup") from exc
+
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        backup_path = self.db_path.with_suffix(f"{self.db_path.suffix}.bak_{timestamp}")
+        try:
+            shutil.copy2(self.db_path, backup_path)
+            UserDatabase._backed_up_dbs.add(self._db_path_str)
+            _LOGGER.info("Backed up database before schema init: %s", backup_path)
+        except OSError as exc:
+            if log_exception is not None:
+                log_exception(_LOGGER, "Database backup failed; refusing schema changes", exc)
+            raise RuntimeError(
+                "Database backup failed; schema changes were not applied. "
+                "Please back up hrv_users.db and retry."
+            ) from exc
     
     # -----------------------------------------------------------------------
     # User Management
@@ -1091,6 +1264,7 @@ class UserDatabase:
             cursor.execute("""
                 INSERT OR REPLACE INTO clinical_scales (
                     assessment_id, user_id, assessment_date,
+                    timepoint_id,
                     epworth_sleepiness_scale, pittsburgh_sleep_quality_index,
                     insomnia_severity_index, karolinska_sleepiness_scale,
                     samn_perelli_fatigue, fatigue_severity_scale,
@@ -1098,9 +1272,10 @@ class UserDatabase:
                     state_trait_anxiety_inventory, panas_positive_affect,
                     panas_negative_affect, borg_rpe, vas_pain,
                     vas_fatigue, notes
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 scales.assessment_id, scales.user_id, scales.assessment_date,
+                scales.timepoint_id,
                 scales.epworth_sleepiness_scale, scales.pittsburgh_sleep_quality_index,
                 scales.insomnia_severity_index, scales.karolinska_sleepiness_scale,
                 scales.samn_perelli_fatigue, scales.fatigue_severity_scale,
@@ -1141,6 +1316,7 @@ class UserDatabase:
             assessment_id=row["assessment_id"],
             user_id=row["user_id"],
             assessment_date=row["assessment_date"],
+            timepoint_id=_safe_get("timepoint_id"),
             epworth_sleepiness_scale=row["epworth_sleepiness_scale"],
             pittsburgh_sleep_quality_index=row["pittsburgh_sleep_quality_index"],
             insomnia_severity_index=row["insomnia_severity_index"],
@@ -1456,7 +1632,7 @@ class UserDatabase:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT OR REPLACE INTO hrv_measurements (
-                    measurement_id, user_id, measurement_date, device_name,
+                    measurement_id, user_id, measurement_date, timepoint_id, device_name,
                     source_file, file_hash, recording_start_utc,
                     recording_duration_min, recording_context, body_position,
                     mean_rr_ms, sdnn_ms, rmssd_ms, pnn50_pct, mean_hr_bpm, sdhr_bpm,
@@ -1466,11 +1642,12 @@ class UserDatabase:
                     rr_intervals_json, artifact_percentage, quality_score, notes,
                     analysis_settings_json, created_at
                 ) VALUES (
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
             """, (
                 measurement.measurement_id, measurement.user_id, measurement.measurement_date,
+                measurement.timepoint_id,
                 measurement.device_name, measurement.source_file, measurement.file_hash,
                 measurement.recording_start_utc, measurement.recording_duration_min,
                 measurement.recording_context, measurement.body_position,
@@ -1545,6 +1722,7 @@ class UserDatabase:
             "measurement_id",
             "user_id",
             "measurement_date",
+            "timepoint_id",
             "device_name",
             "source_file",
             "file_hash",
@@ -1606,6 +1784,7 @@ class UserDatabase:
             measurement_id=row["measurement_id"],
             user_id=row["user_id"],
             measurement_date=row["measurement_date"],
+            timepoint_id=row["timepoint_id"] if "timepoint_id" in row.keys() else None,
             device_name=row["device_name"],
             source_file=row["source_file"],
             file_hash=row["file_hash"],
@@ -1797,7 +1976,14 @@ class UserDatabase:
         
         if df.empty or metric not in df.columns:
             return {}
-        
+
+        # Ensure chronological order for trends/changes.
+        if "measurement_date" in df.columns:
+            try:
+                df = df.sort_values("measurement_date")
+            except Exception:
+                pass
+
         values = df[metric].dropna()
         
         if len(values) < 2:
@@ -1834,16 +2020,129 @@ class UserDatabase:
             if first_val != 0:
                 stats["pct_change_total"] = float((last_val - first_val) / first_val * 100)
         
-        # 95% CI for mean
-        from scipy import stats as scipy_stats
-        ci = scipy_stats.t.interval(
-            0.95, len(values) - 1,
-            loc=values.mean(), scale=scipy_stats.sem(values)
-        )
-        stats["ci_95_lower"] = float(ci[0])
-        stats["ci_95_upper"] = float(ci[1])
+        # 95% CI for mean (optional SciPy)
+        try:
+            from scipy import stats as scipy_stats  # type: ignore
+        except Exception:
+            scipy_stats = None  # type: ignore[assignment]
+        if scipy_stats is not None:
+            ci = scipy_stats.t.interval(
+                0.95,
+                len(values) - 1,
+                loc=values.mean(),
+                scale=scipy_stats.sem(values),
+            )
+            stats["ci_95_lower"] = float(ci[0])
+            stats["ci_95_upper"] = float(ci[1])
         
         return stats
+
+    # -----------------------------------------------------------------------
+    # Longitudinal Timepoints (T0..T21)
+    # -----------------------------------------------------------------------
+
+    def upsert_measurement_timepoint(self, timepoint: MeasurementTimepoint) -> str:
+        """Create or update a longitudinal measurement timepoint.
+
+        Upserts by (user_id, timepoint_label) so clinicians can adjust dates/notes.
+        """
+        if not timepoint.user_id:
+            raise ValueError("timepoint.user_id is required")
+        if not timepoint.timepoint_label:
+            raise ValueError("timepoint.timepoint_label is required")
+        if not timepoint.measurement_date:
+            raise ValueError("timepoint.measurement_date is required")
+
+        now = datetime.now(timezone.utc).isoformat()
+        timepoint.timepoint_id = timepoint.timepoint_id or str(uuid.uuid4())
+        timepoint.created_at = timepoint.created_at or now
+        timepoint.updated_at = now
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO measurement_timepoints (
+                    timepoint_id, user_id, timepoint_label, measurement_date,
+                    measurement_number, is_baseline, notes, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, timepoint_label) DO UPDATE SET
+                    measurement_date = excluded.measurement_date,
+                    measurement_number = excluded.measurement_number,
+                    is_baseline = excluded.is_baseline,
+                    notes = excluded.notes,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    timepoint.timepoint_id,
+                    timepoint.user_id,
+                    timepoint.timepoint_label,
+                    timepoint.measurement_date,
+                    timepoint.measurement_number,
+                    1 if timepoint.is_baseline else 0,
+                    timepoint.notes,
+                    timepoint.created_at,
+                    timepoint.updated_at,
+                ),
+            )
+        return timepoint.timepoint_id
+
+    def list_measurement_timepoints(
+        self, user_id: str, *, limit: int = 50
+    ) -> List[MeasurementTimepoint]:
+        """List timepoints for a user (newest first)."""
+        if not user_id:
+            raise ValueError("user_id is required")
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT *
+                FROM measurement_timepoints
+                WHERE user_id = ?
+                ORDER BY datetime(measurement_date) DESC
+                LIMIT ?
+                """,
+                (user_id, int(limit)),
+            )
+            rows = cursor.fetchall()
+        return [self._row_to_measurement_timepoint(row) for row in rows]
+
+    def get_measurement_timepoint_by_label(
+        self, user_id: str, timepoint_label: str
+    ) -> Optional[MeasurementTimepoint]:
+        """Get a timepoint by label (e.g., 'T0_baseline', 'T3')."""
+        if not user_id:
+            raise ValueError("user_id is required")
+        if not timepoint_label:
+            raise ValueError("timepoint_label is required")
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT *
+                FROM measurement_timepoints
+                WHERE user_id = ? AND timepoint_label = ?
+                LIMIT 1
+                """,
+                (user_id, timepoint_label),
+            )
+            row = cursor.fetchone()
+        return self._row_to_measurement_timepoint(row) if row else None
+
+    def _row_to_measurement_timepoint(self, row: sqlite3.Row) -> MeasurementTimepoint:
+        """Convert row to MeasurementTimepoint."""
+        return MeasurementTimepoint(
+            timepoint_id=row["timepoint_id"],
+            user_id=row["user_id"],
+            timepoint_label=row["timepoint_label"],
+            measurement_date=row["measurement_date"],
+            measurement_number=row["measurement_number"],
+            is_baseline=bool(row["is_baseline"]),
+            notes=row["notes"],
+            created_at=row["created_at"],
+            updated_at=row["updated_at"],
+        )
     
     def compare_periods(
         self,
@@ -2177,6 +2476,9 @@ __all__ = [
     "HRVMeasurement",
     "PolarCredentials",
     "VO2maxEntry",
+    "MeasurementTimepoint",
+    "StudyGroup",
+    "StudyAssignment",
     "UserDatabase",
     "get_database",
     "get_database_path",

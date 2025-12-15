@@ -2641,6 +2641,7 @@ def _persist_analysis_results(
         source = str(row.get("source", "unknown"))
         up = uploads.get(source)
         file_hash = file_hash_map.get(source)
+        timepoint_id = st.session_state.get(f"longitudinal_timepoint_id:{user_id}")
         recording_start_iso = None
         recording_date_iso = datetime.now(timezone.utc).date().isoformat()
         recording_duration_min = float(row.get("recording_duration_minutes", 0.0)) if "recording_duration_minutes" in row else None
@@ -2660,6 +2661,7 @@ def _persist_analysis_results(
             measurement_id=str(uuid.uuid4()),
             user_id=user_id,
             measurement_date=recording_date_iso,
+            timepoint_id=timepoint_id,
             device_name="RR Upload",
             source_file=source,
             file_hash=file_hash,
