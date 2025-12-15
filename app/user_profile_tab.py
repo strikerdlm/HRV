@@ -1378,7 +1378,8 @@ def _render_clinical_assessment(user: UserProfile) -> None:
     
     st.caption("⚡ Inputs are batched — use Preview or Save to refresh scores without full reruns.")
 
-    active_timepoint_id = _render_longitudinal_timepoint_controls(user.user_id)
+    # Timepoint selector is rendered once above tabs (avoid duplicate keys).
+    active_timepoint_id = st.session_state.get(_timepoint_id_key(user.user_id))
     
     selected_scales = st.multiselect(
         t('select_scales'),
@@ -1980,7 +1981,6 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
         "Upload RR interval .txt files here to store them under this profile. "
         "They will be queued for analysis without needing the sidebar uploader."
     )
-    _ = _render_longitudinal_timepoint_controls(user.user_id)
     uploaded_files = st.file_uploader(
         "Upload RR (.txt)",
         type=["txt"],
@@ -3772,6 +3772,10 @@ def render_user_profile_tab() -> None:
         else:
             _render_profile_view(current_user)
         
+        st.markdown("---")
+
+        # Timepoint selector (shared across sub-tabs; avoids duplicate keys).
+        _render_longitudinal_timepoint_controls(current_user.user_id)
         st.markdown("---")
         
         # Sub-tabs for different sections
