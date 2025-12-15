@@ -574,6 +574,14 @@ This feature enables personalized HRV analysis and fatigue assessment by incorpo
 
 All longitudinal plots inside the profile (assessment history, Garmin wellness trends, HRV history, and Exploration Medical Analytics) now render with Apache ECharts for consistent styling and publication-ready exports.
 
+### Longitudinal timepoints (T0–T21)
+
+Mission Control now supports **study timepoints** so you can run baseline + follow-up workflows (e.g., **T0_baseline**, **T1** … **T21**) without losing determinism.
+
+- **Where**: User Profile → **Assessments** and **HRV** tabs
+- **How**: Select a timepoint label, set the measurement date, then click **Save / Apply timepoint**. New assessments and HRV measurements saved after that will carry the linked `timepoint_id`.
+- **Unassigned**: You can leave the timepoint as **Unassigned** if the entry is not part of a longitudinal protocol.
+
 ### Batched Clinical Assessments (December 2025 Sprint)
 
 - **Clinical form batching:** Epworth, Samn-Perelli, Karolinska, and VAS controls now live inside Streamlit forms so you can adjust multiple sliders without forcing a full-page rerun. Press **Preview** to refresh summaries or **Save** to persist the assessment.
