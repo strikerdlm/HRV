@@ -1566,7 +1566,7 @@ def _render_assessment_history(user: UserProfile) -> None:
     st.markdown("## 📈 Assessment History")
     
     # Use cached loader for fast repeated views
-    @st.cache_data(ttl=30, show_spinner=False)
+    @st.cache_data(ttl=30, max_entries=64, show_spinner=False)
     def _load_history(uid: str, limit: int) -> list:
         db = get_database()
         return [h.to_dict() for h in db.get_clinical_scales_history(uid, limit=limit)]
@@ -1736,7 +1736,7 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         st.info("Garmin import module unavailable. Install fitparse and rerun.")
         return
 
-    @st.cache_data(ttl=30, show_spinner=False)
+    @st.cache_data(ttl=30, max_entries=64, show_spinner=False)
     def _load_history(uid: str) -> pd.DataFrame:
         db = get_database()
         if hasattr(db, "get_garmin_daily_dataframe"):
@@ -2929,7 +2929,7 @@ def _render_medical_history_summary(user: UserProfile) -> None:
     st.markdown("#### 📋 Medical History Summary")
     
     # Load latest medical record from database for richer context
-    @st.cache_data(ttl=30, show_spinner=False)
+    @st.cache_data(ttl=30, max_entries=64, show_spinner=False)
     def _load_latest_record(uid: str) -> Dict[str, Any]:
         try:
             db = get_database()
@@ -2980,7 +2980,7 @@ def _render_medical_history_summary(user: UserProfile) -> None:
             st.info("No medical history recorded. Edit your profile or use the Exploration Medical Record form.")
 
 
-@st.cache_data(ttl=60, show_spinner=False)
+@st.cache_data(ttl=60, max_entries=64, show_spinner=False)
 def _load_medical_history_dataframe(user_id: str) -> pd.DataFrame:
     """Load exploration medical history entries as a typed DataFrame."""
     if not user_id:
