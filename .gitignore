@@ -239,6 +239,10 @@ desktop.ini
 *.temp
 ~*
 
+# Core dumps (native crashes)
+# Ignore files named exactly 'core' anywhere (common Unix core dump name).
+core
+
 # IDE files
 *.swp
 *.swo
