@@ -968,7 +968,7 @@ def _safe_to_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
     return result
 
 
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=300, max_entries=32, show_spinner=False)
 def _fetch_swpc_dataset(path: str) -> pd.DataFrame:
     url = f"{SWPC_BASE_URL}{path}"
     response = requests.get(url, timeout=SWPC_TIMEOUT)
@@ -1154,7 +1154,7 @@ def get_swpc_solar_probabilities() -> pd.DataFrame:
     return df
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(ttl=600, max_entries=64, show_spinner=False)
 def _cached_comprehensive(
         rr: np.ndarray, include_advanced: bool) -> Dict[str, Any]:
     start_time = time.perf_counter()
@@ -1176,12 +1176,12 @@ def _cached_comprehensive(
     return result
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(ttl=600, max_entries=128, show_spinner=False)
 def _cached_psd(rr: np.ndarray, method: str) -> Tuple[np.ndarray, np.ndarray]:
     return psd_curve(rr, sampling_rate=4.0, method=method)
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(ttl=600, max_entries=32, show_spinner=False)
 def _cached_windowed(
     df: pd.DataFrame,
     rr_col: str,
@@ -1214,7 +1214,7 @@ def _cached_windowed(
         )
 
 
-@st.cache_data(show_spinner=False)
+@st.cache_data(ttl=600, max_entries=64, show_spinner=False)
 def _cached_spectrogram(
         rr: np.ndarray) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     return spectrogram_rr(rr, sampling_rate=4.0)
@@ -2841,70 +2841,93 @@ def _device_import_section() -> Dict[str, UploadedRR]:
                 type=["gt3x", "agd", "csv"],
                 key="actigraph_uploader",
             )
-            if actigraph_file is not None:
-                try:
-                    # Save to temp file for processing
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(
-                        delete=False,
-                        suffix=f".{actigraph_file.name.split('.')[-1]}"
-                    ) as tmp:
-                        tmp.write(actigraph_file.getvalue())
-                        tmp_path = Path(tmp.name)
-                    
-                    # Import data
-                    actigraph_data = import_actigraph_data(
-                        tmp_path,
-                        use_pygt3x=True,
-                        compute_counts=True,
-                        classify_intensity=True,
-                        classify_sleep=True,
-                    )
-                    
-                    # Store in session state for use in other tabs
-                    st.session_state["actigraph_data"] = actigraph_data
-                    
-                    # Quality check
-                    quality = check_actigraph_data_quality(actigraph_data)
-                    
-                    st.success(f"✅ Loaded ActiGraph data: {quality['raw_samples']:,} samples")
-                    st.caption(f"Device: {quality['device_type']} @ {quality['sample_rate']} Hz")
-                    
-                    if quality["warnings"]:
-                        for warn in quality["warnings"]:
-                            st.warning(warn)
-                    
-                    # If heart rate data available, convert to RR intervals
-                    if not actigraph_data.heart_rate.empty:
-                        hr_df = actigraph_data.heart_rate
-                        # Estimate RR from HR (approximation)
-                        rr_ms = (60000.0 / hr_df["heart_rate"].values).astype(float)
-                        # Filter valid values
-                        valid_mask = (rr_ms >= 300) & (rr_ms <= 2000)
-                        rr_ms = rr_ms[valid_mask]
-                        
-                        if len(rr_ms) > 0:
-                            start_ts = pd.Timestamp(
-                                hr_df["timestamp"].iloc[0]
-                            ).tz_convert(timezone.utc)
-                            df = _to_dataframe(
-                                f"actigraph_{actigraph_file.name}",
-                                rr_ms,
-                                start_ts=start_ts,
-                            )
-                            out[f"actigraph_{actigraph_file.name}"] = UploadedRR(
-                                name=f"actigraph_{actigraph_file.name}",
-                                rr_ms=rr_ms,
-                                df=df,
-                                recording_start_utc=start_ts,
-                            )
-                            st.info(f"📈 Extracted {len(rr_ms):,} RR intervals from HR data")
-                    
-                    # Clean up temp file
-                    tmp_path.unlink(missing_ok=True)
-                    
-                except Exception as exc:
-                    st.error(f"Failed to import ActiGraph data: {exc}")
+            import_actigraph_clicked = st.button(
+                "Import ActiGraph data",
+                key="actigraph_import_button",
+                disabled=actigraph_file is None,
+                help="Runs once when clicked (prevents re-processing on every rerun).",
+            )
+            if import_actigraph_clicked and actigraph_file is not None:
+                with st.spinner("Importing ActiGraph data..."):
+                    tmp_path: Optional[Path] = None
+                    try:
+                        import tempfile
+                        with tempfile.NamedTemporaryFile(
+                            delete=False,
+                            suffix=f".{actigraph_file.name.split('.')[-1]}",
+                        ) as tmp:
+                            tmp.write(actigraph_file.getvalue())
+                            tmp_path = Path(tmp.name)
+
+                        actigraph_data = import_actigraph_data(
+                            tmp_path,
+                            use_pygt3x=True,
+                            compute_counts=True,
+                            classify_intensity=True,
+                            classify_sleep=True,
+                        )
+
+                        # Store in session state for use in other tabs
+                        st.session_state["actigraph_data"] = actigraph_data
+
+                        # Quality check
+                        quality = check_actigraph_data_quality(actigraph_data)
+
+                        st.success(
+                            f"✅ Loaded ActiGraph data: {quality['raw_samples']:,} samples"
+                        )
+                        st.caption(
+                            f"Device: {quality['device_type']} @ {quality['sample_rate']} Hz"
+                        )
+
+                        if quality["warnings"]:
+                            for warn in quality["warnings"]:
+                                st.warning(warn)
+
+                        # If heart rate data available, convert to RR intervals (approximation)
+                        if not actigraph_data.heart_rate.empty:
+                            hr_df = actigraph_data.heart_rate
+                            rr_ms = (60000.0 / hr_df["heart_rate"].values).astype(float)
+                            valid_mask = (rr_ms >= 300) & (rr_ms <= 2000)
+                            rr_ms = rr_ms[valid_mask]
+
+                            if len(rr_ms) > 0:
+                                start_ts = pd.Timestamp(hr_df["timestamp"].iloc[0])
+                                if start_ts.tzinfo is None or start_ts.tzinfo.utcoffset(start_ts) is None:
+                                    start_ts = start_ts.tz_localize("UTC")
+                                else:
+                                    start_ts = start_ts.tz_convert("UTC")
+                                df = _to_dataframe(
+                                    f"actigraph_{actigraph_file.name}",
+                                    rr_ms,
+                                    start_ts=start_ts,
+                                )
+                                out[f"actigraph_{actigraph_file.name}"] = UploadedRR(
+                                    name=f"actigraph_{actigraph_file.name}",
+                                    rr_ms=rr_ms,
+                                    df=df,
+                                    recording_start_utc=start_ts,
+                                )
+                                st.info(
+                                    f"📈 Extracted {len(rr_ms):,} RR intervals from HR data"
+                                )
+                        else:
+                            st.info("No heart-rate channel found; RR extraction skipped.")
+                    except Exception as exc:  # pragma: no cover - UI defensive
+                        log_exception(_LOGGER, "Failed to import ActiGraph data", exc)
+                        st.error(f"Failed to import ActiGraph data: {exc}")
+                    finally:
+                        if tmp_path is not None:
+                            try:
+                                tmp_path.unlink(missing_ok=True)
+                            except OSError as exc:
+                                _LOGGER.debug(
+                                    "Unable to delete temp ActiGraph file %s: %s",
+                                    tmp_path,
+                                    exc,
+                                )
+            elif actigraph_file is not None:
+                st.caption("Ready to import. Click **Import ActiGraph data** to process once.")
     else:
         with st.sidebar.expander("📊 ActiGraph GT3X Import", expanded=False):
             st.warning("ActiGraph import not available. Install pygt3x: `pip install pygt3x`")
@@ -2924,98 +2947,125 @@ def _device_import_section() -> Dict[str, UploadedRR]:
                 key="somfit_xml_uploader",
             )
             
-            if somfit_file is not None:
-                try:
-                    import tempfile
-                    # Save main file
-                    with tempfile.NamedTemporaryFile(
-                        delete=False,
-                        suffix=f".{somfit_file.name.split('.')[-1]}"
-                    ) as tmp:
-                        tmp.write(somfit_file.getvalue())
-                        tmp_path = Path(tmp.name)
-                    
-                    # Save XML if provided
+            import_somfit_clicked = st.button(
+                "Import Somfit data",
+                key="somfit_import_button",
+                disabled=somfit_file is None,
+                help="Runs once when clicked (prevents re-processing on every rerun).",
+            )
+            if import_somfit_clicked and somfit_file is not None:
+                with st.spinner("Importing Somfit data..."):
+                    tmp_path = None
                     xml_path = None
-                    if somfit_xml is not None:
+                    try:
+                        import tempfile
                         with tempfile.NamedTemporaryFile(
                             delete=False,
-                            suffix=".xml"
-                        ) as tmp_xml:
-                            tmp_xml.write(somfit_xml.getvalue())
-                            xml_path = Path(tmp_xml.name)
-                    
-                    # Import data
-                    somfit_data = import_somfit_data(
-                        tmp_path,
-                        annotation_path=xml_path,
-                        use_pyedflib=True,
-                        extract_rr=True,
-                    )
-                    
-                    # Store in session state
-                    st.session_state["somfit_data"] = somfit_data
-                    
-                    # Quality check
-                    quality = check_somfit_data_quality(somfit_data)
-                    
-                    st.success(
-                        f"✅ Loaded Somfit data: {quality['recording_duration_hours']:.1f} hours"
-                    )
-                    st.caption(f"Signals: {quality['num_signals']}")
-                    
-                    # Show sleep metrics if available
-                    if not somfit_data.staging.epochs.empty:
-                        staging = somfit_data.staging
-                        st.markdown(f"""
+                            suffix=f".{somfit_file.name.split('.')[-1]}",
+                        ) as tmp:
+                            tmp.write(somfit_file.getvalue())
+                            tmp_path = Path(tmp.name)
+
+                        if somfit_xml is not None:
+                            with tempfile.NamedTemporaryFile(
+                                delete=False,
+                                suffix=".xml",
+                            ) as tmp_xml:
+                                tmp_xml.write(somfit_xml.getvalue())
+                                xml_path = Path(tmp_xml.name)
+
+                        somfit_data = import_somfit_data(
+                            tmp_path,
+                            annotation_path=xml_path,
+                            use_pyedflib=True,
+                            extract_rr=True,
+                        )
+
+                        # Store in session state
+                        st.session_state["somfit_data"] = somfit_data
+
+                        quality = check_somfit_data_quality(somfit_data)
+
+                        st.success(
+                            f"✅ Loaded Somfit data: {quality['recording_duration_hours']:.1f} hours"
+                        )
+                        st.caption(f"Signals: {quality['num_signals']}")
+
+                        if not somfit_data.staging.epochs.empty:
+                            staging = somfit_data.staging
+                            st.markdown(
+                                f"""
                         **Sleep Architecture:**
                         - TST: {staging.total_sleep_time:.0f} min
                         - Efficiency: {staging.sleep_efficiency:.1f}%
                         - WASO: {staging.waso:.0f} min
-                        """)
-                    
-                    if quality["warnings"]:
-                        for warn in quality["warnings"]:
-                            if "Note:" in warn:
-                                st.info(warn)
-                            else:
-                                st.warning(warn)
-                    
-                    # Extract RR intervals for HRV analysis
-                    if not somfit_data.rr_intervals.empty:
-                        rr_df = somfit_data.rr_intervals
-                        rr_ms = rr_df["rr_interval_ms"].values.astype(float)
-                        
-                        if len(rr_ms) > 0:
-                            if "timestamp" in rr_df.columns:
-                                start_ts = pd.Timestamp(
-                                    rr_df["timestamp"].iloc[0]
-                                ).tz_convert(timezone.utc)
-                            else:
-                                start_ts = pd.Timestamp(
-                                    somfit_data.metadata.start_time
-                                ).tz_convert(timezone.utc) if somfit_data.metadata.start_time else pd.Timestamp.now(tz=timezone.utc)
-                            
-                            df = _to_dataframe(
-                                f"somfit_{somfit_file.name}",
-                                rr_ms,
-                                start_ts=start_ts,
+                        """
                             )
-                            out[f"somfit_{somfit_file.name}"] = UploadedRR(
-                                name=f"somfit_{somfit_file.name}",
-                                rr_ms=rr_ms,
-                                df=df,
-                                recording_start_utc=start_ts,
-                            )
-                            st.info(f"📈 Extracted {len(rr_ms):,} RR intervals")
-                    
-                    # Clean up temp files
-                    tmp_path.unlink(missing_ok=True)
-                    if xml_path:
-                        xml_path.unlink(missing_ok=True)
-                    
-                except Exception as exc:
-                    st.error(f"Failed to import Somfit data: {exc}")
+
+                        if quality["warnings"]:
+                            for warn in quality["warnings"]:
+                                if "Note:" in warn:
+                                    st.info(warn)
+                                else:
+                                    st.warning(warn)
+
+                        # Extract RR intervals for HRV analysis
+                        if not somfit_data.rr_intervals.empty:
+                            rr_df = somfit_data.rr_intervals
+                            rr_ms = rr_df["rr_interval_ms"].values.astype(float)
+
+                            if len(rr_ms) > 0:
+                                if "timestamp" in rr_df.columns:
+                                    start_ts = pd.Timestamp(rr_df["timestamp"].iloc[0])
+                                else:
+                                    start_ts = (
+                                        pd.Timestamp(somfit_data.metadata.start_time)
+                                        if somfit_data.metadata.start_time
+                                        else pd.Timestamp.now(tz=timezone.utc)
+                                    )
+                                if start_ts.tzinfo is None or start_ts.tzinfo.utcoffset(start_ts) is None:
+                                    start_ts = start_ts.tz_localize("UTC")
+                                else:
+                                    start_ts = start_ts.tz_convert("UTC")
+
+                                df = _to_dataframe(
+                                    f"somfit_{somfit_file.name}",
+                                    rr_ms,
+                                    start_ts=start_ts,
+                                )
+                                out[f"somfit_{somfit_file.name}"] = UploadedRR(
+                                    name=f"somfit_{somfit_file.name}",
+                                    rr_ms=rr_ms,
+                                    df=df,
+                                    recording_start_utc=start_ts,
+                                )
+                                st.info(f"📈 Extracted {len(rr_ms):,} RR intervals")
+                        else:
+                            st.info("No RR interval channel found; RR extraction skipped.")
+                    except Exception as exc:  # pragma: no cover - UI defensive
+                        log_exception(_LOGGER, "Failed to import Somfit data", exc)
+                        st.error(f"Failed to import Somfit data: {exc}")
+                    finally:
+                        if tmp_path is not None:
+                            try:
+                                tmp_path.unlink(missing_ok=True)
+                            except OSError as exc:
+                                _LOGGER.debug(
+                                    "Unable to delete temp Somfit file %s: %s",
+                                    tmp_path,
+                                    exc,
+                                )
+                        if xml_path is not None:
+                            try:
+                                xml_path.unlink(missing_ok=True)
+                            except OSError as exc:
+                                _LOGGER.debug(
+                                    "Unable to delete temp Somfit XML %s: %s",
+                                    xml_path,
+                                    exc,
+                                )
+            elif somfit_file is not None:
+                st.caption("Ready to import. Click **Import Somfit data** to process once.")
     else:
         with st.sidebar.expander("😴 Somfit Pro Import", expanded=False):
             st.warning("Somfit import not available. Install pyedflib: `pip install pyedflib`")
@@ -4214,7 +4264,7 @@ OPEN_METEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/era5"
 BOGOTA = {"latitude": 4.7110, "longitude": -74.0721}
 
 
-@st.cache_data(ttl=1800, show_spinner=False)
+@st.cache_data(ttl=1800, max_entries=16, show_spinner=False)
 def fetch_open_meteo_hourly(
     start_date: str,
     end_date: str,
