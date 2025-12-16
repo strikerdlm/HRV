@@ -78,11 +78,23 @@ class _SuppressAsyncioWebSocketClosed(logging.Filter):
             return True
 
         exc_info = record.exc_info
-        if not exc_info or exc_info[0] is None:
+        if exc_info and exc_info[0] is not None:
+            exc_type = exc_info[0]
+            exc_name = getattr(exc_type, "__name__", "")
+            if exc_name in {"WebSocketClosedError", "StreamClosedError"}:
+                return False
             return True
-        exc_type = exc_info[0]
-        exc_name = getattr(exc_type, "__name__", "")
-        if exc_name in {"WebSocketClosedError", "StreamClosedError"}:
+
+        # Some asyncio error logs embed the exception type into the message text
+        # without populating `record.exc_info`. Suppress only the known benign
+        # websocket-close race that Streamlit/Tornado emits.
+        benign_markers = (
+            "WebSocketClosedError",
+            "StreamClosedError",
+            "tornado.websocket.WebSocketClosedError",
+            "tornado.iostream.StreamClosedError",
+        )
+        if any(marker in message for marker in benign_markers):
             return False
         return True
 
