@@ -583,7 +583,7 @@ def t(key: str, **kwargs: Any) -> str:
 
 
 # Pre-compute translation lookups for hot paths
-@st.cache_data(ttl=3600, show_spinner=False)
+@st.cache_data(ttl=3600, max_entries=16, show_spinner=False)
 def _get_translations_for_language(lang_code: str) -> Dict[str, str]:
     """Cache UI translations for a language (1-hour TTL).
     
