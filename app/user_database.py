@@ -2409,7 +2409,7 @@ except ImportError:
 try:
     import streamlit as st
     
-    @st.cache_data(ttl=30, show_spinner=False)
+    @st.cache_data(ttl=30, max_entries=32, show_spinner=False)
     def get_cached_user_list() -> List[Dict[str, Any]]:
         """Get cached list of users (30-second TTL).
         
@@ -2429,7 +2429,7 @@ try:
             for u in users
         ]
     
-    @st.cache_data(ttl=60, show_spinner=False)
+    @st.cache_data(ttl=60, max_entries=128, show_spinner=False)
     def get_cached_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
         """Get cached user profile by ID (60-second TTL).
         
