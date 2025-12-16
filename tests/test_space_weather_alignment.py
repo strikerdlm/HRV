@@ -106,3 +106,27 @@ def test_corr_table_uses_partial_correlation_when_covariates_present() -> None:
     )
     assert no_cov.iloc[0]["pearson_r"] > 0.8
     assert abs(with_cov.iloc[0]["pearson_r"]) < 0.2
+
+
+def test_get_swpc_solar_radio_flux_handles_tz_aware_datetime(monkeypatch, tmp_path) -> None:
+    """Space-weather bootstrap should not crash on tz-aware datetime columns."""
+    from app import app as app_module
+
+    df = pd.DataFrame(
+        {
+            "time_tag": pd.to_datetime(
+                ["2024-01-01T00:00:00Z", "2024-01-02T00:00:00Z"], utc=True
+            ),
+            "observed_flux": [100.0, 110.0],
+        }
+    )
+
+    monkeypatch.setattr(app_module, "_fetch_swpc_dataset", lambda _path: df.copy())
+    monkeypatch.setattr(app_module, "_read_dataframe_cache", lambda *_a, **_k: None)
+    monkeypatch.setattr(app_module, "_write_dataframe_cache", lambda *_a, **_k: None)
+    monkeypatch.setattr(app_module, "SPACE_WEATHER_CACHE_DIR", tmp_path, raising=False)
+
+    result = app_module.get_swpc_solar_radio_flux()
+    assert not result.empty
+    assert "time_tag" in result.columns
+    assert pd.api.types.is_datetime64_any_dtype(result["time_tag"])
