@@ -2480,6 +2480,26 @@ def _render_gpt_high_interpretation(
         state["sources"] = result.sources
         state["reasoning_encrypted"] = result.reasoning_encrypted
         st.session_state["gpt5_tts_audio"] = b""
+        # Persist the rendered markdown (not raw reasoning) per active user for exports.
+        try:
+            ctx = get_active_user_context()
+        except Exception:
+            ctx = _guest_user_context()
+        if ctx.get("has_user") and ctx.get("user_id"):
+            try:
+                db = get_database()
+                db.save_ai_report(
+                    user_id=str(ctx.get("user_id")),
+                    report_type="hrv_gpt5_high",
+                    context_hash=payload_hash,
+                    markdown=result.markdown,
+                    sources=result.sources,
+                    model_used=getattr(result, "model_used", None),
+                    mode=getattr(getattr(result, "mode", None), "value", None),
+                    confidence=getattr(result, "confidence", None),
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                _LOGGER.debug("Unable to persist GPT report to DB: %s", exc)
     if not state["markdown"]:
         body_container.info(
             "GPT-5 interpretation will appear here once generated.")
@@ -2801,6 +2821,18 @@ def _persist_analysis_results(
                     source_file=source,
                     file_hash=file_hash or "",
                 )
+                # Mirror cached payload into SQLite for per-user availability across sessions.
+                try:
+                    db.save_hrv_analysis_cache(
+                        user_id=user_id,
+                        file_hash=str(file_hash or ""),
+                        analysis_settings=analysis_settings,
+                        payload=payload,
+                        source_file=source,
+                        recording_date=rec_date_obj.isoformat(),
+                    )
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.debug("Unable to persist HRV analysis cache to DB for %s: %s", source, exc)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.debug("Unable to store analysis payload for %s: %s", source, exc)
 def _upload_section() -> Dict[str, UploadedRR]:
@@ -4865,18 +4897,75 @@ def main() -> None:
 
         st.sidebar.markdown("---")
         st.sidebar.subheader("Patient profile (covariate adjustment)")
+        # Default to active user profile context when available.
+        try:
+            _sidebar_user_ctx = get_active_user_context()
+        except Exception:
+            _sidebar_user_ctx = _guest_user_context()
+        _sidebar_uid = (
+            str(_sidebar_user_ctx.get("user_id"))
+            if _sidebar_user_ctx.get("has_user") and _sidebar_user_ctx.get("user_id")
+            else "guest"
+        )
         enable_cov = st.sidebar.checkbox(
-            "Enable covariate adjustment (RMSSD/SDNN)", value=False
+            "Enable covariate adjustment (RMSSD/SDNN)",
+            value=False,
+            key=f"cov_enable_{_sidebar_uid}",
         )
+        use_profile_cov = st.sidebar.toggle(
+            "Use active profile defaults",
+            value=bool(_sidebar_user_ctx.get("has_user")),
+            key=f"cov_use_profile_{_sidebar_uid}",
+            help="When enabled, age/sex/BMI/activity default to the active user profile.",
+        )
+        _default_age = int(_sidebar_user_ctx.get("age_years") or 45)
+        _default_bmi = float(_sidebar_user_ctx.get("bmi") or 25.0)
+        _sex_ctx = str(_sidebar_user_ctx.get("sex") or "other").lower()
+        if _sex_ctx.startswith("m"):
+            _default_sex = "Male"
+        elif _sex_ctx.startswith("f"):
+            _default_sex = "Female"
+        else:
+            _default_sex = "Other"
+        _activity_ctx = str(_sidebar_user_ctx.get("activity_level") or "").lower()
+        if "athlete" in _activity_ctx or "very" in _activity_ctx or "extreme" in _activity_ctx:
+            _default_exercise = "Athlete"
+        elif "sedentary" in _activity_ctx:
+            _default_exercise = "Sedentary"
+        else:
+            _default_exercise = "Moderate"
+
         age_years = st.sidebar.number_input(
-            "Age (years)", min_value=10, max_value=100, value=45, step=1
+            "Age (years)",
+            min_value=10,
+            max_value=100,
+            value=_default_age,
+            step=1,
+            key=f"cov_age_{_sidebar_uid}",
+            disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
         )
-        sex = st.sidebar.selectbox("Sex", ["Female", "Male"], index=1)
+        sex = st.sidebar.selectbox(
+            "Sex",
+            ["Female", "Male", "Other"],
+            index=["Female", "Male", "Other"].index(_default_sex),
+            key=f"cov_sex_{_sidebar_uid}",
+            disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
+        )
         bmi = st.sidebar.number_input(
-            "BMI (kg/m²)", min_value=10.0, max_value=60.0, value=29.0, step=0.5
+            "BMI (kg/m²)",
+            min_value=10.0,
+            max_value=60.0,
+            value=_default_bmi,
+            step=0.5,
+            key=f"cov_bmi_{_sidebar_uid}",
+            disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
         )
         exercise = st.sidebar.selectbox(
-            "Exercise regularity", ["Sedentary", "Moderate", "Athlete"], index=0
+            "Exercise regularity",
+            ["Sedentary", "Moderate", "Athlete"],
+            index=["Sedentary", "Moderate", "Athlete"].index(_default_exercise),
+            key=f"cov_exercise_{_sidebar_uid}",
+            disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
         )
 
         # Apply minimal mode overrides to ensure fastest behavior by default
@@ -4930,6 +5019,14 @@ def main() -> None:
                 help="If enabled, previously computed HRV results with the same file hash and settings are reloaded instead of recomputed.",
             )
             if reuse_cached_results and active_user_id:
+                # Prefer SQLite-backed cache (user_database) before filesystem cache.
+                analysis_settings_hash = ""
+                try:
+                    _db = get_database()
+                    analysis_settings_hash = _db.compute_settings_hash(analysis_settings)
+                except Exception as exc:  # pragma: no cover - defensive
+                    logger.debug("Unable to compute settings hash for DB cache: %s", exc)
+                    analysis_settings_hash = ""
                 try:
                     reuse_manager = create_user_manager()
                     reuse_manager.set_current_user(
@@ -4947,7 +5044,15 @@ def main() -> None:
                         if not file_hash:
                             continue
                         try:
-                            payload = reuse_manager.load_hrv_results_by_hash(file_hash)
+                            payload = None
+                            if analysis_settings_hash:
+                                payload = _db.get_hrv_analysis_cache_payload(
+                                    user_id=active_user_id,
+                                    file_hash=file_hash,
+                                    analysis_settings_hash=analysis_settings_hash,
+                                )
+                            if payload is None:
+                                payload = reuse_manager.load_hrv_results_by_hash(file_hash)
                         except Exception as exc:  # pragma: no cover - defensive
                             logger.debug(
                                 "Failed to read cached results for %s: %s", dup_name, exc
@@ -10723,6 +10828,7 @@ that predicts cognitive performance based on:
                 st.warning(str(exc))
             else:
                 st.text_area("Report preview", report_markdown, height=360)
+                st.session_state["last_export_report_markdown"] = report_markdown
                 file_suffix = scope_choice.value
                 timestamp_str = pd.Timestamp.utcnow().strftime("%Y%m%dT%H%M%SZ")
                 file_name = f"hrv_report_{file_suffix}_{timestamp_str}.md"
@@ -10753,7 +10859,32 @@ that predicts cognitive performance based on:
                         report_markdown=report_markdown,
                     )
                 else:
-                    st.session_state["gpt5_export_markdown"] = ""
+                    # If GPT is disabled, attempt to load the last stored report for this exact payload.
+                    loaded = False
+                    if active_user_context.get("has_user") and active_user_context.get("user_id"):
+                        try:
+                            payload = build_analysis_payload(
+                                meta_rows_for_context,
+                                multi_results_df,
+                                windowed_df,
+                                episodes_df,
+                                ml_summary_df,
+                                report_markdown=report_markdown,
+                            )
+                            payload_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+                            db = get_database()
+                            report = db.get_ai_report(
+                                user_id=str(active_user_context.get("user_id")),
+                                report_type="hrv_gpt5_high",
+                                context_hash=payload_hash,
+                            )
+                            if report is not None and report.markdown.strip():
+                                st.session_state["gpt5_export_markdown"] = report.markdown
+                                loaded = True
+                        except Exception:
+                            loaded = False
+                    if not loaded:
+                        st.session_state["gpt5_export_markdown"] = ""
         gpt_report_md = st.session_state.get("gpt5_export_markdown", "")
         if gpt_report_md:
             st.markdown("---")
@@ -10771,6 +10902,24 @@ that predicts cognitive performance based on:
                 file_name=gpt_file_name,
                 mime="text/markdown",
             )
+            base_report = st.session_state.get("last_export_report_markdown", "")
+            if isinstance(base_report, str) and base_report.strip():
+                combined_name = (
+                    f"hrv_report_with_gpt5_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.md"
+                )
+                combined_md = (
+                    base_report.rstrip()
+                    + "\n\n---\n\n"
+                    + "## GPT-5.2 High-Reasoning Interpretation\n\n"
+                    + gpt_report_md.strip()
+                    + "\n"
+                )
+                st.download_button(
+                    label="Download combined report (HRV + GPT-5)",
+                    data=combined_md.encode("utf-8"),
+                    file_name=combined_name,
+                    mime="text/markdown",
+                )
             tts_button = st.button(
                 "Generate GPT-5 audio playback (tts-hd)",
                 key="gpt5_tts_button",
