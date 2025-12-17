@@ -284,6 +284,7 @@ The app will:
 - RR uploads are saved to the active user profile (light-bulb indicator) and immediately written to `data/{user}/rr_intervals`; computed HRV results persist with their analysis settings.
 - Re-uploads with the same file hash trigger a sidebar warning; you can reuse stored results when the settings match (toggle in the sidebar) or force recomputation if settings changed.
 - Sidebar uploads target the active profile (Diego by default). Uploading from **User Profile → HRV** scopes files to that user and sets that profile active before queuing them for analysis.
+- In **User Profile → HRV → HRV Measurement History**, use **Regenerate plots** to force-refresh the HRV history charts after new uploads/analysis runs.
 
 ### FIT ↔ CSV Tools (User Profile → Data tab)
 
