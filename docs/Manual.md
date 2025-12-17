@@ -643,14 +643,15 @@ Mission Control - Flight Surgeon now includes an exploration medical record alig
 | Field | Description | Units |
 |-------|-------------|-------|
 | `mission_profile` | Scenario (e.g., LUNAR-22, Gateway-30, Mars analog) | categorical |
+| `record_date` | Log date used to align HRV/Garmin/space-weather context | YYYY-MM-DD |
 | `mission_day` | Mission elapsed day (supports ≥22 days) | integer |
 | `habitat` | Analog site (HERA, CHAPEA, NEEMO, etc.) | categorical |
 | `eva_status` | EVA clearance (Cleared, Restricted, No EVA) | categorical |
-| `eva_hours_72h` | EVA minutes accumulated during the last 72 h | hours |
-| `radiation_dose_msv` | Daily or cumulative ionizing dose | mSv |
-| `space_weather_alert` | NOAA/NASA alert level to correlate with HRV | categorical |
-| `confinement_stress` | Self-reported confinement burden (1‑10) | ordinal |
-| `sleep_hours` | Sleep obtained in the last 24 h | hours |
+| `eva_hours_72h` | EVA hours accumulated during the last 72 h | hours |
+| `radiation_dose_msv` | Cumulative effective dose (auto-estimated from mission environment + EVA by default) | mSv |
+| `space_weather_alert` | Space-weather alert (computed from NOAA Kp + >10 MeV proton flux by default) | categorical |
+| `confinement_stress` | Stress indicator (can seed from objective HRV indices) | ordinal |
+| `sleep_hours` | Sleep obtained in the last 24 h (seeds from Garmin daily sleep when available) | hours |
 | `exercise_minutes` | Countermeasure exercise duration | minutes |
 | `hydration_liters` | Water intake per day | liters |
 | `behavioral_flags` | Team cohesion / cognitive notes | categorical |
@@ -661,9 +662,9 @@ The UI form includes chronic condition selectors, acute symptom checklists, and 
 
 The Clinical Profile tab now exposes an **Exploration Medical Analytics** dashboard that aggregates every ExMC/EIMO entry into actionable indicators:
 
-- **Radiation Gauge**: Displays the highest cumulative dose logged to date, percentage of the NASA 1000 mSv career guideline, and daily accumulation rate to highlight accelerating exposure trends (NASA Human Research Program, 2023).
+- **Radiation Gauge**: Displays the highest cumulative dose logged/estimated to date, percentage of the NASA **600 mSv career effective dose design limit** (STD-3001), and daily accumulation rate to highlight accelerating exposure trends.
 - **EVA Workload Cards**: Summaries for average/peak EVA hours (rolling 72 h), days since the last EVA, and a clearance histogram so teams can identify when restrictions cluster around specific mission profiles.
-- **Stress & Behavioral Trends**: Five-entry rolling averages for confinement stress, workload rating, and sleep duration compare against the all-time mean to expose subtle drifts in crew well-being.
+- **Stress & Behavioral Trends**: Objective HRV stress/PNS time series and Garmin sleep duration trends are shown when available; subjective logs remain available for comparison (workload/stress notes).
 - **Symptom & Behavioral Frequency Tables**: Top acute symptoms and behavioral health flags are tallied automatically, giving medical officers a quick triage list without exporting raw JSON.
 
 All indicators update in real time once a record is saved, giving crews immediate feedback without leaving the Clinical Profile context.
@@ -2380,11 +2381,21 @@ Solutions:
 
 26. NASA Glenn Research Center. (2024). *Exploration Medical Technologies.* https://www.nasa.gov/glenn/glenn-expertise-space-exploration/human-health-performance/exploration-medical-technologies/
 
+### Space Radiation & Space-Weather Scales
+
+27. National Aeronautics and Space Administration. (2022). *NASA Space Flight Human-System Standard, Volume 1: Crew Health* (NASA-STD-3001, Rev. B). NASA. https://www.nasa.gov/wp-content/uploads/2020/10/2022-01-05_nasa-std-3001_vol.1_rev._b_final_draft_with_signature_010522.pdf
+
+28. Zhang, S., Berger, T., Matthiä, D., Hellweg, C. E., et al. (2020). First measurements of the radiation dose on the lunar surface. *Science Advances, 6*(39), eaaz1334. https://doi.org/10.1126/sciadv.aaz1334
+
+29. Hassler, D. M., Zeitlin, C., Wimmer-Schweingruber, R. F., Ehresmann, B., et al. (2014). Mars' surface radiation environment measured with the Mars Science Laboratory's Curiosity rover. *Science, 343*(6169), 1244797. https://doi.org/10.1126/science.1244797
+
+30. NOAA Space Weather Prediction Center. (n.d.). *Solar radiation storms (S-scale).* https://www.swpc.noaa.gov/phenomena/solar-radiation-storm
+
 ### API Integrations
 
-27. Polar Electro. (2024). *Polar AccessLink API Documentation.* https://www.polar.com/accesslink-api/
+31. Polar Electro. (2024). *Polar AccessLink API Documentation.* https://www.polar.com/accesslink-api/
 
-28. Developer Tech News. (2014). *Polar opens its API for developers to access health data.* https://www.developer-tech.com/news/polar-opens-its-api-developers-access-user-health-data/
+32. Developer Tech News. (2014). *Polar opens its API for developers to access health data.* https://www.developer-tech.com/news/polar-opens-its-api-developers-access-user-health-data/
 
 ---
 
