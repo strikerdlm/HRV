@@ -44,6 +44,7 @@ try:
         ClinicalScales,
         HRVMeasurement,
         GarminDailyMetrics,
+        BodyCompositionMeasurement,
         MeasurementTimepoint,
         UserDatabase,
         get_database,
@@ -106,6 +107,13 @@ try:
     GARMIN_IMPORT_AVAILABLE = True
 except ImportError:
     GARMIN_IMPORT_AVAILABLE = False
+
+# NOAA / space-weather datasets (used for profile radiation + alert enrichment)
+try:
+    from noaa_space import load_noaa_space_data
+    NOAA_SPACE_AVAILABLE = True
+except ImportError:
+    NOAA_SPACE_AVAILABLE = False
 
 # Visualization helpers
 from echarts_component import EChartsConfig, render_echarts
@@ -2763,6 +2771,8 @@ def _render_data_management(user: UserProfile) -> None:
                     "clinical_scales": [s.to_dict() for s in db.get_clinical_scales_history(user.user_id)],
                     "hrv_measurements": [m.to_dict() for m in db.get_hrv_history(user.user_id)],
                     "garmin_daily_metrics": [g.to_dict() for g in db.get_garmin_daily_metrics(user.user_id)],
+                    "body_composition": [b.to_dict() for b in db.get_body_composition_history(user.user_id)],
+                    "exploration_medical_history": db.get_medical_history(user.user_id, limit=500),
                 }
                 
                 json_str = json.dumps(export_data, indent=2, default=str)
@@ -3493,86 +3503,299 @@ def _render_body_composition_form(user: UserProfile) -> None:
     """Render body composition entry form."""
     st.markdown("#### 📐 Body Composition Measurements")
     st.caption("Enter values from bioimpedance scale, DEXA, or caliper measurements.")
-    
+
+    @st.cache_data(ttl=30, max_entries=128, show_spinner=False)
+    def _load_body_comp(uid: str) -> pd.DataFrame:
+        db = get_database()
+        if hasattr(db, "get_body_composition_dataframe"):
+            return db.get_body_composition_dataframe(uid, limit=180)  # type: ignore[attr-defined]
+        if hasattr(db, "get_body_composition_history"):
+            rows = db.get_body_composition_history(uid, limit=180)  # type: ignore[attr-defined]
+            return pd.DataFrame([r.to_dict() for r in rows]) if rows else pd.DataFrame()
+        return pd.DataFrame()
+
+    try:
+        history_df = _load_body_comp(user.user_id)
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Unable to load body composition history: {exc}")
+        history_df = pd.DataFrame()
+
+    latest: Dict[str, Any] = {}
+    if not history_df.empty:
+        tmp = history_df.copy()
+        if "measurement_date" in tmp.columns:
+            tmp["measurement_date"] = pd.to_datetime(tmp["measurement_date"], errors="coerce")
+            tmp = tmp.dropna(subset=["measurement_date"]).sort_values("measurement_date", ascending=False)
+        latest = tmp.iloc[0].to_dict() if not tmp.empty else {}
+
+        # Quick snapshot + trends
+        st.markdown("##### 📈 Latest & Trends")
+        last_date = latest.get("measurement_date")
+        if isinstance(last_date, pd.Timestamp) and not pd.isna(last_date):
+            st.caption(f"Latest entry: {last_date.date().isoformat()}")
+        col_a, col_b, col_c, col_d = st.columns(4)
+        col_a.metric("Body fat", f"{_safe_float(latest.get('body_fat_pct')):.1f}%" if _safe_float(latest.get("body_fat_pct")) is not None else "—")
+        col_b.metric("Waist", f"{_safe_float(latest.get('waist_cm')):.1f} cm" if _safe_float(latest.get("waist_cm")) is not None else "—")
+        col_c.metric("Hip", f"{_safe_float(latest.get('hip_cm')):.1f} cm" if _safe_float(latest.get("hip_cm")) is not None else "—")
+        col_d.metric("Lean mass", f"{_safe_float(latest.get('lean_mass_kg')):.1f} kg" if _safe_float(latest.get("lean_mass_kg")) is not None else "—")
+
+        if "measurement_date" in tmp.columns and len(tmp) > 1:
+            trend_cols = [
+                c
+                for c in ["body_fat_pct", "waist_cm", "hip_cm", "lean_mass_kg", "muscle_mass_kg", "water_pct"]
+                if c in tmp.columns and tmp[c].notna().sum() > 1
+            ]
+            if trend_cols:
+                chart_df = tmp.set_index("measurement_date")[trend_cols].sort_index()
+                _render_profile_line_chart(
+                    chart_df,
+                    title="Body composition trends",
+                    y_axis_label="value",
+                )
+
+        with st.expander("📊 Body composition history", expanded=False):
+            display_cols = [
+                "measurement_date",
+                "body_fat_pct",
+                "weight_kg",
+                "waist_cm",
+                "hip_cm",
+                "neck_cm",
+                "lean_mass_kg",
+                "muscle_mass_kg",
+                "water_pct",
+                "visceral_fat_level",
+                "measurement_method",
+            ]
+            display_df = tmp[[c for c in display_cols if c in tmp.columns]].copy()
+            if "measurement_date" in display_df.columns:
+                display_df["measurement_date"] = pd.to_datetime(display_df["measurement_date"], errors="coerce").dt.date
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+    def _default_float(val: Any, fallback: float) -> float:
+        parsed = _safe_float(val)
+        return float(parsed) if parsed is not None else float(fallback)
+
+    def _default_int(val: Any, fallback: int) -> int:
+        parsed = _safe_int(val)
+        return int(parsed) if parsed is not None else int(fallback)
+
+    method_options = ["bioimpedance", "dexa", "calipers", "tape_measure", "estimated"]
+    stored_method = str(latest.get("measurement_method") or "") if latest else ""
+    method_index = method_options.index(stored_method) if stored_method in method_options else 0
+
     form_key = f"body_composition_form_{user.user_id}"
     with st.form(form_key, clear_on_submit=False):
+        active_timepoint_id = st.session_state.get(_timepoint_id_key(user.user_id))
+        default_date = date.today()
+        if latest:
+            latest_date = latest.get("measurement_date")
+            if isinstance(latest_date, pd.Timestamp) and not pd.isna(latest_date):
+                default_date = latest_date.date()
+
+        measurement_date = st.date_input(
+            "Measurement date",
+            value=default_date,
+            key=f"body_comp_date_{user.user_id}",
+        )
+
+        st.markdown("##### 📏 Height & Weight")
+        col_hw1, col_hw2 = st.columns(2)
+        with col_hw1:
+            height_cm = st.number_input(
+                "Height (cm)",
+                min_value=100.0,
+                max_value=230.0,
+                value=_default_float(latest.get("height_cm") if latest else None, _default_float(user.height_cm, 170.0)),
+                step=0.5,
+                key=f"body_comp_height_{user.user_id}",
+            )
+        with col_hw2:
+            weight_kg = st.number_input(
+                "Weight (kg)",
+                min_value=30.0,
+                max_value=250.0,
+                value=_default_float(latest.get("weight_kg") if latest else None, _default_float(user.weight_kg, 70.0)),
+                step=0.1,
+                key=f"body_comp_weight_{user.user_id}",
+            )
+
         col1, col2 = st.columns(2)
-        
         with col1:
             body_fat_pct = st.number_input(
                 "Body Fat %",
                 min_value=1.0,
                 max_value=60.0,
-                value=20.0,
+                value=_default_float(latest.get("body_fat_pct") if latest else None, 20.0),
                 step=0.5,
-                help="From bioimpedance scale, DEXA, or calipers"
+                help="From bioimpedance scale, DEXA, or calipers",
+                key=f"body_comp_bf_{user.user_id}",
             )
             lean_mass_kg = st.number_input(
                 "Lean Mass (kg)",
                 min_value=20.0,
                 max_value=120.0,
-                value=float(user.weight_kg * 0.8) if user.weight_kg else 55.0,
+                value=_default_float(latest.get("lean_mass_kg") if latest else None, float(weight_kg) * 0.8),
                 step=0.5,
+                key=f"body_comp_lean_{user.user_id}",
             )
             muscle_mass_kg = st.number_input(
                 "Muscle Mass (kg)",
                 min_value=10.0,
                 max_value=80.0,
-                value=float(user.weight_kg * 0.4) if user.weight_kg else 30.0,
+                value=_default_float(latest.get("muscle_mass_kg") if latest else None, float(weight_kg) * 0.4),
                 step=0.5,
+                key=f"body_comp_muscle_{user.user_id}",
             )
-        
         with col2:
             bone_mass_kg = st.number_input(
                 "Bone Mass (kg)",
                 min_value=1.0,
                 max_value=10.0,
-                value=3.0,
+                value=_default_float(latest.get("bone_mass_kg") if latest else None, 3.0),
                 step=0.1,
+                key=f"body_comp_bone_{user.user_id}",
             )
             water_pct = st.number_input(
                 "Water %",
                 min_value=30.0,
                 max_value=80.0,
-                value=55.0,
+                value=_default_float(latest.get("water_pct") if latest else None, 55.0),
                 step=0.5,
+                key=f"body_comp_water_{user.user_id}",
             )
             visceral_fat = st.number_input(
                 "Visceral Fat Level",
                 min_value=1,
                 max_value=59,
-                value=8,
+                value=_default_int(latest.get("visceral_fat_level") if latest else None, 8),
                 step=1,
-                help="1-12 healthy, 13-59 excess"
+                help="1-12 healthy, 13-59 excess",
+                key=f"body_comp_visceral_{user.user_id}",
             )
-        
+
         st.markdown("##### 📏 Circumferences (cm)")
         col1, col2, col3 = st.columns(3)
-        
         with col1:
-            waist_cm = st.number_input("Waist", min_value=40.0, max_value=200.0, value=80.0, step=0.5)
-            hip_cm = st.number_input("Hip", min_value=50.0, max_value=200.0, value=95.0, step=0.5)
+            waist_cm = st.number_input(
+                "Waist",
+                min_value=40.0,
+                max_value=200.0,
+                value=_default_float(latest.get("waist_cm") if latest else None, 80.0),
+                step=0.5,
+                key=f"body_comp_waist_{user.user_id}",
+            )
+            hip_cm = st.number_input(
+                "Hip",
+                min_value=50.0,
+                max_value=200.0,
+                value=_default_float(latest.get("hip_cm") if latest else None, 95.0),
+                step=0.5,
+                key=f"body_comp_hip_{user.user_id}",
+            )
         with col2:
-            neck_cm = st.number_input("Neck", min_value=20.0, max_value=60.0, value=38.0, step=0.5)
-            chest_cm = st.number_input("Chest", min_value=50.0, max_value=150.0, value=95.0, step=0.5)
+            neck_cm = st.number_input(
+                "Neck",
+                min_value=20.0,
+                max_value=60.0,
+                value=_default_float(latest.get("neck_cm") if latest else None, 38.0),
+                step=0.5,
+                key=f"body_comp_neck_{user.user_id}",
+            )
+            chest_cm = st.number_input(
+                "Chest",
+                min_value=50.0,
+                max_value=150.0,
+                value=_default_float(latest.get("chest_cm") if latest else None, 95.0),
+                step=0.5,
+                key=f"body_comp_chest_{user.user_id}",
+            )
         with col3:
-            arm_cm = st.number_input("Arm (relaxed)", min_value=15.0, max_value=60.0, value=32.0, step=0.5)
-            thigh_cm = st.number_input("Thigh", min_value=30.0, max_value=90.0, value=55.0, step=0.5)
-        
+            arm_cm = st.number_input(
+                "Arm (relaxed)",
+                min_value=15.0,
+                max_value=60.0,
+                value=_default_float(latest.get("arm_cm") if latest else None, 32.0),
+                step=0.5,
+                key=f"body_comp_arm_{user.user_id}",
+            )
+            thigh_cm = st.number_input(
+                "Thigh",
+                min_value=30.0,
+                max_value=90.0,
+                value=_default_float(latest.get("thigh_cm") if latest else None, 55.0),
+                step=0.5,
+                key=f"body_comp_thigh_{user.user_id}",
+            )
+
+        calf_cm = st.number_input(
+            "Calf",
+            min_value=20.0,
+            max_value=70.0,
+            value=_default_float(latest.get("calf_cm") if latest else None, 38.0),
+            step=0.5,
+            key=f"body_comp_calf_{user.user_id}",
+        )
+
         measurement_method = st.selectbox(
             "Measurement Method",
-            options=["bioimpedance", "dexa", "calipers", "tape_measure", "estimated"],
+            options=method_options,
+            index=method_index,
             format_func=lambda x: x.replace("_", " ").title(),
+            key=f"body_comp_method_{user.user_id}",
         )
-        
+        notes = st.text_area(
+            "Notes (optional)",
+            value=str(latest.get("notes") or "") if latest else "",
+            key=f"body_comp_notes_{user.user_id}",
+        )
+
         submitted = st.form_submit_button(
             "💾 Save Body Composition",
             use_container_width=True,
         )
-        
+
         if submitted:
-            st.success("✅ Body composition saved!")
-            # TODO: Save to database when schema is connected
+            try:
+                db = get_database()
+                measurement = BodyCompositionMeasurement(
+                    composition_id=str(uuid.uuid4()),
+                    user_id=user.user_id,
+                    measurement_date=measurement_date.isoformat(),
+                    timepoint_id=active_timepoint_id,
+                    height_cm=float(height_cm),
+                    weight_kg=float(weight_kg),
+                    body_fat_pct=float(body_fat_pct),
+                    lean_mass_kg=float(lean_mass_kg),
+                    muscle_mass_kg=float(muscle_mass_kg),
+                    bone_mass_kg=float(bone_mass_kg),
+                    water_pct=float(water_pct),
+                    visceral_fat_level=int(visceral_fat),
+                    waist_cm=float(waist_cm),
+                    hip_cm=float(hip_cm),
+                    neck_cm=float(neck_cm),
+                    chest_cm=float(chest_cm),
+                    arm_cm=float(arm_cm),
+                    thigh_cm=float(thigh_cm),
+                    calf_cm=float(calf_cm),
+                    measurement_method=str(measurement_method),
+                    notes=notes.strip() or None,
+                )
+                if hasattr(db, "save_body_composition"):
+                    db.save_body_composition(measurement)  # type: ignore[attr-defined]
+                else:
+                    raise AttributeError("Database does not support body composition storage yet.")
+            except Exception as exc:  # noqa: BLE001
+                if log_exception is not None:
+                    log_exception(_LOGGER, "Failed to save body composition", exc)
+                st.error(f"Failed to save body composition: {exc}")
+            else:
+                try:
+                    _load_body_comp.clear()  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+                st.success("✅ Body composition saved to your profile.")
+                st.rerun()
 
 
 def _render_medical_history_summary(user: UserProfile) -> None:
@@ -3687,6 +3910,241 @@ def _compute_radiation_rate(history_df: pd.DataFrame) -> Optional[float]:
     return (end_dose - start_dose) / (end_day - start_day)
 
 
+def _s_scale_from_pfu(max_pfu: Optional[float]) -> tuple[str, int]:
+    """Return NOAA SWPC radiation storm scale label (S0–S5) from >10 MeV proton flux."""
+    if max_pfu is None or not np.isfinite(float(max_pfu)):
+        return "S0", 0
+    pfu = float(max_pfu)
+    if pfu >= 100_000:
+        return "S5", 5
+    if pfu >= 10_000:
+        return "S4", 4
+    if pfu >= 1_000:
+        return "S3", 3
+    if pfu >= 100:
+        return "S2", 2
+    if pfu >= 10:
+        return "S1", 1
+    return "S0", 0
+
+
+def _g_scale_from_kp(max_kp: Optional[float]) -> tuple[str, int]:
+    """Return NOAA geomagnetic storm scale label (G0–G5) from Kp."""
+    if max_kp is None or not np.isfinite(float(max_kp)):
+        return "G0", 0
+    kp = float(max_kp)
+    if kp >= 9:
+        return "G5", 5
+    if kp >= 8:
+        return "G4", 4
+    if kp >= 7:
+        return "G3", 3
+    if kp >= 6:
+        return "G2", 2
+    if kp >= 5:
+        return "G1", 1
+    return "G0", 0
+
+
+def _space_weather_alert_category(g_level: int, s_level: int) -> str:
+    """Map G/S storm levels into the profile alert taxonomy."""
+    if max(g_level, s_level) >= 3:
+        return "Storm In Progress"
+    if max(g_level, s_level) >= 1:
+        return "Warning"
+    return "None"
+
+
+def _estimate_baseline_radiation_msv_per_day(
+    *, mission_profile: str, habitat: str
+) -> tuple[float, str]:
+    """Return a baseline effective dose rate estimate (mSv/day) for the selected environment.
+
+    Notes:
+        These are coarse, planning-level anchors; actual dose depends on shielding,
+        solar cycle, trajectory, and storm events. The UI surfaces the assumptions.
+    """
+    mission_profile = (mission_profile or "").strip()
+    habitat = (habitat or "").strip()
+
+    # Earth analog baseline (~2.4 mSv/year background ≈ 0.0066 mSv/day).
+    if mission_profile.startswith("ANALOG") or habitat in {"Mars Dune Alpha", "HERA", "NEEMO"}:
+        return 2.4 / 365.0, "Earth background (~2.4 mSv/year)"
+
+    # ISS / LEO.
+    if mission_profile == "LEO-ISS" or habitat == "ISS":
+        return 0.73, "ISS (order-of-magnitude, LEO effective dose)"
+
+    # Gateway / cislunar.
+    if mission_profile == "GATEWAY-30" or habitat == "Gateway":
+        return 1.3, "Cislunar free-space design target (~1.3 mSv/day)"
+
+    # Lunar surface.
+    if mission_profile in {"LUNAR-SLS", "LUNAR-SURFACE-90"} or habitat in {"Lunar Hab", "Starship HLS"}:
+        return 1.369, "Lunar surface (Chang'E-4 LND)"
+
+    # Mars cruise / surface.
+    if mission_profile == "MARS-TRANSIT-180":
+        return 1.84, "Mars cruise (MSL/RAD cruise)"
+    if mission_profile == "MARS-SURFACE-500":
+        return 0.64, "Mars surface (MSL/RAD surface)"
+
+    # Fallback.
+    return 2.4 / 365.0, "Earth background (~2.4 mSv/year)"
+
+
+@st.cache_data(ttl=1800, max_entries=16, show_spinner=False)
+def _load_noaa_profile_bundles() -> tuple[Dict[str, Any], Dict[str, str]]:
+    """Load a small subset of NOAA datasets used for profile alert estimation."""
+    if not NOAA_SPACE_AVAILABLE:
+        return {}, {"__global__": "NOAA space module unavailable."}
+    bundles, errors = load_noaa_space_data(
+        keys=("planetary_k_index_1m", "goes_integral_protons"),
+        use_cache=True,
+    )
+    packed: Dict[str, Any] = {}
+    for key, bundle in bundles.items():
+        packed[key] = {
+            "frame": bundle.frame,
+            "time_column": bundle.time_column,
+            "value_columns": bundle.value_columns,
+            "split_labels": dict(bundle.split_labels),
+        }
+    return packed, errors
+
+
+def _space_weather_summary_for_date(target_date: date) -> Dict[str, Any]:
+    """Compute Kp + >10 MeV proton max and alert labels for a given UTC date."""
+    packed, errors = _load_noaa_profile_bundles()
+
+    out: Dict[str, Any] = {
+        "kp_max": None,
+        "kp_g_scale": "G0",
+        "kp_g_level": 0,
+        "proton_max_pfu": None,
+        "proton_s_scale": "S0",
+        "proton_s_level": 0,
+        "alert_category": "None",
+        "errors": errors,
+    }
+
+    # Kp max
+    kp_payload = packed.get("planetary_k_index_1m")
+    if isinstance(kp_payload, dict):
+        kp_df = kp_payload.get("frame")
+        time_col = kp_payload.get("time_column")
+        if isinstance(kp_df, pd.DataFrame) and not kp_df.empty and isinstance(time_col, str) and time_col in kp_df.columns:
+            series = pd.to_datetime(kp_df[time_col], errors="coerce", utc=True)
+            day_mask = series.dt.date == target_date
+            if "kp_index" in kp_df.columns:
+                vals = pd.to_numeric(kp_df.loc[day_mask, "kp_index"], errors="coerce").dropna()
+                if not vals.empty:
+                    out["kp_max"] = float(vals.max())
+                    g_scale, g_level = _g_scale_from_kp(out["kp_max"])
+                    out["kp_g_scale"] = g_scale
+                    out["kp_g_level"] = g_level
+
+    # Proton flux max (>=10 MeV)
+    proton_payload = packed.get("goes_integral_protons")
+    if isinstance(proton_payload, dict):
+        proton_df = proton_payload.get("frame")
+        time_col = proton_payload.get("time_column")
+        value_cols = proton_payload.get("value_columns") or ()
+        split_labels = proton_payload.get("split_labels") or {}
+        if (
+            isinstance(proton_df, pd.DataFrame)
+            and not proton_df.empty
+            and isinstance(time_col, str)
+            and time_col in proton_df.columns
+        ):
+            # Identify the >=10 MeV column.
+            proton_col: Optional[str] = None
+            for col in value_cols:
+                label = str(split_labels.get(col, "")).lower()
+                if "10" in label and "mev" in label:
+                    proton_col = str(col)
+                    break
+            if proton_col is None:
+                for col in value_cols:
+                    col_lower = str(col).lower()
+                    if "ge_10" in col_lower and "mev" in col_lower:
+                        proton_col = str(col)
+                        break
+
+            if proton_col and proton_col in proton_df.columns:
+                series = pd.to_datetime(proton_df[time_col], errors="coerce", utc=True)
+                day_mask = series.dt.date == target_date
+                vals = pd.to_numeric(proton_df.loc[day_mask, proton_col], errors="coerce").dropna()
+                if not vals.empty:
+                    out["proton_max_pfu"] = float(vals.max())
+                    s_scale, s_level = _s_scale_from_pfu(out["proton_max_pfu"])
+                    out["proton_s_scale"] = s_scale
+                    out["proton_s_level"] = s_level
+
+    out["alert_category"] = _space_weather_alert_category(
+        int(out["kp_g_level"]), int(out["proton_s_level"])
+    )
+    return out
+
+
+@st.cache_data(ttl=30, max_entries=128, show_spinner=False)
+def _load_hrv_daily_objective(uid: str) -> pd.DataFrame:
+    """Load daily-median objective HRV indices (stress/PNS) for a user."""
+    if not uid:
+        return pd.DataFrame()
+    db = get_database()
+    df = db.get_hrv_dataframe(
+        uid,
+        limit=500,
+        include_rr=False,
+        columns=(
+            "measurement_date",
+            "stress_index",
+            "parasympathetic_index",
+            "hrv_score",
+            "mean_hr_bpm",
+            "rmssd_ms",
+            "sdnn_ms",
+        ),
+    )
+    if df.empty or "measurement_date" not in df.columns:
+        return pd.DataFrame()
+    tmp = df.copy()
+    tmp["measurement_date"] = pd.to_datetime(tmp["measurement_date"], errors="coerce")
+    tmp = tmp.dropna(subset=["measurement_date"])
+    if tmp.empty:
+        return pd.DataFrame()
+    tmp["day"] = tmp["measurement_date"].dt.normalize()
+    cols = [c for c in tmp.columns if c not in {"measurement_date"}]
+    numeric_cols = [c for c in cols if c in tmp.columns and pd.api.types.is_numeric_dtype(tmp[c])]
+    if not numeric_cols:
+        return pd.DataFrame()
+    daily = tmp.groupby("day", as_index=True)[numeric_cols].median().sort_index()
+    return daily
+
+
+@st.cache_data(ttl=60, max_entries=128, show_spinner=False)
+def _load_garmin_daily_objective(uid: str) -> pd.DataFrame:
+    """Load Garmin daily metrics (sleep/stress/body battery) for a user."""
+    if not uid:
+        return pd.DataFrame()
+    db = get_database()
+    if not hasattr(db, "get_garmin_daily_dataframe"):
+        return pd.DataFrame()
+    df = db.get_garmin_daily_dataframe(uid, limit=365)  # type: ignore[attr-defined]
+    if df.empty or "metric_date" not in df.columns:
+        return pd.DataFrame()
+    tmp = df.copy()
+    tmp["metric_date"] = pd.to_datetime(tmp["metric_date"], errors="coerce")
+    tmp = tmp.dropna(subset=["metric_date"]).sort_values("metric_date")
+    if tmp.empty:
+        return pd.DataFrame()
+    tmp["day"] = tmp["metric_date"].dt.normalize()
+    # Prefer latest entry per day (Garmin table is unique per date, but keep robust).
+    tmp = tmp.drop_duplicates(subset=["day"], keep="last").set_index("day")
+    return tmp
+
+
 def _build_frequency_df(values: Sequence[Any], top_n: int = 5) -> pd.DataFrame:
     """Aggregate frequency counts for list-like history fields."""
     counts: Counter[str] = Counter()
@@ -3723,14 +4181,27 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
 
     # Radiation exposure
     st.markdown("##### ☢️ Radiation Exposure")
-    rad_series = history_df["radiation_dose_msv"].dropna() if "radiation_dose_msv" in history_df.columns else pd.Series(dtype=float)
-    rad_limit = 1000.0  # NASA career limit guideline for deep-space crews
+    rad_limit = 600.0  # NASA STD-3001B (career effective dose design limit)
+    rad_limit_legacy = 1000.0  # Legacy planning guideline (kept for comparison)
+
+    rad_col: Optional[str] = None
+    if "radiation_dose_msv" in history_df.columns and not history_df["radiation_dose_msv"].dropna().empty:
+        rad_col = "radiation_dose_msv"
+    elif "radiation_estimated_cumulative_msv" in history_df.columns and not history_df["radiation_estimated_cumulative_msv"].dropna().empty:
+        rad_col = "radiation_estimated_cumulative_msv"
+
+    rad_series = (
+        pd.to_numeric(history_df[rad_col], errors="coerce").dropna() if rad_col is not None else pd.Series(dtype=float)
+    )
+
     if rad_series.empty:
-        st.warning("No radiation dose entries recorded yet.")
+        st.warning("No radiation dose entries recorded yet (or no modelled dose available).")
     else:
         max_rad = float(rad_series.max())
         median_rad = float(rad_series.median())
-        rad_rate = _compute_radiation_rate(history_df)
+        rate_df = history_df.copy()
+        rate_df["radiation_dose_msv"] = pd.to_numeric(rate_df[rad_col], errors="coerce") if rad_col is not None else np.nan
+        rad_rate = _compute_radiation_rate(rate_df)
         remaining = max(rad_limit - max_rad, 0.0)
         col_r1, col_r2, col_r3 = st.columns(3)
         col_r1.metric(
@@ -3750,11 +4221,17 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
         )
         progress_value = min(max_rad / rad_limit, 1.0)
         st.progress(progress_value)
-        st.caption(f"{progress_value * 100:.1f}% of NASA 1000 mSv career guideline")
+        legacy_pct = min(max_rad / rad_limit_legacy, 1.0) * 100.0
+        st.caption(
+            f"{progress_value * 100:.1f}% of NASA 600 mSv career effective dose design limit "
+            f"(legacy 1000 mSv: {legacy_pct:.1f}%)."
+        )
         if {"mission_day"}.issubset(history_df.columns):
-            chart_df = history_df.dropna(subset=["mission_day", "radiation_dose_msv"]).copy()
+            chart_df = history_df.dropna(subset=["mission_day", rad_col] if rad_col else ["mission_day"]).copy()
             if not chart_df.empty:
                 chart_df = chart_df.sort_values("mission_day").set_index("mission_day")
+                if rad_col and rad_col != "radiation_dose_msv":
+                    chart_df["radiation_dose_msv"] = pd.to_numeric(chart_df[rad_col], errors="coerce")
                 chart_df.rename(columns={"radiation_dose_msv": "Radiation (mSv)"}, inplace=True)
                 _render_profile_line_chart(
                     chart_df[["Radiation (mSv)"]],
@@ -3786,50 +4263,120 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
 
     # Stress and behavioral indicators
     st.markdown("##### 🧠 Stress & Behavioral Indicators")
-    stress_series = history_df["confinement_stress"].dropna() if "confinement_stress" in history_df.columns else pd.Series(dtype=float)
-    workload_series = history_df["workload_rating"].dropna() if "workload_rating" in history_df.columns else pd.Series(dtype=float)
-    sleep_series = history_df["sleep_hours"].dropna() if "sleep_hours" in history_df.columns else pd.Series(dtype=float)
-    recent_window = history_df.tail(min(len(history_df), 5))
-    recent_stress = (
-        float(recent_window["confinement_stress"].dropna().mean())
-        if "confinement_stress" in recent_window.columns and not recent_window["confinement_stress"].dropna().empty
-        else None
+    # Objective physiology (preferred): HRV + Garmin
+    hrv_daily = _load_hrv_daily_objective(user.user_id)
+    garmin_daily = _load_garmin_daily_objective(user.user_id)
+    hrv_stress_series = (
+        pd.to_numeric(hrv_daily["stress_index"], errors="coerce").dropna()
+        if not hrv_daily.empty and "stress_index" in hrv_daily.columns
+        else pd.Series(dtype=float)
     )
-    baseline_stress = float(stress_series.mean()) if not stress_series.empty else None
-    stress_delta = (
-        None if baseline_stress is None or recent_stress is None else recent_stress - baseline_stress
+    hrv_pns_series = (
+        pd.to_numeric(hrv_daily["parasympathetic_index"], errors="coerce").dropna()
+        if not hrv_daily.empty and "parasympathetic_index" in hrv_daily.columns
+        else pd.Series(dtype=float)
     )
-    recent_workload = (
-        float(recent_window["workload_rating"].dropna().mean())
-        if "workload_rating" in recent_window.columns and not recent_window["workload_rating"].dropna().empty
-        else None
+    garmin_sleep_series = (
+        pd.to_numeric(garmin_daily["sleep_duration_hours"], errors="coerce").dropna()
+        if not garmin_daily.empty and "sleep_duration_hours" in garmin_daily.columns
+        else pd.Series(dtype=float)
     )
-    workload_delta = (
+
+    def _recent_mean(series: pd.Series, n: int) -> Optional[float]:
+        values = series.dropna().tail(max(1, int(n)))
+        return float(values.mean()) if not values.empty else None
+
+    def _baseline_mean(series: pd.Series) -> Optional[float]:
+        values = series.dropna()
+        return float(values.mean()) if not values.empty else None
+
+    recent_hrv_stress = _recent_mean(hrv_stress_series, 5)
+    recent_pns = _recent_mean(hrv_pns_series, 5)
+    recent_sleep_obj = _recent_mean(garmin_sleep_series, 5)
+    hrv_stress_delta = (
         None
-        if workload_series.empty or recent_workload is None
-        else recent_workload - float(workload_series.mean())
+        if recent_hrv_stress is None or _baseline_mean(hrv_stress_series) is None
+        else recent_hrv_stress - float(_baseline_mean(hrv_stress_series))
     )
-    recent_sleep = (
-        float(recent_window["sleep_hours"].dropna().mean())
-        if "sleep_hours" in recent_window.columns and not recent_window["sleep_hours"].dropna().empty
-        else None
-    )
+
     col_s1, col_s2, col_s3 = st.columns(3)
     col_s1.metric(
-        "Confinement stress (last 5)",
-        f"{recent_stress:.1f}/10" if recent_stress is not None else "—",
-        delta=f"{stress_delta:+.1f} vs avg" if stress_delta is not None else None,
+        "HRV stress index (last 5)",
+        f"{recent_hrv_stress:.0f}" if recent_hrv_stress is not None else "—",
+        delta=f"{hrv_stress_delta:+.0f} vs avg" if hrv_stress_delta is not None else None,
     )
     col_s2.metric(
-        "Workload rating (last 5)",
-        f"{recent_workload:.1f}/10" if recent_workload is not None else "—",
-        delta=f"{workload_delta:+.1f} vs avg" if workload_delta is not None else None,
-    )
-    col_s3.metric(
-        "Sleep hours (last 5)",
-        f"{recent_sleep:.1f} h" if recent_sleep is not None else "—",
+        "PNS index (last 5)",
+        f"{recent_pns:.2f}" if recent_pns is not None else "—",
         delta=None,
     )
+    col_s3.metric(
+        "Sleep hours (Garmin, last 5)",
+        f"{recent_sleep_obj:.1f} h" if recent_sleep_obj is not None else "—",
+        delta=None,
+    )
+
+    if not hrv_daily.empty:
+        plot_cols = [c for c in ["stress_index", "parasympathetic_index"] if c in hrv_daily.columns]
+        if plot_cols:
+            _render_profile_line_chart(
+                hrv_daily[plot_cols],
+                title="Objective HRV stress & PNS (daily medians)",
+                y_axis_label="value",
+            )
+    if not garmin_daily.empty and "sleep_duration_hours" in garmin_daily.columns:
+        _render_profile_line_chart(
+            garmin_daily[["sleep_duration_hours"]].rename(columns={"sleep_duration_hours": "Sleep (h)"}),
+            title="Objective sleep duration (Garmin)",
+            y_axis_label="hours",
+        )
+
+    # Subjective logs (optional): stored exploration medical record fields.
+    with st.expander("📝 Logged (subjective) indicators", expanded=False):
+        stress_series = history_df["confinement_stress"].dropna() if "confinement_stress" in history_df.columns else pd.Series(dtype=float)
+        workload_series = history_df["workload_rating"].dropna() if "workload_rating" in history_df.columns else pd.Series(dtype=float)
+        sleep_series = history_df["sleep_hours"].dropna() if "sleep_hours" in history_df.columns else pd.Series(dtype=float)
+        recent_window = history_df.tail(min(len(history_df), 5))
+        recent_stress = (
+            float(recent_window["confinement_stress"].dropna().mean())
+            if "confinement_stress" in recent_window.columns and not recent_window["confinement_stress"].dropna().empty
+            else None
+        )
+        baseline_stress = float(stress_series.mean()) if not stress_series.empty else None
+        stress_delta = (
+            None if baseline_stress is None or recent_stress is None else recent_stress - baseline_stress
+        )
+        recent_workload = (
+            float(recent_window["workload_rating"].dropna().mean())
+            if "workload_rating" in recent_window.columns and not recent_window["workload_rating"].dropna().empty
+            else None
+        )
+        workload_delta = (
+            None
+            if workload_series.empty or recent_workload is None
+            else recent_workload - float(workload_series.mean())
+        )
+        recent_sleep = (
+            float(recent_window["sleep_hours"].dropna().mean())
+            if "sleep_hours" in recent_window.columns and not recent_window["sleep_hours"].dropna().empty
+            else None
+        )
+        col_l1, col_l2, col_l3 = st.columns(3)
+        col_l1.metric(
+            "Confinement stress (last 5)",
+            f"{recent_stress:.1f}/10" if recent_stress is not None else "—",
+            delta=f"{stress_delta:+.1f} vs avg" if stress_delta is not None else None,
+        )
+        col_l2.metric(
+            "Workload rating (last 5)",
+            f"{recent_workload:.1f}/10" if recent_workload is not None else "—",
+            delta=f"{workload_delta:+.1f} vs avg" if workload_delta is not None else None,
+        )
+        col_l3.metric(
+            "Sleep hours (last 5)",
+            f"{recent_sleep:.1f} h" if recent_sleep is not None else "—",
+            delta=None,
+        )
     symptom_df = _build_frequency_df(
         history_df["acute_symptoms"].tolist() if "acute_symptoms" in history_df.columns else [],
         top_n=5,
@@ -3980,6 +4527,22 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 format_func=lambda key: mission_options.get(key, key),
                 index=_safe_selectbox_index(latest.get("mission_profile"), mission_keys, 0),
             )
+            # Used to align Garmin/HRV and space-weather context for the log entry.
+            default_record_date = date.today()
+            stored_record_date = latest.get("record_date") if isinstance(latest, dict) else None
+            if stored_record_date:
+                parsed = pd.to_datetime(stored_record_date, errors="coerce", utc=True)
+                if isinstance(parsed, pd.Timestamp) and not pd.isna(parsed):
+                    default_record_date = parsed.date()
+            elif latest.get("updated_at"):
+                parsed = pd.to_datetime(latest.get("updated_at"), errors="coerce", utc=True)
+                if isinstance(parsed, pd.Timestamp) and not pd.isna(parsed):
+                    default_record_date = parsed.date()
+            record_date = st.date_input(
+                "Log date (UTC)",
+                value=default_record_date,
+                help="Used to align Garmin sleep/stress, HRV, and space-weather context to this record.",
+            )
             mission_day = st.number_input(
                 "Mission day",
                 min_value=0,
@@ -4037,26 +4600,76 @@ def _render_medical_record_form(user: UserProfile) -> None:
         # Section 2: Radiation & Space Weather (ExMC risk domain)
         # ─────────────────────────────────────────────────────────────────────
         st.markdown("##### ☢️ Radiation & Space Weather")
+        space_summary = _space_weather_summary_for_date(record_date)
+        dose_rate_msv_day, dose_rate_ref = _estimate_baseline_radiation_msv_per_day(
+            mission_profile=str(mission_profile),
+            habitat=str(habitat),
+        )
+        # EVA increases exposure because shielding is reduced; we model this as a
+        # bounded multiplier on the baseline dose rate during EVA hours.
+        eva_multiplier = 1.2 if (str(habitat) == "ISS" or str(mission_profile) == "LEO-ISS") else 1.8
+        eva_extra_msv = float(dose_rate_msv_day) * (float(eva_hours) / 24.0) * max(eva_multiplier - 1.0, 0.0)
+        estimated_cumulative_msv = (float(dose_rate_msv_day) * float(mission_day)) + eva_extra_msv
+
+        col_sw1, col_sw2, col_sw3, col_sw4 = st.columns(4)
+        with col_sw1:
+            kp_max = space_summary.get("kp_max")
+            st.metric("Kp (max, day)", f"{kp_max:.1f}" if isinstance(kp_max, (int, float)) and np.isfinite(float(kp_max)) else "—")
+        with col_sw2:
+            st.metric("Geomagnetic", str(space_summary.get("kp_g_scale") or "G0"))
+        with col_sw3:
+            proton_max = space_summary.get("proton_max_pfu")
+            st.metric(">10 MeV protons (max)", f"{proton_max:.0f} pfu" if isinstance(proton_max, (int, float)) and np.isfinite(float(proton_max)) else "—")
+        with col_sw4:
+            st.metric("Radiation storm", str(space_summary.get("proton_s_scale") or "S0"))
+
+        st.caption(
+            f"Baseline dose-rate anchor: ~{dose_rate_msv_day:.3f} mSv/day ({dose_rate_ref}). "
+            f"EVA surcharge (approx): +{eva_extra_msv:.3f} mSv for {eva_hours:.1f} h/24h equivalent."
+        )
+
+        auto_radiation = st.checkbox(
+            "Auto-estimate cumulative dose from mission + EVA",
+            value=True,
+            help="Uses published dose-rate anchors for the selected environment and a bounded EVA surcharge. "
+            "Storm-time dose spikes are not modelled; treat space-weather S-scale as a hazard indicator.",
+        )
+        auto_space_weather = st.checkbox(
+            "Auto-compute space-weather alert",
+            value=True,
+            help="Maps observed Kp (G-scale) and >10 MeV proton flux (S-scale) to the profile alert taxonomy.",
+        )
+
+        rad_limit_msv = 600.0  # NASA STD-3001B (career effective dose design limit)
+        default_alert = str(space_summary.get("alert_category") or "None")
+        if default_alert not in space_weather_alerts:
+            default_alert = "None"
+
         col_r1, col_r2, col_r3 = st.columns(3)
         with col_r1:
             radiation_dose = st.number_input(
                 "Cumulative dose (mSv)",
                 min_value=0.0,
                 max_value=1200.0,
-                value=float(latest.get("radiation_dose_msv", 0.0)),
+                value=float(estimated_cumulative_msv) if auto_radiation else float(latest.get("radiation_dose_msv", estimated_cumulative_msv)),
                 step=0.5,
-                help="Career limit ~1000 mSv (NASA); Mars transit ~300 mSv per transit",
+                help="NASA career effective dose design limit: 600 mSv (STD-3001).",
             )
+            st.caption(f"Limit reference: {rad_limit_msv:.0f} mSv (career, effective dose)")
         with col_r2:
             space_weather = st.selectbox(
                 "Space-weather alert level",
                 options=space_weather_alerts,
-                index=_safe_selectbox_index(latest.get("space_weather_alert"), space_weather_alerts, 0),
+                index=_safe_selectbox_index(default_alert if auto_space_weather else latest.get("space_weather_alert"), space_weather_alerts, 0),
             )
+            st.caption(f"Computed: {space_summary.get('kp_g_scale','G0')} / {space_summary.get('proton_s_scale','S0')}")
         with col_r3:
+            gcr_default = bool(latest.get("gcr_concern", False))
+            if not gcr_default:
+                gcr_default = str(mission_profile) not in {"LEO-ISS", "ANALOG-CHAPEA", "ANALOG-HERA"}
             galactic_cosmic_ray = st.checkbox(
                 "GCR exposure concern",
-                value=latest.get("gcr_concern", False),
+                value=gcr_default,
                 help="Galactic Cosmic Ray monitoring for deep-space missions",
             )
         
@@ -4104,13 +4717,69 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 behavioral_flags,
             ),
         )
+
+        # Objective context (HRV + Garmin) aligned to the selected log date.
+        target_day = pd.Timestamp(record_date).normalize()
+        hrv_daily = _load_hrv_daily_objective(user.user_id)
+        garmin_daily = _load_garmin_daily_objective(user.user_id)
+
+        stress_index_day: Optional[float] = None
+        stress_scale_obj: Optional[int] = None
+        if not hrv_daily.empty and target_day in hrv_daily.index and "stress_index" in hrv_daily.columns:
+            stress_index_day = _safe_float(hrv_daily.loc[target_day, "stress_index"])
+            baseline = pd.to_numeric(hrv_daily["stress_index"], errors="coerce").dropna()
+            if stress_index_day is not None and not baseline.empty:
+                if len(baseline) >= 5:
+                    percentile = float((baseline < float(stress_index_day)).mean())
+                    stress_scale_obj = int(np.clip(int(round(1.0 + percentile * 9.0)), 1, 10))
+                else:
+                    stress_scale_obj = int(np.clip(int(round(np.log10(float(stress_index_day) + 1.0) * 2.5)), 1, 10))
+
+        garmin_row: Optional[pd.Series] = None
+        if not garmin_daily.empty and target_day in garmin_daily.index:
+            garmin_row = garmin_daily.loc[target_day]
+
+        sleep_hours_obj = _safe_float(garmin_row.get("sleep_duration_hours")) if garmin_row is not None else None
+        sleep_quality_obj: Optional[int] = None
+        if garmin_row is not None:
+            eff = _safe_float(garmin_row.get("sleep_efficiency"))
+            score = _safe_float(garmin_row.get("sleep_score"))
+            quality_norm: Optional[float] = None
+            if eff is not None:
+                quality_norm = float(eff) / 100.0 if eff > 1.2 else float(eff)
+            elif score is not None:
+                quality_norm = float(score) / 100.0 if score > 1.2 else float(score)
+            if quality_norm is not None and np.isfinite(quality_norm):
+                sleep_quality_obj = int(np.clip(int(round(1.0 + quality_norm * 4.0)), 1, 5))
+
+        col_seed1, col_seed2, col_seed3 = st.columns(3)
+        with col_seed1:
+            use_hrv_stress = st.checkbox(
+                "Seed stress from HRV (objective)",
+                value=stress_scale_obj is not None,
+                help="Uses the daily-median Baevsky Stress Index (from HRV history) to seed the 1–10 stress slider.",
+            )
+        with col_seed2:
+            use_garmin_sleep = st.checkbox(
+                "Seed sleep from Garmin (objective)",
+                value=sleep_hours_obj is not None,
+                help="Uses Garmin daily sleep duration/efficiency (if available) to seed the sleep fields.",
+            )
+        with col_seed3:
+            if stress_index_day is not None:
+                st.metric("HRV stress index (day)", f"{float(stress_index_day):.0f}")
+            elif garmin_row is not None and _safe_float(garmin_row.get("stress_score")) is not None:
+                st.metric("Garmin stress (day)", f"{_safe_float(garmin_row.get('stress_score')):.0f}")
+            else:
+                st.metric("Objective context", "—")
+
         col_h1, col_h2 = st.columns(2)
         with col_h1:
             confinement_stress = st.slider(
                 "Confinement stress (1–10)",
                 min_value=1,
                 max_value=10,
-                value=int(latest.get("confinement_stress", 3)),
+                value=int(stress_scale_obj) if use_hrv_stress and stress_scale_obj is not None else int(latest.get("confinement_stress", 3)),
             )
         with col_h2:
             workload_rating = st.slider(
@@ -4131,14 +4800,14 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 "Sleep (last 24h, hours)",
                 min_value=0.0,
                 max_value=14.0,
-                value=float(latest.get("sleep_hours", 7.0)),
+                value=float(sleep_hours_obj) if use_garmin_sleep and sleep_hours_obj is not None else float(latest.get("sleep_hours", 7.0)),
                 step=0.25,
             )
             sleep_quality = st.slider(
                 "Sleep quality (1–5)",
                 min_value=1,
                 max_value=5,
-                value=int(latest.get("sleep_quality", 3)),
+                value=int(sleep_quality_obj) if use_garmin_sleep and sleep_quality_obj is not None else int(latest.get("sleep_quality", 3)),
             )
         with col_e:
             exercise_minutes = st.number_input(
@@ -4208,9 +4877,14 @@ def _render_medical_record_form(user: UserProfile) -> None:
             if not _should_process_form_submission(form_key):
                 st.info("Processing previous submission... please wait.")
                 return
+            radiation_dose_to_store = float(estimated_cumulative_msv) if auto_radiation else float(radiation_dose)
+            space_weather_to_store = default_alert if auto_space_weather else str(space_weather)
+            stress_source = "hrv" if (use_hrv_stress and stress_scale_obj is not None) else "manual"
+            sleep_source = "garmin" if (use_garmin_sleep and sleep_hours_obj is not None) else "manual"
             record = {
                 # Mission Context
                 "mission_profile": mission_profile,
+                "record_date": record_date.isoformat(),
                 "mission_day": mission_day,
                 "habitat": habitat,
                 "crew_role": crew_role,
@@ -4220,18 +4894,36 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 "eva_hours_72h": eva_hours,
                 "days_since_last_eva": days_since_last_eva,
                 # Radiation & Space Weather
-                "radiation_dose_msv": radiation_dose,
-                "space_weather_alert": space_weather,
+                "radiation_dose_msv": radiation_dose_to_store,
+                "radiation_limit_msv": float(rad_limit_msv),
+                "radiation_baseline_msv_per_day": float(dose_rate_msv_day),
+                "radiation_baseline_reference": str(dose_rate_ref),
+                "radiation_eva_multiplier": float(eva_multiplier),
+                "radiation_eva_extra_msv": float(eva_extra_msv),
+                "radiation_estimated_cumulative_msv": float(estimated_cumulative_msv),
+                "radiation_model": "baseline_rate_x_days_plus_eva_surcharge",
+                "space_weather_alert": space_weather_to_store,
+                "space_weather_auto": bool(auto_space_weather),
+                "kp_max": space_summary.get("kp_max"),
+                "kp_g_scale": space_summary.get("kp_g_scale"),
+                "proton_max_pfu": space_summary.get("proton_max_pfu"),
+                "proton_s_scale": space_summary.get("proton_s_scale"),
                 "gcr_concern": galactic_cosmic_ray,
                 # Health Status
                 "chronic_conditions": chronic_conditions,
                 "acute_symptoms": acute_symptoms,
                 "behavioral_flags": behavioral_state,
                 "confinement_stress": confinement_stress,
+                "confinement_stress_source": stress_source,
+                "confinement_stress_obj": int(stress_scale_obj) if stress_scale_obj is not None else None,
+                "hrv_stress_index_obj": float(stress_index_day) if stress_index_day is not None else None,
                 "workload_rating": workload_rating,
                 # Countermeasures
                 "sleep_hours": sleep_hours,
                 "sleep_quality": sleep_quality,
+                "sleep_source": sleep_source,
+                "sleep_hours_obj": float(sleep_hours_obj) if sleep_hours_obj is not None else None,
+                "sleep_quality_obj": int(sleep_quality_obj) if sleep_quality_obj is not None else None,
                 "exercise_minutes": exercise_minutes,
                 "exercise_type": exercise_type,
                 "hydration_liters": hydration_liters,
