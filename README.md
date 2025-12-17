@@ -108,6 +108,10 @@ The app will open in your default browser at `http://localhost:8501`.
 
 **Per-profile readiness:** **User Profile → Readiness** computes readiness from stored parasympathetic-index history and displays HRV metric gauges using the same ECharts styling as the main Gauges tab.
 
+**Clinical profile persistence:** **User Profile → Clinical Profile → Body Composition** now saves anthropometrics (body fat, lean/muscle mass, circumferences) to the database and renders per-user trends/history.
+
+**Exploration medicine auto-enrichment:** **User Profile → Clinical Profile → Exploration Medical Record** includes a log date selector and can auto-compute a space-weather alert (NOAA Kp + >10 MeV proton flux) plus a baseline cumulative radiation dose estimate from mission profile/habitat + EVA hours, displaying the dose alongside NASA limit guidance. Stress and sleep fields can seed from objective HRV and Garmin daily metrics when present.
+
 **FIT ↔ CSV tools (Data tab):** Convert Garmin FIT files to CSV directly inside the User Profile → Data tab, download the CSV, and store both FIT and CSV under the active profile. You can also upload Garmin CSVs to keep them with your profile.
 
 ### Polar AccessLink (optional VO2max sync)
