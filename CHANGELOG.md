@@ -28,6 +28,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **User Profile** (`app/user_profile_tab.py`): Fixed Streamlit duplicate form-key crash by rendering the longitudinal timepoint selector once above the profile sub-tabs (instead of inside multiple tab panels).
 - **User Profile HRV history refresh** (`app/user_profile_tab.py`): Added a **Regenerate plots** control in **HRV Measurement History** to force-refresh charts after new uploads/analysis runs (clears Streamlit data caches and reruns the HRV history renderer).
+- **Navigation after HRV analysis** (`app/app.py`): Removed an early return that could trap the UI on an “already completed” message after analysis; the full tab navigation now renders and the action button switches to **Recompute HRV Analysis** when appropriate.
 - **Logging** (`app/logging_config.py`): Suppressed benign Streamlit/Tornado `WebSocketClosedError` “Task exception was never retrieved” noise so `logs/errors.log` stays actionable.
 - **Device imports** (`app/app.py`): ActiGraph and Somfit sidebar imports now run only when clicking an explicit **Import** button (prevents expensive re-processing on every rerun) and always clean up temporary files, improving UI smoothness and reliability.
 
