@@ -104,7 +104,7 @@ The app will open in your default browser at `http://localhost:8501`.
 3. **Explore tabs**: Start with **Overview** for summary statistics, then explore **Gauges** for visual benchmarks
 4. **Export**: Go to **Export** tab to download a comprehensive Markdown report
 
-**Per-user persistence:** RR uploads are saved with the active profile (see the light-bulb banner) and immediately written to `data/{user}/rr_intervals`. The app warns when you re-upload a previously analyzed file and can reuse stored HRV results when the file hash and analysis settings match (toggle in the sidebar) or let you recompute. Sidebar uploads target the active profile (Diego by default); uploads from the User Profile tab are scoped to that user and set that profile active.
+**Per-user persistence:** RR uploads are saved with the active profile (see the light-bulb banner) and immediately written to `data/{user}/rr_intervals`. The app warns when you re-upload a previously analyzed file and can reuse stored HRV results when the file hash and analysis settings match (toggle in the sidebar) or let you recompute. Sidebar uploads target the active profile (Diego by default); uploads from the User Profile tab are scoped to that user and set that profile active. In **User Profile → HRV → HRV Measurement History**, use **Regenerate plots** if charts look stale after a new analysis run.
 
 **FIT ↔ CSV tools (Data tab):** Convert Garmin FIT files to CSV directly inside the User Profile → Data tab, download the CSV, and store both FIT and CSV under the active profile. You can also upload Garmin CSVs to keep them with your profile.
 
