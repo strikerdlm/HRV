@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **Per-user HRV analysis artifact cache in SQLite** (`app/user_database.py`, `app/app.py`): reusable HRV analysis payloads are now persisted per user and keyed by **file hash + analysis settings hash**, enabling cross-session reuse without recomputation when inputs and settings match.
+- **Per-user GPT-5.2 export persistence** (`app/user_database.py`, `app/app.py`): GPT-5.2 high-reasoning interpretation markdown (and citation metadata) is now stored per user + payload hash so exports can include prior interpretations even when GPT is disabled/offline. A **combined HRV + GPT** markdown download is provided in the Export tab.
 - **Longitudinal timepoints (T0–T21)** (`app/user_database.py`, `app/user_profile_tab.py`, `app/app.py`): Added a `measurement_timepoints` table and UI controls to tag new HRV measurements and clinical assessments to a study timepoint so baseline/Δ workflows can be built deterministically.
 - **Profile HRV performance/recovery plots** (`app/user_profile_tab.py`): The **User Profile → HRV → HRV Measurement History** panel now includes additional trend visualizations (lnRMSSD, heart-rate, autonomic indices, and quality) plus optional HRV↔Garmin daily metric relationship plots when wearable history is present.
 - **Profile RR Library → Analysis Workspace** (`app/user_profile_tab.py`, `app/app.py`): Added a **Stored RR Library** loader inside **User Profile → HRV** so you can load already-saved RR recordings into the main analysis workspace (with an optional “Load + run analysis” shortcut) without re-uploading files.
@@ -27,6 +29,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Profile exploration medicine auto-enrichment** (`app/user_profile_tab.py`): The **Exploration Medical Record** can now align records to a log date and auto-compute (a) **space-weather alert level** from NOAA Kp + >10 MeV proton flux (G/S scales) and (b) a **baseline cumulative radiation dose estimate** from mission profile/habitat + EVA hours (with NASA limit guidance). Stress and sleep fields can seed from objective HRV and Garmin daily metrics when available.
 
 ### Changed
+- **Covariate adjustment defaults** (`app/app.py`): age/sex/BMI/activity inputs now default to the active user profile context when available (with a “Use active profile defaults” toggle), ensuring profile-aware HRV interpretation is user-scoped.
 - **Performance** (`app/app.py`, `app/user_profile_tab.py`, `app/user_database.py`, `app/i18n.py`): Bounded Streamlit caches (heavy HRV compute, space-weather fetches, profile/history loaders, i18n lookups) with explicit TTL + `max_entries` to keep memory usage stable during long sessions.
 - **Readiness tab** (`app/app.py`): Readiness scoring now prefers the user’s **stored HRV history** in the database (parasympathetic index) so it can include more sessions than the currently loaded uploads.
 - **SAFTE/Fatigue inputs** (`app/app.py`): Sleep duration and sleep quality can now auto-seed from the latest stored Garmin daily metrics (one-shot per new Garmin day), improving per-user workflow when wearable sleep data is available.
