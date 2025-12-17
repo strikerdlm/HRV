@@ -1456,3 +1456,147 @@ def readiness_from_pns(
 	}
 
 
+# ---------------------------------------------------------------------------
+# Personalized HRV Interpretation
+# ---------------------------------------------------------------------------
+
+def interpret_hrv_personalized(
+	hrv_results: Dict[str, Any],
+	user_context: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+	"""
+	Interpret HRV results using personalized norms based on user profile.
+	
+	This function takes the computed HRV metrics and provides personalized
+	interpretations based on the user's age, sex, and other profile data.
+	
+	Args:
+		hrv_results: Dictionary of computed HRV metrics from compute_comprehensive_hrv()
+		user_context: Optional user profile data from get_active_user_context()
+			Expected keys: age_years, sex, hrv_norms, personalized_metrics
+	
+	Returns:
+		Dictionary with interpreted metrics including:
+		- status: "normal", "low", "high", "very_low", "very_high"
+		- interpretation: Human-readable interpretation
+		- percentile_estimate: Estimated percentile for age group
+		- reference_range: Normal range for the user's age group
+	"""
+	interpretations: Dict[str, Any] = {
+		"has_personalization": user_context is not None,
+		"metrics": {},
+	}
+	
+	# Default age group norms (30-39 years as fallback)
+	default_norms = {
+		"rmssd_ms": {"mean": 35.0, "sd": 13.0, "p5": 15.0, "p95": 65.0},
+		"sdnn_ms": {"mean": 45.0, "sd": 14.0, "p5": 22.0, "p95": 75.0},
+		"pnn50_pct": {"mean": 14.0, "sd": 10.0, "p5": 1.5, "p95": 38.0},
+		"hf_power_ms2": {"mean": 755.0, "sd": 350.0, "p5": 200.0, "p95": 1600.0},
+		"lf_power_ms2": {"mean": 1050.0, "sd": 420.0, "p5": 380.0, "p95": 2000.0},
+		"lf_hf_ratio": {"mean": 1.8, "sd": 0.8, "p5": 0.6, "p95": 3.5},
+	}
+	
+	# Get personalized norms if available
+	personalized_norms = default_norms.copy()
+	age_group = "30-39"
+	sex = "other"
+	
+	if user_context:
+		age_group = user_context.get("hrv_norms", {}).get("age_group", age_group)
+		sex = user_context.get("sex", sex)
+		
+		# Override with personalized norms if available
+		hrv_norms_data = user_context.get("hrv_norms", {}).get("metrics", {})
+		for metric_name, values in hrv_norms_data.items():
+			if metric_name in personalized_norms and isinstance(values, dict):
+				personalized_norms[metric_name] = {
+					"mean": values.get("mean", personalized_norms[metric_name]["mean"]),
+					"sd": values.get("sd", personalized_norms[metric_name]["sd"]),
+					"p5": values.get("percentile_5", personalized_norms[metric_name]["p5"]),
+					"p95": values.get("percentile_95", personalized_norms[metric_name]["p95"]),
+				}
+		
+		interpretations["age_group"] = age_group
+		interpretations["sex"] = sex
+	
+	# Interpret each key metric
+	key_metrics = [
+		("rmssd_ms", "RMSSD", "ms", "Parasympathetic modulation marker"),
+		("sdnn_ms", "SDNN", "ms", "Overall HRV reflecting autonomic regulation"),
+		("pnn50_pct", "pNN50", "%", "High frequency vagal activity indicator"),
+		("hf_power_ms2", "HF Power", "ms²", "Respiratory sinus arrhythmia"),
+		("lf_power_ms2", "LF Power", "ms²", "Baroreflex and mixed autonomic activity"),
+		("lf_hf_ratio", "LF/HF Ratio", "", "Sympathovagal balance (interpret with caution)"),
+	]
+	
+	for metric_key, display_name, unit, description in key_metrics:
+		value = hrv_results.get(metric_key)
+		if value is None or not np.isfinite(value):
+			continue
+		
+		norms = personalized_norms.get(metric_key, default_norms.get(metric_key, {}))
+		mean = norms.get("mean", 35.0)
+		sd = norms.get("sd", 13.0)
+		p5 = norms.get("p5", 15.0)
+		p95 = norms.get("p95", 65.0)
+		
+		# Calculate z-score
+		z_score = (value - mean) / sd if sd > 0 else 0
+		
+		# Estimate percentile (using normal distribution approximation)
+		from math import erf, sqrt
+		percentile = int(50 * (1 + erf(z_score / sqrt(2))))
+		percentile = max(1, min(99, percentile))
+		
+		# Determine status
+		if value < mean - 2 * sd:
+			status = "very_low"
+			interpretation = f"Significantly below normal for age {age_group}"
+		elif value < mean - sd:
+			status = "low"
+			interpretation = f"Below normal for age {age_group}"
+		elif value > mean + 2 * sd:
+			status = "very_high"
+			interpretation = f"Significantly above normal for age {age_group}"
+		elif value > mean + sd:
+			status = "high"
+			interpretation = f"Above normal for age {age_group}"
+		else:
+			status = "normal"
+			interpretation = f"Within normal range for age {age_group}"
+		
+		interpretations["metrics"][metric_key] = {
+			"display_name": display_name,
+			"value": float(value),
+			"unit": unit,
+			"status": status,
+			"interpretation": interpretation,
+			"description": description,
+			"percentile_estimate": percentile,
+			"z_score": round(z_score, 2),
+			"reference_mean": mean,
+			"reference_sd": sd,
+			"reference_range": f"{p5:.1f} - {p95:.1f}",
+		}
+	
+	# Overall autonomic interpretation
+	rmssd_status = interpretations["metrics"].get("rmssd_ms", {}).get("status", "normal")
+	lf_hf_status = interpretations["metrics"].get("lf_hf_ratio", {}).get("status", "normal")
+	
+	if rmssd_status in ["very_low", "low"]:
+		overall = "Reduced parasympathetic activity"
+		recommendation = "Consider recovery strategies, stress management, and sleep optimization"
+	elif rmssd_status in ["very_high", "high"]:
+		overall = "Elevated parasympathetic activity"
+		recommendation = "Good vagal tone, indicative of recovery state or high fitness"
+	else:
+		overall = "Balanced autonomic function"
+		recommendation = "Continue current lifestyle habits"
+	
+	interpretations["overall_status"] = overall
+	interpretations["recommendation"] = recommendation
+	interpretations["reference"] = "Nunan et al. PACE 2010; Shaffer & Ginsberg 2017"
+	
+	return interpretations
+
