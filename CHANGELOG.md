@@ -21,9 +21,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Longitudinal timepoints (T0–T21)** (`app/user_database.py`, `app/user_profile_tab.py`, `app/app.py`): Added a `measurement_timepoints` table and UI controls to tag new HRV measurements and clinical assessments to a study timepoint so baseline/Δ workflows can be built deterministically.
 - **Profile HRV performance/recovery plots** (`app/user_profile_tab.py`): The **User Profile → HRV → HRV Measurement History** panel now includes additional trend visualizations (lnRMSSD, heart-rate, autonomic indices, and quality) plus optional HRV↔Garmin daily metric relationship plots when wearable history is present.
+- **Profile RR Library → Analysis Workspace** (`app/user_profile_tab.py`, `app/app.py`): Added a **Stored RR Library** loader inside **User Profile → HRV** so you can load already-saved RR recordings into the main analysis workspace (with an optional “Load + run analysis” shortcut) without re-uploading files.
+- **Profile Readiness & Recovery** (`app/user_profile_tab.py`): Added a **Readiness** sub-tab inside User Profile that computes readiness from stored parasympathetic-index history and renders HRV metric gauges in the same ECharts style as the main gauges tab.
 
 ### Changed
 - **Performance** (`app/app.py`, `app/user_profile_tab.py`, `app/user_database.py`, `app/i18n.py`): Bounded Streamlit caches (heavy HRV compute, space-weather fetches, profile/history loaders, i18n lookups) with explicit TTL + `max_entries` to keep memory usage stable during long sessions.
+- **Readiness tab** (`app/app.py`): Readiness scoring now prefers the user’s **stored HRV history** in the database (parasympathetic index) so it can include more sessions than the currently loaded uploads.
+- **SAFTE/Fatigue inputs** (`app/app.py`): Sleep duration and sleep quality can now auto-seed from the latest stored Garmin daily metrics (one-shot per new Garmin day), improving per-user workflow when wearable sleep data is available.
 
 ### Fixed
 - **User Profile** (`app/user_profile_tab.py`): Fixed Streamlit duplicate form-key crash by rendering the longitudinal timepoint selector once above the profile sub-tabs (instead of inside multiple tab panels).
