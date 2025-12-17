@@ -108,7 +108,7 @@ except ImportError:
     GARMIN_IMPORT_AVAILABLE = False
 
 # Visualization helpers
-from echarts_component import render_echarts
+from echarts_component import EChartsConfig, render_echarts
 from gauge_builder import GaugeThresholds, build_two_ring_gauge, get_gauge_thresholds
 
 # Import profile module
@@ -131,8 +131,8 @@ try:
 except ImportError:
     PROFILE_MODULE_AVAILABLE = False
 
-from user_data_manager import create_user_manager, parse_filename_date
-from hrv_core import load_rr_intervals_from_text
+from user_data_manager import create_user_manager, get_user_data_path, parse_filename_date
+from hrv_core import build_readiness_baseline, load_rr_intervals_from_text, readiness_from_pns
 
 _LOGGER: Final[logging.Logger] = (
     get_logger(__name__) if get_logger is not None else logging.getLogger(__name__)
@@ -463,6 +463,140 @@ def _render_profile_scatter_chart(
         ],
     }
     render_echarts(option, height_px=height_px)
+
+
+def _profile_gauge_option(
+    title: str,
+    value: float,
+    mu: float,
+    sigma: float,
+    vmin: float,
+    vmax: float,
+    unit: str,
+) -> Dict[str, Any]:
+    """Build an ECharts gauge option with Kubios-style color zones."""
+    # Compute band thresholds
+    lo = max(float(vmin), float(mu - sigma))
+    hi = min(float(vmax), float(mu + sigma))
+    span = max(1e-9, float(vmax - vmin))
+    lo_r = max(0.0, min(1.0, (lo - float(vmin)) / span))
+    hi_r = max(0.0, min(1.0, (hi - float(vmin)) / span))
+
+    axis_colors = [[lo_r, "#e53935"], [hi_r, "#43a047"], [1.0, "#fb8c00"]]
+    is_valid = bool(np.isfinite(value))
+    plot_value = float(value) if is_valid else float(vmin)
+    detail = f"{plot_value:.1f} {unit}".strip() if is_valid else f"n/a {unit}".strip()
+
+    return {
+        "title": {"text": title, "left": "center"},
+        "series": [
+            {
+                "type": "gauge",
+                "min": float(vmin),
+                "max": float(vmax),
+                "axisLine": {"lineStyle": {"width": 14, "color": axis_colors}},
+                "pointer": {"width": 4},
+                "splitNumber": 8,
+                "progress": {"show": False},
+                "detail": {"formatter": detail, "fontSize": 14},
+                "data": [{"value": plot_value}],
+            }
+        ],
+    }
+
+
+def _render_profile_hrv_metric_gauges(
+    row: pd.Series,
+    *,
+    key_suffix: str,
+) -> None:
+    """Render the same HRV metric gauges used in the main analysis tab."""
+    # Anchors from Normative.md (short-term ~5 min)
+    sdnn_mu, sdnn_sigma = 50.0, 16.0
+    rmssd_mu, rmssd_sigma = 42.0, 15.0
+    lfhf_mu, lfhf_sigma = 2.8, 2.6
+    hf_mu, hf_sigma = 657.0, 777.0
+
+    # Values (profile DB uses *_ms and *_ms2 naming)
+    sdnn = float(row.get("sdnn_ms", np.nan))
+    rmssd = float(row.get("rmssd_ms", np.nan))
+    lfhf = float(row.get("lf_hf_ratio", np.nan))
+    hf_power = float(row.get("hf_power_ms2", np.nan))
+
+    sdnn_vmin, sdnn_vmax = 0.0, 120.0
+    rmssd_vmin, rmssd_vmax = 0.0, 100.0
+    lfhf_vmin, lfhf_vmax = 0.0, 12.0
+    hf_vmin, hf_vmax = 0.0, float(
+        max(
+            hf_mu + 3 * hf_sigma,
+            (hf_power if np.isfinite(hf_power) else 0.0) * 1.5,
+            3000.0,
+        )
+    )
+
+    cols = st.columns(2)
+    with cols[0]:
+        render_echarts(
+            _profile_gauge_option(
+                "SDNN (ms)",
+                sdnn,
+                sdnn_mu,
+                sdnn_sigma,
+                sdnn_vmin,
+                sdnn_vmax,
+                "ms",
+            ),
+            height_px=300,
+            config=EChartsConfig(),
+        )
+    with cols[1]:
+        render_echarts(
+            _profile_gauge_option(
+                "RMSSD (ms)",
+                rmssd,
+                rmssd_mu,
+                rmssd_sigma,
+                rmssd_vmin,
+                rmssd_vmax,
+                "ms",
+            ),
+            height_px=300,
+            config=EChartsConfig(),
+        )
+
+    cols2 = st.columns(2)
+    with cols2[0]:
+        render_echarts(
+            _profile_gauge_option(
+                "LF/HF (ratio)",
+                lfhf,
+                lfhf_mu,
+                lfhf_sigma,
+                lfhf_vmin,
+                lfhf_vmax,
+                "",
+            ),
+            height_px=300,
+            config=EChartsConfig(),
+        )
+    with cols2[1]:
+        render_echarts(
+            _profile_gauge_option(
+                "HF Power (ms²)",
+                hf_power,
+                hf_mu,
+                hf_sigma,
+                hf_vmin,
+                hf_vmax,
+                "ms²",
+            ),
+            height_px=300,
+            config=EChartsConfig(),
+        )
+
+    st.caption(
+        "Bands reflect mean ± SD from short-term (∼5 min) references; see Normative.md for details and caveats."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -2094,6 +2228,82 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
 
 
 @_fragment_if_available
+def _render_profile_rr_library(user: UserProfile) -> None:
+    """Load RR recordings already stored under this profile into the main analysis workspace."""
+    st.markdown("## 📚 Stored RR Library")
+    st.caption(
+        "Load RR interval recordings already saved under this profile into the main analysis workspace "
+        "(no re-upload needed)."
+    )
+
+    base_path = Path(__file__).resolve().parent / "data"
+    user_path = get_user_data_path(user.user_id, base_path=base_path)
+    rr_dir = user_path / "rr_intervals"
+    if not rr_dir.exists():
+        st.info("No stored RR directory found yet for this profile.")
+        return
+
+    files = sorted(rr_dir.glob("*.txt"), key=lambda p: p.name, reverse=True)
+    if not files:
+        st.info("No stored RR recordings found yet for this profile.")
+        return
+
+    options = [p.name for p in files]
+    st.caption(f"Stored RR recordings: {len(options)} file(s)")
+
+    default_count = min(2, len(options))
+    selected = st.multiselect(
+        "Select recordings to load",
+        options=options,
+        default=options[:default_count],
+        key=f"profile_rr_library_select_{user.user_id}",
+        help="These recordings will be loaded into the main analysis workspace for this active profile.",
+    )
+
+    if not selected:
+        return
+
+    def _build_queue_payload() -> list[dict[str, Any]]:
+        payload: list[dict[str, Any]] = []
+        for name in selected:
+            p = rr_dir / name
+            start_date = parse_filename_date(name) or date.today()
+            start_ts = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+            payload.append(
+                {
+                    "path": str(p),
+                    "name": name,
+                    "recording_start": start_ts.isoformat(),
+                }
+            )
+        return payload
+
+    col_a, col_b = st.columns(2)
+    with col_a:
+        if st.button(
+            "📥 Load into Analysis workspace",
+            key=f"profile_rr_library_load_{user.user_id}",
+            use_container_width=True,
+        ):
+            st.session_state["queued_rr_filepaths"] = _build_queue_payload()
+            _set_current_user(user)
+            st.success("Queued stored RR recordings for the analysis workspace.")
+            st.rerun()
+    with col_b:
+        if st.button(
+            "🚀 Load + run HRV analysis",
+            key=f"profile_rr_library_load_run_{user.user_id}",
+            type="primary",
+            use_container_width=True,
+        ):
+            st.session_state["queued_rr_filepaths"] = _build_queue_payload()
+            st.session_state["auto_run_hrv_analysis"] = True
+            _set_current_user(user)
+            st.success("Queued recordings and starting HRV analysis…")
+            st.rerun()
+
+
+@_fragment_if_available
 def _render_hrv_history(user: UserProfile) -> None:
     """Render HRV measurement history."""
     st.markdown("## 💓 HRV Measurement History")
@@ -2325,6 +2535,208 @@ def _render_hrv_history(user: UserProfile) -> None:
         
     except Exception as exc:
         st.error(f"Failed to load HRV history: {exc}")
+
+
+@_fragment_if_available
+def _render_profile_readiness(user: UserProfile) -> None:
+    """Render readiness & recovery assessment from stored profile history."""
+    st.markdown("## 🏃 Readiness & Recovery Assessment")
+    st.caption(
+        "Uses the **Parasympathetic Index** saved with your HRV measurements to compare your current state "
+        "against a selectable personal baseline."
+    )
+
+    try:
+        db = get_database()
+        df = db.get_hrv_dataframe(
+            user.user_id,
+            limit=365,
+            include_rr=False,
+            columns=(
+                "measurement_id",
+                "measurement_date",
+                "source_file",
+                "file_hash",
+                "parasympathetic_index",
+                "sdnn_ms",
+                "rmssd_ms",
+                "lf_hf_ratio",
+                "hf_power_ms2",
+                "created_at",
+            ),
+        )
+    except Exception as exc:  # noqa: BLE001
+        st.error(f"Unable to load readiness history: {exc}")
+        return
+
+    if df.empty:
+        st.info("No stored HRV measurements found yet. Run an HRV analysis to populate readiness history.")
+        return
+
+    df = df.copy()
+    df["measurement_date"] = pd.to_datetime(df["measurement_date"], errors="coerce")
+    df["created_at"] = pd.to_datetime(df.get("created_at"), errors="coerce")
+    df = df.dropna(subset=["measurement_date"])
+    df = df.sort_values(["measurement_date", "created_at"], ascending=True)
+
+    labels: List[str] = []
+    pns_map: Dict[str, float] = {}
+    row_map: Dict[str, pd.Series] = {}
+    collision_counter: Dict[str, int] = {}
+
+    for _, row in df.iterrows():
+        try:
+            pns_val = float(row.get("parasympathetic_index", np.nan))
+        except (TypeError, ValueError):
+            pns_val = float("nan")
+        if not np.isfinite(pns_val):
+            continue
+        ts = row.get("measurement_date")
+        date_label = (
+            pd.to_datetime(ts).date().isoformat() if ts is not None else "unknown-date"
+        )
+        src = str(row.get("source_file") or "HRV session")
+        suffix = str(row.get("file_hash") or "").strip()
+        suffix = suffix[:8] if suffix else str(row.get("measurement_id") or "")[:8]
+        base_label = f"{date_label} · {src}"
+        if suffix:
+            base_label = f"{base_label} · {suffix}"
+        count = collision_counter.get(base_label, 0)
+        collision_counter[base_label] = count + 1
+        label = base_label if count == 0 else f"{base_label} ({count + 1})"
+
+        labels.append(label)
+        pns_map[label] = pns_val
+        row_map[label] = row
+
+    if not labels:
+        st.info(
+            "No parasympathetic index values were found in your stored measurements yet. "
+            "Run HRV analysis with readiness metrics enabled."
+        )
+        return
+
+    default_idx = max(len(labels) - 1, 0)
+    current_sel = st.selectbox(
+        "Current measurement",
+        options=labels,
+        index=default_idx,
+        key=f"profile_readiness_current_{user.user_id}",
+    )
+    default_baseline = [name for name in labels if name != current_sel]
+    baseline_sel = st.multiselect(
+        "Historical baseline datasets (oldest to newest)",
+        options=labels,
+        default=default_baseline,
+        key=f"profile_readiness_baseline_{user.user_id}",
+    )
+    include_current = st.checkbox(
+        "Include current measurement in baseline",
+        value=False,
+        key=f"profile_readiness_include_current_{user.user_id}",
+    )
+    min_hist = int(
+        st.number_input(
+            "Minimum historical samples",
+            min_value=3,
+            max_value=30,
+            value=7,
+            step=1,
+            key=f"profile_readiness_min_hist_{user.user_id}",
+        )
+    )
+    max_default = int(max(min_hist, min(30, len(labels))))
+    max_hist = int(
+        st.slider(
+            "Historical window (max records retained)",
+            min_value=min_hist,
+            max_value=90,
+            value=max_default,
+            step=1,
+            key=f"profile_readiness_max_hist_{user.user_id}",
+        )
+    )
+
+    history_names: List[str] = []
+    for name in labels:
+        if name in baseline_sel and (include_current or name != current_sel):
+            history_names.append(name)
+    if include_current and current_sel not in history_names:
+        history_names.append(current_sel)
+
+    if not history_names:
+        st.warning("Select at least one baseline record to build readiness baseline.")
+        return
+
+    history_values = [pns_map[name] for name in labels if name in history_names]
+    if len(history_values) < int(min_hist):
+        st.info(
+            f"Readiness baseline needs at least {int(min_hist)} samples; currently {len(history_values)}."
+        )
+        return
+
+    try:
+        baseline = build_readiness_baseline(
+            history_values,
+            min_samples=min_hist,
+            max_samples=max_hist,
+        )
+    except ValueError as exc:
+        st.warning(f"Baseline configuration issue: {exc}")
+        return
+
+    current_pns = float(pns_map.get(current_sel, np.nan))
+    if not np.isfinite(current_pns):
+        st.warning("Current measurement lacks a valid parasympathetic index.")
+        return
+
+    readiness = readiness_from_pns(current_pns, baseline)
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric("Readiness score (percentile)", f"{readiness['readiness_score']:.1f}")
+    col_b.metric("Category", readiness["readiness_category"])
+    col_c.metric("PNS index", f"{readiness['pns_index']:.3f}")
+
+    # Baseline chart (ECharts)
+    history_labels = history_names.copy()
+    if current_sel not in history_labels:
+        history_labels.append(current_sel)
+    line_series = {
+        "name": "Baseline PNS history",
+        "type": "line",
+        "showSymbol": True,
+        "smooth": True,
+        "data": [[label, float(pns_map[label])] for label in history_names],
+    }
+    current_series = {
+        "name": f"{current_sel} (current)",
+        "type": "scatter",
+        "symbolSize": 12,
+        "itemStyle": {"color": "#1e88e5"},
+        "data": [[current_sel, readiness["pns_index"]]],
+    }
+    opt = {
+        "title": {"text": "Parasympathetic index baseline", "left": "center"},
+        "tooltip": {"trigger": "axis"},
+        "grid": {"left": 32, "right": 16, "containLabel": True},
+        "xAxis": {"type": "category", "name": "Session", "data": history_labels, "boundaryGap": False},
+        "yAxis": {"type": "value", "name": "PNS index"},
+        "legend": {"top": 24},
+        "series": [line_series, current_series],
+    }
+    mark_lines = [
+        {"yAxis": readiness["very_low_cut"], "name": "Very low cut"},
+        {"yAxis": readiness["low_cut"], "name": "Low cut"},
+        {"yAxis": readiness["high_cut"], "name": "High cut"},
+    ]
+    line_series["markLine"] = {"symbol": "none", "data": mark_lines}
+    render_echarts(opt, height_px=360, width="100%", config=EChartsConfig())
+
+    with st.expander("🎯 HRV Metric Gauges (selected session)", expanded=False):
+        row = row_map.get(current_sel)
+        if row is None:
+            st.info("Selected session details unavailable for gauges.")
+        else:
+            _render_profile_hrv_metric_gauges(row, key_suffix=user.user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -4018,11 +4430,12 @@ def render_user_profile_tab() -> None:
         st.markdown("---")
         
         # Sub-tabs for different sections
-        tab_assess, tab_clinical, tab_history, tab_hrv, tab_data, tab_sessions = st.tabs([
+        tab_assess, tab_clinical, tab_history, tab_hrv, tab_readiness, tab_data, tab_sessions = st.tabs([
             "📋 Assessments",
             "🏥 Clinical Profile",
             "📈 History",
             "💓 HRV",
+            "🏃 Readiness",
             "📦 Data",
             "👥 Sessions",
         ])
@@ -4041,7 +4454,12 @@ def render_user_profile_tab() -> None:
         with tab_hrv:
             _render_profile_rr_uploads(current_user)
             st.markdown("---")
+            _render_profile_rr_library(current_user)
+            st.markdown("---")
             _render_hrv_history(current_user)
+
+        with tab_readiness:
+            _render_profile_readiness(current_user)
         
         with tab_data:
             _render_fit_csv_tools(current_user)
