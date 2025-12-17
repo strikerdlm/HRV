@@ -2966,8 +2966,8 @@ def _render_garmin_ingest(user: UserProfile) -> None:
         return
 
     uploaded = st.file_uploader(
-        "Select FIT or Garmin wellness ZIP",
-        type=["fit", "zip"],
+        "Select FIT, Garmin wellness ZIP, or Garmin export JSON",
+        type=["fit", "zip", "json"],
         key=f"garmin_ingest_{user.user_id}",
         accept_multiple_files=False,
     )
@@ -2976,8 +2976,8 @@ def _render_garmin_ingest(user: UserProfile) -> None:
         return
 
     suffix = Path(uploaded.name).suffix.lower()
-    if suffix not in {".fit", ".zip"}:
-        st.error("Unsupported file type. Please upload a .fit or Garmin wellness .zip export.")
+    if suffix not in {".fit", ".zip", ".json"}:
+        st.error("Unsupported file type. Please upload a .fit, Garmin wellness .zip export, or a Garmin export .json file.")
         return
 
     with st.spinner("Parsing Garmin data..."):
@@ -2990,6 +2990,7 @@ def _render_garmin_ingest(user: UserProfile) -> None:
             data = import_garmin_data(
                 fit_path=temp_path if suffix == ".fit" else None,
                 zip_path=temp_path if suffix == ".zip" else None,
+                json_path=temp_path if suffix == ".json" else None,
             )
             daily_df = get_daily_physiology_summary(data)
         except Exception as exc:  # noqa: BLE001
