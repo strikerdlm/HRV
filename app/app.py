@@ -1220,6 +1220,75 @@ def _cached_spectrogram(
     return spectrogram_rr(rr, sampling_rate=4.0)
 
 
+@st.cache_data(ttl=30, max_entries=128, show_spinner=False)
+def _cached_pns_history(
+    user_id: str,
+    *,
+    limit: int = 365,
+) -> pd.DataFrame:
+    """Load recent parasympathetic index history for readiness scoring.
+
+    Returns a small DataFrame containing the fields needed for readiness UI.
+    """
+    if not user_id:
+        return pd.DataFrame()
+    db = get_database()
+    # Restrict columns to keep the query + cache payload lightweight.
+    return db.get_hrv_dataframe(
+        user_id,
+        limit=limit,
+        include_rr=False,
+        columns=(
+            "measurement_id",
+            "measurement_date",
+            "source_file",
+            "file_hash",
+            "parasympathetic_index",
+            "created_at",
+        ),
+    )
+
+
+@st.cache_data(ttl=60, max_entries=256, show_spinner=False)
+def _cached_rr_from_path(path: str, mtime_ns: int) -> np.ndarray:
+    """Load RR intervals from a stored path with cache invalidation.
+
+    Args:
+        path: Absolute path to a text/CSV file containing one RR value per line.
+        mtime_ns: File modification time in nanoseconds (cache-busting).
+    """
+    _ = mtime_ns  # used only to invalidate the cache when the file changes
+    if not path:
+        return np.array([], dtype=float)
+    p = Path(path)
+    if not p.exists():
+        return np.array([], dtype=float)
+    rr = np.loadtxt(p, dtype=float)
+    rr = rr[(rr >= 300) & (rr <= 2000)]
+    return rr
+
+
+@st.cache_data(ttl=60, max_entries=128, show_spinner=False)
+def _cached_latest_garmin_daily(user_id: str) -> Dict[str, Any]:
+    """Return the latest Garmin daily metrics row for a user (if present)."""
+    if not user_id:
+        return {}
+    db = get_database()
+    if not hasattr(db, "get_garmin_daily_dataframe"):
+        return {}
+    try:
+        df = db.get_garmin_daily_dataframe(user_id, limit=1)  # type: ignore[attr-defined]
+    except Exception:
+        return {}
+    if df is None or df.empty:
+        return {}
+    row = df.iloc[0].to_dict()
+    metric_date = row.get("metric_date")
+    if isinstance(metric_date, pd.Timestamp):
+        row["metric_date"] = metric_date.date().isoformat()
+    return row
+
+
 SPACE_WEATHER_MAX_DAYS = 30
 
 
@@ -4580,6 +4649,52 @@ def main() -> None:
             )
         except Exception as exc:  # pragma: no cover - defensive
             logger.debug("Skipped queued upload due to error: %s", exc)
+
+    # Include queued RR file paths from profile storage (avoid large arrays in session state)
+    queued_profile_paths = st.session_state.pop("queued_rr_filepaths", [])
+    for queued in queued_profile_paths:
+        try:
+            path_str = str(queued.get("path") or "")
+            if not path_str:
+                continue
+            p = Path(path_str)
+            if not p.exists():
+                continue
+            try:
+                mtime_ns = int(p.stat().st_mtime_ns)
+            except OSError:
+                continue
+            rr_ms = _cached_rr_from_path(str(p), mtime_ns)
+            if rr_ms.size < 10:
+                continue
+
+            start_raw = queued.get("recording_start")
+            start_ts = (
+                pd.to_datetime(start_raw).tz_localize(timezone.utc)
+                if start_raw and pd.to_datetime(start_raw).tzinfo is None
+                else pd.to_datetime(start_raw)
+            )
+            if start_ts is None or not isinstance(start_ts, pd.Timestamp):
+                parsed_date = parse_filename_date(p.name) or date.today()
+                start_ts = pd.Timestamp(datetime.combine(parsed_date, datetime.min.time(), tzinfo=timezone.utc))
+
+            name = str(queued.get("name") or p.name)
+            # Ensure unique name within this run
+            base = name
+            idx = 2
+            while name in uploads:
+                name = f"{base} ({idx})"
+                idx += 1
+
+            df = _to_dataframe(name, rr_ms, start_ts=start_ts)
+            uploads[name] = UploadedRR(
+                name=name,
+                rr_ms=rr_ms,
+                df=df,
+                recording_start_utc=start_ts,
+            )
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Skipped queued RR path due to error: %s", exc)
     
     _persist_raw_uploads(logger, active_profile, uploads)
     
@@ -4927,6 +5042,7 @@ def main() -> None:
     meta_rows_for_context: List[Dict[str, Any]] = []
     
     # Require explicit user action to run HRV analysis
+    auto_run_requested = bool(st.session_state.pop("auto_run_hrv_analysis", False))
     hrv_analysis_ready = st.session_state.get("hrv_analysis_ready", False)
     hrv_complete_sig = st.session_state.get("hrv_analysis_complete_signature")
     upload_signature = tuple(sorted(uploads.keys())) if has_hrv_data_uploaded else tuple()
@@ -4952,6 +5068,13 @@ def main() -> None:
             },
         )
         #endregion
+
+    # Optional: allow other panels (e.g., User Profile) to trigger a one-shot run.
+    if auto_run_requested and has_hrv_data_uploaded:
+        st.session_state["hrv_analysis_complete_signature"] = None
+        st.session_state["hrv_analysis_ready"] = True
+        hrv_analysis_ready = True
+        analysis_already_completed = False
     
     if has_hrv_data_uploaded and not hrv_analysis_ready:
         if analysis_already_completed:
@@ -5543,6 +5666,11 @@ def main() -> None:
         # Mark comprehensive stage complete to avoid auto-reruns on the same upload set
         st.session_state["hrv_analysis_ready"] = False
         st.session_state["hrv_analysis_complete_signature"] = upload_signature
+        # Refresh readiness/DB-backed panels immediately after new measurements are saved.
+        try:
+            _cached_pns_history.clear()  # type: ignore[attr-defined]
+        except Exception:  # pragma: no cover - cache may be unavailable
+            pass
         #region agent log
         _agent_debug_log(
             "H6",
@@ -6387,13 +6515,64 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
         st.markdown(
             "*Compares current parasympathetic index with your historical baseline. "
             "Categories follow Kubios readiness definitions.*")
-        if not pns_mapping:
+        pns_display_mapping: Dict[str, float] = {}
+        ordered_names: List[str] = []
+        if active_user_id:
+            try:
+                hist_df = _cached_pns_history(active_user_id, limit=365)
+            except Exception:  # pragma: no cover - defensive
+                hist_df = pd.DataFrame()
+            if not hist_df.empty and "parasympathetic_index" in hist_df.columns:
+                hist_df = hist_df.copy()
+                # Ensure chronological ordering (oldest→newest) for baseline building.
+                hist_df["measurement_date"] = pd.to_datetime(
+                    hist_df["measurement_date"], errors="coerce"
+                )
+                hist_df["created_at"] = pd.to_datetime(
+                    hist_df.get("created_at"), errors="coerce"
+                )
+                hist_df = hist_df.dropna(subset=["measurement_date"])
+                hist_df = hist_df.sort_values(
+                    ["measurement_date", "created_at"], ascending=True
+                )
+                collision_counter: Dict[str, int] = {}
+                for _, row in hist_df.iterrows():
+                    pns = row.get("parasympathetic_index")
+                    try:
+                        pns_val = float(pns) if pns is not None else float("nan")
+                    except (TypeError, ValueError):
+                        pns_val = float("nan")
+                    if not np.isfinite(pns_val):
+                        continue
+                    date_ts = row.get("measurement_date")
+                    date_label = (
+                        pd.to_datetime(date_ts).date().isoformat()
+                        if date_ts is not None
+                        else "unknown-date"
+                    )
+                    src = str(row.get("source_file") or "HRV session")
+                    suffix = str(row.get("file_hash") or "").strip()
+                    suffix = suffix[:8] if suffix else str(row.get("measurement_id") or "")[:8]
+                    base_label = f"{date_label} · {src}"
+                    if suffix:
+                        base_label = f"{base_label} · {suffix}"
+                    count = collision_counter.get(base_label, 0)
+                    collision_counter[base_label] = count + 1
+                    label = base_label if count == 0 else f"{base_label} ({count + 1})"
+                    pns_display_mapping[label] = pns_val
+                    ordered_names.append(label)
+
+        # Fall back to current-session computed mapping when DB history is unavailable.
+        if not pns_display_mapping and pns_mapping:
+            pns_display_mapping = dict(pns_mapping)
+            ordered_names = [name for name in ordered_sources if name in pns_display_mapping]
+
+        if not pns_display_mapping:
             st.info(
-                "Upload multiple sessions with successful metric computation to enable readiness analysis."
+                "No readiness history available yet. Run HRV analysis (or save HRV measurements) "
+                "to build a parasympathetic baseline."
             )
         else:
-            ordered_names = [
-                name for name in ordered_sources if name in pns_mapping]
             if not ordered_names:
                 st.info(
                     "Ready metrics unavailable; ensure parasympathetic index was computed."
@@ -6447,7 +6626,7 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
                     )
                 else:
                     history_values = [
-                        pns_mapping[name]
+                        pns_display_mapping[name]
                         for name in ordered_names
                         if name in history_names
                     ]
@@ -6475,7 +6654,7 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
                             baseline = None
                     if baseline is not None:
                         current_pns = float(
-                            pns_mapping.get(
+                            pns_display_mapping.get(
                                 current_sel, np.nan))
                         if not np.isfinite(current_pns):
                             st.warning(
@@ -6515,7 +6694,7 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
                                 "showSymbol": True,
                                 "smooth": True,
                                 "data": [
-                                    [label, float(pns_mapping[label])]
+                                    [label, float(pns_display_mapping[label])]
                                     for label in history_names
                                 ],
                             }
@@ -7565,6 +7744,57 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 for key, value in stored_fatigue_settings.items():
                     st.session_state[key] = value
                 fatigue_defaults.update(stored_fatigue_settings)
+
+            # Optional: auto-fill sleep inputs from latest Garmin daily metrics.
+            # Applies only when (a) a profile is active, (b) the user has not
+            # explicitly saved fatigue settings for this tab, and (c) new Garmin
+            # data arrives (one-shot per signature).
+            auto_fill_garmin = st.checkbox(
+                "Auto-fill sleep inputs from Garmin (when available)",
+                value=True,
+                key="fatigue_autofill_garmin",
+                help="Uses the latest stored Garmin daily sleep metrics to seed sleep duration and quality once per new day.",
+            )
+            if fatigue_user_id and auto_fill_garmin and not stored_fatigue_settings:
+                latest_garmin = _cached_latest_garmin_daily(fatigue_user_id)
+                if latest_garmin:
+                    sig = (
+                        str(latest_garmin.get("metric_date") or ""),
+                        str(latest_garmin.get("created_at") or ""),
+                    )
+                    prev_sig = tuple(st.session_state.get("fatigue_autofill_garmin_sig", ("", "")))
+                    if sig != prev_sig:
+                        updated_any = False
+                        sleep_dur = latest_garmin.get("sleep_duration_hours")
+                        if isinstance(sleep_dur, (int, float)) and np.isfinite(float(sleep_dur)):
+                            new_dur = float(max(4.0, min(10.0, round(float(sleep_dur), 1))))
+                            st.session_state["fatigue_sleep_duration"] = new_dur
+                            fatigue_defaults["fatigue_sleep_duration"] = new_dur
+                            new_debt = float(max(0.0, round(7.5 - new_dur, 1)))
+                            st.session_state["fatigue_sleep_debt"] = new_debt
+                            fatigue_defaults["fatigue_sleep_debt"] = new_debt
+                            updated_any = True
+
+                        quality_val: Optional[float] = None
+                        eff = latest_garmin.get("sleep_efficiency")
+                        if isinstance(eff, (int, float)) and np.isfinite(float(eff)):
+                            eff_f = float(eff)
+                            if eff_f > 1.2:
+                                eff_f = eff_f / 100.0
+                            quality_val = eff_f
+                        score = latest_garmin.get("sleep_score")
+                        if quality_val is None and isinstance(score, (int, float)) and np.isfinite(float(score)):
+                            quality_val = float(score) / 100.0
+                        if quality_val is not None and np.isfinite(float(quality_val)):
+                            new_q = float(max(0.4, min(0.95, float(quality_val))))
+                            st.session_state["fatigue_sleep_quality"] = new_q
+                            fatigue_defaults["fatigue_sleep_quality"] = new_q
+                            updated_any = True
+
+                        if updated_any:
+                            st.session_state["fatigue_autofill_garmin_sig"] = sig
+                            date_label = str(latest_garmin.get("metric_date") or "latest day")
+                            st.caption(f"Auto-filled fatigue sleep inputs from Garmin ({date_label}).")
 
             st.markdown("#### 🔄 Cross-tab correlation: Circadian ➜ Fatigue")
             circadian_context = cross_tab_broker.get_latest("circadian", fatigue_user_id)
