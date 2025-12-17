@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.21-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.23-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
@@ -18,6 +18,8 @@ Contributing to **AsterPhysiology** Research Initiative
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.8.23**: **Profile Tools Engine** — Comprehensive calculation engines accessible per user profile: SAFTE fatigue prediction with 24-hour cognitive effectiveness forecast, lnRMSSD-based recovery scoring, training readiness assessment with workout recommendations, personalized HRV analysis with parasympathetic/stress indices, and hour-by-hour performance forecasting. Run all tools with one click and export results to Markdown.
 
 **NEW in v1.8.22**: **Personalized User Profile Features** — All calculations are now tailored to the individual user profile. Body fat estimation via US Navy method (using neck/waist/hip circumferences), sleep apnea risk (STOP-BANG score), age/sex-adjusted HRV reference ranges, VO2max fitness classification, cardiovascular risk profile, and personalized hydration requirements. Profile data flows to all tabs for truly personalized physiological assessments.
 
@@ -168,7 +170,8 @@ All other tabs show **example data** and **reference values** to help you unders
 | **CPU Performance Mode**               | Adjustable presets (Fast/Balanced/Quality) with smart downsampling                                                                                                                                 |
 | **GPU Acceleration**                   | NVIDIA CUDA support (RTX 5070/4090/3080) for heavy computations                                                                                                                                    |
 | **User Profile System**                | Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS), history tracking with ECharts timelines for assessments, Garmin wellness, HRV history, and exploration medicine dashboards      |
-| **Personalized Health Metrics** ✨NEW  | Body fat (US Navy method), sleep apnea risk (STOP-BANG), age-adjusted HRV norms, VO2max fitness classification, cardiovascular risk profile, personalized hydration requirements                 |
+| **Personalized Health Metrics**        | Body fat (US Navy method), sleep apnea risk (STOP-BANG), age-adjusted HRV norms, VO2max fitness classification, cardiovascular risk profile, personalized hydration requirements                 |
+| **Profile Tools Engine** ✨NEW         | SAFTE fatigue prediction, recovery score (lnRMSSD-based), training readiness assessment, personalized HRV analysis, 24-hour performance forecast — all using profile data                      |
 | **Active User Context Sync**           | Circadian and SAFTE tabs auto-fill age, chronotype, sleep debt, and mission schedules from the selected profile with a single sync button; body composition data flows to all tabs              |
 | **Clinical Profiles**                  | Astronaut-grade assessment: BMR, TDEE, NASA nutrition, body composition with circumference tracking (neck, waist, hip, chest, arm, thigh, calf)                                                   |
 | **Personalized HRV Interpretation**    | Age/sex-adjusted reference ranges from Nunan et al. (2010) and Shaffer & Ginsberg (2017); status, percentile estimate, and recommendations per metric                                             |
