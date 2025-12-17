@@ -324,6 +324,40 @@ class GarminDailyMetrics:
 
 
 @dataclass
+class BodyCompositionMeasurement:
+    """Body composition + extended anthropometrics for a user at a specific date."""
+
+    composition_id: str
+    user_id: str
+    measurement_date: str  # ISO date string (YYYY-MM-DD)
+    timepoint_id: Optional[str] = None  # Links to measurement_timepoints.timepoint_id
+
+    height_cm: Optional[float] = None
+    weight_kg: Optional[float] = None
+    body_fat_pct: Optional[float] = None
+    lean_mass_kg: Optional[float] = None
+    muscle_mass_kg: Optional[float] = None
+    bone_mass_kg: Optional[float] = None
+    water_pct: Optional[float] = None
+    visceral_fat_level: Optional[int] = None
+
+    waist_cm: Optional[float] = None
+    hip_cm: Optional[float] = None
+    neck_cm: Optional[float] = None
+    chest_cm: Optional[float] = None
+    arm_cm: Optional[float] = None
+    thigh_cm: Optional[float] = None
+    calf_cm: Optional[float] = None
+
+    measurement_method: Optional[str] = None
+    notes: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+
+@dataclass
 class MeasurementTimepoint:
     """A labeled longitudinal study timepoint (T0..T21) for a user."""
 
@@ -1929,6 +1963,126 @@ class UserDatabase:
             df["metric_date"] = pd.to_datetime(df["metric_date"])
         return df
 
+    # -----------------------------------------------------------------------
+    # Body Composition / Anthropometrics
+    # -----------------------------------------------------------------------
+
+    def save_body_composition(
+        self, measurement: BodyCompositionMeasurement
+    ) -> str:
+        """Insert a body composition measurement for a user."""
+        measurement.composition_id = measurement.composition_id or str(uuid.uuid4())
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO body_composition (
+                    composition_id, user_id, measurement_date, timepoint_id,
+                    height_cm, weight_kg, body_fat_pct, lean_mass_kg, muscle_mass_kg,
+                    bone_mass_kg, water_pct, visceral_fat_level,
+                    waist_cm, hip_cm, neck_cm, chest_cm, arm_cm, thigh_cm, calf_cm,
+                    measurement_method, notes
+                ) VALUES (
+                    ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?,
+                    ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?
+                )
+                """,
+                (
+                    measurement.composition_id,
+                    measurement.user_id,
+                    measurement.measurement_date,
+                    measurement.timepoint_id,
+                    measurement.height_cm,
+                    measurement.weight_kg,
+                    measurement.body_fat_pct,
+                    measurement.lean_mass_kg,
+                    measurement.muscle_mass_kg,
+                    measurement.bone_mass_kg,
+                    measurement.water_pct,
+                    measurement.visceral_fat_level,
+                    measurement.waist_cm,
+                    measurement.hip_cm,
+                    measurement.neck_cm,
+                    measurement.chest_cm,
+                    measurement.arm_cm,
+                    measurement.thigh_cm,
+                    measurement.calf_cm,
+                    measurement.measurement_method,
+                    measurement.notes,
+                ),
+            )
+        return measurement.composition_id
+
+    def get_body_composition_history(
+        self, user_id: str, *, limit: int = 180
+    ) -> List[BodyCompositionMeasurement]:
+        """Return recent body composition measurements for a user."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT *
+                FROM body_composition
+                WHERE user_id = ?
+                ORDER BY datetime(measurement_date) DESC
+                LIMIT ?
+                """,
+                (user_id, int(limit)),
+            )
+            rows = cursor.fetchall()
+        return [self._row_to_body_composition(row) for row in rows]
+
+    def get_body_composition_dataframe(
+        self, user_id: str, *, limit: int = 180
+    ) -> pd.DataFrame:
+        """Return body composition history as a DataFrame."""
+        with self._get_connection() as conn:
+            df = pd.read_sql_query(
+                """
+                SELECT *
+                FROM body_composition
+                WHERE user_id = ?
+                ORDER BY datetime(measurement_date) DESC
+                LIMIT ?
+                """,
+                conn,
+                params=(user_id, int(limit)),
+            )
+        if not df.empty and "measurement_date" in df.columns:
+            df["measurement_date"] = pd.to_datetime(df["measurement_date"], errors="coerce")
+        return df
+
+    def _row_to_body_composition(
+        self, row: sqlite3.Row
+    ) -> BodyCompositionMeasurement:
+        """Convert row to BodyCompositionMeasurement."""
+        return BodyCompositionMeasurement(
+            composition_id=row["composition_id"],
+            user_id=row["user_id"],
+            measurement_date=row["measurement_date"],
+            timepoint_id=row["timepoint_id"] if "timepoint_id" in row.keys() else None,
+            height_cm=row["height_cm"],
+            weight_kg=row["weight_kg"],
+            body_fat_pct=row["body_fat_pct"],
+            lean_mass_kg=row["lean_mass_kg"],
+            muscle_mass_kg=row["muscle_mass_kg"],
+            bone_mass_kg=row["bone_mass_kg"],
+            water_pct=row["water_pct"],
+            visceral_fat_level=row["visceral_fat_level"],
+            waist_cm=row["waist_cm"],
+            hip_cm=row["hip_cm"],
+            neck_cm=row["neck_cm"],
+            chest_cm=row["chest_cm"],
+            arm_cm=row["arm_cm"],
+            thigh_cm=row["thigh_cm"],
+            calf_cm=row["calf_cm"],
+            measurement_method=row["measurement_method"],
+            notes=row["notes"],
+        )
+
     def _row_to_garmin_daily_metrics(
         self, row: sqlite3.Row
     ) -> GarminDailyMetrics:
@@ -2476,6 +2630,8 @@ __all__ = [
     "HRVMeasurement",
     "PolarCredentials",
     "VO2maxEntry",
+    "GarminDailyMetrics",
+    "BodyCompositionMeasurement",
     "MeasurementTimepoint",
     "StudyGroup",
     "StudyAssignment",
