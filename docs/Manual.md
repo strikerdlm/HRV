@@ -285,6 +285,8 @@ The app will:
 - Re-uploads with the same file hash trigger a sidebar warning; you can reuse stored results when the settings match (toggle in the sidebar) or force recomputation if settings changed.
 - Sidebar uploads target the active profile (Diego by default). Uploading from **User Profile → HRV** scopes files to that user and sets that profile active before queuing them for analysis.
 - In **User Profile → HRV → HRV Measurement History**, use **Regenerate plots** to force-refresh the HRV history charts after new uploads/analysis runs.
+- In **User Profile → HRV → Stored RR Library**, you can load RR recordings already stored under that profile back into the main analysis workspace (optionally auto-running HRV analysis) without re-uploading.
+- In **User Profile → Readiness**, readiness scoring uses stored parasympathetic-index history and shows HRV metric gauges with the same ECharts styling as the main gauges.
 
 ### FIT ↔ CSV Tools (User Profile → Data tab)
 
@@ -1655,6 +1657,8 @@ The Sleep, Activity, Fatigue, and Task Effectiveness (SAFTE) model predicts cogn
    - Prior sleep debt (hours)
 
 > **Profile sync:** Click **Sync with active profile** to auto-fill age, sex, chronotype offset, sleep debt, and work cadence from the currently selected astronaut's exploration medical record. The values refresh automatically after you switch users, so you only need to tweak edge cases.
+>
+> **Garmin auto-fill (stored):** If Garmin daily sleep metrics have been ingested into the profile database (sleep duration and sleep efficiency/score), the Fatigue tab can auto-seed sleep duration and sleep quality **once per new Garmin day**. You can disable this behavior via the on-tab checkbox.
 
 **Step 2: Configure work schedule**
 
