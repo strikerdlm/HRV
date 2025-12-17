@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Workout suggestions and clinical recommendations
 - **Run All Tools Summary**: One-click execution of all profile tools with aggregated results display
 
+### Fixed
+- **Clinical Profile tab** (`app/user_profile_tab.py`): Removed nested Streamlit expanders that could crash the app with `StreamlitAPIException: Expanders may not be nested...` by converting inner panels (parameters/history/recommendations/subjective logs) to checkbox-controlled sections.
+
 ### Scientific References (Profile Tools Engine)
 - Plews DJ et al. (2013). J Appl Physiol - lnRMSSD for training monitoring
 - Kiviniemi AM et al. (2007). Med Sci Sports Exerc - HRV-guided training
