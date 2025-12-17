@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.8.17  
-**Last Updated:** 2025-12-11
+**Version:** 1.8.23  
+**Last Updated:** 2025-12-17
 
 ---
 
@@ -768,6 +768,129 @@ Adjustments:
    - NASA Nutrition Calculator (VO₂max compensation)
    - Fatigue Prediction (sleep requirements)
    - Circadian Physiology (chronotype adjustments)
+
+### Profile Tools Engine (NEW in v1.8.23)
+
+The **Profile Tools Engine** provides comprehensive calculation engines accessible per user profile. Each tool uses your individual profile data (age, sex, weight, chronotype, HRV values) to deliver personalized physiological assessments.
+
+#### Available Tools
+
+| Tool | Description | Key Outputs |
+|------|-------------|-------------|
+| **Recovery Score** | lnRMSSD-based recovery assessment | Score (0-100), status, component breakdown |
+| **Training Readiness** | Multi-component readiness assessment | Readiness score, workout suggestions |
+| **Fatigue Prediction (SAFTE)** | 24-hour cognitive effectiveness forecast | Current/predicted effectiveness, risk level |
+| **Personalized HRV Analysis** | Age/sex-adjusted HRV interpretation | Parasympathetic index, stress index, autonomic balance |
+| **Performance Forecast** | Hour-by-hour performance prediction | Peak/low times, 24-hour curve |
+
+#### Recovery Score Calculation
+
+Based on Plews et al. (2013) and the lnRMSSD methodology:
+
+**Components:**
+- **HRV Component (0-50 points)**: Compares lnRMSSD to personal baseline or age-adjusted norms
+- **Sleep Component (0-30 points)**: Evaluates sleep duration and quality
+- **Resting HR Component (0-20 points)**: Compares to baseline heart rate
+
+**Status Classifications:**
+| Score | Status | Training Recommendation |
+|-------|--------|------------------------|
+| 80-100 | Excellent | High-intensity training OK |
+| 65-79 | Good | Normal training day |
+| 50-64 | Moderate | Reduce intensity 10-20% |
+| 35-49 | Low | Active recovery only |
+| 0-34 | Poor | Rest day recommended |
+
+Reference: Plews DJ, et al. *J Appl Physiol.* 2013;115(4):531-538.
+
+#### Training Readiness Assessment
+
+Multi-component score for workout planning:
+
+**Components:**
+- **HRV (0-35 points)**: Current HRV status vs age norms
+- **Sleep (0-25 points)**: Duration × quality factor
+- **Fatigue (0-20 points)**: Time since last training, intensity
+- **Strain (0-20 points)**: Accumulated training load
+
+**Readiness Levels:**
+| Level | Score | Action |
+|-------|-------|--------|
+| Optimal | 85+ | Competition-ready, HIIT OK |
+| High | 70-84 | Proceed as planned |
+| Moderate | 50-69 | Focus on technique |
+| Low | 30-49 | Active recovery |
+| Very Low | <30 | Full rest day |
+
+Reference: Kiviniemi AM, et al. *Med Sci Sports Exerc.* 2007;39(4):625-631.
+
+#### SAFTE Fatigue Prediction
+
+Based on the Sleep, Activity, Fatigue, and Task Effectiveness model:
+
+**Model Components:**
+- **Circadian Process**: 24-hour alertness rhythm adjusted for chronotype
+- **Homeostatic Process**: Sleep pressure accumulation (~2.4%/hour awake)
+- **Sleep Debt**: Cumulative deficit from insufficient sleep
+
+**Outputs:**
+- Current effectiveness (%)
+- 4h, 8h, 24h forecasts
+- Risk level (Minimal to Critical)
+- Optimal sleep time
+- 24-hour performance curve
+
+Reference: Hursh SR, et al. *Aviat Space Environ Med.* 2004;75(3):A44-A53.
+
+#### Personalized HRV Analysis
+
+Age/sex-adjusted interpretation using Nunan et al. (2010) and Shaffer & Ginsberg (2017) norms:
+
+**Calculated Indices:**
+- **Parasympathetic Index (0-10)**: Overall vagal tone assessment
+- **Stress Index**: Baevsky-style sympathetic activity indicator
+- **Autonomic Balance**: LF/HF ratio interpretation
+
+**Metric Interpretation:**
+| Status | Meaning |
+|--------|---------|
+| Very Low | >2 SD below mean for age group |
+| Low | 1-2 SD below mean |
+| Normal | Within ±1 SD of mean |
+| High | 1-2 SD above mean |
+| Very High | >2 SD above mean |
+
+#### Performance Forecast
+
+24-hour cognitive performance prediction:
+
+**Features:**
+- Peak performance time identification
+- Circadian low point warning
+- Post-lunch dip detection
+- Critical window alerts
+- Work schedule integration
+
+#### Using the Profile Tools Engine
+
+1. Navigate to **User Profile → Clinical Profile → Profile Tools Engine**
+2. Select a tool from the dropdown (or choose "All Tools Summary")
+3. Configure input parameters:
+   - Sleep hours and quality
+   - Hours awake
+   - Chronotype selection
+   - RMSSD value (from HRV analysis)
+   - Resting heart rate
+4. Click **🚀 Run Calculations**
+5. Review results with component breakdowns
+6. Export summary to Markdown if needed
+
+#### Scientific References (Profile Tools Engine)
+
+- Plews DJ, Laursen PB, Stanley J, Kilding AE, Buchheit M. Training adaptation and heart rate variability in elite endurance athletes: opening the door to effective monitoring. *Sports Med.* 2013;43(9):773-781.
+- Kiviniemi AM, Hautala AJ, Kinnunen H, Tulppo MP. Endurance training guided individually by daily heart rate variability measurements. *Eur J Appl Physiol.* 2007;101(6):743-751.
+- Hursh SR, Redmond DP, Johnson ML, et al. Fatigue models for applied research in warfighting. *Aviat Space Environ Med.* 2004;75(3 Suppl):A44-A53.
+- Borbély AA. A two process model of sleep regulation. *Hum Neurobiol.* 1982;1(3):195-204.
 
 ### Exploration Medical Record (NASA isolation missions)
 

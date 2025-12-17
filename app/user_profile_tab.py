@@ -3117,6 +3117,23 @@ try:
 except ImportError:
     PERSONALIZED_COMPUTATIONS_AVAILABLE = False
 
+# Import Profile Tools Engine for SAFTE, recovery, and readiness calculations
+try:
+    from profile_tools_engine import (
+        calculate_recovery_score,
+        calculate_training_readiness,
+        predict_fatigue,
+        analyze_hrv_personalized,
+        generate_performance_forecast,
+        run_all_profile_tools,
+        RecoveryStatus,
+        ReadinessLevel,
+        FatigueRisk,
+    )
+    PROFILE_TOOLS_ENGINE_AVAILABLE = True
+except ImportError:
+    PROFILE_TOOLS_ENGINE_AVAILABLE = False
+
 # Import Polar AccessLink module if available
 try:
     from polar_accesslink import (
@@ -3171,6 +3188,609 @@ def _render_clinical_profile(user: UserProfile) -> None:
     # Personalized Health Metrics (NEW)
     with st.expander("🎯 Personalized Health Metrics", expanded=False):
         _render_personalized_health_metrics(user)
+    
+    # Profile Tools Engine - SAFTE, Recovery, Readiness
+    with st.expander("🛠️ Profile Tools Engine", expanded=False):
+        _render_profile_tools_engine(user)
+
+
+@_fragment_if_available
+def _render_profile_tools_engine(user: UserProfile) -> None:
+    """Render Profile Tools Engine for SAFTE, recovery, and readiness calculations.
+    
+    Provides comprehensive calculation engines accessible per user profile:
+    - SAFTE fatigue prediction using profile data
+    - HRV analysis with personalized interpretation
+    - Recovery score calculations
+    - Training readiness assessment
+    - Performance forecasting
+    """
+    st.markdown("#### 🛠️ Profile Tools Engine")
+    st.caption(
+        "Comprehensive calculation engines using your profile data. "
+        "Run SAFTE fatigue models, recovery analysis, and readiness assessments."
+    )
+    
+    if not PROFILE_TOOLS_ENGINE_AVAILABLE:
+        st.warning(
+            "Profile Tools Engine not available. "
+            "Ensure `profile_tools_engine.py` is in the app directory."
+        )
+        return
+    
+    # Check for required data
+    if not all([user.height_cm, user.weight_kg, user.date_of_birth, user.sex]):
+        st.info(
+            "Complete your profile (height, weight, age, sex) to use the Profile Tools Engine. "
+            "Click 'Edit Profile' above."
+        )
+        return
+    
+    age = _calculate_age(user.date_of_birth)
+    if age is None:
+        st.error("Could not calculate age from date of birth.")
+        return
+    
+    sex = user.sex or "other"
+    current_hour = datetime.now().hour
+    
+    # Tool selector
+    st.markdown("##### 🔧 Select Tool")
+    tool_options = [
+        "📊 All Tools Summary",
+        "🔋 Recovery Score",
+        "🏃 Training Readiness",
+        "😴 Fatigue Prediction (SAFTE)",
+        "💓 Personalized HRV Analysis",
+        "📈 Performance Forecast",
+    ]
+    selected_tool = st.selectbox(
+        "Choose a calculation tool",
+        options=tool_options,
+        key=f"profile_tool_select_{user.user_id}",
+    )
+    
+    st.markdown("---")
+    
+    # Input parameters for calculations
+    with st.expander("⚙️ Calculation Parameters", expanded=True):
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            sleep_hours = st.number_input(
+                "Sleep hours (last night)",
+                min_value=0.0,
+                max_value=14.0,
+                value=7.0,
+                step=0.5,
+                key=f"tools_sleep_hours_{user.user_id}",
+            )
+            sleep_quality = st.slider(
+                "Sleep quality (0-1)",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.7,
+                step=0.1,
+                key=f"tools_sleep_quality_{user.user_id}",
+            )
+        
+        with col2:
+            hours_awake = st.number_input(
+                "Hours awake",
+                min_value=0.0,
+                max_value=48.0,
+                value=float(current_hour - 7 if current_hour >= 7 else current_hour + 17),
+                step=0.5,
+                key=f"tools_hours_awake_{user.user_id}",
+            )
+            chronotype = st.selectbox(
+                "Chronotype",
+                options=["Morning (-2h)", "Slight morning (-1h)", "Neutral (0h)", 
+                         "Slight evening (+1h)", "Evening (+2h)"],
+                index=2,
+                key=f"tools_chronotype_{user.user_id}",
+            )
+            chronotype_map = {
+                "Morning (-2h)": -2.0,
+                "Slight morning (-1h)": -1.0,
+                "Neutral (0h)": 0.0,
+                "Slight evening (+1h)": 1.0,
+                "Evening (+2h)": 2.0,
+            }
+            chronotype_offset = chronotype_map.get(chronotype, 0.0)
+        
+        with col3:
+            rmssd_input = st.number_input(
+                "RMSSD (ms) - from HRV",
+                min_value=0.0,
+                max_value=200.0,
+                value=float(user.resting_hr_bpm or 35.0) if user.resting_hr_bpm else 35.0,
+                step=1.0,
+                help="Enter your latest RMSSD value from HRV analysis",
+                key=f"tools_rmssd_{user.user_id}",
+            )
+            resting_hr = st.number_input(
+                "Resting HR (bpm)",
+                min_value=30,
+                max_value=120,
+                value=int(user.resting_hr_bpm or 65),
+                step=1,
+                key=f"tools_resting_hr_{user.user_id}",
+            )
+    
+    # Run calculations button
+    if st.button("🚀 Run Calculations", type="primary", key=f"run_tools_{user.user_id}"):
+        st.markdown("---")
+        
+        # Prepare HRV metrics dict for analysis
+        hrv_metrics = {
+            "rmssd_ms": rmssd_input,
+            "resting_hr": resting_hr,
+        }
+        
+        # Load additional HRV metrics from database if available
+        try:
+            db = get_database()
+            hrv_history = db.get_hrv_measurement_history(user.user_id, limit=1)
+            if hrv_history:
+                latest_hrv = hrv_history[0]
+                if hasattr(latest_hrv, 'metrics_json') and latest_hrv.metrics_json:
+                    import json
+                    stored_metrics = json.loads(latest_hrv.metrics_json) if isinstance(latest_hrv.metrics_json, str) else latest_hrv.metrics_json
+                    hrv_metrics.update({
+                        "sdnn_ms": stored_metrics.get("sdnn_ms", stored_metrics.get("sdnn")),
+                        "pnn50": stored_metrics.get("pnn50_pct", stored_metrics.get("pnn50")),
+                        "hf_power": stored_metrics.get("hf_power_ms2", stored_metrics.get("hf_power")),
+                        "lf_power": stored_metrics.get("lf_power_ms2", stored_metrics.get("lf_power")),
+                        "lf_hf_ratio": stored_metrics.get("lf_hf_ratio"),
+                        "mean_rr_ms": stored_metrics.get("mean_rr_ms", stored_metrics.get("mean_rr")),
+                    })
+        except Exception:
+            pass
+        
+        if selected_tool == "📊 All Tools Summary":
+            _render_all_tools_summary(
+                age, sex, user.weight_kg, user.height_cm,
+                rmssd_input, hrv_metrics, sleep_hours, sleep_quality,
+                hours_awake, current_hour, chronotype_offset, resting_hr,
+                user.vo2max_ml_kg_min, user.activity_level or "moderate"
+            )
+        
+        elif selected_tool == "🔋 Recovery Score":
+            _render_recovery_score_tool(
+                rmssd_input, age, sleep_hours, sleep_quality, resting_hr
+            )
+        
+        elif selected_tool == "🏃 Training Readiness":
+            _render_training_readiness_tool(
+                rmssd_input, age, sleep_hours, sleep_quality, chronotype_offset
+            )
+        
+        elif selected_tool == "😴 Fatigue Prediction (SAFTE)":
+            _render_fatigue_prediction_tool(
+                sleep_hours, sleep_quality, hours_awake, current_hour, chronotype_offset
+            )
+        
+        elif selected_tool == "💓 Personalized HRV Analysis":
+            _render_hrv_analysis_tool(
+                hrv_metrics, age, sex, resting_hr, user.activity_level or "moderate"
+            )
+        
+        elif selected_tool == "📈 Performance Forecast":
+            _render_performance_forecast_tool(
+                current_hour, sleep_hours, chronotype_offset
+            )
+
+
+def _render_all_tools_summary(
+    age: int, sex: str, weight_kg: float, height_cm: float,
+    rmssd_ms: float, hrv_metrics: Dict[str, Any], sleep_hours: float,
+    sleep_quality: float, hours_awake: float, current_hour: int,
+    chronotype_offset: float, resting_hr: float, vo2max: Optional[float],
+    activity_level: str
+) -> None:
+    """Render summary of all profile tools."""
+    st.markdown("### 📊 Profile Tools Summary")
+    
+    results = run_all_profile_tools(
+        age=age,
+        sex=sex,
+        weight_kg=weight_kg,
+        height_cm=height_cm,
+        rmssd_ms=rmssd_ms,
+        hrv_metrics=hrv_metrics,
+        sleep_hours=sleep_hours,
+        sleep_quality=sleep_quality,
+        hours_awake=hours_awake,
+        current_hour=current_hour,
+        chronotype_offset=chronotype_offset,
+        resting_hr=resting_hr,
+        vo2max=vo2max,
+        activity_level=activity_level,
+    )
+    
+    # Display summary cards
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        if "recovery_score" in results:
+            rec = results["recovery_score"]
+            score = rec.get("score", 0)
+            status = rec.get("status_label", "Unknown")
+            if score >= 65:
+                st.success(f"🔋 **Recovery**: {score:.0f}/100")
+            elif score >= 50:
+                st.warning(f"🔋 **Recovery**: {score:.0f}/100")
+            else:
+                st.error(f"🔋 **Recovery**: {score:.0f}/100")
+            st.caption(status)
+    
+    with col2:
+        if "training_readiness" in results:
+            tr = results["training_readiness"]
+            score = tr.get("readiness_score", 0)
+            level = tr.get("level_label", "Unknown")
+            if score >= 70:
+                st.success(f"🏃 **Readiness**: {score:.0f}/100")
+            elif score >= 50:
+                st.warning(f"🏃 **Readiness**: {score:.0f}/100")
+            else:
+                st.error(f"🏃 **Readiness**: {score:.0f}/100")
+            st.caption(level)
+    
+    with col3:
+        if "fatigue_prediction" in results:
+            fp = results["fatigue_prediction"]
+            eff = fp.get("current_effectiveness", 0)
+            risk = fp.get("risk_label", "Unknown")
+            if eff >= 75:
+                st.success(f"😴 **Effectiveness**: {eff:.0f}%")
+            elif eff >= 65:
+                st.warning(f"😴 **Effectiveness**: {eff:.0f}%")
+            else:
+                st.error(f"😴 **Effectiveness**: {eff:.0f}%")
+            st.caption(risk)
+    
+    # HRV Analysis
+    if "hrv_analysis" in results:
+        st.markdown("---")
+        st.markdown("##### 💓 Personalized HRV Status")
+        hrv = results["hrv_analysis"]
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Parasympathetic Index", f"{hrv.get('parasympathetic_index', 0):.1f}/10")
+            st.caption(hrv.get("autonomic_balance", ""))
+        with col2:
+            st.metric("Stress Index", f"{hrv.get('stress_index', 0):.0f}")
+            st.caption(hrv.get("overall_status", ""))
+    
+    # Performance Forecast
+    if "performance_forecast" in results:
+        st.markdown("---")
+        st.markdown("##### 📈 Performance Forecast")
+        pf = results["performance_forecast"]
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("Peak Performance", pf.get("peak_performance_time", "--:--"))
+        with col2:
+            st.metric("Low Point", pf.get("low_performance_time", "--:--"))
+        
+        # Show recommendations
+        recs = pf.get("recommendations", [])
+        if recs:
+            with st.expander("💡 Recommendations"):
+                for rec in recs:
+                    st.markdown(f"- {rec}")
+    
+    # Export option
+    st.markdown("---")
+    if st.button("📥 Export Summary (Markdown)", key="export_tools_summary"):
+        export_text = f"""# Profile Tools Summary
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+
+## User Context
+- Age: {age} years
+- Sex: {sex}
+- Current Hour: {current_hour}:00
+
+## Recovery Score
+- Score: {results.get('recovery_score', {}).get('score', 'N/A')}/100
+- Status: {results.get('recovery_score', {}).get('status_label', 'N/A')}
+
+## Training Readiness
+- Score: {results.get('training_readiness', {}).get('readiness_score', 'N/A')}/100
+- Level: {results.get('training_readiness', {}).get('level_label', 'N/A')}
+
+## Fatigue Prediction
+- Current Effectiveness: {results.get('fatigue_prediction', {}).get('current_effectiveness', 'N/A')}%
+- Risk: {results.get('fatigue_prediction', {}).get('risk_label', 'N/A')}
+
+## HRV Analysis
+- Parasympathetic Index: {results.get('hrv_analysis', {}).get('parasympathetic_index', 'N/A')}/10
+- Stress Index: {results.get('hrv_analysis', {}).get('stress_index', 'N/A')}
+"""
+        st.code(export_text, language="markdown")
+
+
+def _render_recovery_score_tool(
+    rmssd_ms: float, age: int, sleep_hours: float,
+    sleep_quality: float, resting_hr: float
+) -> None:
+    """Render recovery score calculation results."""
+    st.markdown("### 🔋 Recovery Score")
+    
+    recovery = calculate_recovery_score(
+        rmssd_ms=rmssd_ms,
+        age=age,
+        sleep_hours=sleep_hours,
+        sleep_quality=sleep_quality,
+        resting_hr=resting_hr,
+    )
+    
+    # Main score display
+    score = recovery.score
+    if score >= 80:
+        st.success(f"## {score:.0f}/100 — {recovery.status_label}")
+    elif score >= 65:
+        st.info(f"## {score:.0f}/100 — {recovery.status_label}")
+    elif score >= 50:
+        st.warning(f"## {score:.0f}/100 — {recovery.status_label}")
+    else:
+        st.error(f"## {score:.0f}/100 — {recovery.status_label}")
+    
+    # Component breakdown
+    st.markdown("##### Component Breakdown")
+    components = recovery.components
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("HRV Component", f"{components.get('hrv', 0):.1f}/50")
+    with col2:
+        st.metric("Sleep Component", f"{components.get('sleep', 0):.1f}/30")
+    with col3:
+        st.metric("Resting HR Component", f"{components.get('resting_hr', 0):.1f}/20")
+    
+    # lnRMSSD details
+    if recovery.ln_rmssd:
+        st.markdown("##### HRV Details")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.metric("lnRMSSD", f"{recovery.ln_rmssd:.3f}")
+        with col2:
+            if recovery.ln_rmssd_baseline:
+                st.metric("Baseline lnRMSSD", f"{recovery.ln_rmssd_baseline:.3f}")
+    
+    # Interpretation
+    st.markdown("##### Interpretation")
+    st.info(recovery.interpretation)
+    
+    # Recommendations
+    st.markdown("##### Recommendations")
+    for rec in recovery.recommendations:
+        st.markdown(f"- {rec}")
+
+
+def _render_training_readiness_tool(
+    rmssd_ms: float, age: int, sleep_hours: float,
+    sleep_quality: float, chronotype_offset: float
+) -> None:
+    """Render training readiness calculation results."""
+    st.markdown("### 🏃 Training Readiness")
+    
+    readiness = calculate_training_readiness(
+        rmssd_ms=rmssd_ms,
+        age=age,
+        sleep_hours=sleep_hours,
+        sleep_quality=sleep_quality,
+        chronotype_offset=chronotype_offset,
+    )
+    
+    # Main score display
+    score = readiness.readiness_score
+    if score >= 85:
+        st.success(f"## {score:.0f}/100 — {readiness.level_label}")
+    elif score >= 70:
+        st.info(f"## {score:.0f}/100 — {readiness.level_label}")
+    elif score >= 50:
+        st.warning(f"## {score:.0f}/100 — {readiness.level_label}")
+    else:
+        st.error(f"## {score:.0f}/100 — {readiness.level_label}")
+    
+    # Component breakdown
+    st.markdown("##### Component Breakdown")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("HRV", f"{readiness.hrv_component:.1f}/35")
+    with col2:
+        st.metric("Sleep", f"{readiness.sleep_component:.1f}/25")
+    with col3:
+        st.metric("Fatigue", f"{readiness.fatigue_component:.1f}/20")
+    with col4:
+        st.metric("Strain", f"{readiness.strain_component:.1f}/20")
+    
+    # Interpretation
+    st.markdown("##### Interpretation")
+    st.info(readiness.interpretation)
+    
+    # Training recommendations
+    st.markdown("##### Training Recommendations")
+    for rec in readiness.training_recommendations:
+        st.markdown(f"- {rec}")
+    
+    # Workout suggestions
+    st.markdown("##### Suggested Workouts")
+    for workout in readiness.workout_suggestions:
+        st.markdown(f"- {workout}")
+
+
+def _render_fatigue_prediction_tool(
+    sleep_hours: float, sleep_quality: float, hours_awake: float,
+    current_hour: int, chronotype_offset: float
+) -> None:
+    """Render SAFTE fatigue prediction results."""
+    st.markdown("### 😴 Fatigue Prediction (SAFTE Model)")
+    
+    fatigue = predict_fatigue(
+        sleep_hours_last_night=sleep_hours,
+        sleep_quality=sleep_quality,
+        hours_awake=hours_awake,
+        current_hour=current_hour,
+        chronotype_offset=chronotype_offset,
+    )
+    
+    # Current effectiveness
+    eff = fatigue.current_effectiveness
+    if eff >= 85:
+        st.success(f"## Current Effectiveness: {eff:.0f}%")
+    elif eff >= 75:
+        st.info(f"## Current Effectiveness: {eff:.0f}%")
+    elif eff >= 65:
+        st.warning(f"## Current Effectiveness: {eff:.0f}%")
+    else:
+        st.error(f"## Current Effectiveness: {eff:.0f}%")
+    
+    st.caption(f"Risk Level: {fatigue.risk_label}")
+    
+    # Predictions
+    st.markdown("##### Effectiveness Forecast")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("In 4 hours", f"{fatigue.predicted_effectiveness_4h:.0f}%")
+    with col2:
+        st.metric("In 8 hours", f"{fatigue.predicted_effectiveness_8h:.0f}%")
+    with col3:
+        st.metric("In 24 hours", f"{fatigue.predicted_effectiveness_24h:.0f}%")
+    
+    # Sleep debt and circadian
+    st.markdown("##### Status")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Sleep Debt", f"{fatigue.sleep_debt_hours:.1f}h")
+    with col2:
+        st.metric("Circadian Phase", fatigue.circadian_phase)
+    with col3:
+        st.metric("Optimal Bedtime", fatigue.optimal_sleep_time)
+    
+    # Performance curve visualization
+    st.markdown("##### 24-Hour Performance Curve")
+    if fatigue.performance_curve:
+        curve_data = pd.DataFrame(fatigue.performance_curve, columns=["Hour", "Effectiveness"])
+        st.line_chart(curve_data.set_index("Hour"))
+    
+    # Recommendations
+    if fatigue.recommendations:
+        st.markdown("##### Recommendations")
+        for rec in fatigue.recommendations:
+            st.markdown(f"- {rec}")
+
+
+def _render_hrv_analysis_tool(
+    hrv_metrics: Dict[str, Any], age: int, sex: str,
+    resting_hr: float, activity_level: str
+) -> None:
+    """Render personalized HRV analysis results."""
+    st.markdown("### 💓 Personalized HRV Analysis")
+    
+    analysis = analyze_hrv_personalized(
+        hrv_metrics=hrv_metrics,
+        age=age,
+        sex=sex,
+        resting_hr=resting_hr,
+        activity_level=activity_level,
+    )
+    
+    # Main indices
+    col1, col2 = st.columns(2)
+    with col1:
+        pns = analysis.parasympathetic_index
+        if pns >= 7:
+            st.success(f"## Parasympathetic Index: {pns:.1f}/10")
+        elif pns >= 4:
+            st.info(f"## Parasympathetic Index: {pns:.1f}/10")
+        else:
+            st.warning(f"## Parasympathetic Index: {pns:.1f}/10")
+    
+    with col2:
+        stress = analysis.stress_index
+        if stress < 100:
+            st.success(f"## Stress Index: {stress:.0f}")
+        elif stress < 200:
+            st.info(f"## Stress Index: {stress:.0f}")
+        else:
+            st.warning(f"## Stress Index: {stress:.0f}")
+    
+    # Status
+    st.markdown("##### Overall Status")
+    st.info(f"**{analysis.overall_status}**\n\nAutonomic Balance: {analysis.autonomic_balance}")
+    
+    # Interpreted metrics table
+    st.markdown("##### Metric Analysis")
+    if analysis.metrics:
+        metric_rows = []
+        for name, data in analysis.metrics.items():
+            if isinstance(data, dict):
+                metric_rows.append({
+                    "Metric": name.upper().replace("_MS", " (ms)").replace("_PCT", " (%)"),
+                    "Value": f"{data.get('value', 'N/A')}",
+                    "Status": data.get("status", "N/A").replace("_", " ").title(),
+                    "Percentile": f"~{data.get('percentile_estimate', 'N/A')}th" if data.get('percentile_estimate') else "N/A",
+                })
+        if metric_rows:
+            st.dataframe(pd.DataFrame(metric_rows), use_container_width=True, hide_index=True)
+    
+    # Clinical significance
+    if analysis.clinical_significance:
+        st.markdown("##### Clinical Significance")
+        for sig in analysis.clinical_significance:
+            st.markdown(f"- {sig}")
+    
+    # Recommendations
+    if analysis.recommendations:
+        st.markdown("##### Recommendations")
+        for rec in analysis.recommendations:
+            st.markdown(f"- {rec}")
+
+
+def _render_performance_forecast_tool(
+    current_hour: int, sleep_hours: float, chronotype_offset: float
+) -> None:
+    """Render 24-hour performance forecast results."""
+    st.markdown("### 📈 Performance Forecast")
+    
+    forecast = generate_performance_forecast(
+        current_hour=current_hour,
+        sleep_hours_last_night=sleep_hours,
+        chronotype_offset=chronotype_offset,
+    )
+    
+    # Current performance
+    st.metric("Current Performance", f"{forecast.current_performance:.0f}%")
+    
+    # Peak and low times
+    col1, col2 = st.columns(2)
+    with col1:
+        st.success(f"🔝 **Peak Performance**: {forecast.peak_performance_time}")
+    with col2:
+        st.warning(f"📉 **Low Point**: {forecast.low_performance_time}")
+    
+    # Hourly forecast chart
+    st.markdown("##### 24-Hour Forecast")
+    if forecast.hourly_forecast:
+        df = pd.DataFrame(forecast.hourly_forecast)
+        df = df.rename(columns={"hour_str": "Time", "effectiveness": "Effectiveness %"})
+        if "Time" in df.columns and "Effectiveness %" in df.columns:
+            st.line_chart(df.set_index("Time")["Effectiveness %"])
+    
+    # Critical windows
+    if forecast.critical_windows:
+        st.markdown("##### ⚠️ Critical Windows")
+        for cw in forecast.critical_windows:
+            st.warning(f"**{cw.get('period', '')}**: {cw.get('warning', '')}")
+    
+    # Recommendations
+    if forecast.recommendations:
+        st.markdown("##### Recommendations")
+        for rec in forecast.recommendations:
+            st.markdown(f"- {rec}")
 
 
 @_fragment_if_available
