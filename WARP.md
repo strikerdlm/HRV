@@ -135,6 +135,20 @@ Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations c
   - Uses user's age group and sex for reference ranges
   - Overall autonomic assessment with recommendations
 
+#### Phase 6: Profile Tools Engine (Priority: HIGH) ✅ COMPLETE
+- [x] **Profile Tools Engine**: Comprehensive calculation engines per user profile
+  - **Recovery Score**: lnRMSSD-based recovery with HRV/sleep/HR components (Plews et al. 2013)
+  - **Training Readiness**: Multi-component readiness score with workout suggestions
+  - **SAFTE Fatigue Prediction**: 24-hour cognitive effectiveness forecast
+  - **Personalized HRV Analysis**: Age/sex-adjusted interpretation with stress indices
+  - **Performance Forecast**: Hour-by-hour performance prediction with circadian modeling
+- [x] **Profile Tools UI**: Interactive tool selector in Clinical Profile tab
+  - Configurable calculation parameters (sleep, chronotype, HRV values)
+  - Component breakdown visualizations
+  - 24-hour performance curve charts
+  - One-click export to Markdown
+- [x] **All Tools Summary**: Aggregated execution of all profile tools with unified display
+
 ### Planned Features (Q1 2026)
 
 #### Longitudinal Study Support
@@ -690,7 +704,7 @@ The app includes Windows console safety workarounds (Colorama fix) in `app/app.p
 - **README**: `README.md` — quick start and high-level features
 - **Agent Rules**: `.cursor/rules/agent.mdc` — AI agent development guidelines
 
-## Project Structure (Updated v1.8.5)
+## Project Structure (Updated v1.8.23)
 ```
 HRV/
 ├── app/
@@ -700,10 +714,12 @@ HRV/
 │   ├── gpu_processing.py         # GPU-accelerated computations
 │   ├── user_profile_tab.py       # User profile management
 │   ├── user_database.py          # SQLite persistence
-│   ├── polar_accesslink.py       # Polar AccessLink OAuth & VO2max sync (NEW)
+│   ├── polar_accesslink.py       # Polar AccessLink OAuth & VO2max sync
 │   ├── performance_utils.py      # CPU optimization utilities
 │   ├── space_weather_impact.py   # Solar event predictions
 │   ├── logging_config.py         # Centralized logging
+│   ├── profile_tools_engine.py   # Profile calculation engines (NEW v1.8.23)
+│   ├── personalized_computations.py  # Personalized health metrics
 │   └── data_cache/               # Cached API responses
 ├── logs/                         # Application logs
 │   ├── app.log                   # Main log (rotating)
