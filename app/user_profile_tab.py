@@ -3098,6 +3098,25 @@ try:
 except ImportError:
     CLINICAL_PROFILE_AVAILABLE = False
 
+# Import personalized computations module if available
+try:
+    from personalized_computations import (
+        calculate_body_fat_navy,
+        calculate_sleep_apnea_risk,
+        get_personalized_hrv_norms,
+        interpret_hrv_metric_personalized,
+        classify_fitness_by_vo2max,
+        calculate_personalized_hydration,
+        assess_cardiovascular_risk,
+        calculate_all_personalized_metrics,
+        RiskLevel,
+        FitnessCategory,
+        BodyFatCategory,
+    )
+    PERSONALIZED_COMPUTATIONS_AVAILABLE = True
+except ImportError:
+    PERSONALIZED_COMPUTATIONS_AVAILABLE = False
+
 # Import Polar AccessLink module if available
 try:
     from polar_accesslink import (
@@ -3148,6 +3167,330 @@ def _render_clinical_profile(user: UserProfile) -> None:
     
     with st.expander("📊 Exploration Medical Analytics", expanded=False):
         _render_exploration_medical_analytics(user)
+    
+    # Personalized Health Metrics (NEW)
+    with st.expander("🎯 Personalized Health Metrics", expanded=False):
+        _render_personalized_health_metrics(user)
+
+
+@_fragment_if_available
+def _render_personalized_health_metrics(user: UserProfile) -> None:
+    """Render personalized health metrics based on user profile data.
+    
+    This section uses the user's specific measurements (weight, neck circumference,
+    waist, etc.) to calculate personalized health metrics including:
+    - Body fat estimation (US Navy method)
+    - Sleep apnea risk (STOP-BANG score)
+    - Age-adjusted HRV reference ranges
+    - Fitness classification based on VO2max
+    - Cardiovascular risk profile
+    - Personalized hydration requirements
+    """
+    st.markdown("#### 🎯 Personalized Health Metrics")
+    st.caption(
+        "Profile-specific calculations using your measurements. "
+        "Update Body Composition data for more accurate estimates."
+    )
+    
+    if not PERSONALIZED_COMPUTATIONS_AVAILABLE:
+        st.warning(
+            "Personalized computations module not available. "
+            "Ensure `personalized_computations.py` is in the app directory."
+        )
+        return
+    
+    # Check for required data
+    if not all([user.height_cm, user.weight_kg, user.date_of_birth, user.sex]):
+        st.info(
+            "Complete your profile (height, weight, age, sex) to view personalized health metrics. "
+            "Click 'Edit Profile' above."
+        )
+        return
+    
+    age = _calculate_age(user.date_of_birth)
+    if age is None:
+        st.error("Could not calculate age from date of birth.")
+        return
+    
+    sex = user.sex or "other"
+    
+    # Load body composition data for circumferences
+    neck_cm = None
+    waist_cm = None
+    hip_cm = None
+    
+    try:
+        db = get_database()
+        if hasattr(db, "get_body_composition_history"):
+            comp_history = db.get_body_composition_history(user.user_id, limit=1)
+            if comp_history:
+                latest_comp = comp_history[0]
+                neck_cm = getattr(latest_comp, 'neck_cm', None)
+                waist_cm = getattr(latest_comp, 'waist_cm', None)
+                hip_cm = getattr(latest_comp, 'hip_cm', None)
+    except Exception:
+        pass
+    
+    # Load medical history for risk factors
+    smoker = False
+    diabetes = False
+    hypertension = False
+    family_history_cvd = False
+    snoring = None
+    tiredness = None
+    observed_apnea = None
+    
+    try:
+        if hasattr(db, "get_medical_history"):
+            med_history = db.get_medical_history(user.user_id, limit=1)
+            if med_history:
+                latest_med = med_history[0]
+                smoker = latest_med.get("tobacco_use") == "current"
+                diabetes = latest_med.get("diabetes_type") is not None
+                hypertension = latest_med.get("hypertension", False)
+                family_history_cvd = latest_med.get("family_heart_disease", False)
+                snoring = latest_med.get("snoring")
+                observed_apnea = latest_med.get("sleep_apnea")
+    except Exception:
+        pass
+    
+    # Calculate all personalized metrics
+    results = calculate_all_personalized_metrics(
+        weight_kg=user.weight_kg,
+        height_cm=user.height_cm,
+        age=age,
+        sex=sex,
+        neck_cm=neck_cm,
+        waist_cm=waist_cm,
+        hip_cm=hip_cm,
+        vo2max=user.vo2max_ml_kg_min,
+        resting_hr=user.resting_hr_bpm,
+        systolic_bp=None,  # Could load from medical history
+        total_cholesterol=None,
+        hdl_cholesterol=None,
+        smoker=smoker,
+        diabetes=diabetes,
+        hypertension_treated=hypertension,
+        family_history_cvd=family_history_cvd,
+        snoring=snoring,
+        tiredness=tiredness,
+        observed_apnea=observed_apnea,
+        activity_level=user.activity_level or "moderate",
+    )
+    
+    # --- BMI Section ---
+    st.markdown("##### 📊 Body Mass Index")
+    bmi_data = results.get("bmi", {})
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("BMI", f"{bmi_data.get('value', 0):.1f} kg/m²")
+    with col2:
+        category = bmi_data.get('category', 'Unknown')
+        if category == "Normal":
+            st.success(f"Category: {category}")
+        elif category in ["Overweight", "Underweight"]:
+            st.warning(f"Category: {category}")
+        else:
+            st.error(f"Category: {category}")
+    
+    # --- Body Fat Section (if circumferences available) ---
+    if "body_fat" in results.get("calculations_available", []):
+        st.markdown("##### 🏋️ Body Fat (US Navy Method)")
+        bf_data = results.get("body_fat", {})
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Body Fat %", f"{bf_data.get('body_fat_pct', 0):.1f}%")
+        with col2:
+            st.metric("Fat Mass", f"{bf_data.get('fat_mass_kg', 0):.1f} kg")
+        with col3:
+            st.metric("Lean Mass", f"{bf_data.get('lean_mass_kg', 0):.1f} kg")
+        
+        bf_category = bf_data.get('category_label', 'Unknown')
+        if "Fitness" in bf_category or "Athletes" in bf_category:
+            st.success(f"Classification: {bf_category}")
+        elif "Average" in bf_category:
+            st.info(f"Classification: {bf_category}")
+        elif "Obese" in bf_category:
+            st.error(f"Classification: {bf_category}")
+        else:
+            st.warning(f"Classification: {bf_category}")
+        
+        st.caption(f"Method: {bf_data.get('method', 'US Navy')}")
+    else:
+        st.info(
+            "📏 **Add circumference measurements** (neck, waist, hip) in Body Composition "
+            "to calculate body fat using the US Navy method."
+        )
+    
+    # --- Sleep Apnea Risk ---
+    st.markdown("##### 😴 Sleep Apnea Risk (STOP-BANG)")
+    apnea_data = results.get("sleep_apnea_risk", {})
+    score = apnea_data.get("total_score", 0)
+    risk_label = apnea_data.get("risk_label", "Unknown")
+    risk_level = apnea_data.get("risk_level", "unknown")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("STOP-BANG Score", f"{score}/8")
+    with col2:
+        if risk_level == "low":
+            st.success(risk_label)
+        elif risk_level == "moderate":
+            st.warning(risk_label)
+        else:
+            st.error(risk_label)
+    
+    risk_factors = apnea_data.get("risk_factors", [])
+    if risk_factors:
+        st.markdown("**Risk factors identified:**")
+        for factor in risk_factors:
+            st.markdown(f"- {factor}")
+    
+    if score >= 3:
+        with st.expander("💡 Recommendations"):
+            for rec in apnea_data.get("recommendations", []):
+                st.markdown(f"- {rec}")
+    
+    # --- Personalized HRV Norms ---
+    st.markdown("##### 💓 Personalized HRV Reference Ranges")
+    hrv_norms = results.get("hrv_norms", {})
+    age_group = hrv_norms.get("age_group", "Unknown")
+    st.caption(f"Reference ranges for age group {age_group} ({hrv_norms.get('reference', '')})")
+    
+    metrics = hrv_norms.get("metrics", {})
+    if metrics:
+        norm_df_data = []
+        for metric_name, values in metrics.items():
+            norm_df_data.append({
+                "Metric": metric_name.upper().replace("_MS", " (ms)").replace("_PCT", " (%)").replace("_MS2", " (ms²)"),
+                "Mean": f"{values['mean']:.1f}",
+                "SD": f"{values['sd']:.1f}",
+                "Normal Range": f"{values['percentile_5']:.1f} - {values['percentile_95']:.1f}",
+            })
+        st.dataframe(pd.DataFrame(norm_df_data), use_container_width=True, hide_index=True)
+    
+    # --- Fitness Classification (if VO2max available) ---
+    if "fitness_classification" in results.get("calculations_available", []):
+        st.markdown("##### 🏃 Fitness Classification (VO2max)")
+        fitness_data = results.get("fitness_classification", {})
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("VO2max", f"{fitness_data.get('vo2max_ml_kg_min', 0):.1f} mL/kg/min")
+        with col2:
+            category = fitness_data.get("category_label", "Unknown")
+            if category in ["Excellent", "Superior"]:
+                st.success(f"Category: {category}")
+            elif category == "Good":
+                st.info(f"Category: {category}")
+            elif category == "Fair":
+                st.warning(f"Category: {category}")
+            else:
+                st.error(f"Category: {category}")
+        with col3:
+            st.metric("Percentile", f"~{fitness_data.get('percentile_estimate', 50)}th")
+        st.caption(f"Age group: {fitness_data.get('age_group')} | Sex: {fitness_data.get('sex')}")
+    
+    # --- Cardiovascular Risk ---
+    st.markdown("##### ❤️ Cardiovascular Risk Profile")
+    cv_data = results.get("cardiovascular_risk", {})
+    cv_risk_level = cv_data.get("risk_level", "unknown")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if cv_risk_level == "low":
+            st.success("Risk Level: LOW")
+        elif cv_risk_level == "moderate":
+            st.warning("Risk Level: MODERATE")
+        elif cv_risk_level == "high":
+            st.error("Risk Level: HIGH")
+        else:
+            st.error("Risk Level: VERY HIGH")
+    
+    with col2:
+        num_risk = len(cv_data.get("risk_factors", []))
+        num_protective = len(cv_data.get("protective_factors", []))
+        st.metric("Risk / Protective Factors", f"{num_risk} / {num_protective}")
+    
+    col_r, col_p = st.columns(2)
+    with col_r:
+        risk_factors = cv_data.get("risk_factors", [])
+        if risk_factors:
+            st.markdown("**⚠️ Risk Factors:**")
+            for factor in risk_factors[:5]:  # Limit display
+                st.markdown(f"- {factor}")
+    
+    with col_p:
+        protective = cv_data.get("protective_factors", [])
+        if protective:
+            st.markdown("**✅ Protective Factors:**")
+            for factor in protective[:5]:
+                st.markdown(f"- {factor}")
+    
+    cv_recommendations = cv_data.get("recommendations", [])
+    if cv_recommendations:
+        with st.expander("💡 Recommendations"):
+            for rec in cv_recommendations:
+                st.markdown(f"- {rec}")
+    
+    # --- Hydration Requirements ---
+    st.markdown("##### 💧 Personalized Hydration")
+    hydration_data = results.get("hydration_requirements", {})
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric("Base Requirement", f"{hydration_data.get('base_ml', 0):.0f} mL")
+    with col2:
+        st.metric("Daily Target", f"{hydration_data.get('total_ml', 0):.0f} mL")
+    with col3:
+        st.metric("~Glasses (8oz)", f"{hydration_data.get('glasses_8oz', 0)}")
+    
+    st.caption(
+        f"Based on {user.weight_kg:.1f} kg body weight at "
+        f"{user.activity_level or 'moderate'} activity level."
+    )
+    
+    # --- Summary Export ---
+    st.markdown("---")
+    st.markdown("##### 📥 Export Personalized Metrics")
+    
+    if st.button("📋 Copy Summary to Clipboard", key=f"copy_personalized_{user.user_id}"):
+        summary_text = f"""# Personalized Health Metrics for {user.full_name}
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
+
+## Demographics
+- Age: {age} years
+- Sex: {sex}
+- Height: {user.height_cm:.1f} cm
+- Weight: {user.weight_kg:.1f} kg
+- BMI: {bmi_data.get('value', 0):.1f} kg/m² ({bmi_data.get('category', 'Unknown')})
+
+## Body Composition
+"""
+        if "body_fat" in results.get("calculations_available", []):
+            bf = results.get("body_fat", {})
+            summary_text += f"""- Body Fat: {bf.get('body_fat_pct', 0):.1f}%
+- Fat Mass: {bf.get('fat_mass_kg', 0):.1f} kg
+- Lean Mass: {bf.get('lean_mass_kg', 0):.1f} kg
+- Classification: {bf.get('category_label', 'Unknown')}
+"""
+        
+        summary_text += f"""
+## Sleep Apnea Risk
+- STOP-BANG Score: {score}/8
+- Risk Level: {risk_label}
+
+## Cardiovascular Risk
+- Risk Level: {cv_risk_level.upper()}
+- Risk Factors: {', '.join(cv_data.get('risk_factors', ['None'])[:3])}
+
+## Hydration
+- Daily Target: {hydration_data.get('total_ml', 0):.0f} mL ({hydration_data.get('liters', 0):.1f} L)
+
+---
+Reference: Personalized computations based on user profile data.
+See docs/Manual.md for scientific references.
+"""
+        st.code(summary_text, language="markdown")
+        st.success("Summary generated! Copy the text above.")
 
 
 def _render_data_completeness(user: UserProfile) -> None:
@@ -5268,13 +5611,52 @@ def get_active_user_context() -> Dict[str, Any]:
             chronotype_offset = -1.0  # Morning tendency
     
     latest_medical_record: Dict[str, Any] = {}
+    body_composition: Dict[str, Any] = {}
+    personalized_metrics: Dict[str, Any] = {}
+    
     try:
         db = get_database()
         med_rows = db.get_medical_history(user.user_id, limit=1)
         if med_rows:
             latest_medical_record = med_rows[0]
+        
+        # Load body composition data
+        if hasattr(db, "get_body_composition_history"):
+            comp_rows = db.get_body_composition_history(user.user_id, limit=1)
+            if comp_rows:
+                latest_comp = comp_rows[0]
+                body_composition = {
+                    "neck_cm": getattr(latest_comp, 'neck_cm', None),
+                    "waist_cm": getattr(latest_comp, 'waist_cm', None),
+                    "hip_cm": getattr(latest_comp, 'hip_cm', None),
+                    "body_fat_pct": getattr(latest_comp, 'body_fat_pct', None),
+                    "lean_mass_kg": getattr(latest_comp, 'lean_mass_kg', None),
+                    "muscle_mass_kg": getattr(latest_comp, 'muscle_mass_kg', None),
+                    "chest_cm": getattr(latest_comp, 'chest_cm', None),
+                    "measurement_date": getattr(latest_comp, 'measurement_date', None),
+                }
+        
+        # Calculate personalized metrics if module available
+        if PERSONALIZED_COMPUTATIONS_AVAILABLE and age is not None:
+            try:
+                personalized_metrics = calculate_all_personalized_metrics(
+                    weight_kg=user.weight_kg or 70.0,
+                    height_cm=user.height_cm or 170.0,
+                    age=age,
+                    sex=user.sex or "other",
+                    neck_cm=body_composition.get("neck_cm"),
+                    waist_cm=body_composition.get("waist_cm"),
+                    hip_cm=body_composition.get("hip_cm"),
+                    vo2max=user.vo2max_ml_kg_min,
+                    resting_hr=user.resting_hr_bpm,
+                    activity_level=user.activity_level or "moderate",
+                )
+            except Exception:
+                personalized_metrics = {}
     except Exception:
         latest_medical_record = {}
+        body_composition = {}
+        personalized_metrics = {}
     
     return {
         "has_user": True,
@@ -5291,6 +5673,16 @@ def get_active_user_context() -> Dict[str, Any]:
         "vo2max_ml_kg_min": user.vo2max_ml_kg_min or 35.0,
         "activity_level": user.activity_level or "moderately_active",
         "chronotype_offset": chronotype_offset,
+        # Body composition data
+        "neck_cm": body_composition.get("neck_cm"),
+        "waist_cm": body_composition.get("waist_cm"),
+        "hip_cm": body_composition.get("hip_cm"),
+        "body_fat_pct": body_composition.get("body_fat_pct"),
+        "lean_mass_kg": body_composition.get("lean_mass_kg"),
+        "body_composition": body_composition,
+        # Personalized calculations
+        "personalized_metrics": personalized_metrics,
+        "hrv_norms": personalized_metrics.get("hrv_norms", {}),
         "occupation": user.occupation,
         "medical_conditions": getattr(user, 'medical_conditions', []),
         "medications": getattr(user, 'medications', []),

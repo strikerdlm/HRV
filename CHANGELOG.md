@@ -5,6 +5,64 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.22] - 2025-12-17
+
+### Added
+- **Personalized Health Metrics** (`app/personalized_computations.py`): New module providing user-specific physiological calculations tailored to individual profile data:
+  - **Body fat estimation** using US Navy method (Hodgdon & Beckett 1984) with neck/waist/hip circumferences
+  - **Sleep apnea risk** assessment using STOP-BANG score components (Chung et al. 2008)
+  - **Age/sex-adjusted HRV reference ranges** from Nunan et al. (2010) and Shaffer & Ginsberg (2017)
+  - **VO2max fitness classification** using ACSM Guidelines percentile tables
+  - **Cardiovascular risk profile** assessment with multiple risk/protective factors
+  - **Personalized hydration requirements** based on NASA-STD-3001 (32 mL/kg body weight)
+- **Personalized Health Metrics UI** (`app/user_profile_tab.py`): New expander panel in Clinical Profile tab displaying:
+  - BMI with WHO classification
+  - Body fat percentage with ACSM category (Athletes/Fitness/Average/Obese)
+  - STOP-BANG sleep apnea risk score with recommendations
+  - Personalized HRV reference ranges table by age group
+  - Fitness classification with percentile estimate
+  - Cardiovascular risk factors and protective factors
+  - Hydration requirements with glasses/liters display
+  - One-click markdown summary export
+- **Personalized HRV Interpretation** (`app/hrv_core.py`): New `interpret_hrv_personalized()` function that:
+  - Interprets HRV metrics against age/sex-adjusted norms
+  - Returns status (very_low/low/normal/high/very_high) per metric
+  - Provides percentile estimate and z-score for each metric
+  - Generates overall autonomic assessment with recommendations
+- **Enhanced User Context** (`app/user_profile_tab.py`): `get_active_user_context()` now includes:
+  - Body composition data (neck_cm, waist_cm, hip_cm, body_fat_pct, lean_mass_kg)
+  - Personalized HRV norms for the user's age group
+  - All personalized metrics calculations
+- **Diego Malpica Profile Setup** (`app/setup_diego_profile.py`): Utility script to initialize complete user profile with:
+  - Biometrics (weight 91 kg, height 173 cm)
+  - Body composition (neck 41 cm, waist 94 cm, hip 102 cm)
+  - Clinical assessment scales (ESS, PSQI, KSS, Samn-Perelli)
+  - VO2max and fitness data
+
+### Changed
+- **User Profile Tab** imports and integrates the personalized_computations module with graceful fallback
+- **Clinical Profile** section now includes "Personalized Health Metrics" expander after Exploration Medical Analytics
+- **Active User Context** propagates body composition and personalized metrics to all tabs
+
+### Documentation
+- Updated `WARP.md` roadmap with Phase 5: Personalized User Profile Features (marked complete)
+- Updated `README.md` features table with personalized health metrics and HRV interpretation
+- Updated `docs/Manual.md` with comprehensive Personalized Health Metrics guide including:
+  - US Navy body fat formula and classification tables
+  - STOP-BANG score interpretation
+  - Age-adjusted HRV reference ranges
+  - VO2max fitness classification by age/sex
+  - Cardiovascular risk factors
+  - Hydration calculation methodology
+
+### Scientific References
+- Hodgdon JA, Beckett MB (1984). Naval Health Research Center - Body Fat Prediction
+- Chung F et al. (2008). Anesthesiology - STOP-BANG Questionnaire
+- Nunan D et al. (2010). PACE - Short-term HRV Normal Values
+- Shaffer F, Ginsberg JP (2017). Front Public Health - HRV Metrics and Norms
+- ACSM Guidelines for Exercise Testing and Prescription (11th Ed)
+- NASA-STD-3001 Water Requirements
+
 ## [1.8.21] - 2025-12-14
 
 ### Added
