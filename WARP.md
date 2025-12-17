@@ -114,6 +114,27 @@ Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations c
 - [x] **Exploration Medical Analytics**: Radiation/EVA/stress dashboards derived from ExMC logs inside Clinical Profile tab
 - [x] **Group Summaries**: Cohort-level med/HRV snapshot + descriptive stats exports in Export tab (v1.8.21)
 
+#### Phase 5: Personalized User Profile Features (Priority: HIGH) ✅ COMPLETE
+- [x] **Personalized Health Metrics**: All computations tailored to individual user profile
+  - Body fat estimation using US Navy method (requires neck/waist/hip circumferences)
+  - Sleep apnea risk assessment (STOP-BANG score using neck circumference, BMI, age, sex)
+  - Age/sex-adjusted HRV reference ranges (Nunan et al. 2010, Shaffer & Ginsberg 2017)
+  - Fitness classification based on VO2max (ACSM percentiles by age/sex)
+  - Cardiovascular risk profile (multiple risk factor assessment)
+  - Personalized hydration requirements (weight-based with activity adjustment)
+- [x] **User Context Propagation**: Active user data flows to all calculations
+  - Body composition data (neck_cm, waist_cm, hip_cm, body_fat_pct) available to all tabs
+  - Personalized HRV interpretation using age-adjusted norms
+  - Profile-specific NASA nutrition calculations with VO2max compensation
+- [x] **Clinical Data Integration**: Comprehensive profile with clinical assessment history
+  - Full body composition tracking with trends
+  - Clinical scales (ESS, KSS, PSQI, Samn-Perelli) linked to user profile
+  - Medical history integration for risk assessments
+- [x] **Personalized HRV Interpretation**: `interpret_hrv_personalized()` function in hrv_core.py
+  - Returns status, interpretation, percentile estimate per metric
+  - Uses user's age group and sex for reference ranges
+  - Overall autonomic assessment with recommendations
+
 ### Planned Features (Q1 2026)
 
 #### Longitudinal Study Support
