@@ -4632,12 +4632,13 @@ def main() -> None:
             if rr_ms.size < 10:
                 continue
             start_raw = queued.get("recording_start")
-            start_ts = (
-                pd.to_datetime(start_raw).tz_localize(timezone.utc)
-                if start_raw and pd.to_datetime(start_raw).tzinfo is None
-                else pd.to_datetime(start_raw)
-            )
-            if start_ts is None or not isinstance(start_ts, pd.Timestamp):
+            start_ts = pd.to_datetime(start_raw, errors="coerce")
+            if isinstance(start_ts, pd.Timestamp) and not pd.isna(start_ts):
+                if start_ts.tzinfo is None or start_ts.tzinfo.utcoffset(start_ts) is None:
+                    start_ts = start_ts.tz_localize(timezone.utc)
+                else:
+                    start_ts = start_ts.tz_convert(timezone.utc)
+            else:
                 start_ts = pd.Timestamp.now(tz=timezone.utc)
             name = queued.get("name") or f"queued_{len(uploads)+1}"
             df = _to_dataframe(name, rr_ms, start_ts=start_ts)
@@ -4669,14 +4670,17 @@ def main() -> None:
                 continue
 
             start_raw = queued.get("recording_start")
-            start_ts = (
-                pd.to_datetime(start_raw).tz_localize(timezone.utc)
-                if start_raw and pd.to_datetime(start_raw).tzinfo is None
-                else pd.to_datetime(start_raw)
-            )
-            if start_ts is None or not isinstance(start_ts, pd.Timestamp):
+            start_ts = pd.to_datetime(start_raw, errors="coerce")
+            if isinstance(start_ts, pd.Timestamp) and not pd.isna(start_ts):
+                if start_ts.tzinfo is None or start_ts.tzinfo.utcoffset(start_ts) is None:
+                    start_ts = start_ts.tz_localize(timezone.utc)
+                else:
+                    start_ts = start_ts.tz_convert(timezone.utc)
+            else:
                 parsed_date = parse_filename_date(p.name) or date.today()
-                start_ts = pd.Timestamp(datetime.combine(parsed_date, datetime.min.time(), tzinfo=timezone.utc))
+                start_ts = pd.Timestamp(
+                    datetime.combine(parsed_date, datetime.min.time(), tzinfo=timezone.utc)
+                )
 
             name = str(queued.get("name") or p.name)
             # Ensure unique name within this run
