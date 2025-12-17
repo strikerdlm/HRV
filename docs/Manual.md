@@ -636,6 +636,139 @@ $$HR_{max} = 208 - (0.7 \times age)$$
 
 Reference: Tanaka H, et al. *J Am Coll Cardiol.* 2001;37(1):153-156.
 
+### Personalized Health Metrics (NEW in v1.8.22)
+
+The **Personalized Health Metrics** panel in the Clinical Profile tab provides comprehensive health assessments tailored to your individual profile data. All calculations use your specific measurements (weight, height, age, sex, body circumferences) rather than generic population averages.
+
+#### Body Fat Estimation (US Navy Method)
+
+Uses the Hodgdon & Beckett (1984) circumference-based method from the Naval Health Research Center:
+
+**Male formula:**
+$$BF\% = \frac{495}{1.0324 - 0.19077 \times \log_{10}(waist - neck) + 0.15456 \times \log_{10}(height)} - 450$$
+
+**Female formula:**
+$$BF\% = \frac{495}{1.29579 - 0.35004 \times \log_{10}(waist + hip - neck) + 0.22100 \times \log_{10}(height)} - 450$$
+
+**Required measurements:**
+- Neck circumference (cm) — measured below the larynx
+- Waist circumference (cm) — at navel for males, narrowest point for females
+- Hip circumference (cm) — required for females only
+
+**Body Fat Classification (ACSM):**
+
+| Category | Male | Female |
+|----------|------|--------|
+| Essential Fat | 2-5% | 10-13% |
+| Athletes | 6-13% | 14-20% |
+| Fitness | 14-17% | 21-24% |
+| Average | 18-24% | 25-31% |
+| Obese | >25% | >32% |
+
+#### Sleep Apnea Risk (STOP-BANG Score)
+
+Calculates obstructive sleep apnea risk using STOP-BANG questionnaire components (Chung F et al., Anesthesiology 2008):
+
+| Component | Criteria |
+|-----------|----------|
+| **S** - Snoring | Loud snoring |
+| **T** - Tiredness | Daytime fatigue/sleepiness |
+| **O** - Observed | Witnessed breathing stops |
+| **P** - Pressure | High blood pressure |
+| **B** - BMI | BMI > 35 kg/m² |
+| **A** - Age | Age > 50 years |
+| **N** - Neck | Neck > 40 cm (male) or > 38 cm (female) |
+| **G** - Gender | Male sex |
+
+**Risk Interpretation:**
+- **0-2**: Low risk of OSA
+- **3-4**: Intermediate risk — consider clinical evaluation
+- **5-8**: High risk — recommend sleep study (polysomnography)
+
+#### Personalized HRV Reference Ranges
+
+All HRV metrics are interpreted against age/sex-adjusted reference ranges from:
+- Nunan D et al. *PACE* 2010;33:1407-17
+- Shaffer F, Ginsberg JP. *Front Public Health* 2017;5:258
+
+| Age Group | RMSSD (ms) | SDNN (ms) | pNN50 (%) | HF Power (ms²) |
+|-----------|------------|-----------|-----------|----------------|
+| 20-29 | 19-75 | 25-85 | 2-45 | 300-2000 |
+| 30-39 | 15-65 | 22-75 | 1.5-38 | 200-1600 |
+| 40-49 | 12-55 | 20-65 | 1-30 | 150-1200 |
+| 50-59 | 10-45 | 18-58 | 0.5-22 | 100-900 |
+| 60-69 | 8-40 | 16-52 | 0.3-18 | 60-700 |
+| 70+ | 7-35 | 14-46 | 0.2-14 | 40-550 |
+
+Each metric displays:
+- **Status**: very_low, low, normal, high, very_high
+- **Percentile estimate**: Where you fall in your age group
+- **Z-score**: Standard deviations from age-group mean
+- **Interpretation**: Human-readable guidance
+
+#### Fitness Classification (VO₂max)
+
+Uses ACSM Guidelines for Exercise Testing (11th Ed) percentile tables:
+
+| Category | Male 30-39 | Female 30-39 |
+|----------|------------|--------------|
+| Very Poor | <23 | <22 |
+| Poor | 23-31 | 22-27.5 |
+| Fair | 31-35.5 | 27.5-31.5 |
+| Good | 35.5-40 | 31.5-35.5 |
+| Excellent | 40-44 | 35.5-39 |
+| Superior | >44 | >39 |
+
+#### Cardiovascular Risk Profile
+
+Assesses multiple risk factors following simplified Framingham-like criteria:
+
+**Risk Factors Assessed:**
+- Age (≥45 male, ≥55 female)
+- Elevated BMI (≥25 overweight, ≥30 obese)
+- Hypertension (SBP ≥130 mmHg)
+- Dyslipidemia (TC/HDL ratio, low HDL)
+- Current smoking
+- Diabetes
+- Family history of premature CVD
+- Low cardiorespiratory fitness
+
+**Protective Factors:**
+- Healthy BMI (18.5-24.9)
+- Normal blood pressure
+- High HDL (≥60 mg/dL)
+- Non-smoker
+- Excellent fitness (high VO₂max)
+- Low resting heart rate
+
+#### Personalized Hydration Requirements
+
+Based on NASA-STD-3001 Water Requirements:
+
+$$Base_{mL} = weight_{kg} \times 32$$
+
+Adjustments:
+- **Activity level**: Sedentary (×1.0) to Very Active (×1.4)
+- **Exercise**: +750 mL per hour of activity
+- **Hot environment**: +25%
+- **Altitude >2500m**: +12%
+
+#### Using Personalized Metrics
+
+1. **Complete Your Profile**: Navigate to **User Profile → Edit Profile** and enter height, weight, date of birth, and sex.
+
+2. **Add Body Composition**: Go to **Clinical Profile → Body Composition** and enter circumference measurements (especially neck, waist, and hip).
+
+3. **View Personalized Metrics**: Open **Clinical Profile → Personalized Health Metrics** to see all calculated assessments.
+
+4. **Export Summary**: Click **Copy Summary to Clipboard** to generate a markdown report of your personalized metrics.
+
+5. **Cross-Tab Integration**: Your profile data automatically flows to:
+   - HRV interpretation (age-adjusted norms)
+   - NASA Nutrition Calculator (VO₂max compensation)
+   - Fatigue Prediction (sleep requirements)
+   - Circadian Physiology (chronotype adjustments)
+
 ### Exploration Medical Record (NASA isolation missions)
 
 Mission Control - Flight Surgeon now includes an exploration medical record aligned with NASA's Medical Information Systems & Tools (MIST) architecture and the Exploration Medical Capability (ExMC) guidance for Earth-independent care. Every entry is stored in the `medical_history` table (JSON payload) so longitudinal and group-level statistics can be performed later. Key fields:
