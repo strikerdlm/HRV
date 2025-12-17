@@ -46,7 +46,7 @@ _LOGGER = get_logger(__name__) if get_logger is not None else logging.getLogger(
 
 # Database configuration
 DEFAULT_DB_NAME = "hrv_users.db"
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Thread-local storage for connection reuse
 _thread_local = threading.local()
@@ -288,6 +288,49 @@ class HRVMeasurement:
     analysis_settings_json: Optional[str] = None
     created_at: Optional[str] = None
     
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+
+@dataclass
+class HRVAnalysisCacheEntry:
+    """Persisted HRV analysis artifacts keyed by file hash + settings hash.
+
+    This stores the *reusable* analysis payload (windowed metrics subset + summary row)
+    so users do not need to recompute when inputs and settings are identical.
+    """
+
+    cache_id: str
+    user_id: str
+    file_hash: str
+    analysis_settings_hash: str
+    analysis_settings_json: str
+    payload_json: str
+    source_file: Optional[str] = None
+    recording_date: Optional[str] = None
+    created_at: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+
+@dataclass
+class AIReport:
+    """Stored AI report (e.g., GPT-5.2 interpretation) scoped to a user and context hash."""
+
+    report_id: str
+    user_id: str
+    report_type: str
+    context_hash: str
+    markdown: str
+    sources_json: Optional[str] = None
+    model_used: Optional[str] = None
+    mode: Optional[str] = None
+    confidence: Optional[float] = None
+    created_at: Optional[str] = None
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary."""
         return asdict(self)
@@ -675,6 +718,63 @@ class UserDatabase:
                 CREATE INDEX IF NOT EXISTS idx_users_username
                 ON users(username)
             """)
+
+            # HRV analysis artifacts cache (reusable computed payloads)
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS hrv_analysis_cache (
+                    cache_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    file_hash TEXT NOT NULL,
+                    analysis_settings_hash TEXT NOT NULL,
+                    analysis_settings_json TEXT NOT NULL,
+                    payload_json TEXT NOT NULL,
+                    source_file TEXT,
+                    recording_date TEXT,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(user_id, file_hash, analysis_settings_hash),
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_hrv_cache_user_hash
+                ON hrv_analysis_cache(user_id, file_hash)
+                """
+            )
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_hrv_cache_user_created
+                ON hrv_analysis_cache(user_id, created_at)
+                """
+            )
+
+            # AI reports (e.g., GPT-5.2 interpretation) persisted per user + context
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ai_reports (
+                    report_id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    report_type TEXT NOT NULL,
+                    context_hash TEXT NOT NULL,
+                    markdown TEXT NOT NULL,
+                    sources_json TEXT,
+                    model_used TEXT,
+                    mode TEXT,
+                    confidence REAL,
+                    created_at TEXT NOT NULL,
+                    UNIQUE(user_id, report_type, context_hash),
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_ai_reports_user_type_created
+                ON ai_reports(user_id, report_type, created_at)
+                """
+            )
 
             # Garmin daily metrics (wellness/activity aggregates)
             cursor.execute("""
@@ -1734,6 +1834,293 @@ class UserDatabase:
             )
             row = cursor.fetchone()
         return self._row_to_hrv_measurement(row) if row else None
+
+    # -----------------------------------------------------------------------
+    # HRV Analysis Artifacts Cache (per user, per file hash, per settings hash)
+    # -----------------------------------------------------------------------
+
+    @staticmethod
+    def _stable_json_dumps(value: Any) -> str:
+        """Serialize to JSON with stable key ordering.
+
+        Notes:
+            Uses `default=str` defensively for numpy/pandas scalars.
+        """
+        return json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+
+    @staticmethod
+    def compute_settings_hash(analysis_settings: Dict[str, Any]) -> str:
+        """Compute deterministic hash for analysis settings."""
+        if not isinstance(analysis_settings, dict) or not analysis_settings:
+            raise ValueError("analysis_settings must be a non-empty dict")
+        settings_json = UserDatabase._stable_json_dumps(analysis_settings)
+        return hashlib.sha256(settings_json.encode("utf-8")).hexdigest()
+
+    def save_hrv_analysis_cache(
+        self,
+        *,
+        user_id: str,
+        file_hash: str,
+        analysis_settings: Dict[str, Any],
+        payload: Dict[str, Any],
+        source_file: Optional[str] = None,
+        recording_date: Optional[str] = None,
+    ) -> str:
+        """Upsert reusable HRV analysis payload into SQLite.
+
+        Args:
+            user_id: User identifier.
+            file_hash: Hash of the raw RR file content.
+            analysis_settings: Dict describing analysis parameters.
+            payload: Dict payload containing computed analysis outputs.
+            source_file: Optional human-friendly filename.
+            recording_date: Optional ISO date string.
+
+        Returns:
+            analysis_settings_hash used as cache key.
+        """
+        if not user_id:
+            raise ValueError("user_id is required")
+        if not file_hash:
+            raise ValueError("file_hash is required")
+        if not isinstance(payload, dict) or not payload:
+            raise ValueError("payload must be a non-empty dict")
+
+        settings_hash = self.compute_settings_hash(analysis_settings)
+        now = datetime.now(timezone.utc).isoformat()
+        cache_id = str(uuid.uuid4())
+        settings_json = self._stable_json_dumps(analysis_settings)
+        payload_json = self._stable_json_dumps(payload)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO hrv_analysis_cache (
+                    cache_id, user_id, file_hash, analysis_settings_hash,
+                    analysis_settings_json, payload_json, source_file, recording_date, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, file_hash, analysis_settings_hash) DO UPDATE SET
+                    analysis_settings_json = excluded.analysis_settings_json,
+                    payload_json = excluded.payload_json,
+                    source_file = COALESCE(excluded.source_file, hrv_analysis_cache.source_file),
+                    recording_date = COALESCE(excluded.recording_date, hrv_analysis_cache.recording_date),
+                    created_at = excluded.created_at
+                """,
+                (
+                    cache_id,
+                    user_id,
+                    file_hash,
+                    settings_hash,
+                    settings_json,
+                    payload_json,
+                    source_file,
+                    recording_date,
+                    now,
+                ),
+            )
+        return settings_hash
+
+    def get_hrv_analysis_cache_payload(
+        self,
+        *,
+        user_id: str,
+        file_hash: str,
+        analysis_settings_hash: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Load cached HRV analysis payload for a user/file/settings triple."""
+        if not user_id or not file_hash or not analysis_settings_hash:
+            return None
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT payload_json
+                FROM hrv_analysis_cache
+                WHERE user_id = ? AND file_hash = ? AND analysis_settings_hash = ?
+                ORDER BY datetime(created_at) DESC
+                LIMIT 1
+                """,
+                (user_id, file_hash, analysis_settings_hash),
+            )
+            row = cursor.fetchone()
+        if not row:
+            return None
+        try:
+            return json.loads(row["payload_json"])
+        except (TypeError, json.JSONDecodeError):
+            return None
+
+    def get_hrv_analysis_cache_entries(
+        self, user_id: str, *, limit: int = 200
+    ) -> List[HRVAnalysisCacheEntry]:
+        """Return HRV analysis cache entries for a user (most recent first)."""
+        if not user_id:
+            return []
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT *
+                FROM hrv_analysis_cache
+                WHERE user_id = ?
+                ORDER BY datetime(created_at) DESC
+                LIMIT ?
+                """,
+                (user_id, int(limit)),
+            )
+            rows = cursor.fetchall()
+        out: List[HRVAnalysisCacheEntry] = []
+        for row in rows:
+            out.append(
+                HRVAnalysisCacheEntry(
+                    cache_id=row["cache_id"],
+                    user_id=row["user_id"],
+                    file_hash=row["file_hash"],
+                    analysis_settings_hash=row["analysis_settings_hash"],
+                    analysis_settings_json=row["analysis_settings_json"],
+                    payload_json=row["payload_json"],
+                    source_file=row["source_file"],
+                    recording_date=row["recording_date"],
+                    created_at=row["created_at"],
+                )
+            )
+        return out
+
+    # -----------------------------------------------------------------------
+    # AI Reports (per user, per context hash)
+    # -----------------------------------------------------------------------
+
+    def save_ai_report(
+        self,
+        *,
+        user_id: str,
+        report_type: str,
+        context_hash: str,
+        markdown: str,
+        sources: Optional[Sequence[str]] = None,
+        model_used: Optional[str] = None,
+        mode: Optional[str] = None,
+        confidence: Optional[float] = None,
+    ) -> str:
+        """Upsert an AI report for a user/context.
+
+        This stores the **rendered markdown only** (no raw reasoning), plus citation metadata.
+        """
+        if not user_id:
+            raise ValueError("user_id is required")
+        if not report_type:
+            raise ValueError("report_type is required")
+        if not context_hash:
+            raise ValueError("context_hash is required")
+        if not isinstance(markdown, str) or not markdown.strip():
+            raise ValueError("markdown must be a non-empty string")
+        now = datetime.now(timezone.utc).isoformat()
+        report_id = str(uuid.uuid4())
+        sources_json = json.dumps(list(sources or []), ensure_ascii=True)
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO ai_reports (
+                    report_id, user_id, report_type, context_hash,
+                    markdown, sources_json, model_used, mode, confidence, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, report_type, context_hash) DO UPDATE SET
+                    markdown = excluded.markdown,
+                    sources_json = excluded.sources_json,
+                    model_used = excluded.model_used,
+                    mode = excluded.mode,
+                    confidence = excluded.confidence,
+                    created_at = excluded.created_at
+                """,
+                (
+                    report_id,
+                    user_id,
+                    report_type,
+                    context_hash,
+                    markdown,
+                    sources_json,
+                    model_used,
+                    mode,
+                    confidence,
+                    now,
+                ),
+            )
+        return report_id
+
+    def get_ai_report(
+        self,
+        *,
+        user_id: str,
+        report_type: str,
+        context_hash: str,
+    ) -> Optional[AIReport]:
+        """Fetch a stored AI report for a user/context."""
+        if not user_id or not report_type or not context_hash:
+            return None
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT *
+                FROM ai_reports
+                WHERE user_id = ? AND report_type = ? AND context_hash = ?
+                ORDER BY datetime(created_at) DESC
+                LIMIT 1
+                """,
+                (user_id, report_type, context_hash),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return AIReport(
+            report_id=row["report_id"],
+            user_id=row["user_id"],
+            report_type=row["report_type"],
+            context_hash=row["context_hash"],
+            markdown=row["markdown"],
+            sources_json=row["sources_json"],
+            model_used=row["model_used"],
+            mode=row["mode"],
+            confidence=row["confidence"],
+            created_at=row["created_at"],
+        )
+
+    def get_ai_reports(
+        self, user_id: str, *, report_type: Optional[str] = None, limit: int = 100
+    ) -> List[AIReport]:
+        """List stored AI reports for a user (most recent first)."""
+        if not user_id:
+            return []
+        sql = "SELECT * FROM ai_reports WHERE user_id = ?"
+        params: Tuple[Any, ...] = (user_id,)
+        if report_type:
+            sql += " AND report_type = ?"
+            params = (user_id, str(report_type))
+        sql += " ORDER BY datetime(created_at) DESC LIMIT ?"
+        params = (*params, int(limit))
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(sql, params)
+            rows = cursor.fetchall()
+        out: List[AIReport] = []
+        for row in rows:
+            out.append(
+                AIReport(
+                    report_id=row["report_id"],
+                    user_id=row["user_id"],
+                    report_type=row["report_type"],
+                    context_hash=row["context_hash"],
+                    markdown=row["markdown"],
+                    sources_json=row["sources_json"],
+                    model_used=row["model_used"],
+                    mode=row["mode"],
+                    confidence=row["confidence"],
+                    created_at=row["created_at"],
+                )
+            )
+        return out
     
     def get_hrv_dataframe(
         self,
@@ -2410,6 +2797,8 @@ class UserDatabase:
             "user_profile": user.to_dict(),
             "clinical_scales": [s.to_dict() for s in self.get_clinical_scales_history(user_id)],
             "hrv_measurements": [m.to_dict() for m in self.get_hrv_history(user_id)],
+            "hrv_analysis_cache": [c.to_dict() for c in self.get_hrv_analysis_cache_entries(user_id)],
+            "ai_reports": [r.to_dict() for r in self.get_ai_reports(user_id)],
         }
         
         with open(filepath, "w", encoding="utf-8") as f:

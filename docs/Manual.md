@@ -3581,8 +3581,34 @@ This section outlines completed features and remaining planned enhancements for 
 ✅ **User Profiles System** - Biometrics and validated clinical scales (ESS, KSS, PSQI)  
 ✅ **Docker Deployment** - Full containerization with PostgreSQL/TimescaleDB  
 ✅ **Professional Welcome Page** - Laboratory branding with quick access grid  
+✅ **Per-user reuse & exports** - HRV analysis artifacts and GPT-5.2 interpretation markdown persist per user in SQLite for cross-session reuse and user-scoped exports  
 
 ### Remaining Enhancements
+
+#### Per-user persistence across all mission modules
+**Status:** Planned  
+**Description:** Persist *computed outputs* (not only inputs/settings) for each user so results are instantly available across reruns and sessions.
+
+- Circadian scenario run history (inputs + outputs + key markers like DLMO/CBT/ESRI)
+- SAFTE run history (inputs + outputs + data-source provenance: wrist → clinical → Garmin Connect)
+- Mission package export per subject (HRV + circadian + SAFTE + radiation + space-weather context + stored GPT report)
+
+#### SAFTE-R performance prediction (per subject)
+**Status:** Planned  
+**Description:** Add an explicit SAFTE-R option (parameterization and UI) under each subject profile to predict performance with an audit trail of assumptions and inputs.
+
+#### Mission-specific radiation dose modelling
+**Status:** Planned  
+**Description:** Tie dose computation to the mission being simulated (environment/shielding/EVA timeline) and persist dose model inputs/outputs per user and per mission scenario.
+
+#### HRV protocol covariates (measurement accuracy)
+**Status:** Planned  
+**Description:** Capture and persist key acquisition covariates so comparisons and interpretation remain valid across users and sessions.
+
+- Evidence base: Task Force (1996); Laborde, Mosley, & Thayer (2017); Quigley et al. (2024) — see References section for links.
+- Posture/body position, time-of-day, breathing protocol / estimated respiratory rate
+- Recent exercise, caffeine/nicotine/alcohol, acute illness/fever, medication changes
+- Context tags (rest/sleep/exercise/recovery) to prevent mixing protocols in baselines
 
 #### Advanced Nonlinear Dynamics
 **Status:** Partially implemented  
