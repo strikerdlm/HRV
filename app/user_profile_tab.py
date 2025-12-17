@@ -394,6 +394,77 @@ def _render_profile_bar_chart(
     render_echarts(option, height_px=height_px)
 
 
+def _render_profile_scatter_chart(
+    df: pd.DataFrame,
+    *,
+    x_col: str,
+    y_col: str,
+    title: str,
+    x_axis_label: str,
+    y_axis_label: str,
+    height_px: int = 320,
+    point_color: str = "#2563eb",
+) -> None:
+    """Render a numeric scatter chart with ECharts.
+
+    Args:
+        df: Input dataframe containing `x_col` and `y_col`.
+        x_col: Column name for x-axis values.
+        y_col: Column name for y-axis values.
+        title: Chart title.
+        x_axis_label: X-axis label.
+        y_axis_label: Y-axis label.
+        height_px: Height in pixels.
+        point_color: Hex color string for points.
+    """
+    if df.empty:
+        st.info("No data to visualize yet.")
+        return
+    if x_col not in df.columns or y_col not in df.columns:
+        st.info("Required data not available for this chart.")
+        return
+
+    subset = df[[x_col, y_col]].copy()
+    if not pd.api.types.is_numeric_dtype(subset[x_col]):
+        subset[x_col] = pd.to_numeric(subset[x_col], errors="coerce")
+    if not pd.api.types.is_numeric_dtype(subset[y_col]):
+        subset[y_col] = pd.to_numeric(subset[y_col], errors="coerce")
+    subset = subset.dropna()
+    if subset.empty:
+        st.info("No paired observations available yet.")
+        return
+
+    points = [[float(x), float(y)] for x, y in subset.to_numpy()]
+    option = {
+        "title": {"text": title},
+        "tooltip": {"trigger": "item"},
+        "grid": {"left": 70, "right": 20, "top": 50, "bottom": 55},
+        "xAxis": {
+            "type": "value",
+            "name": x_axis_label,
+            "nameLocation": "middle",
+            "nameGap": 35,
+            "scale": True,
+        },
+        "yAxis": {
+            "type": "value",
+            "name": y_axis_label,
+            "nameLocation": "middle",
+            "nameGap": 45,
+            "scale": True,
+        },
+        "series": [
+            {
+                "type": "scatter",
+                "data": points,
+                "symbolSize": 7,
+                "itemStyle": {"color": point_color},
+            }
+        ],
+    }
+    render_echarts(option, height_px=height_px)
+
+
 # ---------------------------------------------------------------------------
 # Session State Keys
 # ---------------------------------------------------------------------------
@@ -1335,23 +1406,8 @@ def _render_panas_gauge(
         ],
     }
     
-    # Render using streamlit-echarts if available, otherwise use HTML/JS
-    try:
-        from streamlit_echarts import st_echarts
-        st_echarts(options=option, height="220px", key=f"panas_gauge_{key_suffix}")
-    except ImportError:
-        # Fallback: render as HTML with ECharts CDN
-        option_json = json.dumps(option)
-        html = f'''
-        <div id="panas_gauge_{key_suffix}" style="width:100%;height:220px;"></div>
-        <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
-        <script>
-            var chart = echarts.init(document.getElementById('panas_gauge_{key_suffix}'));
-            chart.setOption({option_json});
-            window.addEventListener('resize', function() {{ chart.resize(); }});
-        </script>
-        '''
-        st.components.v1.html(html, height=240)
+    # Render with the in-repo ECharts component to avoid optional dependencies.
+    render_echarts(option, height_px=220)
 
 
 # ---------------------------------------------------------------------------
@@ -2037,9 +2093,33 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
         st.success("Files stored under this profile and queued for analysis.")
 
 
+@_fragment_if_available
 def _render_hrv_history(user: UserProfile) -> None:
     """Render HRV measurement history."""
     st.markdown("## 💓 HRV Measurement History")
+
+    refresh_state_key = f"hrv_history_refresh_token:{user.user_id}"
+    refresh_token_raw = st.session_state.get(refresh_state_key, 0)
+    try:
+        refresh_token = int(refresh_token_raw) if refresh_token_raw is not None else 0
+    except (TypeError, ValueError):
+        refresh_token = 0
+
+    col_refresh, col_meta = st.columns([1, 3])
+    with col_refresh:
+        if st.button(
+            "🔄 Regenerate plots",
+            key=f"hrv_history_regen_{user.user_id}",
+            help="Reload HRV measurements from the database and redraw all charts.",
+        ):
+            st.session_state[refresh_state_key] = refresh_token + 1
+            try:
+                st.cache_data.clear()
+            except Exception:  # pragma: no cover - cache may be unavailable in some contexts
+                pass
+            st.rerun(scope="fragment" if _HAS_FRAGMENT else "app")
+    with col_meta:
+        st.caption("If charts look stale after new uploads/analysis, regenerate to refresh them.")
     
     try:
         with st.spinner("Loading HRV measurements..."):
@@ -2053,6 +2133,15 @@ def _render_hrv_history(user: UserProfile) -> None:
         df = df.sort_values("measurement_date")
         if len(df) >= 500:
             st.caption("Showing the 500 most recent HRV measurements for faster loading.")
+
+        # Optional: last update marker (helps verify refreshes)
+        if "created_at" in df.columns:
+            try:
+                last_created = pd.to_datetime(df["created_at"], errors="coerce").max()
+            except Exception:
+                last_created = None
+            if last_created is not None and not pd.isna(last_created):
+                st.caption(f"Last saved measurement: {last_created} (UTC)")
     
         # Summary metrics
         col1, col2, col3, col4 = st.columns(4)
@@ -2079,6 +2168,156 @@ def _render_hrv_history(user: UserProfile) -> None:
                     title="HRV History",
                     y_axis_label="ms",
                 )
+
+        # Additional performance & recovery visuals
+        with st.expander("🏃 Performance & Recovery plots", expanded=False):
+            # lnRMSSD is commonly used for daily recovery tracking; we plot it without
+            # attaching thresholds/interpretation here.
+            if "rmssd_ms" in df.columns and df["rmssd_ms"].notna().any():
+                ln_df = df[["measurement_date", "rmssd_ms"]].copy()
+                ln_df = ln_df[(ln_df["rmssd_ms"].notna()) & (ln_df["rmssd_ms"] > 0)]
+                if not ln_df.empty:
+                    ln_df = ln_df.set_index("measurement_date").sort_index()
+                    ln_df["ln_rmssd"] = np.log(ln_df["rmssd_ms"].astype(float))
+                    _render_profile_line_chart(
+                        ln_df[["ln_rmssd"]],
+                        title="lnRMSSD trend",
+                        y_axis_label="ln(ms)",
+                    )
+
+            hr_cols = [c for c in ["mean_hr_bpm", "sdhr_bpm"] if c in df.columns and df[c].notna().any()]
+            if hr_cols:
+                hr_df = df.set_index("measurement_date")[hr_cols]
+                _render_profile_line_chart(
+                    hr_df,
+                    title="Heart rate trend",
+                    y_axis_label="bpm",
+                )
+
+            idx_cols = [
+                c
+                for c in ["stress_index", "parasympathetic_index", "hrv_score"]
+                if c in df.columns and df[c].notna().any()
+            ]
+            if idx_cols:
+                idx_df = df.set_index("measurement_date")[idx_cols]
+                _render_profile_line_chart(
+                    idx_df,
+                    title="Autonomic / recovery indices",
+                    y_axis_label="index",
+                )
+
+            qual_cols = [
+                c
+                for c in ["artifact_percentage", "quality_score"]
+                if c in df.columns and df[c].notna().any()
+            ]
+            if qual_cols:
+                qual_df = df.set_index("measurement_date")[qual_cols]
+                _render_profile_line_chart(
+                    qual_df,
+                    title="Data quality trend",
+                    y_axis_label="% / score",
+                )
+
+        # HRV × wearable/activity relationships (when daily metrics exist)
+        with st.expander("🔗 HRV × Activity (Garmin daily metrics)", expanded=False):
+            try:
+                garmin_df = pd.DataFrame()
+                if hasattr(db, "get_garmin_daily_dataframe"):
+                    garmin_df = db.get_garmin_daily_dataframe(user.user_id, limit=365)  # type: ignore[attr-defined]
+                elif hasattr(db, "get_garmin_daily_metrics"):
+                    rows = db.get_garmin_daily_metrics(user.user_id, limit=365)  # type: ignore[attr-defined]
+                    if rows:
+                        garmin_df = pd.DataFrame([r.to_dict() for r in rows])
+            except Exception:
+                garmin_df = pd.DataFrame()
+
+            if garmin_df.empty or "metric_date" not in garmin_df.columns:
+                st.info("No Garmin daily metrics available yet for activity/recovery overlays.")
+            else:
+                garmin_df = garmin_df.copy()
+                garmin_df["metric_date"] = pd.to_datetime(garmin_df["metric_date"], errors="coerce")
+                garmin_df = garmin_df.dropna(subset=["metric_date"])
+                if garmin_df.empty:
+                    st.info("No usable Garmin dates found yet.")
+                else:
+                    garmin_daily_cols = [
+                        c
+                        for c in ["steps", "distance_km", "calories_kcal", "sleep_score", "stress_score", "body_battery_avg"]
+                        if c in garmin_df.columns and garmin_df[c].notna().any()
+                    ]
+                    if not garmin_daily_cols:
+                        st.info("Garmin metrics found, but no activity/recovery fields are populated yet.")
+                    else:
+                        garmin_daily = garmin_df.set_index("metric_date")[garmin_daily_cols].sort_index()
+
+                        # Aggregate HRV to daily medians for fair alignment with daily Garmin metrics.
+                        hrv_daily_cols = [
+                            c
+                            for c in ["rmssd_ms", "sdnn_ms", "mean_hr_bpm"]
+                            if c in df.columns and df[c].notna().any()
+                        ]
+                        hrv_daily = pd.DataFrame()
+                        if hrv_daily_cols and "measurement_date" in df.columns:
+                            hrv_tmp = df[["measurement_date"] + hrv_daily_cols].copy()
+                            hrv_tmp["measurement_date"] = pd.to_datetime(hrv_tmp["measurement_date"], errors="coerce")
+                            hrv_tmp = hrv_tmp.dropna(subset=["measurement_date"])
+                            if not hrv_tmp.empty:
+                                hrv_tmp["day"] = hrv_tmp["measurement_date"].dt.normalize()
+                                hrv_daily = (
+                                    hrv_tmp.groupby("day", as_index=True)[hrv_daily_cols]
+                                    .median()
+                                    .sort_index()
+                                )
+
+                        if hrv_daily.empty:
+                            st.info("HRV history is available, but not enough daily values to align with Garmin yet.")
+                        else:
+                            merged = hrv_daily.join(garmin_daily, how="inner")
+                            if merged.empty:
+                                st.info("No overlapping days between HRV measurements and Garmin daily metrics yet.")
+                            else:
+                                # Time series: activity alongside HRV (separate charts for units)
+                                if "steps" in merged.columns and merged["steps"].notna().any():
+                                    _render_profile_line_chart(
+                                        merged[["steps"]],
+                                        title="Daily steps",
+                                        y_axis_label="steps",
+                                    )
+                                if "rmssd_ms" in merged.columns and merged["rmssd_ms"].notna().any():
+                                    _render_profile_line_chart(
+                                        merged[["rmssd_ms"]],
+                                        title="Daily median RMSSD",
+                                        y_axis_label="ms",
+                                    )
+
+                                # Scatter relationships (shown only when both sides exist)
+                                scatter_pairs = [
+                                    ("steps", "rmssd_ms", "RMSSD vs Steps", "Steps", "RMSSD (ms)"),
+                                    ("distance_km", "rmssd_ms", "RMSSD vs Distance", "Distance (km)", "RMSSD (ms)"),
+                                    ("calories_kcal", "rmssd_ms", "RMSSD vs Calories", "Calories (kcal)", "RMSSD (ms)"),
+                                    ("sleep_score", "rmssd_ms", "RMSSD vs Sleep Score", "Sleep Score", "RMSSD (ms)"),
+                                    ("stress_score", "rmssd_ms", "RMSSD vs Stress Score", "Stress Score", "RMSSD (ms)"),
+                                    ("body_battery_avg", "rmssd_ms", "RMSSD vs Body Battery", "Body Battery (avg)", "RMSSD (ms)"),
+                                ]
+                                for x_col, y_col, title, xlab, ylab in scatter_pairs:
+                                    if x_col not in merged.columns or y_col not in merged.columns:
+                                        continue
+                                    paired = merged[[x_col, y_col]].dropna()
+                                    if len(paired) < 3:
+                                        continue
+                                    _render_profile_scatter_chart(
+                                        merged,
+                                        x_col=x_col,
+                                        y_col=y_col,
+                                        title=title,
+                                        x_axis_label=xlab,
+                                        y_axis_label=ylab,
+                                    )
+                                    corr = paired[x_col].corr(paired[y_col])
+                                    if corr is not None and not pd.isna(corr):
+                                        st.caption(f"{title}: Pearson r = {corr:.2f} (n={len(paired)})")
         
         # Full data table
         with st.expander("📊 All HRV Measurements"):
