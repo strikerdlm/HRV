@@ -2044,12 +2044,13 @@ For live data:
 
 ### Importing into HRV App
 
-**For Vivosmart 5 FIT or wellness ZIP (fills Clinical Profile gauges; batch supported):**
+**For Vivosmart 5 FIT, wellness ZIP, or Garmin export JSON (fills Clinical Profile gauges):**
 
 1. Open **User Profile → 📦 Data → Garmin Vivosmart 5 Import**.
-2. Upload one or multiple `.fit` files (Export Original) or the wellness `.zip` export.
-3. The app parses steps, distance, calories, sleep score/efficiency, SpO₂, respiration (awake + sleep), stress, and body battery (charge/drain).
-4. Results are saved to the user's profile and shown as double-ring ECharts gauges in the **📈 History** tab.
+2. Upload a `.fit` file (Export Original), the wellness `.zip` export, or an unzipped Garmin export `.json` file (e.g., `UDSFile_*.json`, `*_sleepData.json`).
+3. The app parses steps, distance, calories, sleep score/efficiency, SpO₂, respiration (awake + sleep), stress, and body battery (charge/drain) when those fields are present in the export.
+4. You can import multiple files sequentially; partial imports **preserve** any previously stored non-null daily values.
+5. Results are saved to the user's profile and shown as double-ring ECharts gauges in the **📈 History** tab.
 
 **Legacy ZIP import in sidebar (RR only):**
 
