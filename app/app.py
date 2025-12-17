@@ -4935,10 +4935,12 @@ def main() -> None:
         hrv_analysis_ready = False
         st.session_state["hrv_analysis_ready"] = False
     # Prevent repeated runs for the same upload set once completed
-    if has_hrv_data_uploaded and hrv_complete_sig == upload_signature:
+    analysis_already_completed = bool(
+        has_hrv_data_uploaded and hrv_complete_sig == upload_signature
+    )
+    if analysis_already_completed:
         hrv_analysis_ready = False
         st.session_state["hrv_analysis_ready"] = False
-        st.info("HRV analysis already completed for this upload set. Click Run again to recompute.")
         #region agent log
         _agent_debug_log(
             "H6",
@@ -4950,12 +4952,17 @@ def main() -> None:
             },
         )
         #endregion
-        return
     
     if has_hrv_data_uploaded and not hrv_analysis_ready:
-        st.info("HRV data uploaded. Click **Run HRV Analysis** to start processing.")
+        if analysis_already_completed:
+            st.info(
+                "HRV analysis already completed for this upload set. "
+                "You can switch tabs (e.g., **User Profile**) or click **Recompute HRV Analysis** to rerun."
+            )
+        else:
+            st.info("HRV data uploaded. Click **Run HRV Analysis** to start processing.")
         if st.button(
-            "🚀 Run HRV Analysis",
+            "🔁 Recompute HRV Analysis" if analysis_already_completed else "🚀 Run HRV Analysis",
             key="run_hrv_analysis",
             type="primary",
             help="Runs HRV cleaning, windowing, and metric computation for uploaded datasets.",
