@@ -65,6 +65,9 @@ _SPO2_FILE_SUFFIX: Final[str] = "_spo2Data.json"
 _RESPIRATION_FILE_SUFFIX: Final[str] = "_respirationData.json"
 _BODY_BATTERY_FILE_SUFFIX: Final[str] = "_bodyBatteryData.json"
 
+# Garmin "DI-Connect-Aggregator" daily summary exports (common in newer exports).
+_UDS_FILE_PREFIX: Final[str] = "UDSFile_"
+
 # Maximum days to fetch in a single API call to avoid rate limiting
 _MAX_FETCH_DAYS: Final[int] = 30
 
@@ -133,6 +136,9 @@ class GarminWellnessData:
     activity_df: pd.DataFrame = field(default_factory=pd.DataFrame)
     session_df: pd.DataFrame = field(default_factory=pd.DataFrame)
     resting_hr_df: pd.DataFrame = field(default_factory=pd.DataFrame)
+    # Optional daily summary rows (e.g., DI-Connect-Aggregator UDSFile exports)
+    # used to populate day-level metrics without requiring minute-level streams.
+    daily_summary_df: pd.DataFrame = field(default_factory=pd.DataFrame)
     source: str = "unknown"
 
 
@@ -671,7 +677,8 @@ def _find_wellness_files(
 
     Yields:
         Tuples of (file_type, file_path) for each wellness file found.
-        file_type is one of: "sleep", "hrv", "stress", "hr", "spo2", "respiration", "body_battery".
+        file_type is one of: "sleep", "hrv", "stress", "hr", "spo2", "respiration", "body_battery",
+        or "daily_summary" (DI-Connect-Aggregator UDSFile exports).
     """
     suffixes = {
         _SLEEP_FILE_SUFFIX: "sleep",
@@ -710,6 +717,14 @@ def _find_wellness_files(
                     _LOGGER.info("Found wellness JSON: %s (type: %s)", name, file_type)
                     yield file_type, name
                     break
+            else:
+                # Newer Garmin exports often include a daily summary aggregator file (UDSFile_*.json)
+                # under DI_CONNECT/DI-Connect-Aggregator/. This contains steps, distance, calories,
+                # stress aggregates, SpO2 aggregates, respiration aggregates, and body battery stats.
+                base = Path(name).name
+                if base.startswith(_UDS_FILE_PREFIX) and base.lower().endswith(".json"):
+                    _LOGGER.info("Found Garmin daily summary JSON: %s (type: daily_summary)", name)
+                    yield "daily_summary", name
 
 
 def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
@@ -737,6 +752,9 @@ def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
     spo2_records: list[dict[str, Any]] = []
     respiration_records: list[dict[str, Any]] = []
     body_battery_records: list[dict[str, Any]] = []
+    daily_summary_records: list[dict[str, Any]] = []
+    activity_records: list[dict[str, Any]] = []
+    resting_hr_records: list[dict[str, Any]] = []
     fit_hr_records: list[dict[str, Any]] = []
     fit_hrv_records: list[dict[str, Any]] = []
     fit_spo2_records: list[dict[str, Any]] = []
@@ -780,6 +798,24 @@ def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
                     respiration_records.extend(_parse_respiration_record(record))
                 elif file_type == "body_battery":
                     body_battery_records.extend(_parse_body_battery_record(record))
+                elif file_type == "daily_summary":
+                    daily_summary_records.append(_parse_daily_summary_record(record))
+                    activity_record = _extract_activity_record_from_daily_summary(record)
+                    if activity_record is not None:
+                        activity_records.append(activity_record)
+                    resting_record = _extract_resting_hr_record_from_daily_summary(record)
+                    if resting_record is not None:
+                        resting_hr_records.append(resting_record)
+                    stress_record = _extract_stress_record_from_daily_summary(record)
+                    if stress_record is not None:
+                        stress_records.append(stress_record)
+                    spo2_record = _extract_spo2_record_from_daily_summary(record)
+                    if spo2_record is not None:
+                        spo2_records.append(spo2_record)
+                    resp_record = _extract_respiration_record_from_daily_summary(record)
+                    if resp_record is not None:
+                        respiration_records.append(resp_record)
+                    body_battery_records.extend(_extract_body_battery_records_from_daily_summary(record))
 
         # Additionally parse any FIT files inside the ZIP (common in wellness exports)
         for name in zf.namelist():
@@ -820,6 +856,11 @@ def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
     result.spo2_df = pd.DataFrame(spo2_records) if spo2_records else pd.DataFrame()
     result.respiration_df = pd.DataFrame(respiration_records) if respiration_records else pd.DataFrame()
     result.body_battery_df = pd.DataFrame(body_battery_records) if body_battery_records else pd.DataFrame()
+    result.daily_summary_df = (
+        pd.DataFrame(daily_summary_records) if daily_summary_records else pd.DataFrame()
+    )
+    result.activity_df = pd.DataFrame(activity_records) if activity_records else pd.DataFrame()
+    result.resting_hr_df = pd.DataFrame(resting_hr_records) if resting_hr_records else pd.DataFrame()
     if fit_hr_records:
         fit_hr_df = pd.DataFrame(fit_hr_records)
         result.hr_df = pd.concat([result.hr_df, fit_hr_df], ignore_index=True) if not result.hr_df.empty else fit_hr_df
@@ -844,9 +885,19 @@ def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
     if fit_session_records:
         result.session_df = pd.DataFrame(fit_session_records)
     if fit_activity_records:
-        result.activity_df = pd.DataFrame(fit_activity_records)
+        fit_act_df = pd.DataFrame(fit_activity_records)
+        result.activity_df = (
+            pd.concat([result.activity_df, fit_act_df], ignore_index=True)
+            if not result.activity_df.empty
+            else fit_act_df
+        )
     if fit_resting_hr_records:
-        result.resting_hr_df = pd.DataFrame(fit_resting_hr_records)
+        fit_rest_df = pd.DataFrame(fit_resting_hr_records)
+        result.resting_hr_df = (
+            pd.concat([result.resting_hr_df, fit_rest_df], ignore_index=True)
+            if not result.resting_hr_df.empty
+            else fit_rest_df
+        )
 
     # If no wellness JSON was found but FIT data exists, mark source
     if not found_wellness_json and (fit_hr_records or fit_rr_intervals or fit_spo2_records or fit_activity_records):
@@ -869,22 +920,415 @@ def parse_wellness_export_zip(zip_path: Path) -> GarminWellnessData:
     return result
 
 
+def parse_wellness_export_json(json_path: Path) -> GarminWellnessData:
+    """Parse a single Garmin export JSON file (from an unzipped export).
+
+    Supported JSON files:
+    - `*_sleepData.json` (sleep stages + scores; multiple schemas supported)
+    - `*_hrvData.json`
+    - `*_stressData.json`
+    - `*_heartRateData.json`
+    - `*_spo2Data.json`
+    - `*_respirationData.json`
+    - `*_bodyBatteryData.json`
+    - `UDSFile_*.json` (daily summary aggregator)
+    """
+    path = Path(json_path)
+    if not path.exists():
+        msg = f"JSON file not found: {path}"
+        raise FileNotFoundError(msg)
+
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            payload = json.load(f)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"Invalid JSON file: {path.name}") from exc
+
+    records: list[dict[str, Any]] = []
+    if isinstance(payload, dict):
+        records = [payload]
+    elif isinstance(payload, list):
+        records = [r for r in payload if isinstance(r, dict)]
+    else:
+        raise ValueError(f"Unsupported JSON payload type in {path.name}: {type(payload)}")
+
+    name = path.name
+    if name.startswith(_UDS_FILE_PREFIX) and name.lower().endswith(".json"):
+        file_type = "daily_summary"
+    elif name.endswith(_SLEEP_FILE_SUFFIX):
+        file_type = "sleep"
+    elif name.endswith(_HRV_FILE_SUFFIX):
+        file_type = "hrv"
+    elif name.endswith(_STRESS_FILE_SUFFIX):
+        file_type = "stress"
+    elif name.endswith(_HR_FILE_SUFFIX):
+        file_type = "hr"
+    elif name.endswith(_SPO2_FILE_SUFFIX):
+        file_type = "spo2"
+    elif name.endswith(_RESPIRATION_FILE_SUFFIX):
+        file_type = "respiration"
+    elif name.endswith(_BODY_BATTERY_FILE_SUFFIX):
+        file_type = "body_battery"
+    else:
+        raise ValueError(
+            "Unrecognized Garmin JSON export file. Expected one of: "
+            f"{_UDS_FILE_PREFIX}*.json, *{_SLEEP_FILE_SUFFIX}, *{_HRV_FILE_SUFFIX}, "
+            f"*{_STRESS_FILE_SUFFIX}, *{_HR_FILE_SUFFIX}, *{_SPO2_FILE_SUFFIX}, "
+            f"*{_RESPIRATION_FILE_SUFFIX}, *{_BODY_BATTERY_FILE_SUFFIX}. "
+            f"Got: {name}"
+        )
+
+    result = GarminWellnessData(source=f"json:{name}")
+
+    if file_type == "sleep":
+        sleep_records = [_parse_sleep_record(r) for r in records]
+        result.sleep_df = pd.DataFrame(sleep_records) if sleep_records else pd.DataFrame()
+        return result
+
+    if file_type == "hrv":
+        hrv_records: list[dict[str, Any]] = []
+        for r in records:
+            hrv_records.extend(_parse_hrv_record(r))
+        result.hrv_df = pd.DataFrame(hrv_records) if hrv_records else pd.DataFrame()
+        return result
+
+    if file_type == "stress":
+        stress_records: list[dict[str, Any]] = []
+        for r in records:
+            stress_records.extend(_parse_stress_record(r))
+        result.stress_df = pd.DataFrame(stress_records) if stress_records else pd.DataFrame()
+        return result
+
+    if file_type == "hr":
+        hr_records: list[dict[str, Any]] = []
+        for r in records:
+            hr_records.extend(_parse_hr_record(r))
+        result.hr_df = pd.DataFrame(hr_records) if hr_records else pd.DataFrame()
+        return result
+
+    if file_type == "spo2":
+        spo2_records: list[dict[str, Any]] = []
+        for r in records:
+            spo2_records.extend(_parse_spo2_record(r))
+        result.spo2_df = pd.DataFrame(spo2_records) if spo2_records else pd.DataFrame()
+        return result
+
+    if file_type == "respiration":
+        respiration_records: list[dict[str, Any]] = []
+        for r in records:
+            respiration_records.extend(_parse_respiration_record(r))
+        result.respiration_df = pd.DataFrame(respiration_records) if respiration_records else pd.DataFrame()
+        return result
+
+    if file_type == "body_battery":
+        body_battery_records: list[dict[str, Any]] = []
+        for r in records:
+            body_battery_records.extend(_parse_body_battery_record(r))
+        result.body_battery_df = (
+            pd.DataFrame(body_battery_records) if body_battery_records else pd.DataFrame()
+        )
+        return result
+
+    # daily_summary
+    daily_summary_records: list[dict[str, Any]] = []
+    activity_records: list[dict[str, Any]] = []
+    resting_hr_records: list[dict[str, Any]] = []
+    stress_records: list[dict[str, Any]] = []
+    spo2_records: list[dict[str, Any]] = []
+    respiration_records: list[dict[str, Any]] = []
+    body_battery_records: list[dict[str, Any]] = []
+
+    for r in records:
+        daily_summary_records.append(_parse_daily_summary_record(r))
+        activity_record = _extract_activity_record_from_daily_summary(r)
+        if activity_record is not None:
+            activity_records.append(activity_record)
+        resting_record = _extract_resting_hr_record_from_daily_summary(r)
+        if resting_record is not None:
+            resting_hr_records.append(resting_record)
+        stress_record = _extract_stress_record_from_daily_summary(r)
+        if stress_record is not None:
+            stress_records.append(stress_record)
+        spo2_record = _extract_spo2_record_from_daily_summary(r)
+        if spo2_record is not None:
+            spo2_records.append(spo2_record)
+        resp_record = _extract_respiration_record_from_daily_summary(r)
+        if resp_record is not None:
+            respiration_records.append(resp_record)
+        body_battery_records.extend(_extract_body_battery_records_from_daily_summary(r))
+
+    result.daily_summary_df = (
+        pd.DataFrame(daily_summary_records) if daily_summary_records else pd.DataFrame()
+    )
+    result.activity_df = pd.DataFrame(activity_records) if activity_records else pd.DataFrame()
+    result.resting_hr_df = pd.DataFrame(resting_hr_records) if resting_hr_records else pd.DataFrame()
+    result.stress_df = pd.DataFrame(stress_records) if stress_records else pd.DataFrame()
+    result.spo2_df = pd.DataFrame(spo2_records) if spo2_records else pd.DataFrame()
+    result.respiration_df = pd.DataFrame(respiration_records) if respiration_records else pd.DataFrame()
+    result.body_battery_df = (
+        pd.DataFrame(body_battery_records) if body_battery_records else pd.DataFrame()
+    )
+    return result
+
+
 def _parse_sleep_record(record: dict[str, Any]) -> dict[str, Any]:
     """Parse a single sleep record from Garmin JSON export."""
+    # Garmin exports have at least two common sleep JSON schemas:
+    # 1) Older: top-level "sleepTimeSeconds" + "overallScore" (+ sleepRestingSpO2, etc.)
+    # 2) Newer: staged seconds + nested "sleepScores" and optional "spo2SleepSummary".
+    date_val = record.get("calendarDate")
+
+    deep = record.get("deepSleepSeconds")
+    light = record.get("lightSleepSeconds")
+    rem = record.get("remSleepSeconds")
+    awake = record.get("awakeSleepSeconds")
+    unmeasurable = record.get("unmeasurableSeconds")
+
+    total_sleep = record.get("sleepTimeSeconds")
+    if total_sleep is None:
+        staged_total = 0
+        staged_any = False
+        for val in (deep, light, rem):
+            try:
+                if val is None:
+                    continue
+                staged_total += int(val)
+                staged_any = True
+            except (TypeError, ValueError):
+                continue
+        if staged_any:
+            try:
+                if unmeasurable is not None:
+                    staged_total += int(unmeasurable)
+            except (TypeError, ValueError):
+                pass
+            total_sleep = staged_total
+
+    # Sleep score (may be top-level or nested in "sleepScores")
+    sleep_score = record.get("overallScore")
+    if sleep_score is None:
+        sleep_scores = record.get("sleepScores")
+        if isinstance(sleep_scores, dict):
+            sleep_score = sleep_scores.get("overallScore")
+
+    # SpO2 during sleep (may be top-level or nested in "spo2SleepSummary")
+    avg_spo2 = record.get("averageSpO2Value")
+    lowest_spo2 = record.get("lowestSpO2Value")
+    if avg_spo2 is None or lowest_spo2 is None:
+        spo2_summary = record.get("spo2SleepSummary")
+        if isinstance(spo2_summary, dict):
+            if avg_spo2 is None:
+                avg_spo2 = spo2_summary.get("averageSPO2")
+            if lowest_spo2 is None:
+                lowest_spo2 = spo2_summary.get("lowestSPO2")
+
+    # Respiration during sleep (may be top-level or nested)
+    avg_resp = record.get("avgSleepRespirationValue")
+    if avg_resp is None:
+        avg_resp = record.get("averageRespiration")
+
     return {
-        "date": record.get("calendarDate"),
-        "total_sleep_seconds": record.get("sleepTimeSeconds"),
-        "deep_sleep_seconds": record.get("deepSleepSeconds"),
-        "light_sleep_seconds": record.get("lightSleepSeconds"),
-        "rem_sleep_seconds": record.get("remSleepSeconds"),
-        "awake_seconds": record.get("awakeSleepSeconds"),
-        "sleep_score": record.get("overallScore"),
+        "date": date_val,
+        "total_sleep_seconds": total_sleep,
+        "deep_sleep_seconds": deep,
+        "light_sleep_seconds": light,
+        "rem_sleep_seconds": rem,
+        "awake_seconds": awake,
+        "sleep_score": sleep_score,
         "sleep_start": record.get("sleepStartTimestampGMT"),
         "sleep_end": record.get("sleepEndTimestampGMT"),
-        "avg_spo2": record.get("averageSpO2Value"),
-        "lowest_spo2": record.get("lowestSpO2Value"),
-        "avg_respiration": record.get("avgSleepRespirationValue"),
+        "avg_spo2": avg_spo2,
+        "lowest_spo2": lowest_spo2,
+        "avg_respiration": avg_resp,
     }
+
+
+def _parse_daily_summary_record(record: dict[str, Any]) -> dict[str, Any]:
+    """Parse a single Garmin daily summary record (UDSFile export).
+
+    The UDSFile payload is a day-level aggregator and typically includes:
+    - steps, distance, active/total calories
+    - all-day stress aggregates (TOTAL/AWAKE/ASLEEP)
+    - body battery charged/drained + summary stats list
+    - respiration aggregates
+    - SpO2 aggregates
+    """
+    date_val = record.get("calendarDate")
+
+    steps = record.get("totalSteps")
+    distance_m = record.get("totalDistanceMeters")
+    active_kcal = record.get("activeKilocalories")
+
+    # Stress aggregate (prefer TOTAL; ignore sentinel -2 values)
+    avg_stress: Any = None
+    all_day_stress = record.get("allDayStress")
+    if isinstance(all_day_stress, dict):
+        aggregator_list = all_day_stress.get("aggregatorList")
+        if isinstance(aggregator_list, list):
+            # Prefer TOTAL, else first non-negative
+            picked: dict[str, Any] | None = None
+            for item in aggregator_list:
+                if isinstance(item, dict) and item.get("type") == "TOTAL":
+                    picked = item
+                    break
+            if picked is None:
+                for item in aggregator_list:
+                    if isinstance(item, dict) and item.get("averageStressLevel") not in (None, -2):
+                        picked = item
+                        break
+            if picked is not None:
+                avg_stress = picked.get("averageStressLevel")
+
+    # Respiration aggregate
+    avg_resp_awake: Any = None
+    resp = record.get("respiration")
+    if isinstance(resp, dict):
+        avg_resp_awake = resp.get("avgWakingRespirationValue")
+
+    # SpO2 aggregate
+    avg_spo2 = record.get("averageSpo2Value")
+    min_spo2 = record.get("lowestSpo2Value")
+
+    # Body battery aggregates
+    body_battery_avg: Any = None
+    body_battery_charge: Any = None
+    body_battery_drain: Any = None
+    bb = record.get("bodyBattery")
+    bb_values: list[float] = []
+    if isinstance(bb, dict):
+        body_battery_charge = bb.get("chargedValue")
+        body_battery_drain = bb.get("drainedValue")
+        stats_list = bb.get("bodyBatteryStatList")
+        if isinstance(stats_list, list):
+            for item in stats_list:
+                if not isinstance(item, dict):
+                    continue
+                raw = item.get("statsValue")
+                try:
+                    if raw is None:
+                        continue
+                    bb_values.append(float(raw))
+                except (TypeError, ValueError):
+                    continue
+    if bb_values:
+        body_battery_avg = float(np.mean(bb_values))
+
+    resting_hr = record.get("currentDayRestingHeartRate")
+    if resting_hr is None:
+        resting_hr = record.get("restingHeartRate")
+
+    return {
+        "date": date_val,
+        "steps": steps,
+        "distance_km": (float(distance_m) / 1000.0) if distance_m is not None else None,
+        "calories_kcal": active_kcal,
+        "avg_stress": avg_stress,
+        "avg_spo2": avg_spo2,
+        "min_spo2": min_spo2,
+        "avg_respiration_awake": avg_resp_awake,
+        "body_battery_avg": body_battery_avg,
+        "body_battery_charge": body_battery_charge,
+        "body_battery_drain": body_battery_drain,
+        "resting_hr_bpm": resting_hr,
+        "min_hr": record.get("minHeartRate"),
+        "max_hr": record.get("maxHeartRate"),
+    }
+
+
+def _extract_activity_record_from_daily_summary(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract a minimal activity counter row from a daily summary record."""
+    ts = record.get("wellnessEndTimeGmt") or record.get("wellnessStartTimeGmt")
+    if ts is None:
+        return None
+    if not any(k in record for k in ("totalSteps", "totalDistanceMeters", "activeKilocalories", "totalKilocalories")):
+        return None
+    return {
+        "timestamp": ts,
+        "steps": record.get("totalSteps"),
+        "distance_m": record.get("totalDistanceMeters"),
+        # Prefer active calories for alignment with FIT monitoring counters.
+        "active_calories": record.get("activeKilocalories"),
+        "calories": record.get("totalKilocalories"),
+    }
+
+
+def _extract_resting_hr_record_from_daily_summary(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract a resting HR row from a daily summary record."""
+    ts = record.get("wellnessEndTimeGmt") or record.get("wellnessStartTimeGmt")
+    if ts is None:
+        return None
+    val = record.get("currentDayRestingHeartRate")
+    if val is None:
+        val = record.get("restingHeartRate")
+    if val is None:
+        return None
+    return {"timestamp": ts, "resting_hr_bpm": val}
+
+
+def _extract_stress_record_from_daily_summary(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract a daily average stress row from a daily summary record."""
+    ts = record.get("wellnessEndTimeGmt") or record.get("wellnessStartTimeGmt")
+    if ts is None:
+        return None
+    parsed = _parse_daily_summary_record(record).get("avg_stress")
+    if parsed is None or parsed == -2:
+        return None
+    return {"timestamp": ts, "stress_level": parsed}
+
+
+def _extract_spo2_record_from_daily_summary(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract a daily SpO2 row from a daily summary record."""
+    ts = record.get("latestSpo2ValueReadingTimeGmt") or record.get("wellnessEndTimeGmt") or record.get("wellnessStartTimeGmt")
+    if ts is None:
+        return None
+    val = record.get("averageSpo2Value")
+    if val is None:
+        val = record.get("latestSpo2Value")
+    if val is None:
+        return None
+    return {"timestamp": ts, "spo2": val}
+
+
+def _extract_respiration_record_from_daily_summary(record: dict[str, Any]) -> dict[str, Any] | None:
+    """Extract a daily respiration row from a daily summary record."""
+    resp = record.get("respiration")
+    if not isinstance(resp, dict):
+        return None
+    ts = resp.get("latestRespirationTimeGMT") or record.get("wellnessEndTimeGmt") or record.get("wellnessStartTimeGmt")
+    if ts is None:
+        return None
+    val = resp.get("avgWakingRespirationValue")
+    if val is None:
+        val = resp.get("latestRespirationValue")
+    if val is None:
+        return None
+    return {"timestamp": ts, "respiration_rate": val}
+
+
+def _extract_body_battery_records_from_daily_summary(record: dict[str, Any]) -> list[dict[str, Any]]:
+    """Extract body-battery stat points from a daily summary record."""
+    bb = record.get("bodyBattery")
+    if not isinstance(bb, dict):
+        return []
+    stats_list = bb.get("bodyBatteryStatList")
+    if not isinstance(stats_list, list):
+        return []
+    out: list[dict[str, Any]] = []
+    for item in stats_list:
+        if not isinstance(item, dict):
+            continue
+        ts = item.get("statTimestamp")
+        val = item.get("statsValue")
+        if ts is None or val is None:
+            continue
+        out.append(
+            {
+                "timestamp": ts,
+                "body_battery": val,
+                "status": item.get("bodyBatteryStatus"),
+            }
+        )
+    return out
 
 
 def _parse_hrv_record(record: dict[str, Any]) -> list[dict[str, Any]]:
@@ -1649,6 +2093,7 @@ def import_garmin_data(
     credentials: GarminCredentials | None = None,
     zip_path: Path | None = None,
     fit_path: Path | None = None,
+    json_path: Path | None = None,
     start_date: date | None = None,
     end_date: date | None = None,
     include_spo2: bool = True,
@@ -1660,12 +2105,14 @@ def import_garmin_data(
     Attempts to load data from:
     1. Individual FIT file (if provided)
     2. Bulk wellness ZIP export (if provided)
-    3. Garmin Connect API (if credentials provided)
+    3. Single Garmin export JSON file (if provided; from an unzipped export)
+    4. Garmin Connect API (if credentials provided)
 
     Args:
         credentials: Garmin Connect credentials (optional).
         zip_path: Path to Garmin wellness export ZIP (optional).
         fit_path: Path to individual FIT file (optional).
+        json_path: Path to a single Garmin export JSON file (optional).
         start_date: Start date for API fetch (default: 7 days ago).
         end_date: End date for API fetch (default: today).
         include_spo2: Whether to fetch SpO2 data from API.
@@ -1678,8 +2125,8 @@ def import_garmin_data(
     Raises:
         ValueError: If no data source provided.
     """
-    if fit_path is None and zip_path is None and credentials is None:
-        msg = "Either credentials, zip_path, or fit_path must be provided"
+    if fit_path is None and zip_path is None and json_path is None and credentials is None:
+        msg = "Either credentials, zip_path, json_path, or fit_path must be provided"
         raise ValueError(msg)
 
     # Try FIT file first (most detailed RR data)
@@ -1715,7 +2162,31 @@ def import_garmin_data(
             not data.body_battery_df.empty,
             not data.activity_df.empty,
             not data.session_df.empty,
+            not data.daily_summary_df.empty,
         ])
+        if has_data:
+            if not data.sleep_df.empty:
+                data.sleep_df = compute_sleep_metrics(data.sleep_df)
+            return data
+
+    # Try single JSON export file (unpacked Garmin export)
+    if json_path is not None:
+        _LOGGER.info("Parsing Garmin export JSON: %s", json_path)
+        data = parse_wellness_export_json(json_path)
+        has_data = any(
+            [
+                not data.sleep_df.empty,
+                not data.hrv_df.empty,
+                not data.hr_df.empty,
+                not data.stress_df.empty,
+                not data.spo2_df.empty,
+                not data.respiration_df.empty,
+                not data.body_battery_df.empty,
+                not data.activity_df.empty,
+                not data.session_df.empty,
+                not data.daily_summary_df.empty,
+            ]
+        )
         if has_data:
             if not data.sleep_df.empty:
                 data.sleep_df = compute_sleep_metrics(data.sleep_df)
@@ -1798,7 +2269,7 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
         return daily_metrics[day]
 
     def _update_max(day: date, key: str, value: Any) -> None:
-        if value is None or (isinstance(value, float) and np.isnan(value)):
+        if value is None or pd.isna(value):
             return
         metrics = _ensure_day(day)
         if metrics.get(key) is None:
@@ -1810,7 +2281,7 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
                 metrics[key] = value
 
     def _update_mean(day: date, key: str, value: Any) -> None:
-        if value is None or (isinstance(value, float) and np.isnan(value)):
+        if value is None or pd.isna(value):
             return
         metrics = _ensure_day(day)
         metrics[key] = value
@@ -1826,6 +2297,43 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
             return None
         # For cumulative counters, the maximum value is the daily total
         return float(valid.max())
+
+    # ---------------------------------------------------------------------
+    # Precomputed daily summary rows (e.g., UDSFile exports)
+    # ---------------------------------------------------------------------
+    if not data.daily_summary_df.empty and "date" in data.daily_summary_df.columns:
+        summary_df = data.daily_summary_df.copy()
+        summary_df["date"] = pd.to_datetime(summary_df["date"], errors="coerce").dt.date
+        summary_df = summary_df.dropna(subset=["date"])
+        for _, row in summary_df.iterrows():
+            d = row.get("date")
+            if d is None or pd.isna(d):
+                continue
+            if not isinstance(d, date):
+                try:
+                    d = pd.to_datetime(d, errors="coerce").date()
+                except Exception:
+                    continue
+            # Steps / distance / calories
+            _update_max(d, "steps", row.get("steps"))
+            _update_max(d, "distance_km", row.get("distance_km"))
+            _update_max(d, "calories_kcal", row.get("calories_kcal"))
+
+            # Stress / respiration / SpO2 aggregates
+            _update_mean(d, "avg_stress", row.get("avg_stress"))
+            _update_mean(d, "avg_respiration_awake", row.get("avg_respiration_awake"))
+            _update_mean(d, "avg_spo2", row.get("avg_spo2"))
+            _update_mean(d, "min_spo2", row.get("min_spo2"))
+
+            # Resting HR (when present)
+            _update_mean(d, "resting_hr_bpm", row.get("resting_hr_bpm"))
+            _update_mean(d, "min_hr", row.get("min_hr"))
+            _update_mean(d, "max_hr", row.get("max_hr"))
+
+            # Body battery aggregates (when present)
+            _update_mean(d, "body_battery_avg", row.get("body_battery_avg"))
+            _update_mean(d, "body_battery_charge", row.get("body_battery_charge"))
+            _update_mean(d, "body_battery_drain", row.get("body_battery_drain"))
 
     # Process heart rate
     if not data.hr_df.empty and "timestamp" in data.hr_df.columns:
@@ -1858,9 +2366,19 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
         spo2_df = data.spo2_df.copy()
         spo2_df["timestamp"] = pd.to_datetime(spo2_df["timestamp"], utc=True)
         spo2_df["date"] = spo2_df["timestamp"].dt.date
-        spo2_daily = spo2_df.groupby("date")["spo2"].agg(["mean", "min"])
+        spo2_daily = spo2_df.groupby("date")["spo2"].agg(["mean", "min", "count"])
         for idx, row in spo2_daily.iterrows():
             metrics = _ensure_day(idx)
+            # If we already have aggregated day-level values (e.g., from UDSFile daily_summary_df)
+            # and only a single placeholder reading exists for this day, preserve the aggregated values.
+            has_precomputed = (
+                not data.daily_summary_df.empty
+                and metrics.get("avg_spo2") is not None
+                and metrics.get("min_spo2") is not None
+            )
+            count = int(row.get("count") or 0)
+            if has_precomputed and count <= 1:
+                continue
             metrics["avg_spo2"] = row["mean"]
             metrics["min_spo2"] = row["min"]
 
@@ -1966,8 +2484,9 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
             charge = float(deltas[deltas > 0].sum()) if not deltas.empty else 0.0
             drain = float(abs(deltas[deltas < 0].sum())) if not deltas.empty else 0.0
             metrics = _ensure_day(idx)
-            metrics["body_battery_charge"] = charge
-            metrics["body_battery_drain"] = drain
+            # Preserve any precomputed daily charge/drain values (e.g., from UDSFile exports).
+            metrics.setdefault("body_battery_charge", charge)
+            metrics.setdefault("body_battery_drain", drain)
             metrics.setdefault("body_battery_avg", float(sorted_vals.mean()))
             metrics.setdefault("body_battery_max", float(sorted_vals.max()))
             metrics.setdefault("body_battery_min", float(sorted_vals.min()))
