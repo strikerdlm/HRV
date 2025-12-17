@@ -3253,11 +3253,26 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
     st.markdown("---")
     
     # Input parameters for calculations
-    with st.expander("⚙️ Calculation Parameters", expanded=True):
+    # NOTE: Streamlit expanders cannot be nested. This section is rendered inside an
+    # outer expander ("🛠️ Profile Tools Engine"), so we use a checkbox to collapse.
+    chronotype_map = {
+        "Morning (-2h)": -2.0,
+        "Slight morning (-1h)": -1.0,
+        "Neutral (0h)": 0.0,
+        "Slight evening (+1h)": 1.0,
+        "Evening (+2h)": 2.0,
+    }
+    show_parameters = st.checkbox(
+        "⚙️ Show calculation parameters",
+        value=True,
+        key=f"profile_tools_show_params_{user.user_id}",
+        help="Hide to reduce clutter; values are preserved in session state.",
+    )
+    if show_parameters:
         col1, col2, col3 = st.columns(3)
-        
+
         with col1:
-            sleep_hours = st.number_input(
+            _ = st.number_input(  # widget persists to session_state via key
                 "Sleep hours (last night)",
                 min_value=0.0,
                 max_value=14.0,
@@ -3265,7 +3280,7 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
                 step=0.5,
                 key=f"tools_sleep_hours_{user.user_id}",
             )
-            sleep_quality = st.slider(
+            _ = st.slider(  # widget persists to session_state via key
                 "Sleep quality (0-1)",
                 min_value=0.0,
                 max_value=1.0,
@@ -3273,9 +3288,9 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
                 step=0.1,
                 key=f"tools_sleep_quality_{user.user_id}",
             )
-        
+
         with col2:
-            hours_awake = st.number_input(
+            _ = st.number_input(  # widget persists to session_state via key
                 "Hours awake",
                 min_value=0.0,
                 max_value=48.0,
@@ -3283,24 +3298,21 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
                 step=0.5,
                 key=f"tools_hours_awake_{user.user_id}",
             )
-            chronotype = st.selectbox(
+            _ = st.selectbox(  # widget persists to session_state via key
                 "Chronotype",
-                options=["Morning (-2h)", "Slight morning (-1h)", "Neutral (0h)", 
-                         "Slight evening (+1h)", "Evening (+2h)"],
+                options=[
+                    "Morning (-2h)",
+                    "Slight morning (-1h)",
+                    "Neutral (0h)",
+                    "Slight evening (+1h)",
+                    "Evening (+2h)",
+                ],
                 index=2,
                 key=f"tools_chronotype_{user.user_id}",
             )
-            chronotype_map = {
-                "Morning (-2h)": -2.0,
-                "Slight morning (-1h)": -1.0,
-                "Neutral (0h)": 0.0,
-                "Slight evening (+1h)": 1.0,
-                "Evening (+2h)": 2.0,
-            }
-            chronotype_offset = chronotype_map.get(chronotype, 0.0)
-        
+
         with col3:
-            rmssd_input = st.number_input(
+            _ = st.number_input(  # widget persists to session_state via key
                 "RMSSD (ms) - from HRV",
                 min_value=0.0,
                 max_value=200.0,
@@ -3309,7 +3321,7 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
                 help="Enter your latest RMSSD value from HRV analysis",
                 key=f"tools_rmssd_{user.user_id}",
             )
-            resting_hr = st.number_input(
+            _ = st.number_input(  # widget persists to session_state via key
                 "Resting HR (bpm)",
                 min_value=30,
                 max_value=120,
@@ -3317,6 +3329,28 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
                 step=1,
                 key=f"tools_resting_hr_{user.user_id}",
             )
+
+    # Ensure variables exist even when parameter widgets are hidden.
+    sleep_hours_raw = _safe_float(st.session_state.get(f"tools_sleep_hours_{user.user_id}"))
+    sleep_hours = float(sleep_hours_raw) if sleep_hours_raw is not None else 7.0
+
+    sleep_quality_raw = _safe_float(st.session_state.get(f"tools_sleep_quality_{user.user_id}"))
+    sleep_quality = float(sleep_quality_raw) if sleep_quality_raw is not None else 0.7
+
+    hours_awake_default = float(current_hour - 7 if current_hour >= 7 else current_hour + 17)
+    hours_awake_raw = _safe_float(st.session_state.get(f"tools_hours_awake_{user.user_id}"))
+    hours_awake = float(hours_awake_raw) if hours_awake_raw is not None else hours_awake_default
+
+    chronotype = str(st.session_state.get(f"tools_chronotype_{user.user_id}") or "Neutral (0h)")
+    chronotype_offset = float(chronotype_map.get(chronotype, 0.0))
+
+    rmssd_default = float(user.resting_hr_bpm or 35.0) if user.resting_hr_bpm else 35.0
+    rmssd_raw = _safe_float(st.session_state.get(f"tools_rmssd_{user.user_id}"))
+    rmssd_input = float(rmssd_raw) if rmssd_raw is not None else rmssd_default
+
+    resting_hr_default = int(user.resting_hr_bpm or 65)
+    resting_hr_raw = _safe_float(st.session_state.get(f"tools_resting_hr_{user.user_id}"))
+    resting_hr = float(resting_hr_raw) if resting_hr_raw is not None else float(resting_hr_default)
     
     # Run calculations button
     if st.button("🚀 Run Calculations", type="primary", key=f"run_tools_{user.user_id}"):
@@ -3353,7 +3387,8 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
                 age, sex, user.weight_kg, user.height_cm,
                 rmssd_input, hrv_metrics, sleep_hours, sleep_quality,
                 hours_awake, current_hour, chronotype_offset, resting_hr,
-                user.vo2max_ml_kg_min, user.activity_level or "moderate"
+                user.vo2max_ml_kg_min, user.activity_level or "moderate",
+                user.user_id,
             )
         
         elif selected_tool == "🔋 Recovery Score":
@@ -3387,7 +3422,7 @@ def _render_all_tools_summary(
     rmssd_ms: float, hrv_metrics: Dict[str, Any], sleep_hours: float,
     sleep_quality: float, hours_awake: float, current_hour: int,
     chronotype_offset: float, resting_hr: float, vo2max: Optional[float],
-    activity_level: str
+    activity_level: str, user_id: str
 ) -> None:
     """Render summary of all profile tools."""
     st.markdown("### 📊 Profile Tools Summary")
@@ -3478,7 +3513,12 @@ def _render_all_tools_summary(
         # Show recommendations
         recs = pf.get("recommendations", [])
         if recs:
-            with st.expander("💡 Recommendations"):
+            show_recs = st.checkbox(
+                "💡 Show recommendations",
+                value=False,
+                key=f"profile_tools_summary_show_recs_{user_id}",
+            )
+            if show_recs:
                 for rec in recs:
                     st.markdown(f"- {rec}")
     
@@ -3967,7 +4007,12 @@ def _render_personalized_health_metrics(user: UserProfile) -> None:
             st.markdown(f"- {factor}")
     
     if score >= 3:
-        with st.expander("💡 Recommendations"):
+        show_apnea_recs = st.checkbox(
+            "💡 Show sleep apnea recommendations",
+            value=False,
+            key=f"personalized_sleep_apnea_recs_{user.user_id}",
+        )
+        if show_apnea_recs:
             for rec in apnea_data.get("recommendations", []):
                 st.markdown(f"- {rec}")
     
@@ -4048,7 +4093,12 @@ def _render_personalized_health_metrics(user: UserProfile) -> None:
     
     cv_recommendations = cv_data.get("recommendations", [])
     if cv_recommendations:
-        with st.expander("💡 Recommendations"):
+        show_cv_recs = st.checkbox(
+            "💡 Show cardiovascular recommendations",
+            value=False,
+            key=f"personalized_cv_recs_{user.user_id}",
+        )
+        if show_cv_recs:
             for rec in cv_recommendations:
                 st.markdown(f"- {rec}")
     
@@ -4306,7 +4356,12 @@ def _render_nasa_calculator(user: UserProfile) -> None:
     if polar_client and POLAR_MODULE_AVAILABLE:
         vo2_history = polar_client.get_vo2max_history(limit=10)
         if len(vo2_history) > 1:
-            with st.expander("📈 VO2max History", expanded=False):
+            show_vo2_history = st.checkbox(
+                "📈 Show VO2max history",
+                value=False,
+                key=f"nasa_vo2_history_{user.user_id}",
+            )
+            if show_vo2_history:
                 history_data = [
                     {
                         "Date": entry.measurement_date[:10] if entry.measurement_date else "N/A",
@@ -4516,7 +4571,12 @@ def _render_body_composition_form(user: UserProfile) -> None:
                     y_axis_label="value",
                 )
 
-        with st.expander("📊 Body composition history", expanded=False):
+        show_history = st.checkbox(
+            "📊 Show body composition history",
+            value=False,
+            key=f"body_comp_show_history_{user.user_id}",
+        )
+        if show_history:
             display_cols = [
                 "measurement_date",
                 "body_fat_pct",
@@ -5295,7 +5355,12 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
         )
 
     # Subjective logs (optional): stored exploration medical record fields.
-    with st.expander("📝 Logged (subjective) indicators", expanded=False):
+    show_subjective = st.checkbox(
+        "📝 Show logged (subjective) indicators",
+        value=False,
+        key=f"exploration_med_subjective_{user.user_id}",
+    )
+    if show_subjective:
         stress_series = history_df["confinement_stress"].dropna() if "confinement_stress" in history_df.columns else pd.Series(dtype=float)
         workload_series = history_df["workload_rating"].dropna() if "workload_rating" in history_df.columns else pd.Series(dtype=float)
         sleep_series = history_df["sleep_hours"].dropna() if "sleep_hours" in history_df.columns else pd.Series(dtype=float)
