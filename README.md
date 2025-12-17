@@ -355,6 +355,7 @@ The app accepts text files with one RR interval per line in **milliseconds**:
   ```
   https://connect.garmin.com/modern/settings/accountInformation
   ```
+* **Export JSON (unzipped)**: You can also upload individual Garmin export `.json` files (e.g., `UDSFile_*.json`, `*_sleepData.json`) in **User Profile → Data → Wrist Monitoring (Vivosmart 5)**.
 * **FIT Files**: Export individual activities from Garmin Connect web
 * **API Access**: Configure `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env`
 
