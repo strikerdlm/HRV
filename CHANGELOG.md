@@ -5,6 +5,30 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.23] - 2025-12-17
+
+### Added
+- **Profile Tools Engine** (`app/profile_tools_engine.py`): New comprehensive calculation engine accessible per user profile:
+  - **Recovery Score Calculator**: lnRMSSD-based recovery assessment with HRV, sleep, and resting HR components
+  - **Training Readiness Assessment**: Multi-component readiness score with workout recommendations
+  - **SAFTE Fatigue Prediction**: 24-hour cognitive effectiveness forecast using sleep homeostasis and circadian models
+  - **Personalized HRV Analysis**: Age/sex-adjusted HRV interpretation with parasympathetic and stress indices
+  - **Performance Forecast**: Hour-by-hour performance prediction with peak/low time identification
+- **Profile Tools Engine UI** (`app/user_profile_tab.py`): New "🛠️ Profile Tools Engine" expander in Clinical Profile tab:
+  - Tool selector for individual or combined analysis
+  - Configurable input parameters (sleep, chronotype, HRV values)
+  - Interactive results display with component breakdowns
+  - 24-hour performance curve visualization
+  - Markdown export functionality
+  - Workout suggestions and clinical recommendations
+- **Run All Tools Summary**: One-click execution of all profile tools with aggregated results display
+
+### Scientific References (Profile Tools Engine)
+- Plews DJ et al. (2013). J Appl Physiol - lnRMSSD for training monitoring
+- Kiviniemi AM et al. (2007). Med Sci Sports Exerc - HRV-guided training
+- Hursh SR et al. (2004). Aviat Space Environ Med - SAFTE fatigue model
+- Borbély AA (1982). Hum Neurobiol - Two-process model of sleep regulation
+
 ## [1.8.22] - 2025-12-17
 
 ### Added
