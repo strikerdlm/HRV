@@ -199,10 +199,25 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE  | Polar AccessLink automation                  | Complete (persistent OAuth tokens + VO2max history)   |
 | ✅ DONE  | Exploration Medical Analytics dashboards     | Complete (radiation/EVA/stress cards in Clinical tab) |
 | ✅ DONE  | Longitudinal timepoints (T0–T21)             | Complete (tag HRV + assessments to study timepoints)  |
+| ✅ DONE  | Per-user HRV cache + GPT export persistence  | Complete (SQLite-backed reusable payloads + reports)  |
 
 **Best next task:** Baseline/change analytics using tagged T0–T21 timepoints.
 
 ### Planned Features (Q1 2026)
+
+#### Per-user computation persistence (beyond HRV)
+- **Circadian run history per user**: persist circadian scenario inputs + outputs (DLMO/CBT/ESRI trajectories) so users can review and export prior simulations without rerunning.
+- **SAFTE run history per user**: persist SAFTE inputs + forecasts (and the data source used: wrist → clinical → Garmin Connect) for auditability and fast reuse.
+- **Cross-module “mission package export” per user**: one-click export bundling HRV + circadian + fatigue + space-weather context + stored GPT-5.2 report.
+
+#### SAFTE-R performance prediction (per subject)
+- **SAFTE-R model option**: add SAFTE-R parameterization and expose it under each subject in **User Profile → Fatigue**, including calibration hooks (sleep/wake history + chronotype + workload).
+
+#### Mission-specific radiation dose modelling
+- **Mission-linked dose model**: compute effective dose per user from the mission being simulated (environment/shielding/EVA timeline + storm-time hazard flags), and persist both model inputs and outputs per mission scenario.
+
+#### HRV protocol covariates (measurement accuracy)
+- **Protocol context capture**: store and apply key covariates (posture, time-of-day, breathing protocol/respiratory rate, recent exercise/caffeine/nicotine/alcohol, acute illness, medication changes) to improve per-user interpretation and comparability across sessions.
 
 #### Longitudinal Study Support
 
