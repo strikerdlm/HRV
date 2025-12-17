@@ -113,6 +113,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Profile Readiness & Recovery** (`app/user_profile_tab.py`): Added a **Readiness** sub-tab inside User Profile that computes readiness from stored parasympathetic-index history and renders HRV metric gauges in the same ECharts style as the main gauges tab.
 - **Profile body composition persistence** (`app/user_profile_tab.py`, `app/user_database.py`): The **Body Composition** panel now saves measurements (body fat, lean/muscle mass, circumferences) to the database and renders trends/history per profile.
 - **Profile exploration medicine auto-enrichment** (`app/user_profile_tab.py`): The **Exploration Medical Record** can now align records to a log date and auto-compute (a) **space-weather alert level** from NOAA Kp + >10 MeV proton flux (G/S scales) and (b) a **baseline cumulative radiation dose estimate** from mission profile/habitat + EVA hours (with NASA limit guidance). Stress and sleep fields can seed from objective HRV and Garmin daily metrics when available.
+- **Garmin export JSON ingest (Vivosmart 5)** (`app/garmin_import.py`, `app/user_profile_tab.py`): The **User Profile → Data → Wrist Monitoring (Vivosmart 5)** uploader now accepts unzipped Garmin export `.json` files, including:
+  - `UDSFile_*.json` daily summaries (steps, distance, active calories, stress, SpO₂, respiration, body battery)
+  - `*_sleepData.json` (sleep stages + scores; supports the newer nested `sleepScores` schema)
 
 ### Changed
 - **Covariate adjustment defaults** (`app/app.py`): age/sex/BMI/activity inputs now default to the active user profile context when available (with a “Use active profile defaults” toggle), ensuring profile-aware HRV interpretation is user-scoped.
@@ -126,6 +129,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Navigation after HRV analysis** (`app/app.py`): Removed an early return that could trap the UI on an “already completed” message after analysis; the full tab navigation now renders and the action button switches to **Recompute HRV Analysis** when appropriate.
 - **Logging** (`app/logging_config.py`): Suppressed benign Streamlit/Tornado `WebSocketClosedError` “Task exception was never retrieved” noise so `logs/errors.log` stays actionable.
 - **Device imports** (`app/app.py`): ActiGraph and Somfit sidebar imports now run only when clicking an explicit **Import** button (prevents expensive re-processing on every rerun) and always clean up temporary files, improving UI smoothness and reliability.
+- **Garmin daily metrics upsert** (`app/user_database.py`): Partial imports no longer wipe previously stored non-null fields (upsert now preserves existing values when the new value is NULL).
 
 ### Tests
 - Added regression coverage for timepoint persistence and database backups (`tests/test_longitudinal_timepoints.py`).
