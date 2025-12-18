@@ -449,8 +449,8 @@ def compute_fatigue_analysis(
 
     # SAFTE/FAST-style operational zones (commonly cited in aviation fatigue ops):
     # - >= 90%: low fatigue risk ("well-rested")
-    # - 77–90%: caution / transitional range
-    # - 70–77%: high fatigue risk (often compared to ~0.05% BAC impairment)
+    # - > 77% and < 90%: caution / transitional range
+    # - > 70% and <= 77%: high fatigue risk (often compared to ~0.05% BAC impairment)
     # - <= 70%: severe impairment (often compared to ~0.08% BAC impairment)
     #
     # Note: Thresholds are presented in the UI with citations (ICAO/FAA/NASA).
