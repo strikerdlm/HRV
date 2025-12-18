@@ -953,6 +953,9 @@ def parse_wellness_export_json(json_path: Path) -> GarminWellnessData:
         raise ValueError(f"Unsupported JSON payload type in {path.name}: {type(payload)}")
 
     name = path.name
+    file_type: str | None = None
+
+    # Prefer filename-based routing when available (most direct).
     if name.startswith(_UDS_FILE_PREFIX) and name.lower().endswith(".json"):
         file_type = "daily_summary"
     elif name.endswith(_SLEEP_FILE_SUFFIX):
@@ -969,14 +972,68 @@ def parse_wellness_export_json(json_path: Path) -> GarminWellnessData:
         file_type = "respiration"
     elif name.endswith(_BODY_BATTERY_FILE_SUFFIX):
         file_type = "body_battery"
-    else:
-        raise ValueError(
-            "Unrecognized Garmin JSON export file. Expected one of: "
-            f"{_UDS_FILE_PREFIX}*.json, *{_SLEEP_FILE_SUFFIX}, *{_HRV_FILE_SUFFIX}, "
-            f"*{_STRESS_FILE_SUFFIX}, *{_HR_FILE_SUFFIX}, *{_SPO2_FILE_SUFFIX}, "
-            f"*{_RESPIRATION_FILE_SUFFIX}, *{_BODY_BATTERY_FILE_SUFFIX}. "
-            f"Got: {name}"
-        )
+
+    # Fallback: infer from contents (handles temp filenames like tmpXXXX.json).
+    if file_type is None:
+        if not records:
+            raise ValueError(f"Empty JSON export file: {name}")
+        sample = records[0]
+
+        # Sleep: has sleep start/end + stage seconds or total seconds.
+        if (
+            "sleepStartTimestampGMT" in sample
+            and "sleepEndTimestampGMT" in sample
+            and (
+                "deepSleepSeconds" in sample
+                or "lightSleepSeconds" in sample
+                or "remSleepSeconds" in sample
+                or "sleepTimeSeconds" in sample
+                or "sleepScores" in sample
+            )
+        ):
+            file_type = "sleep"
+        # HRV RMSSD export
+        elif "hrvValues" in sample:
+            file_type = "hrv"
+        # Stress export
+        elif "stressValuesArray" in sample:
+            file_type = "stress"
+        # Heart-rate export
+        elif "heartRateValues" in sample:
+            file_type = "hr"
+        # SpO2 export
+        elif "spO2Values" in sample or "sleepingSpO2Values" in sample:
+            file_type = "spo2"
+        # Respiration export
+        elif "respirationValuesArray" in sample:
+            file_type = "respiration"
+        # Body battery export (time series)
+        elif "bodyBatteryLevel" in sample or "bodyBatteryValuesArray" in sample:
+            file_type = "body_battery"
+        # Daily summary export (UDSFile content)
+        elif "calendarDate" in sample and any(
+            k in sample
+            for k in (
+                "totalSteps",
+                "totalDistanceMeters",
+                "activeKilocalories",
+                "allDayStress",
+                "bodyBattery",
+                "respiration",
+                "averageSpo2Value",
+            )
+        ):
+            file_type = "daily_summary"
+        else:
+            keys_preview = sorted(list(sample.keys()))[:25]
+            raise ValueError(
+                "Unrecognized Garmin JSON export file (content-based detection failed). "
+                "Expected one of: "
+                f"{_UDS_FILE_PREFIX}*.json, *{_SLEEP_FILE_SUFFIX}, *{_HRV_FILE_SUFFIX}, "
+                f"*{_STRESS_FILE_SUFFIX}, *{_HR_FILE_SUFFIX}, *{_SPO2_FILE_SUFFIX}, "
+                f"*{_RESPIRATION_FILE_SUFFIX}, *{_BODY_BATTERY_FILE_SUFFIX}. "
+                f"Got: {name}. Sample keys: {keys_preview}"
+            )
 
     result = GarminWellnessData(source=f"json:{name}")
 
