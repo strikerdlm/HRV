@@ -109,3 +109,84 @@ def test_timepoint_label_numbering(label: str, expected: int) -> None:
         assert expected == 0
     else:
         assert int(label[1:]) == expected
+
+
+def test_hrv_timepoint_change_table_computes_baseline_and_delta(tmp_path: Path) -> None:
+    """Baseline/Δ table should compute per-timepoint aggregates and deltas vs T0."""
+    db_path = tmp_path / "hrv_users.db"
+    db = UserDatabase(db_path=db_path)
+
+    user = UserProfile(user_id="", username="u1", full_name="User One")
+    user_id = db.create_user(user)
+
+    tp0 = MeasurementTimepoint(
+        timepoint_id="",
+        user_id=user_id,
+        timepoint_label="T0_baseline",
+        measurement_date="2025-12-15",
+        measurement_number=0,
+        is_baseline=True,
+        notes="Baseline",
+    )
+    tp0_id = db.upsert_measurement_timepoint(tp0)
+
+    tp1 = MeasurementTimepoint(
+        timepoint_id="",
+        user_id=user_id,
+        timepoint_label="T1",
+        measurement_date="2025-12-16",
+        measurement_number=1,
+        is_baseline=False,
+        notes="Follow-up",
+    )
+    tp1_id = db.upsert_measurement_timepoint(tp1)
+
+    # Two baseline sessions: median baseline RMSSD = 42.
+    db.save_hrv_measurement(
+        HRVMeasurement(
+            measurement_id="",
+            user_id=user_id,
+            measurement_date="2025-12-15",
+            timepoint_id=tp0_id,
+            rmssd_ms=40.0,
+            created_at="2025-12-15T12:00:00+00:00",
+        )
+    )
+    db.save_hrv_measurement(
+        HRVMeasurement(
+            measurement_id="",
+            user_id=user_id,
+            measurement_date="2025-12-15",
+            timepoint_id=tp0_id,
+            rmssd_ms=44.0,
+            created_at="2025-12-15T12:05:00+00:00",
+        )
+    )
+    db.save_hrv_measurement(
+        HRVMeasurement(
+            measurement_id="",
+            user_id=user_id,
+            measurement_date="2025-12-16",
+            timepoint_id=tp1_id,
+            rmssd_ms=50.0,
+            created_at="2025-12-16T12:00:00+00:00",
+        )
+    )
+
+    table = db.get_hrv_timepoint_change_table(user_id, metrics=["rmssd_ms"], agg="median", limit=50)
+    assert not table.empty
+    assert "baseline_rmssd_ms" in table.columns
+    assert "delta_rmssd_ms" in table.columns
+
+    # Expect T0 first, then T1.
+    assert table["timepoint_label"].iloc[0] == "T0_baseline"
+    assert table["timepoint_label"].iloc[1] == "T1"
+
+    baseline_val = float(table["baseline_rmssd_ms"].iloc[0])
+    assert baseline_val == pytest.approx(42.0)
+
+    # T0 delta vs itself is 0; T1 delta is +8.
+    delta_t0 = float(table.loc[table["timepoint_label"] == "T0_baseline", "delta_rmssd_ms"].iloc[0])
+    delta_t1 = float(table.loc[table["timepoint_label"] == "T1", "delta_rmssd_ms"].iloc[0])
+    assert delta_t0 == pytest.approx(0.0)
+    assert delta_t1 == pytest.approx(8.0)

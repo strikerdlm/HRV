@@ -2601,6 +2601,80 @@ def _render_hrv_history(user: UserProfile) -> None:
                     y_axis_label="ms",
                 )
 
+        # Longitudinal baseline/change analytics (T0–T21)
+        with st.expander("🧪 Baseline / Δ by timepoint (T0–T21)", expanded=False):
+            st.caption(
+                "Groups HRV sessions by your saved longitudinal timepoints (T0…T21), "
+                "computes a baseline from T0, and reports Δ (delta) per timepoint. "
+                "This requires that your saved HRV measurements are tagged with a timepoint."
+            )
+
+            if "timepoint_id" not in df.columns or df["timepoint_id"].isna().all():
+                st.info(
+                    "No timepoint-tagged HRV measurements were found yet. "
+                    "Use the **Longitudinal timepoint (T0–T21)** selector when saving new entries."
+                )
+            else:
+                available_metric_candidates = [
+                    "rmssd_ms",
+                    "sdnn_ms",
+                    "mean_hr_bpm",
+                    "hf_power_ms2",
+                    "lf_hf_ratio",
+                    "parasympathetic_index",
+                    "stress_index",
+                    "artifact_percentage",
+                    "quality_score",
+                ]
+                available_metrics = [
+                    m for m in available_metric_candidates if m in df.columns and df[m].notna().any()
+                ]
+                if not available_metrics:
+                    st.info("Timepoints are present, but no numeric HRV metrics are available to summarize yet.")
+                else:
+                    col_a, col_b = st.columns([2, 1])
+                    with col_a:
+                        selected_metrics = st.multiselect(
+                            "Metrics to summarize",
+                            options=available_metrics,
+                            default=[m for m in ["rmssd_ms", "sdnn_ms", "mean_hr_bpm"] if m in available_metrics],
+                            key=f"profile_timepoint_metrics_{user.user_id}",
+                            help="These metrics will be aggregated per timepoint, then compared vs the baseline timepoint.",
+                        )
+                    with col_b:
+                        agg_mode = st.selectbox(
+                            "Aggregation",
+                            options=["median", "mean"],
+                            index=0,
+                            key=f"profile_timepoint_agg_{user.user_id}",
+                            help="How to combine multiple sessions within the same timepoint.",
+                        )
+
+                    try:
+                        # If the user unselects everything, fall back to the default metric list inside the DB helper.
+                        metrics_arg = selected_metrics if selected_metrics else None
+                        tp_table = db.get_hrv_timepoint_change_table(
+                            user.user_id,
+                            metrics=metrics_arg,
+                            agg=str(agg_mode),
+                            limit=500,
+                        )
+                    except Exception as exc:  # noqa: BLE001
+                        tp_table = pd.DataFrame()
+                        st.error(f"Unable to compute timepoint baseline/Δ table: {exc}")
+
+                    if tp_table.empty:
+                        st.info(
+                            "No timepoint summaries could be produced yet. "
+                            "Ensure your HRV measurements are saved with a timepoint label (T0…T21)."
+                        )
+                    else:
+                        st.dataframe(tp_table, use_container_width=True)
+                        st.caption(
+                            "Columns prefixed with `baseline_` are the baseline values (T0), and `delta_` columns are "
+                            "computed as (timepoint_value − baseline_value)."
+                        )
+
         # Additional performance & recovery visuals
         with st.expander("🏃 Performance & Recovery plots", expanded=False):
             # lnRMSSD is commonly used for daily recovery tracking; we plot it without
