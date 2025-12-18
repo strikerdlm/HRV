@@ -51,7 +51,11 @@ from export_utils import (
     ExportConfiguration,
     ExportScope,
     build_cohort_markdown_report,
+    build_cohort_longitudinal_delta_long_df,
+    build_cohort_longitudinal_markdown_report,
     build_markdown_report,
+    compare_cohort_longitudinal_groups,
+    compute_cohort_longitudinal_group_summary,
     compute_cohort_summary_stats,
 )
 from echarts_component import EChartsConfig, render_echarts
@@ -11232,6 +11236,168 @@ that predicts cognitive performance based on:
                             mime="text/markdown",
                             key="download_cohort_report_md",
                         )
+
+                with st.expander("🧪 Longitudinal cohort comparisons (T0–T21)", expanded=False):
+                    st.markdown(
+                        "Compare **within-subject changes** across groups using your saved longitudinal "
+                        "timepoint tags (T0…T21). This computes each subject’s Δ vs their own baseline, "
+                        "then compares Δ distributions between groups per timepoint and metric."
+                    )
+
+                    if not selected_user_ids:
+                        st.info("Select at least one active user above to enable longitudinal comparisons.")
+                    else:
+                        control_ids = st.multiselect(
+                            "Control group users",
+                            options=selected_user_ids,
+                            default=[],
+                            format_func=lambda uid: user_label_map.get(uid, uid),
+                            key="cohort_longitudinal_control_users",
+                        )
+                        intervention_ids = st.multiselect(
+                            "Intervention group users",
+                            options=selected_user_ids,
+                            default=[],
+                            format_func=lambda uid: user_label_map.get(uid, uid),
+                            key="cohort_longitudinal_intervention_users",
+                        )
+                        metrics_default = ["rmssd_ms", "sdnn_ms", "mean_hr_bpm", "hf_power_ms2", "lf_hf_ratio"]
+                        selected_metrics = st.multiselect(
+                            "HRV metrics to compare (Δ vs baseline)",
+                            options=metrics_default,
+                            default=["rmssd_ms", "sdnn_ms"],
+                            key="cohort_longitudinal_metrics",
+                        )
+                        agg_mode = st.selectbox(
+                            "Within-timepoint aggregation (per subject)",
+                            options=["median", "mean"],
+                            index=0,
+                            key="cohort_longitudinal_agg",
+                            help="If a subject has multiple HRV sessions under the same timepoint label, "
+                            "this determines how the timepoint value is summarized before Δ is computed.",
+                        )
+                        run_longitudinal = st.button(
+                            "Compute longitudinal group comparisons",
+                            key="cohort_longitudinal_run",
+                            type="primary",
+                        )
+                        if run_longitudinal:
+                            overlap = set(control_ids).intersection(set(intervention_ids))
+                            if overlap:
+                                st.error(
+                                    "Control and intervention selections overlap. "
+                                    "Remove overlapping users and retry."
+                                )
+                            elif not control_ids or not intervention_ids:
+                                st.error("Select at least one user in each group to continue.")
+                            elif not selected_metrics:
+                                st.error("Select at least one metric to compare.")
+                            else:
+                                db = get_database()
+                                user_tables: Dict[str, pd.DataFrame] = {}
+                                user_group_map: Dict[str, str] = {}
+                                for uid in list(control_ids) + list(intervention_ids):
+                                    if uid in user_tables:
+                                        continue
+                                    try:
+                                        tp_table = db.get_hrv_timepoint_change_table(
+                                            uid,
+                                            metrics=selected_metrics,
+                                            agg=str(agg_mode),
+                                            limit=500,
+                                        )
+                                    except Exception as exc:
+                                        st.warning(f"Unable to load timepoint table for {user_label_map.get(uid, uid)}: {exc}")
+                                        tp_table = pd.DataFrame()
+                                    user_tables[uid] = tp_table
+                                    user_group_map[uid] = (
+                                        "Control" if uid in control_ids else "Intervention"
+                                    )
+
+                                cohort_long_df = build_cohort_longitudinal_delta_long_df(
+                                    user_timepoint_tables=user_tables,
+                                    user_group_map=user_group_map,
+                                    metrics=selected_metrics,
+                                )
+                                if cohort_long_df.empty:
+                                    st.warning(
+                                        "No longitudinal cohort deltas could be assembled. "
+                                        "Ensure each subject has timepoint-tagged HRV measurements (T0…T21)."
+                                    )
+                                else:
+                                    group_summary_df = compute_cohort_longitudinal_group_summary(
+                                        cohort_long_df,
+                                        agg="mean",
+                                    )
+                                    comparisons_df = compare_cohort_longitudinal_groups(
+                                        cohort_long_df,
+                                        group_a="Control",
+                                        group_b="Intervention",
+                                        alpha=0.05,
+                                        apply_fdr=True,
+                                    )
+                                    st.session_state["cohort_longitudinal_df"] = cohort_long_df
+                                    st.session_state["cohort_longitudinal_summary_df"] = group_summary_df
+                                    st.session_state["cohort_longitudinal_comparisons_df"] = comparisons_df
+                                    st.success("Longitudinal cohort comparisons computed.")
+
+                        cohort_long_df = st.session_state.get("cohort_longitudinal_df")
+                        group_summary_df = st.session_state.get("cohort_longitudinal_summary_df")
+                        comparisons_df = st.session_state.get("cohort_longitudinal_comparisons_df")
+
+                        if isinstance(group_summary_df, pd.DataFrame) and not group_summary_df.empty:
+                            st.markdown("##### Group × timepoint delta summary (preview)")
+                            st.dataframe(group_summary_df, use_container_width=True)
+                            csv_bytes = group_summary_df.to_csv(index=False).encode("utf-8")
+                            st.download_button(
+                                "Download longitudinal group summary (CSV)",
+                                data=csv_bytes,
+                                file_name=f"cohort_longitudinal_summary_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                                mime="text/csv",
+                                key="download_cohort_longitudinal_summary_csv",
+                            )
+
+                        if isinstance(comparisons_df, pd.DataFrame) and not comparisons_df.empty:
+                            st.markdown("##### Between-group comparisons (preview)")
+                            st.dataframe(comparisons_df, use_container_width=True)
+                            csv_bytes = comparisons_df.to_csv(index=False).encode("utf-8")
+                            st.download_button(
+                                "Download longitudinal comparisons (CSV)",
+                                data=csv_bytes,
+                                file_name=f"cohort_longitudinal_comparisons_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                                mime="text/csv",
+                                key="download_cohort_longitudinal_comparisons_csv",
+                            )
+
+                        if isinstance(cohort_long_df, pd.DataFrame) and not cohort_long_df.empty:
+                            try:
+                                longitudinal_md = build_cohort_longitudinal_markdown_report(
+                                    cohort_long_df=cohort_long_df,
+                                    group_summary_df=(
+                                        group_summary_df
+                                        if isinstance(group_summary_df, pd.DataFrame)
+                                        else pd.DataFrame()
+                                    ),
+                                    comparisons_df=(
+                                        comparisons_df
+                                        if isinstance(comparisons_df, pd.DataFrame)
+                                        else pd.DataFrame()
+                                    ),
+                                    group_a="Control",
+                                    group_b="Intervention",
+                                    additional_notes=cohort_notes,
+                                )
+                            except Exception as exc:
+                                st.warning(f"Longitudinal cohort markdown export failed: {exc}")
+                            else:
+                                st.text_area("Longitudinal cohort report preview", longitudinal_md, height=280)
+                                st.download_button(
+                                    "Download longitudinal cohort report (Markdown)",
+                                    data=longitudinal_md.encode("utf-8"),
+                                    file_name=f"cohort_longitudinal_report_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.md",
+                                    mime="text/markdown",
+                                    key="download_cohort_longitudinal_report_md",
+                                )
 
         st.divider()
         st.subheader("Export report")
