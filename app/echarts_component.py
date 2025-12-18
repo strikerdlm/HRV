@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 import textwrap
 import uuid
 from dataclasses import dataclass
@@ -33,35 +32,6 @@ def _read_local_echarts(local_path: Optional[Path]) -> Optional[str]:
 		return None
 	try:
 		return Path(local_path).read_text(encoding="utf-8")
-	except Exception:
-		return None
-
-
-def _try_prepare_streamlit_static_asset(*, source_path: Path, target_name: str) -> Optional[str]:
-	"""Try to make a local JS asset available via Streamlit's /static route.
-
-	Streamlit supports serving files placed under `.streamlit/static/` at runtime.
-	We use this to avoid inlining large JS bundles into every iframe (which can lead
-	to blank charts if the HTML payload is too large or if external CDNs are blocked).
-
-	Args:
-		source_path: Existing local file path (e.g., node_modules/echarts/dist/echarts.min.js).
-		target_name: Output filename under `.streamlit/static/` (e.g., "echarts.min.js").
-
-	Returns:
-		A URL path like "/static/echarts.min.js" if successful, otherwise None.
-	"""
-	if not source_path.exists() or not source_path.is_file():
-		return None
-
-	static_dir = _PROJECT_ROOT / ".streamlit" / "static"
-	target_path = static_dir / target_name
-	try:
-		static_dir.mkdir(parents=True, exist_ok=True)
-		# Copy only if missing or size differs to keep reruns cheap.
-		if (not target_path.exists()) or (target_path.stat().st_size != source_path.stat().st_size):
-			shutil.copyfile(source_path, target_path)
-		return f"/static/{target_name}"
 	except Exception:
 		return None
 
@@ -108,20 +78,16 @@ def render_echarts(
 	option_json = json.dumps(option, separators=(",", ":"), ensure_ascii=False)
 
 	cdn = cfg.cdn_url or "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
-	static_url: Optional[str] = None
-	if cfg.local_echarts_path is not None:
-		static_url = _try_prepare_streamlit_static_asset(
-			source_path=Path(cfg.local_echarts_path),
-			target_name="echarts.min.js",
-		)
-	echarts_lib_source = static_url or cdn
-	static_candidate = "/static/echarts.min.js"
-	fallback_sources: list[str] = []
-	if echarts_lib_source != cdn:
-		fallback_sources.append(cdn)
-	if echarts_lib_source != static_candidate:
-		fallback_sources.append(static_candidate)
-	script_loader = f'<script src="{echarts_lib_source}"></script>'
+	local_js = _read_local_echarts(cfg.local_echarts_path)
+	# Prefer local inline bundle for maximum reliability (offline / blocked CDNs).
+	if local_js:
+		script_loader = f"<script>{local_js}</script>"
+		echarts_lib_source = "inline"
+		fallback_sources: list[str] = [cdn]
+	else:
+		script_loader = f'<script src="{cdn}"></script>'
+		echarts_lib_source = cdn
+		fallback_sources = []
 
 	theme_snippet = f'"{theme}"' if theme else "null"
 
