@@ -1934,20 +1934,29 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         st.info("Garmin import module unavailable. Install fitparse and rerun.")
         return
 
+    # Load window control (how many days to pull from DB for stats/trends)
+    history_limit = st.selectbox(
+        "History window (days)",
+        options=[30, 90, 180, 365, 730, 1095, 1825],
+        index=3,  # 365
+        key=f"garmin_history_limit_{user.user_id}",
+        help="Loads the most recent N days stored in your profile database.",
+    )
+
     @st.cache_data(ttl=30, max_entries=64, show_spinner=False)
-    def _load_history(uid: str) -> pd.DataFrame:
+    def _load_history(uid: str, limit: int) -> pd.DataFrame:
         db = get_database()
         if hasattr(db, "get_garmin_daily_dataframe"):
-            return db.get_garmin_daily_dataframe(uid, limit=180)  # type: ignore[attr-defined]
+            return db.get_garmin_daily_dataframe(uid, limit=int(limit))  # type: ignore[attr-defined]
         if hasattr(db, "get_garmin_daily_metrics"):
-            metrics = db.get_garmin_daily_metrics(uid, limit=180)  # type: ignore[attr-defined]
+            metrics = db.get_garmin_daily_metrics(uid, limit=int(limit))  # type: ignore[attr-defined]
             if not metrics:
                 return pd.DataFrame()
             return pd.DataFrame([m.to_dict() for m in metrics])
         return pd.DataFrame()
 
     try:
-        df = _load_history(user.user_id)
+        df = _load_history(user.user_id, int(history_limit))
     except Exception as exc:  # noqa: BLE001
         st.error(f"Unable to load Garmin history: {exc}")
         return
@@ -1960,11 +1969,12 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         return
 
     if df.empty:
-        st.info("No Garmin wellness metrics stored yet. Upload a FIT/ZIP file in the Data tab.")
+        st.info("No Garmin wellness metrics stored yet. Upload a FIT/ZIP/JSON file in the Data tab.")
         return
 
     if "metric_date" in df.columns:
-        df["metric_date"] = pd.to_datetime(df["metric_date"])
+        df["metric_date"] = pd.to_datetime(df["metric_date"], errors="coerce")
+        df = df.dropna(subset=["metric_date"])
         df.sort_values("metric_date", ascending=False, inplace=True)
 
     latest = df.iloc[0]
@@ -1977,7 +1987,14 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
     )
     
     # Show latest day values prominently
-    st.markdown(f"### 📅 Latest Day: {latest.get('metric_date', '—')}")
+    latest_day_val = latest.get("metric_date")
+    latest_day_label = "—"
+    if latest_day_val is not None and not pd.isna(latest_day_val):
+        try:
+            latest_day_label = pd.to_datetime(latest_day_val).date().isoformat()
+        except Exception:
+            latest_day_label = str(latest_day_val)
+    st.markdown(f"### 📅 Latest Day: {latest_day_label}")
     col_a, col_b, col_c, col_d, col_e = st.columns(5)
     with col_a:
         steps_val = _safe_float(latest.get("steps"))
@@ -2119,21 +2136,110 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
     st.markdown("---")
     st.markdown("### 📊 Statistical Analysis")
     
-    # Show trends if we have multiple days
-    if len(df) > 1:
-        trend_cols = ["steps", "distance_km", "calories_kcal", "sleep_score", "stress_score", "body_battery_avg"]
-        available_trend = [c for c in trend_cols if c in df.columns and df[c].notna().sum() > 1]
-        
-        if available_trend:
-            st.markdown("#### Trends Over Time")
-            chart_data = df[["metric_date"] + available_trend].dropna(how="all", subset=available_trend)
-            if not chart_data.empty:
-                chart_data = chart_data.set_index("metric_date")
-                _render_profile_line_chart(
-                    chart_data,
-                    title="Daily Wellness Trends",
-                    y_axis_label="Value",
-                )
+    # Build a time-indexed view for charts (ascending time)
+    df_ts = df.copy()
+    if "metric_date" in df_ts.columns:
+        df_ts = df_ts.sort_values("metric_date", ascending=True).set_index("metric_date")
+
+    # Summary statistics (computed from DB history; includes all supported Garmin fields)
+    numeric_cols = [
+        c
+        for c in df.columns
+        if c
+        not in {
+            "entry_id",
+            "user_id",
+            "metric_date",
+            "source",
+            "created_at",
+        }
+        and pd.api.types.is_numeric_dtype(df[c])
+    ]
+    if numeric_cols:
+        stats_rows: list[dict[str, Any]] = []
+        for col in numeric_cols:
+            series = pd.to_numeric(df[col], errors="coerce")
+            non_null = series.dropna()
+            latest_non_null: Any = None
+            if not non_null.empty:
+                # df is sorted latest-first; pick first non-null for "latest"
+                latest_non_null = non_null.iloc[0]
+            stats_rows.append(
+                {
+                    "Metric": col,
+                    "N": int(series.notna().sum()),
+                    "Mean": float(series.mean()) if series.notna().any() else None,
+                    "Median": float(series.median()) if series.notna().any() else None,
+                    "Min": float(series.min()) if series.notna().any() else None,
+                    "Max": float(series.max()) if series.notna().any() else None,
+                    "Latest": latest_non_null,
+                }
+            )
+        stats_df = pd.DataFrame(stats_rows)
+        if not stats_df.empty:
+            st.markdown("#### Summary statistics (stored Garmin daily metrics)")
+            st.dataframe(stats_df, use_container_width=True, hide_index=True)
+
+    # Trends (grouped so all Garmin fields can be visualized)
+    if len(df_ts) > 1 and isinstance(df_ts.index, pd.DatetimeIndex):
+        st.markdown("#### Trends Over Time")
+        groups: list[tuple[str, dict[str, str]]] = [
+            (
+                "🏃 Activity & Movement",
+                {
+                    "steps": "Steps",
+                    "distance_km": "Distance (km)",
+                    "calories_kcal": "Calories (kcal)",
+                },
+            ),
+            (
+                "❤️ Heart Rate & Stress",
+                {
+                    "avg_hr_bpm": "Avg HR (bpm)",
+                    "resting_hr_bpm": "Resting HR (bpm)",
+                    "stress_score": "Stress score",
+                },
+            ),
+            (
+                "😴 Sleep & Recovery",
+                {
+                    "sleep_score": "Sleep score",
+                    "sleep_efficiency": "Sleep efficiency (%)",
+                    "sleep_duration_hours": "Sleep duration (h)",
+                },
+            ),
+            (
+                "🫁 Respiration & SpO₂",
+                {
+                    "avg_spo2": "SpO₂ (%)",
+                    "avg_respiration_awake": "Resp awake (rpm)",
+                    "avg_respiration_sleep": "Resp sleep (rpm)",
+                },
+            ),
+            (
+                "🔋 Body Battery",
+                {
+                    "body_battery_avg": "Body battery avg",
+                    "body_battery_charge": "Body battery charge (+)",
+                    "body_battery_drain": "Body battery drain (–)",
+                },
+            ),
+        ]
+        rendered_any = False
+        for title, rename_map in groups:
+            cols = [c for c in rename_map.keys() if c in df_ts.columns and df_ts[c].notna().sum() > 1]
+            if not cols:
+                continue
+            rendered_any = True
+            st.markdown(f"##### {title}")
+            plot_df = df_ts[cols].copy().rename(columns=rename_map)
+            _render_profile_line_chart(
+                plot_df,
+                title=f"{title} trends",
+                y_axis_label="value",
+            )
+        if not rendered_any:
+            st.caption("Not enough repeated daily values to render trend charts yet.")
     
     with st.expander("📋 View all daily metrics", expanded=False):
         preview_cols = [
@@ -2155,11 +2261,12 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
             "body_battery_drain",
         ]
         existing_cols = [c for c in preview_cols if c in df.columns]
-        display_df = df[existing_cols].head(10).copy()
+        display_df = df[existing_cols].copy()
         
         # Format for better display
         if "metric_date" in display_df.columns:
             display_df["metric_date"] = display_df["metric_date"].dt.strftime("%Y-%m-%d")
+        st.caption(f"Showing {len(display_df)} day(s) loaded from the database.")
         
         st.dataframe(
             display_df.reset_index(drop=True),
