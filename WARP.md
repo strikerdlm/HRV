@@ -65,6 +65,17 @@ Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations c
 
 ### Current Sprint (December 2025)
 
+#### Phase 0: Plot Governance + Fatigue Safety Management (Priority: CRITICAL)
+- [ ] **Enforce Plot Policy Across the App** (ECharts-first; Plotly fallback for edge cases/exports):
+  - Standardize axis labels (variable + units), legends, tooltips, and consistent theme.
+  - Add a short **caption paragraph below every plot** describing axes/variables and preprocessing.
+  - Provide **publication-grade exports** for every plot (SVG/PDF/PNG high-DPI/HTML + data/spec export).
+  - Keep `requirements.txt`, `README.md`, `docs/Manual.md`, and `CHANGELOG.md` updated for every new plot/feature.
+- [ ] **SAFTE Tab Upgrade: ICAO FRMS + USAF Crew Rest Compliance** (research-first):
+  - Implement an FRMS dashboard aligned with ICAO Doc 9966 (predictive/proactive/reactive processes, SPIs, risk matrix).
+  - Implement USAF crew rest / fatigue management checks per AFMAN 11-202V3 (12h non-duty crew rest, ≥8h uninterrupted sleep opportunity; controlled rest guidance).
+  - Add a modern, cockpit-grade ECharts dashboard and publication exports + APA references in the in-app References tab and `docs/Manual.md`.
+
 #### Phase 1: UI Visualization (Priority: HIGH)
 - [x] **Clinical Profile UI**: Render all clinical_profile.py features in user_profile_tab.py
   - Body composition entry form with missing data indicators
