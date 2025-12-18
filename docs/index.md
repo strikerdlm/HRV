@@ -1,23 +1,20 @@
 ---
 layout: default
-title: HRV Analysis
+title: Mission Control - Flight Surgeon
 ---
 
-# Comprehensive Heart Rate Variability (HRV) Analysis
+# Mission Control - Flight Surgeon
 
 ## About
 
-This project provides a comprehensive Jupyter notebook for analyzing Heart Rate Variability (HRV) using the best methods available in Python. Developed by Diego Malpica, MD for aerospace medicine research, this tool helps researchers and clinicians work with physiological data collected during space analog simulations and other research scenarios.
+Mission Control - Flight Surgeon is a research-grade **Streamlit** application for Heart Rate Variability (HRV) analysis with integrated **circadian simulation**, **fatigue/FRMS tooling (SAFTE)**, and **space weather intelligence** (NOAA SWPC + NASA DONKI). It is designed for clinicians, researchers, and aerospace medicine use cases where outputs must be transparent, reproducible, and exportable.
 
 ## Key Features
 
-- **Time Domain Metrics**: SDNN, RMSSD, pNN50, and other statistical measures
-- **Frequency Domain Metrics**: VLF, LF, HF powers, LF/HF ratio using power spectral density
-- **Nonlinear Metrics**: Poincaré plot, DFA (Detrended Fluctuation Analysis), entropy measures
-- **Autonomic Nervous System Analysis**: Parasympathetic and sympathetic indices
-- **Comprehensive Visualization**: RR interval time series, power spectral density, Poincaré plots
-- **Statistical Analysis**: Summary statistics, correlations, and group comparisons
-- **Export Capabilities**: Save results to CSV for further analysis
+- **Core HRV**: time/frequency/nonlinear metrics with QC and windowed analysis
+- **Clinical + aerospace modules**: circadian physiology, fatigue/FRMS (SAFTE), exploration medical record tooling
+- **Space weather**: NOAA SWPC feeds + NASA DONKI events with offline-friendly caching
+- **Publication exports**: Markdown/CSV/JSON/LaTeX plus high-quality plot exports (ECharts-first)
 
 ## Getting Started
 
@@ -25,35 +22,29 @@ This project provides a comprehensive Jupyter notebook for analyzing Heart Rate 
 
 ```bash
 # Clone the repository
-git clone https://github.com/strikerdlm/hrv-analysis.git
+git clone https://github.com/strikerdlm/HRV.git
 
 # Navigate to the project directory
-cd hrv-analysis
+cd HRV
 
 # Install dependencies
-pip install numpy pandas scipy matplotlib seaborn
-pip install hrvanalysis  # Optional but recommended
+python3 -m pip install -r requirements.txt
 ```
 
 ### Usage
 
-Open the Jupyter notebook:
+Run the Streamlit application:
 
 ```bash
-jupyter notebook scripts/HRV_Comprehensive_Analysis.ipynb
+streamlit run app/app.py
 ```
 
-The notebook includes:
-1. Data loading functions for CSV files
-2. Comprehensive HRV analysis functions
-3. Visualization tools
-4. Statistical summaries
-5. Export capabilities
+If you use conda, activate the project environment first (see the root README for the current environment name and setup steps).
 
 ## Documentation
 
-- [Installation Guide](Installation_Guide.md)
-- [User Manual](User_Manual.md)
+- **Quick start + highlights**: see the root [`README.md`](../README.md)
+- **Full manual**: [`Manual.md`](Manual.md)
 - [Scientific Discussion](Scientific_Discussion_Parasympathetic_Analysis.md)
 
 ## License
