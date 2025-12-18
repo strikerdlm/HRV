@@ -140,7 +140,7 @@ The app is fully navigable **without uploading HRV data**. These features work i
 | ------------------------- | ---------------------------------------------------------------------------- |
 | 🌍**Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing |
 | ☀️**Circadian**   | Simulate circadian rhythms with different light schedules                    |
-| 😴**SAFTE/Fatigue** | Model how sleep debt affects cognitive performance                           |
+| 😴**SAFTE/Fatigue** | Model fatigue + cognitive effectiveness, view FRMS-style dashboard, check USAF crew rest |
 | 🫀**Biofeedback**   | Try the paced breathing demo                                                 |
 
 All other tabs show **example data** and **reference values** to help you understand what's available before uploading your own recordings.
@@ -165,7 +165,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | **Space Weather Correlation**          | NOAA Kp, Dst, F10.7, solar wind, and X-ray flux correlations using exact timestamp synchronization (no nearest-neighbor drift) with configurable lags                                            |
 | **Space Weather Impact Predictions**   | Exact arrival times for photons, SEPs, solar wind plasma, with Polar H10 timing recommendations                                                                                                    |
 | **NASA DONKI Integration**             | Flares, CMEs, geomagnetic storms, radiation belt enhancements                                                                                                                                      |
-| **Fatigue Prediction**                 | SAFTE biomathematical model for cognitive performance                                                                                                                                              |
+| **Fatigue Prediction**                 | SAFTE biomathematical model for cognitive effectiveness + FRMS-style (ICAO-aligned) dashboard + USAF crew rest checks + publication-grade plot exports                                               |
 | **HRV Biofeedback**                    | Real-time coherence training with paced breathing                                                                                                                                                  |
 | **CPU Performance Mode**               | Adjustable presets (Fast/Balanced/Quality) with smart downsampling                                                                                                                                 |
 | **GPU Acceleration**                   | NVIDIA CUDA support (RTX 5070/4090/3080) for heavy computations                                                                                                                                    |
@@ -207,6 +207,8 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE  | Exploration Medical Analytics dashboards     | Complete (radiation/EVA/stress cards in Clinical tab) |
 | ✅ DONE  | Longitudinal timepoints (T0–T21)             | Complete (tag HRV + assessments to study timepoints)  |
 | ✅ DONE  | Per-user HRV cache + GPT export persistence  | Complete (SQLite-backed reusable payloads + reports)  |
+| ✅ DONE  | SAFTE tab FRMS dashboard + USAF crew rest    | Complete (ICAO-aligned FRMS dashboard + AFMAN 11-202V3 checks + plot exports) |
+| 🚧 IN PROGRESS | Plot governance enforcement across all tabs | Standardize captions/labels/exports for every plot (ECharts-first; Plotly fallback) |
 
 **Best next task:** Baseline/change analytics using tagged T0–T21 timepoints.
 
