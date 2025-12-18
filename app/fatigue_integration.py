@@ -720,8 +720,19 @@ def _clamp_quality(value: float) -> float:
     return float(max(0.3, min(1.0, value)))
 
 
-def _build_sleep_from_wrist_row(row: pd.Series) -> SleepScheduleInput:
-    """Construct sleep schedule from wrist monitoring metrics."""
+def _build_sleep_from_wrist_row(
+    row: pd.Series,
+    *,
+    bedtime_hour: int,
+    waketime_hour: int,
+) -> SleepScheduleInput:
+    """Construct sleep schedule from wrist monitoring metrics.
+
+    Args:
+        row: Latest wrist monitoring row (Garmin daily metrics).
+        bedtime_hour: Default bedtime hour (0..23) used when wrist data lacks a time window.
+        waketime_hour: Default waketime hour (0..23) used when wrist data lacks a time window.
+    """
     duration = float(row.get("sleep_duration_hours", 0.0) or 0.0)
     quality_candidates: list[float] = []
     if pd.notna(row.get("sleep_score")):
@@ -733,14 +744,25 @@ def _build_sleep_from_wrist_row(row: pd.Series) -> SleepScheduleInput:
     return SleepScheduleInput(
         quality=quality,
         duration=duration if duration > 0 else 7.0,
-        bedtime=23,
-        waketime=7,
+        bedtime=int(bedtime_hour),
+        waketime=int(waketime_hour),
         total_sleep_debt=sleep_debt,
     )
 
 
-def _build_work_from_wrist_row(row: pd.Series) -> WorkScheduleInput:
-    """Construct work schedule using wrist stress/activity proxies."""
+def _build_work_from_wrist_row(
+    row: pd.Series,
+    *,
+    duty_start_hour: int,
+    duty_end_hour: int,
+) -> WorkScheduleInput:
+    """Construct work schedule using wrist stress/activity proxies.
+
+    Args:
+        row: Latest wrist monitoring row (Garmin daily metrics).
+        duty_start_hour: Default duty start hour (0..23).
+        duty_end_hour: Default duty end hour (0..23).
+    """
     cognitive_load = 1
     try:
         stress_val = float(row.get("stress_score"))
@@ -754,17 +776,31 @@ def _build_work_from_wrist_row(row: pd.Series) -> WorkScheduleInput:
             cognitive_load = 3
     except Exception:
         cognitive_load = 1
+    if int(duty_start_hour) <= int(duty_end_hour):
+        work_hours = int(duty_end_hour) - int(duty_start_hour)
+    else:
+        work_hours = (24 - int(duty_start_hour)) + int(duty_end_hour)
     return WorkScheduleInput(
         has_work=True,
-        work_start=9,
-        work_end=17,
-        work_hours=8,
+        work_start=int(duty_start_hour),
+        work_end=int(duty_end_hour),
+        work_hours=int(max(0, min(16, work_hours))),
         cognitive_load=cognitive_load,
     )
 
 
-def _build_sleep_from_clinical(scales: Any) -> SleepScheduleInput:
-    """Construct sleep schedule from clinical subjective assessment."""
+def _build_sleep_from_clinical(
+    scales: Any,
+    *,
+    bedtime_hour: int,
+    waketime_hour: int,
+    typical_sleep_duration_hours: float,
+) -> SleepScheduleInput:
+    """Construct sleep schedule from clinical subjective assessment.
+
+    Clinical scales do not encode bedtime/waketime, so these are taken from
+    the stored fatigue profile defaults (or app defaults).
+    """
     psqi = getattr(scales, "pittsburgh_sleep_quality_index", None)
     if psqi is None:
         quality = 0.8
@@ -785,9 +821,9 @@ def _build_sleep_from_clinical(scales: Any) -> SleepScheduleInput:
 
     return SleepScheduleInput(
         quality=quality,
-        duration=7.0,
-        bedtime=23,
-        waketime=7,
+        duration=float(typical_sleep_duration_hours),
+        bedtime=int(bedtime_hour),
+        waketime=int(waketime_hour),
         total_sleep_debt=sleep_debt,
     )
 
@@ -817,6 +853,30 @@ def run_assessment_fatigue_prediction(
     source = "default"
 
     db = get_database() if get_database is not None else None
+    fatigue_defaults: Dict[str, Any] = {}
+
+    if db is not None and user_id and hasattr(db, "get_fatigue_profile_settings"):
+        try:
+            prof = db.get_fatigue_profile_settings(user_id)  # type: ignore[attr-defined]
+            if prof is not None:
+                fatigue_defaults = {
+                    "bedtime_hour": int(prof.typical_bedtime_hour),
+                    "waketime_hour": int(prof.typical_waketime_hour),
+                    "duty_start_hour": int(prof.duty_start_hour),
+                    "duty_end_hour": int(prof.duty_end_hour),
+                    "typical_sleep_duration_hours": float(prof.typical_sleep_duration_hours),
+                    "typical_sleep_quality": float(prof.typical_sleep_quality),
+                    "include_weekends": bool(prof.include_weekends),
+                }
+        except Exception:
+            fatigue_defaults = {}
+
+    bedtime_hour = int(fatigue_defaults.get("bedtime_hour", 23))
+    waketime_hour = int(fatigue_defaults.get("waketime_hour", 7))
+    duty_start_hour = int(fatigue_defaults.get("duty_start_hour", 9))
+    duty_end_hour = int(fatigue_defaults.get("duty_end_hour", 17))
+    typical_sleep_duration_hours = float(fatigue_defaults.get("typical_sleep_duration_hours", 7.0))
+    typical_sleep_quality = float(fatigue_defaults.get("typical_sleep_quality", 0.8))
 
     # 1) Wrist monitoring (assessment tab → wrist monitoring history)
     if db is not None and user_id:
@@ -825,8 +885,16 @@ def run_assessment_fatigue_prediction(
             if wrist_df is not None and not wrist_df.empty:
                 wrist_df = wrist_df.sort_values("metric_date", ascending=False)
                 latest = wrist_df.iloc[0]
-                sleep_schedule = _build_sleep_from_wrist_row(latest)
-                work_schedule = _build_work_from_wrist_row(latest)
+                sleep_schedule = _build_sleep_from_wrist_row(
+                    latest,
+                    bedtime_hour=bedtime_hour,
+                    waketime_hour=waketime_hour,
+                )
+                work_schedule = _build_work_from_wrist_row(
+                    latest,
+                    duty_start_hour=duty_start_hour,
+                    duty_end_hour=duty_end_hour,
+                )
                 source = "wrist_monitoring"
         except Exception:
             wrist_df = None
@@ -836,8 +904,23 @@ def run_assessment_fatigue_prediction(
         try:
             scales_history = db.get_clinical_scales_history(user_id, limit=1)
             if scales_history:
-                sleep_schedule = _build_sleep_from_clinical(scales_history[0])
-                work_schedule = WorkScheduleInput()
+                sleep_schedule = _build_sleep_from_clinical(
+                    scales_history[0],
+                    bedtime_hour=bedtime_hour,
+                    waketime_hour=waketime_hour,
+                    typical_sleep_duration_hours=typical_sleep_duration_hours,
+                )
+                if duty_start_hour <= duty_end_hour:
+                    duty_hours = duty_end_hour - duty_start_hour
+                else:
+                    duty_hours = (24 - duty_start_hour) + duty_end_hour
+                work_schedule = WorkScheduleInput(
+                    has_work=True,
+                    work_start=duty_start_hour,
+                    work_end=duty_end_hour,
+                    work_hours=int(max(0, min(16, duty_hours))),
+                    cognitive_load=1,
+                )
                 source = "clinical_assessment"
         except Exception:
             pass
@@ -863,9 +946,26 @@ def run_assessment_fatigue_prediction(
 
     # 4) Default fallback
     if sleep_schedule is None:
-        sleep_schedule = SleepScheduleInput()
-        work_schedule = WorkScheduleInput()
-        source = "default"
+        sleep_debt = max(0.0, 7.5 - typical_sleep_duration_hours)
+        sleep_schedule = SleepScheduleInput(
+            quality=_clamp_quality(typical_sleep_quality),
+            duration=float(typical_sleep_duration_hours),
+            bedtime=int(bedtime_hour),
+            waketime=int(waketime_hour),
+            total_sleep_debt=float(sleep_debt),
+        )
+        if duty_start_hour <= duty_end_hour:
+            duty_hours = duty_end_hour - duty_start_hour
+        else:
+            duty_hours = (24 - duty_start_hour) + duty_end_hour
+        work_schedule = WorkScheduleInput(
+            has_work=True,
+            work_start=int(duty_start_hour),
+            work_end=int(duty_end_hour),
+            work_hours=int(max(0, min(16, duty_hours))),
+            cognitive_load=1,
+        )
+        source = "profile_defaults" if fatigue_defaults else "default"
 
     result = run_integrated_fatigue_analysis(
         garmin_sleep_df=None,

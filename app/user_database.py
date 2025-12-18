@@ -46,7 +46,7 @@ _LOGGER = get_logger(__name__) if get_logger is not None else logging.getLogger(
 
 # Database configuration
 DEFAULT_DB_NAME = "hrv_users.db"
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 # Thread-local storage for connection reuse
 _thread_local = threading.local()
@@ -517,6 +517,32 @@ class GarminDailyMetrics:
 
 
 @dataclass
+class FatigueProfileSettings:
+    """Persisted default inputs for SAFTE/FRMS workflows (per user).
+
+    This stores the *typical* sleep window and duty window an operator wants to
+    reuse across SAFTE/FRMS runs. Objective wearable data (e.g., Garmin daily
+    sleep) can still override these defaults when explicitly selected in the UI.
+    """
+
+    user_id: str
+    typical_sleep_duration_hours: float = 7.5
+    typical_sleep_quality: float = 0.8  # 0..1
+    typical_bedtime_hour: int = 23  # 0..23 local
+    typical_waketime_hour: int = 7  # 0..23 local
+
+    duty_start_hour: int = 9  # 0..23 local
+    duty_end_hour: int = 17  # 0..23 local (may be < start for overnight)
+    include_weekends: bool = False
+
+    updated_at: Optional[str] = None
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary."""
+        return asdict(self)
+
+
+@dataclass
 class BodyCompositionMeasurement:
     """Body composition + extended anthropometrics for a user at a specific date."""
 
@@ -957,6 +983,30 @@ class UserDatabase:
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_garmin_metrics_user_date
                 ON garmin_daily_metrics(user_id, metric_date)
             """)
+
+            # SAFTE/FRMS fatigue profile defaults (per user)
+            cursor.execute(
+                """
+                CREATE TABLE IF NOT EXISTS fatigue_profile_settings (
+                    user_id TEXT PRIMARY KEY,
+                    typical_sleep_duration_hours REAL,
+                    typical_sleep_quality REAL,
+                    typical_bedtime_hour INTEGER,
+                    typical_waketime_hour INTEGER,
+                    duty_start_hour INTEGER,
+                    duty_end_hour INTEGER,
+                    include_weekends INTEGER DEFAULT 0,
+                    updated_at TEXT NOT NULL,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+                """
+            )
+            cursor.execute(
+                """
+                CREATE INDEX IF NOT EXISTS idx_fatigue_profile_updated
+                ON fatigue_profile_settings(updated_at)
+                """
+            )
             
             # Body composition table (extended anthropometrics)
             cursor.execute("""
@@ -2502,6 +2552,116 @@ class UserDatabase:
         return df
 
     # -----------------------------------------------------------------------
+    # Fatigue profile defaults (SAFTE/FRMS)
+    # -----------------------------------------------------------------------
+
+    def upsert_fatigue_profile_settings(self, settings: FatigueProfileSettings) -> None:
+        """Upsert per-user fatigue profile defaults used by SAFTE/FRMS.
+
+        Args:
+            settings: FatigueProfileSettings to store.
+
+        Raises:
+            ValueError: If any field is out of range.
+        """
+        if not settings.user_id:
+            raise ValueError("settings.user_id must be provided")
+
+        if not (0.0 < float(settings.typical_sleep_duration_hours) <= 24.0):
+            raise ValueError("typical_sleep_duration_hours must be in (0, 24]")
+        if not (0.0 <= float(settings.typical_sleep_quality) <= 1.0):
+            raise ValueError("typical_sleep_quality must be in [0, 1]")
+        for name, hour in (
+            ("typical_bedtime_hour", settings.typical_bedtime_hour),
+            ("typical_waketime_hour", settings.typical_waketime_hour),
+            ("duty_start_hour", settings.duty_start_hour),
+            ("duty_end_hour", settings.duty_end_hour),
+        ):
+            if not (0 <= int(hour) <= 23):
+                raise ValueError(f"{name} must be in 0..23")
+
+        now = datetime.now(timezone.utc).isoformat()
+        updated_at = settings.updated_at or now
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                INSERT INTO fatigue_profile_settings (
+                    user_id,
+                    typical_sleep_duration_hours,
+                    typical_sleep_quality,
+                    typical_bedtime_hour,
+                    typical_waketime_hour,
+                    duty_start_hour,
+                    duty_end_hour,
+                    include_weekends,
+                    updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    typical_sleep_duration_hours = excluded.typical_sleep_duration_hours,
+                    typical_sleep_quality = excluded.typical_sleep_quality,
+                    typical_bedtime_hour = excluded.typical_bedtime_hour,
+                    typical_waketime_hour = excluded.typical_waketime_hour,
+                    duty_start_hour = excluded.duty_start_hour,
+                    duty_end_hour = excluded.duty_end_hour,
+                    include_weekends = excluded.include_weekends,
+                    updated_at = excluded.updated_at
+                """,
+                (
+                    settings.user_id,
+                    float(settings.typical_sleep_duration_hours),
+                    float(settings.typical_sleep_quality),
+                    int(settings.typical_bedtime_hour),
+                    int(settings.typical_waketime_hour),
+                    int(settings.duty_start_hour),
+                    int(settings.duty_end_hour),
+                    1 if bool(settings.include_weekends) else 0,
+                    str(updated_at),
+                ),
+            )
+
+    def get_fatigue_profile_settings(self, user_id: str) -> Optional[FatigueProfileSettings]:
+        """Return stored fatigue profile defaults for a user (if present)."""
+        if not user_id:
+            return None
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT *
+                FROM fatigue_profile_settings
+                WHERE user_id = ?
+                """,
+                (user_id,),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return None
+        return self._row_to_fatigue_profile_settings(row)
+
+    def _row_to_fatigue_profile_settings(self, row: sqlite3.Row) -> FatigueProfileSettings:
+        """Convert row to FatigueProfileSettings."""
+        return FatigueProfileSettings(
+            user_id=row["user_id"],
+            typical_sleep_duration_hours=float(row["typical_sleep_duration_hours"])
+            if row["typical_sleep_duration_hours"] is not None
+            else 7.5,
+            typical_sleep_quality=float(row["typical_sleep_quality"])
+            if row["typical_sleep_quality"] is not None
+            else 0.8,
+            typical_bedtime_hour=int(row["typical_bedtime_hour"])
+            if row["typical_bedtime_hour"] is not None
+            else 23,
+            typical_waketime_hour=int(row["typical_waketime_hour"])
+            if row["typical_waketime_hour"] is not None
+            else 7,
+            duty_start_hour=int(row["duty_start_hour"]) if row["duty_start_hour"] is not None else 9,
+            duty_end_hour=int(row["duty_end_hour"]) if row["duty_end_hour"] is not None else 17,
+            include_weekends=bool(int(row["include_weekends"] or 0)),
+            updated_at=row["updated_at"],
+        )
+
+    # -----------------------------------------------------------------------
     # Body Composition / Anthropometrics
     # -----------------------------------------------------------------------
 
@@ -3407,6 +3567,7 @@ __all__ = [
     "PolarCredentials",
     "VO2maxEntry",
     "GarminDailyMetrics",
+    "FatigueProfileSettings",
     "BodyCompositionMeasurement",
     "MeasurementTimepoint",
     "StudyGroup",
