@@ -12,6 +12,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Profile Tools RMSSD input default** (`app/user_profile_tab.py`): Corrected the RMSSD parameter widget default (previously incorrectly seeded from resting HR), improving out-of-the-box Profile Tools behavior.
+- **ECharts HTML export template** (`app/echarts_component.py`): Escaped CSS/JS braces inside the Streamlit HTML f-string to prevent a runtime `NameError: name 'height' is not defined` when rendering charts.
+
+### Tests
+- Added a regression test to ensure `render_echarts()` does not raise on CSS brace literals (`tests/test_echarts_component.py`).
 
 ### Documentation
 - Updated `README.md` and `docs/Manual.md` to document the new Operational Performance tool and add neurovisceral integration references.
