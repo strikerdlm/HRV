@@ -206,11 +206,12 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE  | Polar AccessLink automation                  | Complete (persistent OAuth tokens + VO2max history)   |
 | ✅ DONE  | Exploration Medical Analytics dashboards     | Complete (radiation/EVA/stress cards in Clinical tab) |
 | ✅ DONE  | Longitudinal timepoints (T0–T21)             | Complete (tag HRV + assessments to study timepoints)  |
+| ✅ DONE  | Baseline/Δ analytics (T0–T21)                | Complete (User Profile → HRV Measurement History baseline/Δ table) |
 | ✅ DONE  | Per-user HRV cache + GPT export persistence  | Complete (SQLite-backed reusable payloads + reports)  |
 | ✅ DONE  | SAFTE tab FRMS dashboard + USAF crew rest    | Complete (ICAO-aligned FRMS dashboard + AFMAN 11-202V3 checks + plot exports) |
 | 🚧 IN PROGRESS | Plot governance enforcement across all tabs | Standardize captions/labels/exports for every plot (ECharts-first; Plotly fallback) |
 
-**Best next task:** Baseline/change analytics using tagged T0–T21 timepoints.
+**Best next task:** Extend baseline/Δ analytics to cohort/group comparisons (control vs intervention) using the existing T0–T21 tags.
 
 ### Planned Features (Q1 2026)
 
