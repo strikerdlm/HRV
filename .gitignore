@@ -226,6 +226,9 @@ plots_output/
 # User data directory (contains sensitive physiological data)
 data/
 
+# Crew mission workspaces (contain PII + health metrics + databases)
+crew/
+
 # Garmin Connect exports (contain PII + health metrics)
 Garmin/
 
