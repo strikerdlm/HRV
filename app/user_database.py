@@ -48,6 +48,17 @@ _LOGGER = get_logger(__name__) if get_logger is not None else logging.getLogger(
 DEFAULT_DB_NAME = "hrv_users.db"
 SCHEMA_VERSION = 4
 
+# Crew / mission storage layout
+# NOTE: This project stores sensitive physiological data. We keep mission data
+# under the `crew/` folder (ignored by git) instead of cluttering the project
+# root with databases/backups.
+_CREW_DIR_NAME = "crew"
+_MISSION_DB_DIR_NAME = "db"
+_MISSION_SUBJECTS_DIR_NAME = "subjects"
+_DEFAULT_MISSIONS: tuple[str, ...] = ("Mission 1", "Mission 2")
+_ENV_ACTIVE_MISSION = "HRV_ACTIVE_MISSION"
+_MAX_LEGACY_BACKUPS_TO_COPY = 250
+
 # Thread-local storage for connection reuse
 _thread_local = threading.local()
 
@@ -204,14 +215,75 @@ def build_timepoint_change_table_from_hrv_df(
 
 def get_database_path() -> Path:
     """
-    Get the database path placed alongside the application for easy portability.
-    
-    The database now lives in the project directory (same folder as the app)
-    to simplify copying the app and data together across machines.
+    Return the active mission database path (crew/mission-scoped).
+
+    The active mission is selected by the Streamlit app and propagated via the
+    `HRV_ACTIVE_MISSION` environment variable. When unset/invalid, defaults to
+    "Mission 1".
+
+    Layout:
+      - crew/<Mission>/db/hrv_users.db
+      - crew/<Mission>/subjects/<user_id>/... (handled by user_data_manager)
+
+    For safety, legacy root DB files are **copied** (not moved) into Mission 1
+    on first use.
     """
     project_root = Path(__file__).resolve().parents[1]
     project_root.mkdir(parents=True, exist_ok=True)
-    return project_root / DEFAULT_DB_NAME
+
+    raw_mission = str(os.environ.get(_ENV_ACTIVE_MISSION, "")).strip()
+    mission = raw_mission if raw_mission else _DEFAULT_MISSIONS[0]
+    # Prevent path traversal / accidental nested paths.
+    if Path(mission).name != mission:
+        mission = _DEFAULT_MISSIONS[0]
+
+    mission_root = project_root / _CREW_DIR_NAME / mission
+    db_dir = mission_root / _MISSION_DB_DIR_NAME
+    subjects_dir = mission_root / _MISSION_SUBJECTS_DIR_NAME
+    db_dir.mkdir(parents=True, exist_ok=True)
+    subjects_dir.mkdir(parents=True, exist_ok=True)
+
+    db_path = db_dir / DEFAULT_DB_NAME
+
+    # One-time migration: copy legacy root DB + backups into Mission 1.
+    if mission == _DEFAULT_MISSIONS[0]:
+        legacy_db = project_root / DEFAULT_DB_NAME
+        if (not db_path.exists()) and legacy_db.exists():
+            try:
+                shutil.copy2(legacy_db, db_path)
+                _LOGGER.info("Copied legacy DB into crew storage: %s -> %s", legacy_db, db_path)
+            except OSError as exc:
+                if log_exception is not None:
+                    log_exception(_LOGGER, "Failed to copy legacy DB into crew storage", exc)
+                raise
+
+        # Copy any legacy backups so Mission 1 remains self-contained.
+        try:
+            backups = sorted(project_root.glob(f"{DEFAULT_DB_NAME}.bak_*"))
+        except OSError:
+            backups = []
+        copied = 0
+        for backup in backups:
+            if copied >= _MAX_LEGACY_BACKUPS_TO_COPY:
+                _LOGGER.warning(
+                    "Legacy backup copy capped at %d files; remaining backups stay in project root.",
+                    _MAX_LEGACY_BACKUPS_TO_COPY,
+                )
+                break
+            target = db_dir / backup.name
+            if target.exists():
+                continue
+            try:
+                shutil.copy2(backup, target)
+                copied += 1
+            except OSError as exc:
+                if log_exception is not None:
+                    log_exception(_LOGGER, "Failed to copy legacy DB backup into crew storage", exc)
+
+        if copied:
+            _LOGGER.info("Copied %d legacy DB backups into crew storage (%s).", copied, db_dir)
+
+    return db_path
 
 
 # ---------------------------------------------------------------------------
@@ -3456,35 +3528,37 @@ class UserDatabase:
 # Global database instance with Streamlit caching
 # ---------------------------------------------------------------------------
 
-_db_instance: Optional[UserDatabase] = None
+def _create_database_for_path(db_path: Path) -> UserDatabase:
+    """Create a database instance for a specific path."""
+    return UserDatabase(db_path=db_path)
 
 
-def _create_database_singleton() -> UserDatabase:
-    """Internal function to create the database singleton."""
-    return UserDatabase()
-
-
-# Try to use Streamlit's cache_resource for singleton pattern
+# Try to use Streamlit's cache_resource for a singleton-per-path pattern.
+# This prevents cross-mission contamination while keeping `get_database()`'s
+# public signature stable across the codebase.
 try:
     import streamlit as st
-    
+
     @st.cache_resource(show_spinner=False)
+    def _get_database_cached(db_path_str: str) -> UserDatabase:
+        return _create_database_for_path(Path(db_path_str))
+
     def get_database() -> UserDatabase:
-        """Get or create the global database instance (Streamlit-cached singleton).
-        
-        Uses @st.cache_resource for efficient singleton pattern that survives
-        Streamlit reruns without re-initialization overhead.
-        """
-        return _create_database_singleton()
+        """Get or create the database instance for the active mission."""
+        return _get_database_cached(str(get_database_path()))
 
 except ImportError:
     # Fallback for non-Streamlit contexts (testing, scripts)
+    _db_instances: dict[str, UserDatabase] = {}
+
     def get_database() -> UserDatabase:
-        """Get or create the global database instance (fallback singleton)."""
-        global _db_instance
-        if _db_instance is None:
-            _db_instance = UserDatabase()
-        return _db_instance
+        """Get or create the database instance for the active mission."""
+        db_path_str = str(get_database_path())
+        inst = _db_instances.get(db_path_str)
+        if inst is None:
+            inst = _create_database_for_path(Path(db_path_str))
+            _db_instances[db_path_str] = inst
+        return inst
 
 
 # ---------------------------------------------------------------------------
@@ -3500,13 +3574,13 @@ try:
     import streamlit as st
     
     @st.cache_data(ttl=30, max_entries=32, show_spinner=False)
-    def get_cached_user_list() -> List[Dict[str, Any]]:
+    def _get_cached_user_list_for_db(db_path_str: str) -> List[Dict[str, Any]]:
         """Get cached list of users (30-second TTL).
         
         Returns list of dicts instead of UserProfile objects for cacheability.
         Use this for dropdowns and selection UIs that don't need full objects.
         """
-        db = get_database()
+        db = _create_database_for_path(Path(db_path_str))
         users = db.list_users()
         # Convert to dicts for cache serialization
         return [
@@ -3520,16 +3594,24 @@ try:
         ]
     
     @st.cache_data(ttl=60, max_entries=128, show_spinner=False)
-    def get_cached_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+    def _get_cached_user_by_id_for_db(db_path_str: str, user_id: str) -> Optional[Dict[str, Any]]:
         """Get cached user profile by ID (60-second TTL).
         
         Returns dict instead of UserProfile for cacheability.
         """
-        db = get_database()
+        db = _create_database_for_path(Path(db_path_str))
         user = db.get_user(user_id)
         if user:
             return user.to_dict()
         return None
+
+    def get_cached_user_list() -> List[Dict[str, Any]]:
+        """Mission-scoped cached list of users (wrapper)."""
+        return _get_cached_user_list_for_db(str(get_database_path()))
+
+    def get_cached_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+        """Mission-scoped cached user profile (wrapper)."""
+        return _get_cached_user_by_id_for_db(str(get_database_path()), user_id)
 
 except ImportError:
     # Fallback for non-Streamlit contexts
@@ -3554,8 +3636,8 @@ except ImportError:
 def clear_user_cache() -> None:
     """Clear user-related caches after modifications (create, update, delete)."""
     try:
-        get_cached_user_list.clear()  # type: ignore[attr-defined]
-        get_cached_user_by_id.clear()  # type: ignore[attr-defined]
+        _get_cached_user_list_for_db.clear()  # type: ignore[attr-defined]
+        _get_cached_user_by_id_for_db.clear()  # type: ignore[attr-defined]
     except (AttributeError, NameError):
         pass  # Cache not available
 
