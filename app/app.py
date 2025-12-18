@@ -411,6 +411,24 @@ try:
 except ImportError:
     FATIGUE_AVAILABLE = False
 
+# FRMS / USAF crew rest helpers (used in SAFTE tab)
+try:
+    from frms import (
+        FRMSThresholds,
+        FRMSExposureMetrics,
+        FRMSRiskClassification,
+        USAFCrewRestAssessment,
+        USAFCrewRestPolicy,
+        assess_usaf_crew_rest,
+        classify_frms_risk,
+        compute_duty_mask,
+        compute_frms_exposure_metrics,
+        compute_wocl_mask,
+    )
+    FRMS_AVAILABLE = True
+except ImportError:
+    FRMS_AVAILABLE = False
+
 # Real-time HRV and Biofeedback
 try:
     from realtime_hrv import (
@@ -7976,16 +7994,17 @@ that predicts cognitive performance based on:
 | **Sleep Inertia** | Post-sleep grogginess | ↓ 5-15% for 15-60 min after waking |
 | **Sleep Debt** | Cumulative sleep deficit | ↓ 0.56% accuracy per hour of debt |
 
-**Performance Zones:**
-- 🟢 **Optimal (≥80%):** Full cognitive capacity
-- 🟡 **Moderate (60-79%):** Reduced but functional
-- 🟠 **Poor (50-59%):** Significant impairment
-- 🔴 **Critical (<50%):** High accident risk
+**Operational Effectiveness Zones (SAFTE/FAST-style):**
+- 🟢 **Low risk (≥90%):** Well-rested baseline
+- 🟡 **Caution (77–89%):** Transitional range; monitor fatigue and protect safety-critical tasks
+- 🟠 **High risk (70–77%):** Impairment often compared to ~0.05% BAC
+- 🔴 **Severe (≤70%):** Impairment often compared to ~0.08% BAC
 
 **Scientific References:**
 - Hursh et al. (2004). Fatigue models for applied research. *Aviation, Space, and Environmental Medicine*
 - Van Dongen et al. (2003). Cumulative cost of additional wakefulness. *Sleep*
 - Borbély (1982). Two-process model of sleep regulation. *Human Neurobiology*
+ - ICAO (2016). *Doc 9966: Manual for the Oversight of Fatigue Management Approaches*
                 """)
             
             st.markdown("---")
@@ -8297,9 +8316,25 @@ that predicts cognitive performance based on:
                             "trigger": "axis",
                             "formatter": "{b}<br/>Performance: {c}%"
                         },
+                        "toolbox": {
+                            "show": True,
+                            "right": 10,
+                            "feature": {
+                                "saveAsImage": {
+                                    "show": True,
+                                    "title": "Save (PNG)",
+                                    "pixelRatio": 4,
+                                },
+                                "restore": {"show": True, "title": "Reset"},
+                                "dataZoom": {"show": True, "title": {"zoom": "Zoom", "back": "Reset zoom"}},
+                            },
+                        },
                         "xAxis": {
                             "type": "category",
                             "data": x_data,
+                            "name": "Local time",
+                            "nameLocation": "middle",
+                            "nameGap": 35,
                             "axisLabel": {"rotate": 45, "fontSize": 10}
                         },
                         "yAxis": {
@@ -8312,10 +8347,10 @@ that predicts cognitive performance based on:
                         "visualMap": {
                             "show": False,
                             "pieces": [
-                                {"gt": 80, "lte": 100, "color": "#28a745"},
-                                {"gt": 60, "lte": 80, "color": "#ffc107"},
-                                {"gt": 50, "lte": 60, "color": "#fd7e14"},
-                                {"gt": 0, "lte": 50, "color": "#dc3545"},
+                                {"gt": 90, "lte": 100, "color": "#28a745"},
+                                {"gt": 77, "lte": 90, "color": "#ffc107"},
+                                {"gt": 70, "lte": 77, "color": "#fd7e14"},
+                                {"gt": 0, "lte": 70, "color": "#dc3545"},
                             ]
                         },
                         "series": [{
@@ -8326,9 +8361,9 @@ that predicts cognitive performance based on:
                             "areaStyle": {"opacity": 0.3},
                             "markLine": {
                                 "data": [
-                                    {"yAxis": 80, "name": "Optimal", "lineStyle": {"color": "#28a745", "type": "dashed"}},
-                                    {"yAxis": 60, "name": "Moderate", "lineStyle": {"color": "#ffc107", "type": "dashed"}},
-                                    {"yAxis": 50, "name": "Poor", "lineStyle": {"color": "#fd7e14", "type": "dashed"}},
+                                    {"yAxis": 90, "name": "Low risk (90%)", "lineStyle": {"color": "#28a745", "type": "dashed"}},
+                                    {"yAxis": 77, "name": "High risk (77%)", "lineStyle": {"color": "#fd7e14", "type": "dashed"}},
+                                    {"yAxis": 70, "name": "Severe (70%)", "lineStyle": {"color": "#dc3545", "type": "dashed"}},
                                 ]
                             }
                         }],
@@ -8340,6 +8375,11 @@ that predicts cognitive performance based on:
                         perf_chart_config,
                         height_px=400,
                         config=EChartsConfig()
+                    )
+                    st.caption(
+                        "This plot shows predicted SAFTE cognitive effectiveness (y-axis, %) over local time (x-axis). "
+                        "Dashed lines mark common operational thresholds (90%, 77%, 70%) and colors indicate the "
+                        "corresponding fatigue risk zone."
                     )
                 
                 # Analysis metrics
@@ -8370,7 +8410,7 @@ that predicts cognitive performance based on:
                     st.metric(
                         "Risk Score",
                         f"{analysis['risk']:.1f}%",
-                        help="Percentage of time in poor/critical zones"
+                        help="Percentage of time at/under 77% effectiveness (high-risk threshold)"
                     )
                 
                 source_label = st.session_state.get("fatigue_source_label")
@@ -8400,13 +8440,26 @@ that predicts cognitive performance based on:
                 st.markdown("#### 🎯 Performance Zone Distribution")
                 
                 zones = analysis["zones"]
-                zone_labels = ["Optimal (≥80%)", "Moderate (60-79%)", "Poor (50-59%)", "Critical (<50%)"]
+                zone_labels = [
+                    "Low risk (≥90%)",
+                    "Caution (77–89%)",
+                    "High risk (70–77%)",
+                    "Severe (≤70%)",
+                ]
                 zone_colors = ["#28a745", "#ffc107", "#fd7e14", "#dc3545"]
                 
                 # ECharts pie chart for zones
                 zone_chart_config = {
                     "tooltip": {"trigger": "item", "formatter": "{b}: {c} hours ({d}%)"},
                     "legend": {"orient": "horizontal", "bottom": "0%"},
+                    "toolbox": {
+                        "show": True,
+                        "right": 10,
+                        "feature": {
+                            "saveAsImage": {"show": True, "title": "Save (PNG)", "pixelRatio": 4},
+                            "restore": {"show": True, "title": "Reset"},
+                        },
+                    },
                     "series": [{
                         "type": "pie",
                         "radius": ["40%", "70%"],
@@ -8428,9 +8481,13 @@ that predicts cognitive performance based on:
                     height_px=350,
                     config=EChartsConfig()
                 )
+                st.caption(
+                    "This distribution summarizes the number of predicted hours spent in each operational "
+                    "effectiveness zone (≥90%, 77–89%, 70–77%, ≤70%)."
+                )
                 
-                # Risk assessment
-                st.markdown("#### ⚠️ Risk Assessment")
+                # Risk assessment (heuristic)
+                st.markdown("#### ⚠️ Quick Risk Factor Assessment (heuristic)")
                 
                 risk = result.risk_assessment
                 risk_level = risk["risk_level"]
@@ -8472,6 +8529,14 @@ that predicts cognitive performance based on:
                 # ECharts bar chart for risk factors
                 risk_bar_config = {
                     "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
+                    "toolbox": {
+                        "show": True,
+                        "right": 10,
+                        "feature": {
+                            "saveAsImage": {"show": True, "title": "Save (PNG)", "pixelRatio": 4},
+                            "restore": {"show": True, "title": "Reset"},
+                        },
+                    },
                     "xAxis": {"type": "value", "max": 25, "name": "Risk Score"},
                     "yAxis": {
                         "type": "category",
@@ -8501,6 +8566,289 @@ that predicts cognitive performance based on:
                     height_px=250,
                     config=EChartsConfig()
                 )
+                st.caption(
+                    "This bar chart breaks down the heuristic risk-factor score used for quick triage "
+                    "(sleep debt/quality, circadian misalignment, work hours/load, age)."
+                )
+
+                # -------------------------------------------------------------------------
+                # FRMS dashboard (ICAO-aligned) + USAF crew rest checks
+                # -------------------------------------------------------------------------
+                st.markdown("#### 🛡️ FRMS Dashboard (ICAO-aligned)")
+                st.caption(
+                    "This section summarizes *predictive* fatigue risk using SAFTE effectiveness plus "
+                    "FRMS-style exposure indicators (WOCL, time at/under high-risk thresholds) and a "
+                    "conservative SMS-style risk matrix."
+                )
+
+                frms_exposure: Optional[FRMSExposureMetrics] = None
+                frms_class: Optional[FRMSRiskClassification] = None
+                cr_assessment: Optional[USAFCrewRestAssessment] = None
+                frms_thresholds = FRMSThresholds() if FRMS_AVAILABLE else None
+
+                if not FRMS_AVAILABLE:
+                    st.info("FRMS helpers are unavailable in this environment.")
+                else:
+                    try:
+                        dt_list = list(df_fatigue["DateTime"])
+                        eff_list = [float(x) for x in df_fatigue["Performance"].astype(float).tolist()]
+
+                        hours_per_sample = 1.0
+                        if len(dt_list) >= 2:
+                            try:
+                                delta_sec = float((dt_list[1] - dt_list[0]).total_seconds())
+                                if delta_sec > 0:
+                                    hours_per_sample = max(1.0 / 60.0, min(24.0, delta_sec / 3600.0))
+                            except Exception:
+                                hours_per_sample = 1.0
+
+                        wocl_mask = compute_wocl_mask(
+                            dt_list,
+                            wocl_start_hour=int(frms_thresholds.wocl_start_hour),
+                            wocl_end_hour=int(frms_thresholds.wocl_end_hour),
+                        )
+                        duty_mask = compute_duty_mask(
+                            dt_list,
+                            has_work_schedule=bool(fatigue_has_work),
+                            work_start_hour=int(fatigue_work_start),
+                            work_end_hour=int(fatigue_work_end),
+                            include_weekends=False,
+                        )
+
+                        frms_exposure = compute_frms_exposure_metrics(
+                            datetimes=dt_list,
+                            effectiveness=eff_list,
+                            scope_mask=duty_mask,
+                            wocl_mask=wocl_mask,
+                            thresholds=frms_thresholds,
+                            hours_per_sample=float(hours_per_sample),
+                        )
+                        frms_class = classify_frms_risk(frms_exposure, thresholds=frms_thresholds)
+                    except Exception as exc:
+                        st.error(f"Unable to compute FRMS dashboard metrics: {exc}")
+                        log_exception(_LOGGER, "FRMS dashboard metrics failed", exc)
+
+                if frms_exposure is not None and frms_class is not None:
+                    frms_color_map = {
+                        "Low": "#28a745",
+                        "Medium": "#ffc107",
+                        "High": "#fd7e14",
+                        "Extreme": "#dc3545",
+                        "Unknown": "#6c757d",
+                    }
+                    frms_risk_color = frms_color_map.get(frms_class.risk_level, "#6c757d")
+
+                    st.markdown(
+                        f"""
+                        <div style="background: linear-gradient(135deg, {frms_risk_color}22 0%, {frms_risk_color}11 100%);
+                                    padding: 1.25rem; border-radius: 10px; border-left: 5px solid {frms_risk_color};
+                                    margin: 0.75rem 0;">
+                            <h3 style="margin: 0; color: {frms_risk_color};">FRMS Risk Level: {frms_class.risk_level}</h3>
+                            <p style="margin: 0.25rem 0 0 0;">Severity: <b>{frms_class.severity}</b> | Likelihood: <b>{frms_class.likelihood}</b></p>
+                            <p style="margin: 0.25rem 0 0 0; color: #444;">{frms_class.rationale}</p>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
+                    )
+
+                    col_frms_a, col_frms_b, col_frms_c, col_frms_d = st.columns(4)
+                    with col_frms_a:
+                        st.metric(
+                            "Min effectiveness (in-scope)",
+                            f"{frms_exposure.min_effectiveness:.1f}%"
+                            if frms_exposure.min_effectiveness is not None
+                            else "—",
+                            help="Worst predicted SAFTE effectiveness during in-scope hours (duty if provided).",
+                        )
+                    with col_frms_b:
+                        st.metric(
+                            "Hours ≤77% (in-scope)",
+                            f"{frms_exposure.hours_at_or_below_77:.1f} h",
+                            help="High-risk threshold often compared to ~0.05% BAC impairment.",
+                        )
+                    with col_frms_c:
+                        st.metric(
+                            "Hours ≤70% (in-scope)",
+                            f"{frms_exposure.hours_at_or_below_70:.1f} h",
+                            help="Severe impairment threshold often compared to ~0.08% BAC impairment.",
+                        )
+                    with col_frms_d:
+                        st.metric(
+                            "WOCL exposure (in-scope)",
+                            f"{frms_exposure.pct_hours_in_wocl:.1f}%",
+                            help="Percent of in-scope time during the Window of Circadian Low (~02:00–06:00 local).",
+                        )
+
+                    # Risk matrix (SMS-style)
+                    severity_order = ["Negligible", "Minor", "Major", "Hazardous", "Catastrophic"]
+                    likelihood_order = ["Rare", "Unlikely", "Possible", "Likely", "Almost certain"]
+                    risk_value_map = {"Low": 1, "Medium": 2, "High": 3, "Extreme": 4}
+                    sms_matrix = {
+                        "Negligible": ["Low", "Low", "Low", "Medium", "Medium"],
+                        "Minor": ["Low", "Low", "Medium", "High", "High"],
+                        "Major": ["Low", "Medium", "High", "High", "Extreme"],
+                        "Hazardous": ["Medium", "High", "High", "Extreme", "Extreme"],
+                        "Catastrophic": ["High", "High", "Extreme", "Extreme", "Extreme"],
+                    }
+                    heatmap_data: list[list[int]] = []
+                    for y_idx, sev in enumerate(severity_order):
+                        row = sms_matrix.get(sev, ["Low"] * 5)
+                        for x_idx, rlab in enumerate(row):
+                            heatmap_data.append([x_idx, y_idx, int(risk_value_map.get(rlab, 1))])
+
+                    try:
+                        sel_x = likelihood_order.index(frms_class.likelihood)
+                        sel_y = severity_order.index(frms_class.severity)
+                    except ValueError:
+                        sel_x, sel_y = 0, 0
+
+                    risk_matrix_config = {
+                        "tooltip": {
+                            "position": "top",
+                            "formatter": "Risk level: {c} (1=Low, 2=Medium, 3=High, 4=Extreme)",
+                        },
+                        "toolbox": {
+                            "show": True,
+                            "right": 10,
+                            "feature": {
+                                "saveAsImage": {"show": True, "title": "Save (PNG)", "pixelRatio": 4},
+                                "restore": {"show": True, "title": "Reset"},
+                            },
+                        },
+                        "grid": {"left": "18%", "right": "8%", "top": "10%", "bottom": "18%"},
+                        "xAxis": {
+                            "type": "category",
+                            "data": likelihood_order,
+                            "name": "Likelihood (time ≤77% in-scope)",
+                            "nameLocation": "middle",
+                            "nameGap": 35,
+                            "axisLabel": {"rotate": 20},
+                        },
+                        "yAxis": {
+                            "type": "category",
+                            "data": severity_order,
+                            "name": "Severity (min effectiveness in-scope)",
+                            "axisLabel": {"fontSize": 11},
+                        },
+                        "visualMap": {
+                            "type": "piecewise",
+                            "orient": "horizontal",
+                            "left": "center",
+                            "bottom": 0,
+                            "pieces": [
+                                {"value": 1, "label": "Low", "color": "#28a745"},
+                                {"value": 2, "label": "Medium", "color": "#ffc107"},
+                                {"value": 3, "label": "High", "color": "#fd7e14"},
+                                {"value": 4, "label": "Extreme", "color": "#dc3545"},
+                            ],
+                        },
+                        "series": [
+                            {
+                                "name": "FRMS risk matrix",
+                                "type": "heatmap",
+                                "data": heatmap_data,
+                                "label": {"show": True, "formatter": "{c}"},
+                                "emphasis": {
+                                    "itemStyle": {
+                                        "shadowBlur": 10,
+                                        "shadowColor": "rgba(0,0,0,0.35)",
+                                    }
+                                },
+                            },
+                            {
+                                "name": "Current classification",
+                                "type": "scatter",
+                                "data": [[sel_x, sel_y, 5]],
+                                "symbolSize": 26,
+                                "itemStyle": {
+                                    "color": "rgba(0,0,0,0)",
+                                    "borderColor": "#111",
+                                    "borderWidth": 3,
+                                },
+                                "tooltip": {"show": False},
+                            },
+                        ],
+                    }
+                    render_echarts(risk_matrix_config, height_px=360, config=EChartsConfig())
+                    st.caption(
+                        "SMS-style risk matrix (x-axis: likelihood of high-fatigue exposure; y-axis: severity based on "
+                        "worst-case effectiveness). The outlined cell is the current classification."
+                    )
+
+                    # USAF crew rest checker (AFMAN 11-202V3)
+                    st.markdown("#### ✈️ USAF Crew Rest Check (AFMAN 11-202V3)")
+                    st.caption(
+                        "Crew rest is typically **≥12 hours non-duty** before FDP with **≥8 hours uninterrupted sleep opportunity**. "
+                        "Any official interruption resets crew rest; set the start time below to the *true* crew rest start."
+                    )
+
+                    col_cr_1, col_cr_2, col_cr_3 = st.columns(3)
+                    with col_cr_1:
+                        cr_start_date = st.date_input(
+                            "Crew rest start (local date)",
+                            value=datetime.date.today(),
+                            key="usaf_crew_rest_start_date",
+                        )
+                        cr_start_time = st.time_input(
+                            "Crew rest start (local time)",
+                            value=datetime.time(20, 0),
+                            key="usaf_crew_rest_start_time",
+                        )
+                    with col_cr_2:
+                        fdp_start_date = st.date_input(
+                            "FDP start (local date)",
+                            value=datetime.date.today() + datetime.timedelta(days=1),
+                            key="usaf_fdp_start_date",
+                        )
+                        fdp_start_time = st.time_input(
+                            "FDP start (local time)",
+                            value=datetime.time(8, 0),
+                            key="usaf_fdp_start_time",
+                        )
+                    with col_cr_3:
+                        continuous_ops = st.checkbox(
+                            "Continuous ops (allow reduced crew rest ≥10h)",
+                            value=False,
+                            key="usaf_continuous_ops",
+                            help="Use only when the operational continuous-ops condition applies per AFMAN 11-202V3.",
+                        )
+                        planned_sleep_opp = st.number_input(
+                            "Planned uninterrupted sleep opportunity (hours)",
+                            min_value=0.0,
+                            max_value=14.0,
+                            value=float(fatigue_sleep_duration),
+                            step=0.25,
+                            key="usaf_sleep_opportunity_hours",
+                        )
+
+                    crew_rest_start_dt = datetime.datetime.combine(cr_start_date, cr_start_time)
+                    fdp_start_dt = datetime.datetime.combine(fdp_start_date, fdp_start_time)
+                    try:
+                        cr_assessment = assess_usaf_crew_rest(
+                            crew_rest_start_local=crew_rest_start_dt,
+                            fdp_start_local=fdp_start_dt,
+                            planned_sleep_opportunity_hours=float(planned_sleep_opp),
+                            continuous_ops_reduced_rest=bool(continuous_ops),
+                            policy=USAFCrewRestPolicy(),
+                        )
+                        cr_color = "#28a745" if cr_assessment.compliant else "#dc3545"
+                        st.markdown(
+                            f"""
+                            <div style="background: linear-gradient(135deg, {cr_color}22 0%, {cr_color}11 100%);
+                                        padding: 1.1rem; border-radius: 10px; border-left: 5px solid {cr_color};
+                                        margin: 0.75rem 0;">
+                                <h4 style="margin: 0; color: {cr_color};">Crew Rest: {"COMPLIANT" if cr_assessment.compliant else "NOT COMPLIANT"}</h4>
+                                <p style="margin: 0.25rem 0 0 0;">
+                                    Crew rest: <b>{cr_assessment.crew_rest_hours:.1f}h</b> (required ≥{cr_assessment.required_crew_rest_hours:.1f}h) |
+                                    Sleep opportunity: <b>{cr_assessment.planned_sleep_opportunity_hours:.1f}h</b> (required ≥{cr_assessment.required_sleep_opportunity_hours:.1f}h)
+                                </p>
+                                <p style="margin: 0.25rem 0 0 0; color: #444;">{cr_assessment.notes}</p>
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
+                    except Exception as exc:
+                        st.warning(f"Unable to assess crew rest with provided times: {exc}")
                 
                 # Recommendations
                 st.markdown("#### 💡 Recommendations")
@@ -8519,9 +8867,21 @@ that predicts cognitive performance based on:
                         
                         circ_chart_config = {
                             "tooltip": {"trigger": "axis"},
+                            "toolbox": {
+                                "show": True,
+                                "right": 10,
+                                "feature": {
+                                    "saveAsImage": {"show": True, "title": "Save (PNG)", "pixelRatio": 4},
+                                    "restore": {"show": True, "title": "Reset"},
+                                    "dataZoom": {"show": True, "title": {"zoom": "Zoom", "back": "Reset zoom"}},
+                                },
+                            },
                             "xAxis": {
                                 "type": "category",
                                 "data": x_circ,
+                                "name": "Local time",
+                                "nameLocation": "middle",
+                                "nameGap": 35,
                                 "axisLabel": {"rotate": 45, "fontSize": 10}
                             },
                             "yAxis": {
@@ -8544,6 +8904,11 @@ that predicts cognitive performance based on:
                             height_px=300,
                             config=EChartsConfig()
                         )
+                        st.caption(
+                            "Circadian drive (y-axis, unitless) over local time (x-axis). "
+                            "This curve helps interpret when the model expects circadian peaks and troughs "
+                            "(WOCL typically ~02:00–06:00)."
+                        )
                 
                 # Export option
                 st.markdown("---")
@@ -8557,6 +8922,159 @@ that predicts cognitive performance based on:
                     mime="text/csv",
                     key="fatigue_csv_download"
                 )
+
+                # FRMS exports (metrics + classification + crew rest)
+                if frms_exposure is not None and frms_class is not None:
+                    frms_summary_rows = [
+                        {"field": "hours_in_scope", "value": frms_exposure.hours_in_scope, "unit": "h"},
+                        {"field": "hours_in_wocl", "value": frms_exposure.hours_in_wocl, "unit": "h"},
+                        {"field": "pct_hours_in_wocl", "value": frms_exposure.pct_hours_in_wocl, "unit": "%"},
+                        {"field": "min_effectiveness", "value": frms_exposure.min_effectiveness, "unit": "%"},
+                        {"field": "mean_effectiveness", "value": frms_exposure.mean_effectiveness, "unit": "%"},
+                        {"field": "hours_below_90", "value": frms_exposure.hours_below_90, "unit": "h"},
+                        {"field": "hours_at_or_below_77", "value": frms_exposure.hours_at_or_below_77, "unit": "h"},
+                        {"field": "hours_at_or_below_70", "value": frms_exposure.hours_at_or_below_70, "unit": "h"},
+                        {"field": "pct_hours_at_or_below_77", "value": frms_exposure.pct_hours_at_or_below_77, "unit": "%"},
+                        {"field": "risk_level", "value": frms_class.risk_level, "unit": ""},
+                        {"field": "severity", "value": frms_class.severity, "unit": ""},
+                        {"field": "likelihood", "value": frms_class.likelihood, "unit": ""},
+                        {"field": "rationale", "value": frms_class.rationale, "unit": ""},
+                    ]
+                    frms_csv = pd.DataFrame(frms_summary_rows).to_csv(index=False).encode("utf-8")
+                    st.download_button(
+                        "Download FRMS Summary (CSV)",
+                        frms_csv,
+                        file_name="frms_summary.csv",
+                        mime="text/csv",
+                        key="frms_summary_csv_download",
+                    )
+
+                    frms_payload = {
+                        "thresholds": {
+                            "low_risk_min_effectiveness": float(frms_thresholds.low_risk_min_effectiveness)
+                            if frms_thresholds is not None
+                            else 90.0,
+                            "high_risk_max_effectiveness": float(frms_thresholds.high_risk_max_effectiveness)
+                            if frms_thresholds is not None
+                            else 77.0,
+                            "severe_impairment_max_effectiveness": float(frms_thresholds.severe_impairment_max_effectiveness)
+                            if frms_thresholds is not None
+                            else 70.0,
+                            "wocl_start_hour": int(frms_thresholds.wocl_start_hour) if frms_thresholds is not None else 2,
+                            "wocl_end_hour": int(frms_thresholds.wocl_end_hour) if frms_thresholds is not None else 6,
+                        },
+                        "exposure": {
+                            "samples_total": frms_exposure.samples_total,
+                            "samples_in_scope": frms_exposure.samples_in_scope,
+                            "hours_in_scope": frms_exposure.hours_in_scope,
+                            "hours_in_wocl": frms_exposure.hours_in_wocl,
+                            "min_effectiveness": frms_exposure.min_effectiveness,
+                            "mean_effectiveness": frms_exposure.mean_effectiveness,
+                            "hours_below_90": frms_exposure.hours_below_90,
+                            "hours_at_or_below_77": frms_exposure.hours_at_or_below_77,
+                            "hours_at_or_below_70": frms_exposure.hours_at_or_below_70,
+                            "pct_hours_in_wocl": frms_exposure.pct_hours_in_wocl,
+                            "pct_hours_at_or_below_77": frms_exposure.pct_hours_at_or_below_77,
+                        },
+                        "classification": {
+                            "severity": frms_class.severity,
+                            "likelihood": frms_class.likelihood,
+                            "risk_level": frms_class.risk_level,
+                            "rationale": frms_class.rationale,
+                        },
+                    }
+                    if cr_assessment is not None:
+                        frms_payload["usaf_crew_rest"] = {
+                            "crew_rest_hours": cr_assessment.crew_rest_hours,
+                            "required_crew_rest_hours": cr_assessment.required_crew_rest_hours,
+                            "planned_sleep_opportunity_hours": cr_assessment.planned_sleep_opportunity_hours,
+                            "required_sleep_opportunity_hours": cr_assessment.required_sleep_opportunity_hours,
+                            "compliant": cr_assessment.compliant,
+                            "notes": cr_assessment.notes,
+                        }
+                    st.download_button(
+                        "Download FRMS + Crew Rest Payload (JSON)",
+                        json.dumps(frms_payload, ensure_ascii=False, default=str, indent=2).encode("utf-8"),
+                        file_name="frms_dashboard.json",
+                        mime="application/json",
+                        key="frms_payload_json_download",
+                    )
+
+                # Publication-grade plot exports (Plotly fallback)
+                with st.expander("Publication-grade plot exports (SVG/PDF/PNG/HTML)", expanded=False):
+                    st.caption(
+                        "ECharts provides interactive plots; Plotly is used here as a publication-export fallback "
+                        "to generate vector (SVG/PDF) and high-DPI raster outputs."
+                    )
+                    try:
+                        import plotly.graph_objects as go  # type: ignore
+                    except Exception as exc:
+                        st.info(f"Plotly is not available: {exc}")
+                        go = None  # type: ignore[assignment]
+
+                    if go is not None and not perf_data.empty:
+                        fig = go.Figure()
+                        fig.add_trace(
+                            go.Scatter(
+                                x=list(perf_data["DateTime"]),
+                                y=[float(v) for v in perf_data["Performance"]],
+                                mode="lines",
+                                name="Effectiveness (%)",
+                                line=dict(width=3, color="#2E86AB"),
+                            )
+                        )
+                        fig.add_hline(y=90, line_dash="dash", line_color="#28a745", annotation_text="90%")
+                        fig.add_hline(y=77, line_dash="dash", line_color="#fd7e14", annotation_text="77%")
+                        fig.add_hline(y=70, line_dash="dash", line_color="#dc3545", annotation_text="70%")
+                        fig.update_layout(
+                            template="plotly_white",
+                            title="SAFTE Cognitive Effectiveness (publication export)",
+                            xaxis_title="Local time",
+                            yaxis_title="Effectiveness (%)",
+                            height=520,
+                            margin=dict(l=60, r=30, t=60, b=60),
+                        )
+
+                        st.download_button(
+                            "Download performance plot (HTML)",
+                            fig.to_html(full_html=True, include_plotlyjs="cdn").encode("utf-8"),
+                            file_name="safte_performance_plot.html",
+                            mime="text/html",
+                            key="safte_plotly_perf_html",
+                        )
+
+                        # Static image exports require Kaleido.
+                        try:
+                            png_bytes = fig.to_image(format="png", width=1800, height=600, scale=2)
+                            svg_bytes = fig.to_image(format="svg", width=1800, height=600)
+                            pdf_bytes = fig.to_image(format="pdf", width=1800, height=600)
+                            st.download_button(
+                                "Download performance plot (PNG, high-DPI)",
+                                png_bytes,
+                                file_name="safte_performance_plot.png",
+                                mime="image/png",
+                                key="safte_plotly_perf_png",
+                            )
+                            st.download_button(
+                                "Download performance plot (SVG)",
+                                svg_bytes,
+                                file_name="safte_performance_plot.svg",
+                                mime="image/svg+xml",
+                                key="safte_plotly_perf_svg",
+                            )
+                            st.download_button(
+                                "Download performance plot (PDF)",
+                                pdf_bytes,
+                                file_name="safte_performance_plot.pdf",
+                                mime="application/pdf",
+                                key="safte_plotly_perf_pdf",
+                            )
+                        except Exception as exc:
+                            st.info(
+                                "Static image export requires Kaleido. "
+                                "Install with `pip install kaleido` (or ensure it is present in your environment). "
+                                f"Details: {exc}"
+                            )
                 
                 st.caption(
                     f"Model: {result.model_used.upper()} SAFTE | "
@@ -10977,6 +11495,13 @@ that predicts cognitive performance based on:
             "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2017.00213/full  \n"
             "- Sammito, S., & Böckelmann, I. (2016). Reference values for time- and frequency-domain heart rate variability measures. Heart Rhythm, 13(6), 1309–1316. https://pubmed.ncbi.nlm.nih.gov/27986557/  \n"
             "- Berkoff, D. J., Cairns, C. B., Sanchez, L. D., & Moorman, C. T. (2007). Heart rate variability in elite American track-and-field athletes. Journal of Strength and Conditioning Research, 21(1), 227–231. https://pubmed.ncbi.nlm.nih.gov/17313294/  \n"
+            "\n\n"
+            "**Fatigue risk management (FRMS / SAFTE)**  \n"
+            "- International Civil Aviation Organization. (2016). *Manual for the Oversight of Fatigue Management Approaches* (Doc 9966, 2nd ed.). https://www.icao.int/safety/fatiguemanagement/FRMS%20Tools/Doc%209966.FRMS.2016%20Edition.en.pdf  \n"
+            "- Department of the Air Force. (n.d.). *AFMAN 11-202V3: General Flight Rules.* https://static.e-publishing.af.mil/production/1/af_a3/publication/afman11-202v3/afman11-202v3.pdf  \n"
+            "- Federal Aviation Administration. (2010). *Flightcrew Member Duty and Rest Requirements* (Docket No. FAA-2009-1093; Attachment 1). https://downloads.regulations.gov/FAA-2009-1093-2518/attachment_1.pdf  \n"
+            "- National Aeronautics and Space Administration. (2012). *NASA–easyJet Collaboration on the Human Factors Monitoring Program (HFMP) Study* (NASA NTRS No. 20120013448). https://ntrs.nasa.gov/api/citations/20120013448/downloads/20120013448.pdf  \n"
+            "- Federal Railroad Administration. (2006). *Validation and calibration of a fatigue assessment tool for railroad work schedules* (Final report; DOT/FRA/ORD-06/21). https://rosap.ntl.bts.gov/view/dot/62575  \n"
             "\n\n"
             "**Space radiation & space-weather scales (used in profile dose/alerts)**  \n"
             "- National Aeronautics and Space Administration. (2022). *NASA Space Flight Human-System Standard, Volume 1: Crew Health* (NASA-STD-3001, Rev. B). https://www.nasa.gov/wp-content/uploads/2020/10/2022-01-05_nasa-std-3001_vol.1_rev._b_final_draft_with_signature_010522.pdf  \n"
