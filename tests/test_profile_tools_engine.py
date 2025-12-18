@@ -18,10 +18,12 @@ from profile_tools_engine import (
     predict_fatigue,
     analyze_hrv_personalized,
     generate_performance_forecast,
+    predict_operational_performance,
     run_all_profile_tools,
     RecoveryStatus,
     ReadinessLevel,
     FatigueRisk,
+    OperationalReadinessLevel,
 )
 
 
@@ -265,6 +267,7 @@ class TestRunAllTools:
         assert "fatigue_prediction" in results
         assert "hrv_analysis" in results
         assert "performance_forecast" in results
+        assert "operational_performance" in results
         assert len(results.get("tools_available", [])) >= 4
 
     def test_run_all_without_hrv(self) -> None:
@@ -280,6 +283,7 @@ class TestRunAllTools:
         # Should still have fatigue and forecast
         assert "fatigue_prediction" in results
         assert "performance_forecast" in results
+        assert "operational_performance" in results
 
     def test_run_all_has_timestamp(self) -> None:
         """Results should have timestamp."""
@@ -291,6 +295,62 @@ class TestRunAllTools:
         )
         assert "generated_at" in results
         assert "user_context" in results
+
+
+class TestOperationalPerformance:
+    """Tests for fused operational performance predictor."""
+
+    def test_operational_performance_bounds(self) -> None:
+        """Score should be bounded and provide scheduling fields."""
+        result = predict_operational_performance(
+            age=35,
+            sex="male",
+            rmssd_ms=35.0,
+            hrv_metrics={"rmssd_ms": 35.0, "sdnn_ms": 50.0, "pnn50": 12.0},
+            sleep_hours_last_night=7.0,
+            sleep_quality=0.7,
+            hours_awake=6.0,
+            current_hour=10,
+            chronotype_offset=0.0,
+            resting_hr=60.0,
+            workload_intensity=0.5,
+        )
+        assert 0.0 <= result.readiness_score <= 100.0
+        assert isinstance(result.readiness_level, OperationalReadinessLevel)
+        assert isinstance(result.readiness_label, str)
+        # Scheduling fields may be None if curve is too short, but should exist
+        assert hasattr(result, "best_2h_window_start")
+        assert hasattr(result, "worst_2h_window_start")
+
+    def test_operational_performance_degrades_with_poor_sleep(self) -> None:
+        """Severe sleep restriction should reduce readiness vs good sleep (all else equal)."""
+        good = predict_operational_performance(
+            age=35,
+            sex="male",
+            rmssd_ms=35.0,
+            hrv_metrics={"rmssd_ms": 35.0, "sdnn_ms": 50.0, "pnn50": 12.0},
+            sleep_hours_last_night=8.0,
+            sleep_quality=0.9,
+            hours_awake=4.0,
+            current_hour=11,
+            chronotype_offset=0.0,
+            resting_hr=60.0,
+            workload_intensity=0.3,
+        )
+        poor = predict_operational_performance(
+            age=35,
+            sex="male",
+            rmssd_ms=35.0,
+            hrv_metrics={"rmssd_ms": 35.0, "sdnn_ms": 50.0, "pnn50": 12.0},
+            sleep_hours_last_night=4.0,
+            sleep_quality=0.4,
+            hours_awake=14.0,
+            current_hour=3,
+            chronotype_offset=0.0,
+            resting_hr=60.0,
+            workload_intensity=0.3,
+        )
+        assert poor.readiness_score <= good.readiness_score
 
 
 if __name__ == "__main__":
