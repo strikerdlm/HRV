@@ -5,6 +5,18 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.27] - 2025-12-18
+
+### Added
+- **Per-user SAFTE/FRMS default inputs** (`app/user_database.py`, `app/app.py`, `app/fatigue_integration.py`): Added persisted **fatigue profile defaults** (typical sleep window + duty window + weekend policy) so SAFTE and FRMS can auto-run using user-collected variables without manual re-entry.
+- **SAFTE duty-weekend toggle** (`app/app.py`): FRMS “in-scope” duty mask can now optionally include weekends, improving schedule realism for shift/mission operations.
+
+### Changed
+- **Fatigue tab exports (ECharts-first)** (`app/app.py`): Removed the Plotly/Kaleido publication-export fallback and standardized on the built-in ECharts client-side export toolbar (PNG/SVG/HTML/spec JSON + Print/Save PDF).
+
+### Tests
+- Added regression coverage for fatigue profile defaults and assessment automation (`tests/test_fatigue_profile_defaults.py`).
+
 ## [1.8.26] - 2025-12-18
 
 ### Added
