@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Operational Performance predictor (HRV + SAFTE fusion)** (`app/profile_tools_engine.py`, `app/user_profile_tab.py`): Added a transparent, bounded **operational readiness score (0–100)** that fuses SAFTE effectiveness with HRV-derived recovery/autonomic markers, including **GO/CAUTION/NO‑GO** categories plus **best/worst 2‑hour task windows** and next‑12h alert windows.
+- **Crew mission workspaces** (`app/app.py`, `app/user_database.py`, `app/user_data_manager.py`): Added a `crew/` folder with **Mission 1** and **Mission 2** workspaces and a sidebar mission selector. The app now stores the active mission’s **SQLite DB + backups** under `crew/<Mission>/db/` and per-subject files under `crew/<Mission>/subjects/` (legacy root DB/data are copied into Mission 1 on first use for safety).
 
 ### Fixed
 - **Profile Tools RMSSD input default** (`app/user_profile_tab.py`): Corrected the RMSSD parameter widget default (previously incorrectly seeded from resting HR), improving out-of-the-box Profile Tools behavior.
