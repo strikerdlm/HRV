@@ -436,6 +436,18 @@ try:
 except ImportError:
     FRMS_AVAILABLE = False
 
+# Mission-level FRMS v2 helpers (crew risk board)
+try:
+    from frms_v2 import (
+        CrewMemberFRMS,
+        build_crew_risk_board,
+        build_decision_log_entry,
+        crew_risk_board_to_payload,
+    )
+    FRMS_V2_AVAILABLE = True
+except ImportError:
+    FRMS_V2_AVAILABLE = False
+
 # Real-time HRV and Biofeedback
 try:
     from realtime_hrv import (
@@ -11291,6 +11303,421 @@ that predicts cognitive performance based on:
                             mime="text/markdown",
                             key="download_cohort_report_md",
                         )
+
+                # ---------------------------------------------------------------------
+                # Mission FRMS v2 (crew risk board) - prototype aggregation across roster
+                # ---------------------------------------------------------------------
+                with st.expander("🛡️ Mission FRMS v2 — Crew Risk Board (multi-profile)", expanded=False):
+                    st.caption(
+                        "Prototype mission-level FRMS aggregation across selected active users. "
+                        "This runs a bounded SAFTE forecast per user (wrist → clinical → Garmin → defaults) "
+                        "and computes FRMS exposure + risk matrix classification for a shared scope window."
+                    )
+
+                    if not (FATIGUE_AVAILABLE and FRMS_AVAILABLE and FRMS_V2_AVAILABLE):
+                        st.info(
+                            "Mission FRMS v2 requires the fatigue + FRMS modules. "
+                            "If this environment is missing them, use the single-user SAFTE tab FRMS dashboard."
+                        )
+                    elif not selected_user_ids:
+                        st.info("Select at least one active user above to build a crew risk board.")
+                    else:
+                        col_cfg_a, col_cfg_b, col_cfg_c = st.columns(3)
+                        with col_cfg_a:
+                            frms2_days = st.number_input(
+                                "Forecast horizon (days)",
+                                min_value=1,
+                                max_value=7,
+                                value=5,
+                                step=1,
+                                key="frms_v2_days",
+                                help="Number of days simulated per crew member (bounded).",
+                            )
+                            frms2_model = st.selectbox(
+                                "SAFTE model",
+                                options=["advanced", "classic"],
+                                index=0,
+                                key="frms_v2_model",
+                                help="Matches the SAFTE tab engine; use 'advanced' unless validating classic behavior.",
+                            )
+                        with col_cfg_b:
+                            scope_mode = st.selectbox(
+                                "Scope for FRMS exposure metrics",
+                                options=["all_hours", "duty_window"],
+                                index=1,
+                                key="frms_v2_scope_mode",
+                                help="Risk exposure can be computed for all forecast hours or only a duty window.",
+                            )
+                            duty_start = st.slider(
+                                "Duty window start (hour, local)",
+                                min_value=0,
+                                max_value=23,
+                                value=9,
+                                step=1,
+                                disabled=(scope_mode != "duty_window"),
+                                key="frms_v2_duty_start",
+                            )
+                            duty_end = st.slider(
+                                "Duty window end (hour, local)",
+                                min_value=0,
+                                max_value=23,
+                                value=17,
+                                step=1,
+                                disabled=(scope_mode != "duty_window"),
+                                key="frms_v2_duty_end",
+                            )
+                            include_weekends = st.checkbox(
+                                "Include weekends in duty scope",
+                                value=False,
+                                disabled=(scope_mode != "duty_window"),
+                                key="frms_v2_include_weekends",
+                            )
+                        with col_cfg_c:
+                            wocl_start = st.slider(
+                                "WOCL start (hour, local)",
+                                min_value=0,
+                                max_value=23,
+                                value=2,
+                                step=1,
+                                key="frms_v2_wocl_start",
+                            )
+                            wocl_end = st.slider(
+                                "WOCL end (hour, local)",
+                                min_value=0,
+                                max_value=23,
+                                value=6,
+                                step=1,
+                                key="frms_v2_wocl_end",
+                            )
+                            th_low = st.number_input(
+                                "Low-risk threshold (effectiveness, %)",
+                                min_value=50.0,
+                                max_value=100.0,
+                                value=90.0,
+                                step=1.0,
+                                key="frms_v2_th_low",
+                            )
+                            th_high = st.number_input(
+                                "High-risk threshold (effectiveness, %)",
+                                min_value=50.0,
+                                max_value=100.0,
+                                value=77.0,
+                                step=1.0,
+                                key="frms_v2_th_high",
+                            )
+                            th_severe = st.number_input(
+                                "Severe threshold (effectiveness, %)",
+                                min_value=50.0,
+                                max_value=100.0,
+                                value=70.0,
+                                step=1.0,
+                                key="frms_v2_th_severe",
+                            )
+
+                        run_board = st.button(
+                            "Run crew risk board (FRMS v2)",
+                            type="primary",
+                            key="frms_v2_run_board",
+                        )
+
+                        def _chronotype_offset_from_occupation(occupation: Any) -> float:
+                            occ = str(occupation or "").lower()
+                            if any(x in occ for x in ["night", "shift", "pilot", "flight"]):
+                                return 1.0
+                            if any(x in occ for x in ["early", "morning", "farmer"]):
+                                return -1.0
+                            return 0.0
+
+                        if run_board:
+                            db = get_database()
+                            members: list[CrewMemberFRMS] = []
+                            errors: list[str] = []
+
+                            thresholds = FRMSThresholds(
+                                low_risk_min_effectiveness=float(th_low),
+                                high_risk_max_effectiveness=float(th_high),
+                                severe_impairment_max_effectiveness=float(th_severe),
+                                wocl_start_hour=int(wocl_start),
+                                wocl_end_hour=int(wocl_end),
+                            )
+
+                            cfg = {
+                                "prediction_days": int(frms2_days),
+                                "safte_model": str(frms2_model),
+                                "scope_mode": str(scope_mode),
+                                "duty_window": {
+                                    "start_hour": int(duty_start),
+                                    "end_hour": int(duty_end),
+                                    "include_weekends": bool(include_weekends),
+                                },
+                                "wocl": {"start_hour": int(wocl_start), "end_hour": int(wocl_end)},
+                                "thresholds": {
+                                    "low_risk_min_effectiveness": float(th_low),
+                                    "high_risk_max_effectiveness": float(th_high),
+                                    "severe_impairment_max_effectiveness": float(th_severe),
+                                },
+                            }
+
+                            with st.spinner("Running bounded SAFTE forecasts and aggregating FRMS metrics…"):
+                                for uid in list(selected_user_ids)[:13]:
+                                    try:
+                                        user = db.get_user(str(uid))
+                                    except Exception:
+                                        user = None
+                                    if user is None:
+                                        errors.append(f"User {uid} missing from database.")
+                                        continue
+
+                                    user_context = {
+                                        "age_years": int(getattr(user, "age_years", 35) or 35),
+                                        "sex": str(getattr(user, "sex", "other") or "other"),
+                                        "chronotype_offset": _chronotype_offset_from_occupation(getattr(user, "occupation", None)),
+                                        "genetic_profile": tuple(),
+                                    }
+
+                                    try:
+                                        result, source_label, _wrist_df = run_assessment_fatigue_prediction(
+                                            user_context=user_context,
+                                            user_id=str(uid),
+                                            prediction_days=int(frms2_days),
+                                            model_type=str(frms2_model),
+                                        )
+                                    except Exception as exc:
+                                        errors.append(f"{user.full_name or user.username or uid}: fatigue run failed ({exc}).")
+                                        continue
+
+                                    df_fatigue = build_fatigue_dataframe(
+                                        result.time_points,
+                                        result.performances,
+                                        result.circadian_values,
+                                    )
+                                    try:
+                                        dt_list = list(df_fatigue["DateTime"])
+                                        eff_list = [float(x) for x in df_fatigue["Performance"].astype(float).tolist()]
+                                    except Exception as exc:
+                                        errors.append(f"{user.full_name or user.username or uid}: invalid fatigue series ({exc}).")
+                                        continue
+
+                                    hours_per_sample = 1.0
+                                    if len(dt_list) >= 2:
+                                        try:
+                                            delta_sec = float((dt_list[1] - dt_list[0]).total_seconds())
+                                            if delta_sec > 0:
+                                                hours_per_sample = max(1.0 / 60.0, min(24.0, delta_sec / 3600.0))
+                                        except Exception:
+                                            hours_per_sample = 1.0
+
+                                    wocl_mask = compute_wocl_mask(
+                                        dt_list,
+                                        wocl_start_hour=int(wocl_start),
+                                        wocl_end_hour=int(wocl_end),
+                                    )
+                                    if scope_mode == "duty_window":
+                                        scope_mask = compute_duty_mask(
+                                            dt_list,
+                                            has_work_schedule=True,
+                                            work_start_hour=int(duty_start),
+                                            work_end_hour=int(duty_end),
+                                            include_weekends=bool(include_weekends),
+                                        )
+                                    else:
+                                        scope_mask = [True for _ in dt_list]
+
+                                    try:
+                                        exposure = compute_frms_exposure_metrics(
+                                            datetimes=dt_list,
+                                            effectiveness=eff_list,
+                                            scope_mask=scope_mask,
+                                            wocl_mask=wocl_mask,
+                                            thresholds=thresholds,
+                                            hours_per_sample=float(hours_per_sample),
+                                        )
+                                        classification = classify_frms_risk(exposure, thresholds=thresholds)
+                                        alerts = tuple(
+                                            compute_frms_alerts(
+                                                exposure=exposure,
+                                                classification=classification,
+                                                crew_rest=None,
+                                                thresholds=thresholds,
+                                            )
+                                        )
+                                    except Exception as exc:
+                                        errors.append(f"{user.full_name or user.username or uid}: FRMS metrics failed ({exc}).")
+                                        continue
+
+                                    members.append(
+                                        CrewMemberFRMS(
+                                            user_id=str(uid),
+                                            display_name=str(user.full_name or user.username or uid),
+                                            data_source=str(source_label),
+                                            exposure=exposure,
+                                            classification=classification,
+                                            alerts=alerts,
+                                        )
+                                    )
+
+                            if errors:
+                                st.warning("Some crew members could not be processed:\n" + "\n".join([f"- {e}" for e in errors[:8]]))
+
+                            if not members:
+                                st.error("No crew members were successfully processed. See warnings above.")
+                            else:
+                                board = build_crew_risk_board(members=members, config=cfg)
+                                st.session_state["frms_v2_board"] = board
+                                st.success("Crew risk board generated.")
+
+                        board = st.session_state.get("frms_v2_board")
+                        if board is not None:
+                            try:
+                                counts = dict(board.risk_level_counts)
+                                col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+                                with col_s1:
+                                    st.metric("Crew size", str(len(board.members)))
+                                with col_s2:
+                                    st.metric("Worst risk level", str(board.worst_risk_level))
+                                with col_s3:
+                                    st.metric("High", str(int(counts.get("High", 0))))
+                                with col_s4:
+                                    st.metric("Extreme", str(int(counts.get("Extreme", 0))))
+
+                                # Visualization: distribution of risk levels across crew
+                                levels = ["Low", "Medium", "High", "Extreme", "Unknown"]
+                                dist_values = [int(counts.get(k, 0)) for k in levels]
+                                dist_chart = {
+                                    "title": {
+                                        "text": "Crew FRMS risk distribution",
+                                        "left": "center",
+                                        "textStyle": {"fontSize": 14},
+                                    },
+                                    "tooltip": {"trigger": "axis"},
+                                    "toolbox": {
+                                        "show": True,
+                                        "right": 10,
+                                        "feature": {
+                                            "saveAsImage": {"show": True, "title": "Save (PNG)", "pixelRatio": 4},
+                                            "restore": {"show": True, "title": "Reset"},
+                                        },
+                                    },
+                                    "xAxis": {"type": "category", "data": levels, "name": "FRMS risk level"},
+                                    "yAxis": {"type": "value", "name": "Crew members (count)", "minInterval": 1},
+                                    "series": [
+                                        {
+                                            "type": "bar",
+                                            "data": dist_values,
+                                            "itemStyle": {
+                                                "color": {
+                                                    "type": "linear",
+                                                    "x": 0,
+                                                    "y": 0,
+                                                    "x2": 0,
+                                                    "y2": 1,
+                                                    "colorStops": [
+                                                        {"offset": 0, "color": "#2E86AB"},
+                                                        {"offset": 1, "color": "#2E86AB55"},
+                                                    ],
+                                                }
+                                            },
+                                            "label": {"show": True, "position": "top"},
+                                        }
+                                    ],
+                                    "grid": {"left": "10%", "right": "5%", "bottom": "15%", "top": "20%"},
+                                }
+                                render_echarts(dist_chart, height_px=320, config=EChartsConfig())
+                                st.caption(
+                                    "Bar chart of crew-member counts by FRMS risk level (x-axis) computed from SAFTE "
+                                    "effectiveness forecasts. Y-axis is the number of crew members classified into each "
+                                    "risk level for the selected scope window (all hours or duty window)."
+                                )
+
+                                # Table
+                                rows = []
+                                for m in board.members:
+                                    rows.append(
+                                        {
+                                            "user_id": m.user_id,
+                                            "name": m.display_name,
+                                            "data_source": m.data_source,
+                                            "risk_level": m.classification.risk_level,
+                                            "severity": m.classification.severity,
+                                            "likelihood": m.classification.likelihood,
+                                            "min_effectiveness_pct": m.exposure.min_effectiveness,
+                                            "hours_at_or_below_77_h": m.exposure.hours_at_or_below_77,
+                                            "hours_at_or_below_70_h": m.exposure.hours_at_or_below_70,
+                                            "pct_hours_in_wocl_pct": m.exposure.pct_hours_in_wocl,
+                                            "alerts_n": len(m.alerts),
+                                        }
+                                    )
+                                board_df = pd.DataFrame(rows)
+                                st.dataframe(board_df, use_container_width=True)
+
+                                # Data exports
+                                csv_bytes = board_df.to_csv(index=False).encode("utf-8")
+                                st.download_button(
+                                    "Download crew risk board (CSV)",
+                                    data=csv_bytes,
+                                    file_name=f"frms_v2_crew_risk_board_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                                    mime="text/csv",
+                                    key="frms_v2_board_csv",
+                                )
+                                board_payload = crew_risk_board_to_payload(board)
+                                st.download_button(
+                                    "Download crew risk board payload (JSON)",
+                                    data=json.dumps(board_payload, ensure_ascii=False, default=str, indent=2).encode("utf-8"),
+                                    file_name=f"frms_v2_crew_risk_board_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.json",
+                                    mime="application/json",
+                                    key="frms_v2_board_json",
+                                )
+
+                                # Decision log (audit trail)
+                                st.markdown("##### Decision log (audit trail export)")
+                                col_d1, col_d2 = st.columns(2)
+                                with col_d1:
+                                    decision_owner = st.text_input(
+                                        "Decision owner",
+                                        value=str(active_user_context.get("full_name") or active_user_context.get("username") or ""),
+                                        key="frms_v2_decision_owner",
+                                        help="Who is signing the operational decision (e.g., Flight Surgeon, Mission Director).",
+                                    )
+                                    decision = st.selectbox(
+                                        "Decision",
+                                        options=["GO", "GO_WITH_MITIGATIONS", "NO_GO"],
+                                        index=1,
+                                        key="frms_v2_decision",
+                                    )
+                                with col_d2:
+                                    mitigations_text = st.text_area(
+                                        "Mitigations (one per line)",
+                                        placeholder="e.g.\n- 20-min controlled rest (if permitted)\n- Task reallocation during WOCL\n- Caffeine timing plan",
+                                        height=120,
+                                        key="frms_v2_mitigations",
+                                    )
+                                decision_notes = st.text_area(
+                                    "Decision notes (optional)",
+                                    placeholder="Constraints, waivers, operational context, residual risk acceptance, follow-up plan…",
+                                    height=90,
+                                    key="frms_v2_decision_notes",
+                                )
+                                mitigations = [
+                                    ln.strip(" -\t")
+                                    for ln in str(mitigations_text or "").splitlines()
+                                    if ln.strip(" -\t")
+                                ]
+                                entry = build_decision_log_entry(
+                                    board=board,
+                                    decision=str(decision),
+                                    decision_owner=str(decision_owner),
+                                    mitigations=mitigations,
+                                    notes=str(decision_notes),
+                                )
+                                st.download_button(
+                                    "Download FRMS decision log entry (JSON)",
+                                    data=json.dumps(entry.to_payload(), ensure_ascii=False, default=str, indent=2).encode("utf-8"),
+                                    file_name=f"frms_v2_decision_log_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.json",
+                                    mime="application/json",
+                                    key="frms_v2_decision_log_json",
+                                )
+                            except Exception as exc:
+                                st.warning(f"Unable to render crew risk board: {exc}")
 
                 with st.expander("🧪 Longitudinal cohort comparisons (T0–T21)", expanded=False):
                     st.markdown(
