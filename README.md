@@ -526,6 +526,7 @@ project/
 - CSV/JSON data export
 - LaTeX tables for publications
 - GPT-5.2 AI interpretation (requires API key)
+- **Plot exports (all ECharts charts)**: Use the inline export toolbar to download **PNG (high-DPI)**, **SVG (vector)**, **HTML**, and **spec JSON**, or **Print/Save PDF** from your browser.
 
 ### Circadian Physiology Tab
 
