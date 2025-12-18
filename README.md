@@ -214,6 +214,31 @@ All other tabs show **example data** and **reference values** to help you unders
 
 ### Planned Features (Q1 2026)
 
+#### Mission FRMS v2.0 (comprehensive crew readiness + alerts)
+The SAFTE tab already ships a baseline **predictive FRMS dashboard** (exposure metrics + SMS-style risk matrix + USAF crew rest check). The next milestone is a **mission-wide FRMS system** that runs across *all profiles* and produces actionable alerts + mitigations for safety-critical windows.
+
+**What’s left to implement (end-to-end FRMS):**
+- **Mission-level roster + “crew risk board”**: aggregate fatigue exposure and risk classification across all active profiles (per shift/EVA/task window), with a single view for flight surgeon / mission director decision-making.
+- **FRMS processes (predictive + proactive + reactive)**: add structured hazard reporting, SPIs/trending, safety assurance checks, and a transparent audit trail for risk decisions (inputs → classification → mitigation → outcome).
+- **Alerting + escalation**: rules-based alerts when thresholds are crossed (e.g., time ≤77% in-scope, WOCL overlap, crew-rest noncompliance), plus “why it triggered” explanations and exportable evidence packets.
+- **Evidence-based countermeasure recommender**: standardized, mission-safe recommendations (sleep extension, controlled rest, caffeine timing, light scheduling, task re-allocation), with citations per recommendation and explicit constraints/limitations.
+- **Model calibration + validation layer**: optional PVT/psychomotor vigilance testing, incident/near-miss logging, and calibration hooks (SAFTE-R + individualized parameters) to validate predictive skill for this mission.
+
+**Core standards & research (verifiable sources, APA):**
+- International Civil Aviation Organization. (2016). *Manual for the Oversight of Fatigue Management Approaches* (Doc 9966, 2nd ed.). https://www.icao.int/safety/fatiguemanagement/FRMS%20Tools/Doc%209966.FRMS.2016%20Edition.en.pdf
+- International Civil Aviation Organization. (2011). *FRMS Implementation Guide for Operators* (July 2011). https://www.icao.int/safety/fatiguemanagement/FRMS%20Tools/FRMS%20Implementation%20Guide%20for%20Operators%20July%202011.pdf
+- International Civil Aviation Organization. (2018). *Safety Management Manual* (Doc 9859, 4th ed.). https://store.icao.int/en/safety-management-manual-doc-9859
+- Federal Aviation Administration. (2013). *Fatigue Risk Management Systems for Aviation Safety* (Advisory Circular AC 120-103A). https://www.faa.gov/documentlibrary/media/advisory_circular/ac_120-103a.pdf
+- International Air Transport Association, International Civil Aviation Organization, & International Federation of Air Line Pilots’ Associations. (2015). *Fatigue Management Guide for Airline Operators* (2nd ed.). https://www.ifalpa.org/media/2279/fmg-for-airline-operators-2nd-ed.pdf
+- Department of the Air Force. (n.d.). *AFMAN 11-202V3: General Flight Rules.* https://static.e-publishing.af.mil/production/1/af_a3/publication/afman11-202v3/afman11-202v3.pdf
+- Hursh, S. R., Redmond, D. P., Johnson, M. L., Thorne, D. R., Belenky, G., Balkin, T. J., Storm, W. F., Miller, J. C., & Eddy, D. R. (2004). Fatigue models for applied research in warfighting. *Aviation, Space, and Environmental Medicine, 75*(3 Suppl), A44–A53. https://doi.org/10.1097/01.ASM.0000122824.30373.5E
+- Van Dongen, H. P. A., Maislin, G., Mullington, J. M., & Dinges, D. F. (2003). The cumulative cost of additional wakefulness: Dose-response effects on neurobehavioral functions and sleep physiology from chronic sleep restriction and total sleep deprivation. *Sleep, 26*(2), 117–126. https://doi.org/10.1093/sleep/26.2.117
+- Belenky, G., Wesensten, N. J., Thorne, D. R., Thomas, M. L., Sing, H. C., Redmond, D. P., Russo, M. B., & Balkin, T. J. (2003). Patterns of performance degradation and restoration during sleep restriction and subsequent recovery: A sleep dose-response study. *Journal of Sleep Research, 12*(1), 1–12. https://doi.org/10.1046/j.1365-2869.2003.00337.x
+- Dawson, D., & Reid, K. (1997). Fatigue, alcohol and performance impairment. *Nature, 388*(6639), 235. https://doi.org/10.1038/40775
+- Williamson, A. M., & Feyer, A.-M. (2000). Moderate sleep deprivation produces impairments in cognitive and motor performance equivalent to legally prescribed levels of alcohol intoxication. *Occupational and Environmental Medicine, 57*(10), 649–655. https://doi.org/10.1136/oem.57.10.649
+- Folkard, S., & Tucker, P. (2003). Shift work, safety and productivity. *Occupational Medicine, 53*(2), 95–101. https://doi.org/10.1093/occmed/kqg047
+- Hilditch, C. J., Arsintescu, L., Gregory, K. B., & Flynn-Evans, E. E. (2020). Mitigating fatigue on the flight deck: How is controlled rest used in practice? *Chronobiology International, 37*(11), 1563–1574. https://doi.org/10.1080/07420528.2020.1803898
+
 #### Per-user computation persistence (beyond HRV)
 - **Circadian run history per user**: persist circadian scenario inputs + outputs (DLMO/CBT/ESRI trajectories) so users can review and export prior simulations without rerunning.
 - **SAFTE run history per user**: persist SAFTE inputs + forecasts (and the data source used: wrist → clinical → Garmin Connect) for auditability and fast reuse.
@@ -253,7 +278,7 @@ Study Design:
 - Responder vs non-responder classification
 - Effect size calculations (Cohen's d, η²)
 
-> **For detailed roadmap**: See [WARP.md](WARP.md) section "🚀 DEVELOPMENT ROADMAP"
+> **For detailed roadmap**: See [WARP.md](WARP.md) section "🚀 DEVELOPMENT ROADMAP" and `docs/Manual.md` → **Pending Developments and Roadmap**.
 
 ---
 
