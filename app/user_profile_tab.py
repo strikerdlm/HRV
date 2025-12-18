@@ -346,24 +346,61 @@ def _render_profile_line_chart(
                 "smooth": True,
                 "showSymbol": False,
                 "connectNulls": False,
+                "lineStyle": {"width": 2},
+                "emphasis": {"focus": "series"},
                 "data": values,
             }
         )
+    legend_names = [s["name"] for s in series_payload if isinstance(s, dict) and "name" in s]
+    y_label = str(y_axis_label or "Value")
     option = {
-        "title": {"text": title},
-        "tooltip": {"trigger": "axis"},
-        "legend": {"type": "scroll"},
-        "grid": {"left": 60, "right": 20, "top": 50, "bottom": 40},
+        # Title is intentionally omitted: Streamlit headings already carry the chart title,
+        # and duplicating it inside ECharts is visually noisy in the app layout.
+        "backgroundColor": "transparent",
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "cross"},
+            "confine": True,
+        },
+        "legend": {"type": "scroll", "top": 0, "left": 0, "right": 0},
+        "grid": {"left": 60, "right": 20, "top": 30, "bottom": 60, "containLabel": True},
         "xAxis": {
             "type": "category",
             "data": x_labels,
             "boundaryGap": False,
-            "axisLabel": {"rotate": 0},
+            "axisLabel": {"rotate": 0, "hideOverlap": True},
         },
-        "yAxis": {"type": "value", "name": y_axis_label, "scale": True},
+        "yAxis": {"type": "value", "name": y_label, "scale": True, "nameGap": 45},
+        "dataZoom": [
+            {"type": "inside", "xAxisIndex": 0, "filterMode": "none"},
+            {"type": "slider", "xAxisIndex": 0, "height": 22, "bottom": 10},
+        ],
+        "toolbox": {
+            "right": 8,
+            "top": 2,
+            "feature": {
+                "dataZoom": {"yAxisIndex": "none"},
+                "restore": {},
+                "saveAsImage": {"pixelRatio": 4, "name": title or "chart"},
+            },
+        },
         "series": series_payload,
+        "aria": {
+            "enabled": True,
+            "label": {
+                "description": (
+                    f"{title}. X-axis shows {date_format} time labels. "
+                    f"Y-axis shows {y_label}. Series: {', '.join(legend_names)}."
+                )
+            },
+        },
     }
     render_echarts(option, height_px=height_px)
+    st.caption(
+        f"**What you're seeing:** A time series chart of **{', '.join(legend_names)}** over the x-axis (dates). "
+        f"The y-axis shows **{y_label}** (units are indicated in the legend when mixed). "
+        "Hover to inspect values; use the bottom slider (or scroll/drag) to zoom; use the toolbar to export a high-resolution image."
+    )
 
 
 def _render_profile_bar_chart(
@@ -1978,6 +2015,56 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         df.sort_values("metric_date", ascending=False, inplace=True)
 
     latest = df.iloc[0]
+
+    def _latest_non_null(metric_col: str) -> tuple[Optional[float], Optional[pd.Timestamp]]:
+        """Return (value, metric_date) for the latest non-null metric value.
+
+        We intentionally use the latest *available* value per metric (not just the latest
+        day row) because Garmin imports can arrive in parts (UDS daily summary vs sleep),
+        and the most recent day may be incomplete.
+        """
+        if metric_col not in df.columns or "metric_date" not in df.columns:
+            return None, None
+        series = pd.to_numeric(df[metric_col], errors="coerce")
+        mask = series.notna()
+        if not bool(mask.any()):
+            return None, None
+        idx = mask.idxmax()  # first True because df is sorted latest-first
+        try:
+            val = float(series.loc[idx])
+        except Exception:
+            return None, None
+        dt_val = df.loc[idx, "metric_date"]
+        return val, pd.to_datetime(dt_val, errors="coerce")
+
+    def _date_label(dt_val: Any) -> str:
+        if dt_val is None or pd.isna(dt_val):
+            return "—"
+        try:
+            return pd.to_datetime(dt_val).date().isoformat()
+        except Exception:
+            return str(dt_val)
+
+    no_data_hints: dict[str, str] = {
+        # Activity + physiology summaries
+        "steps": "Import a Garmin FIT/ZIP/JSON with daily activity summaries (e.g., `UDSFile_*.json`).",
+        "distance_km": "Import a Garmin FIT/ZIP/JSON with daily activity summaries (e.g., `UDSFile_*.json`).",
+        "calories_kcal": "Import a Garmin FIT/ZIP/JSON with daily activity summaries (e.g., `UDSFile_*.json`).",
+        "avg_hr_bpm": "Import a Garmin FIT file or `UDSFile_*.json` daily summary (then re-import to populate Avg HR).",
+        "resting_hr_bpm": "Import a Garmin FIT/ZIP/JSON that includes resting HR (often present in `UDSFile_*.json`).",
+        "stress_score": "Import `UDSFile_*.json` (daily stress summary) or a wellness ZIP export.",
+        "avg_spo2": "Import `UDSFile_*.json` (daily SpO₂ summary) or `*_spo2Data.json` / wellness ZIP if available.",
+        "avg_respiration_awake": "Import `UDSFile_*.json` (daily respiration summary) or `*_respirationData.json` / wellness ZIP if available.",
+        # Sleep-derived metrics
+        "sleep_score": "Import `*_sleepData.json` (sleep export) or a wellness ZIP export (sleep scores live there).",
+        "sleep_efficiency": "Import `*_sleepData.json` (sleep start/end required); efficiency is computed by the app.",
+        "sleep_duration_hours": "Import `*_sleepData.json` (sleep duration/stages).",
+        "avg_respiration_sleep": "Import `*_sleepData.json` (contains sleep respiration in many Garmin exports).",
+        # Body battery
+        "body_battery_avg": "Import `UDSFile_*.json` or a wellness ZIP export containing body battery.",
+        "body_battery_charge": "Import `UDSFile_*.json` or a wellness ZIP export containing body battery charge/drain.",
+        "body_battery_drain": "Import `UDSFile_*.json` or a wellness ZIP export containing body battery charge/drain.",
+    }
     
     # Debug: show what values we have
     _LOGGER.info(
@@ -2035,15 +2122,16 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
     st.markdown("### 🏃 Activity & Movement")
     cols = st.columns(3)
     activity_gauges = [
-        ("steps", "Steps", latest.get("steps"), "steps"),
-        ("distance_km", "Distance", latest.get("distance_km"), "distance_km"),
-        ("calories_kcal", "Calories", latest.get("calories_kcal"), "calories_kcal"),
+        ("steps", "Steps", "steps"),
+        ("distance_km", "Distance", "distance_km"),
+        ("calories_kcal", "Calories", "calories_kcal"),
     ]
-    for col, (_key, title, value, threshold_key) in zip(cols, activity_gauges):
-        val = _safe_float(value)
+    for col, (metric_col, title, threshold_key) in zip(cols, activity_gauges):
+        val, val_date = _latest_non_null(metric_col)
         if val is None or pd.isna(val):
             with col:
-                st.info(f"No {title} data")
+                hint = no_data_hints.get(metric_col, "")
+                st.info(f"No {title} data. {hint}".strip())
             continue
         thresholds = get_gauge_thresholds(threshold_key)
         if not thresholds:
@@ -2051,19 +2139,21 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
         with col:
             render_echarts(option, height_px=280)
+            st.caption(f"Latest available: {_date_label(val_date)}")
     
     st.markdown("### ❤️ Heart Rate & Stress")
     cols = st.columns(3)
     hr_gauges = [
-        ("avg_hr_bpm", "Avg HR", latest.get("avg_hr_bpm"), "avg_hr_bpm"),
-        ("resting_hr_bpm", "Resting HR", latest.get("resting_hr_bpm"), "resting_hr_bpm"),
-        ("stress_score", "Stress", latest.get("stress_score"), "stress_score"),
+        ("avg_hr_bpm", "Avg HR", "avg_hr_bpm"),
+        ("resting_hr_bpm", "Resting HR", "resting_hr_bpm"),
+        ("stress_score", "Stress", "stress_score"),
     ]
-    for col, (_key, title, value, threshold_key) in zip(cols, hr_gauges):
-        val = _safe_float(value)
+    for col, (metric_col, title, threshold_key) in zip(cols, hr_gauges):
+        val, val_date = _latest_non_null(metric_col)
         if val is None or pd.isna(val):
             with col:
-                st.info(f"No {title} data")
+                hint = no_data_hints.get(metric_col, "")
+                st.info(f"No {title} data. {hint}".strip())
             continue
         thresholds = get_gauge_thresholds(threshold_key)
         if not thresholds:
@@ -2071,19 +2161,21 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
         with col:
             render_echarts(option, height_px=280)
+            st.caption(f"Latest available: {_date_label(val_date)}")
     
     st.markdown("### 😴 Sleep & Recovery")
     cols = st.columns(3)
     sleep_gauges = [
-        ("sleep_score", "Sleep Score", latest.get("sleep_score"), "sleep_score"),
-        ("sleep_efficiency", "Sleep Efficiency", latest.get("sleep_efficiency"), "sleep_efficiency"),
-        ("sleep_duration_hours", "Sleep Duration", latest.get("sleep_duration_hours"), "sleep_duration_hours"),
+        ("sleep_score", "Sleep Score", "sleep_score"),
+        ("sleep_efficiency", "Sleep Efficiency", "sleep_efficiency"),
+        ("sleep_duration_hours", "Sleep Duration", "sleep_duration_hours"),
     ]
-    for col, (_key, title, value, threshold_key) in zip(cols, sleep_gauges):
-        val = _safe_float(value)
+    for col, (metric_col, title, threshold_key) in zip(cols, sleep_gauges):
+        val, val_date = _latest_non_null(metric_col)
         if val is None or pd.isna(val):
             with col:
-                st.info(f"No {title} data")
+                hint = no_data_hints.get(metric_col, "")
+                st.info(f"No {title} data. {hint}".strip())
             continue
         thresholds = get_gauge_thresholds(threshold_key)
         if not thresholds:
@@ -2091,19 +2183,21 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
         with col:
             render_echarts(option, height_px=280)
+            st.caption(f"Latest available: {_date_label(val_date)}")
     
     st.markdown("### 🫁 Respiration & SpO₂")
     cols = st.columns(3)
     resp_gauges = [
-        ("avg_spo2", "SpO₂", latest.get("avg_spo2"), "spo2_pct"),
-        ("avg_respiration_awake", "Resp Awake", latest.get("avg_respiration_awake"), "respiration_awake_bpm"),
-        ("avg_respiration_sleep", "Resp Sleep", latest.get("avg_respiration_sleep"), "respiration_sleep_bpm"),
+        ("avg_spo2", "SpO₂", "spo2_pct"),
+        ("avg_respiration_awake", "Resp Awake", "respiration_awake_bpm"),
+        ("avg_respiration_sleep", "Resp Sleep", "respiration_sleep_bpm"),
     ]
-    for col, (_key, title, value, threshold_key) in zip(cols, resp_gauges):
-        val = _safe_float(value)
+    for col, (metric_col, title, threshold_key) in zip(cols, resp_gauges):
+        val, val_date = _latest_non_null(metric_col)
         if val is None or pd.isna(val):
             with col:
-                st.info(f"No {title} data")
+                hint = no_data_hints.get(metric_col, "")
+                st.info(f"No {title} data. {hint}".strip())
             continue
         thresholds = get_gauge_thresholds(threshold_key)
         if not thresholds:
@@ -2111,19 +2205,21 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
         with col:
             render_echarts(option, height_px=280)
+            st.caption(f"Latest available: {_date_label(val_date)}")
     
     st.markdown("### 🔋 Body Battery")
     cols = st.columns(3)
     bb_gauges = [
-        ("body_battery_avg", "Avg Level", latest.get("body_battery_avg"), "body_battery_avg"),
-        ("body_battery_charge", "Charged", latest.get("body_battery_charge"), "body_battery_charge"),
-        ("body_battery_drain", "Drained", latest.get("body_battery_drain"), "body_battery_drain"),
+        ("body_battery_avg", "Avg Level", "body_battery_avg"),
+        ("body_battery_charge", "Charged", "body_battery_charge"),
+        ("body_battery_drain", "Drained", "body_battery_drain"),
     ]
-    for col, (_key, title, value, threshold_key) in zip(cols, bb_gauges):
-        val = _safe_float(value)
+    for col, (metric_col, title, threshold_key) in zip(cols, bb_gauges):
+        val, val_date = _latest_non_null(metric_col)
         if val is None or pd.isna(val):
             with col:
-                st.info(f"No {title} data")
+                hint = no_data_hints.get(metric_col, "")
+                st.info(f"No {title} data. {hint}".strip())
             continue
         thresholds = get_gauge_thresholds(threshold_key)
         if not thresholds:
@@ -2131,6 +2227,7 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
         with col:
             render_echarts(option, height_px=280)
+            st.caption(f"Latest available: {_date_label(val_date)}")
 
     st.markdown("---")
     st.markdown("---")
@@ -2236,7 +2333,7 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
             _render_profile_line_chart(
                 plot_df,
                 title=f"{title} trends",
-                y_axis_label="value",
+                y_axis_label="Value (see legend units)",
             )
         if not rendered_any:
             st.caption("Not enough repeated daily values to render trend charts yet.")
