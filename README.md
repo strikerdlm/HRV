@@ -223,6 +223,8 @@ All other tabs show **example data** and **reference values** to help you unders
 #### Mission FRMS v2.0 (comprehensive crew readiness + alerts)
 The SAFTE tab already ships a baseline **predictive FRMS dashboard** (exposure metrics + SMS-style risk matrix + USAF crew rest check). The next milestone is a **mission-wide FRMS system** that runs across *all profiles* and produces actionable alerts + mitigations for safety-critical windows.
 
+**Status update:** A **prototype “Crew Risk Board”** is now available in **Export → Group summaries → “Mission FRMS v2 — Crew Risk Board (multi-profile)”**, including **CSV/JSON exports** plus an exportable **decision log (JSON)** for audit trail workflows.
+
 **What’s left to implement (end-to-end FRMS):**
 - **Mission-level roster + “crew risk board”**: aggregate fatigue exposure and risk classification across all active profiles (per shift/EVA/task window), with a single view for flight surgeon / mission director decision-making.
 - **FRMS processes (predictive + proactive + reactive)**: add structured hazard reporting, SPIs/trending, safety assurance checks, and a transparent audit trail for risk decisions (inputs → classification → mitigation → outcome).
