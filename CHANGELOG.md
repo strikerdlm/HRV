@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Clinical Profile tab** (`app/user_profile_tab.py`): Removed nested Streamlit expanders that could crash the app with `StreamlitAPIException: Expanders may not be nested...` by converting inner panels (parameters/history/recommendations/subjective logs) to checkbox-controlled sections.
+- **Wrist Monitoring history** (`app/user_profile_tab.py`): Fixed “latest available metric” selection so per-metric values truly come from the most recent non-null row in the latest-first table order (avoids index-label pitfalls when the DataFrame index is not reset or not unique).
 
 ### Scientific References (Profile Tools Engine)
 - Plews DJ et al. (2013). J Appl Physiol - lnRMSSD for training monitoring
