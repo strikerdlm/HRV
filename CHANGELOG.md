@@ -5,6 +5,14 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.24] - 2025-12-18
+
+### Added
+- **Longitudinal cohort comparisons (T0–T21)** (`app/app.py`, `app/export_utils.py`): Export tab now supports **control vs intervention** comparisons using **within-subject Δ vs baseline** per timepoint, with CSV + Markdown exports (includes effect sizes and FDR-adjusted p-values).
+
+### Documentation
+- Updated `README.md` and `docs/Manual.md` to reflect the new longitudinal cohort export workflow.
+
 ## [1.8.23] - 2025-12-17
 
 ### Added
