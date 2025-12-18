@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Profile Tools RMSSD input default** (`app/user_profile_tab.py`): Corrected the RMSSD parameter widget default (previously incorrectly seeded from resting HR), improving out-of-the-box Profile Tools behavior.
 - **ECharts HTML export template** (`app/echarts_component.py`): Escaped CSS/JS braces inside the Streamlit HTML f-string to prevent a runtime `NameError: name 'height' is not defined` when rendering charts.
+- **ECharts charts not appearing** (`app/echarts_component.py`): Load the ECharts runtime from a Streamlit-served local static bundle (`.streamlit/static/echarts.min.js`) with CDN fallback and an in-iframe status/error message, preventing blank plots when CDN access is blocked.
+- **USAF Crew Rest checker date/time defaults** (`app/app.py`): Fixed incorrect `datetime.date.today()` / `datetime.time(...)` usage caused by `from datetime import datetime` shadowing, which could crash the app before any plots rendered.
 
 ### Tests
 - Added a regression test to ensure `render_echarts()` does not raise on CSS brace literals (`tests/test_echarts_component.py`).
