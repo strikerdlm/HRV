@@ -105,6 +105,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- **FRMS + USAF crew rest dashboard (SAFTE tab)** (`app/app.py`, `app/frms.py`): The SAFTE/Fatigue tab now includes an ICAO-aligned FRMS summary (WOCL exposure + threshold-based risk matrix) and a USAF crew rest compliance checker (AFMAN 11-202V3 baseline), plus publication-grade plot exports (Plotly fallback: HTML/PNG/SVG/PDF).
 - **Doctoral thesis proposal** (`docs/PhD.md`): Literature-backed dissertation concept for pilot/commander readiness classification, including multimodal predictors (sleep/fatigue/circadian/HRV/objective vigilance), countermeasure governance, and a 5×5 operational risk matrix for mission go/no-go decision support.
 - **Per-user HRV analysis artifact cache in SQLite** (`app/user_database.py`, `app/app.py`): reusable HRV analysis payloads are now persisted per user and keyed by **file hash + analysis settings hash**, enabling cross-session reuse without recomputation when inputs and settings match.
 - **Per-user GPT-5.2 export persistence** (`app/user_database.py`, `app/app.py`): GPT-5.2 high-reasoning interpretation markdown (and citation metadata) is now stored per user + payload hash so exports can include prior interpretations even when GPT is disabled/offline. A **combined HRV + GPT** markdown download is provided in the Export tab.
@@ -119,6 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `*_sleepData.json` (sleep stages + scores; supports the newer nested `sleepScores` schema)
 
 ### Changed
+- **Fatigue zone thresholds** (`app/fatigue_integration.py`, `app/app.py`): Updated operational effectiveness zones to SAFTE/FAST-style thresholds (≥90, 77–89, 70–77, ≤70) and clarified plot captions/labels for safer interpretation.
 - **Covariate adjustment defaults** (`app/app.py`): age/sex/BMI/activity inputs now default to the active user profile context when available (with a “Use active profile defaults” toggle), ensuring profile-aware HRV interpretation is user-scoped.
 - **Performance** (`app/app.py`, `app/user_profile_tab.py`, `app/user_database.py`, `app/i18n.py`): Bounded Streamlit caches (heavy HRV compute, space-weather fetches, profile/history loaders, i18n lookups) with explicit TTL + `max_entries` to keep memory usage stable during long sessions.
 - **Readiness tab** (`app/app.py`): Readiness scoring now prefers the user’s **stored HRV history** in the database (parasympathetic index) so it can include more sessions than the currently loaded uploads.
