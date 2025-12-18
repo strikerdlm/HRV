@@ -130,6 +130,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Logging** (`app/logging_config.py`): Suppressed benign Streamlit/Tornado `WebSocketClosedError` “Task exception was never retrieved” noise so `logs/errors.log` stays actionable.
 - **Device imports** (`app/app.py`): ActiGraph and Somfit sidebar imports now run only when clicking an explicit **Import** button (prevents expensive re-processing on every rerun) and always clean up temporary files, improving UI smoothness and reliability.
 - **Garmin daily metrics upsert** (`app/user_database.py`): Partial imports no longer wipe previously stored non-null fields (upsert now preserves existing values when the new value is NULL).
+- **Wrist Monitoring stats/trends** (`app/user_profile_tab.py`): The History tab now loads a configurable number of stored Garmin days and renders trends + summary statistics across all saved daily metrics (not just a subset), and the “View all daily metrics” panel now shows the full loaded table (not just 10 rows).
 
 ### Tests
 - Added regression coverage for timepoint persistence and database backups (`tests/test_longitudinal_timepoints.py`).
