@@ -527,11 +527,251 @@ def compare_cohort_longitudinal_groups(
 	return out
 
 
+def fit_cohort_longitudinal_mixed_effects(
+	cohort_long_df: pd.DataFrame,
+	*,
+	group_a: str,
+	group_b: str,
+	max_iter: int = 200,
+) -> pd.DataFrame:
+	"""Fit a mixed-effects model for Δ vs baseline with random subject intercepts.
+
+	This implements a roadmap item: add mixed-effects models for Group × Time inference.
+
+	Model (per metric):
+		Δ ~ C(group) * C(timepoint_label) + (1 | user_id)
+
+	Notes:
+	- T0 deltas are excluded (always 0 by construction).
+	- This is intended for small-to-moderate longitudinal cohorts (T0–T21).
+	- The implementation is deterministic (bounded optimizer iterations) and fails closed
+	  (returns an empty DataFrame or per-metric error rows).
+
+	Args:
+		cohort_long_df: Output of `build_cohort_longitudinal_delta_long_df()`.
+		group_a: First group label (included).
+		group_b: Second group label (included).
+		max_iter: Maximum optimizer iterations (bounded).
+
+	Returns:
+		Tidy DataFrame of fixed-effects terms across metrics with columns:
+		`metric`, `term`, `coef`, `std_err`, `z`, `p_value`, `ci_low`, `ci_high`,
+		`n_obs`, `n_subjects`, `converged`, `aic`, `bic`.
+	"""
+	if not isinstance(cohort_long_df, pd.DataFrame) or cohort_long_df.empty:
+		return pd.DataFrame(
+			columns=[
+				"metric",
+				"term",
+				"coef",
+				"std_err",
+				"z",
+				"p_value",
+				"ci_low",
+				"ci_high",
+				"n_obs",
+				"n_subjects",
+				"converged",
+				"aic",
+				"bic",
+				"error",
+			]
+		)
+
+	a = str(group_a or "").strip()
+	b = str(group_b or "").strip()
+	if not a or not b:
+		raise ValueError("group_a and group_b are required")
+	if a == b:
+		raise ValueError("group_a and group_b must be different")
+	if int(max_iter) <= 0:
+		raise ValueError("max_iter must be positive")
+
+	df = cohort_long_df.copy()
+	required = {"user_id", "group", "timepoint_label", "metric", "delta"}
+	if not required.issubset(set(df.columns)):
+		return pd.DataFrame(
+			columns=[
+				"metric",
+				"term",
+				"coef",
+				"std_err",
+				"z",
+				"p_value",
+				"ci_low",
+				"ci_high",
+				"n_obs",
+				"n_subjects",
+				"converged",
+				"aic",
+				"bic",
+				"error",
+			]
+		)
+
+	df["group"] = df["group"].astype(str)
+	df["timepoint_label"] = df["timepoint_label"].astype(str)
+	df["metric"] = df["metric"].astype(str)
+	df["user_id"] = df["user_id"].astype(str)
+	df["delta"] = pd.to_numeric(df["delta"], errors="coerce")
+	df = df.dropna(subset=["delta"])
+	df = df[df["group"].isin([a, b])]
+	df = df[~df["timepoint_label"].astype(str).str.startswith("T0")]
+	if df.empty:
+		return pd.DataFrame(
+			columns=[
+				"metric",
+				"term",
+				"coef",
+				"std_err",
+				"z",
+				"p_value",
+				"ci_low",
+				"ci_high",
+				"n_obs",
+				"n_subjects",
+				"converged",
+				"aic",
+				"bic",
+				"error",
+			]
+		)
+
+	# Local import (statsmodels is an optional-but-pinned dependency for this app).
+	try:  # pragma: no cover - exercised in runtime; tests cover when installed
+		import statsmodels.formula.api as smf  # type: ignore
+	except Exception as exc:  # pragma: no cover
+		return pd.DataFrame(
+			[
+				{
+					"metric": "",
+					"term": "",
+					"coef": float("nan"),
+					"std_err": float("nan"),
+					"z": float("nan"),
+					"p_value": float("nan"),
+					"ci_low": float("nan"),
+					"ci_high": float("nan"),
+					"n_obs": int(df.shape[0]),
+					"n_subjects": int(df["user_id"].nunique()),
+					"converged": False,
+					"aic": float("nan"),
+					"bic": float("nan"),
+					"error": f"statsmodels unavailable: {exc}",
+				}
+			]
+		)
+
+	rows: list[dict[str, Any]] = []
+	for metric_name, g in df.groupby("metric", sort=False):
+		sub = g.copy()
+		n_obs = int(sub.shape[0])
+		n_subjects = int(sub["user_id"].nunique())
+		if n_obs < 6 or n_subjects < 2:
+			rows.append(
+				{
+					"metric": str(metric_name),
+					"term": "",
+					"coef": float("nan"),
+					"std_err": float("nan"),
+					"z": float("nan"),
+					"p_value": float("nan"),
+					"ci_low": float("nan"),
+					"ci_high": float("nan"),
+					"n_obs": n_obs,
+					"n_subjects": n_subjects,
+					"converged": False,
+					"aic": float("nan"),
+					"bic": float("nan"),
+					"error": "Insufficient observations/subjects for mixed-effects model.",
+				}
+			)
+			continue
+
+		# MixedLM expects categorical variables to be present as strings or categoricals.
+		sub["group"] = sub["group"].astype("category")
+		sub["timepoint_label"] = sub["timepoint_label"].astype("category")
+
+		try:
+			model = smf.mixedlm(
+				"delta ~ C(group) * C(timepoint_label)",
+				data=sub,
+				groups=sub["user_id"],
+			)
+			res = model.fit(
+				reml=False,
+				method="lbfgs",
+				maxiter=int(max_iter),
+				disp=False,
+			)
+			params = res.params
+			bse = res.bse
+			pvals = getattr(res, "pvalues", None)
+			ci = res.conf_int()
+			converged = bool(getattr(res, "converged", True))
+			aic = float(getattr(res, "aic", float("nan")))
+			bic = float(getattr(res, "bic", float("nan")))
+
+			for term in params.index:
+				coef = float(params[term])
+				std_err = float(bse[term]) if term in bse.index else float("nan")
+				z = float(coef / std_err) if np.isfinite(std_err) and std_err != 0 else float("nan")
+				p_value = float(pvals[term]) if pvals is not None and term in pvals.index else float("nan")
+				ci_low = float(ci.loc[term, 0]) if term in ci.index else float("nan")
+				ci_high = float(ci.loc[term, 1]) if term in ci.index else float("nan")
+				rows.append(
+					{
+						"metric": str(metric_name),
+						"term": str(term),
+						"coef": coef,
+						"std_err": std_err,
+						"z": z,
+						"p_value": p_value,
+						"ci_low": ci_low,
+						"ci_high": ci_high,
+						"n_obs": n_obs,
+						"n_subjects": n_subjects,
+						"converged": converged,
+						"aic": aic,
+						"bic": bic,
+						"error": "",
+					}
+				)
+		except Exception as exc:
+			rows.append(
+				{
+					"metric": str(metric_name),
+					"term": "",
+					"coef": float("nan"),
+					"std_err": float("nan"),
+					"z": float("nan"),
+					"p_value": float("nan"),
+					"ci_low": float("nan"),
+					"ci_high": float("nan"),
+					"n_obs": n_obs,
+					"n_subjects": n_subjects,
+					"converged": False,
+					"aic": float("nan"),
+					"bic": float("nan"),
+					"error": f"{type(exc).__name__}: {exc}",
+				}
+			)
+
+	out = pd.DataFrame(rows)
+	if out.empty:
+		return out
+	# Present fixed effects first, then random effect variance terms.
+	out["is_random"] = out["term"].astype(str).str.contains("Group Var", na=False)
+	out = out.sort_values(["metric", "is_random", "term"]).drop(columns=["is_random"])
+	return out.reset_index(drop=True)
+
+
 def build_cohort_longitudinal_markdown_report(
 	*,
 	cohort_long_df: pd.DataFrame,
 	group_summary_df: pd.DataFrame,
 	comparisons_df: pd.DataFrame,
+	mixed_effects_df: Optional[pd.DataFrame] = None,
 	group_a: str,
 	group_b: str,
 	additional_notes: str = "",
@@ -563,6 +803,17 @@ def build_cohort_longitudinal_markdown_report(
 		lines.append("## Between-group comparisons (Δ vs baseline)")
 		lines.append("")
 		lines.append(_dataframe_to_markdown(comparisons_df, max_rows=None))
+		lines.append("")
+
+	if isinstance(mixed_effects_df, pd.DataFrame) and not mixed_effects_df.empty:
+		lines.append("## Mixed-effects model (Group × Time)")
+		lines.append("")
+		lines.append(
+			"Model: `delta ~ C(group) * C(timepoint_label) + (1 | user_id)` "
+			"(random intercept per subject; T0 excluded)."
+		)
+		lines.append("")
+		lines.append(_dataframe_to_markdown(mixed_effects_df, max_rows=None))
 		lines.append("")
 
 	if additional_notes.strip():

@@ -21,6 +21,7 @@ from app.export_utils import (  # pylint: disable=wrong-import-position
     compare_cohort_longitudinal_groups,
     compute_cohort_longitudinal_group_summary,
     compute_cohort_summary_stats,
+    fit_cohort_longitudinal_mixed_effects,
 )
 
 
@@ -162,4 +163,53 @@ def test_cohort_longitudinal_delta_and_group_comparison_tables() -> None:
     )
     assert "# Cohort Longitudinal Report" in md
     assert "## Between-group comparisons" in md
+
+
+def test_cohort_mixed_effects_model_runs_on_longitudinal_deltas() -> None:
+    # Minimal longitudinal deltas for two groups across two timepoints.
+    user_tables = {
+        "c1": pd.DataFrame(
+            [
+                {"timepoint_label": "T0_baseline", "rmssd_ms": 40.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 0.0},
+                {"timepoint_label": "T1", "rmssd_ms": 41.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 1.0},
+                {"timepoint_label": "T2", "rmssd_ms": 42.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 2.0},
+            ]
+        ),
+        "c2": pd.DataFrame(
+            [
+                {"timepoint_label": "T0_baseline", "rmssd_ms": 40.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 0.0},
+                {"timepoint_label": "T1", "rmssd_ms": 42.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 2.0},
+                {"timepoint_label": "T2", "rmssd_ms": 43.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 3.0},
+            ]
+        ),
+        "i1": pd.DataFrame(
+            [
+                {"timepoint_label": "T0_baseline", "rmssd_ms": 40.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 0.0},
+                {"timepoint_label": "T1", "rmssd_ms": 45.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 5.0},
+                {"timepoint_label": "T2", "rmssd_ms": 47.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 7.0},
+            ]
+        ),
+        "i2": pd.DataFrame(
+            [
+                {"timepoint_label": "T0_baseline", "rmssd_ms": 40.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 0.0},
+                {"timepoint_label": "T1", "rmssd_ms": 46.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 6.0},
+                {"timepoint_label": "T2", "rmssd_ms": 48.0, "baseline_rmssd_ms": 40.0, "delta_rmssd_ms": 8.0},
+            ]
+        ),
+    }
+    user_groups = {"c1": "Control", "c2": "Control", "i1": "Intervention", "i2": "Intervention"}
+    long_df = build_cohort_longitudinal_delta_long_df(
+        user_timepoint_tables=user_tables,
+        user_group_map=user_groups,
+        metrics=["rmssd_ms"],
+    )
+    mixed_df = fit_cohort_longitudinal_mixed_effects(
+        long_df,
+        group_a="Control",
+        group_b="Intervention",
+        max_iter=100,
+    )
+    assert not mixed_df.empty
+    assert set(["metric", "term", "coef", "p_value", "n_obs", "n_subjects"]).issubset(mixed_df.columns)
+    assert "rmssd_ms" in set(mixed_df["metric"].astype(str).tolist())
 

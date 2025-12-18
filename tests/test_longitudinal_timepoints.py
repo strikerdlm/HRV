@@ -19,6 +19,7 @@ from user_database import (  # noqa: E402
     ClinicalScales,
     HRVMeasurement,
     MeasurementTimepoint,
+    StudyGroup,
     UserDatabase,
     UserProfile,
 )
@@ -190,3 +191,39 @@ def test_hrv_timepoint_change_table_computes_baseline_and_delta(tmp_path: Path) 
     delta_t1 = float(table.loc[table["timepoint_label"] == "T1", "delta_rmssd_ms"].iloc[0])
     assert delta_t0 == pytest.approx(0.0)
     assert delta_t1 == pytest.approx(8.0)
+
+
+def test_study_groups_and_assignments_persist_and_build_roster(tmp_path: Path) -> None:
+    """Study groups/assignments should be persisted and queriable as a roster."""
+    db_path = tmp_path / "hrv_users.db"
+    db = UserDatabase(db_path=db_path)
+
+    user = UserProfile(user_id="", username="u1", full_name="User One")
+    user_id = db.create_user(user)
+
+    study_id = "study_alpha"
+    group_id = db.upsert_study_group(
+        StudyGroup(
+            group_id="",
+            study_id=study_id,
+            group_name="Control",
+            description="Control arm",
+        )
+    )
+    assert group_id
+
+    groups = db.list_study_groups(study_id)
+    assert groups
+    assert any(g.group_name == "Control" for g in groups)
+
+    db.set_user_study_assignment(user_id=user_id, study_id=study_id, group_id=group_id)
+    roster = db.get_study_roster_dataframe(study_id)
+    assert not roster.empty
+    row = roster[roster["user_id"] == user_id].iloc[0]
+    assert str(row["group_name"]) == "Control"
+
+    # Unassign should clear the roster entry.
+    db.set_user_study_assignment(user_id=user_id, study_id=study_id, group_id=None)
+    roster2 = db.get_study_roster_dataframe(study_id)
+    row2 = roster2[roster2["user_id"] == user_id].iloc[0]
+    assert (row2.get("group_name") is None) or (str(row2.get("group_name")) in {"", "None", "nan"})
