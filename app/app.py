@@ -7996,8 +7996,8 @@ that predicts cognitive performance based on:
 
 **Operational Effectiveness Zones (SAFTE/FAST-style):**
 - 🟢 **Low risk (≥90%):** Well-rested baseline
-- 🟡 **Caution (77–89%):** Transitional range; monitor fatigue and protect safety-critical tasks
-- 🟠 **High risk (70–77%):** Impairment often compared to ~0.05% BAC
+- 🟡 **Caution (77–<90%):** Transitional range; monitor fatigue and protect safety-critical tasks
+- 🟠 **High risk (>70–≤77%):** Impairment often compared to ~0.05% BAC
 - 🔴 **Severe (≤70%):** Impairment often compared to ~0.08% BAC
 
 **Scientific References:**
@@ -8442,8 +8442,8 @@ that predicts cognitive performance based on:
                 zones = analysis["zones"]
                 zone_labels = [
                     "Low risk (≥90%)",
-                    "Caution (77–89%)",
-                    "High risk (70–77%)",
+                    "Caution (77–<90%)",
+                    "High risk (>70–≤77%)",
                     "Severe (≤70%)",
                 ]
                 zone_colors = ["#28a745", "#ffc107", "#fd7e14", "#dc3545"]
@@ -8483,7 +8483,7 @@ that predicts cognitive performance based on:
                 )
                 st.caption(
                     "This distribution summarizes the number of predicted hours spent in each operational "
-                    "effectiveness zone (≥90%, 77–89%, 70–77%, ≤70%)."
+                    "effectiveness zone (≥90%, 77–<90%, >70–≤77%, ≤70%)."
                 )
                 
                 # Risk assessment (heuristic)
