@@ -19,6 +19,8 @@ Contributing to **AsterPhysiology** Research Initiative
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
 
+**NEW in v1.8.28**: **Crew mission workspaces** — The app now organizes data under `crew/` with **Mission 1** and **Mission 2**. The active mission’s **SQLite DB + backups** live in `crew/<Mission>/db/`, and per-subject files live in `crew/<Mission>/subjects/`.
+
 **NEW in v1.8.27**: **Per-user SAFTE/FRMS defaults** — Save a typical **sleep window**, **duty window**, and **weekend policy** per profile so SAFTE/FRMS workflows can auto-load reproducible schedules without re-entry.
 
 **NEW in v1.8.26**: **Mission FRMS v2 “Crew Risk Board” prototype** — Export a multi-profile roster view with crew-level FRMS metrics/classification plus **CSV/JSON** outputs and an **audit decision log (JSON)**.
@@ -116,7 +118,7 @@ The app will open in your default browser at `http://localhost:8501`.
 3. **Explore tabs**: Start with **Overview** for summary statistics, then explore **Gauges** for visual benchmarks
 4. **Export**: Go to **Export** tab to download a comprehensive Markdown report
 
-**Per-user persistence:** RR uploads are saved with the active profile (see the light-bulb banner) and immediately written to `data/{user}/rr_intervals`. The app warns when you re-upload a previously analyzed file and can reuse stored HRV results when the file hash and analysis settings match (toggle in the sidebar) or let you recompute. Sidebar uploads target the active profile (Diego by default); uploads from the User Profile tab are scoped to that user and set that profile active. In **User Profile → HRV → HRV Measurement History**, use **Regenerate plots** if charts look stale after a new analysis run. In **User Profile → HRV → Stored RR Library**, you can load previously saved RR recordings back into the analysis workspace (optionally auto-running analysis) without re-uploading.
+**Per-user persistence:** RR uploads are saved with the active profile (see the light-bulb banner) and immediately written to `crew/<Mission>/subjects/{user}/rr_intervals`. The app warns when you re-upload a previously analyzed file and can reuse stored HRV results when the file hash and analysis settings match (toggle in the sidebar) or let you recompute. Sidebar uploads target the active profile (Diego by default); uploads from the User Profile tab are scoped to that user and set that profile active. In **User Profile → HRV → HRV Measurement History**, use **Regenerate plots** if charts look stale after a new analysis run. In **User Profile → HRV → Stored RR Library**, you can load previously saved RR recordings back into the analysis workspace (optionally auto-running analysis) without re-uploading.
 
 **Per-profile readiness:** **User Profile → Readiness** computes readiness from stored parasympathetic-index history and displays HRV metric gauges using the same ECharts styling as the main Gauges tab.
 
