@@ -226,6 +226,12 @@ plots_output/
 # User data directory (contains sensitive physiological data)
 data/
 
+# Garmin Connect exports (contain PII + health metrics)
+Garmin/
+
+# Local SQLite backups (contain PII; should never be committed)
+hrv_users.db.bak_*
+
 # Downloaded papers
 downloads/
 
