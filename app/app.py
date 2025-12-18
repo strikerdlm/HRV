@@ -8362,7 +8362,7 @@ that predicts cognitive performance based on:
                             "markLine": {
                                 "data": [
                                     {"yAxis": 90, "name": "Low risk (≥90%)", "lineStyle": {"color": "#28a745", "type": "dashed"}},
-                                    {"yAxis": 77, "name": "High risk (≤77%)", "lineStyle": {"color": "#fd7e14", "type": "dashed"}},
+                                    {"yAxis": 77, "name": "High risk (>70–≤77%)", "lineStyle": {"color": "#fd7e14", "type": "dashed"}},
                                     {"yAxis": 70, "name": "Severe (≤70%)", "lineStyle": {"color": "#dc3545", "type": "dashed"}},
                                 ]
                             }
