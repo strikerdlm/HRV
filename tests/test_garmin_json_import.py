@@ -67,6 +67,29 @@ def test_import_garmin_sleep_json_new_schema(tmp_path: Path) -> None:
     assert float(row["tst_minutes"]) == (4200 + 13860 + 4260) / 60.0
 
 
+def test_import_garmin_sleep_json_temp_filename_is_inferred(tmp_path: Path) -> None:
+    """Temp filenames (e.g., tmpXXXX.json) should still parse based on content."""
+    payload = [
+        {
+            "sleepStartTimestampGMT": "2025-12-10T02:36:00.0",
+            "sleepEndTimestampGMT": "2025-12-10T09:15:00.0",
+            "calendarDate": "2025-12-10",
+            "deepSleepSeconds": 4200,
+            "lightSleepSeconds": 13860,
+            "remSleepSeconds": 4260,
+            "awakeSleepSeconds": 1620,
+            "sleepScores": {"overallScore": 75},
+        }
+    ]
+
+    json_path = tmp_path / "tmpcbl3yx51.json"
+    json_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    data = import_garmin_data(json_path=json_path)
+    assert not data.sleep_df.empty
+    assert data.sleep_df.iloc[0]["date"] == "2025-12-10"
+
+
 def test_import_garmin_udsfile_json_daily_summary(tmp_path: Path) -> None:
     """UDSFile daily summary should populate daily metrics (steps/stress/spo2/body battery)."""
     payload = [
