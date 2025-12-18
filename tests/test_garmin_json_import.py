@@ -105,6 +105,8 @@ def test_import_garmin_udsfile_json_daily_summary(tmp_path: Path) -> None:
             "currentDayRestingHeartRate": 60,
             "minHeartRate": 55,
             "maxHeartRate": 120,
+            "minAvgHeartRate": 58,
+            "maxAvgHeartRate": 111,
             "allDayStress": {
                 "aggregatorList": [
                     {"type": "TOTAL", "averageStressLevel": 43},
@@ -159,6 +161,7 @@ def test_import_garmin_udsfile_json_daily_summary(tmp_path: Path) -> None:
     assert int(row["steps"]) == 1000
     assert float(row["distance_km"]) == 0.8
     assert float(row["calories_kcal"]) == 200.0
+    assert float(row["avg_hr"]) == (58 + 111) / 2.0
     assert float(row["avg_stress"]) == 43
     assert float(row["avg_spo2"]) == 88.0
     assert float(row["avg_respiration_awake"]) == 14.0
