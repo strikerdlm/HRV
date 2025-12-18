@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import textwrap
 import uuid
 from dataclasses import dataclass
@@ -9,6 +10,10 @@ from typing import Any, Dict, Optional, Union
 
 import streamlit as st
 import streamlit.components.v1 as components
+
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+_DEFAULT_LOCAL_ECHARTS_BUNDLE = _PROJECT_ROOT / "node_modules" / "echarts" / "dist" / "echarts.min.js"
 
 
 @dataclass(slots=True, frozen=True)
@@ -20,7 +25,7 @@ class EChartsConfig:
 		local_echarts_path: Optional local path to echarts.min.js (e.g., node_modules/echarts/dist/echarts.min.js).
 	"""
 	cdn_url: Optional[str] = "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
-	local_echarts_path: Optional[Path] = None
+	local_echarts_path: Optional[Path] = _DEFAULT_LOCAL_ECHARTS_BUNDLE
 
 
 def _read_local_echarts(local_path: Optional[Path]) -> Optional[str]:
@@ -28,6 +33,35 @@ def _read_local_echarts(local_path: Optional[Path]) -> Optional[str]:
 		return None
 	try:
 		return Path(local_path).read_text(encoding="utf-8")
+	except Exception:
+		return None
+
+
+def _try_prepare_streamlit_static_asset(*, source_path: Path, target_name: str) -> Optional[str]:
+	"""Try to make a local JS asset available via Streamlit's /static route.
+
+	Streamlit supports serving files placed under `.streamlit/static/` at runtime.
+	We use this to avoid inlining large JS bundles into every iframe (which can lead
+	to blank charts if the HTML payload is too large or if external CDNs are blocked).
+
+	Args:
+		source_path: Existing local file path (e.g., node_modules/echarts/dist/echarts.min.js).
+		target_name: Output filename under `.streamlit/static/` (e.g., "echarts.min.js").
+
+	Returns:
+		A URL path like "/static/echarts.min.js" if successful, otherwise None.
+	"""
+	if not source_path.exists() or not source_path.is_file():
+		return None
+
+	static_dir = _PROJECT_ROOT / ".streamlit" / "static"
+	target_path = static_dir / target_name
+	try:
+		static_dir.mkdir(parents=True, exist_ok=True)
+		# Copy only if missing or size differs to keep reruns cheap.
+		if (not target_path.exists()) or (target_path.stat().st_size != source_path.stat().st_size):
+			shutil.copyfile(source_path, target_path)
+		return f"/static/{target_name}"
 	except Exception:
 		return None
 
@@ -65,20 +99,29 @@ def render_echarts(
 		raise ValueError("export_basename must be a non-empty string")
 
 	cfg = config or EChartsConfig(
-		local_echarts_path=Path("node_modules/echarts/dist/echarts.min.js")
+		local_echarts_path=_DEFAULT_LOCAL_ECHARTS_BUNDLE
 	)
 
 	container_id = f"echarts-{uuid.uuid4().hex}"
+	status_id = f"{container_id}-status"
 	toolbar_id = f"echarts-toolbar-{uuid.uuid4().hex}"
 	option_json = json.dumps(option, separators=(",", ":"), ensure_ascii=False)
-	local_js = _read_local_echarts(cfg.local_echarts_path)
 
-	# If local JS is available, inline it; otherwise load from CDN (defer)
-	if local_js:
-		script_loader = f"<script>{local_js}</script>"
-	else:
-		cdn = cfg.cdn_url or "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
-		script_loader = f'<script src="{cdn}"></script>'
+	cdn = cfg.cdn_url or "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
+	static_url: Optional[str] = None
+	if cfg.local_echarts_path is not None:
+		static_url = _try_prepare_streamlit_static_asset(
+			source_path=Path(cfg.local_echarts_path),
+			target_name="echarts.min.js",
+		)
+	echarts_lib_source = static_url or cdn
+	static_candidate = "/static/echarts.min.js"
+	fallback_sources: list[str] = []
+	if echarts_lib_source != cdn:
+		fallback_sources.append(cdn)
+	if echarts_lib_source != static_candidate:
+		fallback_sources.append(static_candidate)
+	script_loader = f'<script src="{echarts_lib_source}"></script>'
 
 	theme_snippet = f'"{theme}"' if theme else "null"
 
@@ -105,6 +148,9 @@ def render_echarts(
 	html = textwrap.dedent(
 		f"""
 		{export_toolbar_html}
+		<div id="{status_id}" style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;font-size:12px;color:#6b7280;margin:4px 0;">
+		  Loading chart...
+		</div>
 		<div id="{container_id}" style="width:{width};height:{height_px}px;margin:0 auto;"></div>
 		{script_loader}
 		<script>
@@ -113,6 +159,26 @@ def render_echarts(
 			const ECHARTS_OPTION = {option_json};
 			const ECHARTS_THEME = {theme_snippet};
 			const ECHARTS_RENDERER = {json.dumps(renderer)};
+			const ECHARTS_LIB_SOURCE = {json.dumps(echarts_lib_source)};
+			const ECHARTS_FALLBACK_SOURCES = {json.dumps(fallback_sources)};
+
+			const statusEl = document.getElementById("{status_id}");
+			function setStatus(message, isError) {{
+				if (!statusEl) return;
+				statusEl.textContent = message;
+				statusEl.style.color = isError ? "#b91c1c" : "#6b7280";
+				statusEl.style.display = message ? "block" : "none";
+			}}
+
+			function loadScript(src) {{
+				return new Promise((resolve, reject) => {{
+					const s = document.createElement("script");
+					s.src = src;
+					s.onload = () => resolve(true);
+					s.onerror = () => reject(new Error("Failed to load script: " + src));
+					document.head.appendChild(s);
+				}});
+			}}
 
 			function downloadDataUrl(dataUrl, filename) {{
 				const a = document.createElement('a');
@@ -183,13 +249,39 @@ def render_echarts(
 				win.addEventListener("load", () => setTimeout(tryPrint, 250));
 			}}
 
-			function mountChart() {{
-				if (!window.echarts) {{
-					console.error("ECharts not loaded.");
-					return;
-				}}
-				const el = document.getElementById("{container_id}");
-				if (!el) return;
+			async function mountChart() {{
+				setStatus("Loading ECharts from " + ECHARTS_LIB_SOURCE + "...", false);
+				try {{
+					if (!window.echarts && Array.isArray(ECHARTS_FALLBACK_SOURCES) && ECHARTS_FALLBACK_SOURCES.length) {{
+						for (let i = 0; i < ECHARTS_FALLBACK_SOURCES.length; i++) {{
+							const src = ECHARTS_FALLBACK_SOURCES[i];
+							if (!src) continue;
+							setStatus(
+								"Loading ECharts fallback (" + (i + 1) + "/" + ECHARTS_FALLBACK_SOURCES.length + ") from " + src + "...",
+								false
+							);
+							try {{
+								await loadScript(src);
+							}} catch (e) {{
+								console.warn("ECharts fallback failed:", src, e);
+							}}
+							if (window.echarts) break;
+						}}
+					}}
+					if (!window.echarts) {{
+						console.error("ECharts not loaded.");
+						setStatus(
+							"ECharts failed to load. Tried: " + [ECHARTS_LIB_SOURCE].concat(ECHARTS_FALLBACK_SOURCES || []).join(", "),
+							true
+						);
+						return;
+					}}
+					const el = document.getElementById("{container_id}");
+					if (!el) {{
+						setStatus("Chart container element was not found.", true);
+						return;
+					}}
+					setStatus("", false);
 				if (window.frameElement) {{
 					const frame = window.frameElement;
 					frame.style.width = '100%';
@@ -289,6 +381,11 @@ def render_echarts(
 							window.alert("Export failed. See browser console for details.");
 						}}
 					}});
+				}}
+				}} catch (e) {{
+					console.error("Chart render failed:", e);
+					const msg = (e && e.message) ? e.message : String(e);
+					setStatus("Chart render failed: " + msg, true);
 				}}
 			}}
 			if (document.readyState === 'loading') {{
