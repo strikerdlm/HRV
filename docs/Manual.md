@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.8.23  
+**Version:** 1.8.27  
 **Last Updated:** 2025-12-18
 
 ---
@@ -81,7 +81,7 @@ All other tabs show **example data** and **reference values** to help you unders
 
 | Requirement | Minimum | Recommended |
 |-------------|---------|-------------|
-| Python | 3.10 | 3.11+ |
+| Python | 3.10 | 3.12+ |
 | RAM | 4 GB | 8 GB |
 | Storage | 500 MB | 1 GB |
 | Browser | Chrome 90+ | Chrome/Edge latest |
@@ -103,8 +103,8 @@ The app automatically detects GPU availability and falls back to CPU when CUDA i
 **Step 1: Clone or download the repository**
 
 ```bash
-git clone https://github.com/yourusername/hrv-space-weather.git
-cd hrv-space-weather
+git clone https://github.com/strikerdlm/HRV.git
+cd HRV
 ```
 
 **Step 2: Set up Python environment**
