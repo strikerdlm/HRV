@@ -30,7 +30,10 @@ psutil>=5.9,<6  # CPU detection and process priority management
 # ===========================================================================
 # DATA VISUALIZATION
 # ===========================================================================
-# 
+# Interactive charts (ECharts is embedded via JS; Plotly used as export fallback)
+plotly>=5.0,<6
+# Static plot exports (PNG/SVG/PDF) for Plotly
+kaleido>=0.2,<1
 
 # ===========================================================================
 # DEVICE INTEGRATIONS (Optional)
