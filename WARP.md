@@ -173,8 +173,8 @@ Subject (1) → Measurements (up to 22)
 ```
 
 **Intra-Subject Analysis** (within individual):
-- [ ] Baseline establishment (T0) with confidence intervals
-- [ ] Change detection from baseline (Δ metrics)
+- [x] Baseline establishment (T0) for stored HRV metrics (median/mean per timepoint)
+- [x] Change detection from baseline (Δ metrics) per timepoint (User Profile → HRV Measurement History)
 - [ ] Trend analysis (linear, polynomial, seasonal decomposition)
 - [ ] Individual response patterns to interventions
 - [ ] Personal reference ranges (percentile-based)
