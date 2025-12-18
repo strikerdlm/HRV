@@ -268,7 +268,7 @@ except ImportError:
     HRV_CACHE_AVAILABLE = False
 
 from dataclasses import asdict, dataclass
-from datetime import timezone, timedelta, datetime, date
+from datetime import timezone, timedelta, datetime, date, time
 from typing import (
     Any,
     Dict,
@@ -8949,23 +8949,23 @@ that predicts cognitive performance based on:
                     with col_cr_1:
                         cr_start_date = st.date_input(
                             "Crew rest start (local date)",
-                            value=datetime.date.today(),
+                            value=date.today(),
                             key="usaf_crew_rest_start_date",
                         )
                         cr_start_time = st.time_input(
                             "Crew rest start (local time)",
-                            value=datetime.time(20, 0),
+                            value=time(20, 0),
                             key="usaf_crew_rest_start_time",
                         )
                     with col_cr_2:
                         fdp_start_date = st.date_input(
                             "FDP start (local date)",
-                            value=datetime.date.today() + datetime.timedelta(days=1),
+                            value=date.today() + timedelta(days=1),
                             key="usaf_fdp_start_date",
                         )
                         fdp_start_time = st.time_input(
                             "FDP start (local time)",
-                            value=datetime.time(8, 0),
+                            value=time(8, 0),
                             key="usaf_fdp_start_time",
                         )
                     with col_cr_3:
@@ -8984,8 +8984,8 @@ that predicts cognitive performance based on:
                             key="usaf_sleep_opportunity_hours",
                         )
 
-                    crew_rest_start_dt = datetime.datetime.combine(cr_start_date, cr_start_time)
-                    fdp_start_dt = datetime.datetime.combine(fdp_start_date, fdp_start_time)
+                    crew_rest_start_dt = datetime.combine(cr_start_date, cr_start_time)
+                    fdp_start_dt = datetime.combine(fdp_start_date, fdp_start_time)
                     try:
                         cr_assessment = assess_usaf_crew_rest(
                             crew_rest_start_local=crew_rest_start_dt,
