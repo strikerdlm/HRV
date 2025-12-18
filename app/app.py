@@ -8347,10 +8347,10 @@ that predicts cognitive performance based on:
                         "visualMap": {
                             "show": False,
                             "pieces": [
-                                {"gt": 90, "lte": 100, "color": "#28a745"},
-                                {"gt": 77, "lte": 90, "color": "#ffc107"},
+                                {"gte": 90, "lte": 100, "color": "#28a745"},
+                                {"gt": 77, "lt": 90, "color": "#ffc107"},
                                 {"gt": 70, "lte": 77, "color": "#fd7e14"},
-                                {"gt": 0, "lte": 70, "color": "#dc3545"},
+                                {"lte": 70, "color": "#dc3545"},
                             ]
                         },
                         "series": [{
