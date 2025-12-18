@@ -144,7 +144,7 @@ The app is fully navigable **without uploading HRV data**. These features work i
 | ------------------------- | ---------------------------------------------------------------------------- |
 | 🌍**Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing |
 | ☀️**Circadian**   | Simulate circadian rhythms with different light schedules                    |
-| 😴**SAFTE/Fatigue** | Model fatigue + cognitive effectiveness, view FRMS-style dashboard, check USAF crew rest |
+| 😴**SAFTE/Fatigue** | Guided SAFTE fatigue workflow with auto-fill (wrist → clinical → Garmin → defaults), FRMS-style dashboard + USAF crew rest checks, and per-user saved schedule defaults |
 | 🫀**Biofeedback**   | Try the paced breathing demo                                                 |
 
 All other tabs show **example data** and **reference values** to help you understand what's available before uploading your own recordings.
@@ -169,7 +169,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | **Space Weather Correlation**          | NOAA Kp, Dst, F10.7, solar wind, and X-ray flux correlations using exact timestamp synchronization (no nearest-neighbor drift) with configurable lags                                            |
 | **Space Weather Impact Predictions**   | Exact arrival times for photons, SEPs, solar wind plasma, with Polar H10 timing recommendations                                                                                                    |
 | **NASA DONKI Integration**             | Flares, CMEs, geomagnetic storms, radiation belt enhancements                                                                                                                                      |
-| **Fatigue Prediction**                 | SAFTE biomathematical model for cognitive effectiveness + FRMS-style (ICAO-aligned) dashboard + USAF crew rest checks + publication-grade plot exports                                               |
+| **Fatigue Prediction**                 | SAFTE biomathematical model for cognitive effectiveness + FRMS-style (ICAO-aligned) dashboard + USAF crew rest checks + publication-grade plot exports (ECharts toolbar: PNG/SVG/HTML/spec JSON + Print/Save PDF)                                               |
 | **HRV Biofeedback**                    | Real-time coherence training with paced breathing                                                                                                                                                  |
 | **CPU Performance Mode**               | Adjustable presets (Fast/Balanced/Quality) with smart downsampling                                                                                                                                 |
 | **GPU Acceleration**                   | NVIDIA CUDA support (RTX 5070/4090/3080) for heavy computations                                                                                                                                    |

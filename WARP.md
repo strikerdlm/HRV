@@ -75,6 +75,7 @@ Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations c
   - Baseline FRMS-style dashboard (ICAO Doc 9966 framing + risk matrix) with deterministic “why it triggered” alerts.
   - USAF crew rest / fatigue management checks per AFMAN 11-202V3 (12h non-duty crew rest, ≥8h uninterrupted sleep opportunity; controlled rest guidance).
   - Exports + APA references documented in the in-app References tab and `docs/Manual.md`.
+  - Persisted **per-user fatigue defaults** (typical sleep/duty windows + weekend policy) so SAFTE/FRMS runs are reproducible and don’t require manual re-entry.
   - **Next:** FRMS v2 mission-level “crew risk board” (multi-profile aggregation + escalation + audit trail).
 
 #### Phase 1: UI Visualization (Priority: HIGH)

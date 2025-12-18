@@ -1917,12 +1917,15 @@ The Sleep, Activity, Fatigue, and Task Effectiveness (SAFTE) model predicts cogn
 > **Profile sync:** Click **Sync with active profile** to auto-fill age, sex, chronotype offset, sleep debt, and work cadence from the currently selected astronaut's exploration medical record. The values refresh automatically after you switch users, so you only need to tweak edge cases.
 >
 > **Garmin auto-fill (stored):** If Garmin daily sleep metrics have been ingested into the profile database (sleep duration and sleep efficiency/score), the Fatigue tab can auto-seed sleep duration and sleep quality **once per new Garmin day**. You can disable this behavior via the on-tab checkbox.
+>
+> **Profile defaults (persisted):** Use **“Save as profile defaults (SAFTE/FRMS)”** to store a typical sleep window + duty window (and weekend policy) in SQLite. Future SAFTE/FRMS runs will auto-load these values so operators don’t need to re-enter schedules.
 
 **Step 2: Configure work schedule**
 
 1. Enable **Include work schedule**
 2. Enter work start hour and work end hour
-3. Set cognitive load (0–3)
+3. (Optional) Enable **Include weekends (Sat/Sun) as duty** for shift/mission operations
+4. Set cognitive load (0–3)
 
 **Step 3: Run prediction**
 
@@ -1955,7 +1958,7 @@ The SAFTE tab provides exports for downstream reporting and publication workflow
 
 - **Predictions (CSV)**: full time series of DateTime, performance, and circadian drive.
 - **FRMS dashboard payload (JSON)** and **FRMS summary (CSV)** for audit trails.
-- **Plot exports (HTML, PNG, SVG, PDF)** via Plotly export fallback (static image export requires `kaleido`).
+- **Plot exports (PNG, SVG, HTML, spec JSON + Print/Save PDF)** via the built-in **ECharts export toolbar** shown above each plot (exports are generated locally in your browser).
 
 ### Mission FRMS v2 — Crew Risk Board (Multi-Profile)
 
