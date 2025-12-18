@@ -17,6 +17,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Tests
 - Added regression coverage for fatigue profile defaults and assessment automation (`tests/test_fatigue_profile_defaults.py`).
 
+### Documentation
+- Synced `README.md`, `docs/Manual.md`, `WARP.md`, and `requirements.txt` version headers to **v1.8.27** and replaced placeholder clone URLs with the canonical repository (`strikerdlm/HRV`).
+
 ## [1.8.26] - 2025-12-18
 
 ### Added
