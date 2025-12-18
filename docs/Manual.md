@@ -10,7 +10,7 @@ Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
 **Version:** 1.8.23  
-**Last Updated:** 2025-12-17
+**Last Updated:** 2025-12-18
 
 ---
 
@@ -1910,8 +1910,9 @@ The Sleep, Activity, Fatigue, and Task Effectiveness (SAFTE) model predicts cogn
 2. Enter last night's sleep:
    - Bedtime hour (0-23)
    - Wake time hour (0-23)
-   - Sleep quality (0-100%)
-   - Prior sleep debt (hours)
+   - Sleep quality (0–1, where 1.0 is best)
+   - Sleep duration (hours)
+   - Prior sleep debt (hours, optional)
 
 > **Profile sync:** Click **Sync with active profile** to auto-fill age, sex, chronotype offset, sleep debt, and work cadence from the currently selected astronaut's exploration medical record. The values refresh automatically after you switch users, so you only need to tweak edge cases.
 >
@@ -1919,17 +1920,42 @@ The Sleep, Activity, Fatigue, and Task Effectiveness (SAFTE) model predicts cogn
 
 **Step 2: Configure work schedule**
 
-1. Check "Has work today"
-2. Enter work start hour
-3. Enter work duration
-4. Select task type (low/medium/high cognitive demand)
+1. Enable **Include work schedule**
+2. Enter work start hour and work end hour
+3. Set cognitive load (0–3)
 
 **Step 3: Run prediction**
 
-1. Click "Predict Fatigue"
+1. Click **🚀 Run Fatigue Prediction**
 2. View hourly effectiveness chart
 3. Review risk assessment
 4. Read recommendations
+
+### FRMS & USAF Upgrades (Safety Management Dashboard)
+
+The SAFTE tab includes an aviation-grade **FRMS-style dashboard** aligned with ICAO guidance:
+
+- **Predictive (model-based) fatigue risk** using SAFTE effectiveness.
+- **WOCL exposure** (Window of Circadian Low, typically ~02:00–06:00 local).
+- **Operational effectiveness thresholds** commonly used with SAFTE/FAST:
+  - **≥90%**: low risk (“well-rested” baseline)
+  - **77–89%**: caution / transitional range
+  - **70–77%**: high risk (often compared to ~0.05% BAC impairment)
+  - **≤70%**: severe impairment (often compared to ~0.08% BAC impairment)
+- **SMS-style risk matrix** classification (severity × likelihood) for structured decision support.
+
+It also includes a **USAF crew rest check** (AFMAN 11-202V3 baseline):
+
+- Crew rest typically requires **≥12 hours non-duty** before FDP with **≥8 hours uninterrupted sleep opportunity**.
+- If crew rest is interrupted by official business, it must restart (update the “crew rest start” time accordingly).
+
+### Exports (Publication-Grade)
+
+The SAFTE tab provides exports for downstream reporting and publication workflows:
+
+- **Predictions (CSV)**: full time series of DateTime, performance, and circadian drive.
+- **FRMS dashboard payload (JSON)** and **FRMS summary (CSV)** for audit trails.
+- **Plot exports (HTML, PNG, SVG, PDF)** via Plotly export fallback (static image export requires `kaleido`).
 
 > **One-click Garmin automation:** Press **Auto-run Garmin (5-day forecast)** to fetch the latest Garmin sleep/stress data (requires `GARMIN_EMAIL` and `GARMIN_PASSWORD` in your `.env`) and run a 5-day SAFTE forecast with the active user profile. The tab also shows the Garmin summary used for traceability.
 >
@@ -1944,11 +1970,11 @@ Work: 8 AM - 5 PM (9 hours)
 Task: High cognitive demand
 
 Results:
-- Morning effectiveness: 85%
-- Afternoon slump (2-4 PM): 65%
-- End of day: 55%
+- Morning effectiveness: 92% (low risk)
+- Mid-afternoon dip (2-4 PM): 84% (caution)
+- End of day: 79% (caution)
 
-Risk level: MODERATE
+High-risk exposure (≤77%): 0 hours
 Recommendations:
 - Take 20-min nap between 1-3 PM
 - Avoid critical decisions after 4 PM
@@ -1963,6 +1989,14 @@ Recommendations:
 | **Circadian nadir** | 3-5 AM, 2-4 PM dips | Strategic napping, task scheduling |
 | **Sleep inertia** | Post-wake grogginess | Allow 30-60 min before demanding tasks |
 | **Extended wakefulness** | >16 hours awake | Enforce rest periods |
+
+### Key References (Fatigue / FRMS)
+
+- International Civil Aviation Organization. (2016). *Manual for the Oversight of Fatigue Management Approaches* (Doc 9966, 2nd ed.). https://www.icao.int/safety/fatiguemanagement/FRMS%20Tools/Doc%209966.FRMS.2016%20Edition.en.pdf
+- Department of the Air Force. (n.d.). *AFMAN 11-202V3: General Flight Rules.* https://static.e-publishing.af.mil/production/1/af_a3/publication/afman11-202v3/afman11-202v3.pdf
+- Federal Aviation Administration. (2010). *Flightcrew Member Duty and Rest Requirements* (Docket No. FAA-2009-1093; Attachment 1). https://downloads.regulations.gov/FAA-2009-1093-2518/attachment_1.pdf
+- National Aeronautics and Space Administration. (2012). *NASA–easyJet Collaboration on the Human Factors Monitoring Program (HFMP) Study* (NASA NTRS No. 20120013448). https://ntrs.nasa.gov/api/citations/20120013448/downloads/20120013448.pdf
+- Federal Railroad Administration. (2006). *Validation and calibration of a fatigue assessment tool for railroad work schedules* (Final report; DOT/FRA/ORD-06/21). https://rosap.ntl.bts.gov/view/dot/62575
 
 ---
 
@@ -3841,6 +3875,24 @@ This section outlines completed features and remaining planned enhancements for 
 ✅ **Per-user reuse & exports** - HRV analysis artifacts and GPT-5.2 interpretation markdown persist per user in SQLite for cross-session reuse and user-scoped exports  
 
 ### Remaining Enhancements
+
+#### Plot Governance (ECharts-first, publication-grade everywhere)
+**Status:** Planned (Priority: CRITICAL)  
+**Description:** Enforce the project plotting policy across *all* tabs and modules.
+
+- Standardize chart styling (titles, axis labels with units, legends, tooltips, colorblind-safe palette).
+- Require a short explanatory paragraph beneath every plot (what the user sees, axis/units, preprocessing).
+- Add publication-grade plot exports across the app (SVG/PDF/PNG high-DPI/HTML + data/spec export).
+- Keep `requirements.txt`, `README.md`, `docs/Manual.md`, and `CHANGELOG.md` updated whenever plots/features change.
+
+#### Fatigue Safety Management (ICAO FRMS + USAF doctrine) inside SAFTE tab
+**Status:** Planned (Priority: CRITICAL; research-first)  
+**Description:** Upgrade the SAFTE/Fatigue module into an aviation-grade fatigue safety dashboard aligned with ICAO FRMS and USAF crew rest requirements.
+
+- ICAO FRMS-aligned dashboard (policy framing, predictive/proactive/reactive hazard processes, safety assurance SPIs, promotion/training guidance).
+- Risk matrix + audit trail of assumptions/inputs for fatigue risk decisions.
+- USAF crew rest compliance checks (AFMAN 11-202V3) with clear “compliant / waiver required / not compliant” outputs.
+- Publication exports and APA references surfaced in the in-app **📚 References** tab and this manual.
 
 #### Per-user persistence across all mission modules
 **Status:** Planned  
