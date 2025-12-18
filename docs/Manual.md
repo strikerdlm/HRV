@@ -780,6 +780,7 @@ The **Profile Tools Engine** provides comprehensive calculation engines accessib
 | **Recovery Score** | lnRMSSD-based recovery assessment | Score (0-100), status, component breakdown |
 | **Training Readiness** | Multi-component readiness assessment | Readiness score, workout suggestions |
 | **Fatigue Prediction (SAFTE)** | 24-hour cognitive effectiveness forecast | Current/predicted effectiveness, risk level |
+| **Operational Performance (HRV + SAFTE)** | Fused readiness for safety-critical tasks | Readiness score, GO/CAUTION/NO-GO, best/worst 2h windows |
 | **Personalized HRV Analysis** | Age/sex-adjusted HRV interpretation | Parasympathetic index, stress index, autonomic balance |
 | **Performance Forecast** | Hour-by-hour performance prediction | Peak/low times, 24-hour curve |
 
@@ -842,6 +843,29 @@ Based on the Sleep, Activity, Fatigue, and Task Effectiveness model:
 
 Reference: Hursh SR, et al. *Aviat Space Environ Med.* 2004;75(3):A44-A53.
 
+#### Operational Performance (HRV + SAFTE)
+
+This tool provides a **transparent fusion** of:
+
+- **SAFTE effectiveness (%)** (sleep + circadian drivers of alertness), and
+- **HRV-derived recovery/autonomic state** (lnRMSSD-based recovery score, parasympathetic index, stress index)
+
+into a single **Operational Readiness Score (0–100)** that supports **task scheduling** and **risk awareness**.
+
+**Key outputs:**
+- **Operational readiness score (0–100)**: higher = better expected operational readiness.
+- **Category**:
+  - **GO** (≥85): peak readiness window
+  - **GO (monitor)** (70–84): adequate readiness; continue monitoring
+  - **CAUTION** (55–69): elevated risk; reduce complexity, add verification steps
+  - **NO‑GO** (<55): avoid safety‑critical tasks when possible
+- **Best / worst 2-hour windows**: derived from the next‑24h SAFTE curve, applying the current HRV state as a modifier.
+- **Next‑12h alert windows**: projected hours where readiness is low enough to warrant avoiding critical tasks.
+
+**Operational interpretation notes:**
+- The score is a **planning index**, not a medical diagnosis or a validated probability of error.
+- Use it to **sequence** demanding tasks into the best readiness window and to **trigger mitigations** (nap, workload reduction, second-person verification).
+
 #### Personalized HRV Analysis
 
 Age/sex-adjusted interpretation using Nunan et al. (2010) and Shaffer & Ginsberg (2017) norms:
@@ -891,6 +915,8 @@ Age/sex-adjusted interpretation using Nunan et al. (2010) and Shaffer & Ginsberg
 - Kiviniemi AM, Hautala AJ, Kinnunen H, Tulppo MP. Endurance training guided individually by daily heart rate variability measurements. *Eur J Appl Physiol.* 2007;101(6):743-751.
 - Hursh SR, Redmond DP, Johnson ML, et al. Fatigue models for applied research in warfighting. *Aviat Space Environ Med.* 2004;75(3 Suppl):A44-A53.
 - Borbély AA. A two process model of sleep regulation. *Hum Neurobiol.* 1982;1(3):195-204.
+- Thayer, J. F., & Lane, R. D. (2000). A model of neurovisceral integration in emotion regulation and dysregulation. *Journal of Affective Disorders, 61*(3), 201–216. https://doi.org/10.1016/S0165-0327(00)00338-4
+- Laborde, S., Mosley, E., & Thayer, J. F. (2017). Heart rate variability and cardiac vagal tone in psychophysiological research: Recommendations for experiment planning, data analysis, and data reporting. *Frontiers in Psychology, 8*, 213. https://doi.org/10.3389/fpsyg.2017.00213
 
 ### Exploration Medical Record (NASA isolation missions)
 

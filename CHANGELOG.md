@@ -5,6 +5,17 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.28] - 2025-12-18
+
+### Added
+- **Operational Performance predictor (HRV + SAFTE fusion)** (`app/profile_tools_engine.py`, `app/user_profile_tab.py`): Added a transparent, bounded **operational readiness score (0–100)** that fuses SAFTE effectiveness with HRV-derived recovery/autonomic markers, including **GO/CAUTION/NO‑GO** categories plus **best/worst 2‑hour task windows** and next‑12h alert windows.
+
+### Fixed
+- **Profile Tools RMSSD input default** (`app/user_profile_tab.py`): Corrected the RMSSD parameter widget default (previously incorrectly seeded from resting HR), improving out-of-the-box Profile Tools behavior.
+
+### Documentation
+- Updated `README.md` and `docs/Manual.md` to document the new Operational Performance tool and add neurovisceral integration references.
+
 ## [1.8.27] - 2025-12-18
 
 ### Added

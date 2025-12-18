@@ -3414,10 +3414,12 @@ try:
         predict_fatigue,
         analyze_hrv_personalized,
         generate_performance_forecast,
+        predict_operational_performance,
         run_all_profile_tools,
         RecoveryStatus,
         ReadinessLevel,
         FatigueRisk,
+        OperationalReadinessLevel,
     )
     PROFILE_TOOLS_ENGINE_AVAILABLE = True
 except ImportError:
@@ -3530,6 +3532,7 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
         "🔋 Recovery Score",
         "🏃 Training Readiness",
         "😴 Fatigue Prediction (SAFTE)",
+        "🧠 Operational Performance (HRV+SAFTE)",
         "💓 Personalized HRV Analysis",
         "📈 Performance Forecast",
     ]
@@ -3605,7 +3608,7 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
                 "RMSSD (ms) - from HRV",
                 min_value=0.0,
                 max_value=200.0,
-                value=float(user.resting_hr_bpm or 35.0) if user.resting_hr_bpm else 35.0,
+                value=35.0,
                 step=1.0,
                 help="Enter your latest RMSSD value from HRV analysis",
                 key=f"tools_rmssd_{user.user_id}",
@@ -3633,7 +3636,7 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
     chronotype = str(st.session_state.get(f"tools_chronotype_{user.user_id}") or "Neutral (0h)")
     chronotype_offset = float(chronotype_map.get(chronotype, 0.0))
 
-    rmssd_default = float(user.resting_hr_bpm or 35.0) if user.resting_hr_bpm else 35.0
+    rmssd_default = 35.0
     rmssd_raw = _safe_float(st.session_state.get(f"tools_rmssd_{user.user_id}"))
     rmssd_input = float(rmssd_raw) if rmssd_raw is not None else rmssd_default
 
@@ -3695,6 +3698,21 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
                 sleep_hours, sleep_quality, hours_awake, current_hour, chronotype_offset
             )
         
+        elif selected_tool == "🧠 Operational Performance (HRV+SAFTE)":
+            _render_operational_performance_tool(
+                age=age,
+                sex=sex,
+                rmssd_ms=rmssd_input,
+                hrv_metrics=hrv_metrics,
+                sleep_hours=sleep_hours,
+                sleep_quality=sleep_quality,
+                hours_awake=hours_awake,
+                current_hour=current_hour,
+                chronotype_offset=chronotype_offset,
+                resting_hr=resting_hr,
+                user_id=user.user_id,
+            )
+
         elif selected_tool == "💓 Personalized HRV Analysis":
             _render_hrv_analysis_tool(
                 hrv_metrics, age, sex, resting_hr, user.activity_level or "moderate"
@@ -3810,6 +3828,31 @@ def _render_all_tools_summary(
             if show_recs:
                 for rec in recs:
                     st.markdown(f"- {rec}")
+
+    # Operational performance (HRV + SAFTE)
+    if "operational_performance" in results:
+        st.markdown("---")
+        st.markdown("##### 🧠 Operational Performance (HRV + SAFTE)")
+        op = results["operational_performance"]
+        score = float(op.get("readiness_score", 0.0) or 0.0)
+        label = str(op.get("readiness_label", ""))
+        if score >= 70:
+            st.success(f"🧠 **Operational readiness**: {score:.0f}/100")
+        elif score >= 55:
+            st.warning(f"🧠 **Operational readiness**: {score:.0f}/100")
+        else:
+            st.error(f"🧠 **Operational readiness**: {score:.0f}/100")
+        st.caption(label)
+        drivers = op.get("drivers", {}) if isinstance(op.get("drivers"), dict) else {}
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("SAFTE effectiveness", f"{float(drivers.get('safte_effectiveness', 0.0) or 0.0):.0f}%")
+        with col2:
+            rec_val = drivers.get("recovery_score")
+            st.metric("Recovery score", f"{float(rec_val or 0.0):.0f}/100" if rec_val is not None else "N/A")
+        with col3:
+            si_val = drivers.get("stress_index")
+            st.metric("Stress index", f"{float(si_val or 0.0):.0f}" if si_val is not None else "N/A")
     
     # Export option
     st.markdown("---")
@@ -3837,6 +3880,10 @@ Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}
 ## HRV Analysis
 - Parasympathetic Index: {results.get('hrv_analysis', {}).get('parasympathetic_index', 'N/A')}/10
 - Stress Index: {results.get('hrv_analysis', {}).get('stress_index', 'N/A')}
+ 
+## Operational Performance (HRV + SAFTE)
+- Operational readiness: {results.get('operational_performance', {}).get('readiness_score', 'N/A')}/100
+- Category: {results.get('operational_performance', {}).get('readiness_label', 'N/A')}
 """
         st.code(export_text, language="markdown")
 
@@ -4119,6 +4166,89 @@ def _render_performance_forecast_tool(
     if forecast.recommendations:
         st.markdown("##### Recommendations")
         for rec in forecast.recommendations:
+            st.markdown(f"- {rec}")
+
+
+def _render_operational_performance_tool(
+    *,
+    age: int,
+    sex: str,
+    rmssd_ms: float,
+    hrv_metrics: Dict[str, Any],
+    sleep_hours: float,
+    sleep_quality: float,
+    hours_awake: float,
+    current_hour: int,
+    chronotype_offset: float,
+    resting_hr: float,
+    user_id: str,
+) -> None:
+    """Render fused operational performance predictor (HRV + SAFTE)."""
+    st.markdown("### 🧠 Operational Performance (HRV + SAFTE)")
+    st.caption(
+        "Fuses SAFTE-style cognitive effectiveness (sleep/circadian) with HRV-derived recovery and autonomic markers. "
+        "Use for task scheduling and risk awareness (not a diagnosis)."
+    )
+
+    op = predict_operational_performance(
+        age=age,
+        sex=sex,
+        rmssd_ms=rmssd_ms if rmssd_ms > 0 else None,
+        hrv_metrics={k: v for k, v in hrv_metrics.items() if isinstance(v, (int, float)) and v is not None},
+        sleep_hours_last_night=sleep_hours,
+        sleep_quality=sleep_quality,
+        hours_awake=hours_awake,
+        current_hour=current_hour,
+        chronotype_offset=chronotype_offset,
+        resting_hr=resting_hr,
+    )
+
+    score = op.readiness_score
+    if score >= 85:
+        st.success(f"## {score:.0f}/100 — {op.readiness_label}")
+    elif score >= 70:
+        st.info(f"## {score:.0f}/100 — {op.readiness_label}")
+    elif score >= 55:
+        st.warning(f"## {score:.0f}/100 — {op.readiness_label}")
+    else:
+        st.error(f"## {score:.0f}/100 — {op.readiness_label}")
+
+    st.markdown("##### Drivers (explainability)")
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        st.metric("SAFTE effectiveness", f"{op.safte_effectiveness:.0f}%")
+    with col2:
+        st.metric("Recovery score", f"{op.recovery_score:.0f}/100" if op.recovery_score is not None else "N/A")
+    with col3:
+        st.metric("PNS index", f"{op.parasympathetic_index:.1f}/10" if op.parasympathetic_index is not None else "N/A")
+    with col4:
+        st.metric("Stress index", f"{op.stress_index:.0f}" if op.stress_index is not None else "N/A")
+
+    st.markdown("##### Task scheduling guidance")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("Best 2h window (start)", op.best_2h_window_start or "N/A")
+    with col2:
+        st.metric("Worst 2h window (start)", op.worst_2h_window_start or "N/A")
+
+    if op.next_12h_alert_windows:
+        st.markdown("##### ⚠️ Next 12h alert windows")
+        for aw in op.next_12h_alert_windows:
+            st.warning(f"**{aw.get('hour', '--:--')}** — {aw.get('reason', '')}")
+
+    if op.triggers:
+        show_triggers = st.checkbox(
+            "Show triggers (why it scored this way)",
+            value=True,
+            key=f"op_perf_show_triggers_{user_id}",
+        )
+        if show_triggers:
+            for t in op.triggers:
+                st.markdown(f"- {t}")
+
+    if op.recommendations:
+        st.markdown("##### Recommendations")
+        for rec in op.recommendations:
             st.markdown(f"- {rec}")
 
 
