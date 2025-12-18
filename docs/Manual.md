@@ -2437,15 +2437,17 @@ If you have multiple active users open (study group workflow), the Export tab no
 **Longitudinal cohort comparisons (T0–T21)**  
 If your HRV measurements are tagged with longitudinal timepoints (T0…T21), the Export tab also includes a **Longitudinal cohort comparisons (T0–T21)** expander that:
 - Computes **within-subject Δ vs baseline** (timepoint value − subject baseline value) per metric
-- Aggregates Δ by **group × timepoint** (e.g., Control vs Intervention)
+- Aggregates Δ by **group × timepoint** (using **persisted** study groups/assignments stored in SQLite under a **Study ID**)
 - Runs **between-group comparisons** on Δ distributions per timepoint and metric (effect sizes + FDR-adjusted p-values)
+- Optionally fits a **mixed-effects model** (random intercept per subject) for **Group × Time** inference on Δ vs baseline
 - Provides download options for **CSV** (summary + comparisons) and a **Markdown longitudinal cohort report**
 
 **How to use (recommended workflow):**
 1. In **User Profile**, tag each saved HRV measurement to a timepoint label (T0…T21).
 2. Keep **2+ users active** (User Profile tab) so they appear in the Export cohort selector.
 3. In **Export → Group summaries (cohort export)**, expand **Longitudinal cohort comparisons (T0–T21)**.
-4. Assign users to **Control** and **Intervention** groups (no overlap), select metrics, then click **Compute longitudinal group comparisons**.
+4. Enter a **Study ID**, then use the **persisted roster editor** to assign each active user to a group (e.g., Control/Intervention).
+5. Select the two groups to compare, choose metrics, optionally enable the **mixed-effects model**, then click **Compute longitudinal group comparisons**.
 
 **Interpretation note:** Baseline deltas at **T0** are excluded from between-group testing (Δ = 0 by definition). The comparison focuses on how **change from baseline** differs between groups over time.
 
