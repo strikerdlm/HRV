@@ -120,7 +120,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `*_sleepData.json` (sleep stages + scores; supports the newer nested `sleepScores` schema)
 
 ### Changed
-- **Fatigue zone thresholds** (`app/fatigue_integration.py`, `app/app.py`): Updated operational effectiveness zones to SAFTE/FAST-style thresholds and clarified boundary labels (≥90, 77–<90, >70–≤77, ≤70) for safer interpretation.
+- **Fatigue zone thresholds** (`app/fatigue_integration.py`, `app/app.py`): Updated operational effectiveness zones to SAFTE/FAST-style thresholds and clarified boundary labels (≥90, >77–<90, >70–≤77, ≤70) for safer interpretation.
 - **Covariate adjustment defaults** (`app/app.py`): age/sex/BMI/activity inputs now default to the active user profile context when available (with a “Use active profile defaults” toggle), ensuring profile-aware HRV interpretation is user-scoped.
 - **Performance** (`app/app.py`, `app/user_profile_tab.py`, `app/user_database.py`, `app/i18n.py`): Bounded Streamlit caches (heavy HRV compute, space-weather fetches, profile/history loaders, i18n lookups) with explicit TTL + `max_entries` to keep memory usage stable during long sessions.
 - **Readiness tab** (`app/app.py`): Readiness scoring now prefers the user’s **stored HRV history** in the database (parasympathetic index) so it can include more sessions than the currently loaded uploads.
