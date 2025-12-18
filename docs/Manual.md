@@ -2434,6 +2434,21 @@ If you have multiple active users open (study group workflow), the Export tab no
 - **Cohort-level descriptive statistics** (n, mean, SD, median, min, max) for common HRV, scale, and mission variables
 - Download options for **CSV** (roster + stats) and a **Markdown cohort report**
 
+**Longitudinal cohort comparisons (T0–T21)**  
+If your HRV measurements are tagged with longitudinal timepoints (T0…T21), the Export tab also includes a **Longitudinal cohort comparisons (T0–T21)** expander that:
+- Computes **within-subject Δ vs baseline** (timepoint value − subject baseline value) per metric
+- Aggregates Δ by **group × timepoint** (e.g., Control vs Intervention)
+- Runs **between-group comparisons** on Δ distributions per timepoint and metric (effect sizes + FDR-adjusted p-values)
+- Provides download options for **CSV** (summary + comparisons) and a **Markdown longitudinal cohort report**
+
+**How to use (recommended workflow):**
+1. In **User Profile**, tag each saved HRV measurement to a timepoint label (T0…T21).
+2. Keep **2+ users active** (User Profile tab) so they appear in the Export cohort selector.
+3. In **Export → Group summaries (cohort export)**, expand **Longitudinal cohort comparisons (T0–T21)**.
+4. Assign users to **Control** and **Intervention** groups (no overlap), select metrics, then click **Compute longitudinal group comparisons**.
+
+**Interpretation note:** Baseline deltas at **T0** are excluded from between-group testing (Δ = 0 by definition). The comparison focuses on how **change from baseline** differs between groups over time.
+
 1. Select export format:
    - Markdown (for Word/docs)
    - LaTeX (for academic papers)
@@ -3874,6 +3889,7 @@ This section outlines completed features and remaining planned enhancements for 
 ✅ **Professional Welcome Page** - Laboratory branding with quick access grid  
 ✅ **Per-user reuse & exports** - HRV analysis artifacts and GPT-5.2 interpretation markdown persist per user in SQLite for cross-session reuse and user-scoped exports  
 ✅ **Baseline/Δ analytics (T0–T21)** - User Profile → HRV Measurement History includes a baseline/Δ table grouped by longitudinal timepoint labels (T0…T21)  
+✅ **Cohort longitudinal comparisons (T0–T21)** - Export tab supports control vs intervention comparisons using within-subject Δ vs baseline per timepoint, with CSV + Markdown exports  
 
 ### Remaining Enhancements
 
