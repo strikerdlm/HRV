@@ -57,6 +57,7 @@ from export_utils import (
     compare_cohort_longitudinal_groups,
     compute_cohort_longitudinal_group_summary,
     compute_cohort_summary_stats,
+    fit_cohort_longitudinal_mixed_effects,
 )
 from echarts_component import EChartsConfig, render_echarts
 from space_weather_alignment import (
@@ -298,7 +299,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from pathlib import Path
 from pandas.api.types import is_datetime64_any_dtype
-from user_database import HRVMeasurement, get_database
+from user_database import HRVMeasurement, StudyGroup, get_database
 from user_data_manager import create_user_manager, parse_filename_date
 
 try:
@@ -421,10 +422,12 @@ try:
         FRMSThresholds,
         FRMSExposureMetrics,
         FRMSRiskClassification,
+        FRMSAlert,
         USAFCrewRestAssessment,
         USAFCrewRestPolicy,
         assess_usaf_crew_rest,
         classify_frms_risk,
+        compute_frms_alerts,
         compute_duty_mask,
         compute_frms_exposure_metrics,
         compute_wocl_mask,
@@ -8854,6 +8857,34 @@ that predicts cognitive performance based on:
                         )
                     except Exception as exc:
                         st.warning(f"Unable to assess crew rest with provided times: {exc}")
+
+                # Rule-based alerts (FRMS "why it triggered")
+                if (
+                    FRMS_AVAILABLE
+                    and frms_exposure is not None
+                    and frms_class is not None
+                    and frms_thresholds is not None
+                ):
+                    try:
+                        alerts: list[FRMSAlert] = compute_frms_alerts(
+                            exposure=frms_exposure,
+                            classification=frms_class,
+                            crew_rest=cr_assessment,
+                            thresholds=frms_thresholds,
+                        )
+                    except Exception as exc:
+                        alerts = []
+                        log_exception(_LOGGER, "FRMS alerts computation failed", exc)
+                    if alerts:
+                        st.markdown("#### 🚨 FRMS Alerts (rule-based)")
+                        for a in alerts:
+                            text = f"**{a.message}** — {a.rationale}"
+                            if a.level == "critical":
+                                st.error(text)
+                            elif a.level == "warning":
+                                st.warning(text)
+                            else:
+                                st.info(text)
                 
                 # Recommendations
                 st.markdown("#### 💡 Recommendations")
@@ -8997,6 +9028,30 @@ that predicts cognitive performance based on:
                             "compliant": cr_assessment.compliant,
                             "notes": cr_assessment.notes,
                         }
+                    if (
+                        FRMS_AVAILABLE
+                        and frms_thresholds is not None
+                        and frms_exposure is not None
+                        and frms_class is not None
+                    ):
+                        try:
+                            payload_alerts = compute_frms_alerts(
+                                exposure=frms_exposure,
+                                classification=frms_class,
+                                crew_rest=cr_assessment,
+                                thresholds=frms_thresholds,
+                            )
+                        except Exception:
+                            payload_alerts = []
+                        frms_payload["alerts"] = [
+                            {
+                                "level": a.level,
+                                "code": a.code,
+                                "message": a.message,
+                                "rationale": a.rationale,
+                            }
+                            for a in payload_alerts
+                        ]
                     st.download_button(
                         "Download FRMS + Crew Rest Payload (JSON)",
                         json.dumps(frms_payload, ensure_ascii=False, default=str, indent=2).encode("utf-8"),
@@ -11247,20 +11302,141 @@ that predicts cognitive performance based on:
                     if not selected_user_ids:
                         st.info("Select at least one active user above to enable longitudinal comparisons.")
                     else:
-                        control_ids = st.multiselect(
-                            "Control group users",
-                            options=selected_user_ids,
-                            default=[],
-                            format_func=lambda uid: user_label_map.get(uid, uid),
-                            key="cohort_longitudinal_control_users",
-                        )
-                        intervention_ids = st.multiselect(
-                            "Intervention group users",
-                            options=selected_user_ids,
-                            default=[],
-                            format_func=lambda uid: user_label_map.get(uid, uid),
-                            key="cohort_longitudinal_intervention_users",
-                        )
+                        # Persisted cohort grouping (roadmap "best next task"):
+                        # store study groups + subject assignments in SQLite, then reuse for exports.
+                        db = get_database()
+                        study_id = st.text_input(
+                            "Study ID (persisted)",
+                            value=str(st.session_state.get("cohort_study_id", "default_study")),
+                            key="cohort_study_id",
+                            help="A short identifier for your cohort study (e.g., 'trial_2026_q1').",
+                        ).strip()
+                        if not study_id:
+                            st.warning("Enter a Study ID to manage persisted group assignments.")
+                            study_id = "default_study"
+
+                        try:
+                            groups = db.list_study_groups(study_id, limit=50)
+                        except Exception as exc:
+                            groups = []
+                            st.warning(f"Unable to load study groups: {exc}")
+
+                        group_name_to_id: Dict[str, str] = {
+                            str(g.group_name): str(g.group_id) for g in groups
+                        }
+                        group_names = sorted([str(g.group_name) for g in groups if g.group_name])
+
+                        col_groups_a, col_groups_b = st.columns([3, 2])
+                        with col_groups_a:
+                            st.caption(
+                                "Persisted groups are stored in `hrv_users.db` (tables: `study_groups`, `study_assignments`). "
+                                "Use the roster editor to assign active users to groups for this Study ID."
+                            )
+                        with col_groups_b:
+                            init_default_groups = st.button(
+                                "Initialize groups: Control / Intervention",
+                                key="cohort_init_default_groups",
+                                help="Creates two default groups under this Study ID if they do not exist.",
+                            )
+                        if init_default_groups:
+                            try:
+                                _ = db.upsert_study_group(
+                                    StudyGroup(group_id="", study_id=study_id, group_name="Control", description="Control arm")
+                                )
+                                _ = db.upsert_study_group(
+                                    StudyGroup(group_id="", study_id=study_id, group_name="Intervention", description="Intervention arm")
+                                )
+                                groups = db.list_study_groups(study_id, limit=50)
+                                group_name_to_id = {str(g.group_name): str(g.group_id) for g in groups}
+                                group_names = sorted([str(g.group_name) for g in groups if g.group_name])
+                                st.success("Default study groups initialized.")
+                            except Exception as exc:
+                                st.warning(f"Unable to initialize default groups: {exc}")
+
+                        if not group_names:
+                            st.info("Create at least one study group to proceed (e.g., Control/Intervention).")
+                            roster_editor_df = pd.DataFrame()
+                        else:
+                            try:
+                                roster_df = db.get_study_roster_dataframe(study_id, limit=2000)
+                            except Exception as exc:
+                                roster_df = pd.DataFrame()
+                                st.warning(f"Unable to load study roster: {exc}")
+
+                            if roster_df.empty:
+                                st.info("No users found to build a roster.")
+                                roster_editor_df = pd.DataFrame()
+                            else:
+                                roster_editor_df = roster_df[roster_df["user_id"].isin(selected_user_ids)].copy()
+                                roster_editor_df = roster_editor_df[
+                                    ["user_id", "full_name", "username", "group_name"]
+                                ].copy()
+                                roster_editor_df["group_name"] = roster_editor_df["group_name"].fillna("").astype(str)
+
+                                st.markdown("##### Persisted roster editor (active users)")
+                                edited_roster = st.data_editor(
+                                    roster_editor_df,
+                                    hide_index=True,
+                                    use_container_width=True,
+                                    disabled=["user_id", "full_name", "username"],
+                                    column_config={
+                                        "group_name": st.column_config.SelectboxColumn(
+                                            "Group",
+                                            options=[""] + group_names,
+                                            help="Assign each active user to a group for this Study ID (blank = unassigned).",
+                                        )
+                                    },
+                                    key="cohort_roster_editor",
+                                )
+
+                                save_assignments = st.button(
+                                    "Save study assignments",
+                                    key="cohort_save_assignments",
+                                    type="secondary",
+                                )
+                                if save_assignments:
+                                    for row in edited_roster.itertuples(index=False):
+                                        uid = str(getattr(row, "user_id"))
+                                        gname = str(getattr(row, "group_name", "") or "").strip()
+                                        if not gname:
+                                            db.set_user_study_assignment(
+                                                user_id=uid,
+                                                study_id=study_id,
+                                                group_id=None,
+                                            )
+                                            continue
+                                        gid = group_name_to_id.get(gname)
+                                        if not gid:
+                                            continue
+                                        db.set_user_study_assignment(
+                                            user_id=uid,
+                                            study_id=study_id,
+                                            group_id=gid,
+                                        )
+                                    st.success("Study assignments saved.")
+
+                        # ---- Longitudinal analysis controls ----
+                        if group_names:
+                            col_cmp_a, col_cmp_b = st.columns(2)
+                            with col_cmp_a:
+                                group_a = st.selectbox(
+                                    "Group A",
+                                    options=group_names,
+                                    index=0,
+                                    key="cohort_longitudinal_group_a",
+                                )
+                            with col_cmp_b:
+                                remaining = [g for g in group_names if g != group_a]
+                                group_b = st.selectbox(
+                                    "Group B",
+                                    options=remaining if remaining else group_names,
+                                    index=0,
+                                    key="cohort_longitudinal_group_b",
+                                )
+                        else:
+                            group_a = "Control"
+                            group_b = "Intervention"
+
                         metrics_default = ["rmssd_ms", "sdnn_ms", "mean_hr_bpm", "hf_power_ms2", "lf_hf_ratio"]
                         selected_metrics = st.multiselect(
                             "HRV metrics to compare (Δ vs baseline)",
@@ -11276,27 +11452,54 @@ that predicts cognitive performance based on:
                             help="If a subject has multiple HRV sessions under the same timepoint label, "
                             "this determines how the timepoint value is summarized before Δ is computed.",
                         )
+                        run_mixed = st.checkbox(
+                            "Also fit mixed-effects model (random intercept per subject)",
+                            value=True,
+                            key="cohort_longitudinal_run_mixed",
+                            help="Fits Δ ~ Group × Time with a random subject intercept (requires statsmodels).",
+                        )
                         run_longitudinal = st.button(
                             "Compute longitudinal group comparisons",
                             key="cohort_longitudinal_run",
                             type="primary",
                         )
                         if run_longitudinal:
-                            overlap = set(control_ids).intersection(set(intervention_ids))
-                            if overlap:
-                                st.error(
-                                    "Control and intervention selections overlap. "
-                                    "Remove overlapping users and retry."
+                            # Build group membership from persisted roster editor when available.
+                            group_a_ids: list[str] = []
+                            group_b_ids: list[str] = []
+                            try:
+                                edited = st.session_state.get("cohort_roster_editor")
+                                edited_df = (
+                                    pd.DataFrame(edited)
+                                    if isinstance(edited, dict) and "edited_rows" in edited
+                                    else None
                                 )
-                            elif not control_ids or not intervention_ids:
-                                st.error("Select at least one user in each group to continue.")
+                                _ = edited_df  # explicit: session-state schema may differ by Streamlit version
+                            except Exception:
+                                edited_df = None
+
+                            # Prefer fresh DB roster (source of truth).
+                            try:
+                                roster_live = db.get_study_roster_dataframe(study_id, limit=2000)
+                            except Exception:
+                                roster_live = pd.DataFrame()
+                            if not roster_live.empty:
+                                roster_live = roster_live[roster_live["user_id"].isin(selected_user_ids)].copy()
+                                roster_live["group_name"] = roster_live["group_name"].fillna("").astype(str)
+                                group_a_ids = roster_live[roster_live["group_name"] == str(group_a)]["user_id"].astype(str).tolist()
+                                group_b_ids = roster_live[roster_live["group_name"] == str(group_b)]["user_id"].astype(str).tolist()
+
+                            overlap = set(group_a_ids).intersection(set(group_b_ids))
+                            if overlap:
+                                st.error("Group assignments overlap. Remove overlaps and retry.")
+                            elif not group_a_ids or not group_b_ids:
+                                st.error("Assign at least one user to each selected group to continue.")
                             elif not selected_metrics:
                                 st.error("Select at least one metric to compare.")
                             else:
-                                db = get_database()
                                 user_tables: Dict[str, pd.DataFrame] = {}
                                 user_group_map: Dict[str, str] = {}
-                                for uid in list(control_ids) + list(intervention_ids):
+                                for uid in list(group_a_ids) + list(group_b_ids):
                                     if uid in user_tables:
                                         continue
                                     try:
@@ -11311,7 +11514,7 @@ that predicts cognitive performance based on:
                                         tp_table = pd.DataFrame()
                                     user_tables[uid] = tp_table
                                     user_group_map[uid] = (
-                                        "Control" if uid in control_ids else "Intervention"
+                                        str(group_a) if uid in group_a_ids else str(group_b)
                                     )
 
                                 cohort_long_df = build_cohort_longitudinal_delta_long_df(
@@ -11331,19 +11534,33 @@ that predicts cognitive performance based on:
                                     )
                                     comparisons_df = compare_cohort_longitudinal_groups(
                                         cohort_long_df,
-                                        group_a="Control",
-                                        group_b="Intervention",
+                                        group_a=str(group_a),
+                                        group_b=str(group_b),
                                         alpha=0.05,
                                         apply_fdr=True,
                                     )
+                                    mixed_df = pd.DataFrame()
+                                    if bool(run_mixed):
+                                        mixed_df = fit_cohort_longitudinal_mixed_effects(
+                                            cohort_long_df,
+                                            group_a=str(group_a),
+                                            group_b=str(group_b),
+                                            max_iter=200,
+                                        )
                                     st.session_state["cohort_longitudinal_df"] = cohort_long_df
                                     st.session_state["cohort_longitudinal_summary_df"] = group_summary_df
                                     st.session_state["cohort_longitudinal_comparisons_df"] = comparisons_df
+                                    st.session_state["cohort_longitudinal_mixed_df"] = mixed_df
+                                    st.session_state["cohort_longitudinal_group_a"] = str(group_a)
+                                    st.session_state["cohort_longitudinal_group_b"] = str(group_b)
                                     st.success("Longitudinal cohort comparisons computed.")
 
                         cohort_long_df = st.session_state.get("cohort_longitudinal_df")
                         group_summary_df = st.session_state.get("cohort_longitudinal_summary_df")
                         comparisons_df = st.session_state.get("cohort_longitudinal_comparisons_df")
+                        mixed_df = st.session_state.get("cohort_longitudinal_mixed_df")
+                        group_a_name = str(st.session_state.get("cohort_longitudinal_group_a", "Group A"))
+                        group_b_name = str(st.session_state.get("cohort_longitudinal_group_b", "Group B"))
 
                         if isinstance(group_summary_df, pd.DataFrame) and not group_summary_df.empty:
                             st.markdown("##### Group × timepoint delta summary (preview)")
@@ -11369,6 +11586,18 @@ that predicts cognitive performance based on:
                                 key="download_cohort_longitudinal_comparisons_csv",
                             )
 
+                        if isinstance(mixed_df, pd.DataFrame) and not mixed_df.empty:
+                            st.markdown("##### Mixed-effects model (preview)")
+                            st.dataframe(mixed_df, use_container_width=True)
+                            csv_bytes = mixed_df.to_csv(index=False).encode("utf-8")
+                            st.download_button(
+                                "Download mixed-effects results (CSV)",
+                                data=csv_bytes,
+                                file_name=f"cohort_longitudinal_mixed_effects_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                                mime="text/csv",
+                                key="download_cohort_longitudinal_mixed_csv",
+                            )
+
                         if isinstance(cohort_long_df, pd.DataFrame) and not cohort_long_df.empty:
                             try:
                                 longitudinal_md = build_cohort_longitudinal_markdown_report(
@@ -11383,8 +11612,13 @@ that predicts cognitive performance based on:
                                         if isinstance(comparisons_df, pd.DataFrame)
                                         else pd.DataFrame()
                                     ),
-                                    group_a="Control",
-                                    group_b="Intervention",
+                                    mixed_effects_df=(
+                                        mixed_df
+                                        if isinstance(mixed_df, pd.DataFrame)
+                                        else None
+                                    ),
+                                    group_a=group_a_name,
+                                    group_b=group_b_name,
                                     additional_notes=cohort_notes,
                                 )
                             except Exception as exc:

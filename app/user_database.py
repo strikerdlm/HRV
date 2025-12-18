@@ -639,8 +639,9 @@ class UserDatabase:
         Returns:
             SQLite connection with optimized settings.
         """
-        # Check if we have a valid connection for this thread and database
-        conn_key = f"conn_{id(self)}"
+        # Use a stable per-db key to avoid `id(self)` reuse across tests/reruns.
+        # This maintains the intended "one connection per DB per thread" behavior.
+        conn_key = f"conn_{self._db_path_str}"
         conn = getattr(_thread_local, conn_key, None)
         
         if conn is not None:
@@ -686,7 +687,7 @@ class UserDatabase:
     
     def close(self) -> None:
         """Close the persistent SQLite connection for this instance."""
-        conn_key = f"conn_{id(self)}"
+        conn_key = f"conn_{self._db_path_str}"
         conn = getattr(_thread_local, conn_key, None)
         if conn is None:
             return
@@ -2872,6 +2873,203 @@ class UserDatabase:
             timepoints=timepoints,
             metrics=metrics,
             agg=agg,
+        )
+
+    # -----------------------------------------------------------------------
+    # Study Groups / Cohort Assignments (persisted)
+    # -----------------------------------------------------------------------
+
+    def upsert_study_group(self, group: StudyGroup) -> str:
+        """Create or update a study group definition.
+
+        Upserts by (study_id, group_name) to keep the UI idempotent.
+
+        Args:
+            group: StudyGroup payload.
+
+        Returns:
+            group_id (existing or newly created).
+        """
+        if not group.study_id:
+            raise ValueError("group.study_id is required")
+        if not group.group_name:
+            raise ValueError("group.group_name is required")
+
+        now = datetime.now(timezone.utc).isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT group_id
+                FROM study_groups
+                WHERE study_id = ? AND group_name = ?
+                LIMIT 1
+                """,
+                (str(group.study_id), str(group.group_name)),
+            )
+            row = cursor.fetchone()
+            if row is not None:
+                group_id = str(row["group_id"])
+                cursor.execute(
+                    """
+                    UPDATE study_groups
+                    SET description = ?
+                    WHERE group_id = ?
+                    """,
+                    (group.description, group_id),
+                )
+                return group_id
+
+            group_id = group.group_id or str(uuid.uuid4())
+            created_at = group.created_at or now
+            cursor.execute(
+                """
+                INSERT INTO study_groups (group_id, study_id, group_name, description, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (group_id, str(group.study_id), str(group.group_name), group.description, created_at),
+            )
+            return str(group_id)
+
+    def list_study_groups(self, study_id: str, *, limit: int = 50) -> List[StudyGroup]:
+        """List study groups for a given study_id."""
+        if not study_id:
+            raise ValueError("study_id is required")
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT *
+                FROM study_groups
+                WHERE study_id = ?
+                ORDER BY datetime(created_at) ASC
+                LIMIT ?
+                """,
+                (str(study_id), int(limit)),
+            )
+            rows = cursor.fetchall()
+        return [self._row_to_study_group(row) for row in rows]
+
+    def get_study_group_by_name(self, study_id: str, group_name: str) -> Optional[StudyGroup]:
+        """Get a study group by (study_id, group_name)."""
+        if not study_id:
+            raise ValueError("study_id is required")
+        if not group_name:
+            raise ValueError("group_name is required")
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT *
+                FROM study_groups
+                WHERE study_id = ? AND group_name = ?
+                LIMIT 1
+                """,
+                (str(study_id), str(group_name)),
+            )
+            row = cursor.fetchone()
+        return self._row_to_study_group(row) if row else None
+
+    def set_user_study_assignment(
+        self,
+        *,
+        user_id: str,
+        study_id: str,
+        group_id: Optional[str],
+        assignment_date: Optional[str] = None,
+    ) -> None:
+        """Assign a user to exactly one group within a study (or unassign).
+
+        Behavior:
+        - If group_id is provided: remove any prior assignment for this (user_id, study_id),
+          then create a new assignment row.
+        - If group_id is None: remove any prior assignment for this (user_id, study_id).
+        """
+        if not user_id:
+            raise ValueError("user_id is required")
+        if not study_id:
+            raise ValueError("study_id is required")
+
+        now = datetime.now(timezone.utc).isoformat()
+        assignment_date_val = str(assignment_date or now)
+
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+
+            # Remove existing assignment(s) for this user within the study.
+            cursor.execute(
+                """
+                DELETE FROM study_assignments
+                WHERE user_id = ?
+                  AND group_id IN (SELECT group_id FROM study_groups WHERE study_id = ?)
+                """,
+                (str(user_id), str(study_id)),
+            )
+
+            if group_id is None:
+                return
+
+            # Validate that group_id belongs to this study_id.
+            cursor.execute(
+                """
+                SELECT group_id
+                FROM study_groups
+                WHERE group_id = ? AND study_id = ?
+                LIMIT 1
+                """,
+                (str(group_id), str(study_id)),
+            )
+            row = cursor.fetchone()
+            if row is None:
+                raise ValueError("group_id does not belong to the provided study_id")
+
+            cursor.execute(
+                """
+                INSERT INTO study_assignments (assignment_id, user_id, group_id, assignment_date, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (str(uuid.uuid4()), str(user_id), str(group_id), assignment_date_val, now),
+            )
+
+    def get_study_roster_dataframe(self, study_id: str, *, limit: int = 500) -> pd.DataFrame:
+        """Return a roster of users with their assigned group (if any)."""
+        if not study_id:
+            raise ValueError("study_id is required")
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT
+                    u.user_id,
+                    u.full_name,
+                    u.username,
+                    g.group_id,
+                    g.group_name,
+                    g.study_id
+                FROM users u
+                LEFT JOIN (
+                    SELECT sa.user_id, sa.group_id
+                    FROM study_assignments sa
+                    WHERE sa.group_id IN (SELECT group_id FROM study_groups WHERE study_id = ?)
+                ) sa ON sa.user_id = u.user_id
+                LEFT JOIN study_groups g ON g.group_id = sa.group_id
+                ORDER BY u.full_name ASC
+                LIMIT ?
+                """,
+                (str(study_id), int(limit)),
+            )
+            rows = cursor.fetchall()
+        if not rows:
+            return pd.DataFrame(columns=["user_id", "full_name", "username", "group_id", "group_name", "study_id"])
+        return pd.DataFrame([dict(r) for r in rows])
+
+    def _row_to_study_group(self, row: sqlite3.Row) -> StudyGroup:
+        return StudyGroup(
+            group_id=str(row["group_id"]),
+            study_id=str(row["study_id"]),
+            group_name=str(row["group_name"]),
+            description=row["description"],
+            created_at=str(row["created_at"]),
         )
     
     def compare_periods(
