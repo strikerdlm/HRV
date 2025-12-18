@@ -1957,6 +1957,22 @@ The SAFTE tab provides exports for downstream reporting and publication workflow
 - **FRMS dashboard payload (JSON)** and **FRMS summary (CSV)** for audit trails.
 - **Plot exports (HTML, PNG, SVG, PDF)** via Plotly export fallback (static image export requires `kaleido`).
 
+### Mission FRMS v2 — Crew Risk Board (Multi-Profile)
+
+In addition to the single-user FRMS dashboard inside the SAFTE tab, the app includes a **mission-level FRMS v2 prototype**:
+
+- **Where to find it**: **Export → Group summaries (cohort export) → “🛡️ Mission FRMS v2 — Crew Risk Board (multi-profile)”**.
+- **What it does**: Runs a bounded SAFTE forecast **per selected active user** (data priority: wrist monitoring → clinical scales → Garmin Connect (if configured) → defaults) and then computes:
+  - FRMS exposure metrics (WOCL exposure, time ≤77%/≤70%, min effectiveness) for a **shared scope** (all hours or a duty-window).
+  - FRMS risk matrix classification per crew member.
+  - Rule-based FRMS alerts per crew member (“why it triggered”).
+- **What you can export**:
+  - **Crew risk board (CSV)**: roster-style table for briefings.
+  - **Crew risk board payload (JSON)**: structured evidence packet for audit and integration.
+  - **Decision log entry (JSON)**: an auditable record capturing **decision owner + decision + mitigations + notes** with the embedded board payload.
+
+> **Current limitation (prototype)**: The mission board does **not** yet include per-crew individualized crew-rest times or a persistent decision-log database table; it focuses on **multi-profile aggregation + exports** first (FRMS v2 scaffolding).
+
 > **One-click Garmin automation:** Press **Auto-run Garmin (5-day forecast)** to fetch the latest Garmin sleep/stress data (requires `GARMIN_EMAIL` and `GARMIN_PASSWORD` in your `.env`) and run a 5-day SAFTE forecast with the active user profile. The tab also shows the Garmin summary used for traceability.
 >
 > **Data priority:** The 5-day automation first uses wrist monitoring data saved in the Assessment tab. If none exists, it uses the subjective clinical sleep quality from the same tab. Only if both are missing will it attempt a live Garmin Connect fetch (requires `.env` credentials). The source used is shown after the run.
@@ -1993,6 +2009,7 @@ Recommendations:
 ### Key References (Fatigue / FRMS)
 
 - International Civil Aviation Organization. (2016). *Manual for the Oversight of Fatigue Management Approaches* (Doc 9966, 2nd ed.). https://www.icao.int/safety/fatiguemanagement/FRMS%20Tools/Doc%209966.FRMS.2016%20Edition.en.pdf
+- Gander, P. H., Mangie, J., Van Den Berg, M. J., Smith, A. A., Mulrine, H. M., & Signal, T. L. (2014). Crew fatigue safety performance indicators for fatigue risk management systems. *Aviation, Space, and Environmental Medicine, 85*(2), 139–147. https://doi.org/10.3357/asem.3748.2014
 - Department of the Air Force. (n.d.). *AFMAN 11-202V3: General Flight Rules.* https://static.e-publishing.af.mil/production/1/af_a3/publication/afman11-202v3/afman11-202v3.pdf
 - Federal Aviation Administration. (2010). *Flightcrew Member Duty and Rest Requirements* (Docket No. FAA-2009-1093; Attachment 1). https://downloads.regulations.gov/FAA-2009-1093-2518/attachment_1.pdf
 - National Aeronautics and Space Administration. (2012). *NASA–easyJet Collaboration on the Human Factors Monitoring Program (HFMP) Study* (NASA NTRS No. 20120013448). https://ntrs.nasa.gov/api/citations/20120013448/downloads/20120013448.pdf
@@ -3914,7 +3931,16 @@ This section outlines completed features and remaining planned enhancements for 
 - ✅ ICAO-aligned FRMS summary + risk matrix, designed for deterministic “why it triggered” traceability.
 - ✅ USAF crew rest compliance checks (AFMAN 11-202V3) with clear “compliant / waiver required / not compliant” outputs.
 - ✅ Exportable evidence: FRMS JSON export and plot export workflows.
-- 🔜 FRMS v2: mission-level roster + “crew risk board”, escalation rules, SPIs/trending, and an auditable decision log (inputs → classification → mitigation → outcome).
+- ✅ **FRMS v2 prototype (Crew Risk Board)**: Export tab aggregates FRMS metrics/classifications across selected active profiles and exports **crew board CSV/JSON** plus a **decision log JSON** (audit trail).
+- 🔜 **FRMS v2 requisites to complete (end-to-end)**:
+  - **Roster & mission window model**: explicit shift/EVA/task windows per crew member (start/end, timezone, role) with versioned assumptions.
+  - **Crew-rest at scale**: per-crew crew-rest start, FDP start, planned sleep opportunity, and waiver rules (not a single global setting).
+  - **Escalation rules**: configurable trigger thresholds (time ≤77%, WOCL overlap, noncompliant crew rest) with severity tiers and required mitigations/approvals.
+  - **SPIs / trending**: track fatigue safety performance indicators over time (e.g., exposure hours ≤77%, WOCL duty overlap rate, alert rates, waiver rates), aligned with FRMS safety assurance practices.
+  - **Hazard / occurrence reporting**: structured near-miss / incident logging linked to the predicted-risk context and crew state.
+  - **Audit log persistence**: persist decision logs (inputs → classification → mitigations → outcome) in SQLite/Postgres with immutable records and export.
+  - **Validation hooks**: optional PVT/vigilance testing, outcome labeling, and calibration hooks (e.g., SAFTE-R parameterization) to quantify predictive skill on the mission roster.
+  - **Governance artifacts**: model card, data dictionary, and misuse constraints (what the tool can/can’t decide).
 
 #### Per-user persistence across all mission modules
 **Status:** Planned  
