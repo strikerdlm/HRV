@@ -9,15 +9,17 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.23-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.24-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2025--12--14-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2025--12--18-blue)](CHANGELOG.md)
 
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.8.24**: **Longitudinal cohort comparisons (T0–T21)** — In the Export tab, compare **control vs intervention** using **within-subject Δ vs baseline** per timepoint, with CSV + Markdown exports (effect sizes + FDR-adjusted p-values).
 
 **NEW in v1.8.23**: **Profile Tools Engine** — Comprehensive calculation engines accessible per user profile: SAFTE fatigue prediction with 24-hour cognitive effectiveness forecast, lnRMSSD-based recovery scoring, training readiness assessment with workout recommendations, personalized HRV analysis with parasympathetic/stress indices, and hour-by-hour performance forecasting. Run all tools with one click and export results to Markdown.
 
@@ -209,9 +211,10 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE  | Baseline/Δ analytics (T0–T21)                | Complete (User Profile → HRV Measurement History baseline/Δ table) |
 | ✅ DONE  | Per-user HRV cache + GPT export persistence  | Complete (SQLite-backed reusable payloads + reports)  |
 | ✅ DONE  | SAFTE tab FRMS dashboard + USAF crew rest    | Complete (ICAO-aligned FRMS dashboard + AFMAN 11-202V3 checks + plot exports) |
+| ✅ DONE  | Cohort/group baseline/Δ comparisons (T0–T21) | Complete (Export → Longitudinal cohort comparisons: control vs intervention) |
 | 🚧 IN PROGRESS | Plot governance enforcement across all tabs | Standardize captions/labels/exports for every plot (ECharts-first; Plotly fallback) |
 
-**Best next task:** Extend baseline/Δ analytics to cohort/group comparisons (control vs intervention) using the existing T0–T21 tags.
+**Best next task:** Persist study group definitions/assignments (beyond ad-hoc export grouping) and add mixed-effects models for Group × Time inference.
 
 ### Planned Features (Q1 2026)
 
