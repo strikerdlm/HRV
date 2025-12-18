@@ -73,7 +73,7 @@ All other tabs show **example data** and **reference values** to help you unders
 
 **Cross-tab correlation:** The Circadian tab now publishes DLMO/CBT markers, ESRI, and light window details to the SAFTE/Fatigue tab. A single click in SAFTE applies the latest circadian sleep window and chronotype offset to fatigue simulations for tighter mission planning.
 
-**Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. Space Weather and NOAA tabs auto-load cache-first data on open (reusing cached Kp/F10.7/NOAA feeds if offline) even without RR uploads. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the database lives alongside the app (`hrv_users.db`) for easy portability.
+**Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. Space Weather and NOAA tabs auto-load cache-first data on open (reusing cached Kp/F10.7/NOAA feeds if offline) even without RR uploads. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the active mission database is stored under `crew/<Mission>/db/hrv_users.db` (selected in the sidebar Crew workspace selector) for mission-scoped portability.
 
 **Release awareness:** The welcome header and About tab now read version, release date, and git commit metadata directly from `CHANGELOG.md`, so flight surgeons can confirm they are on v1.8.15 (or later) without leaving the UI. The indicator flips to “dirty” whenever the working tree has uncommitted changes.
 
@@ -281,7 +281,7 @@ The app will:
 
 ### Per-User Storage & Duplicate Protection
 
-- RR uploads are saved to the active user profile (light-bulb indicator) and immediately written to `data/{user}/rr_intervals`; computed HRV results persist with their analysis settings.
+- RR uploads are saved to the active user profile (light-bulb indicator) and immediately written to `crew/<Mission>/subjects/{user}/rr_intervals`; computed HRV results persist with their analysis settings.
 - Re-uploads with the same file hash trigger a sidebar warning; you can reuse stored results when the settings match (toggle in the sidebar) or force recomputation if settings changed.
 - Sidebar uploads target the active profile (Diego by default). Uploading from **User Profile → HRV** scopes files to that user and sets that profile active before queuing them for analysis.
 - In **User Profile → HRV → HRV Measurement History**, use **Regenerate plots** to force-refresh the HRV history charts after new uploads/analysis runs.
