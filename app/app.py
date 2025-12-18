@@ -4603,6 +4603,30 @@ def main() -> None:
     st.set_page_config(
         page_title="HRV Analysis — Streamlit + ECharts",
         layout="wide")
+
+    # ----------------------------------------------------------------------
+    # Crew / Mission workspace selection (affects DB + per-subject file storage)
+    # ----------------------------------------------------------------------
+    crew_root = Path(__file__).resolve().parents[1] / "crew"
+    for mission_name in ("Mission 1", "Mission 2"):
+        (crew_root / mission_name / "db").mkdir(parents=True, exist_ok=True)
+        (crew_root / mission_name / "subjects").mkdir(parents=True, exist_ok=True)
+
+    st.sidebar.subheader("🧑‍🚀 Crew workspace")
+    active_mission = st.sidebar.selectbox(
+        "Active mission",
+        options=["Mission 1", "Mission 2"],
+        index=0,
+        key="crew_active_mission",
+        help="Each mission uses its own DB and subject folders under the `crew/` directory.",
+    )
+    previous_mission = st.session_state.get("_crew_previous_mission")
+    st.session_state["_crew_previous_mission"] = active_mission
+    os.environ["HRV_ACTIVE_MISSION"] = str(active_mission)
+    if previous_mission and previous_mission != active_mission:
+        # Prevent cross-mission user/session leakage.
+        st.session_state.pop("current_user_id", None)
+
     # Apply neutral layout refinements (responsive margins, full-width
     # components)
     st.markdown(
