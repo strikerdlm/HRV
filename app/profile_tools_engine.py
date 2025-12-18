@@ -74,6 +74,15 @@ class FatigueRisk(str, Enum):
     CRITICAL = "critical"
 
 
+class OperationalReadinessLevel(str, Enum):
+    """Operational readiness classification for safety-critical human performance."""
+
+    GO = "go"
+    GO_MONITOR = "go_monitor"
+    CAUTION = "caution"
+    NO_GO = "no_go"
+
+
 # Reference thresholds for lnRMSSD recovery (Plews et al. 2013)
 RECOVERY_THRESHOLDS: Dict[str, Tuple[float, float]] = {
     "20-29": (3.8, 4.3),  # (low_threshold, high_threshold)
@@ -239,6 +248,59 @@ class PerformanceForecast:
         }
 
 
+@dataclass
+class OperationalPerformance:
+    """Fused operational performance predictor (HRV + SAFTE).
+
+    This is a *transparent*, rule-based fusion intended for operational planning:
+    it combines SAFTE-style cognitive effectiveness (sleep/circadian) with HRV-based
+    recovery (lnRMSSD) and autonomic markers (parasympathetic index, stress index).
+
+    Outputs are indices (0-100) and readiness categories, not a medical diagnosis.
+    """
+
+    readiness_score: float  # 0-100 (higher = better)
+    readiness_level: OperationalReadinessLevel
+    readiness_label: str
+
+    # Inputs / drivers (surfaced for explainability)
+    safte_effectiveness: float  # 0-100
+    recovery_score: Optional[float] = None  # 0-100
+    parasympathetic_index: Optional[float] = None  # 0-10
+    stress_index: Optional[float] = None  # ~0-500 typical
+
+    # Scheduling guidance (derived from SAFTE curve + current HRV state)
+    best_2h_window_start: Optional[str] = None  # "HH:00"
+    worst_2h_window_start: Optional[str] = None  # "HH:00"
+    next_12h_alert_windows: List[Dict[str, str]] = field(default_factory=list)
+
+    triggers: List[str] = field(default_factory=list)
+    recommendations: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for UI/export."""
+        return {
+            "readiness_score": round(self.readiness_score, 1),
+            "readiness_level": self.readiness_level.value,
+            "readiness_label": self.readiness_label,
+            "drivers": {
+                "safte_effectiveness": round(self.safte_effectiveness, 1),
+                "recovery_score": round(self.recovery_score, 1) if self.recovery_score is not None else None,
+                "parasympathetic_index": (
+                    round(self.parasympathetic_index, 2) if self.parasympathetic_index is not None else None
+                ),
+                "stress_index": round(self.stress_index, 0) if self.stress_index is not None else None,
+            },
+            "scheduling": {
+                "best_2h_window_start": self.best_2h_window_start,
+                "worst_2h_window_start": self.worst_2h_window_start,
+                "next_12h_alert_windows": self.next_12h_alert_windows,
+            },
+            "triggers": self.triggers,
+            "recommendations": self.recommendations,
+        }
+
+
 # ---------------------------------------------------------------------------
 # Helper Functions
 # ---------------------------------------------------------------------------
@@ -320,6 +382,228 @@ def _sleep_homeostatic(hours_awake: float, base_effectiveness: float = 100.0) ->
     
     # Apply floor (minimum ~65% after 24h awake)
     return max(65.0, min(100.0, effectiveness))
+
+
+def _clamp_0_100(value: float) -> float:
+    """Clamp value to [0, 100]."""
+    return max(0.0, min(100.0, float(value)))
+
+
+def _fuse_operational_readiness_score(
+    *,
+    safte_effectiveness: float,
+    recovery_score: Optional[float],
+    parasympathetic_index: Optional[float],
+    stress_index: Optional[float],
+) -> Tuple[float, List[str]]:
+    """Fuse SAFTE effectiveness and HRV-derived signals into a readiness score.
+
+    Design goals:
+    - Deterministic, bounded, explainable.
+    - Conservative: low SAFTE effectiveness or poor HRV recovery should pull the score down.
+
+    Returns:
+        (readiness_score_0_100, triggers)
+    """
+    triggers: List[str] = []
+
+    safte = _clamp_0_100(safte_effectiveness)
+
+    # Base fusion: SAFTE dominates (sleep/circadian strongly drive vigilance), HRV refines (recovery/autonomic state).
+    # If recovery is unknown, rely more on SAFTE.
+    if recovery_score is None:
+        fused = safte
+        triggers.append("Recovery score unavailable; readiness driven primarily by SAFTE effectiveness.")
+    else:
+        rec = _clamp_0_100(recovery_score)
+        fused = 0.65 * safte + 0.35 * rec
+        if rec < 50:
+            triggers.append(f"Low HRV recovery score ({rec:.0f}/100) reduces operational readiness.")
+        if safte < 70:
+            triggers.append(f"Low SAFTE effectiveness ({safte:.0f}%) increases operational risk.")
+
+    # Autonomic modifiers (small, bounded) for explainability without overpowering SAFTE.
+    if stress_index is not None:
+        si = float(stress_index)
+        if si >= 250:
+            penalty = min(12.0, (si - 250.0) / 20.0)  # up to ~12 points
+            fused -= penalty
+            triggers.append(f"Elevated stress index ({si:.0f}) penalizes readiness by {penalty:.1f} points.")
+
+    if parasympathetic_index is not None:
+        pns = float(parasympathetic_index)
+        if pns <= 3.5:
+            fused -= 4.0
+            triggers.append(f"Low parasympathetic index ({pns:.1f}/10) suggests reduced recovery reserve.")
+        elif pns >= 7.5:
+            fused += 3.0
+            triggers.append(f"High parasympathetic index ({pns:.1f}/10) provides a small readiness bonus.")
+
+    return _clamp_0_100(fused), triggers
+
+
+def _classify_operational_readiness(score_0_100: float) -> Tuple[OperationalReadinessLevel, str]:
+    """Classify operational readiness into GO/CAUTION/NO-GO style categories."""
+    score = _clamp_0_100(score_0_100)
+    if score >= 85.0:
+        return OperationalReadinessLevel.GO, "GO — Peak readiness"
+    if score >= 70.0:
+        return OperationalReadinessLevel.GO_MONITOR, "GO (monitor) — Adequate readiness"
+    if score >= 55.0:
+        return OperationalReadinessLevel.CAUTION, "CAUTION — Elevated risk"
+    return OperationalReadinessLevel.NO_GO, "NO-GO — High operational risk"
+
+
+def predict_operational_performance(
+    *,
+    age: int,
+    sex: str,
+    rmssd_ms: Optional[float],
+    hrv_metrics: Optional[Dict[str, float]],
+    sleep_hours_last_night: float,
+    sleep_quality: float,
+    hours_awake: float,
+    current_hour: int,
+    chronotype_offset: float = 0.0,
+    resting_hr: Optional[float] = None,
+    workload_intensity: float = 0.5,
+) -> OperationalPerformance:
+    """Predict operational performance readiness from SAFTE + HRV.
+
+    Args:
+        age: Age in years.
+        sex: Biological sex (used only for HRV norms if available).
+        rmssd_ms: RMSSD (ms) if available; enables recovery scoring.
+        hrv_metrics: Optional HRV metrics dict (rmssd_ms, sdnn_ms, hf_power, lf_hf_ratio, mean_rr_ms...).
+        sleep_hours_last_night: Hours slept last night.
+        sleep_quality: Sleep quality (0-1).
+        hours_awake: Hours since waking.
+        current_hour: Hour of day (0-23).
+        chronotype_offset: Chronotype offset (negative=morning type).
+        resting_hr: Optional resting HR (bpm), used in recovery scoring and HRV analysis context.
+        workload_intensity: Workload intensity (0-1) that slightly degrades effectiveness.
+
+    Returns:
+        OperationalPerformance with readiness score, category, and scheduling guidance.
+    """
+    if not (0 <= current_hour <= 23):
+        raise ValueError("current_hour must be in [0, 23].")
+    if sleep_hours_last_night < 0 or hours_awake < 0:
+        raise ValueError("sleep_hours_last_night and hours_awake must be non-negative.")
+    if not (0.0 <= sleep_quality <= 1.0):
+        raise ValueError("sleep_quality must be in [0, 1].")
+    if not (0.0 <= workload_intensity <= 1.0):
+        raise ValueError("workload_intensity must be in [0, 1].")
+
+    # SAFTE-style effectiveness (sleep/circadian driver)
+    fatigue = predict_fatigue(
+        sleep_hours_last_night=sleep_hours_last_night,
+        sleep_quality=sleep_quality,
+        hours_awake=hours_awake,
+        current_hour=current_hour,
+        chronotype_offset=chronotype_offset,
+        workload_intensity=workload_intensity,
+    )
+
+    # HRV-derived recovery + autonomic markers (if available)
+    recovery: Optional[RecoveryScore] = None
+    if rmssd_ms is not None and rmssd_ms > 0:
+        recovery = calculate_recovery_score(
+            rmssd_ms=float(rmssd_ms),
+            age=age,
+            sleep_hours=sleep_hours_last_night,
+            sleep_quality=sleep_quality,
+            resting_hr=resting_hr,
+        )
+
+    hrv_analysis: Optional[PersonalizedHRVAnalysis] = None
+    if hrv_metrics:
+        try:
+            hrv_analysis = analyze_hrv_personalized(
+                hrv_metrics=hrv_metrics,
+                age=age,
+                sex=sex,
+                resting_hr=resting_hr,
+            )
+        except Exception as exc:
+            _LOGGER.warning("Operational performance HRV analysis failed: %s", exc)
+            hrv_analysis = None
+
+    score, triggers = _fuse_operational_readiness_score(
+        safte_effectiveness=fatigue.current_effectiveness,
+        recovery_score=recovery.score if recovery is not None else None,
+        parasympathetic_index=hrv_analysis.parasympathetic_index if hrv_analysis is not None else None,
+        stress_index=hrv_analysis.stress_index if hrv_analysis is not None else None,
+    )
+    level, label = _classify_operational_readiness(score)
+
+    # Scheduling: use SAFTE hourly curve and apply the same fusion with fixed HRV state.
+    best_start: Optional[int] = None
+    worst_start: Optional[int] = None
+    best_score = -1.0
+    worst_score = 101.0
+
+    curve = fatigue.performance_curve  # list[(hour, effectiveness)]
+    for i in range(0, max(0, len(curve) - 2)):
+        # 2-hour rolling average of effectiveness
+        _, e0 = curve[i]
+        _, e1 = curve[i + 1]
+        avg_eff = float((e0 + e1) / 2.0)
+        fused_i, _ = _fuse_operational_readiness_score(
+            safte_effectiveness=avg_eff,
+            recovery_score=recovery.score if recovery is not None else None,
+            parasympathetic_index=hrv_analysis.parasympathetic_index if hrv_analysis is not None else None,
+            stress_index=hrv_analysis.stress_index if hrv_analysis is not None else None,
+        )
+        if fused_i > best_score:
+            best_score = fused_i
+            best_start = int(curve[i][0])
+        if fused_i < worst_score:
+            worst_score = fused_i
+            worst_start = int(curve[i][0])
+
+    next_12h_alerts: List[Dict[str, str]] = []
+    for hour, eff in curve[1:13]:
+        fused_h, _ = _fuse_operational_readiness_score(
+            safte_effectiveness=float(eff),
+            recovery_score=recovery.score if recovery is not None else None,
+            parasympathetic_index=hrv_analysis.parasympathetic_index if hrv_analysis is not None else None,
+            stress_index=hrv_analysis.stress_index if hrv_analysis is not None else None,
+        )
+        if fused_h < 55.0:
+            next_12h_alerts.append(
+                {
+                    "hour": f"{int(hour):02d}:00",
+                    "reason": f"Projected low readiness ({fused_h:.0f}/100) — avoid safety-critical tasks",
+                }
+            )
+
+    recommendations: List[str] = []
+    if level in (OperationalReadinessLevel.CAUTION, OperationalReadinessLevel.NO_GO):
+        recommendations.append("Avoid safety-critical tasks; schedule them during the best 2-hour window if possible.")
+        recommendations.append("Consider a short nap (≤20 min) if operationally feasible.")
+        recommendations.append("Use a checklist + second-person verification for critical steps.")
+    if fatigue.current_effectiveness < 70:
+        recommendations.append("Fatigue-driven risk detected: prioritize sleep extension and reduce workload intensity.")
+    if recovery is not None and recovery.score < 50:
+        recommendations.append("HRV recovery deficit detected: consider active recovery and avoid high-intensity training.")
+    if hrv_analysis is not None and hrv_analysis.stress_index >= 250:
+        recommendations.append("Elevated autonomic stress: consider paced breathing (5–6 breaths/min) and recovery strategies.")
+
+    return OperationalPerformance(
+        readiness_score=score,
+        readiness_level=level,
+        readiness_label=label,
+        safte_effectiveness=float(fatigue.current_effectiveness),
+        recovery_score=recovery.score if recovery is not None else None,
+        parasympathetic_index=hrv_analysis.parasympathetic_index if hrv_analysis is not None else None,
+        stress_index=hrv_analysis.stress_index if hrv_analysis is not None else None,
+        best_2h_window_start=(f"{best_start:02d}:00" if best_start is not None else None),
+        worst_2h_window_start=(f"{worst_start:02d}:00" if worst_start is not None else None),
+        next_12h_alert_windows=next_12h_alerts,
+        triggers=triggers,
+        recommendations=recommendations,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1231,6 +1515,25 @@ def run_all_profile_tools(
         results["tools_available"].append("performance_forecast")
     except Exception as exc:
         _LOGGER.warning("Performance forecast failed: %s", exc)
+
+    # Operational performance (HRV + SAFTE fusion)
+    try:
+        op = predict_operational_performance(
+            age=age,
+            sex=sex,
+            rmssd_ms=rmssd_ms,
+            hrv_metrics=hrv_metrics,
+            sleep_hours_last_night=sleep_hours,
+            sleep_quality=sleep_quality,
+            hours_awake=hours_awake,
+            current_hour=current_hour,
+            chronotype_offset=chronotype_offset,
+            resting_hr=resting_hr,
+        )
+        results["operational_performance"] = op.to_dict()
+        results["tools_available"].append("operational_performance")
+    except Exception as exc:
+        _LOGGER.warning("Operational performance prediction failed: %s", exc)
     
     return results
 
@@ -1250,12 +1553,15 @@ __all__ = [
     "FatiguePrediction",
     "PersonalizedHRVAnalysis",
     "PerformanceForecast",
+    "OperationalReadinessLevel",
+    "OperationalPerformance",
     # Calculation functions
     "calculate_recovery_score",
     "calculate_training_readiness",
     "predict_fatigue",
     "analyze_hrv_personalized",
     "generate_performance_forecast",
+    "predict_operational_performance",
     "run_all_profile_tools",
     # Reference data
     "RECOVERY_THRESHOLDS",
