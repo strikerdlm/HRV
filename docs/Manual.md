@@ -1939,7 +1939,7 @@ The SAFTE tab includes an aviation-grade **FRMS-style dashboard** aligned with I
 - **WOCL exposure** (Window of Circadian Low, typically ~02:00–06:00 local).
 - **Operational effectiveness thresholds** commonly used with SAFTE/FAST:
   - **≥90%**: low risk (“well-rested” baseline)
-  - **77–<90%**: caution / transitional range
+  - **>77–<90%**: caution / transitional range
   - **>70–≤77%**: high risk (often compared to ~0.05% BAC impairment)
   - **≤70%**: severe impairment (often compared to ~0.08% BAC impairment)
 - **SMS-style risk matrix** classification (severity × likelihood) for structured decision support.
