@@ -131,67 +131,39 @@ _RR_NORMAL: Final[float] = 15.0
 _RR_HIGH: Final[float] = 20.0
 _RR_MAX: Final[float] = 30.0
 
-# Garmin wrist monitoring metrics
-_STEPS_LOW: Final[float] = 3000.0
-_STEPS_NORMAL: Final[float] = 10000.0
-_STEPS_HIGH: Final[float] = 15000.0
-_STEPS_MAX: Final[float] = 30000.0
+# Garmin wellness / activity (Vivosmart 5) — daily summary thresholds
+#
+# NOTE: Keep Garmin thresholds in a distinct namespace to avoid accidental
+# shadowing/overwrites (these constants are used by the Garmin gauges).
+_GARMIN_STEPS_LOW: Final[float] = 4000.0
+_GARMIN_STEPS_NORMAL: Final[float] = 8000.0
+_GARMIN_STEPS_HIGH: Final[float] = 12000.0
+_GARMIN_STEPS_MAX: Final[float] = 20000.0
 
-_DISTANCE_LOW: Final[float] = 2.0
-_DISTANCE_NORMAL: Final[float] = 8.0
-_DISTANCE_HIGH: Final[float] = 15.0
-_DISTANCE_MAX: Final[float] = 30.0
+_GARMIN_DISTANCE_KM_LOW: Final[float] = 3.0
+_GARMIN_DISTANCE_KM_NORMAL: Final[float] = 5.0
+_GARMIN_DISTANCE_KM_HIGH: Final[float] = 10.0
+_GARMIN_DISTANCE_KM_MAX: Final[float] = 20.0
 
-_CALORIES_LOW: Final[float] = 1800.0
-_CALORIES_NORMAL: Final[float] = 2500.0
-_CALORIES_HIGH: Final[float] = 3500.0
-_CALORIES_MAX: Final[float] = 6000.0
+_GARMIN_CALORIES_KCAL_LOW: Final[float] = 1200.0
+_GARMIN_CALORIES_KCAL_NORMAL: Final[float] = 2000.0
+_GARMIN_CALORIES_KCAL_HIGH: Final[float] = 3200.0
+_GARMIN_CALORIES_KCAL_MAX: Final[float] = 6000.0
 
-_SPO2_LOW: Final[float] = 90.0
-_SPO2_NORMAL: Final[float] = 95.0
-_SPO2_HIGH: Final[float] = 98.0
-_SPO2_MAX: Final[float] = 100.0
+_GARMIN_RESTING_HR_LOW: Final[float] = 45.0
+_GARMIN_RESTING_HR_NORMAL: Final[float] = 60.0
+_GARMIN_RESTING_HR_HIGH: Final[float] = 75.0
+_GARMIN_RESTING_HR_MAX: Final[float] = 120.0
 
-_STRESS_LOW: Final[float] = 25.0
-_STRESS_NORMAL: Final[float] = 50.0
-_STRESS_HIGH: Final[float] = 75.0
-_STRESS_MAX: Final[float] = 100.0
+_GARMIN_STRESS_SCORE_LOW: Final[float] = 10.0
+_GARMIN_STRESS_SCORE_NORMAL: Final[float] = 30.0
+_GARMIN_STRESS_SCORE_HIGH: Final[float] = 50.0
+_GARMIN_STRESS_SCORE_MAX: Final[float] = 100.0
 
-_BODY_BATTERY_LOW: Final[float] = 25.0
-_BODY_BATTERY_NORMAL: Final[float] = 50.0
-_BODY_BATTERY_HIGH: Final[float] = 75.0
-_BODY_BATTERY_MAX: Final[float] = 100.0
-
-# Garmin wellness / activity (Vivosmart 5)
-_STEPS_LOW: Final[float] = 4000.0
-_STEPS_NORMAL: Final[float] = 8000.0
-_STEPS_HIGH: Final[float] = 12000.0
-_STEPS_MAX: Final[float] = 20000.0
-
-_DIST_KM_LOW: Final[float] = 3.0
-_DIST_KM_NORMAL: Final[float] = 5.0
-_DIST_KM_HIGH: Final[float] = 10.0
-_DIST_KM_MAX: Final[float] = 20.0
-
-_CALORIES_LOW: Final[float] = 1200.0
-_CALORIES_NORMAL: Final[float] = 2000.0
-_CALORIES_HIGH: Final[float] = 3200.0
-_CALORIES_MAX: Final[float] = 6000.0
-
-_RESTING_HR_LOW: Final[float] = 45.0
-_RESTING_HR_NORMAL: Final[float] = 60.0
-_RESTING_HR_HIGH: Final[float] = 75.0
-_RESTING_HR_MAX: Final[float] = 120.0
-
-_STRESS_LOW: Final[float] = 10.0
-_STRESS_NORMAL: Final[float] = 30.0
-_STRESS_HIGH: Final[float] = 50.0
-_STRESS_MAX: Final[float] = 100.0
-
-_SPO2_LOW: Final[float] = 90.0
-_SPO2_NORMAL: Final[float] = 95.0
-_SPO2_HIGH: Final[float] = 98.0
-_SPO2_MAX: Final[float] = 100.0
+_GARMIN_SPO2_LOW: Final[float] = 90.0
+_GARMIN_SPO2_NORMAL: Final[float] = 95.0
+_GARMIN_SPO2_HIGH: Final[float] = 98.0
+_GARMIN_SPO2_MAX: Final[float] = 100.0
 
 _RESP_AWAKE_LOW: Final[float] = 10.0
 _RESP_AWAKE_NORMAL: Final[float] = 14.0
@@ -294,15 +266,41 @@ _GAUGE_THRESHOLDS: dict[str, GaugeThresholds] = {
     "respiratory_rate_bpm": GaugeThresholds(_RR_LOW, _RR_NORMAL, _RR_HIGH, _RR_MAX, "br/min"),
 
     # Garmin wellness & activity
-    "steps": GaugeThresholds(_STEPS_LOW, _STEPS_NORMAL, _STEPS_HIGH, _STEPS_MAX, ""),
-    "distance_km": GaugeThresholds(_DISTANCE_LOW, _DISTANCE_NORMAL, _DISTANCE_HIGH, _DISTANCE_MAX, "km"),
-    "calories_kcal": GaugeThresholds(_CALORIES_LOW, _CALORIES_NORMAL, _CALORIES_HIGH, _CALORIES_MAX, "kcal"),
-    "resting_hr_bpm": GaugeThresholds(40, 60, 80, 100, "bpm", invert_colors=True),
+    "steps": GaugeThresholds(_GARMIN_STEPS_LOW, _GARMIN_STEPS_NORMAL, _GARMIN_STEPS_HIGH, _GARMIN_STEPS_MAX, ""),
+    "distance_km": GaugeThresholds(
+        _GARMIN_DISTANCE_KM_LOW,
+        _GARMIN_DISTANCE_KM_NORMAL,
+        _GARMIN_DISTANCE_KM_HIGH,
+        _GARMIN_DISTANCE_KM_MAX,
+        "km",
+    ),
+    "calories_kcal": GaugeThresholds(
+        _GARMIN_CALORIES_KCAL_LOW,
+        _GARMIN_CALORIES_KCAL_NORMAL,
+        _GARMIN_CALORIES_KCAL_HIGH,
+        _GARMIN_CALORIES_KCAL_MAX,
+        "kcal",
+    ),
+    "resting_hr_bpm": GaugeThresholds(
+        _GARMIN_RESTING_HR_LOW,
+        _GARMIN_RESTING_HR_NORMAL,
+        _GARMIN_RESTING_HR_HIGH,
+        _GARMIN_RESTING_HR_MAX,
+        "bpm",
+        invert_colors=True,
+    ),
     "avg_hr_bpm": GaugeThresholds(_MEAN_HR_LOW, _MEAN_HR_NORMAL, _MEAN_HR_HIGH, _MEAN_HR_MAX, "bpm", invert_colors=True),
-    "stress_score": GaugeThresholds(_STRESS_LOW, _STRESS_NORMAL, _STRESS_HIGH, _STRESS_MAX, "", invert_colors=True),
+    "stress_score": GaugeThresholds(
+        _GARMIN_STRESS_SCORE_LOW,
+        _GARMIN_STRESS_SCORE_NORMAL,
+        _GARMIN_STRESS_SCORE_HIGH,
+        _GARMIN_STRESS_SCORE_MAX,
+        "",
+        invert_colors=True,
+    ),
     "sleep_score": GaugeThresholds(60.0, 80.0, 90.0, 100.0, ""),
     "sleep_duration_hours": GaugeThresholds(_TST_LOW, _TST_NORMAL, _TST_HIGH, _TST_MAX, "h"),
-    "spo2_pct": GaugeThresholds(_SPO2_LOW, _SPO2_NORMAL, _SPO2_HIGH, _SPO2_MAX, "%"),
+    "spo2_pct": GaugeThresholds(_GARMIN_SPO2_LOW, _GARMIN_SPO2_NORMAL, _GARMIN_SPO2_HIGH, _GARMIN_SPO2_MAX, "%"),
     "respiration_awake_bpm": GaugeThresholds(_RESP_AWAKE_LOW, _RESP_AWAKE_NORMAL, _RESP_AWAKE_HIGH, _RESP_AWAKE_MAX, "br/min"),
     "respiration_sleep_bpm": GaugeThresholds(_RESP_SLEEP_LOW, _RESP_SLEEP_NORMAL, _RESP_SLEEP_HIGH, _RESP_SLEEP_MAX, "br/min"),
     "body_battery_avg": GaugeThresholds(_BB_LEVEL_LOW, _BB_LEVEL_NORMAL, _BB_LEVEL_HIGH, _BB_LEVEL_MAX, ""),

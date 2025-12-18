@@ -216,7 +216,7 @@ All other tabs show **example data** and **reference values** to help you unders
 | ✅ DONE  | Cohort/group baseline/Δ comparisons (T0–T21) | Complete (Export → Longitudinal cohort comparisons: control vs intervention) |
 | 🚧 IN PROGRESS | Plot governance enforcement across all tabs | Standardize captions/labels/exports for every plot (ECharts-first; Plotly fallback) |
 
-**Best next task:** Persist study group definitions/assignments (beyond ad-hoc export grouping) and add mixed-effects models for Group × Time inference.
+**Best next task:** Finish **plot governance enforcement** across *all* tabs (captions + axis units + consistent tooltips/legends + export coverage), then extend FRMS into a **mission-level “crew risk board”** (multi-profile aggregation + escalation + audit trail).
 
 ### Planned Features (Q1 2026)
 
