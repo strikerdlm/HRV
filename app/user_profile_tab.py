@@ -2026,16 +2026,26 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         if metric_col not in df.columns or "metric_date" not in df.columns:
             return None, None
         series = pd.to_numeric(df[metric_col], errors="coerce")
-        mask = series.notna()
-        if not bool(mask.any()):
+        non_null_mask = series.notna()
+        if not bool(non_null_mask.any()):
             return None, None
-        idx = mask.idxmax()  # first True because df is sorted latest-first
+        # IMPORTANT: df is sorted latest-first, but its index may not be reset (and may
+        # not be unique). Avoid relying on label-based selection via idxmax/loc.
         try:
-            val = float(series.loc[idx])
-        except Exception:
+            val_any = series.loc[non_null_mask].iloc[0]
+            dt_any = df.loc[non_null_mask, "metric_date"].iloc[0]
+        except (IndexError, KeyError, TypeError, ValueError):
             return None, None
-        dt_val = df.loc[idx, "metric_date"]
-        return val, pd.to_datetime(dt_val, errors="coerce")
+
+        try:
+            val = float(val_any)
+        except (TypeError, ValueError):
+            return None, None
+
+        dt = pd.to_datetime(dt_any, errors="coerce")
+        if dt is None or pd.isna(dt):
+            return val, None
+        return val, dt
 
     def _date_label(dt_val: Any) -> str:
         if dt_val is None or pd.isna(dt_val):
