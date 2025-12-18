@@ -3873,6 +3873,7 @@ This section outlines completed features and remaining planned enhancements for 
 ✅ **Docker Deployment** - Full containerization with PostgreSQL/TimescaleDB  
 ✅ **Professional Welcome Page** - Laboratory branding with quick access grid  
 ✅ **Per-user reuse & exports** - HRV analysis artifacts and GPT-5.2 interpretation markdown persist per user in SQLite for cross-session reuse and user-scoped exports  
+✅ **Baseline/Δ analytics (T0–T21)** - User Profile → HRV Measurement History includes a baseline/Δ table grouped by longitudinal timepoint labels (T0…T21)  
 
 ### Remaining Enhancements
 

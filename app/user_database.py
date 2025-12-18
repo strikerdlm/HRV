@@ -52,6 +52,156 @@ SCHEMA_VERSION = 3
 _thread_local = threading.local()
 
 
+# ---------------------------------------------------------------------------
+# Longitudinal analysis helpers (T0..T21)
+# ---------------------------------------------------------------------------
+
+def _parse_timepoint_number(timepoint_label: str) -> Optional[int]:
+    """Parse a timepoint label (T0_baseline, T1...T21) into an integer 0..21."""
+    if not timepoint_label:
+        return None
+    label = str(timepoint_label).strip()
+    if not label.startswith("T"):
+        return None
+    if label.startswith("T0"):
+        return 0
+    try:
+        return int(label[1:])
+    except (TypeError, ValueError):
+        return None
+
+
+def _validate_agg(agg: str) -> str:
+    """Validate aggregation mode."""
+    mode = str(agg or "").strip().lower()
+    if mode not in {"median", "mean"}:
+        raise ValueError("agg must be 'median' or 'mean'")
+    return mode
+
+
+def _aggregate_numeric(series: pd.Series, *, agg: str) -> float:
+    """Aggregate a numeric series with NaN-safe mean/median."""
+    numeric = pd.to_numeric(series, errors="coerce")
+    values = numeric.to_numpy(dtype=float, copy=False)
+    if values.size == 0:
+        return float("nan")
+    if agg == "mean":
+        return float(np.nanmean(values))
+    return float(np.nanmedian(values))
+
+
+def build_timepoint_change_table_from_hrv_df(
+    hrv_df: pd.DataFrame,
+    *,
+    timepoints: Sequence["MeasurementTimepoint"],
+    metrics: Optional[Sequence[str]] = None,
+    agg: str = "median",
+) -> pd.DataFrame:
+    """Compute a baseline/Δ table from an HRV history DataFrame and timepoint metadata.
+
+    Args:
+        hrv_df: HRV history DataFrame containing at least `timepoint_id` and metric columns.
+        timepoints: Measurement timepoint records for the same user.
+        metrics: Optional list of metric columns to include (numeric).
+        agg: Aggregation mode for multiple sessions within a timepoint: "median" or "mean".
+
+    Returns:
+        DataFrame with one row per timepoint label including baseline values and Δ columns.
+        Returns empty DataFrame if no timepoint-tagged HRV rows exist.
+    """
+    mode = _validate_agg(agg)
+    if hrv_df is None or hrv_df.empty:
+        return pd.DataFrame()
+    if "timepoint_id" not in hrv_df.columns:
+        return pd.DataFrame()
+    if not timepoints:
+        return pd.DataFrame()
+
+    # Build lookup for timepoint metadata (bounded: at most a few dozen rows).
+    tp_rows: list[dict[str, Any]] = []
+    for tp in timepoints:
+        tp_num = tp.measurement_number if tp.measurement_number is not None else _parse_timepoint_number(tp.timepoint_label)
+        tp_rows.append(
+            {
+                "timepoint_id": tp.timepoint_id,
+                "timepoint_label": tp.timepoint_label,
+                "timepoint_number": tp_num,
+                "is_baseline": bool(tp.is_baseline) or str(tp.timepoint_label).startswith("T0"),
+                "timepoint_date": tp.measurement_date,
+            }
+        )
+    tp_df = pd.DataFrame(tp_rows).dropna(subset=["timepoint_id", "timepoint_label"])
+    if tp_df.empty:
+        return pd.DataFrame()
+
+    # Filter HRV rows to those tagged with a known timepoint id.
+    tagged = hrv_df.copy()
+    tagged["timepoint_id"] = tagged["timepoint_id"].astype("string")
+    tp_ids = set(tp_df["timepoint_id"].astype("string").tolist())
+    tagged = tagged[tagged["timepoint_id"].isin(tp_ids)]
+    if tagged.empty:
+        return pd.DataFrame()
+
+    # Join label/ordering metadata into HRV rows.
+    merged = tagged.merge(tp_df, on="timepoint_id", how="left")
+    merged = merged.dropna(subset=["timepoint_label"])
+
+    # Select metrics (prefer a small default set that is broadly available).
+    default_metrics = (
+        "rmssd_ms",
+        "sdnn_ms",
+        "mean_hr_bpm",
+        "hf_power_ms2",
+        "lf_hf_ratio",
+        "parasympathetic_index",
+        "stress_index",
+        "artifact_percentage",
+        "quality_score",
+    )
+    metric_cols = list(metrics) if metrics is not None else list(default_metrics)
+    metric_cols = [c for c in metric_cols if c in merged.columns and c not in {"timepoint_id", "timepoint_label"}]
+    if not metric_cols:
+        return pd.DataFrame()
+
+    # Aggregate per timepoint label.
+    rows: list[dict[str, Any]] = []
+    for label, g in merged.groupby("timepoint_label", sort=False):
+        row: dict[str, Any] = {
+            "timepoint_label": str(label),
+            "timepoint_number": pd.to_numeric(g["timepoint_number"], errors="coerce").dropna().min(),
+            "is_baseline": bool(g["is_baseline"].fillna(False).any()),
+            "n_sessions": int(len(g)),
+        }
+        for col in metric_cols:
+            row[col] = _aggregate_numeric(g[col], agg=mode)
+        rows.append(row)
+
+    out = pd.DataFrame(rows)
+    if out.empty:
+        return out
+
+    out["timepoint_number"] = pd.to_numeric(out["timepoint_number"], errors="coerce")
+    out = out.sort_values(["timepoint_number", "timepoint_label"], na_position="last").reset_index(drop=True)
+
+    # Determine baseline row (prefer is_baseline; otherwise the earliest timepoint number).
+    baseline_candidates = out[out["is_baseline"] == True]  # noqa: E712
+    if not baseline_candidates.empty:
+        baseline_row = baseline_candidates.iloc[0]
+    else:
+        baseline_row = out.iloc[0]
+
+    baseline_label = str(baseline_row.get("timepoint_label", "T0_baseline"))
+    out["baseline_label"] = baseline_label
+
+    # Add baseline + delta columns for each metric.
+    for col in metric_cols:
+        base_val = float(baseline_row.get(col, float("nan")))
+        out[f"baseline_{col}"] = base_val
+        out[f"delta_{col}"] = pd.to_numeric(out[col], errors="coerce") - base_val
+
+    return out
+
+
 def get_database_path() -> Path:
     """
     Get the database path placed alongside the application for easy portability.
@@ -2683,6 +2833,45 @@ class UserDatabase:
             notes=row["notes"],
             created_at=row["created_at"],
             updated_at=row["updated_at"],
+        )
+
+    def get_hrv_timepoint_change_table(
+        self,
+        user_id: str,
+        *,
+        metrics: Optional[Sequence[str]] = None,
+        agg: str = "median",
+        limit: int = 500,
+    ) -> pd.DataFrame:
+        """Build a baseline/Δ (delta) table across T0–T21 timepoints.
+
+        This is the first "Longitudinal Study Support" building block: it summarizes
+        stored HRV measurements grouped by timepoint label (e.g., T0_baseline, T1…T21),
+        computes a baseline from T0, and reports deltas vs baseline for each timepoint.
+
+        Args:
+            user_id: User identifier.
+            metrics: Optional list of numeric HRV metric columns to include. When omitted,
+                a conservative default metric set is used.
+            agg: Aggregation method for multiple sessions within a timepoint: "median" or "mean".
+            limit: Max HRV rows to load (most recent first).
+
+        Returns:
+            A DataFrame with one row per timepoint label including baseline values and Δ columns.
+
+        Raises:
+            ValueError: If `user_id` is empty or `agg` is not supported.
+        """
+        if not user_id:
+            raise ValueError("user_id is required")
+
+        df = self.get_hrv_dataframe(user_id, limit=int(limit), include_rr=False)
+        timepoints = self.list_measurement_timepoints(user_id, limit=50)
+        return build_timepoint_change_table_from_hrv_df(
+            df,
+            timepoints=timepoints,
+            metrics=metrics,
+            agg=agg,
         )
     
     def compare_periods(
