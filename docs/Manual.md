@@ -2645,7 +2645,7 @@ Solutions:
 
 10. Costa, M. D., Davis, R. B., & Goldberger, A. L. (2017). Heart rate fragmentation: A new approach to the analysis of cardiac interbeat interval dynamics. *Frontiers in Physiology, 8*, 255.
 
-11. PROOF-AF Study. (2025). Heart rate fragmentation and DFA α1 predict atrial fibrillation. *European Heart Journal Open, 5*(1), oeaf030.
+11. Guichard, J. B., et al. (2025). Assessing heart rate fragmentation to predict atrial fibrillation in the general population aged 65: the PROOF-AF study. *European Heart Journal Open*. https://doi.org/10.1093/ehjopen/oeaf030
 
 ### Fatigue Modeling
 
@@ -3892,6 +3892,7 @@ This section outlines completed features and remaining planned enhancements for 
 ✅ **Per-user reuse & exports** - HRV analysis artifacts and GPT-5.2 interpretation markdown persist per user in SQLite for cross-session reuse and user-scoped exports  
 ✅ **Baseline/Δ analytics (T0–T21)** - User Profile → HRV Measurement History includes a baseline/Δ table grouped by longitudinal timepoint labels (T0…T21)  
 ✅ **Cohort longitudinal comparisons (T0–T21)** - Export tab supports control vs intervention comparisons using within-subject Δ vs baseline per timepoint, with CSV + Markdown exports  
+✅ **Persisted study groups + mixed-effects inference** - Export tab supports persisted Study IDs/groups (SQLite) and optional random-intercept mixed-effects modeling for Group × Time on Δ vs baseline  
 
 ### Remaining Enhancements
 
@@ -3907,13 +3908,13 @@ This section outlines completed features and remaining planned enhancements for 
 **Current implementation note:** Every Apache ECharts chart now includes an inline export toolbar for **PNG (high-DPI)**, **SVG (vector)**, **HTML**, and **spec JSON** exports, plus **Print/Save PDF** using your browser’s print dialog.
 
 #### Fatigue Safety Management (ICAO FRMS + USAF doctrine) inside SAFTE tab
-**Status:** Planned (Priority: CRITICAL; research-first)  
-**Description:** Upgrade the SAFTE/Fatigue module into an aviation-grade fatigue safety dashboard aligned with ICAO FRMS and USAF crew rest requirements.
+**Status:** Implemented baseline + planned FRMS v2 (Priority: CRITICAL; research-first)  
+**Description:** The SAFTE/Fatigue module now includes a baseline FRMS-style dashboard (with rule-based “why it triggered” alerts) plus USAF crew-rest compliance checks. The next milestone is **FRMS v2**: mission-level aggregation across *all profiles* with escalation + audit trail.
 
-- ICAO FRMS-aligned dashboard (policy framing, predictive/proactive/reactive hazard processes, safety assurance SPIs, promotion/training guidance).
-- Risk matrix + audit trail of assumptions/inputs for fatigue risk decisions.
-- USAF crew rest compliance checks (AFMAN 11-202V3) with clear “compliant / waiver required / not compliant” outputs.
-- Publication exports and APA references surfaced in the in-app **📚 References** tab and this manual.
+- ✅ ICAO-aligned FRMS summary + risk matrix, designed for deterministic “why it triggered” traceability.
+- ✅ USAF crew rest compliance checks (AFMAN 11-202V3) with clear “compliant / waiver required / not compliant” outputs.
+- ✅ Exportable evidence: FRMS JSON export and plot export workflows.
+- 🔜 FRMS v2: mission-level roster + “crew risk board”, escalation rules, SPIs/trending, and an auditable decision log (inputs → classification → mitigation → outcome).
 
 #### Per-user persistence across all mission modules
 **Status:** Planned  

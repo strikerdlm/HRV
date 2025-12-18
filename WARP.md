@@ -2,7 +2,7 @@
 
 This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when working with code in this repository.
 
-**Version**: 1.8.5 | **Last Updated**: 2025-12-06 | **Environment**: conda (hrv)
+**Version**: 1.8.25 | **Last Updated**: 2025-12-18 | **Environment**: conda (`hrv-py312`)
 
 ---
 
@@ -12,7 +12,7 @@ This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when
 
 ```powershell
 # Activate conda environment (REQUIRED before any work)
-conda activate hrv
+conda activate hrv-py312
 
 # Run the application
 streamlit run app/app.py
@@ -38,9 +38,9 @@ conda deactivate
 | Problem | Solution |
 |---------|----------|
 | "No Python at 'C:\Python311\python.exe'" | `Remove-Item .venv -Recurse -Force`<br>Then reload VS Code window |
-| ModuleNotFoundError | `conda activate hrv`<br>Verify with `pip list` |
-| Streamlit won't start | Check `conda env list` shows `*` next to hrv |
-| VS Code wrong interpreter | Ctrl+Shift+P → "Python: Select Interpreter"<br>Choose "Python 3.12.12 ('hrv': conda)" |
+| ModuleNotFoundError | `conda activate hrv-py312`<br>Verify with `pip list` |
+| Streamlit won't start | Check `conda env list` shows `*` next to hrv-py312 |
+| VS Code wrong interpreter | Ctrl+Shift+P → "Python: Select Interpreter"<br>Choose "Python 3.12.x ('hrv-py312': conda)" |
 
 ---
 
@@ -71,10 +71,11 @@ Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations c
   - Add a short **caption paragraph below every plot** describing axes/variables and preprocessing.
   - Provide **publication-grade exports** for every plot (SVG/PDF/PNG high-DPI/HTML + data/spec export).
   - Keep `requirements.txt`, `README.md`, `docs/Manual.md`, and `CHANGELOG.md` updated for every new plot/feature.
-- [ ] **SAFTE Tab Upgrade: ICAO FRMS + USAF Crew Rest Compliance** (research-first):
-  - Implement an FRMS dashboard aligned with ICAO Doc 9966 (predictive/proactive/reactive processes, SPIs, risk matrix).
-  - Implement USAF crew rest / fatigue management checks per AFMAN 11-202V3 (12h non-duty crew rest, ≥8h uninterrupted sleep opportunity; controlled rest guidance).
-  - Add a modern, cockpit-grade ECharts dashboard and publication exports + APA references in the in-app References tab and `docs/Manual.md`.
+- [x] **SAFTE Tab Upgrade: ICAO FRMS + USAF Crew Rest Compliance** (research-first):
+  - Baseline FRMS-style dashboard (ICAO Doc 9966 framing + risk matrix) with deterministic “why it triggered” alerts.
+  - USAF crew rest / fatigue management checks per AFMAN 11-202V3 (12h non-duty crew rest, ≥8h uninterrupted sleep opportunity; controlled rest guidance).
+  - Exports + APA references documented in the in-app References tab and `docs/Manual.md`.
+  - **Next:** FRMS v2 mission-level “crew risk board” (multi-profile aggregation + escalation + audit trail).
 
 #### Phase 1: UI Visualization (Priority: HIGH)
 - [x] **Clinical Profile UI**: Render all clinical_profile.py features in user_profile_tab.py
@@ -278,7 +279,7 @@ ALTER TABLE lab_chemistry ADD COLUMN timepoint_id TEXT;
 
 ```powershell
 # Activate the conda environment
-conda activate hrv
+conda activate hrv-py312
 
 # Start the Streamlit app
 streamlit run app/app.py
@@ -290,16 +291,16 @@ If the `hrv` conda environment doesn't exist yet:
 
 ```powershell
 # Create conda environment with Python 3.12
-conda create -n hrv python=3.12 -y
+conda create -n hrv-py312 python=3.12 -y
 
 # Install conda packages
-conda install -n hrv -c conda-forge streamlit pandas numpy scipy python-dotenv beautifulsoup4 numba psutil -y
+conda install -n hrv-py312 -c conda-forge streamlit pandas numpy scipy python-dotenv beautifulsoup4 numba psutil -y
 
 # Install remaining packages via pip
-conda run -n hrv pip install "requests>=2.31,<3" "openai>=1.55,<2" "pygt3x>=0.4" "pyedflib>=0.1.30"
+conda run -n hrv-py312 pip install "requests>=2.31,<3" "openai>=1.55,<2" "pygt3x>=0.4" "pyedflib>=0.1.30"
 
 # Activate environment
-conda activate hrv
+conda activate hrv-py312
 ```
 
 ### Python Version
@@ -323,7 +324,7 @@ POLAR_ACCESSLINK_USER_ID=...  # Optional
 
 The `.vscode/settings.json` is configured to use the conda environment. After setup:
 1. Reload VS Code window (Ctrl+Shift+P → "Reload Window")
-2. Verify Python interpreter shows: `Python 3.12.12 ('hrv': conda)`
+2. Verify Python interpreter shows: `Python 3.12.x ('hrv-py312': conda)`
 3. Terminal should auto-activate the conda environment
 
 ## Architecture
@@ -645,7 +646,7 @@ Select-String -Path logs/app.log -Pattern "ERROR|EXCEPTION" -Context 3
 Remove-Item .venv -Recurse -Force -ErrorAction SilentlyContinue
 
 # 2. Verify conda environment exists
-conda env list | Select-String "hrv"
+conda env list | Select-String "hrv-py312"
 
 # 3. If missing, create it (see First-Time Setup section above)
 
@@ -653,21 +654,21 @@ conda env list | Select-String "hrv"
 # Ctrl+Shift+P → "Reload Window"
 
 # 5. Select correct Python interpreter
-# Ctrl+Shift+P → "Python: Select Interpreter" → Choose "Python 3.12.12 ('hrv': conda)"
+# Ctrl+Shift+P → "Python: Select Interpreter" → Choose "Python 3.12.x ('hrv-py312': conda)"
 ```
 
 **Problem**: ModuleNotFoundError for installed packages
 
 **Solution**: Wrong conda environment is active
 ```powershell
-# Verify you're in the hrv environment
-conda activate hrv
+# Verify you're in the hrv-py312 environment
+conda activate hrv-py312
 
 # Check if package is installed
 pip list | Select-String "<package_name>"
 
 # If missing, install it
-conda run -n hrv pip install <package_name>
+conda run -n hrv-py312 pip install <package_name>
 ```
 
 ### Streamlit hangs on Windows shutdown
@@ -696,7 +697,7 @@ The app includes Windows console safety workarounds (Colorama fix) in `app/app.p
 - Check `logs/app.log` for GPU initialization messages
 
 ### Import errors
-- **CRITICAL**: Ensure conda environment is activated: `conda activate hrv`
+- **CRITICAL**: Ensure conda environment is activated: `conda activate hrv-py312`
 - Verify you're NOT in base conda environment (check terminal prompt)
 - Ensure all dependencies are installed in hrv environment
 - Use Python 3.10+ (some type hints and syntax require 3.10)

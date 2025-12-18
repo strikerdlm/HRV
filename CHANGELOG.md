@@ -150,6 +150,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **SAFTE/Fatigue inputs** (`app/app.py`): Sleep duration and sleep quality can now auto-seed from the latest stored Garmin daily metrics (one-shot per new Garmin day), improving per-user workflow when wearable sleep data is available.
 
 ### Fixed
+- **Garmin gauge thresholds** (`app/gauge_builder.py`): Fixed accidental constant shadowing and corrected `distance_km`/Garmin wellness thresholds so the intended km/kcal/stress/SpO₂ ranges are consistently applied.
 - **User Profile** (`app/user_profile_tab.py`): Fixed Streamlit duplicate form-key crash by rendering the longitudinal timepoint selector once above the profile sub-tabs (instead of inside multiple tab panels).
 - **User Profile HRV history refresh** (`app/user_profile_tab.py`): Added a **Regenerate plots** control in **HRV Measurement History** to force-refresh charts after new uploads/analysis runs (clears Streamlit data caches and reruns the HRV history renderer).
 - **Navigation after HRV analysis** (`app/app.py`): Removed an early return that could trap the UI on an “already completed” message after analysis; the full tab navigation now renders and the action button switches to **Recompute HRV Analysis** when appropriate.
@@ -161,6 +162,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Tests
 - Added regression coverage for timepoint persistence and database backups (`tests/test_longitudinal_timepoints.py`).
 - Added regression coverage for tz-aware datetime handling in SWPC solar flux retrieval (`tests/test_space_weather_alignment.py`).
+
+### Documentation
+- Updated `README.md`, `docs/Manual.md`, and `docs/index.md` to reflect the current roadmap status (plot governance next), corrected the docs landing page away from the legacy notebook instructions, and added the verifiable PROOF-AF DOI citation.
+- Updated `WARP.md` to match the current conda environment name (`hrv-py312`) and roadmap status.
 
 ## [1.8.20] - 2025-12-12
 
