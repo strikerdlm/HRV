@@ -447,22 +447,28 @@ def compute_fatigue_analysis(
     max_performance = float(np.max(valid_performances))
     std_performance = float(np.std(valid_performances))
 
-    optimal_hours = int(np.sum(valid_performances >= 80))
-    moderate_hours = int(np.sum((valid_performances >= 60) & (valid_performances < 80)))
-    poor_hours = int(np.sum((valid_performances >= 50) & (valid_performances < 60)))
-    critical_hours = int(np.sum(valid_performances < 50))
+    # SAFTE/FAST-style operational zones (commonly cited in aviation fatigue ops):
+    # - >= 90%: low fatigue risk ("well-rested")
+    # - 77–90%: caution / transitional range
+    # - 70–77%: high fatigue risk (often compared to ~0.05% BAC impairment)
+    # - <= 70%: severe impairment (often compared to ~0.08% BAC impairment)
+    #
+    # Note: Thresholds are presented in the UI with citations (ICAO/FAA/NASA).
+    low_risk_hours = int(np.sum(valid_performances >= 90))
+    caution_hours = int(np.sum((valid_performances < 90) & (valid_performances > 77)))
+    high_risk_hours = int(np.sum((valid_performances <= 77) & (valid_performances > 70)))
+    severe_hours = int(np.sum(valid_performances <= 70))
 
     total_hours = int(len(valid_performances))
-    risk_percentage = float(
-        (poor_hours + critical_hours) / max(1, total_hours) * 100
-    )
+    # "Risk" is defined as time at/under the high-risk threshold (<=77%).
+    risk_percentage = float((high_risk_hours + severe_hours) / max(1, total_hours) * 100.0)
 
     return {
         "avg": avg_performance,
         "min": min_performance,
         "max": max_performance,
         "std": std_performance,
-        "zones": [optimal_hours, moderate_hours, poor_hours, critical_hours],
+        "zones": [low_risk_hours, caution_hours, high_risk_hours, severe_hours],
         "risk": risk_percentage,
     }
 
