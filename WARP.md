@@ -2,7 +2,7 @@
 
 This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when working with code in this repository.
 
-**Version**: 1.8.25 | **Last Updated**: 2025-12-18 | **Environment**: conda (`hrv-py312`)
+**Version**: 1.8.27 | **Last Updated**: 2025-12-18 | **Environment**: conda (`hrv-py312`)
 
 ---
 
@@ -76,7 +76,8 @@ Mission Control - Flight Surgeon is an HRV (Heart Rate Variability) operations c
   - USAF crew rest / fatigue management checks per AFMAN 11-202V3 (12h non-duty crew rest, ≥8h uninterrupted sleep opportunity; controlled rest guidance).
   - Exports + APA references documented in the in-app References tab and `docs/Manual.md`.
   - Persisted **per-user fatigue defaults** (typical sleep/duty windows + weekend policy) so SAFTE/FRMS runs are reproducible and don’t require manual re-entry.
-  - **Next:** FRMS v2 mission-level “crew risk board” (multi-profile aggregation + escalation + audit trail).
+  - **Done:** FRMS v2 prototype “crew risk board” (multi-profile aggregation + exports + decision log).
+  - **Next:** Add mission-level **alerting + escalation workflows** (threshold rules, mitigations, audit trail evidence packets) on top of the crew board.
 
 #### Phase 1: UI Visualization (Priority: HIGH)
 - [x] **Clinical Profile UI**: Render all clinical_profile.py features in user_profile_tab.py

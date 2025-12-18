@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.25-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.27-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
@@ -18,6 +18,10 @@ Contributing to **AsterPhysiology** Research Initiative
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.8.27**: **Per-user SAFTE/FRMS defaults** — Save a typical **sleep window**, **duty window**, and **weekend policy** per profile so SAFTE/FRMS workflows can auto-load reproducible schedules without re-entry.
+
+**NEW in v1.8.26**: **Mission FRMS v2 “Crew Risk Board” prototype** — Export a multi-profile roster view with crew-level FRMS metrics/classification plus **CSV/JSON** outputs and an **audit decision log (JSON)**.
 
 **NEW in v1.8.25**: **Persisted study groups + mixed-effects inference** — In the Export tab, define a **Study ID**, assign users to **persisted groups** (stored in SQLite), and optionally run a **random-intercept mixed-effects model** for Group × Time on Δ vs baseline. The SAFTE/FRMS dashboard also surfaces a rule-based “why it triggered” alert list and includes it in the FRMS JSON export.
 
@@ -59,8 +63,8 @@ Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate V
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/hrv-space-weather.git
-cd hrv-space-weather
+git clone https://github.com/strikerdlm/HRV.git
+cd HRV
 
 # Activate the conda environment
 conda activate hrv-py312
@@ -76,8 +80,8 @@ streamlit run app/app.py
 
 ```bash
 # Clone the repository
-git clone https://github.com/yourusername/hrv-space-weather.git
-cd hrv-space-weather
+git clone https://github.com/strikerdlm/HRV.git
+cd HRV
 
 # Create and activate virtual environment
 python -m venv .venv
