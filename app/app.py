@@ -299,7 +299,7 @@ import streamlit as st
 from dotenv import load_dotenv
 from pathlib import Path
 from pandas.api.types import is_datetime64_any_dtype
-from user_database import HRVMeasurement, StudyGroup, get_database
+from user_database import FatigueProfileSettings, HRVMeasurement, StudyGroup, get_database
 from user_data_manager import create_user_manager, parse_filename_date
 
 try:
@@ -598,6 +598,7 @@ _DEFAULT_FATIGUE_WIDGET_STATE: Dict[str, Any] = {
     "fatigue_has_work": True,
     "fatigue_work_start": 9,
     "fatigue_work_end": 17,
+    "fatigue_include_weekends": False,
     "fatigue_cognitive_load": 1,
     "fatigue_days": 3,
     "fatigue_model": "Advanced SAFTE",
@@ -610,6 +611,38 @@ def _derive_fatigue_widget_state(user_context: Dict[str, Any]) -> Dict[str, Any]
     state = dict(_DEFAULT_FATIGUE_WIDGET_STATE)
     if not user_context.get("has_user"):
         return state
+
+    # Prefer explicit per-user fatigue profile defaults when present.
+    user_id = user_context.get("user_id")
+    if isinstance(user_id, str) and user_id:
+        prof = _cached_fatigue_profile_settings(user_id)
+    else:
+        prof = {}
+    if prof:
+        try:
+            dur = float(prof.get("typical_sleep_duration_hours", state["fatigue_sleep_duration"]))
+            if np.isfinite(dur):
+                state["fatigue_sleep_duration"] = float(max(4.0, min(10.0, round(dur, 1))))
+        except Exception:
+            pass
+        try:
+            q = float(prof.get("typical_sleep_quality", state["fatigue_sleep_quality"]))
+            if np.isfinite(q):
+                state["fatigue_sleep_quality"] = float(max(0.0, min(1.0, round(q, 2))))
+        except Exception:
+            pass
+        for key, src in (
+            ("fatigue_bedtime", "typical_bedtime_hour"),
+            ("fatigue_waketime", "typical_waketime_hour"),
+            ("fatigue_work_start", "duty_start_hour"),
+            ("fatigue_work_end", "duty_end_hour"),
+        ):
+            try:
+                h = int(prof.get(src, state[key]))
+                state[key] = int(max(0, min(23, h)))
+            except Exception:
+                pass
+        state["fatigue_include_weekends"] = bool(prof.get("include_weekends", False))
 
     age = user_context.get("age_years")
     if isinstance(age, (int, float)):
@@ -1324,6 +1357,37 @@ def _cached_latest_garmin_daily(user_id: str) -> Dict[str, Any]:
     if isinstance(metric_date, pd.Timestamp):
         row["metric_date"] = metric_date.date().isoformat()
     return row
+
+
+@st.cache_data(ttl=60, max_entries=128, show_spinner=False)
+def _cached_fatigue_profile_settings(user_id: str) -> Dict[str, Any]:
+    """Return stored per-user SAFTE/FRMS default inputs (if present)."""
+    if not user_id:
+        return {}
+    db = get_database()
+    if not hasattr(db, "get_fatigue_profile_settings"):
+        return {}
+    try:
+        prof = db.get_fatigue_profile_settings(user_id)  # type: ignore[attr-defined]
+    except Exception:
+        return {}
+    if prof is None:
+        return {}
+    try:
+        return dict(prof.to_dict())
+    except Exception:
+        # Defensive fallback in case dataclass changes.
+        return {
+            "user_id": getattr(prof, "user_id", user_id),
+            "typical_sleep_duration_hours": getattr(prof, "typical_sleep_duration_hours", 7.5),
+            "typical_sleep_quality": getattr(prof, "typical_sleep_quality", 0.8),
+            "typical_bedtime_hour": getattr(prof, "typical_bedtime_hour", 23),
+            "typical_waketime_hour": getattr(prof, "typical_waketime_hour", 7),
+            "duty_start_hour": getattr(prof, "duty_start_hour", 9),
+            "duty_end_hour": getattr(prof, "duty_end_hour", 17),
+            "include_weekends": getattr(prof, "include_weekends", False),
+            "updated_at": getattr(prof, "updated_at", None),
+        }
 
 
 SPACE_WEATHER_MAX_DAYS = 30
@@ -7867,6 +7931,14 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
     with tab_fatigue:
         st.markdown("### 🧠 SAFTE Fatigue & Performance Prediction")
         st.markdown("*Biomathematical model for cognitive performance and fatigue risk assessment*")
+        st.markdown(
+            "#### ✅ Guided workflow (recommended)\n"
+            "1) **Sync context** (optional): Apply Circadian sleep window (bed/wake) + chronotype.\n"
+            "2) **Confirm inputs**: Sleep window, sleep quality/duration, duty window, cognitive load.\n"
+            "3) **Run SAFTE**: Manual scenario or Auto-run (wrist → clinical → Garmin → defaults).\n"
+            "4) **Review FRMS**: WOCL exposure, time ≤77%, risk matrix, and USAF crew-rest compliance.\n"
+            "5) **Export**: Download the forecast CSV + FRMS JSON evidence packet.\n"
+        )
         
         if not FATIGUE_AVAILABLE:
             st.error(
@@ -7890,6 +7962,35 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 for key, value in stored_fatigue_settings.items():
                     st.session_state[key] = value
                 fatigue_defaults.update(stored_fatigue_settings)
+
+            if fatigue_user_id and active_user_context.get("has_user") and not stored_fatigue_settings:
+                prof_defaults = _cached_fatigue_profile_settings(str(fatigue_user_id))
+                if prof_defaults:
+                    updated_at = prof_defaults.get("updated_at")
+                    label = f"Profile defaults loaded (updated {updated_at})" if updated_at else "Profile defaults loaded"
+                    try:
+                        bed_h = int(prof_defaults.get("typical_bedtime_hour", 23))
+                        bed_lab = f"{max(0, min(23, bed_h)):02d}"
+                    except Exception:
+                        bed_lab = "—"
+                    try:
+                        wake_h = int(prof_defaults.get("typical_waketime_hour", 7))
+                        wake_lab = f"{max(0, min(23, wake_h)):02d}"
+                    except Exception:
+                        wake_lab = "—"
+                    try:
+                        duty_s = int(prof_defaults.get("duty_start_hour", 9))
+                        duty_s_lab = f"{max(0, min(23, duty_s)):02d}"
+                    except Exception:
+                        duty_s_lab = "—"
+                    try:
+                        duty_e = int(prof_defaults.get("duty_end_hour", 17))
+                        duty_e_lab = f"{max(0, min(23, duty_e)):02d}"
+                    except Exception:
+                        duty_e_lab = "—"
+                    st.info(
+                        f"{label}: sleep {bed_lab}:00→{wake_lab}:00, duty {duty_s_lab}:00→{duty_e_lab}:00."
+                    )
 
             # Optional: auto-fill sleep inputs from latest Garmin daily metrics.
             # Applies only when (a) a profile is active, (b) the user has not
@@ -8128,6 +8229,13 @@ that predicts cognitive performance based on:
                     disabled=not fatigue_has_work,
                     key="fatigue_work_end",
                 )
+                fatigue_include_weekends = st.checkbox(
+                    "Include weekends (Sat/Sun) as duty",
+                    value=bool(fatigue_defaults.get("fatigue_include_weekends", False)),
+                    disabled=not fatigue_has_work,
+                    key="fatigue_include_weekends",
+                    help="If unchecked, Saturday/Sunday are treated as off-duty for FRMS in-scope calculations.",
+                )
                 fatigue_cognitive_load = st.slider(
                     "Cognitive load (0-3)",
                     min_value=0,
@@ -8183,6 +8291,40 @@ that predicts cognitive performance based on:
                         "Garmin Connect (GARMIN_EMAIL/GARMIN_PASSWORD) if configured."
                     ),
                 )
+                save_profile_defaults = st.button(
+                    "💾 Save as profile defaults (SAFTE/FRMS)",
+                    type="secondary",
+                    key="fatigue_save_profile_defaults",
+                    help="Stores these typical sleep/duty inputs in SQLite for one-click reuse in future SAFTE/FRMS runs.",
+                )
+
+            if save_profile_defaults:
+                if not active_user_context.get("has_user") or not fatigue_user_id:
+                    st.warning("Please select/log in a user profile before saving defaults.")
+                else:
+                    try:
+                        db = get_database()
+                        db.upsert_fatigue_profile_settings(
+                            FatigueProfileSettings(
+                                user_id=str(fatigue_user_id),
+                                typical_sleep_duration_hours=float(fatigue_sleep_duration),
+                                typical_sleep_quality=float(fatigue_sleep_quality),
+                                typical_bedtime_hour=int(fatigue_bedtime),
+                                typical_waketime_hour=int(fatigue_waketime),
+                                duty_start_hour=int(fatigue_work_start),
+                                duty_end_hour=int(fatigue_work_end),
+                                include_weekends=bool(fatigue_include_weekends),
+                                updated_at=datetime.now(timezone.utc).isoformat(),
+                            )
+                        )
+                        try:
+                            _cached_fatigue_profile_settings.clear()  # type: ignore[attr-defined]
+                        except Exception:
+                            pass
+                        st.success("Saved SAFTE/FRMS defaults to the active profile.")
+                    except Exception as exc:
+                        st.error(f"Unable to save fatigue defaults: {exc}")
+                        log_exception(_LOGGER, "Saving fatigue profile defaults failed", exc)
 
             current_fatigue_settings: Dict[str, Any] = {
                 "fatigue_age": int(fatigue_age),
@@ -8196,6 +8338,7 @@ that predicts cognitive performance based on:
                 "fatigue_has_work": bool(fatigue_has_work),
                 "fatigue_work_start": int(fatigue_work_start),
                 "fatigue_work_end": int(fatigue_work_end),
+                "fatigue_include_weekends": bool(fatigue_include_weekends),
                 "fatigue_cognitive_load": int(fatigue_cognitive_load),
                 "fatigue_days": int(fatigue_days),
                 "fatigue_model": str(fatigue_model),
@@ -8632,7 +8775,7 @@ that predicts cognitive performance based on:
                             has_work_schedule=bool(fatigue_has_work),
                             work_start_hour=int(fatigue_work_start),
                             work_end_hour=int(fatigue_work_end),
-                            include_weekends=False,
+                            include_weekends=bool(fatigue_include_weekends),
                         )
 
                         frms_exposure = compute_frms_exposure_metrics(
@@ -9072,81 +9215,10 @@ that predicts cognitive performance based on:
                         key="frms_payload_json_download",
                     )
 
-                # Publication-grade plot exports (Plotly fallback)
-                with st.expander("Publication-grade plot exports (SVG/PDF/PNG/HTML)", expanded=False):
-                    st.caption(
-                        "ECharts provides interactive plots; Plotly is used here as a publication-export fallback "
-                        "to generate vector (SVG/PDF) and high-DPI raster outputs."
-                    )
-                    try:
-                        import plotly.graph_objects as go  # type: ignore
-                    except Exception as exc:
-                        st.info(f"Plotly is not available: {exc}")
-                        go = None  # type: ignore[assignment]
-
-                    if go is not None and not perf_data.empty:
-                        fig = go.Figure()
-                        fig.add_trace(
-                            go.Scatter(
-                                x=list(perf_data["DateTime"]),
-                                y=[float(v) for v in perf_data["Performance"]],
-                                mode="lines",
-                                name="Effectiveness (%)",
-                                line=dict(width=3, color="#2E86AB"),
-                            )
-                        )
-                        fig.add_hline(y=90, line_dash="dash", line_color="#28a745", annotation_text="90%")
-                        fig.add_hline(y=77, line_dash="dash", line_color="#fd7e14", annotation_text="77%")
-                        fig.add_hline(y=70, line_dash="dash", line_color="#dc3545", annotation_text="70%")
-                        fig.update_layout(
-                            template="plotly_white",
-                            title="SAFTE Cognitive Effectiveness (publication export)",
-                            xaxis_title="Local time",
-                            yaxis_title="Effectiveness (%)",
-                            height=520,
-                            margin=dict(l=60, r=30, t=60, b=60),
-                        )
-
-                        st.download_button(
-                            "Download performance plot (HTML)",
-                            fig.to_html(full_html=True, include_plotlyjs="cdn").encode("utf-8"),
-                            file_name="safte_performance_plot.html",
-                            mime="text/html",
-                            key="safte_plotly_perf_html",
-                        )
-
-                        # Static image exports require Kaleido.
-                        try:
-                            png_bytes = fig.to_image(format="png", width=1800, height=600, scale=2)
-                            svg_bytes = fig.to_image(format="svg", width=1800, height=600)
-                            pdf_bytes = fig.to_image(format="pdf", width=1800, height=600)
-                            st.download_button(
-                                "Download performance plot (PNG, high-DPI)",
-                                png_bytes,
-                                file_name="safte_performance_plot.png",
-                                mime="image/png",
-                                key="safte_plotly_perf_png",
-                            )
-                            st.download_button(
-                                "Download performance plot (SVG)",
-                                svg_bytes,
-                                file_name="safte_performance_plot.svg",
-                                mime="image/svg+xml",
-                                key="safte_plotly_perf_svg",
-                            )
-                            st.download_button(
-                                "Download performance plot (PDF)",
-                                pdf_bytes,
-                                file_name="safte_performance_plot.pdf",
-                                mime="application/pdf",
-                                key="safte_plotly_perf_pdf",
-                            )
-                        except Exception as exc:
-                            st.info(
-                                "Static image export requires Kaleido. "
-                                "Install with `pip install kaleido` (or ensure it is present in your environment). "
-                                f"Details: {exc}"
-                            )
+                st.info(
+                    "For publication exports of the SAFTE/FRMS charts, use the **export toolbar above each ECharts plot** "
+                    "(PNG high-DPI, SVG vector, HTML, spec JSON, or Print/Save PDF). Exports are generated locally in your browser."
+                )
                 
                 st.caption(
                     f"Model: {result.model_used.upper()} SAFTE | "
