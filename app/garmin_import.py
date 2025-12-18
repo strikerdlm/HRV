@@ -1216,6 +1216,21 @@ def _parse_daily_summary_record(record: dict[str, Any]) -> dict[str, Any]:
     distance_m = record.get("totalDistanceMeters")
     active_kcal = record.get("activeKilocalories")
 
+    # Daily heart-rate summary (UDS includes min/max of "avg heart rate" over the day)
+    avg_hr: Any = None
+    min_avg_hr = record.get("minAvgHeartRate")
+    max_avg_hr = record.get("maxAvgHeartRate")
+    try:
+        candidates: list[float] = []
+        if min_avg_hr is not None and not pd.isna(min_avg_hr):
+            candidates.append(float(min_avg_hr))
+        if max_avg_hr is not None and not pd.isna(max_avg_hr):
+            candidates.append(float(max_avg_hr))
+        if candidates:
+            avg_hr = float(np.mean(candidates))
+    except Exception:
+        avg_hr = None
+
     # Stress aggregate (prefer TOTAL; ignore sentinel -2 values)
     avg_stress: Any = None
     all_day_stress = record.get("allDayStress")
@@ -1279,6 +1294,7 @@ def _parse_daily_summary_record(record: dict[str, Any]) -> dict[str, Any]:
         "steps": steps,
         "distance_km": (float(distance_m) / 1000.0) if distance_m is not None else None,
         "calories_kcal": active_kcal,
+        "avg_hr": avg_hr,
         "avg_stress": avg_stress,
         "avg_spo2": avg_spo2,
         "min_spo2": min_spo2,
@@ -2375,6 +2391,9 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
             _update_max(d, "steps", row.get("steps"))
             _update_max(d, "distance_km", row.get("distance_km"))
             _update_max(d, "calories_kcal", row.get("calories_kcal"))
+
+            # Heart rate (daily summary proxy)
+            _update_mean(d, "avg_hr", row.get("avg_hr"))
 
             # Stress / respiration / SpO2 aggregates
             _update_mean(d, "avg_stress", row.get("avg_stress"))
