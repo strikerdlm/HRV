@@ -50,6 +50,13 @@ _HRV_RESULTS_DIR: Final[str] = "hrv_results"
 _DEVICE_DATA_DIR: Final[str] = "device_imports"
 _SESSION_FILE: Final[str] = "sessions.json"
 
+# Crew / mission layout (project_root/crew/<Mission>/subjects/<user_id>/...)
+_ENV_ACTIVE_MISSION: Final[str] = "HRV_ACTIVE_MISSION"
+_DEFAULT_MISSIONS: Final[tuple[str, ...]] = ("Mission 1", "Mission 2")
+_CREW_DIR_NAME: Final[str] = "crew"
+_MISSION_SUBJECTS_DIR_NAME: Final[str] = "subjects"
+_MAX_LEGACY_USERS_TO_COPY: Final[int] = 500
+
 # Maximum files to load per category
 _MAX_FILES_PER_CATEGORY: Final[int] = 1000
 
@@ -203,6 +210,73 @@ def sanitize_user_id(user_id: str) -> str:
     return sanitized or "anonymous"
 
 
+def _get_project_root() -> Path:
+    """Return the project root folder (one level above app/)."""
+    return Path(__file__).resolve().parents[1]
+
+
+def _get_active_mission_from_env() -> str:
+    """Get the active mission name from environment variables (safe, bounded)."""
+    mission_raw = str(os.environ.get(_ENV_ACTIVE_MISSION, "")).strip()
+    mission = mission_raw if mission_raw else _DEFAULT_MISSIONS[0]
+    # Prevent path traversal / accidental nested paths.
+    if Path(mission).name != mission:
+        return _DEFAULT_MISSIONS[0]
+    return mission
+
+
+def get_default_data_root() -> Path:
+    """Get the default per-mission subjects root for user data."""
+    project_root = _get_project_root()
+    mission = _get_active_mission_from_env()
+    return project_root / _CREW_DIR_NAME / mission / _MISSION_SUBJECTS_DIR_NAME
+
+
+def _maybe_migrate_legacy_data_root(*, legacy_root: Path, new_root: Path) -> None:
+    """Best-effort migration from legacy ./data into crew/ storage.
+
+    This copies (does not delete) legacy user folders into the new root only
+    when the new root is empty.
+    """
+    try:
+        if not legacy_root.exists() or not legacy_root.is_dir():
+            return
+        if not new_root.exists():
+            new_root.mkdir(parents=True, exist_ok=True)
+        # Only migrate when new_root is empty.
+        if any(new_root.iterdir()):
+            return
+    except OSError:
+        return
+
+    copied = 0
+    try:
+        for entry in legacy_root.iterdir():
+            if copied >= _MAX_LEGACY_USERS_TO_COPY:
+                _LOGGER.warning(
+                    "Legacy data migration capped at %d user folders; remaining users stay in %s",
+                    _MAX_LEGACY_USERS_TO_COPY,
+                    legacy_root,
+                )
+                break
+            target = new_root / entry.name
+            if target.exists():
+                continue
+            try:
+                if entry.is_dir():
+                    shutil.copytree(entry, target, dirs_exist_ok=False)
+                    copied += 1
+                elif entry.is_file():
+                    shutil.copy2(entry, target)
+            except OSError as exc:
+                _LOGGER.warning("Failed to copy legacy user data %s: %s", entry, exc)
+    except OSError:
+        return
+
+    if copied:
+        _LOGGER.info("Migrated %d legacy user folders into %s", copied, new_root)
+
+
 def get_user_data_path(user_id: str, base_path: Path | None = None) -> Path:
     """Get the data folder path for a user.
 
@@ -214,7 +288,7 @@ def get_user_data_path(user_id: str, base_path: Path | None = None) -> Path:
         Path to user's data folder.
     """
     if base_path is None:
-        base_path = Path(_DATA_ROOT)
+        base_path = get_default_data_root()
     safe_id = sanitize_user_id(user_id)
     return base_path / safe_id
 
@@ -288,7 +362,7 @@ class UserDataManager:
             base_path: Base data folder path (default: ./data).
             auto_create_dirs: Automatically create directories.
         """
-        self._base_path = Path(base_path) if base_path else Path(_DATA_ROOT)
+        self._base_path = Path(base_path) if base_path else get_default_data_root()
         self._auto_create = auto_create_dirs
         self._current_user: UserInfo | None = None
         self._current_user_path: Path | None = None
@@ -1083,10 +1157,15 @@ def create_user_manager(base_path: str | Path | None = None) -> UserDataManager:
     Returns:
         Configured UserDataManager.
     """
-    return UserDataManager(
-        base_path=Path(base_path) if base_path else None,
-        auto_create_dirs=True,
-    )
+    if base_path is None:
+        new_root = get_default_data_root()
+        # Best-effort migration of legacy ./data into Mission 1.
+        if _get_active_mission_from_env() == _DEFAULT_MISSIONS[0]:
+            legacy_root = _get_project_root() / _DATA_ROOT
+            _maybe_migrate_legacy_data_root(legacy_root=legacy_root, new_root=new_root)
+        return UserDataManager(base_path=new_root, auto_create_dirs=True)
+
+    return UserDataManager(base_path=Path(base_path), auto_create_dirs=True)
 
 
 def get_or_create_user(
