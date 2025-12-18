@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Longitudinal cohort comparisons (T0–T21)** (`app/app.py`, `app/export_utils.py`): Export tab now supports **control vs intervention** comparisons using **within-subject Δ vs baseline** per timepoint, with CSV + Markdown exports (includes effect sizes and FDR-adjusted p-values).
 
+### Fixed
+- **ECharts export controls** (`app/echarts_component.py`): All ECharts visuals now include built-in, client-side exports for **PNG (high-DPI)**, **SVG (vector)**, **HTML**, and **spec JSON**, plus a **Print/Save PDF** workflow (browser print).
+- **Sleep tab compatibility import** (`app/echarts_component.py`): Restored the `st_echarts(...)` API used by `app/sleep_tab.py` so the sleep UI no longer degrades due to a missing import.
+
 ### Documentation
 - Updated `README.md` and `docs/Manual.md` to reflect the new longitudinal cohort export workflow.
 
