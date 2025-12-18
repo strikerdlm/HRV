@@ -8361,9 +8361,9 @@ that predicts cognitive performance based on:
                             "areaStyle": {"opacity": 0.3},
                             "markLine": {
                                 "data": [
-                                    {"yAxis": 90, "name": "Low risk (90%)", "lineStyle": {"color": "#28a745", "type": "dashed"}},
-                                    {"yAxis": 77, "name": "High risk (77%)", "lineStyle": {"color": "#fd7e14", "type": "dashed"}},
-                                    {"yAxis": 70, "name": "Severe (70%)", "lineStyle": {"color": "#dc3545", "type": "dashed"}},
+                                    {"yAxis": 90, "name": "Low risk (≥90%)", "lineStyle": {"color": "#28a745", "type": "dashed"}},
+                                    {"yAxis": 77, "name": "High risk (≤77%)", "lineStyle": {"color": "#fd7e14", "type": "dashed"}},
+                                    {"yAxis": 70, "name": "Severe (≤70%)", "lineStyle": {"color": "#dc3545", "type": "dashed"}},
                                 ]
                             }
                         }],
@@ -8379,7 +8379,8 @@ that predicts cognitive performance based on:
                     st.caption(
                         "This plot shows predicted SAFTE cognitive effectiveness (y-axis, %) over local time (x-axis). "
                         "Dashed lines mark common operational thresholds (90%, 77%, 70%) and colors indicate the "
-                        "corresponding fatigue risk zone."
+                        "corresponding fatigue risk zone (green: ≥90%; yellow: >77–<90%; orange: >70–≤77%; red: ≤70%). "
+                        "Note: exactly 90.0% is classified and colored as low risk (≥90%)."
                     )
                 
                 # Analysis metrics
