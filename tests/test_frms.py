@@ -5,11 +5,13 @@ import datetime as dt
 import pytest
 
 from app.frms import (
+    FRMSAlert,
     FRMSExposureMetrics,
     FRMSThresholds,
     USAFCrewRestPolicy,
     assess_usaf_crew_rest,
     classify_frms_risk,
+    compute_frms_alerts,
     compute_duty_mask,
     compute_frms_exposure_metrics,
     compute_wocl_mask,
@@ -129,4 +131,39 @@ def test_assess_usaf_crew_rest_invalid_order_raises() -> None:
             fdp_start_local=fdp,
             planned_sleep_opportunity_hours=8.0,
         )
+
+
+def test_compute_frms_alerts_flags_severe_exposure_and_crew_rest() -> None:
+    exposure = FRMSExposureMetrics(
+        samples_total=24,
+        samples_in_scope=24,
+        hours_in_scope=24.0,
+        hours_in_wocl=8.0,
+        min_effectiveness=68.0,
+        mean_effectiveness=80.0,
+        hours_below_90=12.0,
+        hours_at_or_below_77=10.0,
+        hours_at_or_below_70=3.0,
+        pct_hours_in_wocl=33.3,
+        pct_hours_at_or_below_77=41.7,
+    )
+    cls = classify_frms_risk(exposure, thresholds=FRMSThresholds())
+    crew_rest = assess_usaf_crew_rest(
+        crew_rest_start_local=dt.datetime(2025, 1, 1, 23, 0, 0),
+        fdp_start_local=dt.datetime(2025, 1, 2, 8, 0, 0),  # 9h later
+        planned_sleep_opportunity_hours=6.0,
+        continuous_ops_reduced_rest=False,
+        policy=USAFCrewRestPolicy(),
+    )
+    alerts = compute_frms_alerts(
+        exposure=exposure,
+        classification=cls,
+        crew_rest=crew_rest,
+        thresholds=FRMSThresholds(),
+    )
+    assert alerts
+    assert all(isinstance(a, FRMSAlert) for a in alerts)
+    codes = {a.code for a in alerts}
+    assert "min_eff_severe" in codes
+    assert "crew_rest_noncompliant" in codes
 

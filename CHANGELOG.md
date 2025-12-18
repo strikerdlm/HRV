@@ -5,6 +5,16 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.25] - 2025-12-18
+
+### Added
+- **Persisted study groups & assignments** (`app/user_database.py`, `app/app.py`): Export → Longitudinal cohort comparisons now supports **persisted** `study_groups` / `study_assignments` (Study ID + roster editor) instead of ad‑hoc control/intervention selectors.
+- **Mixed-effects longitudinal inference** (`app/export_utils.py`, `app/app.py`): Optional **random-intercept mixed model** for Group × Time on Δ vs baseline (exports CSV + included in longitudinal Markdown report when enabled).
+- **FRMS rule-based alerts** (`app/frms.py`, `app/app.py`): FRMS dashboard now emits a deterministic “why it triggered” alert list and includes alerts in the exported FRMS JSON payload.
+
+### Dependencies
+- Added `statsmodels` to `requirements.txt` for mixed-effects modeling.
+
 ## [1.8.24] - 2025-12-18
 
 ### Added

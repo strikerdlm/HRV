@@ -94,6 +94,16 @@ class USAFCrewRestAssessment:
     notes: str
 
 
+@dataclass(frozen=True, slots=True)
+class FRMSAlert:
+    """A rule-based FRMS alert suitable for mission dashboards."""
+
+    level: str  # "info" | "warning" | "critical"
+    code: str
+    message: str
+    rationale: str
+
+
 def _validate_thresholds(th: FRMSThresholds) -> None:
     if not np.isfinite(th.low_risk_min_effectiveness):
         raise ValueError("low_risk_min_effectiveness must be finite")
@@ -411,4 +421,113 @@ def assess_usaf_crew_rest(
         compliant=compliant,
         notes=" ".join(notes_parts),
     )
+
+
+def compute_frms_alerts(
+    *,
+    exposure: FRMSExposureMetrics,
+    classification: FRMSRiskClassification,
+    crew_rest: USAFCrewRestAssessment | None,
+    thresholds: FRMSThresholds = FRMSThresholds(),
+) -> list[FRMSAlert]:
+    """Compute a small set of deterministic, rule-based FRMS alerts.
+
+    This complements the FRMS dashboard by providing a "why it triggered" list
+    suitable for operational briefings and exports.
+
+    Args:
+        exposure: Exposure metrics from `compute_frms_exposure_metrics`.
+        classification: Risk classification from `classify_frms_risk`.
+        crew_rest: Optional crew rest assessment from `assess_usaf_crew_rest`.
+        thresholds: Threshold settings.
+
+    Returns:
+        List of alerts, highest priority first.
+    """
+    _validate_thresholds(thresholds)
+
+    alerts: list[FRMSAlert] = []
+
+    # Classification-level alerts
+    risk = str(classification.risk_level or "Unknown")
+    if risk in {"Extreme"}:
+        alerts.append(
+            FRMSAlert(
+                level="critical",
+                code="risk_extreme",
+                message="FRMS risk matrix classifies this scenario as EXTREME.",
+                rationale=classification.rationale,
+            )
+        )
+    elif risk in {"High"}:
+        alerts.append(
+            FRMSAlert(
+                level="warning",
+                code="risk_high",
+                message="FRMS risk matrix classifies this scenario as HIGH.",
+                rationale=classification.rationale,
+            )
+        )
+
+    # Exposure threshold alerts
+    if exposure.min_effectiveness is not None:
+        if exposure.min_effectiveness <= thresholds.severe_impairment_max_effectiveness:
+            alerts.append(
+                FRMSAlert(
+                    level="critical",
+                    code="min_eff_severe",
+                    message=f"Min in-scope effectiveness ≤{thresholds.severe_impairment_max_effectiveness:.0f}%.",
+                    rationale=f"Min effectiveness was {exposure.min_effectiveness:.1f}% during in-scope hours.",
+                )
+            )
+        elif exposure.min_effectiveness <= thresholds.high_risk_max_effectiveness:
+            alerts.append(
+                FRMSAlert(
+                    level="warning",
+                    code="min_eff_high_risk",
+                    message=f"Min in-scope effectiveness ≤{thresholds.high_risk_max_effectiveness:.0f}%.",
+                    rationale=f"Min effectiveness was {exposure.min_effectiveness:.1f}% during in-scope hours.",
+                )
+            )
+
+    if exposure.hours_at_or_below_77 > 0:
+        lvl = "critical" if exposure.pct_hours_at_or_below_77 >= 30.0 else "warning"
+        alerts.append(
+            FRMSAlert(
+                level=lvl,
+                code="time_below_77",
+                message=f"Time at/under {thresholds.high_risk_max_effectiveness:.0f}% effectiveness detected.",
+                rationale=(
+                    f"{exposure.hours_at_or_below_77:.1f} h "
+                    f"({exposure.pct_hours_at_or_below_77:.1f}% of in-scope time) at/under "
+                    f"{thresholds.high_risk_max_effectiveness:.0f}%."
+                ),
+            )
+        )
+
+    if exposure.pct_hours_in_wocl >= 25.0 and exposure.hours_in_scope > 0:
+        alerts.append(
+            FRMSAlert(
+                level="warning",
+                code="wocl_exposure",
+                message="High WOCL exposure during in-scope hours.",
+                rationale=f"WOCL exposure was {exposure.pct_hours_in_wocl:.1f}% of in-scope time.",
+            )
+        )
+
+    # Crew rest compliance alerts
+    if crew_rest is not None and not crew_rest.compliant:
+        alerts.append(
+            FRMSAlert(
+                level="critical",
+                code="crew_rest_noncompliant",
+                message="USAF crew rest check is NOT compliant (AFMAN 11-202V3 baseline).",
+                rationale=crew_rest.notes,
+            )
+        )
+
+    # Sort by severity order (critical > warning > info) and keep deterministic ordering.
+    order = {"critical": 0, "warning": 1, "info": 2}
+    alerts = sorted(alerts, key=lambda a: (order.get(a.level, 9), a.code))
+    return alerts
 
