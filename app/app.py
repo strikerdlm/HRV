@@ -4626,6 +4626,18 @@ def main() -> None:
     if previous_mission and previous_mission != active_mission:
         # Prevent cross-mission user/session leakage.
         st.session_state.pop("current_user_id", None)
+        # Sleep tab session keys (UserDataManager + login state)
+        st.session_state.pop("sleep_user_manager", None)
+        st.session_state.pop("sleep_current_user", None)
+        st.session_state.pop("sleep_nights", None)
+        st.session_state.pop("sleep_multi_summary", None)
+        # Clear Streamlit caches so mission switching never reuses stale DB/data.
+        try:
+            st.cache_data.clear()
+            st.cache_resource.clear()
+        except Exception:
+            pass
+        st.rerun()
 
     # Apply neutral layout refinements (responsive margins, full-width
     # components)
