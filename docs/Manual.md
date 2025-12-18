@@ -3894,13 +3894,15 @@ This section outlines completed features and remaining planned enhancements for 
 ### Remaining Enhancements
 
 #### Plot Governance (ECharts-first, publication-grade everywhere)
-**Status:** Planned (Priority: CRITICAL)  
+**Status:** In progress (Priority: CRITICAL)  
 **Description:** Enforce the project plotting policy across *all* tabs and modules.
 
 - Standardize chart styling (titles, axis labels with units, legends, tooltips, colorblind-safe palette).
 - Require a short explanatory paragraph beneath every plot (what the user sees, axis/units, preprocessing).
-- Add publication-grade plot exports across the app (SVG/PDF/PNG high-DPI/HTML + data/spec export).
+- Add publication-grade plot exports across the app (SVG/PNG high-DPI/HTML + data/spec export, plus PDF via browser print workflow).
 - Keep `requirements.txt`, `README.md`, `docs/Manual.md`, and `CHANGELOG.md` updated whenever plots/features change.
+
+**Current implementation note:** Every Apache ECharts chart now includes an inline export toolbar for **PNG (high-DPI)**, **SVG (vector)**, **HTML**, and **spec JSON** exports, plus **Print/Save PDF** using your browser’s print dialog.
 
 #### Fatigue Safety Management (ICAO FRMS + USAF doctrine) inside SAFTE tab
 **Status:** Planned (Priority: CRITICAL; research-first)  
