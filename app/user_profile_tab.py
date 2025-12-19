@@ -2552,7 +2552,7 @@ def _render_hrv_history(user: UserProfile) -> None:
                 st.cache_data.clear()
             except Exception:  # pragma: no cover - cache may be unavailable in some contexts
                 pass
-            st.rerun(scope="fragment" if _HAS_FRAGMENT else "app")
+            st.rerun()
     with col_meta:
         st.caption("If charts look stale after new uploads/analysis, regenerate to refresh them.")
     
