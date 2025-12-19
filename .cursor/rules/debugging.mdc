@@ -1,0 +1,235 @@
+# Streamlit Debugging & Troubleshooting Rules
+
+**Version**: 1.0.0 | **Last Updated**: 2024-12-18
+
+This rule establishes mandatory debugging protocols for the HRV Analysis Suite Streamlit application. Agents MUST follow these steps when encountering errors or bugs.
+
+## 1. MANDATORY: Check Logs First
+
+Before ANY debugging attempt, agents MUST read the log files:
+
+```python
+# Log file locations (relative to project root)
+logs/app.log        # All application logs (DEBUG level)
+logs/errors.log     # Errors only (ERROR level)  
+logs/streamlit.log  # Streamlit internal logs (when debug enabled)
+```
+
+**Actions:**
+1. Read the last 100 lines of `logs/errors.log`
+2. Search for patterns: `Exception`, `Error`, `Traceback`, `CRITICAL`
+3. Note timestamps to correlate with user-reported issues
+
+## 2. MANDATORY: Web Search for Streamlit Issues
+
+When encountering Streamlit-specific errors, agents MUST use web search tools extensively:
+
+### Search Strategy (execute ALL relevant searches in parallel):
+
+```
+# For any Streamlit error, run these searches:
+1. site:github.com/streamlit/streamlit/issues "[exact error message]"
+2. site:discuss.streamlit.io "[error keywords]"
+3. Streamlit [version] "[error]" fix solution 2024
+4. Streamlit [component name] bug workaround
+```
+
+### Known Recurring Issues - Search Templates:
+
+| Issue | Search Query |
+|-------|-------------|
+| SessionInfo error | `Streamlit "SessionInfo before initialized" fix GitHub issue` |
+| WebSocket disconnect | `Streamlit WebSocket disconnect session state race condition` |
+| Fragment errors | `Streamlit st.fragment run_every causes error` |
+| Component iframe | `Streamlit components.html iframe session error` |
+| Toast notifications | `Streamlit suppress toast notification CSS hide` |
+
+## 3. Debugging Checklist
+
+When a bug is reported, follow this checklist IN ORDER:
+
+### Step 1: Gather Information
+- [ ] Read `logs/errors.log` (last 100 lines)
+- [ ] Read `logs/app.log` for context around error time
+- [ ] Check Streamlit version: `pip show streamlit`
+- [ ] Check if error is version-specific
+
+### Step 2: Web Search (MANDATORY)
+- [ ] Search GitHub issues for exact error message
+- [ ] Search Streamlit forum (discuss.streamlit.io)
+- [ ] Search for version-specific issues
+- [ ] Search for CSS/workaround solutions
+
+### Step 3: Common Fixes to Try
+- [ ] Clear browser cache (instruct user)
+- [ ] Check `.streamlit/config.toml` settings
+- [ ] Verify session state initialization order
+- [ ] Check for fragment/component conflicts
+
+### Step 4: Apply Fix
+- [ ] Document the fix with comments
+- [ ] Reference the source (GitHub issue, forum post)
+- [ ] Test the fix
+- [ ] Update CHANGELOG.md if user-visible
+
+## 4. Known Issues & Workarounds
+
+### "Bad message format: Tried to use SessionInfo before initialized"
+
+**Status**: Known Streamlit bug (GitHub #11500, #9767, #8321)
+**Affects**: Multiple versions (0.52, 0.79, 1.32, 1.38-1.52)
+**Root Cause**: WebSocket race condition during session initialization
+
+**Workarounds Applied:**
+1. CSS to hide toast notifications (in `app.py`)
+2. Disabled `@st.fragment` decorators (in `user_profile_tab.py`)
+3. Config: `fastReruns = false` (in `.streamlit/config.toml`)
+4. Config: `disconnectedSessionTTL = 600`
+
+**CSS Workaround:**
+```css
+div[data-testid="stToast"] {
+    display: none !important;
+}
+div[data-testid="stToastContainer"] {
+    display: none !important;
+}
+```
+
+### ECharts Component Issues
+
+**Problem**: Charts not rendering or CORS errors
+**Solution**: Inline embedding of ECharts bundle (in `echarts_component.py`)
+
+**Key Code Pattern:**
+```python
+# Load bundle from node_modules and embed inline
+echarts_bundle = _load_echarts_bundle(cfg.local_echarts_path)
+if echarts_bundle:
+    echarts_script = f"<script>{echarts_bundle}</script>"
+else:
+    echarts_script = f'<script src="{CDN_URL}"></script>'
+```
+
+## 5. Logging Configuration
+
+### Enable Debug Mode
+Users can enable debug logging via sidebar:
+- **🔧 Developer Tools** → **Enable Debug Logging**
+
+### Programmatic Debug Logging
+```python
+from logging_config import (
+    setup_logging,
+    get_logger,
+    enable_streamlit_debug,
+    log_session_state,
+    log_rerun_trigger,
+    timed_operation,
+    StreamlitDebugContext,
+    dump_debug_report,
+)
+
+# Enable Streamlit internal logging
+enable_streamlit_debug(verbose=True)
+
+# Log session state for debugging
+log_session_state("after_user_action")
+
+# Log before rerun
+log_rerun_trigger("button_clicked", details={"button": "refresh"})
+
+# Time slow operations
+@timed_operation("load_data")
+def load_data():
+    ...
+
+# Debug context manager
+with StreamlitDebugContext("processing_upload"):
+    process_file(file)
+```
+
+## 6. Configuration Reference
+
+### `.streamlit/config.toml` Debug Settings
+
+```toml
+[global]
+developmentMode = false  # Set true for verbose output
+
+[server]
+fileWatcherType = "poll"  # Required for OneDrive
+disconnectedSessionTTL = 600  # Longer session timeout
+
+[client]
+showErrorDetails = true
+toolbarMode = "developer"
+
+[runner]
+fastReruns = false  # Disable to prevent race conditions
+
+[logger]
+level = "info"  # Change to "debug" for troubleshooting
+```
+
+## 7. Agent Protocol for New Bugs
+
+When a user reports a new bug:
+
+1. **IMMEDIATELY** read logs:
+   ```
+   Read logs/errors.log (last 100 lines)
+   Read logs/app.log (last 200 lines)
+   ```
+
+2. **SEARCH** (run ALL in parallel):
+   ```
+   WebSearch: Streamlit [error message] fix 2024
+   WebSearch: site:github.com/streamlit/streamlit [error]
+   WebSearch: site:discuss.streamlit.io [error]
+   ```
+
+3. **CHECK** version compatibility:
+   ```
+   pip show streamlit
+   pip index versions streamlit
+   ```
+
+4. **DOCUMENT** findings before implementing fix
+
+5. **TEST** fix before declaring success
+
+## 8. Emergency Rollback
+
+If a fix breaks the app:
+
+1. Check git status: `git status`
+2. Revert changes: `git checkout -- [file]`
+3. Or stash: `git stash`
+
+## 9. Useful Diagnostic Commands
+
+```bash
+# Check Streamlit version
+streamlit version
+
+# Check for package conflicts
+pip check
+
+# List all streamlit-related packages
+pip list | Select-String streamlit
+
+# Clear Streamlit cache
+streamlit cache clear
+
+# Run with debug logging
+streamlit run app/app.py --logger.level=debug
+```
+
+## 10. Reference Links
+
+- Streamlit GitHub Issues: https://github.com/streamlit/streamlit/issues
+- Streamlit Forum: https://discuss.streamlit.io/
+- Streamlit Docs: https://docs.streamlit.io/
+- Known Issue #11500: https://github.com/streamlit/streamlit/issues/11500
+- Known Issue #9767: https://github.com/streamlit/streamlit/issues/9767
