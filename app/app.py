@@ -4614,16 +4614,10 @@ def _inject_sessioninfo_suppressor() -> None:
         div[data-testid="stNotification"],
         div[data-baseweb="toast"],
         div[data-baseweb="notification"],
-        div[role="alert"],
-        div[role="dialog"],
-        div[data-baseweb="modal"] {
+        div[role="alert"] {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
-        }
-        [data-baseweb="backdrop"],
-        [data-baseweb="modal"] {
-            pointer-events: none !important;
         }
         </style>
         <script>
