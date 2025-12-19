@@ -75,11 +75,12 @@ installTracer = false
 # Fix matplotlib async issues
 # postScriptGC = true
 
-# Fast reruns - skip full script execution when possible
-fastReruns = true
+# DISABLED: Fast reruns can cause "SessionInfo before initialized" errors
+# fastReruns = true
+fastReruns = false
 
-# Enforce type checking on inputs
-# enforceSerializableSessionState = true
+# Enforce type checking on inputs - helps catch session state issues
+enforceSerializableSessionState = false
 
 [logger]
 # Logging level: "error", "warning", "info", "debug"
