@@ -275,7 +275,7 @@ except ImportError:
     HRV_CACHE_AVAILABLE = False
 
 from dataclasses import asdict, dataclass
-from datetime import timezone, timedelta, datetime, date, time
+from datetime import timezone, timedelta, datetime, date
 from typing import (
     Any,
     Dict,
@@ -6189,7 +6189,26 @@ def main() -> None:
             "ℹ️ About",
         ]
     )
+    # Debug breadcrumbs: when the UI appears "blank", it's often because a rerun
+    # was triggered mid-render or execution stopped before later tabs were
+    # populated. Gate logs behind the explicit Developer Tools toggle to avoid
+    # log spam during normal use.
+    if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
+        try:
+            _LOGGER.info(
+                "UI: main_result_tabs_created | has_hrv_data=%s | uploads=%d | profile=%s",
+                has_hrv_data,
+                len(uploads),
+                active_display_name,
+            )
+        except Exception:
+            pass
     with tab_overview:
+        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
+            try:
+                _LOGGER.info("UI: render_tab_overview:start")
+            except Exception:
+                pass
         st.markdown("### 📊 Analysis Overview")
         st.markdown("*Summary of uploaded datasets and computed metrics*")
         
@@ -6249,11 +6268,21 @@ def main() -> None:
         ):
             st.dataframe(multi_results_df[["source", "respiratory_rate_bpm"]].rename(
                 columns={"respiratory_rate_bpm": "respiratory_rate [breaths/min]"}))
+        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
+            try:
+                _LOGGER.info("UI: render_tab_overview:end")
+            except Exception:
+                pass
     
     # =========================================================================
     # USER PROFILE TAB - Centralized user data and clinical assessments
     # =========================================================================
     with tab_user_profile:
+        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
+            try:
+                _LOGGER.info("UI: render_tab_user_profile:start")
+            except Exception:
+                pass
         if USER_PROFILE_TAB_AVAILABLE:
             render_user_profile_tab()
         else:
@@ -6267,8 +6296,18 @@ def main() -> None:
                 "- **HRV measurement tracking**\n\n"
                 "Please ensure `user_profile_tab.py` is in the app directory."
             )
+        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
+            try:
+                _LOGGER.info("UI: render_tab_user_profile:end")
+            except Exception:
+                pass
     
     with tab_ts:
+        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
+            try:
+                _LOGGER.info("UI: render_tab_time_series:start")
+            except Exception:
+                pass
         if not has_hrv_data:
             st.info(
                 "📈 **Time Series Analysis**\n\n"
@@ -6318,6 +6357,11 @@ def main() -> None:
             "Short-term norms and physiological context summarized by "
             "[Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf) "
             "and updated in [Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full).")
+        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
+            try:
+                _LOGGER.info("UI: render_tab_time_series:end")
+            except Exception:
+                pass
     with tab_freq:
         if not has_hrv_data:
             st.info(
@@ -8625,12 +8669,14 @@ that predicts cognitive performance based on:
                 "fatigue_days": int(fatigue_days),
                 "fatigue_model": str(fatigue_model),
             }
-            tab_settings_manager.save_settings(
-                "fatigue",
-                fatigue_user_id,
-                current_fatigue_settings,
-                allowed_keys=_FATIGUE_SETTING_KEYS,
-            )
+            # Only save settings when user explicitly triggers an action (not on every rerun)
+            if run_fatigue or auto_run_garmin or save_profile_defaults:
+                tab_settings_manager.save_settings(
+                    "fatigue",
+                    fatigue_user_id,
+                    current_fatigue_settings,
+                    allowed_keys=_FATIGUE_SETTING_KEYS,
+                )
             
             # Run simulation
             if run_fatigue:
@@ -8708,34 +8754,46 @@ that predicts cognitive performance based on:
                 if not active_user_context.get("has_user"):
                     st.warning("Please select or log in a user to run auto fatigue forecast.")
                 else:
-                    with st.spinner("Running auto fatigue forecast (wrist → clinical → Garmin)..."):
-                        try:
-                            auto_result, source_label, wrist_df = run_assessment_fatigue_prediction(
-                                user_context=active_user_context,
-                                user_id=active_user_context.get("user_id"),
-                                prediction_days=5,
-                                model_type="advanced",
-                            )
-                            st.session_state["fatigue_result"] = auto_result
-                            st.session_state["fatigue_source_label"] = source_label
-                            if wrist_df is not None and not wrist_df.empty:
-                                st.session_state["fatigue_assessment_df"] = wrist_df.sort_values(
-                                    "metric_date", ascending=False
-                                ).head(5)
-                            else:
-                                st.session_state.pop("fatigue_assessment_df", None)
-                            st.success(
-                                f"✅ 5-day forecast completed using {source_label.replace('_', ' ')} data."
-                            )
-                        except Exception as exc:
-                            st.error(f"Assessment-based fatigue automation failed: {exc}")
-                            log_exception(_LOGGER, "Assessment-based fatigue automation failed", exc)
+                    # Mark that we're running to avoid double-runs
+                    if st.session_state.get("_fatigue_auto_running"):
+                        st.info("⏳ Auto-run already in progress...")
+                    else:
+                        st.session_state["_fatigue_auto_running"] = True
+                        with st.spinner("Running auto fatigue forecast (wrist → clinical → Garmin)..."):
+                            try:
+                                auto_result, source_label, wrist_df = run_assessment_fatigue_prediction(
+                                    user_context=active_user_context,
+                                    user_id=active_user_context.get("user_id"),
+                                    prediction_days=5,
+                                    model_type="advanced",
+                                )
+                                st.session_state["fatigue_result"] = auto_result
+                                st.session_state["fatigue_source_label"] = source_label
+                                if wrist_df is not None and not wrist_df.empty:
+                                    st.session_state["fatigue_assessment_df"] = wrist_df.sort_values(
+                                        "metric_date", ascending=False
+                                    ).head(5)
+                                else:
+                                    st.session_state.pop("fatigue_assessment_df", None)
+                                st.success(
+                                    f"✅ 5-day forecast completed using {source_label.replace('_', ' ')} data."
+                                )
+                            except Exception as exc:
+                                st.error(f"Assessment-based fatigue automation failed: {exc}")
+                                log_exception(_LOGGER, "Assessment-based fatigue automation failed", exc)
+                            finally:
+                                st.session_state.pop("_fatigue_auto_running", None)
             
             # Display results if available
             if "fatigue_result" in st.session_state:
                 result = st.session_state["fatigue_result"]
                 
                 st.markdown("---")
+                # Show data source if available (from auto-run)
+                source_label = st.session_state.get("fatigue_source_label")
+                if source_label:
+                    source_display = source_label.replace("_", " ").title()
+                    st.info(f"📊 **Data Source:** {source_display}")
                 st.markdown("### 📊 Fatigue Prediction Results")
                 
                 # Build DataFrame for plotting
@@ -9236,7 +9294,7 @@ that predicts cognitive performance based on:
                         )
                         cr_start_time = st.time_input(
                             "Crew rest start (local time)",
-                            value=time(20, 0),
+                            value=datetime.time(20, 0),
                             key="usaf_crew_rest_start_time",
                         )
                     with col_cr_2:
@@ -9247,7 +9305,7 @@ that predicts cognitive performance based on:
                         )
                         fdp_start_time = st.time_input(
                             "FDP start (local time)",
-                            value=time(8, 0),
+                            value=datetime.time(8, 0),
                             key="usaf_fdp_start_time",
                         )
                     with col_cr_3:
