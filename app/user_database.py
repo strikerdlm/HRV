@@ -59,6 +59,21 @@ _DEFAULT_MISSIONS: tuple[str, ...] = ("Mission 1", "Mission 2")
 _ENV_ACTIVE_MISSION = "HRV_ACTIVE_MISSION"
 _MAX_LEGACY_BACKUPS_TO_COPY = 250
 
+# SQLite durability / compatibility knobs.
+#
+# Rationale:
+# - WAL is fast, but it produces sidecar files (-wal/-shm) which can be fragile on
+#   cloud-synced folders (e.g., OneDrive) if sync tools race partially-written pages.
+# - For maximum reliability across *any* path/filesystem, we default to rollback
+#   journaling (DELETE). Users can explicitly enable WAL via env var when safe.
+_ENV_SQLITE_JOURNAL_MODE = "HRV_SQLITE_JOURNAL_MODE"
+# Default to rollback journaling for maximum path/filesystem compatibility.
+# If you are on a local SSD and want higher concurrency/performance, set:
+#   HRV_SQLITE_JOURNAL_MODE=WAL
+_DEFAULT_SQLITE_JOURNAL_MODE = "DELETE"
+_FALLBACK_SQLITE_JOURNAL_MODE_FOR_SYNCED_PATHS = "DELETE"
+_SQLITE_JOURNAL_MODES: tuple[str, ...] = ("WAL", "DELETE", "TRUNCATE", "PERSIST", "MEMORY", "OFF")
+
 # Thread-local storage for connection reuse
 _thread_local = threading.local()
 
@@ -284,6 +299,324 @@ def get_database_path() -> Path:
             _LOGGER.info("Copied %d legacy DB backups into crew storage (%s).", copied, db_dir)
 
     return db_path
+
+
+# ---------------------------------------------------------------------------
+# SQLite file health / durability helpers
+# ---------------------------------------------------------------------------
+
+def _normalize_sqlite_journal_mode(raw: str) -> Optional[str]:
+    """Normalize/validate a SQLite journal mode env var value."""
+    value = str(raw or "").strip().upper()
+    if not value:
+        return None
+    if value not in _SQLITE_JOURNAL_MODES:
+        _LOGGER.warning(
+            "Ignoring invalid %s=%r (expected one of %s).",
+            _ENV_SQLITE_JOURNAL_MODE,
+            raw,
+            ", ".join(_SQLITE_JOURNAL_MODES),
+        )
+        return None
+    return value
+
+
+def _is_likely_cloud_synced_path(path: Path) -> bool:
+    """Heuristic: detect cloud-synced folders that are risky for WAL sidecars."""
+    raw = str(path)
+    if raw.startswith("\\\\"):
+        return True  # UNC / network share
+    # Prefer env-provided sync roots (more robust than string matching).
+    env_roots = (
+        os.environ.get("OneDrive", ""),
+        os.environ.get("OneDriveCommercial", ""),
+        os.environ.get("OneDriveConsumer", ""),
+        os.environ.get("DROPBOX", ""),
+        os.environ.get("Dropbox", ""),
+    )
+    resolved: Optional[Path] = None
+    try:
+        resolved = path.resolve()
+    except OSError:
+        resolved = None
+    for root_raw in env_roots:
+        root = str(root_raw or "").strip()
+        if not root:
+            continue
+        try:
+            root_path = Path(root).resolve()
+        except OSError:
+            continue
+        try:
+            if resolved is not None:
+                resolved.relative_to(root_path)
+                return True
+        except ValueError:
+            pass
+
+    # NOTE: Keep this conservative; false positives only reduce performance.
+    lower_parts = [p.lower() for p in path.parts]
+    return any(
+        ("onedrive" in part)
+        or ("dropbox" in part)
+        or ("google drive" in part)
+        or ("gdrive" in part)
+        or ("icloud" in part)
+        for part in lower_parts
+    )
+
+
+def _select_sqlite_journal_mode(db_path: Path) -> str:
+    """Select a safe SQLite journal mode for this database path."""
+    env_mode = _normalize_sqlite_journal_mode(os.environ.get(_ENV_SQLITE_JOURNAL_MODE, ""))
+    if env_mode is not None:
+        return env_mode
+    if _is_likely_cloud_synced_path(db_path):
+        return _FALLBACK_SQLITE_JOURNAL_MODE_FOR_SYNCED_PATHS
+    return _DEFAULT_SQLITE_JOURNAL_MODE
+
+
+def _apply_sqlite_connection_pragmas(conn: sqlite3.Connection, *, db_path: Path) -> str:
+    """Apply PRAGMAs in a path-robust way and return the actual journal mode.
+
+    Critical: SQLite may refuse `journal_mode=WAL` on some file systems. In that
+    case the PRAGMA returns a *different* mode. We must set `synchronous` based
+    on the actual resulting mode (not the requested one), or durability can be
+    weaker than intended.
+    """
+    requested = _select_sqlite_journal_mode(db_path)
+    actual = requested
+    try:
+        row = conn.execute(f"PRAGMA journal_mode={requested}").fetchone()
+        if row and row[0] is not None:
+            actual = str(row[0])
+    except sqlite3.Error as exc:
+        _LOGGER.warning("Failed to set journal_mode=%s (%s); falling back to DELETE.", requested, exc)
+        try:
+            row = conn.execute("PRAGMA journal_mode=DELETE").fetchone()
+            if row and row[0] is not None:
+                actual = str(row[0])
+            else:
+                actual = "DELETE"
+        except sqlite3.Error as exc2:
+            # If even this fails, we keep going; SQLite will still run with its default.
+            _LOGGER.warning("Failed to set journal_mode=DELETE (%s).", exc2)
+
+    actual_upper = str(actual).strip().upper()
+    if actual_upper not in _SQLITE_JOURNAL_MODES:
+        actual_upper = requested
+    if actual_upper != requested:
+        _LOGGER.warning(
+            "SQLite journal_mode requested=%s but actual=%s for %s",
+            requested,
+            actual_upper,
+            db_path,
+        )
+
+    # Durability + lock behavior (path-agnostic defaults).
+    # - WAL: NORMAL is typical and fast; DB is still consistent.
+    # - non-WAL: FULL is safer on sync/network paths.
+    try:
+        conn.execute("PRAGMA synchronous=NORMAL" if actual_upper == "WAL" else "PRAGMA synchronous=FULL")
+    except sqlite3.Error:
+        pass
+    try:
+        conn.execute("PRAGMA foreign_keys=ON")
+    except sqlite3.Error:
+        pass
+    try:
+        conn.execute("PRAGMA busy_timeout=5000")
+    except sqlite3.Error:
+        pass
+    if actual_upper == "WAL":
+        try:
+            conn.execute("PRAGMA wal_autocheckpoint=1000")
+        except sqlite3.Error:
+            pass
+
+    # Performance knobs (best-effort; tolerate unsupported settings).
+    try:
+        conn.execute("PRAGMA cache_size=-64000")  # 64MB cache
+    except sqlite3.Error:
+        pass
+    try:
+        conn.execute("PRAGMA temp_store=MEMORY")  # Temp tables in memory
+    except sqlite3.Error:
+        pass
+    try:
+        conn.execute("PRAGMA mmap_size=268435456")  # 256MB memory-mapped I/O
+    except sqlite3.Error:
+        pass
+
+    return actual_upper
+
+
+def is_sqlite_database_corruption_error(exc: BaseException) -> bool:
+    """Return True if the exception message strongly indicates SQLite corruption."""
+    msg = str(exc).lower()
+    # The canonical SQLite corruption message we see in the wild.
+    if "database disk image is malformed" in msg:
+        return True
+    # Pandas may wrap the DB-API exception with its own prefix.
+    if "disk image is malformed" in msg and "database" in msg:
+        return True
+    return False
+
+
+def _sqlite_sidecar_paths(db_path: Path) -> tuple[Path, Path]:
+    """Return SQLite WAL sidecar paths for a .db file (db-wal, db-shm)."""
+    wal = Path(f"{db_path}-wal")
+    shm = Path(f"{db_path}-shm")
+    return wal, shm
+
+
+def sqlite_quick_check(db_path: Path, *, timeout_s: float = 2.0) -> tuple[bool, str]:
+    """Run `PRAGMA quick_check(1)` and return (ok, message).
+
+    Notes:
+        - This opens the DB read-only (mode=ro) to avoid modifying state.
+        - If the DB is corrupted, SQLite may return a descriptive message or raise.
+    """
+    if timeout_s <= 0:
+        raise ValueError("timeout_s must be > 0")
+    if not db_path.exists():
+        return False, "missing"
+    try:
+        uri = f"{db_path.resolve().as_uri()}?mode=ro"
+        conn = sqlite3.connect(uri, uri=True, timeout=float(timeout_s))
+    except sqlite3.Error as exc:
+        return False, str(exc)
+    try:
+        row = conn.execute("PRAGMA quick_check(1);").fetchone()
+    except sqlite3.Error as exc:
+        return False, str(exc)
+    finally:
+        try:
+            conn.close()
+        except sqlite3.Error:
+            pass
+    if row is None or not row:
+        return False, "no-result"
+    result = str(row[0])
+    return (result == "ok"), result
+
+
+def list_database_backups(db_path: Optional[Path] = None, *, max_backups: int = 25) -> list[Path]:
+    """List timestamped DB backups (newest first) for the active mission."""
+    if max_backups < 1:
+        raise ValueError("max_backups must be >= 1")
+    target = db_path or get_database_path()
+    try:
+        backups = sorted(target.parent.glob(f"{target.name}.bak_*"), reverse=True)
+    except OSError:
+        backups = []
+    return backups[:max_backups]
+
+
+def _close_thread_local_connection_for_db(db_path_str: str) -> None:
+    """Best-effort: close the per-thread persistent connection for a DB path."""
+    conn_key = f"conn_{db_path_str}"
+    conn = getattr(_thread_local, conn_key, None)
+    if conn is None:
+        return
+    try:
+        conn.close()
+    except sqlite3.Error:
+        pass
+    finally:
+        setattr(_thread_local, conn_key, None)
+
+
+def invalidate_database_instance(db_path: Optional[Path] = None) -> None:
+    """Invalidate cached DB instances so a restored/reset file is picked up."""
+    target = db_path or get_database_path()
+    db_path_str = str(target)
+    _close_thread_local_connection_for_db(db_path_str)
+    # Force schema init on next instantiation (important after resets/restores).
+    UserDatabase._initialized_dbs.discard(db_path_str)
+    UserDatabase._backed_up_dbs.discard(db_path_str)
+    # Clear Streamlit cache_resource wrapper if available.
+    try:
+        _get_database_cached.clear()  # type: ignore[name-defined]
+    except Exception:
+        pass
+
+
+def restore_database_from_backup(*, backup_path: Path, db_path: Optional[Path] = None) -> Path:
+    """Restore the active mission DB from a backup file.
+
+    This function:
+    - Closes any persistent connection for the DB (best-effort)
+    - Preserves the current DB (+ WAL/SHM) with a timestamped `.corrupt_...` suffix
+    - Copies `backup_path` onto `db_path`
+    - Invalidates Streamlit/resource caches so the app uses the restored DB
+
+    Returns:
+        Path to the preserved copy of the previously-active DB file.
+    """
+    target = db_path or get_database_path()
+    backup_path = Path(backup_path)
+    if not backup_path.exists():
+        raise FileNotFoundError(str(backup_path))
+    if target.resolve() == backup_path.resolve():
+        raise ValueError("backup_path must differ from db_path")
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    preserved_db = Path(f"{target}.corrupt_{timestamp}")
+    preserved_wal = Path(f"{target}-wal.corrupt_{timestamp}")
+    preserved_shm = Path(f"{target}-shm.corrupt_{timestamp}")
+
+    # Ensure we are not holding an open handle.
+    invalidate_database_instance(target)
+
+    wal_path, shm_path = _sqlite_sidecar_paths(target)
+
+    # Preserve current files first (never delete user data).
+    if target.exists():
+        shutil.copy2(target, preserved_db)
+    if wal_path.exists():
+        shutil.copy2(wal_path, preserved_wal)
+    if shm_path.exists():
+        shutil.copy2(shm_path, preserved_shm)
+
+    # Move WAL/SHM aside so the restored DB isn't paired with stale sidecars.
+    for sidecar in (wal_path, shm_path):
+        if not sidecar.exists():
+            continue
+        try:
+            sidecar.replace(Path(f"{sidecar}.old_{timestamp}"))
+        except OSError:
+            # If locked, we still proceed; SQLite may complain until restart.
+            pass
+
+    # Copy backup into place.
+    shutil.copy2(backup_path, target)
+    invalidate_database_instance(target)
+    return preserved_db
+
+
+def reset_database_file(db_path: Optional[Path] = None) -> list[Path]:
+    """Move the active DB (+ WAL/SHM) aside and force a fresh DB on next use.
+
+    Returns:
+        List of paths created (the preserved/moved files).
+    """
+    target = db_path or get_database_path()
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    wal_path, shm_path = _sqlite_sidecar_paths(target)
+
+    invalidate_database_instance(target)
+
+    moved: list[Path] = []
+    for p in (target, wal_path, shm_path):
+        if not p.exists():
+            continue
+        new_path = Path(f"{p}.corrupt_{timestamp}")
+        p.replace(new_path)
+        moved.append(new_path)
+
+    invalidate_database_instance(target)
+    return moved
 
 
 # ---------------------------------------------------------------------------
@@ -728,8 +1061,60 @@ class UserDatabase:
         # Only initialize schema once per database file (thread-safe)
         with UserDatabase._init_lock:
             if self._db_path_str not in UserDatabase._initialized_dbs:
+                # If the DB file is corrupted (common when stored in synced folders),
+                # auto-restore the newest valid timestamped backup so the app can
+                # keep operating without manual intervention.
+                self._auto_restore_from_backup_if_corrupt()
                 self._init_database()
                 UserDatabase._initialized_dbs.add(self._db_path_str)
+
+    def _auto_restore_from_backup_if_corrupt(self) -> None:
+        """Auto-restore the DB from the newest valid backup if corruption is detected.
+
+        This is intentionally conservative:
+        - Only runs during first initialization per DB path
+        - Bounded search over the newest backups
+        - Preserves the current DB file (never deletes user data)
+
+        Raises:
+            RuntimeError: If corruption is detected and no valid backup can be restored.
+        """
+        # Fast exits for missing/empty DBs (fresh setup).
+        if not self.db_path.exists():
+            return
+        try:
+            if self.db_path.stat().st_size == 0:
+                return
+        except OSError:
+            # If we can't stat, don't attempt repair here.
+            return
+
+        ok, msg = sqlite_quick_check(self.db_path, timeout_s=2.0)
+        if ok:
+            return
+        _LOGGER.error("SQLite corruption detected (%s). Attempting auto-restore from backup.", msg)
+
+        backups = list_database_backups(db_path=self.db_path, max_backups=25)
+        for backup in backups:
+            bak_ok, _bak_msg = sqlite_quick_check(backup, timeout_s=2.0)
+            if not bak_ok:
+                continue
+            try:
+                preserved = restore_database_from_backup(backup_path=backup, db_path=self.db_path)
+            except (OSError, RuntimeError) as exc:
+                _LOGGER.error("Auto-restore failed from %s: %s", backup, exc)
+                continue
+            _LOGGER.info(
+                "Auto-restored DB from %s (preserved prior DB as %s).",
+                backup,
+                preserved,
+            )
+            return
+
+        raise RuntimeError(
+            "SQLite database appears corrupted and no valid timestamped backup could be restored. "
+            f"DB: {self.db_path} (quick_check={msg})"
+        )
     
     def _get_persistent_connection(self) -> sqlite3.Connection:
         """Get or create a persistent connection for the current thread.
@@ -759,12 +1144,7 @@ class UserDatabase:
         )
         conn.row_factory = sqlite3.Row
         
-        # Apply performance pragmas
-        conn.execute("PRAGMA journal_mode=WAL")  # Write-Ahead Logging for concurrency
-        conn.execute("PRAGMA synchronous=NORMAL")  # Good balance of safety/speed
-        conn.execute("PRAGMA cache_size=-64000")  # 64MB cache
-        conn.execute("PRAGMA temp_store=MEMORY")  # Temp tables in memory
-        conn.execute("PRAGMA mmap_size=268435456")  # 256MB memory-mapped I/O
+        _ = _apply_sqlite_connection_pragmas(conn, db_path=self.db_path)
         
         setattr(_thread_local, conn_key, conn)
         return conn
@@ -808,8 +1188,7 @@ class UserDatabase:
         try:
             cursor = conn.cursor()
             
-            # Apply WAL mode immediately for better concurrent access
-            cursor.execute("PRAGMA journal_mode=WAL")
+            _ = _apply_sqlite_connection_pragmas(conn, db_path=self.db_path)
             
             # Users table
             cursor.execute("""
@@ -3657,6 +4036,12 @@ __all__ = [
     "UserDatabase",
     "get_database",
     "get_database_path",
+    "invalidate_database_instance",
+    "is_sqlite_database_corruption_error",
+    "list_database_backups",
+    "restore_database_from_backup",
+    "reset_database_file",
+    "sqlite_quick_check",
     "get_cached_user_list",
     "get_cached_user_by_id",
     "clear_user_cache",
