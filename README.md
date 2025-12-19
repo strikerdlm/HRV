@@ -68,14 +68,13 @@ Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate V
 git clone https://github.com/strikerdlm/HRV.git
 cd HRV
 
-# Activate the conda environment
-conda activate hrv-py312
+# Recommended: run commands explicitly in the correct env (avoids wrong-env issues)
+conda run -n hrv-py312 pip install -r requirements.txt
+conda run -n hrv-py312 streamlit run app/app.py
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-streamlit run app/app.py
+# (Optional interactive shell)
+# conda activate hrv-py312
+# streamlit run app/app.py
 ```
 
 #### Option 2: Using Virtual Environment
