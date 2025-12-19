@@ -5,11 +5,22 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.32] - 2025-12-19
+
+### Performance
+- **Time Series + HR plot rendering speedup** (`app/app.py`): Downsample *before* converting full columns to Python lists, preventing large list allocations on reruns and reducing the “faded / always running” UI when plotting long recordings.
+- **Spectrogram rendering speedup** (`app/app.py`): Use cached spectrogram computation, downsample the heatmap resolution, and build ECharts heatmap triplets via NumPy (vectorized) to keep browser rendering responsive on long recordings.
+- **RR upload caching speedup** (`app/app.py`): Cache `UploadedRR` objects directly in session state to avoid reconstructing large DataFrames on every rerun; also avoids re-reading file bytes twice during cache cleanup.
+- **Library loader speedup** (`app/app.py`): Cache the RR library listing (`@st.cache_data`) and clear it after saving so the sidebar stays responsive even with many stored files.
+
+### Changed
+- **Save-to-library interaction** (`app/app.py`): Changed from a stateful checkbox to a one-shot button to reduce rerun churn and avoid UI race issues.
+
 ## [1.8.31] - 2025-12-19
 
 ### Added
 - **RR Library Loader in sidebar** (`app/app.py`): New "📚 Load from Library" expander in the sidebar allows users to browse and load previously saved RR interval files from any user profile without re-uploading. Files are sorted by modification time (most recent first) and can be loaded directly into the analysis workspace with one click or loaded and analyzed immediately with "🚀 Load + Analyze".
-- **Save uploaded files to library** (`app/app.py`): When files are uploaded via the sidebar and a user profile is active, a new "💾 Save X file(s) to library" checkbox appears. Checking it saves the uploaded RR files to the active user's profile for future analysis without needing to re-upload. Files are saved with timestamp prefixes if the original filename lacks a date.
+- **Save uploaded files to library** (`app/app.py`): When files are uploaded via the sidebar and a user profile is active, a new "💾 Save X file(s) to library" button appears. Clicking it saves the uploaded RR files to the active user's profile for future analysis without needing to re-upload. Files are saved with timestamp prefixes if the original filename lacks a date.
 
 ### Fixed
 - **Critical: HRV tab infinite loading fix** (`app/app.py`): Fixed bug where Time Series, Frequency, Nonlinear, and Spectrogram tabs would get stuck in infinite loading state (faded results) after uploading RR data. Root cause: `datasets` was not being cached after HRV analysis completed, so on each rerun the tabs received empty datasets. Added session_state caching (`_hrv_cached_datasets`, `_hrv_cached_windowed_df`) to persist processed data between reruns.
