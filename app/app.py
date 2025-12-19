@@ -10,6 +10,14 @@ from __future__ import annotations
 # contexts.
 #
 # This is deterministic, bounded, and required for testability.
+#
+# STREAMLIT VERSION REQUIREMENT:
+# This app requires Streamlit 1.35.0 (pinned in requirements.txt).
+# DO NOT UPGRADE to versions > 1.35 without extensive testing:
+#   - Versions 1.37+ introduce widget tree changes causing "Bad 'setIn' index" errors
+#   - Versions 1.40+ still exhibit SessionInfo race conditions
+# A client-side error suppressor is active (see _inject_sessioninfo_suppressor)
+# to hide remaining transient errors, but root cause is in Streamlit core.
 import sys
 from pathlib import Path
 
@@ -4605,16 +4613,16 @@ def _set_process_priority() -> None:
 
 
 def _inject_sessioninfo_suppressor() -> None:
-    """Hide known Streamlit SessionInfo race-condition toasts client-side."""
+    """Hide known Streamlit race-condition errors (SessionInfo, setIn) client-side."""
     st.markdown(
         """
         <style>
+        /* Hide toast/notification containers - these show transient errors */
         div[data-testid="stToast"],
         div[data-testid="stToastContainer"],
         div[data-testid="stNotification"],
         div[data-baseweb="toast"],
-        div[data-baseweb="notification"],
-        div[role="alert"] {
+        div[data-baseweb="notification"] {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
@@ -4623,71 +4631,120 @@ def _inject_sessioninfo_suppressor() -> None:
         <script>
         (function () {
             'use strict';
-            var selectors = [
+            
+            // Known Streamlit internal error patterns to suppress
+            var ERROR_PATTERNS = [
+                'sessioninfo',
+                'bad message',
+                "bad 'setin'",
+                'setin index',
+                'should be between'
+            ];
+            
+            function isKnownError(text) {
+                if (!text) return false;
+                var lowerText = text.toLowerCase();
+                for (var i = 0; i < ERROR_PATTERNS.length; i++) {
+                    if (lowerText.indexOf(ERROR_PATTERNS[i]) !== -1) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            
+            var toastSelectors = [
                 'div[data-testid="stToast"]',
                 'div[data-testid="stToastContainer"]',
                 'div[data-testid="stNotification"]',
                 'div[data-baseweb="toast"]',
                 'div[data-baseweb="notification"]',
-                'div[role="alert"]',
+                'div[role="alert"]'
+            ];
+            
+            var modalSelectors = [
                 'div[role="dialog"]',
                 'div[data-baseweb="modal"]'
             ];
+            
+            var backdropSelectors = [
+                'div[data-baseweb="backdrop"]',
+                'div[data-baseweb="modal-backdrop"]',
+                '.stModal'
+            ];
+
+            function removeElement(el) {
+                el.style.display = 'none';
+                el.style.visibility = 'hidden';
+                el.style.opacity = '0';
+                el.style.pointerEvents = 'none';
+                if (typeof el.remove === 'function') {
+                    try { el.remove(); } catch (e) { /* ignore */ }
+                }
+            }
 
             function removeBadMessages() {
-                selectors.forEach(function (selector) {
+                // Remove error toasts/alerts
+                toastSelectors.forEach(function (selector) {
                     var nodes = document.querySelectorAll(selector);
                     nodes.forEach(function (el) {
-                        var text = (el.textContent || '').toLowerCase();
-                        if (
-                            text.includes('sessioninfo') ||
-                            text.includes('bad message')
-                        ) {
-                            el.style.display = 'none';
-                            el.style.visibility = 'hidden';
-                            el.style.opacity = '0';
-                            if (typeof el.remove === 'function') {
-                                el.remove();
-                            }
+                        if (isKnownError(el.textContent)) {
+                            removeElement(el);
                         }
                     });
                 });
 
-                // Explicitly remove any modal/backdrop that contains the error text
-                var modals = document.querySelectorAll('div[role="dialog"], div[data-baseweb="modal"]');
-                modals.forEach(function (modal) {
-                    var text = (modal.textContent || '').toLowerCase();
-                    if (text.includes('sessioninfo') || text.includes('bad message')) {
-                        modal.style.display = 'none';
-                        modal.style.visibility = 'hidden';
-                        modal.style.opacity = '0';
-                        if (typeof modal.remove === 'function') {
-                            modal.remove();
+                // Remove error modals and their backdrops
+                modalSelectors.forEach(function (selector) {
+                    var modals = document.querySelectorAll(selector);
+                    modals.forEach(function (modal) {
+                        if (isKnownError(modal.textContent)) {
+                            removeElement(modal);
+                            // Also remove any sibling/parent backdrops
+                            backdropSelectors.forEach(function (bSel) {
+                                var backdrops = document.querySelectorAll(bSel);
+                                backdrops.forEach(function (bd) {
+                                    removeElement(bd);
+                                });
+                            });
                         }
-                    }
+                    });
                 });
             }
 
+            // Suppress JS errors related to known issues
             window.addEventListener(
                 'error',
                 function (event) {
                     if (event && typeof event.message === 'string') {
-                        var msg = event.message.toLowerCase();
-                        if (msg.includes('sessioninfo')) {
+                        if (isKnownError(event.message)) {
                             event.preventDefault();
                             event.stopImmediatePropagation();
+                            return false;
                         }
                     }
                 },
                 true
             );
 
+            // Suppress promise rejections related to known issues
             window.addEventListener('unhandledrejection', function (event) {
-                var reason = event && event.reason ? String(event.reason).toLowerCase() : '';
-                if (reason.includes('sessioninfo')) {
+                var reason = event && event.reason ? String(event.reason) : '';
+                if (isKnownError(reason)) {
                     event.preventDefault();
+                    return false;
                 }
             });
+            
+            // Intercept console.error to suppress known error spam
+            var originalConsoleError = console.error;
+            console.error = function() {
+                var args = Array.prototype.slice.call(arguments);
+                var msg = args.join(' ');
+                if (isKnownError(msg)) {
+                    return; // Suppress
+                }
+                originalConsoleError.apply(console, args);
+            };
 
             function startObservers() {
                 removeBadMessages();
@@ -4697,7 +4754,8 @@ def _inject_sessioninfo_suppressor() -> None:
                 if (document.body) {
                     observer.observe(document.body, { childList: true, subtree: true });
                 }
-                setInterval(removeBadMessages, 750);
+                // Check frequently to catch errors quickly
+                setInterval(removeBadMessages, 300);
             }
 
             if (document.readyState === 'loading') {
