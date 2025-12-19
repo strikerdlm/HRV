@@ -576,8 +576,9 @@ def t(key: str, **kwargs: Any) -> str:
     if kwargs:
         try:
             text = text.format(**kwargs)
-        except KeyError:
-            pass
+        except KeyError as exc:
+            # Missing format key; return unformatted text
+            _LOGGER.debug("Translation format key missing for '%s': %s", key, exc)
     
     return text
 

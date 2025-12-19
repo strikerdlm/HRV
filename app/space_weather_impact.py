@@ -16,6 +16,7 @@ All times computed for Bogotá, Colombia (UTC-5).
 from __future__ import annotations
 
 import datetime
+import logging
 import math
 from dataclasses import dataclass, field
 from enum import Enum
@@ -24,6 +25,8 @@ from typing import Any, Dict, Final, List, Mapping, Optional, Sequence, Tuple
 import numpy as np
 import pandas as pd
 import requests
+
+_LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -586,8 +589,8 @@ def fetch_plasma_impact() -> Tuple[Optional[ImpactEvent], Optional[str]]:
                 mag_dict = dict(zip(header, last_row))
                 bt = _safe_float(mag_dict.get("bt"))
                 bz = _safe_float(mag_dict.get("bz_gsm", mag_dict.get("bz_gse")))
-    except Exception:
-        pass  # Magnetic data is optional
+    except (requests.RequestException, ValueError, KeyError, IndexError) as exc:
+        _LOGGER.debug("Magnetic field data unavailable (optional): %s", exc)
     
     if not isinstance(plasma_data, list) or len(plasma_data) < 2:
         return None, "No solar wind plasma data available"
@@ -739,8 +742,8 @@ def fetch_geomagnetic_impact() -> Tuple[Optional[ImpactEvent], Optional[str]]:
                         kp = kp_val
                         obs_time = _parse_iso_utc(rec.get("time_tag"))
                         break
-    except Exception:
-        pass
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        _LOGGER.debug("Kp index fetch failed (will use default): %s", exc)
     
     # Fetch Dst
     try:
@@ -756,8 +759,8 @@ def fetch_geomagnetic_impact() -> Tuple[Optional[ImpactEvent], Optional[str]]:
                         if obs_time is None:
                             obs_time = _parse_iso_utc(rec.get("time_tag"))
                         break
-    except Exception:
-        pass
+    except (requests.RequestException, ValueError, KeyError) as exc:
+        _LOGGER.debug("Dst index fetch failed (will use default): %s", exc)
     
     if obs_time is None:
         obs_time = datetime.datetime.now(datetime.timezone.utc)
