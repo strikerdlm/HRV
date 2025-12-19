@@ -2956,7 +2956,7 @@ def _persist_analysis_results(
             except Exception as exc:  # pragma: no cover - defensive
                 logger.debug("Unable to store analysis payload for %s: %s", source, exc)
 
-
+@st.cache_data(ttl=30, max_entries=2, show_spinner=False)
 def _list_library_rr_files() -> Dict[str, List[Dict[str, Any]]]:
     """List all stored RR files from all user profiles.
     
@@ -2964,7 +2964,7 @@ def _list_library_rr_files() -> Dict[str, List[Dict[str, Any]]]:
         Dictionary mapping user display names to lists of file info dicts.
         Each file info contains: name, path, date, size_kb.
     """
-    from user_data_manager import get_user_data_path, parse_filename_date
+    from user_data_manager import parse_filename_date
     
     result: Dict[str, List[Dict[str, Any]]] = {}
     base_path = Path(__file__).resolve().parent / "data"
@@ -3238,61 +3238,67 @@ def _upload_section() -> Dict[str, UploadedRR]:
         st.session_state["uploaded_rr_cache"] = {}
     
     upload_cache = st.session_state["uploaded_rr_cache"]
-    
+
+    # PERF: Track active cache keys without re-reading file bytes twice.
+    current_keys: set[str] = set()
+
     for f in files:
         # Compute hash of file content for cache invalidation
         file_content = f.getvalue()
         file_hash = _compute_file_hash(file_content)
         cache_key = f"{f.name}_{file_hash}"
-        
+        current_keys.add(cache_key)
+
         # Check if we have a valid cached entry
-        if cache_key in upload_cache:
-            # Use cached data (avoid re-parsing)
-            cached = upload_cache[cache_key]
+        cached = upload_cache.get(cache_key)
+        if isinstance(cached, UploadedRR):
+            # Use cached object (fast path; avoids DataFrame reconstruction)
+            out[f.name] = cached
+            continue
+
+        if isinstance(cached, dict):
+            # Legacy cache format: convert once, then overwrite with fast object cache.
             out[f.name] = UploadedRR(
                 name=f.name,
-                rr_ms=np.array(cached["rr_ms"]),
-                df=pd.DataFrame(cached["df_dict"]),
-                recording_start_utc=pd.Timestamp(cached["recording_start_utc"]) if cached.get("recording_start_utc") else None,
+                rr_ms=np.array(cached.get("rr_ms", [])),
+                df=pd.DataFrame(cached.get("df_dict", {})),
+                recording_start_utc=(
+                    pd.Timestamp(cached["recording_start_utc"])
+                    if cached.get("recording_start_utc")
+                    else None
+                ),
             )
             # Restore timestamp column as datetime
             if "timestamp" in out[f.name].df.columns:
-                out[f.name].df["timestamp"] = pd.to_datetime(out[f.name].df["timestamp"], utc=True)
-        else:
-            # Parse file (cache miss)
-            content = file_content.decode("utf-8", errors="ignore")
-            rr = load_rr_intervals_from_text(f.name, content)
-            start_ts, precise = _infer_recording_start(f.name)
-            df = _to_dataframe(f.name, rr, start_ts=start_ts)
-            
-            out[f.name] = UploadedRR(
-                name=f.name,
-                rr_ms=rr,
-                df=df,
-                recording_start_utc=start_ts,
-            )
-            
-            # Store in cache (convert to serializable format)
-            df_dict = df.to_dict(orient="list")
-            # Convert timestamps to strings for serialization
-            if "timestamp" in df_dict:
-                df_dict["timestamp"] = [str(t) for t in df_dict["timestamp"]]
-            
-            upload_cache[cache_key] = {
-                "rr_ms": rr.tolist(),
-                "df_dict": df_dict,
-                "recording_start_utc": start_ts.isoformat() if start_ts else None,
-                "precise": precise,
-            }
-            
-            if not precise:
-                st.sidebar.warning(
-                    f"'{f.name}' does not encode a recording start timestamp. "
-                    f"Defaulting to {start_ts.strftime('%Y-%m-%d %H:%M UTC')}."
+                out[f.name].df["timestamp"] = pd.to_datetime(
+                    out[f.name].df["timestamp"], utc=True
                 )
-    
+            upload_cache[cache_key] = out[f.name]
+            continue
+
+        # Parse file (cache miss)
+        content = file_content.decode("utf-8", errors="ignore")
+        rr = load_rr_intervals_from_text(f.name, content)
+        start_ts, precise = _infer_recording_start(f.name)
+        df = _to_dataframe(f.name, rr, start_ts=start_ts)
+
+        out[f.name] = UploadedRR(
+            name=f.name,
+            rr_ms=rr,
+            df=df,
+            recording_start_utc=start_ts,
+        )
+
+        # Store in cache as the object to avoid expensive DataFrame rebuilds
+        upload_cache[cache_key] = out[f.name]
+
+        if not precise:
+            st.sidebar.warning(
+                f"'{f.name}' does not encode a recording start timestamp. "
+                f"Defaulting to {start_ts.strftime('%Y-%m-%d %H:%M UTC')}."
+            )
+
     # Clean up old cache entries (files no longer uploaded)
-    current_keys = {f"{f.name}_{_compute_file_hash(f.getvalue())}" for f in files}
     stale_keys = [k for k in upload_cache if k not in current_keys]
     for k in stale_keys:
         del upload_cache[k]
@@ -3340,6 +3346,11 @@ def _upload_section() -> Dict[str, UploadedRR]:
                         st.sidebar.success(f"✅ Saved {saved_count} file(s) to library!")
                         # Track saved files
                         st.session_state[saved_files_key].update(unsaved_files.keys())
+                        # Refresh cached library listing so the sidebar loader updates immediately.
+                        try:
+                            _list_library_rr_files.clear()  # type: ignore[attr-defined]
+                        except Exception:  # pragma: no cover - defensive
+                            pass
                     else:
                         st.sidebar.info("Files already exist in library or could not be saved.")
             else:
@@ -3780,21 +3791,29 @@ def _plot_rr_timeseries(
     for name, up in datasets.items():
         if up.df.empty:
             continue
-        ts_ser = pd.to_datetime(up.df["timestamp"], errors="coerce").dropna()
+        # PERF: Avoid converting full columns to Python lists before downsampling.
+        # For long recordings, list conversion dominates CPU time and can make the
+        # Streamlit UI appear "faded / always running".
+        ts_ser = up.df["timestamp"]
         if not ts_ser.empty:
-            cur_min = ts_ser.iloc[0]
-            cur_max = ts_ser.iloc[-1]
-            x_min = cur_min if (x_min is None or cur_min < x_min) else x_min
-            x_max = cur_max if (x_max is None or cur_max > x_max) else x_max
-        x_vals = up.df["timestamp"].astype(str).tolist()
-        y_vals = up.df["rr_intervals_ms"].astype(float).tolist()
-        if max_points is not None and len(y_vals) > max_points:
-            idx = np.linspace(0, len(y_vals) - 1, max_points).astype(int)
-            x = [x_vals[i] for i in idx]
-            y = [y_vals[i] for i in idx]
+            cur_min_raw = ts_ser.iloc[0]
+            cur_max_raw = ts_ser.iloc[-1]
+            cur_min = pd.to_datetime(cur_min_raw, errors="coerce")
+            cur_max = pd.to_datetime(cur_max_raw, errors="coerce")
+            if isinstance(cur_min, pd.Timestamp) and not pd.isna(cur_min):
+                x_min = cur_min if (x_min is None or cur_min < x_min) else x_min
+            if isinstance(cur_max, pd.Timestamp) and not pd.isna(cur_max):
+                x_max = cur_max if (x_max is None or cur_max > x_max) else x_max
+
+        n_rows = int(len(up.df))
+        if max_points is not None and n_rows > max_points:
+            idx = np.linspace(0, n_rows - 1, int(max_points), dtype=int)
+            df_plot = up.df.iloc[idx]
         else:
-            x = x_vals
-            y = y_vals
+            df_plot = up.df
+
+        x = df_plot["timestamp"].astype(str).tolist()
+        y = df_plot["rr_intervals_ms"].astype(float).tolist()
         ser = _echarts_line_series(f"{name} (raw)", x, y)
         # Add deviation markAreas per dataset if available
         if (
@@ -3833,11 +3852,8 @@ def _plot_rr_timeseries(
                     ser["markArea"] = {"silent": True, "data": items}
         series.append(ser)
         if "rr_intervals_ms_clean" in up.df.columns:
-            y_cl_vals = up.df["rr_intervals_ms_clean"].astype(float).tolist()
-            if max_points is not None and len(y_cl_vals) > max_points:
-                y_cl = [y_cl_vals[i] for i in idx]
-            else:
-                y_cl = y_cl_vals
+            # Use the same downsampling as the raw series to keep alignment.
+            y_cl = df_plot["rr_intervals_ms_clean"].astype(float).tolist()
             series.append(
                 {
                     **_echarts_line_series(f"{name} (cleaned)", x, y_cl),
@@ -3900,23 +3916,27 @@ def _plot_hr_timeseries(
     for name, up in datasets.items():
         if up.df.empty:
             continue
-        ts_ser = pd.to_datetime(up.df["timestamp"], errors="coerce").dropna()
+        ts_ser = up.df["timestamp"]
         if not ts_ser.empty:
-            cur_min = ts_ser.iloc[0]
-            cur_max = ts_ser.iloc[-1]
-            x_min = cur_min if (x_min is None or cur_min < x_min) else x_min
-            x_max = cur_max if (x_max is None or cur_max > x_max) else x_max
-        x_vals = up.df["timestamp"].astype(str).tolist()
-        y_vals = up.df["heart_rate [bpm]"].astype(float).tolist()
-        
-        # Downsample if needed for performance
-        if max_points is not None and len(y_vals) > max_points:
-            idx = np.linspace(0, len(y_vals) - 1, max_points).astype(int)
-            x = [x_vals[i] for i in idx]
-            y = [y_vals[i] for i in idx]
+            cur_min_raw = ts_ser.iloc[0]
+            cur_max_raw = ts_ser.iloc[-1]
+            cur_min = pd.to_datetime(cur_min_raw, errors="coerce")
+            cur_max = pd.to_datetime(cur_max_raw, errors="coerce")
+            if isinstance(cur_min, pd.Timestamp) and not pd.isna(cur_min):
+                x_min = cur_min if (x_min is None or cur_min < x_min) else x_min
+            if isinstance(cur_max, pd.Timestamp) and not pd.isna(cur_max):
+                x_max = cur_max if (x_max is None or cur_max > x_max) else x_max
+
+        # PERF: Downsample BEFORE converting to Python lists.
+        n_rows = int(len(up.df))
+        if max_points is not None and n_rows > max_points:
+            idx = np.linspace(0, n_rows - 1, int(max_points), dtype=int)
+            df_plot = up.df.iloc[idx]
         else:
-            x = x_vals
-            y = y_vals
+            df_plot = up.df
+
+        x = df_plot["timestamp"].astype(str).tolist()
+        y = df_plot["heart_rate [bpm]"].astype(float).tolist()
         
         series.append(_echarts_line_series(name, x, y))
     opt = {
@@ -4064,18 +4084,54 @@ def _plot_spectrogram(datasets: Dict[str, UploadedRR]) -> None:
     sel = st.selectbox("Spectrogram dataset", names, index=0)
     up = datasets[sel]
     rr = up.rr_ms_clean if (up.rr_ms_clean is not None) else up.rr_ms
-    fxx, txx, Sxx = spectrogram_rr(rr, sampling_rate=4.0)
+    # PERF: spectrogram is expensive; use cached computation and downsample before
+    # building ECharts triplets to avoid "faded / always running" UI on long data.
+    fxx, txx, Sxx = _cached_spectrogram(rr)
     if fxx.size == 0:
         st.info("Insufficient RR for spectrogram.")
         return
-    # Convert to [x,y,value] triplets for ECharts heatmap
-    points = []
-    for j, fy in enumerate(fxx):
-        # Restrict to 0–0.5 Hz for readability
-        if fy > 0.5:
-            continue
-        for i, tx in enumerate(txx):
-            points.append([float(tx), float(fy), float(Sxx[j, i])])
+    # Restrict to 0–0.5 Hz for readability
+    f_mask = fxx <= 0.5
+    if not np.any(f_mask):
+        st.info("Spectrogram has no content below 0.5 Hz for this dataset.")
+        return
+    fxx = fxx[f_mask]
+    Sxx = Sxx[f_mask, :]
+
+    # Downsample heatmap resolution (bounded) for browser performance
+    max_f_bins = 128
+    max_t_bins = 256
+    if PERFORMANCE_UTILS_AVAILABLE:
+        try:
+            perf = get_performance_settings()
+            # Reuse max_plot_points as a rough cap, split across axes.
+            max_plot_points = int(perf.get("max_plot_points", 2000))
+            max_f_bins = max(32, min(256, int(np.sqrt(max_plot_points) * 2)))
+            max_t_bins = max(64, min(512, int(np.sqrt(max_plot_points) * 4)))
+        except Exception:
+            pass
+
+    if fxx.size > max_f_bins:
+        f_idx = np.linspace(0, fxx.size - 1, max_f_bins, dtype=int)
+    else:
+        f_idx = np.arange(fxx.size, dtype=int)
+
+    if txx.size > max_t_bins:
+        t_idx = np.linspace(0, txx.size - 1, max_t_bins, dtype=int)
+    else:
+        t_idx = np.arange(txx.size, dtype=int)
+
+    f_ds = fxx[f_idx]
+    t_ds = txx[t_idx]
+    Sxx_ds = Sxx[np.ix_(f_idx, t_idx)]
+
+    # Convert to [x,y,value] triplets for ECharts heatmap (vectorized)
+    T, F = np.meshgrid(t_ds, f_ds)
+    points = (
+        np.column_stack((T.ravel(), F.ravel(), Sxx_ds.ravel()))
+        .astype(float)
+        .tolist()
+    )
     opt = {
         "title": {"text": f"RR Spectrogram — {sel}", "left": "center"},
         "tooltip": {"position": "top"},
@@ -4089,8 +4145,8 @@ def _plot_spectrogram(datasets: Dict[str, UploadedRR]) -> None:
         "xAxis": {"type": "value", "name": "Time (s)"},
         "yAxis": {"type": "value", "name": "Frequency (Hz)"},
         "visualMap": {
-            "min": float(np.percentile(Sxx, 5)),
-            "max": float(np.percentile(Sxx, 95)),
+            "min": float(np.percentile(Sxx_ds, 5)),
+            "max": float(np.percentile(Sxx_ds, 95)),
             "calculable": True,
             "orient": "horizontal",
             "left": "center",
