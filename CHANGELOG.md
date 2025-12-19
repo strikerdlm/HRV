@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **User Profile performance fix** (`app/user_profile_tab.py`): **Critical fix** - Replaced nested `st.tabs()` with selectbox-based navigation for profile sub-sections (Assessments, Clinical Profile, History, HRV, Readiness, Data, Sessions). Nested tabs in Streamlit render ALL content on every rerun, causing severe slowdowns and browser freezes in Edge/Chromium browsers. The new pattern only renders the selected section (lazy loading), dramatically improving performance.
+- **SAFTE/USAF Crew Rest time input fix** (`app/app.py`): Fixed `TypeError: 'module' object is not callable` caused by `import time` shadowing `from datetime import time`. Changed `time(20, 0)` and `time(8, 0)` to `datetime.time(20, 0)` and `datetime.time(8, 0)` respectively.
 
 ## [1.8.29] - 2025-12-19
 
