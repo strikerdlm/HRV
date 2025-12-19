@@ -8,11 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.8.29] - 2025-12-19
 
 ### Fixed
-- **Streamlit SessionInfo race toast** (`app/app.py`): Added an early, client-side guard that suppresses the transient "Bad message format: Tried to use SessionInfo before it was initialized" dialog so users are not interrupted by the known Streamlit race condition.
-- **SessionInfo modal suppression** (`app/app.py`): Extended the guard to remove Streamlit modals/backdrops containing the SessionInfo error text, preventing the blocking dialog when the WebSocket race occurs.
-- **Dialog visibility regression** (`app/app.py`): Narrowed the SessionInfo CSS guard so legitimate Streamlit dialogs/modals remain visible; only error toasts are hidden.
-- **"Bad 'setIn' index" suppression** (`app/app.py`): Extended client-side guard to catch and suppress the Streamlit "Bad 'setIn' index" errors (caused by widget tree mismatches during reruns). The suppressor now intercepts error patterns in toasts, modals, JS errors, and console output.
-- **Streamlit version downgrade (TESTING)** (`requirements.txt`): Downgraded Streamlit to **1.35.0** for testing, as versions >1.35 (including 1.37+ and 1.40.2) exhibit SessionInfo and setIn race errors. This version is the last release before fragment/widget-tree changes. **Reinstall with `pip install --upgrade -r requirements.txt` to apply. Do not upgrade Streamlit until we confirm 1.35.0 eliminates errors in production.**
+- **Aggressive Streamlit error suppression** (`app/app.py`): Implemented comprehensive client-side suppression of cosmetic Streamlit errors ("Bad message format", "SessionInfo", "Bad 'setIn' index") via CSS + JavaScript as a safety net. The suppressor:
+  - Permanently hides ALL toast/notification/alert containers via CSS
+  - Removes error modals and backdrops matching known patterns
+  - Intercepts console.error, window.error, and unhandledrejection events
+  - Polls every 200ms to catch and remove error elements immediately
+- **Streamlit version stabilization** (`requirements.txt`): Pinned to **Streamlit 1.36.0**, the last stable release BEFORE the `@st.fragment` changes in 1.37+ that introduced SessionInfo/setIn race condition errors. Testing showed:
+  - 1.35.0: Tabs don't load properly - broken
+  - 1.36.0: Most stable version for complex apps (RECOMMENDED)
+  - 1.37.0+: Fragment changes cause SessionInfo/setIn errors
+  - 1.40.2: Has cosmetic error popups but functionally works
+  
+  **Reinstall dependencies with `pip install --upgrade -r requirements.txt` to apply.**
 
 ## [1.8.28] - 2025-12-18
 
