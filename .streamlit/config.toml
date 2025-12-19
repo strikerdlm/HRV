@@ -1,6 +1,7 @@
 [server]
 fileWatcherType = "poll"
 headless = true
+enableStaticServing = true
 
 [logger]
 level = "error"
