@@ -7718,288 +7718,261 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
             # Display area
             st.markdown("---")
             
-            if st.session_state.get("biofeedback_running", False):
-                # IMPORTANT: Do NOT use time.sleep()+st.rerun() for "live" views.
-                # It can spam full-page reruns, destabilize the websocket, and trigger
-                # Streamlit frontend errors like: "Bad message format: Tried to use SessionInfo
-                # before it was initialized".
+            # Define the fragment for live biofeedback view.
+            # We define it outside the conditional block to ensure it's registered consistently.
+            # We use run_every=2 (slightly slower than 1s) to avoid websocket saturation
+            # and potential "SessionInfo" initialization errors in recent Streamlit versions.
+            @st.fragment(run_every=2)
+            def _render_biofeedback_live_view(
+                engine_local: RealtimeHRVEngine,
+                breathing_rate_local: float,
+                session_duration_local: int,
+                inhale_ratio_local: float,
+                biofeedback_mode_local: str,
+            ) -> None:
+                # Defensive check: if biofeedback stopped, don't render anything in this fragment.
+                if not st.session_state.get("biofeedback_running", False):
+                    return
 
-                @st.fragment(run_every=1)
-                def _render_biofeedback_live_view() -> None:
-                    # Auto-stop once the configured duration elapses (bounded execution).
-                    current_session = engine.current_session
-                    if current_session is not None:
-                        try:
-                            elapsed_sec = (
-                                datetime.now(timezone.utc) - current_session.start_time
-                            ).total_seconds()
-                        except Exception:
-                            elapsed_sec = 0.0
-                        try:
-                            target_sec = float(current_session.target_duration_sec)
-                        except Exception:
-                            target_sec = float(session_duration * 60)
-                        if elapsed_sec >= target_sec:
-                            st.session_state["biofeedback_running"] = False
-                            session_result = engine.end_session()
-                            if session_result:
-                                st.session_state["biofeedback_last_session"] = session_result
-                            st.rerun()
-                            return
-                        remaining_sec = max(0.0, target_sec - elapsed_sec)
-                        st.caption(
-                            f"⏱️ Time remaining: {remaining_sec / 60:.1f} min"
-                        )
+                # Auto-stop once the configured duration elapses (bounded execution).
+                current_session = engine_local.current_session
+                if current_session is not None:
+                    try:
+                        elapsed_sec = (
+                            datetime.now(timezone.utc) - current_session.start_time
+                        ).total_seconds()
+                    except Exception:
+                        elapsed_sec = 0.0
+                    try:
+                        target_sec = float(current_session.target_duration_sec)
+                    except Exception:
+                        target_sec = float(session_duration_local * 60)
 
-                    st.markdown("#### 🟢 Session Active")
+                    if elapsed_sec >= target_sec:
+                        st.session_state["biofeedback_running"] = False
+                        session_result = engine_local.end_session()
+                        if session_result:
+                            st.session_state["biofeedback_last_session"] = session_result
+                        # Trigger full app rerun to switch from "Running" view to "Summary" view.
+                        # We use st.rerun() here deliberately; the 2s interval reduces race risk.
+                        st.rerun()
+                        return
 
-                    # Breathing guide visualization
-                    st.markdown("##### 🌬️ Breathing Guide")
+                    remaining_sec = max(0.0, target_sec - elapsed_sec)
+                    st.caption(f"⏱️ Time remaining: {remaining_sec / 60:.1f} min")
 
-                    cycle_duration = 60.0 / breathing_rate
-                    inhale_duration = cycle_duration * inhale_ratio
-                    exhale_duration = cycle_duration * (1 - inhale_ratio)
+                st.markdown("#### 🟢 Session Active")
 
-                    # Create breathing animation data
-                    breath_phases = []
-                    phase_time = 0
-                    for i in range(int(breathing_rate * 2)):  # Show 2 minutes
-                        breath_phases.append(
-                            {
-                                "phase": "Inhale",
-                                "start": phase_time,
-                                "duration": inhale_duration,
-                            }
-                        )
-                        phase_time += inhale_duration
-                        breath_phases.append(
-                            {
-                                "phase": "Exhale",
-                                "start": phase_time,
-                                "duration": exhale_duration,
-                            }
-                        )
-                        phase_time += exhale_duration
+                # Breathing guide visualization
+                st.markdown("##### 🌬️ Breathing Guide")
 
-                    # Display current breathing instruction
-                    import time as time_module
+                cycle_duration = 60.0 / breathing_rate_local
+                inhale_duration = cycle_duration * inhale_ratio_local
+                exhale_duration = cycle_duration * (1 - inhale_ratio_local)
 
-                    current_time = time_module.time() % cycle_duration
-                    if current_time < inhale_duration:
-                        phase = "INHALE"
-                        progress = current_time / inhale_duration
-                        color = "#28a745"
-                    else:
-                        phase = "EXHALE"
-                        progress = (current_time - inhale_duration) / exhale_duration
-                        color = "#17a2b8"
+                # Create breathing animation data
+                import time as time_module
 
-                    st.markdown(
-                        f"""
-                        <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, {color}22 0%, {color}11 100%); 
-                                    border-radius: 15px; margin: 1rem 0;">
-                            <h1 style="color: {color}; margin: 0; font-size: 3rem;">{phase}</h1>
-                            <div style="width: 100%; height: 20px; background: #e0e0e0; border-radius: 10px; margin-top: 1rem;">
-                                <div style="width: {progress * 100}%; height: 100%; background: {color}; border-radius: 10px; transition: width 0.1s;"></div>
-                            </div>
-                            <p style="margin-top: 1rem; font-size: 1.2rem;">Cycle: {inhale_duration:.1f}s in / {exhale_duration:.1f}s out</p>
+                current_time = time_module.time() % cycle_duration
+                if current_time < inhale_duration:
+                    phase = "INHALE"
+                    progress = current_time / inhale_duration
+                    color = "#28a745"
+                else:
+                    phase = "EXHALE"
+                    progress = (current_time - inhale_duration) / exhale_duration
+                    color = "#17a2b8"
+
+                st.markdown(
+                    f"""
+                    <div style="text-align: center; padding: 2rem; background: linear-gradient(135deg, {color}22 0%, {color}11 100%); 
+                                border-radius: 15px; margin: 1rem 0;">
+                        <h1 style="color: {color}; margin: 0; font-size: 3rem;">{phase}</h1>
+                        <div style="width: 100%; height: 20px; background: #e0e0e0; border-radius: 10px; margin-top: 1rem;">
+                            <div style="width: {progress * 100}%; height: 100%; background: {color}; border-radius: 10px; transition: width 0.1s;"></div>
                         </div>
-                        """,
-                        unsafe_allow_html=True,
+                        <p style="margin-top: 1rem; font-size: 1.2rem;">Cycle: {inhale_duration:.1f}s in / {exhale_duration:.1f}s out</p>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+
+                # Simulate data in simulation mode
+                if biofeedback_mode_local == "Simulation":
+                    import random
+                    import numpy as np
+
+                    for _ in range(3):  # Add a few samples
+                        base_rr = 857  # ~70 bpm
+                        rsa_amplitude = 50
+                        rsa = rsa_amplitude * np.sin(
+                            2 * np.pi * (breathing_rate_local / 60) * time_module.time()
+                        )
+                        noise = random.gauss(0, 15)
+                        rr_ms = int(base_rr + rsa + noise)
+                        engine_local.add_rr_sample(rr_ms)
+
+                # Compute current HRV
+                metrics = engine_local.compute_hrv()
+
+                if metrics:
+                    # Store in history (bounded growth)
+                    if "biofeedback_coherence_history" not in st.session_state:
+                        st.session_state["biofeedback_coherence_history"] = []
+                    if "biofeedback_hrv_history" not in st.session_state:
+                        st.session_state["biofeedback_hrv_history"] = []
+
+                    st.session_state["biofeedback_coherence_history"].append(metrics.coherence)
+                    st.session_state["biofeedback_hrv_history"].append(
+                        {
+                            "rmssd": metrics.rmssd,
+                            "coherence": metrics.coherence,
+                            "hr": metrics.mean_hr,
+                        }
+                    )
+                    max_points = max(300, int(session_duration_local * 60) + 120)
+                    if len(st.session_state["biofeedback_coherence_history"]) > max_points:
+                        del st.session_state["biofeedback_coherence_history"][:-max_points]
+                    if len(st.session_state["biofeedback_hrv_history"]) > max_points:
+                        del st.session_state["biofeedback_hrv_history"][:-max_points]
+
+                    # Display metrics
+                    st.markdown("##### 📊 Real-time Metrics")
+                    col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+                    with col_m1:
+                        st.metric(
+                            "Coherence",
+                            f"{metrics.coherence:.0f}%",
+                            help="Target: 70%+ for high coherence",
+                        )
+                    with col_m2:
+                        st.metric(
+                            "RMSSD",
+                            f"{metrics.rmssd:.1f} ms",
+                            help="Higher = better vagal tone",
+                        )
+                    with col_m3:
+                        st.metric("Heart Rate", f"{metrics.mean_hr:.0f} bpm")
+                    with col_m4:
+                        st.metric(
+                            "Resp Rate",
+                            f"{metrics.respiratory_rate:.1f} br/min"
+                            if metrics.respiratory_rate > 0
+                            else "—",
+                        )
+
+                    # Coherence gauge
+                    coherence_gauge = {
+                        "series": [
+                            {
+                                "type": "gauge",
+                                "startAngle": 180,
+                                "endAngle": 0,
+                                "min": 0,
+                                "max": 100,
+                                "splitNumber": 5,
+                                "radius": "90%",
+                                "center": ["50%", "70%"],
+                                "axisLine": {
+                                    "lineStyle": {
+                                        "width": 20,
+                                        "color": [
+                                            [0.4, "#dc3545"],
+                                            [0.7, "#ffc107"],
+                                            [1, "#28a745"],
+                                        ],
+                                    }
+                                },
+                                "pointer": {"length": "60%", "width": 6},
+                                "axisTick": {"show": False},
+                                "splitLine": {"show": False},
+                                "axisLabel": {"show": False},
+                                "title": {
+                                    "show": True,
+                                    "offsetCenter": [0, "30%"],
+                                    "fontSize": 14,
+                                },
+                                "detail": {
+                                    "valueAnimation": True,
+                                    "fontSize": 28,
+                                    "offsetCenter": [0, "0%"],
+                                    "formatter": "{value}%",
+                                },
+                                "data": [
+                                    {
+                                        "value": round(metrics.coherence),
+                                        "name": "Coherence",
+                                    }
+                                ],
+                            }
+                        ]
+                    }
+
+                    render_echarts(
+                        coherence_gauge,
+                        height_px=250,
+                        config=EChartsConfig(),
                     )
 
-                    # Simulate data in simulation mode
-                    if biofeedback_mode == "Simulation":
-                        # Generate simulated RR intervals
-                        import random
-
-                        for _ in range(3):  # Add a few samples
-                            base_rr = 857  # ~70 bpm
-                            # Add respiratory modulation
-                            rsa_amplitude = 50
-                            rsa = rsa_amplitude * np.sin(
-                                2 * np.pi * (breathing_rate / 60) * time_module.time()
-                            )
-                            noise = random.gauss(0, 15)
-                            rr_ms = int(base_rr + rsa + noise)
-                            engine.add_rr_sample(rr_ms)
-
-                    # Compute current HRV
-                    metrics = engine.compute_hrv()
-
-                    if metrics:
-                        # Store in history (bounded growth)
-                        st.session_state["biofeedback_coherence_history"].append(
-                            metrics.coherence
-                        )
-                        st.session_state["biofeedback_hrv_history"].append(
-                            {
-                                "rmssd": metrics.rmssd,
-                                "coherence": metrics.coherence,
-                                "hr": metrics.mean_hr,
-                            }
-                        )
-                        max_points = max(300, int(session_duration * 60) + 120)
-                        if len(st.session_state["biofeedback_coherence_history"]) > max_points:
-                            del st.session_state["biofeedback_coherence_history"][
-                                :-max_points
-                            ]
-                        if len(st.session_state["biofeedback_hrv_history"]) > max_points:
-                            del st.session_state["biofeedback_hrv_history"][:-max_points]
-
-                        # Display metrics
-                        st.markdown("##### 📊 Real-time Metrics")
-
-                        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-
-                        with col_m1:
-                            coherence_color = (
-                                "#28a745"
-                                if metrics.coherence >= 70
-                                else "#ffc107"
-                                if metrics.coherence >= 40
-                                else "#dc3545"
-                            )
-                            _ = coherence_color  # reserved for future styling
-                            st.metric(
-                                "Coherence",
-                                f"{metrics.coherence:.0f}%",
-                                help="Target: 70%+ for high coherence",
-                            )
-
-                        with col_m2:
-                            st.metric(
-                                "RMSSD",
-                                f"{metrics.rmssd:.1f} ms",
-                                help="Higher = better vagal tone",
-                            )
-
-                        with col_m3:
-                            st.metric("Heart Rate", f"{metrics.mean_hr:.0f} bpm")
-
-                        with col_m4:
-                            st.metric(
-                                "Resp Rate",
-                                f"{metrics.respiratory_rate:.1f} br/min"
-                                if metrics.respiratory_rate > 0
-                                else "—",
-                            )
-
-                        # Coherence gauge
-                        coherence_gauge = {
+                    # Coherence history chart
+                    if len(st.session_state["biofeedback_coherence_history"]) > 5:
+                        history = st.session_state["biofeedback_coherence_history"][-60:]
+                        history_chart = {
+                            "xAxis": {
+                                "type": "category",
+                                "data": list(range(len(history))),
+                            },
+                            "yAxis": {
+                                "type": "value",
+                                "min": 0,
+                                "max": 100,
+                                "name": "Coherence %",
+                            },
                             "series": [
                                 {
-                                    "type": "gauge",
-                                    "startAngle": 180,
-                                    "endAngle": 0,
-                                    "min": 0,
-                                    "max": 100,
-                                    "splitNumber": 5,
-                                    "radius": "90%",
-                                    "center": ["50%", "70%"],
-                                    "axisLine": {
-                                        "lineStyle": {
-                                            "width": 20,
-                                            "color": [
-                                                [0.4, "#dc3545"],
-                                                [0.7, "#ffc107"],
-                                                [1, "#28a745"],
-                                            ],
-                                        }
+                                    "type": "line",
+                                    "data": history,
+                                    "smooth": True,
+                                    "areaStyle": {"opacity": 0.3},
+                                    "markLine": {
+                                        "data": [
+                                            {
+                                                "yAxis": 70,
+                                                "name": "High",
+                                                "lineStyle": {"color": "#28a745", "type": "dashed"},
+                                            },
+                                            {
+                                                "yAxis": 40,
+                                                "name": "Medium",
+                                                "lineStyle": {"color": "#ffc107", "type": "dashed"},
+                                            },
+                                        ]
                                     },
-                                    "pointer": {"length": "60%", "width": 6},
-                                    "axisTick": {"show": False},
-                                    "splitLine": {"show": False},
-                                    "axisLabel": {"show": False},
-                                    "title": {
-                                        "show": True,
-                                        "offsetCenter": [0, "30%"],
-                                        "fontSize": 14,
-                                    },
-                                    "detail": {
-                                        "valueAnimation": True,
-                                        "fontSize": 28,
-                                        "offsetCenter": [0, "0%"],
-                                        "formatter": "{value}%",
-                                    },
-                                    "data": [
-                                        {
-                                            "value": round(metrics.coherence),
-                                            "name": "Coherence",
-                                        }
-                                    ],
                                 }
-                            ]
+                            ],
+                            "visualMap": {
+                                "show": False,
+                                "pieces": [
+                                    {"gt": 70, "lte": 100, "color": "#28a745"},
+                                    {"gt": 40, "lte": 70, "color": "#ffc107"},
+                                    {"gt": 0, "lte": 40, "color": "#dc3545"},
+                                ],
+                            },
                         }
-
                         render_echarts(
-                            coherence_gauge,
-                            height_px=250,
+                            history_chart,
+                            height_px=200,
                             config=EChartsConfig(),
                         )
 
-                        # Coherence history chart
-                        if len(st.session_state["biofeedback_coherence_history"]) > 5:
-                            history = st.session_state["biofeedback_coherence_history"][
-                                -60:
-                            ]  # Last 60 samples
-
-                            history_chart = {
-                                "xAxis": {
-                                    "type": "category",
-                                    "data": list(range(len(history))),
-                                },
-                                "yAxis": {
-                                    "type": "value",
-                                    "min": 0,
-                                    "max": 100,
-                                    "name": "Coherence %",
-                                },
-                                "series": [
-                                    {
-                                        "type": "line",
-                                        "data": history,
-                                        "smooth": True,
-                                        "areaStyle": {"opacity": 0.3},
-                                        "markLine": {
-                                            "data": [
-                                                {
-                                                    "yAxis": 70,
-                                                    "name": "High",
-                                                    "lineStyle": {
-                                                        "color": "#28a745",
-                                                        "type": "dashed",
-                                                    },
-                                                },
-                                                {
-                                                    "yAxis": 40,
-                                                    "name": "Medium",
-                                                    "lineStyle": {
-                                                        "color": "#ffc107",
-                                                        "type": "dashed",
-                                                    },
-                                                },
-                                            ]
-                                        },
-                                    }
-                                ],
-                                "visualMap": {
-                                    "show": False,
-                                    "pieces": [
-                                        {"gt": 70, "lte": 100, "color": "#28a745"},
-                                        {"gt": 40, "lte": 70, "color": "#ffc107"},
-                                        {"gt": 0, "lte": 40, "color": "#dc3545"},
-                                    ],
-                                },
-                            }
-
-                            render_echarts(
-                                history_chart,
-                                height_px=200,
-                                config=EChartsConfig(),
-                            )
-
-                _render_biofeedback_live_view()
+            if st.session_state.get("biofeedback_running", False):
+                _render_biofeedback_live_view(
+                    engine,
+                    breathing_rate,
+                    session_duration,
+                    inhale_ratio,
+                    biofeedback_mode,
+                )
             
             else:
                 # Show session summary if available
