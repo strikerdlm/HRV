@@ -298,7 +298,17 @@ button:hover {{ background: #f3f4f6 !important; border-color: #d1d5db !important
 
     # Render the component
     total_height = height_px + (45 if enable_export else 10)
-    components.html(html, height=total_height, scrolling=False)
+    try:
+        components.html(html, height=total_height, scrolling=False)
+    except Exception as e:
+        # Catch any session/component errors gracefully
+        error_msg = str(e)
+        if "SessionInfo" in error_msg or "Bad message" in error_msg:
+            # This is a known Streamlit race condition - silently retry on next render
+            pass
+        else:
+            # Re-raise other errors
+            raise
 
     # Optional caption
     if caption:
