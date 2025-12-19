@@ -8,18 +8,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.8.29] - 2025-12-19
 
 ### Fixed
-- **Aggressive Streamlit error suppression** (`app/app.py`): Implemented comprehensive client-side suppression of cosmetic Streamlit errors ("Bad message format", "SessionInfo", "Bad 'setIn' index") via CSS + JavaScript as a safety net. The suppressor:
-  - Permanently hides ALL toast/notification/alert containers via CSS
-  - Removes error modals and backdrops matching known patterns
-  - Intercepts console.error, window.error, and unhandledrejection events
-  - Polls every 200ms to catch and remove error elements immediately
-- **Streamlit version stabilization** (`requirements.txt`): Pinned to **Streamlit 1.36.0**, the last stable release BEFORE the `@st.fragment` changes in 1.37+ that introduced SessionInfo/setIn race condition errors. Testing showed:
+- **Streamlit version stabilization** (`requirements.txt`): Pinned to **Streamlit 1.36.0**, the most stable version for this app. Testing showed:
   - 1.35.0: Tabs don't load properly - broken
-  - 1.36.0: Most stable version for complex apps (RECOMMENDED)
+  - **1.36.0: Most stable version - RECOMMENDED** (no SessionInfo/setIn errors)
   - 1.37.0+: Fragment changes cause SessionInfo/setIn errors
   - 1.40.2: Has cosmetic error popups but functionally works
   
   **Reinstall dependencies with `pip install --upgrade -r requirements.txt` to apply.**
+  
+- **Simplified error suppressor** (`app/app.py`): Removed aggressive client-side suppression that could interfere with legitimate UI elements. With Streamlit 1.36.0, the aggressive suppressor is no longer needed as the root cause errors are avoided.
+
+### Documentation
+- **Added Streamlit version requirements** (`docs/Manual.md`): Documented Streamlit 1.36.0 as the required stable version in the Troubleshooting section.
 
 ## [1.8.28] - 2025-12-18
 
