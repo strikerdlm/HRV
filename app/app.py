@@ -304,9 +304,21 @@ from user_data_manager import create_user_manager, parse_filename_date
 
 try:
     # Package import (tests, package mode)
-    from app.logging_config import get_logger, log_exception
+    from app.logging_config import (
+        get_logger,
+        log_exception,
+        enable_streamlit_debug,
+        log_rerun_trigger,
+        StreamlitDebugContext,
+    )
 except ImportError:  # pragma: no cover - fallback for Streamlit script execution
-    from logging_config import get_logger, log_exception
+    from logging_config import (
+        get_logger,
+        log_exception,
+        enable_streamlit_debug,
+        log_rerun_trigger,
+        StreamlitDebugContext,
+    )
 
 try:
     from app.agent_insights import AgentInsightManager
@@ -4625,7 +4637,7 @@ def main() -> None:
     os.environ["HRV_ACTIVE_MISSION"] = str(active_mission)
     if previous_mission and previous_mission != active_mission:
         # Prevent cross-mission user/session leakage.
-        keep_keys = {"crew_active_mission", "_crew_previous_mission"}
+        keep_keys = {"crew_active_mission", "_crew_previous_mission", "_debug_mode_enabled"}
         for key in list(st.session_state.keys()):
             if key not in keep_keys:
                 st.session_state.pop(key, None)
@@ -4635,7 +4647,37 @@ def main() -> None:
             st.cache_resource.clear()
         except Exception:
             pass
+        log_rerun_trigger("mission_switch", from_mission=previous_mission, to_mission=active_mission)
         st.rerun()
+
+    # ----------------------------------------------------------------------
+    # Debug Mode Toggle (sidebar)
+    # ----------------------------------------------------------------------
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("🔧 Developer Tools", expanded=False):
+        debug_mode = st.checkbox(
+            "Enable Debug Logging",
+            value=st.session_state.get("_debug_mode_enabled", False),
+            key="_debug_mode_checkbox",
+            help="Enable verbose Streamlit debugging. Logs written to logs/streamlit.log",
+        )
+        if debug_mode and not st.session_state.get("_debug_mode_enabled", False):
+            st.session_state["_debug_mode_enabled"] = True
+            enable_streamlit_debug(verbose=True)
+            st.success("Debug logging enabled. Check `logs/streamlit.log`")
+        elif not debug_mode and st.session_state.get("_debug_mode_enabled", False):
+            st.session_state["_debug_mode_enabled"] = False
+            st.info("Debug logging disabled (takes effect on next restart)")
+        
+        if st.button("📋 Generate Debug Report", key="_generate_debug_report"):
+            try:
+                from logging_config import dump_debug_report
+                report_path = dump_debug_report()
+                st.success(f"Debug report saved: `{report_path}`")
+            except Exception as exc:
+                st.error(f"Failed to generate report: {exc}")
+        
+        st.caption("Debug logs: `logs/app.log`, `logs/errors.log`, `logs/streamlit.log`")
 
     # Apply neutral layout refinements (responsive margins, full-width
     # components)
