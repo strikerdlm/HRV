@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Streamlit SessionInfo race toast** (`app/app.py`): Added an early, client-side guard that suppresses the transient "Bad message format: Tried to use SessionInfo before it was initialized" dialog so users are not interrupted by the known Streamlit race condition.
 - **SessionInfo modal suppression** (`app/app.py`): Extended the guard to remove Streamlit modals/backdrops containing the SessionInfo error text, preventing the blocking dialog when the WebSocket race occurs.
 - **Dialog visibility regression** (`app/app.py`): Narrowed the SessionInfo CSS guard so legitimate Streamlit dialogs/modals remain visible; only error toasts are hidden.
-- **Streamlit stability pin** (`requirements.txt`): Pinned Streamlit to `1.40.2`, a build reported stable against SessionInfo/Bad message format races; reinstall dependencies to apply.
+- **"Bad 'setIn' index" suppression** (`app/app.py`): Extended client-side guard to catch and suppress the Streamlit "Bad 'setIn' index" errors (caused by widget tree mismatches during reruns). The suppressor now intercepts error patterns in toasts, modals, JS errors, and console output.
+- **Streamlit version downgrade (TESTING)** (`requirements.txt`): Downgraded Streamlit to **1.35.0** for testing, as versions >1.35 (including 1.37+ and 1.40.2) exhibit SessionInfo and setIn race errors. This version is the last release before fragment/widget-tree changes. **Reinstall with `pip install --upgrade -r requirements.txt` to apply. Do not upgrade Streamlit until we confirm 1.35.0 eliminates errors in production.**
 
 ## [1.8.28] - 2025-12-18
 
