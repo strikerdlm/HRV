@@ -6571,8 +6571,10 @@ def render_user_profile_tab() -> None:
         _render_longitudinal_timepoint_controls(current_user.user_id)
         st.markdown("---")
         
-        # Sub-tabs for different sections
-        tab_assess, tab_clinical, tab_history, tab_hrv, tab_readiness, tab_data, tab_sessions = st.tabs([
+        # PERFORMANCE FIX: Use selectbox navigation instead of nested tabs
+        # Nested st.tabs renders ALL content on every rerun, causing severe slowdowns.
+        # Selectbox with conditional rendering only processes the selected section.
+        profile_sections = [
             "📋 Assessments",
             "🏥 Clinical Profile",
             "📈 History",
@@ -6580,37 +6582,48 @@ def render_user_profile_tab() -> None:
             "🏃 Readiness",
             "📦 Data",
             "👥 Sessions",
-        ])
+        ]
         
-        with tab_assess:
+        selected_section = st.selectbox(
+            "📂 Profile Section",
+            options=profile_sections,
+            index=0,
+            key=f"profile_section_nav_{current_user.user_id}",
+            help="Select a section to view. Only the selected section is loaded for better performance.",
+        )
+        
+        st.markdown("---")
+        
+        # Render only the selected section (lazy loading)
+        if selected_section == "📋 Assessments":
             _render_clinical_assessment(current_user)
         
-        with tab_clinical:
+        elif selected_section == "🏥 Clinical Profile":
             _render_clinical_profile(current_user)
         
-        with tab_history:
+        elif selected_section == "📈 History":
             _render_assessment_history(current_user)
             st.markdown("---")
             _render_garmin_metrics_history(current_user)
         
-        with tab_hrv:
+        elif selected_section == "💓 HRV":
             _render_profile_rr_uploads(current_user)
             st.markdown("---")
             _render_profile_rr_library(current_user)
             st.markdown("---")
             _render_hrv_history(current_user)
 
-        with tab_readiness:
+        elif selected_section == "🏃 Readiness":
             _render_profile_readiness(current_user)
         
-        with tab_data:
+        elif selected_section == "📦 Data":
             _render_fit_csv_tools(current_user)
             st.markdown("---")
             _render_garmin_ingest(current_user)
             st.markdown("---")
             _render_data_management(current_user)
         
-        with tab_sessions:
+        elif selected_section == "👥 Sessions":
             _render_user_sessions_tab(current_user)
 
 
