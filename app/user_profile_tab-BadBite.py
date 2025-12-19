@@ -108,20 +108,17 @@ except ImportError:
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 # Check for @st.fragment support (Streamlit 1.37+)
-try:
-    _HAS_FRAGMENT = hasattr(st, "fragment")
-except AttributeError:
-    _HAS_FRAGMENT = False
+# NOTE: We disable fragments because they cause "SessionInfo before initialized"
+# errors when used inside tabs or other conditional UI contexts.
+_HAS_FRAGMENT = False  # Disabled - fragments cause stability issues
 
 
 def _fragment_if_available(func: Any) -> Any:
-    """Decorator that applies @st.fragment if available, otherwise no-op.
+    """Decorator that was intended to apply @st.fragment if available.
     
-    Fragments allow partial reruns of just the decorated function,
-    avoiding full page reruns when interacting with widgets inside.
+    DISABLED: Fragments cause stability issues in complex apps.
+    This decorator is now a no-op.
     """
-    if _HAS_FRAGMENT:
-        return st.fragment(func)
     return func
 
 
