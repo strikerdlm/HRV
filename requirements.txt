@@ -5,15 +5,13 @@
 # ===========================================================================
 # CORE DEPENDENCIES (Required)
 # ===========================================================================
-# STREAMLIT VERSION - UNDER TESTING:
-# OBSERVED ISSUES with versions > 1.35:
-#   - 1.37+: SessionInfo race conditions, "Bad 'setIn' index" errors
-#   - 1.40.2: Still reports setIn errors despite being marketed as stable
-# CURRENTLY TESTING: 1.35.0 (last version before widget tree changes)
-# 
-# DO NOT UPGRADE until we confirm 1.35.0 eliminates errors in production use.
-# If 1.35.0 still has issues, we may need to test 1.32.2 or 1.31.1.
-streamlit==1.35.0
+# STREAMLIT VERSION HISTORY:
+# - 1.35.0: Tabs don't load properly - DO NOT USE
+# - 1.36.0: Last stable release BEFORE fragment changes (RECOMMENDED)
+# - 1.37.0+: Introduced @st.fragment causing SessionInfo/setIn race errors
+# - 1.40.2: Has cosmetic error popups but functionally works
+# Using 1.36.0 as the most stable version for this complex app.
+streamlit==1.36.0
 requests>=2.31,<3
 pandas>=2.2,<2.3
 numpy>=1.26,<2.2
