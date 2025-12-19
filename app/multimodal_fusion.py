@@ -793,8 +793,8 @@ def _parse_fitbit_json(
                                 source=DataSource.FITBIT,
                             )
                             hrv_list.append(hrv_data)
-                except Exception:
-                    pass
+                except (KeyError, TypeError, ValueError) as exc:
+                    _LOGGER.debug("Failed to parse Fitbit HRV record: %s", exc)
     
     # Sleep data
     if "sleep" in filename_lower:
@@ -829,8 +829,8 @@ def _parse_fitbit_json(
                         source=DataSource.FITBIT,
                     )
                     sleep_list.append(sleep_data)
-            except Exception:
-                pass
+            except (KeyError, TypeError, ValueError) as exc:
+                _LOGGER.debug("Failed to parse Fitbit sleep record: %s", exc)
     
     # Activity data
     if "activities" in filename_lower or "daily" in filename_lower:
@@ -852,8 +852,8 @@ def _parse_fitbit_json(
                         source=DataSource.FITBIT,
                     )
                     activity_list.append(activity_data)
-            except Exception:
-                pass
+            except (KeyError, TypeError, ValueError) as exc:
+                _LOGGER.debug("Failed to parse Fitbit activity record: %s", exc)
 
 
 # ---------------------------------------------------------------------------
@@ -1194,8 +1194,8 @@ def _detect_data_source(file_path: Path) -> DataSource:
             if "sleep" in data and isinstance(data.get("sleep"), list):
                 if data["sleep"] and "minutesAsleep" in data["sleep"][0]:
                     return DataSource.FITBIT
-        except Exception:
-            pass
+        except (json.JSONDecodeError, OSError, KeyError, IndexError) as exc:
+            _LOGGER.debug("Could not determine data source from JSON content: %s", exc)
     
     elif file_path.suffix.lower() == ".xml":
         return DataSource.APPLE_HEALTH
@@ -1211,8 +1211,8 @@ def _detect_data_source(file_path: Path) -> DataSource:
                     return DataSource.OURA
                 if any("whoop" in n.lower() for n in names):
                     return DataSource.WHOOP
-        except Exception:
-            pass
+        except (zipfile.BadZipFile, OSError) as exc:
+            _LOGGER.debug("Could not determine data source from ZIP content: %s", exc)
     
     return DataSource.UNKNOWN
 
