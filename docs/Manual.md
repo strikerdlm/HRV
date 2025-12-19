@@ -3953,6 +3953,25 @@ This section outlines completed features and remaining planned enhancements for 
 
 **Current implementation note:** Every Apache ECharts chart now includes an inline export toolbar for **PNG (high-DPI)**, **SVG (vector)**, **HTML**, and **spec JSON** exports, plus **Print/Save PDF** using your browser’s print dialog.
 
+#### Technology watchlist (Human Performance Newsletter — 2025-12-18)
+**Status:** Planned (Priority: High; research-first)  
+**Description:** Candidate features inspired by `docs/HumanPerformance-Newsletter.md` that align with mission human-performance monitoring. These items are **not yet implemented** and will require peer-reviewed validation, dataset availability, and clear clinical/operational boundaries before activation.
+
+- **Wearable biomarker ingestion (sweat / cortisol / lactate / electrolytes)**:
+  - Add a generic **biomarkers** storage model (timestamped values + units + sensor/source + quality flags).
+  - Add ECharts plots for biomarker trends and stress/strain overlays with HRV + sleep + workload (where available).
+- **Muscle oxygen saturation (SmO₂) support (NIRS wearables)**:
+  - Import + persist SmO₂ time series and session summaries.
+  - Add threshold/zone helpers (e.g., plateau detection during incremental exercise) and rehab tracking comparisons (e.g., bilateral symmetry over time).
+- **Respiratory rate estimation from PPG/HRV**:
+  - Add a deterministic RR-estimation pipeline (bounded windowing, validation/quality checks) to support sleep and biofeedback workflows when direct respiration is unavailable.
+- **Signal quality scoring (PPG/ECG readiness checks)**:
+  - Add a standardized **signal quality index** for device imports (motion artifacts, clipping, dropout) so downstream metrics can warn or down-weight low-quality segments.
+- **Early illness / anomaly detection from longitudinal HRV trends**:
+  - Add optional per-user “baseline deviation alerts” for sustained RMSSD/SDNN changes (with transparent rules and conservative defaults).
+- **Edge/offline-first processing & privacy**:
+  - Strengthen local-only workflows (no cloud dependency) and make “on-device / on-prem” processing the default for sensitive deployments.
+
 #### Fatigue Safety Management (ICAO FRMS + USAF doctrine) inside SAFTE tab
 **Status:** Implemented baseline + planned FRMS v2 (Priority: CRITICAL; research-first)  
 **Description:** The SAFTE/Fatigue module now includes a baseline FRMS-style dashboard (with rule-based “why it triggered” alerts) plus USAF crew-rest compliance checks. The next milestone is **FRMS v2**: mission-level aggregation across *all profiles* with escalation + audit trail.
