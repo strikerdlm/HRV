@@ -4625,12 +4625,10 @@ def main() -> None:
     os.environ["HRV_ACTIVE_MISSION"] = str(active_mission)
     if previous_mission and previous_mission != active_mission:
         # Prevent cross-mission user/session leakage.
-        st.session_state.pop("current_user_id", None)
-        # Sleep tab session keys (UserDataManager + login state)
-        st.session_state.pop("sleep_user_manager", None)
-        st.session_state.pop("sleep_current_user", None)
-        st.session_state.pop("sleep_nights", None)
-        st.session_state.pop("sleep_multi_summary", None)
+        keep_keys = {"crew_active_mission", "_crew_previous_mission"}
+        for key in list(st.session_state.keys()):
+            if key not in keep_keys:
+                st.session_state.pop(key, None)
         # Clear Streamlit caches so mission switching never reuses stale DB/data.
         try:
             st.cache_data.clear()
