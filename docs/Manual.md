@@ -112,11 +112,12 @@ cd HRV
 **Option A: Using Conda (Recommended)**
 
 ```bash
-# Activate the conda environment
-conda activate hrv-py312
+# Recommended: run commands explicitly in the correct env (avoids wrong-env issues)
+conda run -n hrv-py312 python --version
 
-# Verify Python version (should be 3.12)
-python --version
+# (Optional interactive shell)
+# conda activate hrv-py312
+# python --version
 ```
 
 **Option B: Using Virtual Environment**
@@ -134,7 +135,11 @@ source .venv/bin/activate
 **Step 3: Install dependencies**
 
 ```bash
-pip install -r requirements.txt
+# Conda (recommended)
+conda run -n hrv-py312 pip install -r requirements.txt
+
+# Virtualenv
+# pip install -r requirements.txt
 ```
 
 **Step 4: Set up environment variables (optional but recommended)**
@@ -156,7 +161,11 @@ GARMIN_PASSWORD=your_password
 **Step 5: Launch the application**
 
 ```bash
-streamlit run app/app.py
+# Conda (recommended)
+conda run -n hrv-py312 streamlit run app/app.py
+
+# Virtualenv (after activating .venv)
+# streamlit run app/app.py
 ```
 
 The app opens at `http://localhost:8501` in your default browser.
@@ -2623,9 +2632,15 @@ RMSSD (ms) & 41.2 & 12.1 & [36.3, 46.1] \\
 >
 > **To install the correct version:**
 > ```bash
-> pip install streamlit==1.36.0
+> # Conda (recommended)
+> conda run -n hrv-py312 pip install streamlit==1.36.0
 > # or
-> pip install --upgrade -r requirements.txt
+> conda run -n hrv-py312 pip install --upgrade -r requirements.txt
+>
+> # Virtualenv
+> # pip install streamlit==1.36.0
+> # or
+> # pip install --upgrade -r requirements.txt
 > ```
 >
 > **Do not upgrade Streamlit** unless you have tested the new version thoroughly.
