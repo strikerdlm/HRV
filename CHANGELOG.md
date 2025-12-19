@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Save-to-library interaction** (`app/app.py`): Changed from a stateful checkbox to a one-shot button to reduce rerun churn and avoid UI race issues.
 
+## [1.8.33] - 2025-12-19
+
+### Changed
+- **Plot titles moved outside chart area** (`app/echarts_component.py`, `app/circadian_tab.py`, `app/gauge_builder.py`): ECharts plot titles are now rendered as Streamlit text above each plot (and removed from the ECharts option) so the plot canvas stays clean. Gauges also hide their in-gauge title label and rely on the external title.
+
 ## [1.8.31] - 2025-12-19
 
 ### Added
