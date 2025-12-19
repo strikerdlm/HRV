@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Critical: HRV tab infinite loading fix** (`app/app.py`): Fixed bug where Time Series, Frequency, Nonlinear, and Spectrogram tabs would get stuck in infinite loading state (faded results) after uploading RR data. Root cause: `datasets` was not being cached after HRV analysis completed, so on each rerun the tabs received empty datasets. Added session_state caching (`_hrv_cached_datasets`, `_hrv_cached_windowed_df`) to persist processed data between reruns.
+- **Library loader persistence fix** (`app/app.py`): Fixed bug where files loaded from the library would cause faded/stuck pages. Root cause: `st.session_state.pop("queued_rr_filepaths")` removed the queue after first processing, leaving `uploads` empty on subsequent reruns. Added `_persisted_uploads` session state to keep uploads alive across reruns.
+- **datetime.time TypeError fix** (`app/app.py`): Fixed `TypeError: descriptor 'time' for 'datetime.datetime' objects doesn't apply to a 'int' object` by importing `time as dt_time` from datetime module and using `dt_time(20, 0)` instead of `datetime.time(20, 0)`.
 
 ## [1.8.30] - 2025-12-19
 
