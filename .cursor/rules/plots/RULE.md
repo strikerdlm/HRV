@@ -1,8 +1,7 @@
 ---
 alwaysApply: true
 ---
-
-## Plotting policy (ECharts-first, publication-grade)
+## Plotting policy (ECharts locally using the node_modules on the folder, publication-grade)
 
 When adding or modifying any plot/visualization in this project, agents MUST:
 
