@@ -50,17 +50,40 @@ class EChartsConfig:
     embed_inline: bool = True
 
 
-@lru_cache(maxsize=1)
-def _load_echarts_bundle() -> Optional[str]:
-    """Load and cache the ECharts bundle from local node_modules.
+# Cache for loaded bundles keyed by path string
+_BUNDLE_CACHE: Dict[str, str] = {}
+
+
+def _load_echarts_bundle(path: Optional[Path] = None) -> Optional[str]:
+    """Load and cache the ECharts bundle from a local path.
+
+    Args:
+        path: Path to the echarts.min.js file. Defaults to node_modules location.
 
     Returns:
         The minified ECharts JavaScript code, or None if unavailable.
     """
-    if not _LOCAL_ECHARTS_PATH.exists():
+    bundle_path = path if path is not None else _LOCAL_ECHARTS_PATH
+    
+    if bundle_path is None:
+        return None
+    
+    # Convert to string for cache key
+    path_key = str(bundle_path)
+    
+    # Check cache first
+    if path_key in _BUNDLE_CACHE:
+        return _BUNDLE_CACHE[path_key]
+    
+    # Load from disk
+    if not bundle_path.exists():
         return None
     try:
-        return _LOCAL_ECHARTS_PATH.read_text(encoding="utf-8")
+        content = bundle_path.read_text(encoding="utf-8")
+        # Cache the result (bounded by realistic usage - typically 1-2 paths)
+        if len(_BUNDLE_CACHE) < 5:  # Limit cache size
+            _BUNDLE_CACHE[path_key] = content
+        return content
     except Exception:
         return None
 
@@ -113,7 +136,7 @@ def render_echarts(
     theme_js = f'"{theme}"' if theme else "null"
 
     # Determine how to load ECharts
-    echarts_bundle = _load_echarts_bundle() if cfg.embed_inline else None
+    echarts_bundle = _load_echarts_bundle(cfg.local_echarts_path) if cfg.embed_inline else None
     use_inline = echarts_bundle is not None
 
     if use_inline:
