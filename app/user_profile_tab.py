@@ -5872,16 +5872,12 @@ def _render_medical_record_form(user: UserProfile) -> None:
         """Return index of stored_value in options, or default_index if not found."""
         if stored_value in options:
             return options.index(stored_value)
-        # Only log migration warning once per session to reduce log noise
         if stored_value is not None:
-            log_key = f"_schema_migration_selectbox_{stored_value}"
-            if log_key not in st.session_state:
-                st.session_state[log_key] = True
-                _LOGGER.debug(
-                    "Selectbox schema migration: stored value %r not in options, using default index %d",
-                    stored_value,
-                    default_index,
-                )
+            _LOGGER.debug(
+                "Selectbox schema migration: stored value %r not in options, using default index %d",
+                stored_value,
+                default_index,
+            )
         return default_index
     
     try:
@@ -6138,16 +6134,13 @@ def _render_medical_record_form(user: UserProfile) -> None:
             if not stored:
                 return []
             valid = [v for v in stored if v in options]
-            # Log migration warnings for stale values (only once per session to reduce noise)
+            # Log migration warnings for stale values
             stale = set(stored) - set(valid)
             if stale:
-                log_key = f"_schema_migration_multiselect_{hash(frozenset(stale))}"
-                if log_key not in st.session_state:
-                    st.session_state[log_key] = True
-                    _LOGGER.debug(
-                        "Multiselect schema migration: dropped stale defaults %s",
-                        stale,
-                    )
+                _LOGGER.debug(
+                    "Multiselect schema migration: dropped stale defaults %s",
+                    stale,
+                )
             return valid
         
         chronic_conditions = st.multiselect(
