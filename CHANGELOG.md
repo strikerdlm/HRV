@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.8.32] - 2025-12-19
 
 ### Performance
+- **Default plot cap set to 500** (`app/app.py`, `app/performance_utils.py`): Default rendering now uses 500 points for rapid identification and smoother UI; you can still increase caps via the RR plot dropdown and Performance Settings presets.
 - **Time Series + HR plot rendering speedup** (`app/app.py`): Downsample *before* converting full columns to Python lists, preventing large list allocations on reruns and reducing the “faded / always running” UI when plotting long recordings.
 - **Spectrogram rendering speedup** (`app/app.py`): Use cached spectrogram computation, downsample the heatmap resolution, and build ECharts heatmap triplets via NumPy (vectorized) to keep browser rendering responsive on long recordings.
 - **RR upload caching speedup** (`app/app.py`): Cache `UploadedRR` objects directly in session state to avoid reconstructing large DataFrames on every rerun; also avoids re-reading file bytes twice during cache cleanup.
