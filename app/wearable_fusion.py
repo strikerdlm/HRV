@@ -486,7 +486,8 @@ def import_whoop_data(file_path: Path) -> WearableDataStream:
             dates = pd.to_datetime(df[date_col])
             start_time = dates.min().to_pydatetime().replace(tzinfo=timezone.utc)
             end_time = dates.max().to_pydatetime().replace(tzinfo=timezone.utc)
-        except Exception:
+        except (ValueError, TypeError, AttributeError) as exc:
+            _LOGGER.debug("Could not parse WHOOP date range, using current time: %s", exc)
             start_time = datetime.now(timezone.utc)
             end_time = start_time
     else:
@@ -648,7 +649,8 @@ def import_fitbit_data(file_path: Path) -> WearableDataStream:
                             hr_values.append(float(bpm))
                             hr_timestamps.append(dt)
                     except (KeyError, ValueError, TypeError):
-                        pass
+                        # Malformed heart rate record; skip and continue
+                        continue
 
                 # HRV data (if available)
                 if "hrv" in item:
@@ -656,7 +658,8 @@ def import_fitbit_data(file_path: Path) -> WearableDataStream:
                         hrv = item["hrv"]["rmssd"]
                         hrv_values.append(float(hrv))
                     except (KeyError, ValueError, TypeError):
-                        pass
+                        # HRV data missing or malformed; skip and continue
+                        continue
 
     # Determine time range
     if hr_timestamps:
@@ -870,16 +873,16 @@ class WearableDataFusion:
                 stream = import_oura_data(path)
                 if len(stream.rr_intervals_ms) > 0 or len(stream.hrv_rmssd) > 0:
                     return self.add_stream(stream)
-            except Exception:
-                pass
+            except (json.JSONDecodeError, KeyError, ValueError, OSError) as exc:
+                _LOGGER.debug("File %s not Oura format, trying Fitbit: %s", path.name, exc)
 
             # Try Fitbit
             try:
                 stream = import_fitbit_data(path)
                 if len(stream.heart_rate_bpm) > 0:
                     return self.add_stream(stream)
-            except Exception:
-                pass
+            except (json.JSONDecodeError, KeyError, ValueError, OSError) as exc:
+                _LOGGER.debug("File %s not Fitbit format: %s", path.name, exc)
 
         elif "whoop" in name_lower or path.suffix == ".csv":
             stream = import_whoop_data(path)
