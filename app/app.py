@@ -4692,10 +4692,32 @@ def main() -> None:
         st.caption("Debug logs: `logs/app.log`, `logs/errors.log`, `logs/streamlit.log`")
 
     # Apply neutral layout refinements (responsive margins, full-width
-    # components)
+    # components) + suppress known Streamlit toast errors
     st.markdown(
         """
 		<style>
+		/* ================================================================
+		   WORKAROUND: Hide "Bad message format" toast notifications
+		   This is a known Streamlit issue with session initialization
+		   that appears intermittently and is harmless but annoying.
+		   See: https://github.com/streamlit/streamlit/issues/11500
+		   ================================================================ */
+		/* Hide all toast notifications - we use st.success/st.error instead */
+		div[data-testid="stToast"] {
+			display: none !important;
+			visibility: hidden !important;
+			opacity: 0 !important;
+			pointer-events: none !important;
+		}
+		div[data-testid="stToastContainer"] {
+			display: none !important;
+			visibility: hidden !important;
+		}
+		/* Fallback for older Streamlit versions */
+		.stToast, .element-container .stToast {
+			display: none !important;
+		}
+		
 		.stApp > main {
 			padding-top: clamp(1rem, 4vh, 2rem);
 			padding-bottom: clamp(2rem, 6vh, 3rem);
