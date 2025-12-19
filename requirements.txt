@@ -5,7 +5,8 @@
 # ===========================================================================
 # CORE DEPENDENCIES (Required)
 # ===========================================================================
-streamlit>=1.37,<1.42  # >=1.37 required for @st.fragment partial reruns
+# Pin a stable Streamlit build to reduce SessionInfo race popups
+streamlit==1.40.2  # 1.40.x observed stable; fragments remain available
 requests>=2.31,<3
 pandas>=2.2,<2.3
 numpy>=1.26,<2.2
