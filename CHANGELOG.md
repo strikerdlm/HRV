@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Streamlit SessionInfo race toast** (`app/app.py`): Added an early, client-side guard that suppresses the transient "Bad message format: Tried to use SessionInfo before it was initialized" dialog so users are not interrupted by the known Streamlit race condition.
 - **SessionInfo modal suppression** (`app/app.py`): Extended the guard to remove Streamlit modals/backdrops containing the SessionInfo error text, preventing the blocking dialog when the WebSocket race occurs.
+- **Dialog visibility regression** (`app/app.py`): Narrowed the SessionInfo CSS guard so legitimate Streamlit dialogs/modals remain visible; only error toasts are hidden.
 - **Streamlit stability pin** (`requirements.txt`): Pinned Streamlit to `1.40.2`, a build reported stable against SessionInfo/Bad message format races; reinstall dependencies to apply.
 
 ## [1.8.28] - 2025-12-18
