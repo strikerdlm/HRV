@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 import textwrap
 import uuid
 from dataclasses import dataclass
@@ -13,6 +14,8 @@ import streamlit.components.v1 as components
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_LOCAL_ECHARTS_BUNDLE = _PROJECT_ROOT / "node_modules" / "echarts" / "dist" / "echarts.min.js"
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+_STATIC_ECHARTS_FILENAME = "echarts.min.js"
 
 
 @dataclass(slots=True, frozen=True)
@@ -27,11 +30,53 @@ class EChartsConfig:
 	local_echarts_path: Optional[Path] = _DEFAULT_LOCAL_ECHARTS_BUNDLE
 
 
-def _read_local_echarts(local_path: Optional[Path]) -> Optional[str]:
-	if local_path is None:
+def _get_base_url_prefix() -> str:
+	"""Best-effort Streamlit baseUrlPath prefix ('' or '/<base>').
+
+	Notes:
+	- In unit tests, `st` may be monkeypatched; this function must be tolerant.
+	"""
+	get_opt = getattr(st, "get_option", None)
+	if not callable(get_opt):
+		return ""
+	try:
+		raw = get_opt("server.baseUrlPath")
+	except Exception:
+		return ""
+	if not raw:
+		return ""
+	text = str(raw).strip().strip("/")
+	return f"/{text}" if text else ""
+
+
+def _static_url(filename: str) -> str:
+	"""URL for Streamlit static serving: /app/static/<filename> (with baseUrlPath)."""
+	return f"{_get_base_url_prefix()}/app/static/{filename}"
+
+
+def _ensure_echarts_available_via_static(
+	*,
+	source_path: Optional[Path],
+) -> Optional[str]:
+	"""Ensure ECharts bundle exists under app/static and return its URL.
+
+	Streamlit can serve files from `app/static/` when `server.enableStaticServing=true`.
+	However, `.js` is served as `text/plain` (nosniff) and can't be executed via a
+	`<script src=...>` tag. We fetch it and inject it as an inline script in the iframe.
+	That still enables browser caching and avoids embedding ~1MB into every chart HTML.
+	"""
+	if source_path is None:
+		return None
+	src = Path(source_path)
+	if not src.exists() or not src.is_file():
 		return None
 	try:
-		return Path(local_path).read_text(encoding="utf-8")
+		_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+		dst = _STATIC_DIR / _STATIC_ECHARTS_FILENAME
+		# Copy only if missing or size differs to keep reruns cheap.
+		if (not dst.exists()) or (dst.stat().st_size != src.stat().st_size):
+			shutil.copy2(src, dst)
+		return _static_url(_STATIC_ECHARTS_FILENAME)
 	except Exception:
 		return None
 
@@ -78,16 +123,10 @@ def render_echarts(
 	option_json = json.dumps(option, separators=(",", ":"), ensure_ascii=False)
 
 	cdn = cfg.cdn_url or "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
-	local_js = _read_local_echarts(cfg.local_echarts_path)
-	# Prefer local inline bundle for maximum reliability (offline / blocked CDNs).
-	if local_js:
-		script_loader = f"<script>{local_js}</script>"
-		echarts_lib_source = "inline"
-		fallback_sources: list[str] = [cdn]
-	else:
-		script_loader = f'<script src="{cdn}"></script>'
-		echarts_lib_source = cdn
-		fallback_sources = []
+	local_static_url = _ensure_echarts_available_via_static(source_path=cfg.local_echarts_path)
+	# ECharts loads via fetch+inject (preferred), then CDN <script> fallback.
+	echarts_lib_source = local_static_url or cdn
+	fallback_sources: list[str] = [cdn] if local_static_url else []
 
 	theme_snippet = f'"{theme}"' if theme else "null"
 
@@ -118,7 +157,6 @@ def render_echarts(
 		  Loading chart...
 		</div>
 		<div id="{container_id}" style="width:{width};height:{height_px}px;margin:0 auto;"></div>
-		{script_loader}
 		<script>
 		(function() {{
 			const EXPORT_BASENAME = {json.dumps(export_basename)};
@@ -144,6 +182,17 @@ def render_echarts(
 					s.onerror = () => reject(new Error("Failed to load script: " + src));
 					document.head.appendChild(s);
 				}});
+			}}
+
+			async function fetchAndInjectScript(url) {{
+				const resp = await fetch(url, {{ cache: "force-cache" }});
+				if (!resp.ok) {{
+					throw new Error("Failed to fetch ECharts bundle: HTTP " + resp.status);
+				}}
+				const jsText = await resp.text();
+				const s = document.createElement("script");
+				s.textContent = jsText;
+				document.head.appendChild(s);
 			}}
 
 			function downloadDataUrl(dataUrl, filename) {{
@@ -218,6 +267,15 @@ def render_echarts(
 			async function mountChart() {{
 				setStatus("Loading ECharts from " + ECHARTS_LIB_SOURCE + "...", false);
 				try {{
+					// Preferred: fetch local bundle (served as static text) and inject it.
+					if (!window.echarts && ECHARTS_LIB_SOURCE && String(ECHARTS_LIB_SOURCE).startsWith("/")) {{
+						try {{
+							await fetchAndInjectScript(ECHARTS_LIB_SOURCE);
+						}} catch (e) {{
+							console.warn("Local ECharts load failed:", e);
+						}}
+					}}
+					// Fallback: CDN script injection
 					if (!window.echarts && Array.isArray(ECHARTS_FALLBACK_SOURCES) && ECHARTS_FALLBACK_SOURCES.length) {{
 						for (let i = 0; i < ECHARTS_FALLBACK_SOURCES.length; i++) {{
 							const src = ECHARTS_FALLBACK_SOURCES[i];
