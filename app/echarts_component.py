@@ -301,13 +301,17 @@ button:hover {{ background: #f3f4f6 !important; border-color: #d1d5db !important
     try:
         components.html(html, height=total_height, scrolling=False)
     except Exception as e:
-        # Catch any session/component errors gracefully
+        # Log all errors for debugging but only show non-cosmetic ones
         error_msg = str(e)
+        import logging
+        _logger = logging.getLogger(__name__)
+        _logger.warning("ECharts render error: %s", error_msg)
         if "SessionInfo" in error_msg or "Bad message" in error_msg:
-            # This is a known Streamlit race condition - silently retry on next render
-            pass
+            # This is a known Streamlit race condition - show placeholder
+            st.info("📊 Chart loading... (refresh if not visible)")
         else:
-            # Re-raise other errors
+            # Show error in UI for debugging
+            st.error(f"Chart render error: {error_msg[:200]}")
             raise
 
     # Optional caption
