@@ -147,20 +147,23 @@ _LOGGER: Final[logging.Logger] = (
 )
 
 # Check for @st.fragment support (Streamlit 1.37+)
-try:
-    _HAS_FRAGMENT = hasattr(st, "fragment")
-except AttributeError:
-    _HAS_FRAGMENT = False
+# NOTE: We disable fragments because they cause "SessionInfo before initialized"
+# errors when used inside tabs or other conditional UI contexts.
+# See: https://github.com/streamlit/streamlit/issues/8321
+_HAS_FRAGMENT = False  # Disabled - fragments cause stability issues in this app
 
 
 def _fragment_if_available(func: Any) -> Any:
-    """Decorator that applies @st.fragment if available, otherwise no-op.
+    """Decorator that was intended to apply @st.fragment if available.
     
-    Fragments allow partial reruns of just the decorated function,
-    avoiding full page reruns when interacting with widgets inside.
+    DISABLED: Fragments cause "Bad message format: Tried to use SessionInfo 
+    before it was initialized" errors when decorated functions are called 
+    inside tabs or conditional UI blocks. This decorator is now a no-op.
+    
+    The performance benefit of partial reruns is not worth the stability cost
+    in complex applications with nested UI contexts.
     """
-    if _HAS_FRAGMENT:
-        return st.fragment(func)
+    # Always return the function unchanged - fragments are disabled
     return func
 
 
@@ -2076,8 +2079,8 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         "body_battery_drain": "Import `UDSFile_*.json` or a wellness ZIP export containing body battery charge/drain.",
     }
     
-    # Debug: show what values we have
-    _LOGGER.info(
+    # Debug: show what values we have (DEBUG level to avoid log noise on every rerender)
+    _LOGGER.debug(
         "Wrist monitoring latest day: steps=%s, distance_km=%s, calories=%s, sleep_score=%s, stress=%s",
         latest.get("steps"), latest.get("distance_km"), latest.get("calories_kcal"),
         latest.get("sleep_score"), latest.get("stress_score"),
