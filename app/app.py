@@ -5535,7 +5535,7 @@ def main() -> None:
         )
         rr_plot_cap = st.sidebar.selectbox(
             "RR plot point cap per dataset", [
-                "500", "2000", "10000", "No limit"], index=1)
+                "500", "2000", "10000", "No limit"], index=0)
         skip_freq = st.sidebar.checkbox("Skip Frequency overlay plot", value=False)
         skip_poincare = st.sidebar.checkbox("Skip Poincaré plot", value=False)
         skip_spectrogram = st.sidebar.checkbox("Skip Spectrogram", value=False)
