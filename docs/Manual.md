@@ -2608,6 +2608,30 @@ RMSSD (ms) & 41.2 & 12.1 & [36.3, 46.1] \\
 
 ## Troubleshooting
 
+### Streamlit Version Requirement
+
+> ⚠️ **CRITICAL: This app requires Streamlit 1.36.0**
+>
+> This is the most stable Streamlit version for Mission Control - Flight Surgeon.
+> 
+> | Version | Status |
+> |---------|--------|
+> | **1.35.0** | ❌ Tabs don't load properly |
+> | **1.36.0** | ✅ **RECOMMENDED** - Most stable version |
+> | **1.37.0+** | ❌ SessionInfo/setIn race condition errors |
+> | **1.40.2+** | ⚠️ Works but has cosmetic error popups |
+>
+> **To install the correct version:**
+> ```bash
+> pip install streamlit==1.36.0
+> # or
+> pip install --upgrade -r requirements.txt
+> ```
+>
+> **Do not upgrade Streamlit** unless you have tested the new version thoroughly.
+
+---
+
 ### Common Issues
 
 **Problem: No data appears after upload**
