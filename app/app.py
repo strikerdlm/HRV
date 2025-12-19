@@ -3033,18 +3033,18 @@ def _render_library_loader() -> Dict[str, UploadedRR]:
     """
     out: Dict[str, UploadedRR] = {}
     
+    # Pre-check if library has files (avoid rendering expander if empty)
+    library_files = _list_library_rr_files()
+    if not library_files:
+        # Show collapsed hint instead of full expander
+        st.sidebar.caption("📚 *Library empty — upload files to save them*")
+        return out
+    
     with st.sidebar.expander("📚 Load from Library", expanded=False):
         st.caption(
             "Load previously saved RR recordings from user profiles. "
             "These files are already stored and can be used for analysis without re-uploading."
         )
-        
-        # Get all available files
-        library_files = _list_library_rr_files()
-        
-        if not library_files:
-            st.info("No stored RR files found. Upload files and save them to build your library.")
-            return out
         
         # Build flat list of all files with user context
         all_files: List[Dict[str, Any]] = []
@@ -3067,20 +3067,38 @@ def _render_library_loader() -> Dict[str, UploadedRR]:
         
         st.markdown(f"**{len(options)} file(s) available**")
         
-        # Multi-select for files
+        # Multi-select for files - use session state key with stable prefix
+        select_key = "library_file_select_v2"
+        
+        # Ensure default doesn't exceed available options
+        current_selection = st.session_state.get(select_key, [])
+        valid_selection = [s for s in current_selection if s in options]
+        if current_selection != valid_selection:
+            st.session_state[select_key] = valid_selection
+        
         selected = st.multiselect(
             "Select files to load",
             options=options,
-            default=[],
-            key="library_file_select",
+            default=None,  # Use None instead of [] to avoid index issues
+            key=select_key,
             help="Select one or more files to load into the analysis workspace.",
         )
         
         if not selected:
+            st.info("👆 Select files above, then click Load.")
             return out
         
-        # Map selections back to file info
-        selected_files = [all_files[options.index(s)] for s in selected]
+        # Map selections back to file info safely
+        selected_files = []
+        for s in selected:
+            try:
+                idx = options.index(s)
+                selected_files.append(all_files[idx])
+            except (ValueError, IndexError):
+                continue
+        
+        if not selected_files:
+            return out
         
         col1, col2 = st.columns(2)
         with col1:
@@ -3098,6 +3116,13 @@ def _render_library_loader() -> Dict[str, UploadedRR]:
             )
         
         if load_clicked or load_run_clicked:
+            # Clear previous state to ensure fresh load
+            st.session_state.pop("_persisted_uploads", None)
+            st.session_state.pop("_hrv_cached_datasets", None)
+            st.session_state.pop("_hrv_cached_windowed_df", None)
+            st.session_state.pop("hrv_analysis_complete_signature", None)
+            st.session_state.pop("hrv_analysis_signature", None)
+            
             # Queue files for loading via session state
             queue_payload: List[Dict[str, Any]] = []
             for f in selected_files:
@@ -3304,14 +3329,12 @@ def _upload_section() -> Dict[str, UploadedRR]:
             }
             
             if unsaved_files:
-                save_checkbox = st.sidebar.checkbox(
+                # Use a button instead of checkbox to avoid rapid state changes
+                if st.sidebar.button(
                     f"💾 Save {len(unsaved_files)} file(s) to library",
-                    value=False,
-                    key="sidebar_save_to_library",
+                    key="sidebar_save_to_library_btn",
                     help=f"Save uploaded files to {user_display}'s profile for future analysis.",
-                )
-                
-                if save_checkbox:
+                ):
                     saved_count = _save_uploaded_files_to_library(unsaved_files, user_id)
                     if saved_count > 0:
                         st.sidebar.success(f"✅ Saved {saved_count} file(s) to library!")
@@ -3320,10 +3343,10 @@ def _upload_section() -> Dict[str, UploadedRR]:
                     else:
                         st.sidebar.info("Files already exist in library or could not be saved.")
             else:
-                st.sidebar.info("✅ All files already saved to library.")
+                st.sidebar.caption("✅ All files saved to library.")
         else:
             st.sidebar.caption(
-                "💡 **Tip:** Log in to a user profile to save files for future analysis."
+                "💡 Log in to a profile to save files for later."
             )
     
     return out
@@ -5351,6 +5374,17 @@ def main() -> None:
             except Exception as exc:  # pragma: no cover - defensive
                 logger.debug("Hash lookup failed for %s: %s", name, exc)
 
+    # =========================================================================
+    # PERSIST UPLOADS - Keep uploads in session state across reruns
+    # =========================================================================
+    # Store current uploads for persistence (so they survive after queue is popped)
+    if uploads:
+        st.session_state["_persisted_uploads"] = uploads
+    elif "_persisted_uploads" in st.session_state:
+        # Restore from persisted uploads if current run has none
+        # (This happens after queue is popped on subsequent reruns)
+        uploads = st.session_state["_persisted_uploads"]
+    
     # Initialize flag for data availability - used throughout for conditional rendering
     has_hrv_data_uploaded = bool(uploads)
 
@@ -5754,6 +5788,8 @@ def main() -> None:
         # Clear cached results when uploads change
         st.session_state.pop("_hrv_cached_datasets", None)
         st.session_state.pop("_hrv_cached_windowed_df", None)
+        # Clear completion signature to allow new analysis
+        st.session_state.pop("hrv_analysis_complete_signature", None)
     # Prevent repeated runs for the same upload set once completed
     analysis_already_completed = bool(
         has_hrv_data_uploaded and hrv_complete_sig == upload_signature
