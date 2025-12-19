@@ -402,7 +402,7 @@ def build_two_ring_gauge(
             [1, "#73d13d"],
         ]
 
-    # Title
+    # Title (shown outside the gauge by the ECharts renderer)
     display_title = title or metric_name.replace("_", " ").title()
 
     # Build gauge series
@@ -473,13 +473,8 @@ def build_two_ring_gauge(
                 "borderWidth": 2,
             },
         },
-        "title": {
-            "show": True,
-            "offsetCenter": [0, "75%"],
-            "fontSize": 14,
-            "fontWeight": "bold",
-            "color": "#333",
-        },
+        # Hide the in-gauge title; the app shows titles outside the plot area.
+        "title": {"show": False},
         "detail": {
             "show": True,
             "offsetCenter": [0, "35%"],
@@ -540,6 +535,8 @@ def build_two_ring_gauge(
         series.append(ref_series)
 
     return {
+        # Provide a chart-level title so the renderer can display it outside the plot.
+        "title": {"text": display_title, "show": True},
         "series": series,
         "backgroundColor": "transparent",
     }
