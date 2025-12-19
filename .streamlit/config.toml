@@ -2,8 +2,18 @@
 fileWatcherType = "poll"
 headless = true
 enableStaticServing = true
+# Increase timeout for session handling to reduce "SessionInfo before initialized" errors
+# This gives more time for WebSocket connections to stabilize
+disconnectedSessionTTL = 600
+
+[browser]
+# Reduce WebSocket reconnection issues
+gatherUsageStats = false
 
 [logger]
 level = "error"
 
+[client]
+# Increase the cache timeout for better stability
+caching = true
 
