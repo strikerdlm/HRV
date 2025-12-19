@@ -5,13 +5,21 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.31] - 2025-12-19
+
+### Added
+- **RR Library Loader in sidebar** (`app/app.py`): New "📚 Load from Library" expander in the sidebar allows users to browse and load previously saved RR interval files from any user profile without re-uploading. Files are sorted by modification time (most recent first) and can be loaded directly into the analysis workspace with one click or loaded and analyzed immediately with "🚀 Load + Analyze".
+- **Save uploaded files to library** (`app/app.py`): When files are uploaded via the sidebar and a user profile is active, a new "💾 Save X file(s) to library" checkbox appears. Checking it saves the uploaded RR files to the active user's profile for future analysis without needing to re-upload. Files are saved with timestamp prefixes if the original filename lacks a date.
+
+### Fixed
+- **Critical: HRV tab infinite loading fix** (`app/app.py`): Fixed bug where Time Series, Frequency, Nonlinear, and Spectrogram tabs would get stuck in infinite loading state (faded results) after uploading RR data. Root cause: `datasets` was not being cached after HRV analysis completed, so on each rerun the tabs received empty datasets. Added session_state caching (`_hrv_cached_datasets`, `_hrv_cached_windowed_df`) to persist processed data between reruns.
+
 ## [1.8.30] - 2025-12-19
 
 ### Fixed
 - **User Profile performance fix** (`app/user_profile_tab.py`): **Critical fix** - Replaced nested `st.tabs()` with selectbox-based navigation for profile sub-sections (Assessments, Clinical Profile, History, HRV, Readiness, Data, Sessions). Nested tabs in Streamlit render ALL content on every rerun, causing severe slowdowns and browser freezes in Edge/Chromium browsers. The new pattern only renders the selected section (lazy loading), dramatically improving performance.
 - **SAFTE/USAF Crew Rest time input fix** (`app/app.py`): Fixed `TypeError: 'module' object is not callable` caused by `import time` shadowing `from datetime import time`. Changed `time(20, 0)` and `time(8, 0)` to `datetime.time(20, 0)` and `datetime.time(8, 0)` respectively.
 - **SAFTE Auto-run stability improvements** (`app/app.py`): Reduced unnecessary operations by only saving tab settings when user explicitly clicks a button (not on every rerun). Added guard to prevent double-runs when auto-run button is clicked. Shows data source info after auto-run completes.
-- **Critical: HRV tab infinite loading fix** (`app/app.py`): Fixed bug where Time Series, Frequency, Nonlinear, and Spectrogram tabs would get stuck in infinite loading state (faded results) after uploading RR data. Root cause: `datasets` was not being cached after HRV analysis completed, so on each rerun the tabs received empty datasets. Added session_state caching (`_hrv_cached_datasets`, `_hrv_cached_windowed_df`) to persist processed data between reruns.
 
 ## [1.8.29] - 2025-12-19
 
