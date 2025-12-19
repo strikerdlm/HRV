@@ -7718,14 +7718,9 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
             # Display area
             st.markdown("---")
             
-            # Define the fragment for live biofeedback view.
-            # We define it outside the conditional block to ensure it's registered consistently.
-            # We use run_every=2 (slightly slower than 1s) to avoid websocket saturation.
-            #
-            # IMPORTANT: Fragments should NOT call st.rerun() - this violates Streamlit's
-            # fragment design and can cause websocket race conditions. Instead, the fragment
-            # sets a "session_needs_stop" flag, and the main code handles the transition.
-            @st.fragment(run_every=2)
+            # NOTE: We removed @st.fragment(run_every=N) because it causes
+            # "SessionInfo before initialized" errors when defined inside tabs.
+            # Instead, we use a manual refresh button for the live view.
             def _render_biofeedback_live_view(
                 engine_local: RealtimeHRVEngine,
                 breathing_rate_local: float,
@@ -7733,7 +7728,8 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 inhale_ratio_local: float,
                 biofeedback_mode_local: str,
             ) -> None:
-                # Defensive check: if biofeedback stopped, don't render anything in this fragment.
+                """Render the live biofeedback view (called on each page render)."""
+                # Defensive check: if biofeedback stopped, don't render.
                 if not st.session_state.get("biofeedback_running", False):
                     return
 
@@ -7752,10 +7748,8 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                         target_sec = float(session_duration_local * 60)
 
                     if elapsed_sec >= target_sec:
-                        # Flag for external handling - do NOT call st.rerun() from fragment.
-                        # The main code will detect this flag and handle the transition.
+                        # Session complete - show message and set flag for handling.
                         st.session_state["biofeedback_session_needs_stop"] = True
-                        # Show completion message in-place (fragment can update its own UI).
                         st.success("✅ Session complete! Click 'Stop Session' to view summary.")
                         return
 
@@ -7966,8 +7960,7 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                             config=EChartsConfig(),
                         )
 
-            # Handle session auto-stop flag (set by fragment when duration elapses).
-            # This is outside the fragment, so st.rerun() is safe here.
+            # Handle session auto-stop flag (set when duration elapses).
             if st.session_state.pop("biofeedback_session_needs_stop", False):
                 st.session_state["biofeedback_running"] = False
                 session_result = engine.end_session()
@@ -7976,6 +7969,12 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 st.rerun()
 
             if st.session_state.get("biofeedback_running", False):
+                # Add a refresh button for manual updates during the session.
+                col_refresh, col_spacer = st.columns([1, 3])
+                with col_refresh:
+                    if st.button("🔄 Refresh", key="biofeedback_refresh", help="Update the live view"):
+                        st.rerun()
+                
                 _render_biofeedback_live_view(
                     engine,
                     breathing_rate,
