@@ -4612,170 +4612,22 @@ def _set_process_priority() -> None:
 
 
 def _inject_sessioninfo_suppressor() -> None:
-    """Aggressively suppress ALL Streamlit error toasts/dialogs (SessionInfo, setIn, etc)."""
+    """Minimal safety net for Streamlit error suppression.
+    
+    With Streamlit 1.36.0, most errors are avoided. This is a lightweight
+    fallback that only targets known error modals without affecting
+    legitimate UI elements like file uploaders or tabs.
+    """
+    # Minimal CSS - only hide error-specific toast containers
     st.markdown(
         """
         <style>
-        /* AGGRESSIVE: Permanently hide ALL toast/notification/alert containers */
-        div[data-testid="stToast"],
-        div[data-testid="stToastContainer"],
-        div[data-testid="stNotification"],
-        div[data-baseweb="toast"],
-        div[data-baseweb="notification"],
-        div[role="alert"][data-testid],
-        .stAlert[data-testid] {
+        /* Hide only error toast containers - not all alerts */
+        div[data-testid="stToast"]:has([data-testid="stNotificationContentError"]),
+        div[data-testid="stToastContainer"]:has([data-testid="stNotificationContentError"]) {
             display: none !important;
-            visibility: hidden !important;
-            opacity: 0 !important;
-            height: 0 !important;
-            width: 0 !important;
-            pointer-events: none !important;
-            position: absolute !important;
-            left: -9999px !important;
-        }
-        
-        /* Also hide error modal backdrops that might block interaction */
-        div[data-baseweb="backdrop"],
-        div[data-baseweb="modal-backdrop"] {
-            pointer-events: none !important;
         }
         </style>
-        <script>
-        (function () {
-            'use strict';
-            
-            // Known Streamlit internal error patterns
-            var ERROR_PATTERNS = [
-                'sessioninfo',
-                'bad message',
-                "bad 'setin'",
-                'setin',
-                'should be between',
-                'immutable'
-            ];
-            
-            function containsErrorPattern(text) {
-                if (!text) return false;
-                var lowerText = String(text).toLowerCase();
-                for (var i = 0; i < ERROR_PATTERNS.length; i++) {
-                    if (lowerText.indexOf(ERROR_PATTERNS[i]) !== -1) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-            
-            var removeSelectors = [
-                'div[data-testid="stToast"]',
-                'div[data-testid="stToastContainer"]',
-                'div[data-testid="stNotification"]',
-                'div[data-baseweb="toast"]',
-                'div[data-baseweb="notification"]',
-                'div[role="alert"][data-testid]',
-                '.stAlert[data-testid]'
-            ];
-            
-            var modalSelectors = [
-                'div[role="dialog"]',
-                'div[data-baseweb="modal"]'
-            ];
-            
-            var backdropSelectors = [
-                'div[data-baseweb="backdrop"]',
-                'div[data-baseweb="modal-backdrop"]'
-            ];
-
-            function nukeElement(el) {
-                if (!el) return;
-                try {
-                    el.style.display = 'none';
-                    el.style.visibility = 'hidden';
-                    el.style.opacity = '0';
-                    el.style.height = '0';
-                    el.style.width = '0';
-                    el.style.pointerEvents = 'none';
-                    el.style.position = 'absolute';
-                    el.style.left = '-9999px';
-                    if (el.remove) el.remove();
-                } catch (e) { /* ignore */ }
-            }
-
-            function purgeErrors() {
-                // Remove ALL toast/alert elements (they're usually error messages anyway)
-                removeSelectors.forEach(function (sel) {
-                    try {
-                        var nodes = document.querySelectorAll(sel);
-                        nodes.forEach(nukeElement);
-                    } catch (e) { /* ignore */ }
-                });
-
-                // Remove error modals + their backdrops
-                modalSelectors.forEach(function (sel) {
-                    try {
-                        var modals = document.querySelectorAll(sel);
-                        modals.forEach(function (modal) {
-                            if (containsErrorPattern(modal.textContent || '')) {
-                                nukeElement(modal);
-                                // Nuke backdrops too
-                                backdropSelectors.forEach(function (bSel) {
-                                    var bds = document.querySelectorAll(bSel);
-                                    bds.forEach(nukeElement);
-                                });
-                            }
-                        });
-                    } catch (e) { /* ignore */ }
-                });
-            }
-
-            // Suppress console errors matching patterns
-            var origError = console.error;
-            console.error = function() {
-                var msg = Array.prototype.slice.call(arguments).join(' ');
-                if (!containsErrorPattern(msg)) {
-                    origError.apply(console, arguments);
-                }
-            };
-
-            // Suppress JS error events
-            window.addEventListener('error', function (e) {
-                if (e && e.message && containsErrorPattern(e.message)) {
-                    e.preventDefault();
-                    e.stopImmediatePropagation();
-                    return false;
-                }
-            }, true);
-
-            // Suppress unhandled promise rejections
-            window.addEventListener('unhandledrejection', function (e) {
-                var msg = (e && e.reason) ? String(e.reason) : '';
-                if (containsErrorPattern(msg)) {
-                    e.preventDefault();
-                    return false;
-                }
-            });
-
-            // Start aggressive polling
-            function startCleaner() {
-                purgeErrors();
-                var observer = new MutationObserver(purgeErrors);
-                if (document.body) {
-                    observer.observe(document.body, { 
-                        childList: true, 
-                        subtree: true,
-                        attributes: false
-                    });
-                }
-                // Poll very frequently
-                setInterval(purgeErrors, 200);
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', startCleaner);
-            } else {
-                startCleaner();
-            }
-        })();
-        </script>
         """,
         unsafe_allow_html=True,
     )
