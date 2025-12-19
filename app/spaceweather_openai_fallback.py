@@ -6,8 +6,6 @@ from typing import Dict, Mapping, Optional
 import json
 import os
 
-from openai import OpenAI
-
 from agent_logging import log_agent_output
 
 try:
@@ -104,6 +102,12 @@ def extract_spaceweather_with_openai(
 	"""
 	# Ensure API key is configured via environment (never commit secrets)
 	if not os.getenv("OPENAI_API_KEY"):
+		return None
+
+	# Lazy import to keep Streamlit startup fast when OpenAI fallback is unused.
+	try:
+		from openai import OpenAI  # type: ignore
+	except ImportError:
 		return None
 
 	client = OpenAI()
