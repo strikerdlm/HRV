@@ -2,31 +2,45 @@
 Centralized logging configuration for Mission Control - Flight Surgeon.
 
 Provides persistent file logging for debugging, error tracking, and audit
-trails.
+trails. Includes comprehensive Streamlit-specific debugging capabilities.
 Logs are written to the `logs/` directory with automatic rotation.
 
 Usage:
-    from app.logging_config import setup_logging, get_logger
+    from app.logging_config import setup_logging, get_logger, enable_streamlit_debug
 
     # Call once at app startup
     setup_logging()
+
+    # Enable Streamlit-specific debugging (optional, verbose)
+    enable_streamlit_debug()
 
     # Get module-specific logger
     logger = get_logger(__name__)
     logger.info("Processing started")
 
+Features:
+    - Rotating file logs (app.log, errors.log, streamlit.log)
+    - Streamlit component lifecycle tracking
+    - Session state change monitoring
+    - WebSocket event logging
+    - Performance timing helpers
+
 Author: Mission Control - Flight Surgeon
-Version: 1.0.0
+Version: 2.0.0
 """
 
 from __future__ import annotations
 
+import functools
 import logging
+import os
 import sys
+import time
+import traceback
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from typing import Final
+from typing import Any, Callable, Final, TypeVar
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -35,6 +49,10 @@ from typing import Final
 _LOG_DIR: Final[Path] = Path(__file__).parent.parent / "logs"
 _LOG_FORMAT: Final[str] = (
     "%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(message)s"
+)
+_LOG_FORMAT_DETAILED: Final[str] = (
+    "%(asctime)s.%(msecs)03d | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d | "
+    "%(message)s"
 )
 _DATE_FORMAT: Final[str] = "%Y-%m-%d %H:%M:%S"
 
@@ -46,6 +64,10 @@ _LOG_LEVEL_CONSOLE: Final[int] = logging.INFO  # Less verbose on console
 
 # Track if logging has been set up
 _logging_initialized: bool = False
+_streamlit_debug_enabled: bool = False
+
+# Type variable for decorators
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +277,331 @@ def log_user_action(action: str, details: dict | None = None) -> None:
     audit_logger = logging.getLogger("hrv_audit")
     detail_str = f" | {details}" if details else ""
     audit_logger.info("USER_ACTION: %s%s", action, detail_str)
+
+
+# ---------------------------------------------------------------------------
+# Streamlit-Specific Debugging
+# ---------------------------------------------------------------------------
+
+
+def enable_streamlit_debug(*, verbose: bool = True) -> None:
+    """
+    Enable comprehensive Streamlit debugging.
+    
+    This sets up detailed logging for:
+    - Streamlit internal operations
+    - Session state changes
+    - Component lifecycle events
+    - WebSocket communications
+    - Cache operations
+    
+    Args:
+        verbose: If True, set all Streamlit loggers to DEBUG level.
+                 If False, set to INFO level.
+    
+    Warning:
+        This produces VERY verbose output. Use only for debugging.
+    """
+    global _streamlit_debug_enabled  # noqa: PLW0603
+    
+    level = logging.DEBUG if verbose else logging.INFO
+    
+    # Streamlit internal loggers
+    streamlit_loggers = [
+        "streamlit",
+        "streamlit.runtime",
+        "streamlit.runtime.scriptrunner",
+        "streamlit.runtime.scriptrunner_utils",
+        "streamlit.runtime.state",
+        "streamlit.runtime.caching",
+        "streamlit.runtime.websocket",
+        "streamlit.watcher",
+        "streamlit.web",
+        "streamlit.web.server",
+        "streamlit.components",
+    ]
+    
+    for logger_name in streamlit_loggers:
+        logger = logging.getLogger(logger_name)
+        logger.setLevel(level)
+    
+    # Also enable tornado/websocket debugging if verbose
+    if verbose:
+        logging.getLogger("tornado").setLevel(logging.INFO)
+        logging.getLogger("tornado.access").setLevel(logging.WARNING)
+        logging.getLogger("tornado.application").setLevel(logging.DEBUG)
+        logging.getLogger("tornado.general").setLevel(logging.DEBUG)
+    
+    # Create dedicated streamlit log file
+    if not _streamlit_debug_enabled:
+        target_dir = _LOG_DIR
+        target_dir.mkdir(parents=True, exist_ok=True)
+        
+        streamlit_log_path = target_dir / "streamlit.log"
+        handler = RotatingFileHandler(
+            streamlit_log_path,
+            maxBytes=_MAX_BYTES,
+            backupCount=_BACKUP_COUNT,
+            encoding="utf-8",
+        )
+        handler.setLevel(logging.DEBUG)
+        handler.setFormatter(logging.Formatter(_LOG_FORMAT_DETAILED, datefmt=_DATE_FORMAT))
+        
+        # Add to streamlit root logger
+        streamlit_root = logging.getLogger("streamlit")
+        streamlit_root.addHandler(handler)
+    
+    _streamlit_debug_enabled = True
+    logging.getLogger(__name__).info(
+        "Streamlit debug logging enabled | Level: %s | Log: logs/streamlit.log",
+        logging.getLevelName(level)
+    )
+
+
+def log_session_state(context: str = "") -> None:
+    """
+    Log the current Streamlit session state for debugging.
+    
+    Args:
+        context: Optional context string to identify where this was called.
+    """
+    try:
+        import streamlit as st
+        
+        logger = logging.getLogger("hrv.session_state")
+        state_dict = dict(st.session_state)
+        
+        # Redact sensitive keys
+        redacted = {}
+        sensitive_patterns = ("password", "token", "secret", "api_key", "credential")
+        for key, value in state_dict.items():
+            key_lower = str(key).lower()
+            if any(pattern in key_lower for pattern in sensitive_patterns):
+                redacted[key] = "[REDACTED]"
+            elif isinstance(value, (str, int, float, bool, type(None))):
+                redacted[key] = value
+            else:
+                redacted[key] = f"<{type(value).__name__}>"
+        
+        ctx_str = f" [{context}]" if context else ""
+        logger.debug("Session state%s: %d keys | %s", ctx_str, len(redacted), redacted)
+    except Exception as exc:
+        logging.getLogger(__name__).warning("Failed to log session state: %s", exc)
+
+
+def log_rerun_trigger(reason: str, **details: Any) -> None:
+    """
+    Log when and why a Streamlit rerun is triggered.
+    
+    Call this before st.rerun() to track rerun patterns.
+    
+    Args:
+        reason: Description of why the rerun is happening.
+        **details: Additional context as keyword arguments.
+    """
+    logger = logging.getLogger("hrv.rerun")
+    detail_str = f" | {details}" if details else ""
+    
+    # Get caller info
+    stack = traceback.extract_stack()
+    if len(stack) >= 2:
+        caller = stack[-2]
+        location = f"{caller.filename}:{caller.lineno} in {caller.name}"
+    else:
+        location = "unknown"
+    
+    logger.info("RERUN triggered | Reason: %s | Location: %s%s", reason, location, detail_str)
+
+
+def timed_operation(operation_name: str) -> Callable[[F], F]:
+    """
+    Decorator to log the execution time of a function.
+    
+    Usage:
+        @timed_operation("compute_hrv")
+        def compute_hrv(data):
+            ...
+    
+    Args:
+        operation_name: Name to use in log messages.
+    
+    Returns:
+        Decorated function.
+    """
+    def decorator(func: F) -> F:
+        @functools.wraps(func)
+        def wrapper(*args: Any, **kwargs: Any) -> Any:
+            logger = logging.getLogger("hrv.timing")
+            start = time.perf_counter()
+            try:
+                result = func(*args, **kwargs)
+                elapsed = time.perf_counter() - start
+                logger.debug(
+                    "TIMING | %s completed in %.3fs",
+                    operation_name, elapsed
+                )
+                return result
+            except Exception as exc:
+                elapsed = time.perf_counter() - start
+                logger.error(
+                    "TIMING | %s failed after %.3fs | Error: %s",
+                    operation_name, elapsed, exc
+                )
+                raise
+        return wrapper  # type: ignore[return-value]
+    return decorator
+
+
+class StreamlitDebugContext:
+    """
+    Context manager for debugging a specific section of Streamlit code.
+    
+    Usage:
+        with StreamlitDebugContext("loading_data"):
+            # Your code here
+            df = load_data()
+    
+    Logs entry, exit, timing, and any exceptions.
+    """
+    
+    def __init__(self, name: str, log_session_state: bool = False) -> None:
+        """
+        Initialize debug context.
+        
+        Args:
+            name: Name for this debug section.
+            log_session_state: If True, log session state on entry/exit.
+        """
+        self.name = name
+        self.log_state = log_session_state
+        self.logger = logging.getLogger("hrv.debug_context")
+        self.start_time: float = 0.0
+    
+    def __enter__(self) -> "StreamlitDebugContext":
+        self.start_time = time.perf_counter()
+        self.logger.debug("ENTER | %s", self.name)
+        if self.log_state:
+            log_session_state(f"entering {self.name}")
+        return self
+    
+    def __exit__(
+        self,
+        exc_type: type | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> bool:
+        elapsed = time.perf_counter() - self.start_time
+        if exc_type is not None:
+            self.logger.error(
+                "EXIT | %s | FAILED after %.3fs | %s: %s",
+                self.name, elapsed, exc_type.__name__, exc_val
+            )
+        else:
+            self.logger.debug("EXIT | %s | OK in %.3fs", self.name, elapsed)
+        if self.log_state:
+            log_session_state(f"exiting {self.name}")
+        return False  # Don't suppress exceptions
+
+
+def get_debug_info() -> dict[str, Any]:
+    """
+    Collect comprehensive debug information about the current environment.
+    
+    Returns:
+        Dictionary with debug information.
+    """
+    import platform
+    
+    info: dict[str, Any] = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "python_version": sys.version,
+        "platform": platform.platform(),
+        "cwd": os.getcwd(),
+        "log_dir": str(_LOG_DIR),
+        "logging_initialized": _logging_initialized,
+        "streamlit_debug_enabled": _streamlit_debug_enabled,
+    }
+    
+    # Try to get Streamlit version
+    try:
+        import streamlit as st
+        info["streamlit_version"] = st.__version__
+    except ImportError:
+        info["streamlit_version"] = "not installed"
+    
+    # Try to get session state size
+    try:
+        import streamlit as st
+        info["session_state_keys"] = len(st.session_state)
+    except Exception:
+        info["session_state_keys"] = "unavailable"
+    
+    return info
+
+
+def dump_debug_report(filepath: Path | None = None) -> Path:
+    """
+    Write a comprehensive debug report to a file.
+    
+    Args:
+        filepath: Optional path for the report. Defaults to logs/debug_report_TIMESTAMP.txt
+    
+    Returns:
+        Path to the generated report.
+    """
+    if filepath is None:
+        timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        filepath = _LOG_DIR / f"debug_report_{timestamp}.txt"
+    
+    info = get_debug_info()
+    
+    lines = [
+        "=" * 80,
+        "HRV Analysis Suite - Debug Report",
+        f"Generated: {info['timestamp']}",
+        "=" * 80,
+        "",
+        "ENVIRONMENT",
+        "-" * 40,
+        f"Python: {info['python_version']}",
+        f"Platform: {info['platform']}",
+        f"Streamlit: {info['streamlit_version']}",
+        f"CWD: {info['cwd']}",
+        "",
+        "LOGGING",
+        "-" * 40,
+        f"Log directory: {info['log_dir']}",
+        f"Logging initialized: {info['logging_initialized']}",
+        f"Streamlit debug: {info['streamlit_debug_enabled']}",
+        "",
+        "SESSION",
+        "-" * 40,
+        f"Session state keys: {info['session_state_keys']}",
+        "",
+    ]
+    
+    # Add recent errors from error log
+    error_log = _LOG_DIR / "errors.log"
+    if error_log.exists():
+        lines.append("RECENT ERRORS (last 50 lines)")
+        lines.append("-" * 40)
+        try:
+            with error_log.open("r", encoding="utf-8") as f:
+                recent_errors = f.readlines()[-50:]
+                lines.extend(line.rstrip() for line in recent_errors)
+        except Exception as exc:
+            lines.append(f"Failed to read error log: {exc}")
+    
+    lines.append("")
+    lines.append("=" * 80)
+    lines.append("END OF REPORT")
+    lines.append("=" * 80)
+    
+    filepath.parent.mkdir(parents=True, exist_ok=True)
+    filepath.write_text("\n".join(lines), encoding="utf-8")
+    
+    logging.getLogger(__name__).info("Debug report written to: %s", filepath)
+    return filepath
 
 
 # ---------------------------------------------------------------------------
