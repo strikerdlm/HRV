@@ -126,7 +126,12 @@ def render_echarts(
 	local_static_url = _ensure_echarts_available_via_static(source_path=cfg.local_echarts_path)
 	# ECharts loads via fetch+inject (preferred), then CDN <script> fallback.
 	echarts_lib_source = local_static_url or cdn
-	fallback_sources: list[str] = [cdn] if local_static_url else []
+	# Ensure CDN fallback is ALWAYS available.
+	# If the local bundle is unavailable, ECHARTS_LIB_SOURCE becomes the CDN URL, but the
+	# JS loader only fetches when the URL starts with "/" (local static), and only injects
+	# <script> tags from ECHARTS_FALLBACK_SOURCES. Therefore, we must include the CDN in the
+	# fallback list even when there is no local static bundle.
+	fallback_sources: list[str] = [cdn]
 
 	theme_snippet = f'"{theme}"' if theme else "null"
 
