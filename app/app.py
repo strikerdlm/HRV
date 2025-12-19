@@ -9940,14 +9940,27 @@ that predicts cognitive performance based on:
             key="donki_window_days",
         )
         if fetch_sw_clicked:
-            with st.spinner("Fetching NOAA SWPC datasets..."):
-                _fetch_space_weather_datasets(space_state)
-            last_fetch = space_state.get("last_updated")
-            if isinstance(last_fetch, pd.Timestamp):
-                st.success(
-                    f"Space weather datasets updated at {last_fetch.strftime('%Y-%m-%d %H:%M UTC')}.")
-            else:
-                st.success("Space weather datasets updated.")
+            with st.status(
+                "Fetching NOAA SWPC datasets…", state="running", expanded=True
+            ) as status:
+                try:
+                    _fetch_space_weather_datasets(space_state)
+                    last_fetch = space_state.get("last_updated")
+                    if isinstance(last_fetch, pd.Timestamp):
+                        label = (
+                            f"Space weather datasets updated at "
+                            f"{last_fetch.strftime('%Y-%m-%d %H:%M UTC')}."
+                        )
+                    else:
+                        label = "Space weather datasets updated."
+                    status.update(label=label, state="complete", expanded=False)
+                    st.success(label)
+                except Exception as exc:
+                    log_exception(_LOGGER, "NOAA SWPC fetch failed", exc)
+                    status.update(
+                        label=f"Fetch failed: {exc}", state="error", expanded=True
+                    )
+                    st.error(f"Failed to fetch NOAA SWPC datasets: {exc}")
         if fetch_donki_clicked:
             if not NASA_API_KEY:
                 st.warning(
@@ -9956,14 +9969,29 @@ that predicts cognitive performance based on:
             else:
                 start_donki, end_donki = _donki_default_range(
                     int(donki_window_days))
-                with st.spinner("Fetching NASA DONKI datasets..."):
-                    _fetch_donki_datasets(donki_state, start_donki, end_donki)
-                last_donki = donki_state.get("last_updated")
-                if isinstance(last_donki, pd.Timestamp):
-                    st.success(
-                        f"DONKI datasets updated at {last_donki.strftime('%Y-%m-%d %H:%M UTC')}.")
-                else:
-                    st.success("DONKI datasets updated.")
+                with st.status(
+                    "Fetching NASA DONKI datasets…", state="running", expanded=True
+                ) as status:
+                    try:
+                        _fetch_donki_datasets(donki_state, start_donki, end_donki)
+                        last_donki = donki_state.get("last_updated")
+                        if isinstance(last_donki, pd.Timestamp):
+                            label = (
+                                f"DONKI datasets updated at "
+                                f"{last_donki.strftime('%Y-%m-%d %H:%M UTC')}."
+                            )
+                        else:
+                            label = "DONKI datasets updated."
+                        status.update(label=label, state="complete", expanded=False)
+                        st.success(label)
+                    except Exception as exc:
+                        log_exception(_LOGGER, "NASA DONKI fetch failed", exc)
+                        status.update(
+                            label=f"DONKI fetch failed: {exc}",
+                            state="error",
+                            expanded=True,
+                        )
+                        st.error(f"Failed to fetch NASA DONKI datasets: {exc}")
 
         if space_state.get("swl_loaded"):
             last_swl = space_state.get("swl_last_updated")
