@@ -5,8 +5,15 @@
 # ===========================================================================
 # CORE DEPENDENCIES (Required)
 # ===========================================================================
-# Pin a stable Streamlit build to reduce SessionInfo race popups
-streamlit==1.40.2  # 1.40.x observed stable; fragments remain available
+# STREAMLIT VERSION - UNDER TESTING:
+# OBSERVED ISSUES with versions > 1.35:
+#   - 1.37+: SessionInfo race conditions, "Bad 'setIn' index" errors
+#   - 1.40.2: Still reports setIn errors despite being marketed as stable
+# CURRENTLY TESTING: 1.35.0 (last version before widget tree changes)
+# 
+# DO NOT UPGRADE until we confirm 1.35.0 eliminates errors in production use.
+# If 1.35.0 still has issues, we may need to test 1.32.2 or 1.31.1.
+streamlit==1.35.0
 requests>=2.31,<3
 pandas>=2.2,<2.3
 numpy>=1.26,<2.2
