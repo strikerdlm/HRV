@@ -4703,18 +4703,24 @@ def main() -> None:
 		   See: https://github.com/streamlit/streamlit/issues/11500
 		   ================================================================ */
 		/* Hide all toast notifications - we use st.success/st.error instead */
-		div[data-testid="stToast"] {
+		div[data-testid="stToast"],
+		div[data-testid="stToastContainer"],
+		div[data-baseweb="toast"],
+		div[data-baseweb="toaster"],
+		[class*="Toast"],
+		[class*="toast"] {
 			display: none !important;
 			visibility: hidden !important;
 			opacity: 0 !important;
 			pointer-events: none !important;
+			height: 0 !important;
+			overflow: hidden !important;
+			position: absolute !important;
+			left: -9999px !important;
 		}
-		div[data-testid="stToastContainer"] {
-			display: none !important;
-			visibility: hidden !important;
-		}
-		/* Fallback for older Streamlit versions */
-		.stToast, .element-container .stToast {
+		/* Target the toaster container at root level */
+		.stToast, .element-container .stToast,
+		div[role="alert"][data-baseweb="toast"] {
 			display: none !important;
 		}
 		
@@ -4793,6 +4799,60 @@ def main() -> None:
 			}
 		}
 		</style>
+		<script>
+		// ================================================================
+		// JavaScript: Actively hide toast notifications as they appear
+		// This catches toasts that CSS might miss due to timing
+		// ================================================================
+		(function() {
+			'use strict';
+			
+			function hideToasts() {
+				// Target all possible toast selectors
+				var selectors = [
+					'div[data-testid="stToast"]',
+					'div[data-testid="stToastContainer"]',
+					'div[data-baseweb="toast"]',
+					'div[data-baseweb="toaster"]',
+					'div[role="alert"]'
+				];
+				
+				selectors.forEach(function(selector) {
+					var elements = document.querySelectorAll(selector);
+					elements.forEach(function(el) {
+						// Check if it contains "Bad message" or "SessionInfo"
+						var text = el.textContent || el.innerText || '';
+						if (text.includes('Bad message') || text.includes('SessionInfo')) {
+							el.style.display = 'none';
+							el.style.visibility = 'hidden';
+							el.style.opacity = '0';
+							el.remove();
+						}
+					});
+				});
+			}
+			
+			// Run immediately
+			hideToasts();
+			
+			// Set up MutationObserver to catch new toasts
+			var observer = new MutationObserver(function(mutations) {
+				hideToasts();
+			});
+			
+			// Start observing when DOM is ready
+			if (document.body) {
+				observer.observe(document.body, { childList: true, subtree: true });
+			} else {
+				document.addEventListener('DOMContentLoaded', function() {
+					observer.observe(document.body, { childList: true, subtree: true });
+				});
+			}
+			
+			// Also run periodically as a fallback
+			setInterval(hideToasts, 500);
+		})();
+		</script>
 		""",
         unsafe_allow_html=True,
     )
