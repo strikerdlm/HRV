@@ -7720,8 +7720,11 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
             
             # Define the fragment for live biofeedback view.
             # We define it outside the conditional block to ensure it's registered consistently.
-            # We use run_every=2 (slightly slower than 1s) to avoid websocket saturation
-            # and potential "SessionInfo" initialization errors in recent Streamlit versions.
+            # We use run_every=2 (slightly slower than 1s) to avoid websocket saturation.
+            #
+            # IMPORTANT: Fragments should NOT call st.rerun() - this violates Streamlit's
+            # fragment design and can cause websocket race conditions. Instead, the fragment
+            # sets a "session_needs_stop" flag, and the main code handles the transition.
             @st.fragment(run_every=2)
             def _render_biofeedback_live_view(
                 engine_local: RealtimeHRVEngine,
@@ -7734,7 +7737,7 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 if not st.session_state.get("biofeedback_running", False):
                     return
 
-                # Auto-stop once the configured duration elapses (bounded execution).
+                # Check if session should auto-stop (duration elapsed).
                 current_session = engine_local.current_session
                 if current_session is not None:
                     try:
@@ -7749,13 +7752,11 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                         target_sec = float(session_duration_local * 60)
 
                     if elapsed_sec >= target_sec:
-                        st.session_state["biofeedback_running"] = False
-                        session_result = engine_local.end_session()
-                        if session_result:
-                            st.session_state["biofeedback_last_session"] = session_result
-                        # Trigger full app rerun to switch from "Running" view to "Summary" view.
-                        # We use st.rerun() here deliberately; the 2s interval reduces race risk.
-                        st.rerun()
+                        # Flag for external handling - do NOT call st.rerun() from fragment.
+                        # The main code will detect this flag and handle the transition.
+                        st.session_state["biofeedback_session_needs_stop"] = True
+                        # Show completion message in-place (fragment can update its own UI).
+                        st.success("✅ Session complete! Click 'Stop Session' to view summary.")
                         return
 
                     remaining_sec = max(0.0, target_sec - elapsed_sec)
@@ -7964,6 +7965,15 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                             height_px=200,
                             config=EChartsConfig(),
                         )
+
+            # Handle session auto-stop flag (set by fragment when duration elapses).
+            # This is outside the fragment, so st.rerun() is safe here.
+            if st.session_state.pop("biofeedback_session_needs_stop", False):
+                st.session_state["biofeedback_running"] = False
+                session_result = engine.end_session()
+                if session_result:
+                    st.session_state["biofeedback_last_session"] = session_result
+                st.rerun()
 
             if st.session_state.get("biofeedback_running", False):
                 _render_biofeedback_live_view(
