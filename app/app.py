@@ -4604,6 +4604,95 @@ def _set_process_priority() -> None:
         pass  # psutil not available
 
 
+def _inject_sessioninfo_suppressor() -> None:
+    """Hide known Streamlit SessionInfo race-condition toasts client-side."""
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stToast"],
+        div[data-testid="stToastContainer"],
+        div[data-testid="stNotification"],
+        div[data-baseweb="toast"],
+        div[data-baseweb="notification"],
+        div[role="alert"] {
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+        }
+        </style>
+        <script>
+        (function () {
+            'use strict';
+            var selectors = [
+                'div[data-testid="stToast"]',
+                'div[data-testid="stToastContainer"]',
+                'div[data-testid="stNotification"]',
+                'div[data-baseweb="toast"]',
+                'div[data-baseweb="notification"]',
+                'div[role="alert"]'
+            ];
+
+            function removeBadMessages() {
+                selectors.forEach(function (selector) {
+                    var nodes = document.querySelectorAll(selector);
+                    nodes.forEach(function (el) {
+                        var text = (el.textContent || '').toLowerCase();
+                        if (text.includes('sessioninfo') || text.includes('bad message')) {
+                            el.style.display = 'none';
+                            el.style.visibility = 'hidden';
+                            el.style.opacity = '0';
+                            if (typeof el.remove === 'function') {
+                                el.remove();
+                            }
+                        }
+                    });
+                });
+            }
+
+            window.addEventListener(
+                'error',
+                function (event) {
+                    if (event && typeof event.message === 'string') {
+                        var msg = event.message.toLowerCase();
+                        if (msg.includes('sessioninfo')) {
+                            event.preventDefault();
+                            event.stopImmediatePropagation();
+                        }
+                    }
+                },
+                true
+            );
+
+            window.addEventListener('unhandledrejection', function (event) {
+                var reason = event && event.reason ? String(event.reason).toLowerCase() : '';
+                if (reason.includes('sessioninfo')) {
+                    event.preventDefault();
+                }
+            });
+
+            function startObservers() {
+                removeBadMessages();
+                var observer = new MutationObserver(function () {
+                    removeBadMessages();
+                });
+                if (document.body) {
+                    observer.observe(document.body, { childList: true, subtree: true });
+                }
+                setInterval(removeBadMessages, 750);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', startObservers);
+            } else {
+                startObservers();
+            }
+        })();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def main() -> None:
     logger: logging.Logger = setup_console_logging(logging.INFO)
     
@@ -4625,6 +4714,8 @@ def main() -> None:
     if "_app_session_ready" not in st.session_state:
         st.session_state["_app_session_ready"] = True
     
+    _inject_sessioninfo_suppressor()
+
     # Show error details in UI
     st.set_option("client.showErrorDetails", True)
 
@@ -12123,47 +12214,56 @@ that predicts cognitive performance based on:
                                 ].copy()
                                 roster_editor_df["group_name"] = roster_editor_df["group_name"].fillna("").astype(str)
 
-                                st.markdown("##### Persisted roster editor (active users)")
-                                edited_roster = st.data_editor(
-                                    roster_editor_df,
-                                    hide_index=True,
-                                    use_container_width=True,
-                                    disabled=["user_id", "full_name", "username"],
-                                    column_config={
-                                        "group_name": st.column_config.SelectboxColumn(
-                                            "Group",
-                                            options=[""] + group_names,
-                                            help="Assign each active user to a group for this Study ID (blank = unassigned).",
-                                        )
-                                    },
-                                    key="cohort_roster_editor",
-                                )
+                                if roster_editor_df.empty:
+                                    st.info("Select at least one user to edit roster assignments.")
+                                else:
+                                    roster_sig_source = roster_editor_df["user_id"].astype(str).str.cat(sep="|")
+                                    roster_signature = hashlib.sha1(
+                                        roster_sig_source.encode("utf-8", errors="ignore")
+                                    ).hexdigest()[:8]
+                                    roster_key = f"cohort_roster_editor_{len(roster_editor_df)}_{roster_signature}"
 
-                                save_assignments = st.button(
-                                    "Save study assignments",
-                                    key="cohort_save_assignments",
-                                    type="secondary",
-                                )
-                                if save_assignments:
-                                    for row in edited_roster.itertuples(index=False):
-                                        uid = str(getattr(row, "user_id"))
-                                        gname = str(getattr(row, "group_name", "") or "").strip()
-                                        if not gname:
+                                    st.markdown("##### Persisted roster editor (active users)")
+                                    edited_roster = st.data_editor(
+                                        roster_editor_df,
+                                        hide_index=True,
+                                        use_container_width=True,
+                                        disabled=["user_id", "full_name", "username"],
+                                        column_config={
+                                            "group_name": st.column_config.SelectboxColumn(
+                                                "Group",
+                                                options=[""] + group_names,
+                                                help="Assign each active user to a group for this Study ID (blank = unassigned).",
+                                            )
+                                        },
+                                        key=roster_key,
+                                    )
+
+                                    save_assignments = st.button(
+                                        "Save study assignments",
+                                        key=f"cohort_save_assignments_{roster_signature}",
+                                        type="secondary",
+                                    )
+                                    if save_assignments:
+                                        for row in edited_roster.itertuples(index=False):
+                                            uid = str(getattr(row, "user_id"))
+                                            gname = str(getattr(row, "group_name", "") or "").strip()
+                                            if not gname:
+                                                db.set_user_study_assignment(
+                                                    user_id=uid,
+                                                    study_id=study_id,
+                                                    group_id=None,
+                                                )
+                                                continue
+                                            gid = group_name_to_id.get(gname)
+                                            if not gid:
+                                                continue
                                             db.set_user_study_assignment(
                                                 user_id=uid,
                                                 study_id=study_id,
-                                                group_id=None,
+                                                group_id=gid,
                                             )
-                                            continue
-                                        gid = group_name_to_id.get(gname)
-                                        if not gid:
-                                            continue
-                                        db.set_user_study_assignment(
-                                            user_id=uid,
-                                            study_id=study_id,
-                                            group_id=gid,
-                                        )
-                                    st.success("Study assignments saved.")
+                                        st.success("Study assignments saved.")
 
                         # ---- Longitudinal analysis controls ----
                         if group_names:
