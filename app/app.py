@@ -4614,10 +4614,16 @@ def _inject_sessioninfo_suppressor() -> None:
         div[data-testid="stNotification"],
         div[data-baseweb="toast"],
         div[data-baseweb="notification"],
-        div[role="alert"] {
+        div[role="alert"],
+        div[role="dialog"],
+        div[data-baseweb="modal"] {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
+        }
+        [data-baseweb="backdrop"],
+        [data-baseweb="modal"] {
+            pointer-events: none !important;
         }
         </style>
         <script>
@@ -4629,7 +4635,9 @@ def _inject_sessioninfo_suppressor() -> None:
                 'div[data-testid="stNotification"]',
                 'div[data-baseweb="toast"]',
                 'div[data-baseweb="notification"]',
-                'div[role="alert"]'
+                'div[role="alert"]',
+                'div[role="dialog"]',
+                'div[data-baseweb="modal"]'
             ];
 
             function removeBadMessages() {
@@ -4637,7 +4645,10 @@ def _inject_sessioninfo_suppressor() -> None:
                     var nodes = document.querySelectorAll(selector);
                     nodes.forEach(function (el) {
                         var text = (el.textContent || '').toLowerCase();
-                        if (text.includes('sessioninfo') || text.includes('bad message')) {
+                        if (
+                            text.includes('sessioninfo') ||
+                            text.includes('bad message')
+                        ) {
                             el.style.display = 'none';
                             el.style.visibility = 'hidden';
                             el.style.opacity = '0';
@@ -4646,6 +4657,20 @@ def _inject_sessioninfo_suppressor() -> None:
                             }
                         }
                     });
+                });
+
+                // Explicitly remove any modal/backdrop that contains the error text
+                var modals = document.querySelectorAll('div[role="dialog"], div[data-baseweb="modal"]');
+                modals.forEach(function (modal) {
+                    var text = (modal.textContent || '').toLowerCase();
+                    if (text.includes('sessioninfo') || text.includes('bad message')) {
+                        modal.style.display = 'none';
+                        modal.style.visibility = 'hidden';
+                        modal.style.opacity = '0';
+                        if (typeof modal.remove === 'function') {
+                            modal.remove();
+                        }
+                    }
                 });
             }
 
