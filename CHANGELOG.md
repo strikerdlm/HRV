@@ -5,6 +5,16 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.34] - 2025-12-19
+
+### Documentation
+- **Canonical run command uses `hrv-py312`** (`README.md`, `docs/Manual.md`): Documented `conda run -n hrv-py312 streamlit run app/app.py` (and matching `conda run` for `pip`) so the app is always run under the pinned Streamlit 1.36.0 environment.
+
+## [1.8.33] - 2025-12-19
+
+### Changed
+- **Plot titles moved outside chart area** (`app/echarts_component.py`, `app/circadian_tab.py`, `app/gauge_builder.py`): ECharts plot titles are now rendered as Streamlit text above each plot (and removed from the ECharts option) so the plot canvas stays clean. Gauges also hide their in-gauge title label and rely on the external title.
+
 ## [1.8.32] - 2025-12-19
 
 ### Performance
@@ -16,11 +26,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Save-to-library interaction** (`app/app.py`): Changed from a stateful checkbox to a one-shot button to reduce rerun churn and avoid UI race issues.
-
-## [1.8.33] - 2025-12-19
-
-### Changed
-- **Plot titles moved outside chart area** (`app/echarts_component.py`, `app/circadian_tab.py`, `app/gauge_builder.py`): ECharts plot titles are now rendered as Streamlit text above each plot (and removed from the ECharts option) so the plot canvas stays clean. Gauges also hide their in-gauge title label and rely on the external title.
 
 ## [1.8.31] - 2025-12-19
 
