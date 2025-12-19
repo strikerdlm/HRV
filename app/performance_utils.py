@@ -423,7 +423,9 @@ def get_performance_settings() -> Dict[str, Any]:
             if cpu_info.performance_tier == "high":
                 defaults = {
                     "enable_heavy_plots": True,
-                    "max_plot_points": 3000,
+                    # Default to ultra-fast plotting for rapid identification demos.
+                    # Users can raise this via Performance Preset / Custom sliders.
+                    "max_plot_points": 500,
                     "max_dataframe_rows": 500,
                     "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
                     "throttle_interval": 0.3,
@@ -435,7 +437,7 @@ def get_performance_settings() -> Dict[str, Any]:
             elif cpu_info.performance_tier == "medium":
                 defaults = {
                     "enable_heavy_plots": False,
-                    "max_plot_points": 1500,
+                    "max_plot_points": 500,
                     "max_dataframe_rows": 300,
                     "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
                     "throttle_interval": 0.5,
@@ -447,7 +449,7 @@ def get_performance_settings() -> Dict[str, Any]:
             else:  # low
                 defaults = {
                     "enable_heavy_plots": False,
-                    "max_plot_points": 800,
+                    "max_plot_points": 500,
                     "max_dataframe_rows": 150,
                     "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
                     "throttle_interval": 0.8,
@@ -472,7 +474,7 @@ def _get_fallback_defaults() -> Dict[str, Any]:
     """Get conservative fallback defaults when CPU detection is unavailable."""
     return {
         "enable_heavy_plots": False,
-        "max_plot_points": 1000,
+        "max_plot_points": 500,
         "max_dataframe_rows": 200,
         "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
         "throttle_interval": 0.5,
@@ -522,7 +524,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings.update(new_settings)
             st.caption("✓ Using auto-detected optimal settings")
         elif preset == "Fast (Low CPU)":
-            settings["max_plot_points"] = 800
+            # Ultra-fast preset for rapid identification / demo use.
+            settings["max_plot_points"] = 500
             settings["max_dataframe_rows"] = 150
             settings["max_windows"] = 200
             settings["enable_heavy_plots"] = False
