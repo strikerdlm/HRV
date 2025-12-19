@@ -232,7 +232,8 @@ def convert_fit_to_csv(
                     else:
                         ts = ts.tz_convert(timezone.utc)
                     record[field] = ts
-                except Exception:
+                except (ValueError, TypeError, AttributeError) as exc:
+                    _LOGGER.debug("Timestamp parsing fallback for value %r: %s", value, exc)
                     record[field] = value
             else:
                 record[field] = value
@@ -1228,7 +1229,8 @@ def _parse_daily_summary_record(record: dict[str, Any]) -> dict[str, Any]:
             candidates.append(float(max_avg_hr))
         if candidates:
             avg_hr = float(np.mean(candidates))
-    except Exception:
+    except (ValueError, TypeError) as exc:
+        _LOGGER.debug("Could not compute avg heart rate from %r/%r: %s", min_avg_hr, max_avg_hr, exc)
         avg_hr = None
 
     # Stress aggregate (prefer TOTAL; ignore sentinel -2 values)
@@ -2350,7 +2352,8 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
         else:
             try:
                 metrics[key] = max(metrics[key], value)
-            except Exception:
+            except (TypeError, ValueError):
+                # Incompatible types for max comparison; keep new value
                 metrics[key] = value
 
     def _update_mean(day: date, key: str, value: Any) -> None:
@@ -2385,7 +2388,8 @@ def get_daily_physiology_summary(data: GarminWellnessData) -> pd.DataFrame:
             if not isinstance(d, date):
                 try:
                     d = pd.to_datetime(d, errors="coerce").date()
-                except Exception:
+                except (ValueError, TypeError, AttributeError):
+                    # Could not parse date; skip this record
                     continue
             # Steps / distance / calories
             _update_max(d, "steps", row.get("steps"))

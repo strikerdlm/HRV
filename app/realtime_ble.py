@@ -743,8 +743,9 @@ class BleakBLEManager(BLEManagerInterface):
         if self._client:
             try:
                 await self._client.disconnect()
-            except Exception:
-                pass
+            except OSError as exc:
+                # Connection may already be closed; log but don't raise
+                _LOGGER.debug("BLE disconnect cleanup (non-critical): %s", exc)
             self._client = None
         
         self._device = None
@@ -783,8 +784,9 @@ class BleakBLEManager(BLEManagerInterface):
         if self._client and self._state == ConnectionState.STREAMING:
             try:
                 await self._client.stop_notify(HEART_RATE_MEASUREMENT_UUID)
-            except Exception:
-                pass
+            except OSError as exc:
+                # Notification may already be stopped; log but don't raise
+                _LOGGER.debug("BLE stop_notify cleanup (non-critical): %s", exc)
         
         self._streaming_callback = None
         if self._device:
