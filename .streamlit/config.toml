@@ -1,19 +1,108 @@
+# =============================================================================
+# Streamlit Configuration - HRV Analysis Suite
+# =============================================================================
+# Comprehensive logging and debugging configuration
+# Docs: https://docs.streamlit.io/develop/api-reference/configuration/config.toml
+# =============================================================================
+
+[global]
+# Development mode - set to true for verbose debugging
+# WARNING: Set to false in production for performance
+developmentMode = false
+
+# Show all deprecation warnings in the console
+showWarningOnDirectExecution = true
+
 [server]
+# File watcher type: "auto", "poll", "watchdog", or "none"
+# Use "poll" on network drives (OneDrive) for reliability
 fileWatcherType = "poll"
+
+# Run in headless mode (no browser auto-open)
 headless = true
+
+# Enable serving static files from .streamlit/static/
 enableStaticServing = true
-# Increase timeout for session handling to reduce "SessionInfo before initialized" errors
-# This gives more time for WebSocket connections to stabilize
+
+# Session timeout settings (in seconds)
+# Increase to reduce "SessionInfo before initialized" errors
 disconnectedSessionTTL = 600
 
+# Maximum upload size in MB (default 200)
+maxUploadSize = 500
+
+# Enable Cross-Origin Resource Sharing (for debugging tools)
+enableCORS = true
+
+# Enable XSRF protection
+enableXsrfProtection = true
+
+# Port (default 8501) - uncomment to override
+# port = 8501
+
+# Address to bind (default localhost)
+# address = "0.0.0.0"
+
 [browser]
-# Reduce WebSocket reconnection issues
+# Disable usage stats collection
 gatherUsageStats = false
 
-[logger]
-level = "error"
+# Server address shown in browser (for debugging)
+# serverAddress = "localhost"
+
+# Server port shown in browser
+# serverPort = 8501
 
 [client]
-# Increase the cache timeout for better stability
+# Enable caching for better performance
 caching = true
 
+# Show error details in the browser (helpful for debugging)
+showErrorDetails = true
+
+# Toolbar mode: "auto", "developer", "viewer", "minimal"
+# "developer" shows all debug tools
+toolbarMode = "developer"
+
+[runner]
+# Magic commands enabled (st.write shorthand)
+magicEnabled = true
+
+# Install tracer for profiling (slows down app)
+# Set to true only when profiling performance
+installTracer = false
+
+# Fix matplotlib async issues
+# postScriptGC = true
+
+# Fast reruns - skip full script execution when possible
+fastReruns = true
+
+# Enforce type checking on inputs
+# enforceSerializableSessionState = true
+
+[logger]
+# Logging level: "error", "warning", "info", "debug"
+# Set to "debug" for maximum verbosity during troubleshooting
+# Set to "warning" or "error" for production
+level = "info"
+
+# Log message format
+# messageFormat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+[mapbox]
+# Mapbox token for maps (if using st.map with custom tiles)
+# token = ""
+
+[deprecation]
+# Show deprecation warnings in the app
+showfileUploaderEncoding = true
+showPyplotGlobalUse = true
+
+[theme]
+# Custom theme (optional)
+# primaryColor = "#FF4B4B"
+# backgroundColor = "#FFFFFF"
+# secondaryBackgroundColor = "#F0F2F6"
+# textColor = "#262730"
+# font = "sans serif"
