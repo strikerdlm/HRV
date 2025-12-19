@@ -14,7 +14,10 @@ import streamlit.components.v1 as components
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _DEFAULT_LOCAL_ECHARTS_BUNDLE = _PROJECT_ROOT / "node_modules" / "echarts" / "dist" / "echarts.min.js"
-_STATIC_DIR = Path(__file__).resolve().parent / "static"
+# Streamlit serves static files from .streamlit/static/ relative to the working directory.
+# We also maintain a fallback in app/static/ for backwards compatibility.
+_STREAMLIT_STATIC_DIR = _PROJECT_ROOT / ".streamlit" / "static"
+_APP_STATIC_DIR = Path(__file__).resolve().parent / "static"
 _STATIC_ECHARTS_FILENAME = "echarts.min.js"
 
 
@@ -58,12 +61,13 @@ def _ensure_echarts_available_via_static(
 	*,
 	source_path: Optional[Path],
 ) -> Optional[str]:
-	"""Ensure ECharts bundle exists under app/static and return its URL.
+	"""Ensure ECharts bundle exists under .streamlit/static/ and return its URL.
 
-	Streamlit can serve files from `app/static/` when `server.enableStaticServing=true`.
-	However, `.js` is served as `text/plain` (nosniff) and can't be executed via a
-	`<script src=...>` tag. We fetch it and inject it as an inline script in the iframe.
-	That still enables browser caching and avoids embedding ~1MB into every chart HTML.
+	Streamlit serves files from `.streamlit/static/` when `server.enableStaticServing=true`.
+	The URL is `/app/static/<filename>`. However, `.js` is served as `text/plain` (nosniff)
+	and can't be executed via a `<script src=...>` tag. We fetch it and inject it as an
+	inline script in the iframe. That still enables browser caching and avoids embedding
+	~1MB into every chart HTML.
 	"""
 	if source_path is None:
 		return None
@@ -71,11 +75,18 @@ def _ensure_echarts_available_via_static(
 	if not src.exists() or not src.is_file():
 		return None
 	try:
-		_STATIC_DIR.mkdir(parents=True, exist_ok=True)
-		dst = _STATIC_DIR / _STATIC_ECHARTS_FILENAME
-		# Copy only if missing or size differs to keep reruns cheap.
-		if (not dst.exists()) or (dst.stat().st_size != src.stat().st_size):
-			shutil.copy2(src, dst)
+		# Primary: Streamlit's static directory (.streamlit/static/)
+		_STREAMLIT_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+		dst_streamlit = _STREAMLIT_STATIC_DIR / _STATIC_ECHARTS_FILENAME
+		if (not dst_streamlit.exists()) or (dst_streamlit.stat().st_size != src.stat().st_size):
+			shutil.copy2(src, dst_streamlit)
+
+		# Fallback: also copy to app/static/ for backwards compatibility
+		_APP_STATIC_DIR.mkdir(parents=True, exist_ok=True)
+		dst_app = _APP_STATIC_DIR / _STATIC_ECHARTS_FILENAME
+		if (not dst_app.exists()) or (dst_app.stat().st_size != src.stat().st_size):
+			shutil.copy2(src, dst_app)
+
 		return _static_url(_STATIC_ECHARTS_FILENAME)
 	except Exception:
 		return None
@@ -124,14 +135,14 @@ def render_echarts(
 
 	cdn = cfg.cdn_url or "https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"
 	local_static_url = _ensure_echarts_available_via_static(source_path=cfg.local_echarts_path)
-	# ECharts loads via fetch+inject (preferred), then CDN <script> fallback.
-	echarts_lib_source = local_static_url or cdn
-	# Ensure CDN fallback is ALWAYS available.
-	# If the local bundle is unavailable, ECHARTS_LIB_SOURCE becomes the CDN URL, but the
-	# JS loader only fetches when the URL starts with "/" (local static), and only injects
-	# <script> tags from ECHARTS_FALLBACK_SOURCES. Therefore, we must include the CDN in the
-	# fallback list even when there is no local static bundle.
-	fallback_sources: list[str] = [cdn]
+	# Primary: CDN (most reliable). Fallback: local static bundle (for offline scenarios).
+	# The CDN approach uses a <script> tag which respects proper MIME types and caching.
+	# The local approach uses fetch+inject because Streamlit serves .js as text/plain.
+	echarts_lib_source = cdn  # Always prefer CDN for reliability
+	# Fallback sources: local static bundle if available
+	fallback_sources: list[str] = []
+	if local_static_url:
+		fallback_sources.append(local_static_url)
 
 	theme_snippet = f'"{theme}"' if theme else "null"
 
@@ -269,48 +280,56 @@ def render_echarts(
 				win.addEventListener("load", () => setTimeout(tryPrint, 250));
 			}}
 
-			async function mountChart() {{
-				setStatus("Loading ECharts from " + ECHARTS_LIB_SOURCE + "...", false);
-				try {{
-					// Preferred: fetch local bundle (served as static text) and inject it.
-					if (!window.echarts && ECHARTS_LIB_SOURCE && String(ECHARTS_LIB_SOURCE).startsWith("/")) {{
+		async function mountChart() {{
+			setStatus("Loading ECharts...", false);
+			try {{
+				// Primary: Load from CDN via script tag (most reliable, proper MIME type).
+				if (!window.echarts && ECHARTS_LIB_SOURCE && !String(ECHARTS_LIB_SOURCE).startsWith("/")) {{
+					try {{
+						setStatus("Loading ECharts from CDN...", false);
+						await loadScript(ECHARTS_LIB_SOURCE);
+					}} catch (e) {{
+						console.warn("CDN ECharts load failed:", e);
+					}}
+				}}
+				// Fallback 1: Local static bundle via fetch+inject (for offline or CDN issues).
+				if (!window.echarts && Array.isArray(ECHARTS_FALLBACK_SOURCES) && ECHARTS_FALLBACK_SOURCES.length) {{
+					for (let i = 0; i < ECHARTS_FALLBACK_SOURCES.length; i++) {{
+						const src = ECHARTS_FALLBACK_SOURCES[i];
+						if (!src) continue;
+						setStatus("Loading ECharts fallback (" + (i + 1) + "/" + ECHARTS_FALLBACK_SOURCES.length + ")...", false);
 						try {{
-							await fetchAndInjectScript(ECHARTS_LIB_SOURCE);
-						}} catch (e) {{
-							console.warn("Local ECharts load failed:", e);
-						}}
-					}}
-					// Fallback: CDN script injection
-					if (!window.echarts && Array.isArray(ECHARTS_FALLBACK_SOURCES) && ECHARTS_FALLBACK_SOURCES.length) {{
-						for (let i = 0; i < ECHARTS_FALLBACK_SOURCES.length; i++) {{
-							const src = ECHARTS_FALLBACK_SOURCES[i];
-							if (!src) continue;
-							setStatus(
-								"Loading ECharts fallback (" + (i + 1) + "/" + ECHARTS_FALLBACK_SOURCES.length + ") from " + src + "...",
-								false
-							);
-							try {{
+							if (String(src).startsWith("/")) {{
+								await fetchAndInjectScript(src);
+							}} else {{
 								await loadScript(src);
-							}} catch (e) {{
-								console.warn("ECharts fallback failed:", src, e);
 							}}
-							if (window.echarts) break;
+						}} catch (e) {{
+							console.warn("ECharts fallback failed:", src, e);
 						}}
+						if (window.echarts) break;
 					}}
-					if (!window.echarts) {{
-						console.error("ECharts not loaded.");
-						setStatus(
-							"ECharts failed to load. Tried: " + [ECHARTS_LIB_SOURCE].concat(ECHARTS_FALLBACK_SOURCES || []).join(", "),
-							true
-						);
-						return;
+				}}
+				// Fallback 2: If primary source was local and failed, try CDN directly.
+				if (!window.echarts && ECHARTS_LIB_SOURCE && String(ECHARTS_LIB_SOURCE).startsWith("/")) {{
+					try {{
+						setStatus("Loading ECharts from CDN (final fallback)...", false);
+						await loadScript("https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js");
+					}} catch (e) {{
+						console.warn("Final CDN fallback failed:", e);
 					}}
-					const el = document.getElementById("{container_id}");
-					if (!el) {{
-						setStatus("Chart container element was not found.", true);
-						return;
-					}}
-					setStatus("", false);
+				}}
+				if (!window.echarts) {{
+					console.error("ECharts not loaded.");
+					setStatus("ECharts failed to load. Check your internet connection or try refreshing.", true);
+					return;
+				}}
+				const el = document.getElementById("{container_id}");
+				if (!el) {{
+					setStatus("Chart container element was not found.", true);
+					return;
+				}}
+				setStatus("", false);
 				if (window.frameElement) {{
 					const frame = window.frameElement;
 					frame.style.width = '100%';
@@ -361,13 +380,11 @@ def render_echarts(
 					observer.observe(el);
 					el.__resizeObserver = observer;
 				}} else {{
-					// Fallback for browsers without ResizeObserver support
 					const fallback = () => inst.resize();
 					el.__fallbackInterval = window.setInterval(fallback, 500);
 				}}
 				requestAnimationFrame(() => inst.resize());
 				el.__echartsInstance = inst;
-
 				// Wire export toolbar (optional)
 				const toolbar = document.getElementById("{toolbar_id}");
 				if (toolbar) {{
@@ -411,12 +428,12 @@ def render_echarts(
 						}}
 					}});
 				}}
-				}} catch (e) {{
-					console.error("Chart render failed:", e);
-					const msg = (e && e.message) ? e.message : String(e);
-					setStatus("Chart render failed: " + msg, true);
-				}}
+			}} catch (e) {{
+				console.error("Chart render failed:", e);
+				const msg = (e && e.message) ? e.message : String(e);
+				setStatus("Chart render failed: " + msg, true);
 			}}
+		}}
 			if (document.readyState === 'loading') {{
 				document.addEventListener('DOMContentLoaded', mountChart);
 			}} else {{
