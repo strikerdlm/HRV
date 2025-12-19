@@ -5,6 +5,11 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.30] - 2025-12-19
+
+### Fixed
+- **User Profile performance fix** (`app/user_profile_tab.py`): **Critical fix** - Replaced nested `st.tabs()` with selectbox-based navigation for profile sub-sections (Assessments, Clinical Profile, History, HRV, Readiness, Data, Sessions). Nested tabs in Streamlit render ALL content on every rerun, causing severe slowdowns and browser freezes in Edge/Chromium browsers. The new pattern only renders the selected section (lazy loading), dramatically improving performance.
+
 ## [1.8.29] - 2025-12-19
 
 ### Fixed
