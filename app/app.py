@@ -4610,11 +4610,23 @@ def main() -> None:
     # Set high process priority for better performance (if available)
     _set_process_priority()
     
-    # Streamlit detailed tracebacks in the UI and console
-    st.set_option("client.showErrorDetails", True)
+    # -------------------------------------------------------------------------
+    # Streamlit page config MUST be the first Streamlit command
+    # -------------------------------------------------------------------------
     st.set_page_config(
         page_title="HRV Analysis — Streamlit + ECharts",
-        layout="wide")
+        layout="wide",
+    )
+    
+    # -------------------------------------------------------------------------
+    # Initialize session state early to prevent race conditions
+    # This helps prevent "Tried to use SessionInfo before initialized" errors
+    # -------------------------------------------------------------------------
+    if "_app_session_ready" not in st.session_state:
+        st.session_state["_app_session_ready"] = True
+    
+    # Show error details in UI
+    st.set_option("client.showErrorDetails", True)
 
     # ----------------------------------------------------------------------
     # Crew / Mission workspace selection (affects DB + per-subject file storage)
