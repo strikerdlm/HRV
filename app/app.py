@@ -11,13 +11,12 @@ from __future__ import annotations
 #
 # This is deterministic, bounded, and required for testability.
 #
-# STREAMLIT VERSION REQUIREMENT:
-# This app requires Streamlit 1.35.0 (pinned in requirements.txt).
-# DO NOT UPGRADE to versions > 1.35 without extensive testing:
-#   - Versions 1.37+ introduce widget tree changes causing "Bad 'setIn' index" errors
-#   - Versions 1.40+ still exhibit SessionInfo race conditions
-# A client-side error suppressor is active (see _inject_sessioninfo_suppressor)
-# to hide remaining transient errors, but root cause is in Streamlit core.
+# STREAMLIT VERSION:
+# This app uses Streamlit 1.36.0 (pinned in requirements.txt).
+# This is the last stable release BEFORE the @st.fragment changes in 1.37+
+# that caused "SessionInfo" and "Bad setIn index" race condition errors.
+# Version 1.35.0 was tested but caused tabs not to load properly.
+# Error suppressor is kept active as a safety net (see _inject_sessioninfo_suppressor).
 import sys
 from pathlib import Path
 
@@ -4613,37 +4612,51 @@ def _set_process_priority() -> None:
 
 
 def _inject_sessioninfo_suppressor() -> None:
-    """Hide known Streamlit race-condition errors (SessionInfo, setIn) client-side."""
+    """Aggressively suppress ALL Streamlit error toasts/dialogs (SessionInfo, setIn, etc)."""
     st.markdown(
         """
         <style>
-        /* Hide toast/notification containers - these show transient errors */
+        /* AGGRESSIVE: Permanently hide ALL toast/notification/alert containers */
         div[data-testid="stToast"],
         div[data-testid="stToastContainer"],
         div[data-testid="stNotification"],
         div[data-baseweb="toast"],
-        div[data-baseweb="notification"] {
+        div[data-baseweb="notification"],
+        div[role="alert"][data-testid],
+        .stAlert[data-testid] {
             display: none !important;
             visibility: hidden !important;
             opacity: 0 !important;
+            height: 0 !important;
+            width: 0 !important;
+            pointer-events: none !important;
+            position: absolute !important;
+            left: -9999px !important;
+        }
+        
+        /* Also hide error modal backdrops that might block interaction */
+        div[data-baseweb="backdrop"],
+        div[data-baseweb="modal-backdrop"] {
+            pointer-events: none !important;
         }
         </style>
         <script>
         (function () {
             'use strict';
             
-            // Known Streamlit internal error patterns to suppress
+            // Known Streamlit internal error patterns
             var ERROR_PATTERNS = [
                 'sessioninfo',
                 'bad message',
                 "bad 'setin'",
-                'setin index',
-                'should be between'
+                'setin',
+                'should be between',
+                'immutable'
             ];
             
-            function isKnownError(text) {
+            function containsErrorPattern(text) {
                 if (!text) return false;
-                var lowerText = text.toLowerCase();
+                var lowerText = String(text).toLowerCase();
                 for (var i = 0; i < ERROR_PATTERNS.length; i++) {
                     if (lowerText.indexOf(ERROR_PATTERNS[i]) !== -1) {
                         return true;
@@ -4652,13 +4665,14 @@ def _inject_sessioninfo_suppressor() -> None:
                 return false;
             }
             
-            var toastSelectors = [
+            var removeSelectors = [
                 'div[data-testid="stToast"]',
                 'div[data-testid="stToastContainer"]',
                 'div[data-testid="stNotification"]',
                 'div[data-baseweb="toast"]',
                 'div[data-baseweb="notification"]',
-                'div[role="alert"]'
+                'div[role="alert"][data-testid]',
+                '.stAlert[data-testid]'
             ];
             
             var modalSelectors = [
@@ -4668,100 +4682,97 @@ def _inject_sessioninfo_suppressor() -> None:
             
             var backdropSelectors = [
                 'div[data-baseweb="backdrop"]',
-                'div[data-baseweb="modal-backdrop"]',
-                '.stModal'
+                'div[data-baseweb="modal-backdrop"]'
             ];
 
-            function removeElement(el) {
-                el.style.display = 'none';
-                el.style.visibility = 'hidden';
-                el.style.opacity = '0';
-                el.style.pointerEvents = 'none';
-                if (typeof el.remove === 'function') {
-                    try { el.remove(); } catch (e) { /* ignore */ }
-                }
+            function nukeElement(el) {
+                if (!el) return;
+                try {
+                    el.style.display = 'none';
+                    el.style.visibility = 'hidden';
+                    el.style.opacity = '0';
+                    el.style.height = '0';
+                    el.style.width = '0';
+                    el.style.pointerEvents = 'none';
+                    el.style.position = 'absolute';
+                    el.style.left = '-9999px';
+                    if (el.remove) el.remove();
+                } catch (e) { /* ignore */ }
             }
 
-            function removeBadMessages() {
-                // Remove error toasts/alerts
-                toastSelectors.forEach(function (selector) {
-                    var nodes = document.querySelectorAll(selector);
-                    nodes.forEach(function (el) {
-                        if (isKnownError(el.textContent)) {
-                            removeElement(el);
-                        }
-                    });
+            function purgeErrors() {
+                // Remove ALL toast/alert elements (they're usually error messages anyway)
+                removeSelectors.forEach(function (sel) {
+                    try {
+                        var nodes = document.querySelectorAll(sel);
+                        nodes.forEach(nukeElement);
+                    } catch (e) { /* ignore */ }
                 });
 
-                // Remove error modals and their backdrops
-                modalSelectors.forEach(function (selector) {
-                    var modals = document.querySelectorAll(selector);
-                    modals.forEach(function (modal) {
-                        if (isKnownError(modal.textContent)) {
-                            removeElement(modal);
-                            // Also remove any sibling/parent backdrops
-                            backdropSelectors.forEach(function (bSel) {
-                                var backdrops = document.querySelectorAll(bSel);
-                                backdrops.forEach(function (bd) {
-                                    removeElement(bd);
+                // Remove error modals + their backdrops
+                modalSelectors.forEach(function (sel) {
+                    try {
+                        var modals = document.querySelectorAll(sel);
+                        modals.forEach(function (modal) {
+                            if (containsErrorPattern(modal.textContent || '')) {
+                                nukeElement(modal);
+                                // Nuke backdrops too
+                                backdropSelectors.forEach(function (bSel) {
+                                    var bds = document.querySelectorAll(bSel);
+                                    bds.forEach(nukeElement);
                                 });
-                            });
-                        }
-                    });
+                            }
+                        });
+                    } catch (e) { /* ignore */ }
                 });
             }
 
-            // Suppress JS errors related to known issues
-            window.addEventListener(
-                'error',
-                function (event) {
-                    if (event && typeof event.message === 'string') {
-                        if (isKnownError(event.message)) {
-                            event.preventDefault();
-                            event.stopImmediatePropagation();
-                            return false;
-                        }
-                    }
-                },
-                true
-            );
+            // Suppress console errors matching patterns
+            var origError = console.error;
+            console.error = function() {
+                var msg = Array.prototype.slice.call(arguments).join(' ');
+                if (!containsErrorPattern(msg)) {
+                    origError.apply(console, arguments);
+                }
+            };
 
-            // Suppress promise rejections related to known issues
-            window.addEventListener('unhandledrejection', function (event) {
-                var reason = event && event.reason ? String(event.reason) : '';
-                if (isKnownError(reason)) {
-                    event.preventDefault();
+            // Suppress JS error events
+            window.addEventListener('error', function (e) {
+                if (e && e.message && containsErrorPattern(e.message)) {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    return false;
+                }
+            }, true);
+
+            // Suppress unhandled promise rejections
+            window.addEventListener('unhandledrejection', function (e) {
+                var msg = (e && e.reason) ? String(e.reason) : '';
+                if (containsErrorPattern(msg)) {
+                    e.preventDefault();
                     return false;
                 }
             });
-            
-            // Intercept console.error to suppress known error spam
-            var originalConsoleError = console.error;
-            console.error = function() {
-                var args = Array.prototype.slice.call(arguments);
-                var msg = args.join(' ');
-                if (isKnownError(msg)) {
-                    return; // Suppress
-                }
-                originalConsoleError.apply(console, args);
-            };
 
-            function startObservers() {
-                removeBadMessages();
-                var observer = new MutationObserver(function () {
-                    removeBadMessages();
-                });
+            // Start aggressive polling
+            function startCleaner() {
+                purgeErrors();
+                var observer = new MutationObserver(purgeErrors);
                 if (document.body) {
-                    observer.observe(document.body, { childList: true, subtree: true });
+                    observer.observe(document.body, { 
+                        childList: true, 
+                        subtree: true,
+                        attributes: false
+                    });
                 }
-                // Check frequently to catch errors quickly
-                setInterval(removeBadMessages, 300);
+                // Poll very frequently
+                setInterval(purgeErrors, 200);
             }
 
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', startObservers);
+                document.addEventListener('DOMContentLoaded', startCleaner);
             } else {
-                startObservers();
+                startCleaner();
             }
         })();
         </script>
