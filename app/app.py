@@ -275,7 +275,7 @@ except ImportError:
     HRV_CACHE_AVAILABLE = False
 
 from dataclasses import asdict, dataclass
-from datetime import timezone, timedelta, datetime, date
+from datetime import timezone, timedelta, datetime, date, time as dt_time
 from typing import (
     Any,
     Dict,
@@ -2955,6 +2955,236 @@ def _persist_analysis_results(
                     logger.debug("Unable to persist HRV analysis cache to DB for %s: %s", source, exc)
             except Exception as exc:  # pragma: no cover - defensive
                 logger.debug("Unable to store analysis payload for %s: %s", source, exc)
+
+
+def _list_library_rr_files() -> Dict[str, List[Dict[str, Any]]]:
+    """List all stored RR files from all user profiles.
+    
+    Returns:
+        Dictionary mapping user display names to lists of file info dicts.
+        Each file info contains: name, path, date, size_kb.
+    """
+    from user_data_manager import get_user_data_path, parse_filename_date
+    
+    result: Dict[str, List[Dict[str, Any]]] = {}
+    base_path = Path(__file__).resolve().parent / "data"
+    
+    if not base_path.exists():
+        return result
+    
+    # Get all user directories
+    try:
+        user_dirs = [d for d in base_path.iterdir() if d.is_dir()]
+    except OSError:
+        return result
+    
+    for user_dir in user_dirs:
+        rr_dir = user_dir / "rr_intervals"
+        if not rr_dir.exists():
+            continue
+        
+        try:
+            files = sorted(rr_dir.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True)
+        except OSError:
+            continue
+        
+        if not files:
+            continue
+        
+        # Try to get display name from user_info.json
+        user_info_file = user_dir / "user_info.json"
+        display_name = user_dir.name  # Default to folder name
+        try:
+            if user_info_file.exists():
+                import json
+                with open(user_info_file, "r", encoding="utf-8") as f:
+                    info = json.load(f)
+                    display_name = info.get("full_name") or info.get("username") or user_dir.name
+        except Exception:
+            pass
+        
+        file_list: List[Dict[str, Any]] = []
+        for f in files:
+            try:
+                stat = f.stat()
+                parsed_date = parse_filename_date(f.name)
+                file_list.append({
+                    "name": f.name,
+                    "path": str(f),
+                    "date": parsed_date.isoformat() if parsed_date else None,
+                    "size_kb": stat.st_size / 1024,
+                    "mtime": stat.st_mtime,
+                    "user_id": user_dir.name,
+                })
+            except OSError:
+                continue
+        
+        if file_list:
+            result[display_name] = file_list
+    
+    return result
+
+
+def _render_library_loader() -> Dict[str, UploadedRR]:
+    """Render the 'Load from Library' expander in the sidebar.
+    
+    Returns:
+        Dictionary of loaded RR data from library files.
+    """
+    out: Dict[str, UploadedRR] = {}
+    
+    with st.sidebar.expander("📚 Load from Library", expanded=False):
+        st.caption(
+            "Load previously saved RR recordings from user profiles. "
+            "These files are already stored and can be used for analysis without re-uploading."
+        )
+        
+        # Get all available files
+        library_files = _list_library_rr_files()
+        
+        if not library_files:
+            st.info("No stored RR files found. Upload files and save them to build your library.")
+            return out
+        
+        # Build flat list of all files with user context
+        all_files: List[Dict[str, Any]] = []
+        for user_name, files in library_files.items():
+            for f in files:
+                f["user_display"] = user_name
+                all_files.append(f)
+        
+        # Sort by modification time (most recent first)
+        all_files.sort(key=lambda x: x.get("mtime", 0), reverse=True)
+        
+        # Create display options
+        options = [
+            f"{f['name']} ({f['user_display']})" for f in all_files
+        ]
+        
+        if not options:
+            st.info("No RR files available in the library.")
+            return out
+        
+        st.markdown(f"**{len(options)} file(s) available**")
+        
+        # Multi-select for files
+        selected = st.multiselect(
+            "Select files to load",
+            options=options,
+            default=[],
+            key="library_file_select",
+            help="Select one or more files to load into the analysis workspace.",
+        )
+        
+        if not selected:
+            return out
+        
+        # Map selections back to file info
+        selected_files = [all_files[options.index(s)] for s in selected]
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            load_clicked = st.button(
+                "📥 Load files",
+                key="library_load_btn",
+                use_container_width=True,
+            )
+        with col2:
+            load_run_clicked = st.button(
+                "🚀 Load + Analyze",
+                key="library_load_run_btn",
+                type="primary",
+                use_container_width=True,
+            )
+        
+        if load_clicked or load_run_clicked:
+            # Queue files for loading via session state
+            queue_payload: List[Dict[str, Any]] = []
+            for f in selected_files:
+                parsed_date = None
+                if f.get("date"):
+                    try:
+                        parsed_date = date.fromisoformat(f["date"])
+                    except (ValueError, TypeError):
+                        parsed_date = date.today()
+                else:
+                    parsed_date = date.today()
+                
+                start_ts = datetime.combine(
+                    parsed_date, datetime.min.time(), tzinfo=timezone.utc
+                )
+                queue_payload.append({
+                    "path": f["path"],
+                    "name": f["name"],
+                    "recording_start": start_ts.isoformat(),
+                })
+            
+            st.session_state["queued_rr_filepaths"] = queue_payload
+            
+            if load_run_clicked:
+                st.session_state["auto_run_hrv_analysis"] = True
+                st.success(f"Loading {len(selected_files)} file(s) and starting analysis...")
+            else:
+                st.success(f"Loaded {len(selected_files)} file(s) into workspace.")
+            
+            st.rerun()
+    
+    return out
+
+
+def _save_uploaded_files_to_library(
+    files_to_save: Dict[str, UploadedRR],
+    user_id: str,
+) -> int:
+    """Save uploaded RR files to the user's library.
+    
+    Args:
+        files_to_save: Dictionary of UploadedRR objects to save.
+        user_id: User ID to save files under.
+        
+    Returns:
+        Number of files successfully saved.
+    """
+    from user_data_manager import get_user_data_path, ensure_user_directories
+    
+    base_path = Path(__file__).resolve().parent / "data"
+    user_path = get_user_data_path(user_id, base_path=base_path)
+    dirs = ensure_user_directories(user_path)
+    rr_dir = dirs["rr"]
+    
+    saved_count = 0
+    for name, uploaded in files_to_save.items():
+        if uploaded.rr_ms is None or len(uploaded.rr_ms) < 10:
+            continue
+        
+        # Create filename with timestamp if not already present
+        safe_name = name
+        if not any(c.isdigit() for c in name):
+            # Add date prefix if filename has no numbers (likely no date)
+            ts = uploaded.recording_start_utc
+            if ts:
+                date_str = ts.strftime("%Y%m%d_%H%M")
+            else:
+                date_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
+            safe_name = f"{date_str}_{name}"
+        
+        file_path = rr_dir / safe_name
+        
+        # Don't overwrite existing files
+        if file_path.exists():
+            continue
+        
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                for rr_val in uploaded.rr_ms:
+                    f.write(f"{int(rr_val)}\n")
+            saved_count += 1
+        except OSError:
+            continue
+    
+    return saved_count
+
+
 def _upload_section() -> Dict[str, UploadedRR]:
     """
     Handle RR interval file uploads with session state caching.
@@ -3041,6 +3271,60 @@ def _upload_section() -> Dict[str, UploadedRR]:
     stale_keys = [k for k in upload_cache if k not in current_keys]
     for k in stale_keys:
         del upload_cache[k]
+    
+    # =========================================================================
+    # SAVE FOR LATER - Allow users to save uploaded files to their library
+    # =========================================================================
+    if out:
+        st.sidebar.markdown("---")
+        
+        # Check if user is logged in
+        active_user = st.session_state.get("current_user_profile")
+        user_id = None
+        user_display = None
+        
+        if active_user:
+            if hasattr(active_user, "user_id"):
+                user_id = active_user.user_id
+                user_display = getattr(active_user, "full_name", None) or getattr(active_user, "username", user_id)
+            elif isinstance(active_user, dict):
+                user_id = active_user.get("user_id")
+                user_display = active_user.get("full_name") or active_user.get("username") or user_id
+        
+        if user_id:
+            # Track which files have been saved in this session
+            saved_files_key = "_sidebar_saved_files"
+            if saved_files_key not in st.session_state:
+                st.session_state[saved_files_key] = set()
+            
+            # Filter out files already saved
+            unsaved_files = {
+                name: uploaded for name, uploaded in out.items()
+                if name not in st.session_state[saved_files_key]
+            }
+            
+            if unsaved_files:
+                save_checkbox = st.sidebar.checkbox(
+                    f"💾 Save {len(unsaved_files)} file(s) to library",
+                    value=False,
+                    key="sidebar_save_to_library",
+                    help=f"Save uploaded files to {user_display}'s profile for future analysis.",
+                )
+                
+                if save_checkbox:
+                    saved_count = _save_uploaded_files_to_library(unsaved_files, user_id)
+                    if saved_count > 0:
+                        st.sidebar.success(f"✅ Saved {saved_count} file(s) to library!")
+                        # Track saved files
+                        st.session_state[saved_files_key].update(unsaved_files.keys())
+                    else:
+                        st.sidebar.info("Files already exist in library or could not be saved.")
+            else:
+                st.sidebar.info("✅ All files already saved to library.")
+        else:
+            st.sidebar.caption(
+                "💡 **Tip:** Log in to a user profile to save files for future analysis."
+            )
     
     return out
 
@@ -4926,7 +5210,13 @@ def main() -> None:
 
     # Initialize uploads dictionary
     uploads: Dict[str, UploadedRR] = {}
-    
+
+    # =========================================================================
+    # LIBRARY LOADER - Load previously saved RR files from user profiles
+    # =========================================================================
+    # Render library loader in sidebar (before upload section)
+    _render_library_loader()
+
     # PRIMARY: Device imports (Polar, Garmin, etc.) - in sidebar
     if DEVICE_IMPORTS_AVAILABLE:
         imported_devices = render_primary_import_section()
@@ -4953,7 +5243,7 @@ def main() -> None:
     else:
         # Fallback to legacy upload section if device imports unavailable
         uploads = _upload_section()
-        
+
         # Legacy device-specific imports (ActiGraph GT3X, Somfit Pro)
         device_uploads = _device_import_section()
         uploads.update(device_uploads)
