@@ -9601,7 +9601,7 @@ that predicts cognitive performance based on:
                         )
                         cr_start_time = st.time_input(
                             "Crew rest start (local time)",
-                            value=datetime.time(20, 0),
+                            value=dt_time(20, 0),
                             key="usaf_crew_rest_start_time",
                         )
                     with col_cr_2:
@@ -9612,7 +9612,7 @@ that predicts cognitive performance based on:
                         )
                         fdp_start_time = st.time_input(
                             "FDP start (local time)",
-                            value=datetime.time(8, 0),
+                            value=dt_time(8, 0),
                             key="usaf_fdp_start_time",
                         )
                     with col_cr_3:
