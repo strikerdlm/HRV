@@ -48,6 +48,12 @@ try:
         MeasurementTimepoint,
         UserDatabase,
         get_database,
+        get_database_path,
+        is_sqlite_database_corruption_error,
+        list_database_backups,
+        reset_database_file,
+        restore_database_from_backup,
+        sqlite_quick_check,
         get_cached_user_list,
         clear_user_cache,
     )
@@ -2529,6 +2535,101 @@ def _render_profile_rr_library(user: UserProfile) -> None:
 
 
 @_fragment_if_available
+def _render_sqlite_corruption_recovery_ui(*, context_label: str, user_id: str, exc: BaseException) -> None:
+    """Render recovery UI when the mission SQLite database is corrupted."""
+    st.error(
+        "The mission database appears corrupted (SQLite). "
+        "This is usually fixable by restoring a timestamped backup."
+    )
+    if not DATABASE_AVAILABLE:
+        st.caption("Database module is unavailable in this environment.")
+        return
+
+    db_path = get_database_path()
+    st.caption(f"Context: {context_label}")
+    st.caption(f"Database file: {db_path}")
+    st.caption(f"Error: {exc}")
+
+    ok, msg = sqlite_quick_check(db_path)
+    if ok:
+        st.info("SQLite quick_check reports OK, but a query still failed. Try restoring a backup anyway.")
+    else:
+        st.warning(f"SQLite quick_check indicates corruption: {msg}")
+
+    st.markdown("### Restore from backup")
+    backups = list_database_backups(db_path=db_path, max_backups=25)
+    if not backups:
+        st.info("No timestamped backups were found next to the mission database.")
+    else:
+        backup_names = [p.name for p in backups]
+        selected_name = st.selectbox(
+            "Select a backup to restore",
+            options=backup_names,
+            index=0,
+            key=f"db_restore_select_{user_id}",
+            help="Newest backups are listed first.",
+        )
+        selected_backup = backups[backup_names.index(selected_name)]
+        bak_ok, bak_msg = sqlite_quick_check(selected_backup)
+        if bak_ok:
+            st.caption("Selected backup integrity: ok")
+        else:
+            st.warning(f"Selected backup integrity check: {bak_msg}")
+
+        confirm_restore = st.checkbox(
+            "I understand this will overwrite the active DB file (a corrupt copy will be preserved).",
+            key=f"db_restore_confirm_{user_id}",
+        )
+        if st.button(
+            "🛟 Restore selected backup",
+            type="primary",
+            disabled=not confirm_restore,
+            key=f"db_restore_btn_{user_id}",
+        ):
+            try:
+                preserved = restore_database_from_backup(backup_path=selected_backup, db_path=db_path)
+            except Exception as restore_exc:  # noqa: BLE001
+                st.error(f"Restore failed: {restore_exc}")
+                st.info(
+                    "If the file is locked, stop Streamlit (Ctrl+C), wait a few seconds, and try again."
+                )
+            else:
+                st.success(f"Backup restored. Previous DB preserved as: {preserved.name}")
+                try:
+                    st.cache_data.clear()
+                except Exception:  # pragma: no cover
+                    pass
+                st.rerun()
+
+    st.markdown("### Create a new empty database (last resort)")
+    st.caption(
+        "This keeps a copy of the corrupted DB file, but you may lose stored history until you re-import/recompute it."
+    )
+    confirm_reset = st.checkbox(
+        "I understand this creates a new empty mission database.",
+        key=f"db_reset_confirm_{user_id}",
+    )
+    if st.button(
+        "🧯 Reset database (create new empty)",
+        disabled=not confirm_reset,
+        key=f"db_reset_btn_{user_id}",
+    ):
+        try:
+            moved = reset_database_file(db_path=db_path)
+        except Exception as reset_exc:  # noqa: BLE001
+            st.error(f"Reset failed: {reset_exc}")
+            st.info("If the file is locked, stop Streamlit (Ctrl+C) and try again.")
+        else:
+            moved_names = ", ".join(p.name for p in moved) if moved else "(nothing moved)"
+            st.success(f"Database reset. Preserved files: {moved_names}")
+            try:
+                st.cache_data.clear()
+            except Exception:  # pragma: no cover
+                pass
+            st.rerun()
+
+
+@_fragment_if_available
 def _render_hrv_history(user: UserProfile) -> None:
     """Render HRV measurement history."""
     st.markdown("## 💓 HRV Measurement History")
@@ -2833,6 +2934,13 @@ def _render_hrv_history(user: UserProfile) -> None:
             st.dataframe(df, use_container_width=True)
         
     except Exception as exc:
+        if DATABASE_AVAILABLE and is_sqlite_database_corruption_error(exc):
+            _render_sqlite_corruption_recovery_ui(
+                context_label="HRV measurement history",
+                user_id=str(user.user_id),
+                exc=exc,
+            )
+            return
         st.error(f"Failed to load HRV history: {exc}")
 
 
