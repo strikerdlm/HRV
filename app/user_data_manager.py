@@ -56,6 +56,7 @@ _DEFAULT_MISSIONS: Final[tuple[str, ...]] = ("Mission 1", "Mission 2")
 _CREW_DIR_NAME: Final[str] = "crew"
 _MISSION_SUBJECTS_DIR_NAME: Final[str] = "subjects"
 _MAX_LEGACY_USERS_TO_COPY: Final[int] = 500
+_MAX_LEGACY_LOOSE_FILES_TO_COPY: Final[int] = 200
 
 # Maximum files to load per category
 _MAX_FILES_PER_CATEGORY: Final[int] = 1000
@@ -249,32 +250,72 @@ def _maybe_migrate_legacy_data_root(*, legacy_root: Path, new_root: Path) -> Non
     except OSError:
         return
 
-    copied = 0
+    copied_dirs = 0
+    copied_files = 0
+    capped_dirs = False
+    capped_files = False
+    capped_inspection = False
+    inspected = 0
+    # Hard upper bound on how many entries we will scan.
+    max_inspected = _MAX_LEGACY_USERS_TO_COPY + _MAX_LEGACY_LOOSE_FILES_TO_COPY + 200
     try:
         for entry in legacy_root.iterdir():
-            if copied >= _MAX_LEGACY_USERS_TO_COPY:
-                _LOGGER.warning(
-                    "Legacy data migration capped at %d user folders; remaining users stay in %s",
-                    _MAX_LEGACY_USERS_TO_COPY,
-                    legacy_root,
-                )
+            inspected += 1
+            if inspected > max_inspected:
+                capped_inspection = True
                 break
             target = new_root / entry.name
             if target.exists():
                 continue
             try:
                 if entry.is_dir():
+                    if copied_dirs >= _MAX_LEGACY_USERS_TO_COPY:
+                        capped_dirs = True
+                        continue
                     shutil.copytree(entry, target, dirs_exist_ok=False)
-                    copied += 1
+                    copied_dirs += 1
                 elif entry.is_file():
+                    if copied_files >= _MAX_LEGACY_LOOSE_FILES_TO_COPY:
+                        capped_files = True
+                        continue
                     shutil.copy2(entry, target)
+                    copied_files += 1
             except OSError as exc:
                 _LOGGER.warning("Failed to copy legacy user data %s: %s", entry, exc)
+            if (
+                copied_dirs >= _MAX_LEGACY_USERS_TO_COPY
+                and copied_files >= _MAX_LEGACY_LOOSE_FILES_TO_COPY
+            ):
+                break
     except OSError:
         return
 
-    if copied:
-        _LOGGER.info("Migrated %d legacy user folders into %s", copied, new_root)
+    if capped_dirs:
+        _LOGGER.warning(
+            "Legacy data migration capped at %d user folders; remaining folders stay in %s",
+            _MAX_LEGACY_USERS_TO_COPY,
+            legacy_root,
+        )
+    if capped_files:
+        _LOGGER.warning(
+            "Legacy data migration capped at %d loose files; remaining files stay in %s",
+            _MAX_LEGACY_LOOSE_FILES_TO_COPY,
+            legacy_root,
+        )
+    if capped_inspection:
+        _LOGGER.warning(
+            "Legacy data migration scan capped at %d entries; some items may remain in %s",
+            max_inspected,
+            legacy_root,
+        )
+
+    if copied_dirs or copied_files:
+        _LOGGER.info(
+            "Migrated legacy data into %s: %d user folders, %d loose files",
+            new_root,
+            copied_dirs,
+            copied_files,
+        )
 
 
 def get_user_data_path(user_id: str, base_path: Path | None = None) -> Path:
