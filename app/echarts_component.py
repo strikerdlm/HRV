@@ -54,6 +54,40 @@ class EChartsConfig:
 _BUNDLE_CACHE: Dict[str, str] = {}
 
 
+def _extract_echarts_title(option: Dict[str, Any]) -> tuple[Optional[str], Optional[str]]:
+    """Extract title/subtitle from an ECharts option.
+
+    The app UI shows titles outside the plot area (as Streamlit text) to keep
+    the chart canvas clean and reduce visual clutter. We therefore pull the
+    title out of the option for display.
+
+    Args:
+        option: ECharts option dictionary.
+
+    Returns:
+        (title, subtitle) strings if present; otherwise (None, None).
+    """
+    title_obj = option.get("title")
+    if title_obj is None:
+        return None, None
+
+    # ECharts supports title as dict or list of dicts.
+    candidates: list[dict[str, Any]] = []
+    if isinstance(title_obj, dict):
+        candidates = [title_obj]
+    elif isinstance(title_obj, list):
+        candidates = [t for t in title_obj if isinstance(t, dict)]
+
+    for t in candidates:
+        text_raw = t.get("text")
+        subtext_raw = t.get("subtext")
+        text = str(text_raw).strip() if text_raw is not None else ""
+        subtext = str(subtext_raw).strip() if subtext_raw is not None else ""
+        if text:
+            return text, (subtext or None)
+    return None, None
+
+
 def _load_echarts_bundle(path: Optional[Path] = None) -> Optional[str]:
     """Load and cache the ECharts bundle from a local path.
 
@@ -126,13 +160,59 @@ def render_echarts(
 
     cfg = config or EChartsConfig()
 
+    # ---------------------------------------------------------------------
+    # Title outside plot area (mandatory app behavior)
+    # ---------------------------------------------------------------------
+    title_text, subtitle_text = _extract_echarts_title(option)
+    _st_caption = getattr(st, "caption", None)
+    _st_markdown = getattr(st, "markdown", None)
+    _st_info = getattr(st, "info", None)
+    # Remove in-plot title to keep the canvas clean (do not mutate caller dict).
+    option_to_render: Dict[str, Any]
+    if "title" in option:
+        option_to_render = dict(option)
+        option_to_render.pop("title", None)
+    else:
+        option_to_render = option
+
+    # If the option has no series and only used the title to communicate
+    # "no data", show a Streamlit info box instead of rendering a blank chart.
+    series_obj = option_to_render.get("series")
+    has_series = False
+    if isinstance(series_obj, list):
+        has_series = len(series_obj) > 0
+    elif isinstance(series_obj, dict):
+        has_series = True
+    if not has_series and title_text:
+        # Use the extracted title as the status message (no blank plot).
+        if callable(_st_info):
+            _st_info(title_text)
+        elif callable(_st_caption):
+            _st_caption(title_text)
+        if subtitle_text:
+            if callable(_st_caption):
+                _st_caption(subtitle_text)
+        if caption:
+            if callable(_st_caption):
+                _st_caption(caption)
+        return
+
+    if title_text:
+        if callable(_st_markdown):
+            _st_markdown(f"#### {title_text}")
+        elif callable(_st_caption):
+            _st_caption(title_text)
+        if subtitle_text:
+            if callable(_st_caption):
+                _st_caption(subtitle_text)
+
     # Generate unique IDs
     uid = uuid.uuid4().hex[:12]
     container_id = f"ec-{uid}"
     toolbar_id = f"tb-{uid}"
 
     # Serialize option
-    option_json = json.dumps(option, separators=(",", ":"), ensure_ascii=False)
+    option_json = json.dumps(option_to_render, separators=(",", ":"), ensure_ascii=False)
     theme_js = f'"{theme}"' if theme else "null"
 
     # Determine how to load ECharts
