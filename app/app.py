@@ -5461,6 +5461,9 @@ def main() -> None:
         st.session_state["hrv_analysis_signature"] = upload_signature
         hrv_analysis_ready = False
         st.session_state["hrv_analysis_ready"] = False
+        # Clear cached results when uploads change
+        st.session_state.pop("_hrv_cached_datasets", None)
+        st.session_state.pop("_hrv_cached_windowed_df", None)
     # Prevent repeated runs for the same upload set once completed
     analysis_already_completed = bool(
         has_hrv_data_uploaded and hrv_complete_sig == upload_signature
@@ -5468,6 +5471,14 @@ def main() -> None:
     if analysis_already_completed:
         hrv_analysis_ready = False
         st.session_state["hrv_analysis_ready"] = False
+        # CRITICAL FIX: Restore datasets from cache when analysis already completed
+        # Without this, tabs try to render with empty datasets causing infinite loading
+        cached_datasets = st.session_state.get("_hrv_cached_datasets")
+        if cached_datasets:
+            datasets = cached_datasets
+        cached_windowed = st.session_state.get("_hrv_cached_windowed_df")
+        if cached_windowed is not None and not cached_windowed.empty:
+            windowed_df = cached_windowed
         #region agent log
         _agent_debug_log(
             "H6",
@@ -6074,6 +6085,12 @@ def main() -> None:
             )
         except Exception as exc:  # pragma: no cover - defensive
             logger.debug("Persistence skipped: %s", exc)
+        
+        # CRITICAL: Cache datasets for tab rendering after rerun
+        # Without this, tabs get empty datasets and show infinite loading
+        st.session_state["_hrv_cached_datasets"] = datasets
+        st.session_state["_hrv_cached_windowed_df"] = windowed_df
+        
         # Mark comprehensive stage complete to avoid auto-reruns on the same upload set
         st.session_state["hrv_analysis_ready"] = False
         st.session_state["hrv_analysis_complete_signature"] = upload_signature
