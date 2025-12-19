@@ -51,3 +51,6 @@ def test_render_echarts_does_not_nameerror_on_css_braces(monkeypatch: pytest.Mon
 	html = str(captured.get("html", ""))
 	assert "html,body{height:100%;margin:0}" in html
 	assert "#chart{width:100%;height:100vh;}" in html
+	# Ensure we are not embedding the ~1MB ECharts runtime into every chart iframe.
+	# (We rely on browser caching by fetching the bundle from a static URL instead.)
+	assert len(html) < 250_000
