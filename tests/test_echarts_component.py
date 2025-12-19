@@ -72,10 +72,17 @@ def test_render_echarts_does_not_nameerror_on_css_braces(monkeypatch: pytest.Mon
 def test_render_echarts_with_inline_bundle(monkeypatch: pytest.MonkeyPatch) -> None:
     """Test that inline embedding works when local bundle is available."""
     captured: Dict[str, Any] = {}
+    captured_titles: list[str] = []
 
     def fake_components_html(html: str, **kwargs: Any) -> None:
         captured["html"] = html
         captured.update(kwargs)
+    
+    def fake_markdown(text: str, **_kwargs: Any) -> None:
+        captured_titles.append(str(text))
+    
+    def fake_caption(*_args: Any, **_kwargs: Any) -> None:
+        return None
 
     monkeypatch.setattr(
         echarts_component,
@@ -85,7 +92,11 @@ def test_render_echarts_with_inline_bundle(monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(
         echarts_component,
         "st",
-        types.SimpleNamespace(caption=lambda *_args, **_kwargs: None),
+        types.SimpleNamespace(
+            markdown=fake_markdown,
+            caption=fake_caption,
+            info=lambda *_args, **_kwargs: None,
+        ),
     )
 
     option = {
@@ -106,8 +117,11 @@ def test_render_echarts_with_inline_bundle(monkeypatch: pytest.MonkeyPatch) -> N
 
     html = str(captured.get("html", ""))
     
+    # Title is rendered OUTSIDE the chart area (Streamlit text), not embedded in the HTML.
+    assert any("Test Inline" in t for t in captured_titles)
+    assert "Test Inline" not in html
+    
     # Check that the chart was generated.
-    assert "Test Inline" in html
     assert "42" in html  # The data value
     
     # Check export buttons are present.
