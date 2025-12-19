@@ -578,6 +578,21 @@ def _get_echarts_config(
 
 def _render_echarts(option: Dict, height: int = 400, key: Optional[str] = None) -> None:
     """Render an ECharts chart with explanation panel."""
+    # Title outside plot area: keep the ECharts canvas clean and consistent with
+    # the rest of the app (titles are shown as Streamlit text).
+    title_obj = option.get("title", {})
+    title_text = ""
+    subtitle_text = ""
+    if isinstance(title_obj, dict):
+        title_text = str(title_obj.get("text") or "").strip()
+        subtitle_text = str(title_obj.get("subtext") or "").strip()
+    if title_text:
+        st.markdown(f"#### {title_text}")
+        if subtitle_text:
+            st.caption(subtitle_text)
+        option = dict(option)
+        option.pop("title", None)
+
     container_id = f"echarts-circadian-{int(time_module.time() * 1000)}"
     if key:
         container_id = f"{container_id}-{key}"
