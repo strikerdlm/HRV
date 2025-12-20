@@ -197,6 +197,13 @@ def _fragment_if_available(func: Any) -> Any:
     """
     # Always return the function unchanged - fragments are disabled
     return func
+def _session_ready_guard() -> bool:
+    """Prevent render work before Streamlit session is fully initialized."""
+    ready = st.session_state.get("_app_session_ready")
+    if ready is None:
+        st.session_state["_app_session_ready"] = True
+        return False
+    return True
 
 
 _TIMEPOINT_ID_SESSION_PREFIX: Final[str] = "longitudinal_timepoint_id:"
@@ -1837,6 +1844,9 @@ def _render_assessment_preview(
 @_fragment_if_available
 def _render_assessment_history(user: UserProfile) -> None:
     """Render clinical assessment history."""
+    if not _session_ready_guard():
+        st.info("Initializing session…")
+        return
     st.markdown("## 📈 Assessment History")
     
     # Use cached loader for fast repeated views
@@ -3965,22 +3975,23 @@ def _render_all_tools_summary(
     """Render summary of all profile tools."""
     st.markdown("### 📊 Profile Tools Summary")
     
-    results = run_all_profile_tools(
-        age=age,
-        sex=sex,
-        weight_kg=weight_kg,
-        height_cm=height_cm,
-        rmssd_ms=rmssd_ms,
-        hrv_metrics=hrv_metrics,
-        sleep_hours=sleep_hours,
-        sleep_quality=sleep_quality,
-        hours_awake=hours_awake,
-        current_hour=current_hour,
-        chronotype_offset=chronotype_offset,
-        resting_hr=resting_hr,
-        vo2max=vo2max,
-        activity_level=activity_level,
-    )
+    with st.spinner("Computing profile tools (SAFTE, HRV, readiness)..."):
+        results = run_all_profile_tools(
+            age=age,
+            sex=sex,
+            weight_kg=weight_kg,
+            height_cm=height_cm,
+            rmssd_ms=rmssd_ms,
+            hrv_metrics=hrv_metrics,
+            sleep_hours=sleep_hours,
+            sleep_quality=sleep_quality,
+            hours_awake=hours_awake,
+            current_hour=current_hour,
+            chronotype_offset=chronotype_offset,
+            resting_hr=resting_hr,
+            vo2max=vo2max,
+            activity_level=activity_level,
+        )
     
     # Display summary cards
     col1, col2, col3 = st.columns(3)
