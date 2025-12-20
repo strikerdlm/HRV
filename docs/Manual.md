@@ -859,7 +859,8 @@ Based on the Sleep, Activity, Fatigue, and Task Effectiveness model.
 - Lagged Pearson correlations are computed between windowed HRV metrics and Kp, with date-based alignment for daily predictors.
 - Requirements: run HRV analysis to produce windowed metrics, then click “Compute HRV-Kp Correlations”; cached Kp is reused when available.
 - Inference stack: Pearson r with 95% CI (Fisher z), Spearman ρ, Benjamini–Hochberg FDR for multiple lags/predictors. Optional weather covariates allow partial correlations.
-- ML stack: ElasticNet and RandomForest models on lagged Kp features with time-ordered train/test split; reports R²/MAE and permutation importances (top lag drivers).
+- ML stack: ElasticNet and RandomForest models on lagged space-weather features (Kp, Dst, F10.7, solar wind) with time-aware (walk-forward) splits; reports R²/MAE and permutation importances (top lag drivers).
+- Advanced inference: optional block bootstrap CI and permutation p-values for top findings.
 - Scientific context:
   - Ramishvili et al. 2023, Atmosphere 14(12):1707 — adaptation to geomagnetic storms (https://doi.org/10.3390/atmos14121707)
   - Mattoni et al. 2019, bioRxiv — highlights autocorrelation and small effect sizes (https://doi.org/10.1101/684035)
@@ -3998,6 +3999,7 @@ This section outlines completed features and remaining planned enhancements for 
 ✅ **Baseline/Δ analytics (T0–T21)** - User Profile → HRV Measurement History includes a baseline/Δ table grouped by longitudinal timepoint labels (T0…T21)  
 ✅ **Cohort longitudinal comparisons (T0–T21)** - Export tab supports control vs intervention comparisons using within-subject Δ vs baseline per timepoint, with CSV + Markdown exports  
 ✅ **Persisted study groups + mixed-effects inference** - Export tab supports persisted Study IDs/groups (SQLite) and optional random-intercept mixed-effects modeling for Group × Time on Δ vs baseline  
+✅ **Space-weather inference & ML (HRV ↔ Kp)** - Spearman + Pearson with CI95, BH-FDR, partials with weather covariates; optional ElasticNet + RandomForest on lagged Kp with permutation importances; citation-backed context in UI/docs.
 
 ### Remaining Enhancements
 
