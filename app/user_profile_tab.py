@@ -21,6 +21,7 @@ import logging
 import time
 import uuid
 import io
+import os
 from collections import Counter
 from datetime import datetime, date, timezone, timedelta
 from pathlib import Path
@@ -65,6 +66,23 @@ except ImportError:
         return []
     def clear_user_cache() -> None:  # type: ignore[misc]
         pass
+
+# Garmin Connect live import (optional)
+try:
+    from garmin_connect_service import (  # type: ignore
+        GARMIN_LIB_AVAILABLE,
+        GarminAuthError,
+        fetch_garmin_daily_metrics,
+        summarize_garmin_daily,
+    )
+except ImportError:  # pragma: no cover - optional
+    GARMIN_LIB_AVAILABLE = False  # type: ignore[assignment]
+    class GarminAuthError(RuntimeError):  # type: ignore[override]
+        pass
+    def fetch_garmin_daily_metrics(user_id: str, days: int = 14):  # type: ignore[misc]
+        raise GarminAuthError("Garmin connect service unavailable.")
+    def summarize_garmin_daily(records):  # type: ignore[misc]
+        return {"count": 0}
 
 # Import i18n module for translations
 try:
@@ -1976,6 +1994,49 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
             if log_exception is not None:
                 log_exception(_LOGGER, "Failed to persist sidebar Garmin metrics", exc)
 
+    # Live Garmin Connect fetch (manual button; requires env + library)
+    api_env_ready = (
+        GARMIN_LIB_AVAILABLE
+        and bool(os.getenv("GARMIN_EMAIL"))
+        and bool(os.getenv("GARMIN_PASSWORD"))
+    )
+    with st.expander("🔄 Import from Garmin Connect (Vivosmart 5)", expanded=False):
+        if not GARMIN_LIB_AVAILABLE:
+            st.info("Install `garminconnect` to enable live Garmin imports (see requirements.txt).")
+        elif not api_env_ready:
+            st.info("Set GARMIN_EMAIL and GARMIN_PASSWORD in your .env to enable Garmin Connect import.")
+        else:
+            days_to_fetch = st.select_slider(
+                "Days to fetch (includes today)",
+                options=[7, 14, 30],
+                value=14,
+                key=f"garmin_api_days_{user.user_id}",
+            )
+            if st.button(
+                "Fetch from Garmin Connect",
+                key=f"garmin_api_fetch_{user.user_id}",
+                type="primary",
+            ):
+                try:
+                    with st.spinner(f"Fetching last {days_to_fetch} day(s) from Garmin Connect…"):
+                        records = fetch_garmin_daily_metrics(user.user_id, days=int(days_to_fetch))
+                except GarminAuthError as exc:
+                    st.error(str(exc))
+                except Exception as exc:  # noqa: BLE001
+                    if log_exception is not None:
+                        log_exception(_LOGGER, "Garmin Connect fetch failed", exc)
+                    st.error(f"Garmin fetch failed: {exc}")
+                else:
+                    if not records:
+                        st.info("No Garmin data returned for the selected window.")
+                    else:
+                        db = get_database()
+                        db.save_garmin_daily_metrics(records)
+                        summary = summarize_garmin_daily(records)
+                        label = summary.get("dates", "")
+                        st.success(f"Imported {summary.get('count', len(records))} day(s) from Garmin Connect. {label}")
+                        st.experimental_rerun()
+
     if not GARMIN_IMPORT_AVAILABLE:
         st.info("Garmin import module unavailable. Install fitparse and rerun.")
         return
@@ -2880,7 +2941,20 @@ def _render_hrv_history(user: UserProfile) -> None:
                 else:
                     garmin_daily_cols = [
                         c
-                        for c in ["steps", "distance_km", "calories_kcal", "sleep_score", "stress_score", "body_battery_avg"]
+                            for c in [
+                                "steps",
+                                "distance_km",
+                                "calories_kcal",
+                                "sleep_score",
+                                "sleep_efficiency",
+                                "sleep_duration_hours",
+                                "resting_hr_bpm",
+                                "hrv_rmssd_ms",
+                                "stress_score",
+                                "avg_spo2",
+                                "avg_respiration_sleep",
+                                "body_battery_avg",
+                            ]
                         if c in garmin_df.columns and garmin_df[c].notna().any()
                     ]
                     if not garmin_daily_cols:
