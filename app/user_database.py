@@ -907,9 +907,13 @@ class GarminDailyMetrics:
     sleep_score: Optional[float] = None
     sleep_efficiency: Optional[float] = None
     sleep_duration_hours: Optional[float] = None
+    sleep_start_utc: Optional[str] = None
+    sleep_end_utc: Optional[str] = None
     avg_spo2: Optional[float] = None
     avg_respiration_awake: Optional[float] = None
     avg_respiration_sleep: Optional[float] = None
+    hrv_rmssd_ms: Optional[float] = None
+    hrv_sdnn_ms: Optional[float] = None
     body_battery_avg: Optional[float] = None
     body_battery_charge: Optional[float] = None
     body_battery_drain: Optional[float] = None
@@ -1419,9 +1423,13 @@ class UserDatabase:
                     sleep_score REAL,
                     sleep_efficiency REAL,
                     sleep_duration_hours REAL,
+                    sleep_start_utc TEXT,
+                    sleep_end_utc TEXT,
                     avg_spo2 REAL,
                     avg_respiration_awake REAL,
                     avg_respiration_sleep REAL,
+                    hrv_rmssd_ms REAL,
+                    hrv_sdnn_ms REAL,
                     body_battery_avg REAL,
                     body_battery_charge REAL,
                     body_battery_drain REAL,
@@ -1434,6 +1442,17 @@ class UserDatabase:
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_garmin_metrics_user_date
                 ON garmin_daily_metrics(user_id, metric_date)
             """)
+            # Backfill new columns if the table already existed
+            for col_name, col_type in (
+                ("sleep_start_utc", "TEXT"),
+                ("sleep_end_utc", "TEXT"),
+                ("hrv_rmssd_ms", "REAL"),
+                ("hrv_sdnn_ms", "REAL"),
+            ):
+                try:
+                    cursor.execute(f"ALTER TABLE garmin_daily_metrics ADD COLUMN {col_name} {col_type}")
+                except sqlite3.OperationalError:
+                    pass
 
             # SAFTE/FRMS fatigue profile defaults (per user)
             cursor.execute(
@@ -2914,10 +2933,12 @@ class UserDatabase:
                         entry_id, user_id, metric_date, steps, distance_km,
                         calories_kcal, avg_hr_bpm, resting_hr_bpm, stress_score,
                         sleep_score, sleep_efficiency, sleep_duration_hours,
+                        sleep_start_utc, sleep_end_utc,
                         avg_spo2, avg_respiration_awake, avg_respiration_sleep,
+                        hrv_rmssd_ms, hrv_sdnn_ms,
                         body_battery_avg, body_battery_charge, body_battery_drain,
                         source, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(user_id, metric_date) DO UPDATE SET
                         steps = COALESCE(excluded.steps, steps),
                         distance_km = COALESCE(excluded.distance_km, distance_km),
@@ -2928,9 +2949,13 @@ class UserDatabase:
                         sleep_score = COALESCE(excluded.sleep_score, sleep_score),
                         sleep_efficiency = COALESCE(excluded.sleep_efficiency, sleep_efficiency),
                         sleep_duration_hours = COALESCE(excluded.sleep_duration_hours, sleep_duration_hours),
+                        sleep_start_utc = COALESCE(excluded.sleep_start_utc, sleep_start_utc),
+                        sleep_end_utc = COALESCE(excluded.sleep_end_utc, sleep_end_utc),
                         avg_spo2 = COALESCE(excluded.avg_spo2, avg_spo2),
                         avg_respiration_awake = COALESCE(excluded.avg_respiration_awake, avg_respiration_awake),
                         avg_respiration_sleep = COALESCE(excluded.avg_respiration_sleep, avg_respiration_sleep),
+                        hrv_rmssd_ms = COALESCE(excluded.hrv_rmssd_ms, hrv_rmssd_ms),
+                        hrv_sdnn_ms = COALESCE(excluded.hrv_sdnn_ms, hrv_sdnn_ms),
                         body_battery_avg = COALESCE(excluded.body_battery_avg, body_battery_avg),
                         body_battery_charge = COALESCE(excluded.body_battery_charge, body_battery_charge),
                         body_battery_drain = COALESCE(excluded.body_battery_drain, body_battery_drain),
@@ -2950,9 +2975,13 @@ class UserDatabase:
                         entry.sleep_score,
                         entry.sleep_efficiency,
                         entry.sleep_duration_hours,
+                        entry.sleep_start_utc,
+                        entry.sleep_end_utc,
                         entry.avg_spo2,
                         entry.avg_respiration_awake,
                         entry.avg_respiration_sleep,
+                        entry.hrv_rmssd_ms,
+                        entry.hrv_sdnn_ms,
                         entry.body_battery_avg,
                         entry.body_battery_charge,
                         entry.body_battery_drain,
@@ -3249,9 +3278,13 @@ class UserDatabase:
             sleep_score=row["sleep_score"],
             sleep_efficiency=row["sleep_efficiency"],
             sleep_duration_hours=row["sleep_duration_hours"],
+            sleep_start_utc=row["sleep_start_utc"] if "sleep_start_utc" in row.keys() else None,
+            sleep_end_utc=row["sleep_end_utc"] if "sleep_end_utc" in row.keys() else None,
             avg_spo2=row["avg_spo2"],
             avg_respiration_awake=row["avg_respiration_awake"],
             avg_respiration_sleep=row["avg_respiration_sleep"],
+                        hrv_rmssd_ms=row["hrv_rmssd_ms"] if "hrv_rmssd_ms" in row.keys() else None,
+                        hrv_sdnn_ms=row["hrv_sdnn_ms"] if "hrv_sdnn_ms" in row.keys() else None,
             body_battery_avg=row["body_battery_avg"],
             body_battery_charge=row["body_battery_charge"],
             body_battery_drain=row["body_battery_drain"],
