@@ -107,6 +107,14 @@ except ImportError:
     def get_panas_translations() -> dict:  # type: ignore[misc]
         return {}
 
+# Cached loaders
+@st.cache_data(ttl=60, max_entries=64, show_spinner=False)
+def _load_clinical_history_cached(uid: str, limit: int) -> list:
+    db = get_database()
+    if not hasattr(db, "get_clinical_scales_history"):
+        return []
+    return [h.to_dict() for h in db.get_clinical_scales_history(uid, limit=limit)]
+
 # Import multi-user session manager
 try:
     from multi_user_session import (
@@ -1757,6 +1765,10 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                 notes=context_note,
             )
             db.save_clinical_scales(scales)
+            try:
+                _load_clinical_history_cached.clear()  # type: ignore[attr-defined]
+            except Exception:
+                pass
             st.success(t('assessment_saved'))
             st.balloons()
         except Exception as exc:
@@ -1828,13 +1840,21 @@ def _render_assessment_history(user: UserProfile) -> None:
     st.markdown("## 📈 Assessment History")
     
     # Use cached loader for fast repeated views
-    @st.cache_data(ttl=30, max_entries=64, show_spinner=False)
-    def _load_history(uid: str, limit: int) -> list:
+    @st.cache_data(ttl=60, max_entries=64, show_spinner=False)
+    def _load_clinical_history_cached(uid: str, limit: int) -> list:
         db = get_database()
         return [h.to_dict() for h in db.get_clinical_scales_history(uid, limit=limit)]
-    
+
+    history_limit = st.selectbox(
+        "History window (assessments)",
+        options=[50, 90, 180, 365, 730],
+        index=2,
+        key=f"clinical_history_limit_{user.user_id}",
+        help="Load the most recent assessments only (reduces render time).",
+    )
+
     try:
-        history_dicts = _load_history(user.user_id, 50)
+        history_dicts = _load_clinical_history_cached(user.user_id, int(history_limit))
         
         if not history_dicts:
             st.info("No assessment history found. Complete a clinical assessment to start tracking.")
