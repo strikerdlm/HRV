@@ -1504,13 +1504,23 @@ def _auto_fetch_space_weather_if_needed(state: Dict[str, Any]) -> None:
     if state.get("loaded") or state.get("auto_loading") or state.get("auto_attempted"):
         return
     state["auto_loading"] = True
+    success = False
     try:
         _fetch_space_weather_datasets(state)
+        success = True
     except Exception as exc:  # pragma: no cover - defensive
         log_exception(_LOGGER, "Automatic space weather bootstrap failed", exc)
+        # Bounded single retry with short backoff to tolerate transient network issues
+        try:
+            time.sleep(0.5)
+            _fetch_space_weather_datasets(state)
+            success = True
+        except Exception as retry_exc:  # pragma: no cover - defensive
+            log_exception(_LOGGER, "Space weather bootstrap retry failed", retry_exc)
     finally:
         state["auto_loading"] = False
-        state["auto_attempted"] = True
+        if success:
+            state["auto_attempted"] = True
 
 
 def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
@@ -1521,13 +1531,22 @@ def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
     if state.get("bundles") or state.get("loading") or state.get("auto_loading") or state.get("auto_attempted"):
         return
     state["auto_loading"] = True
+    success = False
     try:
         _load_noaa_space_datasets(state, use_cache=True)
+        success = True
     except Exception as exc:  # pragma: no cover - defensive
         log_exception(_LOGGER, "Automatic NOAA preload failed", exc)
+        try:
+            time.sleep(0.5)
+            _load_noaa_space_datasets(state, use_cache=True)
+            success = True
+        except Exception as retry_exc:  # pragma: no cover - defensive
+            log_exception(_LOGGER, "NOAA preload retry failed", retry_exc)
     finally:
         state["auto_loading"] = False
-        state["auto_attempted"] = True
+        if success:
+            state["auto_attempted"] = True
 
 
 def _donki_state() -> Dict[str, Any]:
@@ -1567,7 +1586,8 @@ def fetch_donki(
     params: Optional[Dict[str, Any]] = None,
 ) -> pd.DataFrame:
     if not NASA_API_KEY:
-        raise RuntimeError("NASA_API_KEY is not set.")
+        _LOGGER.warning("NASA_API_KEY is not set; skipping DONKI fetch for %s", endpoint)
+        return pd.DataFrame()
     config = DONKI_ENDPOINTS.get(endpoint)
     if config is None:
         raise ValueError(f"Unsupported DONKI endpoint '{endpoint}'.")
@@ -1578,15 +1598,16 @@ def fetch_donki(
     query["api_key"] = NASA_API_KEY
     path = config.get("path", endpoint)
     url = f"{DONKI_API_BASE}/{path}"
-    response = requests.get(url, params=query, timeout=DONKI_TIMEOUT)
-    response.raise_for_status()
-    data = response.json()
+    try:
+        response = requests.get(url, params=query, timeout=DONKI_TIMEOUT)
+        response.raise_for_status()
+        data = response.json()
+    except requests.RequestException as exc:
+        log_exception(_LOGGER, f"DONKI request failed for {endpoint}", exc)
+        return pd.DataFrame()
     if not data:
         return pd.DataFrame()
-    if isinstance(data, dict):
-        rows: List[Dict[str, Any]] = [data]
-    else:
-        rows = list(data)
+    rows: List[Dict[str, Any]] = [data] if isinstance(data, dict) else list(data)
     df = pd.json_normalize(rows)
     time_columns = _get_donki_time_columns(endpoint)
     for col in time_columns:
