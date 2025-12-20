@@ -14,10 +14,17 @@ def _fallback_openai_fetch() -> Optional[dict]:
 	"""
 	Try the OpenAI fallback by first downloading the same pages and asking the model to parse them.
 	"""
-	home = requests.get("https://www.spaceweatherlive.com/", timeout=12).text
-	solar = requests.get("https://www.spaceweatherlive.com/en/solar-activity.html", timeout=12).text
-	snapshot = extract_spaceweather_with_openai({"home": home, "solar_activity": solar})
-	return snapshot.to_dict() if snapshot else None
+    try:
+        home_resp = requests.get("https://www.spaceweatherlive.com/", timeout=12)
+        solar_resp = requests.get("https://www.spaceweatherlive.com/en/solar-activity.html", timeout=12)
+        home_resp.raise_for_status()
+        solar_resp.raise_for_status()
+        snapshot = extract_spaceweather_with_openai(
+            {"home": home_resp.text, "solar_activity": solar_resp.text}
+        )
+        return snapshot.to_dict() if snapshot else None
+    except requests.RequestException:
+        return None
 
 
 def main() -> None:
