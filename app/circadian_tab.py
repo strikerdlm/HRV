@@ -207,7 +207,7 @@ def _render_preset_controls(settings: Dict[str, Any]) -> Dict[str, Any]:
             key="circadian_preset_select",
             help="Load a previously saved configuration.",
         )
-        load_clicked = st.button("Load preset", use_container_width=True)
+        load_clicked = st.button("Load preset", width="stretch")
     with col_save:
         preset_name = st.text_input(
             "Preset name",
@@ -215,11 +215,11 @@ def _render_preset_controls(settings: Dict[str, Any]) -> Dict[str, Any]:
             key="circadian_preset_name",
             help="Save the current scenario for later reuse.",
         )
-        save_clicked = st.button("Save preset", use_container_width=True)
+        save_clicked = st.button("Save preset", width="stretch")
     with col_reset:
         reset_clicked = st.button(
             "Reset defaults",
-            use_container_width=True,
+            width="stretch",
             help="Restore NASA default scenario parameters.",
         )
 
@@ -480,7 +480,7 @@ def _render_settings_form(settings: Dict[str, Any]) -> Dict[str, Any]:
         apply_clicked = st.form_submit_button(
             "Apply scenario",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
     updated_settings = settings

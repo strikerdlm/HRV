@@ -304,7 +304,7 @@ def render_profile_form(existing_profile: UserBiometricProfile | None = None) ->
         submitted = st.form_submit_button(
             "💾 Save Profile",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
         if submitted:

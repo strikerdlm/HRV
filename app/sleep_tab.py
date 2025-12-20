@@ -151,7 +151,7 @@ def _render_user_login_section() -> UserInfo | None:
 
             login_submitted = st.form_submit_button(
                 "🔑 Login / Create Account",
-                use_container_width=True,
+                width="stretch",
             )
 
         if login_submitted:
@@ -466,7 +466,7 @@ def render_sleep_overview(nights: list[SleepNight], summary: MultiNightSummary |
             })
 
     if nights_data:
-        st.dataframe(pd.DataFrame(nights_data), use_container_width=True)
+        st.dataframe(pd.DataFrame(nights_data), width="stretch")
 
 
 def render_hypnogram_section(nights: list[SleepNight]) -> None:
