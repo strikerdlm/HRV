@@ -1403,7 +1403,11 @@ def _render_panas_form(user_id: str) -> Dict[str, Optional[int]]:
                 "na_low": "Low negative affect",
             },
             "reference": "Watson, Clark, & Tellegen (1988)",
-            "clinical_note": "PA and NA are independent dimensions.",
+            "clinical_note": (
+                "PA and NA are largely independent dimensions. "
+                "High NA is associated with anxiety/depression; low PA is specifically linked to depression "
+                "(Watson, Clark, & Tellegen, 1988)."
+            ),
         }
     
     st.markdown(f"#### {tr['title']}")
@@ -2490,12 +2494,12 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
     """Allow uploading RR files directly from the profile tab."""
     st.markdown("## 📂 HRV File Uploads")
     st.caption(
-        "Upload RR interval .txt files here to store them under this profile. "
+        "Upload RR interval files (Polar H10/Flow exports .txt or .csv) to store them under this profile. "
         "They will be queued for analysis without needing the sidebar uploader."
     )
     uploaded_files = st.file_uploader(
-        "Upload RR (.txt)",
-        type=["txt"],
+        "Upload RR (.txt or .csv)",
+        type=["txt", "csv"],
         accept_multiple_files=True,
         key=f"profile_rr_upload_{user.user_id}",
     )
@@ -2518,7 +2522,15 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
     for uploaded in uploaded_files:
         try:
             content = uploaded.read().decode("utf-8", errors="ignore")
-            rr_ms = load_rr_intervals_from_text(uploaded.name, content)
+
+            if uploaded.name.lower().endswith(".csv"):
+                # Polar Flow/H10 CSV: first column of RR values (ms); drop headers/non-numeric
+                df_csv = pd.read_csv(io.StringIO(content), header=None, sep=None, engine="python")
+                rr_series = pd.to_numeric(df_csv.stack(), errors="coerce").dropna()
+                rr_ms = rr_series.to_numpy(dtype=float)
+            else:
+                rr_ms = load_rr_intervals_from_text(uploaded.name, content)
+
             if rr_ms.size < 10:
                 st.warning(f"{uploaded.name}: not enough RR intervals to store.")
                 continue
@@ -5868,60 +5880,65 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
     rad_limit = 600.0  # NASA STD-3001B (career effective dose design limit)
     rad_limit_legacy = 1000.0  # Legacy planning guideline (kept for comparison)
 
-    rad_col: Optional[str] = None
+    rad_sources: Dict[str, str] = {}
     if "radiation_dose_msv" in history_df.columns and not history_df["radiation_dose_msv"].dropna().empty:
-        rad_col = "radiation_dose_msv"
-    elif "radiation_estimated_cumulative_msv" in history_df.columns and not history_df["radiation_estimated_cumulative_msv"].dropna().empty:
-        rad_col = "radiation_estimated_cumulative_msv"
+        rad_sources["Recorded cumulative dose"] = "radiation_dose_msv"
+    if (
+        "radiation_estimated_cumulative_msv" in history_df.columns
+        and not history_df["radiation_estimated_cumulative_msv"].dropna().empty
+    ):
+        rad_sources["Estimated cumulative dose"] = "radiation_estimated_cumulative_msv"
 
-    rad_series = (
-        pd.to_numeric(history_df[rad_col], errors="coerce").dropna() if rad_col is not None else pd.Series(dtype=float)
-    )
-
-    if rad_series.empty:
+    if not rad_sources:
         st.warning("No radiation dose entries recorded yet (or no modelled dose available).")
     else:
-        max_rad = float(rad_series.max())
-        median_rad = float(rad_series.median())
-        rate_df = history_df.copy()
-        rate_df["radiation_dose_msv"] = pd.to_numeric(rate_df[rad_col], errors="coerce") if rad_col is not None else np.nan
-        rad_rate = _compute_radiation_rate(rate_df)
-        remaining = max(rad_limit - max_rad, 0.0)
-        col_r1, col_r2, col_r3 = st.columns(3)
-        col_r1.metric(
-            "Max cumulative dose",
-            f"{max_rad:.1f} mSv",
-            delta=f"{remaining:.1f} mSv below NASA limit",
-        )
-        col_r2.metric(
-            "Median logged dose",
-            f"{median_rad:.1f} mSv",
-            delta=None,
-        )
-        col_r3.metric(
-            "Daily accumulation",
-            f"{rad_rate:.2f} mSv/day" if rad_rate is not None else "—",
-            delta=None if rad_rate is None else "Avg change per mission day",
-        )
-        progress_value = min(max_rad / rad_limit, 1.0)
-        st.progress(progress_value)
-        legacy_pct = min(max_rad / rad_limit_legacy, 1.0) * 100.0
-        st.caption(
-            f"{progress_value * 100:.1f}% of NASA 600 mSv career effective dose design limit "
-            f"(legacy 1000 mSv: {legacy_pct:.1f}%)."
-        )
-        if {"mission_day"}.issubset(history_df.columns):
-            chart_df = history_df.dropna(subset=["mission_day", rad_col] if rad_col else ["mission_day"]).copy()
-            if not chart_df.empty:
-                chart_df = chart_df.sort_values("mission_day").set_index("mission_day")
-                if rad_col and rad_col != "radiation_dose_msv":
+        selected_label = st.radio("Dose source", list(rad_sources.keys()), horizontal=True, key="rad_source_selector")
+        rad_col = rad_sources[selected_label]
+        rad_series = pd.to_numeric(history_df[rad_col], errors="coerce").dropna()
+
+        if rad_series.empty:
+            st.warning("No radiation dose entries recorded yet (or no modelled dose available).")
+        else:
+            max_rad = float(rad_series.max())
+            median_rad = float(rad_series.median())
+            rate_df = history_df.copy()
+            rate_df["radiation_dose_msv"] = pd.to_numeric(rate_df[rad_col], errors="coerce")
+            rad_rate = _compute_radiation_rate(rate_df)
+            remaining = max(rad_limit - max_rad, 0.0)
+            col_r1, col_r2, col_r3 = st.columns(3)
+            col_r1.metric(
+                "Max cumulative dose",
+                f"{max_rad:.1f} mSv",
+                delta=f"{remaining:.1f} mSv below NASA limit",
+            )
+            col_r2.metric(
+                "Median logged dose",
+                f"{median_rad:.1f} mSv",
+                delta=None,
+            )
+            col_r3.metric(
+                "Daily accumulation",
+                f"{rad_rate:.2f} mSv/day" if rad_rate is not None else "—",
+                delta=None if rad_rate is None else "Avg change per mission day",
+            )
+            progress_value = min(max_rad / rad_limit, 1.0)
+            st.progress(progress_value)
+            legacy_pct = min(max_rad / rad_limit_legacy, 1.0) * 100.0
+            st.caption(
+                f"{progress_value * 100:.1f}% of NASA 600 mSv career effective dose design limit "
+                f"(legacy 1000 mSv: {legacy_pct:.1f}%)."
+            )
+            if {"mission_day"}.issubset(history_df.columns):
+                chart_df = history_df.dropna(subset=["mission_day", rad_col] if rad_col else ["mission_day"]).copy()
+                if not chart_df.empty:
+                    chart_df = chart_df.sort_values("mission_day").set_index("mission_day")
                     chart_df["radiation_dose_msv"] = pd.to_numeric(chart_df[rad_col], errors="coerce")
-                chart_df.rename(columns={"radiation_dose_msv": "Radiation (mSv)"}, inplace=True)
-                _render_profile_line_chart(
-                    chart_df[["Radiation (mSv)"]],
-                    title="Radiation Dose vs. Mission Day",
-                    y_axis_label="mSv",
-                )
+                    chart_df.rename(columns={"radiation_dose_msv": "Radiation (mSv)"}, inplace=True)
+                    _render_profile_line_chart(
+                        chart_df[["Radiation (mSv)"]],
+                        title="Radiation Dose vs. Mission Day",
+                        y_axis_label="mSv",
+                    )
 
     # EVA workload
     st.markdown("##### 🧑‍🚀 EVA Workload")
@@ -5937,12 +5954,25 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
     col_e2.metric("Peak EVA load", f"{peak_eva:.1f} h" if peak_eva is not None else "—", delta="Rolling 72h window")
     col_e3.metric("Days since last EVA", days_since_last_display)
     if "eva_status" in history_df.columns:
-        eva_status_counts = history_df["eva_status"].dropna().value_counts().head(4)
-        if not eva_status_counts.empty:
+        def _normalize_eva_status(value: Any) -> str:
+            text = str(value).strip().lower()
+            if text in {"1", "go", "green", "clear", "cleared", "approved", "ok", "yes"}:
+                return "GO"
+            if text in {"0", "no-go", "nogo", "red", "hold", "fail", "denied", "no"}:
+                return "NO-GO"
+            return "MONITOR"
+
+        eva_norm = history_df["eva_status"].dropna().map(_normalize_eva_status)
+        eva_status_counts = eva_norm.value_counts().reindex(["GO", "MONITOR", "NO-GO"]).fillna(0).astype(int)
+        if eva_status_counts.sum() > 0:
             _render_profile_bar_chart(
                 eva_status_counts.rename("EVA Clearance States"),
-                title="EVA Clearance States",
+                title="EVA Clearance States (standardized GO / MONITOR / NO-GO)",
                 y_axis_label="Count",
+            )
+            st.caption(
+                "EVA clearance standardized: GO (cleared), MONITOR (requires mitigation/flight surgeon review), "
+                "NO-GO (not cleared)."
             )
 
     # Stress and behavioral indicators
