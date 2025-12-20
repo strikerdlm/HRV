@@ -192,7 +192,6 @@ def get_gpu_config() -> GPUConfig:
         # Probe GPU first so the default reflects real availability
         info = get_gpu_info()
         _gpu_config = GPUConfig(enabled=info.available and _cupy_available)
-        _gpu_config = GPUConfig(enabled=_cupy_available)
     
     return _gpu_config
 
