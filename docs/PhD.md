@@ -337,3 +337,12 @@ To complete a full dissertation proposal and final manuscript, add focused revie
 - Ocular metrics/EEG as objective fatigue markers for aviation.
 - Fitness, aerobic capacity, and stress resilience links to performance in pilots/commanders.
 - Formal decision science for risk matrices in Safety Management Systems.
+
+---
+
+## Appendix B — Space-weather ↔ HRV inference upgrades (2025)
+
+- Robust statistics: Pearson with CI95 (Fisher z), Spearman ρ, BH-FDR; HAC-robust SE/p for autocorrelated series; optional block bootstrap CI and permutation p for top effects.
+- Multi-predictor lags: Kp, Dst, F10.7, solar wind drivers into a unified lagged feature matrix.
+- ML models: ElasticNet, Lasso, RandomForest, Gradient Boosting; time-aware walk-forward CV; permutation importances for explainability.
+- Key references: Ramishvili et al., 2023 (*Atmosphere*, 14(12):1707, https://doi.org/10.3390/atmos14121707); Mattoni et al., 2019 (bioRxiv, https://doi.org/10.1101/684035); Papailiou & Mavromichalaki, 2025 (*Atmosphere*, 16(6):711, https://doi.org/10.3390/atmos16060711).
