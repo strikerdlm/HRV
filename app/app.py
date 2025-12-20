@@ -11925,6 +11925,11 @@ that predicts cognitive performance based on:
                         "pearson_r", key=lambda s: s.abs(), ascending=False
                     )
                 )
+                # Persist for exports
+                st.session_state["space_weather_export"] = {
+                    "corr_full": lag_results.copy(),
+                    "corr_best": best_rows.copy(),
+                }
                 # Export correlation tables
                 st.download_button(
                     "⬇️ Download full correlation table (CSV)",
@@ -12031,11 +12036,16 @@ that predicts cognitive performance based on:
                             imp_df = pd.DataFrame(imps).head(8)
                             st.markdown("Top feature importances (RandomForest, permutation)")
                             st.dataframe(imp_df, width="stretch")
+                            if "space_weather_export" not in st.session_state:
+                                st.session_state["space_weather_export"] = {}
+                            st.session_state["space_weather_export"]["ml_importances"] = imp_df.copy()
                         # Export ML summaries
                         models_df = pd.DataFrame(
                             [
                                 {"model": "elastic_net", **enet},
                                 {"model": "random_forest", **rf},
+                                {"model": "lasso", **ml_results.get("lasso", {})},
+                                {"model": "gradient_boosting", **ml_results.get("gradient_boosting", {})},
                             ]
                         )
                         st.download_button(
@@ -12053,6 +12063,7 @@ that predicts cognitive performance based on:
                                 mime="text/csv",
                                 key="download_ml_importances",
                             )
+                        st.session_state["space_weather_export"]["ml_metrics"] = models_df.copy()
                     except Exception as exc:  # noqa: BLE001
                         st.warning(f"ML run skipped: {exc}")
                 if not best_rows.empty and "pearson_r" in best_rows.columns:
@@ -13788,6 +13799,7 @@ that predicts cognitive performance based on:
                     windowed_df=windowed_df,
                     episodes_df=episodes_df,
                     ml_summary_df=ml_summary_df if include_ml_opt else None,
+                    space_weather_export=st.session_state.get("space_weather_export"),
                     config=export_config,
                     selected_sources=selected_sources,
                     additional_notes=notes_text,
