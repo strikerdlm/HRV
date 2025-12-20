@@ -138,9 +138,27 @@ def _detect_gpu() -> GPUInfo:
             info.compute_capability,
         )
         
-    except ImportError:
-        _LOGGER.info("CuPy not installed - GPU acceleration unavailable")
+    except ImportError as exc:
+        # Capture environment details for debugging mis-detected installs
+        import sys
+        import importlib.util
+
+        spec = importlib.util.find_spec("cupy")
+        hint = (
+            "Module spec found at {0}".format(spec.origin)
+            if spec and spec.origin
+            else "Module spec not found"
+        )
+        _LOGGER.info(
+            "CuPy not installed or not importable - GPU acceleration unavailable (%s). "
+            "sys.executable=%s; %s",
+            exc,
+            sys.executable,
+            hint,
+        )
         info.device_name = "CuPy not installed"
+        if os.getenv("HRV_GPU_REQUIRED", "").strip():
+            raise
         
     except Exception as exc:
         _LOGGER.warning("GPU detection failed: %s", exc)
@@ -172,7 +190,8 @@ def get_gpu_config() -> GPUConfig:
     global _gpu_config
     
     if _gpu_config is None:
-        _gpu_config = GPUConfig()
+        # Default to enabling GPU if CuPy is available
+        _gpu_config = GPUConfig(enabled=_cupy_available)
     
     return _gpu_config
 
