@@ -8889,11 +8889,17 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                             start_dt = None
                             end_dt = None
                         if start_dt is not None and not pd.isna(start_dt):
-                            st.session_state["fatigue_bedtime"] = int(start_dt.tz_convert("UTC").hour)
-                            fatigue_defaults["fatigue_bedtime"] = int(start_dt.tz_convert("UTC").hour)
+                            if start_dt.tzinfo is None:
+                                start_dt = start_dt.tz_localize(timezone.utc)
+                            local_start = start_dt.astimezone()
+                            st.session_state["fatigue_bedtime"] = int(local_start.hour)
+                            fatigue_defaults["fatigue_bedtime"] = int(local_start.hour)
                         if end_dt is not None and not pd.isna(end_dt):
-                            st.session_state["fatigue_waketime"] = int(end_dt.tz_convert("UTC").hour)
-                            fatigue_defaults["fatigue_waketime"] = int(end_dt.tz_convert("UTC").hour)
+                            if end_dt.tzinfo is None:
+                                end_dt = end_dt.tz_localize(timezone.utc)
+                            local_end = end_dt.astimezone()
+                            st.session_state["fatigue_waketime"] = int(local_end.hour)
+                            fatigue_defaults["fatigue_waketime"] = int(local_end.hour)
 
             st.markdown("#### 🔄 Cross-tab correlation: Circadian ➜ Fatigue")
             circadian_context = cross_tab_broker.get_latest("circadian", fatigue_user_id)
@@ -15116,7 +15122,7 @@ def _scan_lag_correlations_generic(
         if not isinstance(median_diff, pd.Timedelta):
             return False
         median_minutes = float(median_diff.total_seconds() / 60.0)
-        if not np.isfinite(median_minutes) or median_minutes < 20 * 60:
+        if not np.isfinite(median_minutes) or median_minutes < 1440.0:
             return False
         # Daily aggregates typically sit on (or very near) midnight UTC.
         normalized = ts.dt.normalize()
