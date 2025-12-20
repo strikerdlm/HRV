@@ -188,9 +188,10 @@ def get_gpu_info(refresh: bool = False) -> GPUInfo:
 def get_gpu_config() -> GPUConfig:
     """Get current GPU configuration."""
     global _gpu_config
-    
     if _gpu_config is None:
-        # Default to enabling GPU if CuPy is available
+        # Probe GPU first so the default reflects real availability
+        info = get_gpu_info()
+        _gpu_config = GPUConfig(enabled=info.available and _cupy_available)
         _gpu_config = GPUConfig(enabled=_cupy_available)
     
     return _gpu_config
