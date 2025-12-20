@@ -862,6 +862,10 @@ Based on the Sleep, Activity, Fatigue, and Task Effectiveness model.
 - ML stack: ElasticNet and RandomForest models on lagged space-weather features (Kp, Dst, F10.7, solar wind) with time-aware (walk-forward) splits; reports R²/MAE and permutation importances (top lag drivers).
 - Advanced inference: optional block bootstrap CI and permutation p-values for top findings.
 - Exports: correlation tables (full + top) and ML summaries/feature importances are downloadable as CSV from the Space Weather tab; include them in PDF/Markdown exports for reporting.
+- Additional models & robustness:
+  - HAC-robust SE/p-values via statsmodels OLS (cov_type='HAC', maxlags=4) for autocorrelated series.
+  - Spearman ρ alongside Pearson r; BH-FDR for multiple lags/predictors.
+  - Extra ML baselines: Gradient Boosting, Lasso; TimeSeriesSplit CV (3 splits) for ElasticNet/RF; permutation importances.
 - Scientific context:
   - Ramishvili et al. 2023, Atmosphere 14(12):1707 — adaptation to geomagnetic storms (https://doi.org/10.3390/atmos14121707)
   - Mattoni et al. 2019, bioRxiv — highlights autocorrelation and small effect sizes (https://doi.org/10.1101/684035)
