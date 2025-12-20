@@ -11313,6 +11313,14 @@ that predicts cognitive performance based on:
         if not lags:
             lags = [0]
 
+        # Ensure Kp data is available (auto-load from cache if state is empty)
+        if (kp_df.empty or "kp_index" not in kp_df.columns) and not kp_error:
+            try:
+                kp_df = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
+            except Exception as exc:  # noqa: BLE001
+                kp_error = str(exc)
+                kp_df = pd.DataFrame()
+
         # Check prerequisites before showing compute button
         can_compute_corr = (
             not windowed_df.empty
