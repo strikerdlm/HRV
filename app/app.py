@@ -303,10 +303,11 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.inspection import permutation_importance
-from sklearn.linear_model import ElasticNetCV
+from sklearn.linear_model import ElasticNetCV, LassoCV
 from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.model_selection import TimeSeriesSplit
 from dotenv import load_dotenv
 from pathlib import Path
 from pandas.api.types import is_datetime64_any_dtype
@@ -4874,6 +4875,25 @@ def _corr_table(
         except Exception:
             rho, p_s = float("nan"), float("nan")
 
+        # HAC-robust regression (OLS with HAC covariance) if statsmodels is available
+        hac_p = float("nan")
+        hac_ci_low = float("nan")
+        hac_ci_high = float("nan")
+        try:
+            import statsmodels.api as sm  # type: ignore
+
+            X = sm.add_constant(predictor_values)
+            model = sm.OLS(target_values, X)
+            res = model.fit(cov_type="HAC", cov_kwds={"maxlags": 4})
+            beta = res.params[1]
+            se = res.bse[1]
+            hac_p = float(res.pvalues[1])
+            z_crit = 1.96
+            hac_ci_low = float(beta - z_crit * se)
+            hac_ci_high = float(beta + z_crit * se)
+        except Exception:
+            pass
+
         rows.append(
             {
                 "metric": col,
@@ -4883,6 +4903,9 @@ def _corr_table(
                 "ci_high": ci_high,
                 "spearman_r": rho,
                 "spearman_p": p_s,
+                "hac_p": hac_p,
+                "hac_ci_low": hac_ci_low,
+                "hac_ci_high": hac_ci_high,
                 "n": n,
             }
         )
