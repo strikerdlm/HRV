@@ -257,7 +257,7 @@ def _render_longitudinal_timepoint_controls(user_id: str) -> Optional[str]:
 
         if label == "— (Unassigned)":
             st.info("New entries will not be linked to a study timepoint.")
-            submitted = st.form_submit_button("Apply", use_container_width=True)
+            submitted = st.form_submit_button("Apply", width="stretch")
             if submitted:
                 st.session_state[_timepoint_id_key(user_id)] = None
                 st.session_state[_timepoint_label_key(user_id)] = label
@@ -295,7 +295,7 @@ def _render_longitudinal_timepoint_controls(user_id: str) -> Optional[str]:
             key=f"longitudinal_timepoint_is_baseline_{user_id}",
         )
 
-        submitted = st.form_submit_button("💾 Save / Apply timepoint", type="primary", use_container_width=True)
+        submitted = st.form_submit_button("💾 Save / Apply timepoint", type="primary", width="stretch")
         if submitted:
             try:
                 timepoint = MeasurementTimepoint(
@@ -915,7 +915,7 @@ def _render_registration_form() -> Optional[UserProfile]:
             value="Moderate",
         )
         
-        submit = st.form_submit_button("✅ Create Profile", use_container_width=True)
+        submit = st.form_submit_button("✅ Create Profile", width="stretch")
         
         if submit:
             if not username or not full_name:
@@ -993,7 +993,7 @@ def _render_login_section() -> Optional[UserProfile]:
     
     with col_action:
         st.write("")  # Spacing
-        if st.button("✅ Select User", use_container_width=True):
+        if st.button("✅ Select User", width="stretch"):
             selected_data = user_options.get(selected_username)
             if selected_data:
                 # Fetch full user profile only when needed
@@ -1103,7 +1103,7 @@ def _render_profile_edit(user: UserProfile) -> None:
         
         col_save, col_cancel = st.columns(2)
         with col_save:
-            if st.form_submit_button("💾 Save Changes", use_container_width=True):
+            if st.form_submit_button("💾 Save Changes", width="stretch"):
                 user.full_name = full_name
                 user.email = email
                 user.date_of_birth = date_of_birth.isoformat()
@@ -1123,7 +1123,7 @@ def _render_profile_edit(user: UserProfile) -> None:
                     st.error(f"Failed to update: {exc}")
         
         with col_cancel:
-            if st.form_submit_button("❌ Cancel", use_container_width=True):
+            if st.form_submit_button("❌ Cancel", width="stretch"):
                 st.session_state["edit_profile_mode"] = False
                 st.rerun()
 
@@ -1739,11 +1739,11 @@ def _render_clinical_assessment(user: UserProfile) -> None:
         save_clicked = col_save.form_submit_button(
             t('save_assessment'),
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
         preview_clicked = col_preview.form_submit_button(
             "🔁 Preview Scores",
-            use_container_width=True,
+            width="stretch",
         )
     
     if preview_clicked or save_clicked:
@@ -1943,7 +1943,7 @@ def _render_assessment_history(user: UserProfile) -> None:
                 "notes",
             ]
             display_df = df[[c for c in display_cols if c in df.columns]]
-            st.dataframe(display_df, use_container_width=True)
+            st.dataframe(display_df, width="stretch")
         
     except Exception as exc:
         st.error(f"Failed to load history: {exc}")
@@ -2389,7 +2389,7 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         stats_df = pd.DataFrame(stats_rows)
         if not stats_df.empty:
             st.markdown("#### Summary statistics (stored Garmin daily metrics)")
-            st.dataframe(stats_df, use_container_width=True, hide_index=True)
+            st.dataframe(stats_df, width="stretch", hide_index=True)
 
     # Trends (grouped so all Garmin fields can be visualized)
     if len(df_ts) > 1 and isinstance(df_ts.index, pd.DatetimeIndex):
@@ -2481,7 +2481,7 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         
         st.dataframe(
             display_df.reset_index(drop=True),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
@@ -2683,7 +2683,7 @@ def _render_profile_rr_library(user: UserProfile) -> None:
         if st.button(
             "📥 Load into Analysis workspace",
             key=f"profile_rr_library_load_{user.user_id}",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state["queued_rr_filepaths"] = _build_queue_payload()
             _set_current_user(user)
@@ -2694,7 +2694,7 @@ def _render_profile_rr_library(user: UserProfile) -> None:
             "🚀 Load + run HRV analysis",
             key=f"profile_rr_library_load_run_{user.user_id}",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         ):
             st.session_state["queued_rr_filepaths"] = _build_queue_payload()
             st.session_state["auto_run_hrv_analysis"] = True
@@ -2942,7 +2942,7 @@ def _render_hrv_history(user: UserProfile) -> None:
                             "Ensure your HRV measurements are saved with a timepoint label (T0…T21)."
                         )
                     else:
-                        st.dataframe(tp_table, use_container_width=True)
+                        st.dataframe(tp_table, width="stretch")
                         st.caption(
                             "Columns prefixed with `baseline_` are the baseline values (T0), and `delta_` columns are "
                             "computed as (timepoint_value − baseline_value)."
@@ -3113,7 +3113,7 @@ def _render_hrv_history(user: UserProfile) -> None:
         
         # Full data table
         with st.expander("📊 All HRV Measurements"):
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df, width="stretch")
         
     except Exception as exc:
         if DATABASE_AVAILABLE and is_sqlite_database_corruption_error(exc):
@@ -3341,7 +3341,7 @@ def _render_data_management(user: UserProfile) -> None:
     
     with col1:
         st.markdown("### Export Data")
-        if st.button("📥 Export All User Data", use_container_width=True):
+        if st.button("📥 Export All User Data", width="stretch"):
             try:
                 import json
                 db = get_database()
@@ -3370,7 +3370,7 @@ def _render_data_management(user: UserProfile) -> None:
     with col2:
         st.markdown("### Account Actions")
         
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("🚪 Logout", width="stretch"):
             _set_current_user(None)
             st.session_state.pop("edit_profile_mode", None)
             st.rerun()
@@ -3457,13 +3457,13 @@ def _render_fit_csv_tools(user: UserProfile) -> None:
                 csv_name = f"{Path(fit_file.name).stem}.csv"
                 preview = df.head(10) if not df.empty else pd.DataFrame()
                 if not preview.empty:
-                    st.dataframe(preview, use_container_width=True)
+                    st.dataframe(preview, width="stretch")
                 st.download_button(
                     "⬇️ Download CSV",
                     data=csv_bytes,
                     file_name=csv_name,
                     mime="text/csv",
-                    use_container_width=True,
+                    width="stretch",
                 )
                 try:
                     manager.store_device_file(
@@ -3496,7 +3496,7 @@ def _render_fit_csv_tools(user: UserProfile) -> None:
                     low_memory=False,
                 )
                 if not preview_df.empty:
-                    st.dataframe(preview_df.head(10), use_container_width=True)
+                    st.dataframe(preview_df.head(10), width="stretch")
             except Exception as exc:  # noqa: BLE001
                 st.error(f"Unable to read CSV: {exc}")
                 preview_df = None
@@ -3654,7 +3654,7 @@ def _render_garmin_ingest(user: UserProfile) -> None:
         
         st.dataframe(
             daily_df.sort_values("date", ascending=False).head(5),
-            use_container_width=True,
+            width="stretch",
         )
     except Exception as exc:  # noqa: BLE001
         if log_exception is not None:
@@ -4443,7 +4443,7 @@ def _render_hrv_analysis_tool(
                     "Percentile": f"~{data.get('percentile_estimate', 'N/A')}th" if data.get('percentile_estimate') else "N/A",
                 })
         if metric_rows:
-            st.dataframe(pd.DataFrame(metric_rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(metric_rows), width="stretch", hide_index=True)
     
     # Clinical significance
     if analysis.clinical_significance:
@@ -4783,7 +4783,7 @@ def _render_personalized_health_metrics(user: UserProfile) -> None:
                 "SD": f"{values['sd']:.1f}",
                 "Normal Range": f"{values['percentile_5']:.1f} - {values['percentile_95']:.1f}",
             })
-        st.dataframe(pd.DataFrame(norm_df_data), use_container_width=True, hide_index=True)
+        st.dataframe(pd.DataFrame(norm_df_data), width="stretch", hide_index=True)
     
     # --- Fitness Classification (if VO2max available) ---
     if "fitness_classification" in results.get("calculations_available", []):
@@ -5122,7 +5122,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                     }
                     for entry in vo2_history
                 ]
-                st.dataframe(history_data, use_container_width=True, hide_index=True)
+                st.dataframe(history_data, width="stretch", hide_index=True)
     
     # Exercise settings
     col1, col2 = st.columns(2)
@@ -5344,7 +5344,7 @@ def _render_body_composition_form(user: UserProfile) -> None:
             display_df = tmp[[c for c in display_cols if c in tmp.columns]].copy()
             if "measurement_date" in display_df.columns:
                 display_df["measurement_date"] = pd.to_datetime(display_df["measurement_date"], errors="coerce").dt.date
-            st.dataframe(display_df, use_container_width=True, hide_index=True)
+            st.dataframe(display_df, width="stretch", hide_index=True)
 
     def _default_float(val: Any, fallback: float) -> float:
         parsed = _safe_float(val)
@@ -5526,7 +5526,7 @@ def _render_body_composition_form(user: UserProfile) -> None:
 
         submitted = st.form_submit_button(
             "💾 Save Body Composition",
-            use_container_width=True,
+            width="stretch",
         )
 
         if submitted:
@@ -6188,13 +6188,13 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
             st.caption("No acute symptom trends logged yet.")
         else:
             st.caption("Top acute symptoms (all-time)")
-            st.dataframe(symptom_df, use_container_width=True, hide_index=True)
+            st.dataframe(symptom_df, width="stretch", hide_index=True)
     with col_b2:
         if behavior_df.empty:
             st.caption("No behavioral flags logged yet.")
         else:
             st.caption("Behavioral health flags (frequency)")
-            st.dataframe(behavior_df, use_container_width=True, hide_index=True)
+            st.dataframe(behavior_df, width="stretch", hide_index=True)
 
 
 @_fragment_if_available
@@ -6763,7 +6763,7 @@ def _render_medical_record_form(user: UserProfile) -> None:
                     "exercise_minutes",
                 ]
             ],
-            use_container_width=True,
+            width="stretch",
         )
     else:
         st.info("No exploration medical records logged yet.")

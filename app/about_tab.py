@@ -504,7 +504,7 @@ def render_about_tab() -> None:
             "Purpose": ["Web UI Framework", "Numerical Computing", "Scientific Algorithms", "Data Analysis", "Plotting Backend", "PostgreSQL Driver", "Environment Config"],
             "Category": ["Frontend", "Core", "Core", "Core", "Visualization", "Database", "Configuration"]
         }
-        st.dataframe(deps_data, use_container_width=True, hide_index=True)
+        st.dataframe(deps_data, width="stretch", hide_index=True)
     
     # Citation section
     st.markdown(_render_citation_box(), unsafe_allow_html=True)
