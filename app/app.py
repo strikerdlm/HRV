@@ -11787,6 +11787,11 @@ that predicts cognitive performance based on:
         )
         
         if can_compute_corr and compute_corr_clicked:
+            gpu_info = get_gpu_info()
+            st.caption(
+                f"Compute context — GPU available: **{gpu_info.available}** ({gpu_info.device_name}); "
+                f"compute runs on CPU; CuPy used only for CUDA-ready array ops."
+            )
             # optional weather covariates fetched for time span of HRV windows
             cov_df = pd.DataFrame()
             covariate_cols: List[str] = []
@@ -11846,6 +11851,7 @@ that predicts cognitive performance based on:
                         )
 
             with st.spinner("Computing correlations..."):
+                corr_start = time.perf_counter()
                 lag_results = _scan_lag_correlations(
                     windowed_df,
                     kp_df,
@@ -11854,6 +11860,7 @@ that predicts cognitive performance based on:
                     merge_tolerance_minutes=int(merge_tol),
                     covariate_cols=covariate_cols or None,
                 )
+                corr_duration = (time.perf_counter() - corr_start) * 1000.0
             if covariate_cols:
                 st.caption(
                     "Weather covariates (%s) were included via partial correlations."
@@ -11863,6 +11870,7 @@ that predicts cognitive performance based on:
                 st.info(
                     "No lagged correlations could be computed with current data.")
             else:
+                st.caption(f"Correlation computation time: {corr_duration:.0f} ms")
                 if (
                     "p_value" in lag_results.columns
                     and lag_results["p_value"].notna().any()
@@ -11962,6 +11970,7 @@ that predicts cognitive performance based on:
                 ):
                     try:
                         with st.spinner("Training ML models..."):
+                            ml_start = time.perf_counter()
                             feature_df = _build_space_weather_feature_matrix(
                                 windowed_df,
                                 bundles,
@@ -11974,10 +11983,12 @@ that predicts cognitive performance based on:
                                 feature_df,
                                 target_metric=target_metric,
                             )
+                            ml_duration = (time.perf_counter() - ml_start) * 1000.0
                         st.markdown(
                             f"- Samples used: **{ml_results.get('samples', 0)}** | "
                             f"Features: **{ml_results.get('features', 0)}**"
                         )
+                        st.caption(f"ML training time: {ml_duration:.0f} ms (CPU)")
                         enet = ml_results.get("elastic_net", {})
                         rf = ml_results.get("random_forest", {})
                         col_m1, col_m2 = st.columns(2)
