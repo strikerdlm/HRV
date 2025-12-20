@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import logging
 import math
+from copy import deepcopy
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from enum import Enum
@@ -1432,6 +1433,27 @@ def run_all_profile_tools(
     """
     if current_hour is None:
         current_hour = datetime.now().hour
+
+    # Lightweight memoization to avoid repeated heavy calculations with identical inputs
+    signature = _profile_tools_signature(
+        age=age,
+        sex=sex,
+        weight_kg=weight_kg,
+        height_cm=height_cm,
+        rmssd_ms=rmssd_ms,
+        hrv_metrics=hrv_metrics,
+        sleep_hours=sleep_hours,
+        sleep_quality=sleep_quality,
+        hours_awake=hours_awake,
+        current_hour=current_hour,
+        chronotype_offset=chronotype_offset,
+        resting_hr=resting_hr,
+        vo2max=vo2max,
+        activity_level=activity_level,
+    )
+    cached = _get_profile_tools_cache(signature)
+    if cached is not None:
+        return cached
     
     results: Dict[str, Any] = {
         "user_context": {
@@ -1535,6 +1557,10 @@ def run_all_profile_tools(
     except Exception as exc:
         _LOGGER.warning("Operational performance prediction failed: %s", exc)
     
+    # Add evidence panel for sleep/readiness metrics
+    results["evidence"] = _sleep_readiness_evidence()
+
+    _set_profile_tools_cache(signature, results)
     return results
 
 
@@ -1566,3 +1592,93 @@ __all__ = [
     # Reference data
     "RECOVERY_THRESHOLDS",
 ]
+
+
+# -----------------------------------------------------------------------------
+# Internal caching helpers
+# -----------------------------------------------------------------------------
+
+
+def _profile_tools_signature(
+    *,
+    age: int,
+    sex: str,
+    weight_kg: float,
+    height_cm: float,
+    rmssd_ms: Optional[float],
+    hrv_metrics: Optional[Dict[str, float]],
+    sleep_hours: float,
+    sleep_quality: float,
+    hours_awake: float,
+    current_hour: int,
+    chronotype_offset: float,
+    resting_hr: Optional[float],
+    vo2max: Optional[float],
+    activity_level: str,
+) -> Tuple:
+    """Build a hashable signature for memoization (rounded to reduce churn)."""
+    def _round(val: Optional[float], ndigits: int = 2) -> Optional[float]:
+        if val is None:
+            return None
+        try:
+            return round(float(val), ndigits)
+        except Exception:
+            return None
+
+    metrics_tuple = None
+    if hrv_metrics:
+        metrics_tuple = tuple(sorted((k, _round(v, 3)) for k, v in hrv_metrics.items()))
+
+    return (
+        int(age),
+        sex.lower(),
+        _round(weight_kg, 2),
+        _round(height_cm, 2),
+        _round(rmssd_ms, 3),
+        metrics_tuple,
+        _round(sleep_hours, 3),
+        _round(sleep_quality, 3),
+        _round(hours_awake, 3),
+        int(current_hour),
+        _round(chronotype_offset, 3),
+        _round(resting_hr, 3),
+        _round(vo2max, 3),
+        activity_level.lower(),
+    )
+
+
+_PROFILE_TOOLS_CACHE: Dict[Tuple, Dict[str, Any]] = {}
+
+
+def _get_profile_tools_cache(signature: Tuple) -> Optional[Dict[str, Any]]:
+    """Return a deep copy of cached results, if present."""
+    cached = _PROFILE_TOOLS_CACHE.get(signature)
+    if cached is None:
+        return None
+    return deepcopy(cached)
+
+
+def _set_profile_tools_cache(signature: Tuple, value: Dict[str, Any]) -> None:
+    """Store a deep copy of results to avoid downstream mutation."""
+    _PROFILE_TOOLS_CACHE[signature] = deepcopy(value)
+
+
+def _sleep_readiness_evidence() -> List[Dict[str, str]]:
+    """Evidence panel for sleep/readiness outputs."""
+    return [
+        {
+            "topic": "Sleep duration and vigilance",
+            "finding": "Sleep <7 h/night is associated with reduced psychomotor vigilance and higher lapse rates.",
+            "citation": "Van Dongen et al., Sleep 2003; Banks & Dinges, Clin Chest Med 2010.",
+        },
+        {
+            "topic": "Sleep efficiency and recovery",
+            "finding": "Sleep efficiency ≥85% correlates with better subjective recovery and next-day alertness.",
+            "citation": "Ohayon et al., Sleep Med Rev 2017; Buysse et al., J Psychiatr Res 1989.",
+        },
+        {
+            "topic": "HRV and training readiness",
+            "finding": "lnRMSSD is a validated marker of parasympathetic recovery and guides training load adjustments.",
+            "citation": "Plews et al., J Appl Physiol 2013; Kiviniemi et al., Med Sci Sports Exerc 2010.",
+        },
+    ]
