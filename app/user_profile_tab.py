@@ -4343,8 +4343,46 @@ def _render_fatigue_prediction_tool(
     # Performance curve visualization
     st.markdown("##### 24-Hour Performance Curve")
     if fatigue.performance_curve:
-        curve_data = pd.DataFrame(fatigue.performance_curve, columns=["Hour", "Effectiveness"])
-        st.line_chart(curve_data.set_index("Hour"))
+        curve_df = pd.DataFrame(fatigue.performance_curve, columns=["Hour", "Effectiveness"]).sort_values("Hour")
+        hours = curve_df["Hour"].tolist()
+        vals = curve_df["Effectiveness"].tolist()
+
+        # Markers for current/4h/8h/24h if available
+        markers: list[dict[str, Any]] = []
+        key_points = {0: "Now", 4: "4h", 8: "8h", 24: "24h"}
+        for h, label in key_points.items():
+            if h in hours:
+                idx = hours.index(h)
+                markers.append({"name": label, "coord": [hours[idx], vals[idx]], "value": f"{vals[idx]:.0f}%"})
+
+        options = {
+            "tooltip": {"trigger": "axis", "formatter": "{b}h : {c}%"},
+            "xAxis": {"type": "category", "data": hours, "name": "Hour", "boundaryGap": False},
+            "yAxis": {"type": "value", "min": 40, "max": 100, "name": "Effectiveness (%)"},
+            "series": [
+                {
+                    "name": "Effectiveness",
+                    "type": "line",
+                    "smooth": True,
+                    "data": vals,
+                    "areaStyle": {"opacity": 0.15},
+                    "lineStyle": {"width": 3},
+                    "markLine": {
+                        "symbol": "none",
+                        "data": [
+                            {"yAxis": 85, "name": "GO"},
+                            {"yAxis": 70, "name": "Monitor"},
+                            {"yAxis": 55, "name": "Caution"},
+                        ],
+                        "label": {"formatter": "{b}"},
+                    },
+                    "markPoint": {"data": markers},
+                }
+            ],
+            "legend": {"show": False},
+            "grid": {"left": "10%", "right": "8%", "bottom": "12%", "top": "8%"},
+        }
+        render_echarts(EChartsConfig(options=options, height="320px"))
     
     # Recommendations
     if fatigue.recommendations:
