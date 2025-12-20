@@ -103,40 +103,59 @@ def _detect_gpu() -> GPUInfo:
         _cp = cp
         _cupy_available = True
         
-        # Get device info
-        device = cp.cuda.Device(0)
-        device.use()
-        
-        info.available = True
-        info.device_id = 0
-        info.device_name = cp.cuda.runtime.getDeviceProperties(0)["name"].decode()
-        
-        # Memory info
-        mempool = cp.get_default_memory_pool()
-        total_mem = device.mem_info[1]
-        free_mem = device.mem_info[0]
-        info.total_memory_gb = total_mem / (1024 ** 3)
-        info.free_memory_gb = free_mem / (1024 ** 3)
-        
-        # CUDA version
-        cuda_ver = cp.cuda.runtime.runtimeGetVersion()
-        info.cuda_version = f"{cuda_ver // 1000}.{(cuda_ver % 1000) // 10}"
-        
-        # Driver version
-        driver_ver = cp.cuda.runtime.driverGetVersion()
-        info.driver_version = f"{driver_ver // 1000}.{(driver_ver % 1000) // 10}"
-        
-        # Compute capability
-        props = cp.cuda.runtime.getDeviceProperties(0)
-        info.compute_capability = f"{props['major']}.{props['minor']}"
-        
-        _LOGGER.info(
-            "GPU detected: %s (%.1f GB, CUDA %s, CC %s)",
-            info.device_name,
-            info.total_memory_gb,
-            info.cuda_version,
-            info.compute_capability,
-        )
+        device_count = max(0, int(cp.cuda.runtime.getDeviceCount()))
+        if device_count == 0:
+            info.device_name = "No CUDA devices found"
+            return info
+
+        preferred_env = os.getenv("HRV_GPU_DEVICE")
+        preferred_id = int(preferred_env) if preferred_env and preferred_env.isdigit() else 0
+        preferred_id = preferred_id % device_count
+
+        # Try preferred device first, then fall back to others
+        for offset in range(device_count):
+            device_id = (preferred_id + offset) % device_count
+            try:
+                device = cp.cuda.Device(device_id)
+                device.use()
+
+                props = cp.cuda.runtime.getDeviceProperties(device_id)
+                name = props["name"]
+                info.available = True
+                info.device_id = device_id
+                info.device_name = name.decode() if isinstance(name, bytes) else str(name)
+
+                # Memory info
+                total_mem = device.mem_info[1]
+                free_mem = device.mem_info[0]
+                info.total_memory_gb = total_mem / (1024 ** 3)
+                info.free_memory_gb = free_mem / (1024 ** 3)
+
+                # CUDA version
+                cuda_ver = cp.cuda.runtime.runtimeGetVersion()
+                info.cuda_version = f"{cuda_ver // 1000}.{(cuda_ver % 1000) // 10}"
+
+                # Driver version
+                driver_ver = cp.cuda.runtime.driverGetVersion()
+                info.driver_version = f"{driver_ver // 1000}.{(driver_ver % 1000) // 10}"
+
+                # Compute capability
+                info.compute_capability = f"{props['major']}.{props['minor']}"
+
+                _LOGGER.info(
+                    "GPU detected: %s (device %d, %.1f GB, CUDA %s, CC %s)",
+                    info.device_name,
+                    info.device_id,
+                    info.total_memory_gb,
+                    info.cuda_version,
+                    info.compute_capability,
+                )
+                break
+            except Exception as exc:  # bounded by device_count attempts
+                _LOGGER.debug("GPU device %d unusable: %s", device_id, exc)
+
+        if not info.available:
+            info.device_name = "No usable CUDA device"
         
     except ImportError as exc:
         # Capture environment details for debugging mis-detected installs
