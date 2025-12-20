@@ -303,6 +303,10 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.inspection import permutation_importance
+from sklearn.linear_model import ElasticNetCV
+from sklearn.metrics import mean_absolute_error, r2_score
 from dotenv import load_dotenv
 from pathlib import Path
 from pandas.api.types import is_datetime64_any_dtype
@@ -4849,7 +4853,39 @@ def _corr_table(
                 predictor_values,
                 target_values,
             )
-        rows.append({"metric": col, "pearson_r": r, "p_value": p, "n": n})
+        # 95% CI for Pearson r using Fisher z (guard for |r| ~ 1 and n < 4)
+        ci_low = float("nan")
+        ci_high = float("nan")
+        if n > 3 and np.isfinite(r) and abs(r) < 0.9999:
+            try:
+                z = np.arctanh(r)
+                se = 1.0 / np.sqrt(n - 3)
+                z_crit = 1.96
+                ci_low = float(np.tanh(z - z_crit * se))
+                ci_high = float(np.tanh(z + z_crit * se))
+            except Exception:
+                ci_low = float("nan")
+                ci_high = float("nan")
+        # Spearman rho (nonparametric robustness)
+        try:
+            from scipy.stats import spearmanr  # type: ignore
+
+            rho, p_s = spearmanr(predictor_values, target_values, nan_policy="omit")
+        except Exception:
+            rho, p_s = float("nan"), float("nan")
+
+        rows.append(
+            {
+                "metric": col,
+                "pearson_r": r,
+                "p_value": p,
+                "ci_low": ci_low,
+                "ci_high": ci_high,
+                "spearman_r": rho,
+                "spearman_p": p_s,
+                "n": n,
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -4905,6 +4941,124 @@ def _scan_lag_correlations(
         corr_df["lag_hours"] = int(lag)
         results.append(corr_df)
     return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
+
+
+def _build_kp_feature_matrix(
+    windowed_df: pd.DataFrame,
+    kp_df: pd.DataFrame,
+    lags_hours: List[int],
+    merge_tolerance_minutes: int = 90,
+) -> pd.DataFrame:
+    """Construct a wide feature matrix of Kp lag features aligned to HRV windows."""
+    if windowed_df.empty or kp_df.empty:
+        return pd.DataFrame()
+    w = windowed_df.copy()
+    w["start"] = pd.to_datetime(w["start"], errors="coerce", utc=True)
+    w = w.dropna(subset=["start"]).sort_values("start")
+    if w.empty:
+        return pd.DataFrame()
+    k = kp_df.copy()
+    k["time_tag"] = pd.to_datetime(k["time_tag"], errors="coerce", utc=True)
+    k = k.dropna(subset=["time_tag", "kp_index"]).sort_values("time_tag")
+    if k.empty:
+        return pd.DataFrame()
+    base = w.set_index("start")
+    for lag in lags_hours:
+        aligned = align_space_weather_series(
+            reference_times=w["start"],
+            predictor_df=k,
+            predictor_time_col="time_tag",
+            predictor_value_col="kp_index",
+            lag_hours=int(lag),
+            max_gap_minutes=int(merge_tolerance_minutes),
+        )
+        if aligned.empty:
+            continue
+        base[f"kp_lag_{int(lag)}h"] = aligned
+    return base.reset_index()
+
+
+def _run_ml_models_on_kp(
+    windowed_df: pd.DataFrame,
+    kp_df: pd.DataFrame,
+    target_metric: str,
+    lags_hours: List[int],
+    merge_tolerance_minutes: int = 90,
+) -> Dict[str, Any]:
+    """Train ElasticNet and RandomForest models predicting an HRV metric from Kp lags."""
+    feature_df = _build_kp_feature_matrix(
+        windowed_df, kp_df, lags_hours, merge_tolerance_minutes=merge_tolerance_minutes
+    )
+    if feature_df.empty or target_metric not in feature_df.columns:
+        raise ValueError("Insufficient data to train ML models.")
+    y = pd.to_numeric(feature_df[target_metric], errors="coerce")
+    X = feature_df[[c for c in feature_df.columns if c.startswith("kp_lag_")]]
+    X = X.apply(pd.to_numeric, errors="coerce")
+    df = pd.concat([y, X], axis=1).dropna()
+    if df.shape[0] < 30:
+        raise ValueError("Not enough samples for ML (need ≥30 rows).")
+    y = df[target_metric].to_numpy(dtype=float)
+    X = df[[c for c in df.columns if c.startswith("kp_lag_")]].to_numpy(dtype=float)
+    n = X.shape[0]
+    split = int(max(10, n * 0.8))
+    X_train, X_test = X[:split], X[split:]
+    y_train, y_test = y[:split], y[split:]
+
+    results: Dict[str, Any] = {"samples": n, "features": X.shape[1]}
+
+    # ElasticNetCV for linear sparse patterns
+    enet = ElasticNetCV(
+        l1_ratio=[0.1, 0.5, 0.9],
+        alphas=None,
+        cv=3,
+        max_iter=5000,
+        n_jobs=None,
+        fit_intercept=True,
+    )
+    enet.fit(X_train, y_train)
+    y_pred_en = enet.predict(X_test)
+    results["elastic_net"] = {
+        "r2": float(r2_score(y_test, y_pred_en)) if y_test.size > 0 else float("nan"),
+        "mae": float(mean_absolute_error(y_test, y_pred_en))
+        if y_test.size > 0
+        else float("nan"),
+        "alpha": float(enet.alpha_),
+        "l1_ratio": float(enet.l1_ratio_),
+    }
+
+    # RandomForest for nonlinear patterns
+    rf = RandomForestRegressor(
+        n_estimators=160,
+        max_depth=6,
+        random_state=42,
+        n_jobs=-1,
+        min_samples_leaf=2,
+    )
+    rf.fit(X_train, y_train)
+    y_pred_rf = rf.predict(X_test)
+    results["random_forest"] = {
+        "r2": float(r2_score(y_test, y_pred_rf)) if y_test.size > 0 else float("nan"),
+        "mae": float(mean_absolute_error(y_test, y_pred_rf))
+        if y_test.size > 0
+        else float("nan"),
+    }
+    try:
+        perm = permutation_importance(
+            rf, X_test, y_test, n_repeats=8, random_state=42, n_jobs=-1
+        )
+        importances = [
+            {"feature": name, "importance": float(val)}
+            for name, val in sorted(
+                zip([c for c in feature_df.columns if c.startswith("kp_lag_")], perm.importances_mean),
+                key=lambda t: t[1],
+                reverse=True,
+            )
+        ]
+        results["feature_importances"] = importances
+    except Exception:
+        results["feature_importances"] = []
+
+    return results
 
 
 OPEN_METEO_ARCHIVE = "https://archive-api.open-meteo.com/v1/era5"
@@ -11458,6 +11612,54 @@ that predicts cognitive performance based on:
                         "pearson_r", key=lambda s: s.abs(), ascending=False
                     )
                 )
+                # ML pattern recognition block
+                st.subheader("ML pattern recognition (HRV ~ Kp lags)")
+                target_metric = st.selectbox(
+                    "Select HRV metric to model",
+                    options=metric_list,
+                    key="kp_ml_target_metric",
+                )
+                if st.button(
+                    "Run ML models (ElasticNet + RandomForest)", key="run_ml_kp_models"
+                ):
+                    try:
+                        with st.spinner("Training ML models..."):
+                            ml_results = _run_ml_models_on_kp(
+                                windowed_df,
+                                kp_df,
+                                target_metric=target_metric,
+                                lags_hours=lags,
+                                merge_tolerance_minutes=int(merge_tol),
+                            )
+                        st.markdown(
+                            f"- Samples used: **{ml_results.get('samples', 0)}** | "
+                            f"Features: **{ml_results.get('features', 0)}**"
+                        )
+                        enet = ml_results.get("elastic_net", {})
+                        rf = ml_results.get("random_forest", {})
+                        col_m1, col_m2 = st.columns(2)
+                        with col_m1:
+                            st.metric(
+                                "ElasticNet R²",
+                                f"{enet.get('r2', float('nan')):.3f}",
+                                help=f"MAE = {enet.get('mae', float('nan')):.3f}; "
+                                f"alpha={enet.get('alpha','n/a')}, l1={enet.get('l1_ratio','n/a')}",
+                            )
+                        with col_m2:
+                            st.metric(
+                                "RandomForest R²",
+                                f"{rf.get('r2', float('nan')):.3f}",
+                                help=f"MAE = {rf.get('mae', float('nan')):.3f}",
+                            )
+                        imps = ml_results.get("feature_importances", [])
+                        if imps:
+                            imp_df = pd.DataFrame(imps).head(8)
+                            st.markdown(
+                                "Top feature importances (RandomForest, permutation)"
+                            )
+                            st.dataframe(imp_df, width="stretch")
+                    except Exception as exc:  # noqa: BLE001
+                        st.warning(f"ML run skipped: {exc}")
                 if not best_rows.empty and "pearson_r" in best_rows.columns:
                     top_row = best_rows.iloc[0]
                     abs_r = float(abs(top_row.get("pearson_r", 0.0)))
@@ -14393,6 +14595,31 @@ def _format_p_value(value: float) -> str:
     return f"p = {value:.3f}"
 
 
+def _bh_fdr(p_values: Sequence[float]) -> List[float]:
+    """Benjamini–Hochberg FDR correction."""
+    p_clean = [float(p) for p in p_values if np.isfinite(p)]
+    m = len(p_clean)
+    if m == 0:
+        return [float("nan")] * len(p_values)
+    sorted_idx = np.argsort(p_clean)
+    q = [float("nan")] * m
+    for rank, idx in enumerate(sorted_idx, start=1):
+        q[idx] = p_clean[idx] * m / rank
+    # monotonicity from largest to smallest
+    for i in range(m - 2, -1, -1):
+        q[i] = min(q[i], q[i + 1])
+    # map back to original length (with non-finite preserved as nan)
+    result = []
+    j = 0
+    for p in p_values:
+        if np.isfinite(p):
+            result.append(min(q[j], 1.0))
+            j += 1
+        else:
+            result.append(float("nan"))
+    return result
+
+
 def _render_noaa_correlation_summary(
     corr_df: Optional[pd.DataFrame],
     dataset_key: str,
@@ -14422,12 +14649,17 @@ def _render_noaa_correlation_summary(
     friendly_name = label_map.get(
         value_column, value_column.replace("_", " ").title()
     )
+    # FDR (Benjamini–Hochberg) on Pearson p-values
+    subset["q_value"] = _bh_fdr(subset["p_value"].tolist())
     display_df = subset[
         [
             "test_name",
             "metric",
             "pearson_r",
             "p_value",
+            "q_value",
+            "spearman_r",
+            "spearman_p",
             "ci_low",
             "ci_high",
             "direction",
@@ -14440,6 +14672,9 @@ def _render_noaa_correlation_summary(
             "direction": "directionality",
             "ci_low": "ci95_low",
             "ci_high": "ci95_high",
+            "spearman_r": "spearman_r",
+            "spearman_p": "spearman_p",
+            "q_value": "fdr_q",
         }
     )
     display_df.insert(0, "predictor", friendly_name)
@@ -14448,6 +14683,15 @@ def _render_noaa_correlation_summary(
         lambda v: _format_with_precision(float(v), 3)
     )
     formatted["p_value"] = formatted["p_value"].apply(
+        lambda v: f"{float(v):.2e}" if np.isfinite(v) else "n/a"
+    )
+    formatted["fdr_q"] = formatted["fdr_q"].apply(
+        lambda v: f"{float(v):.2e}" if np.isfinite(v) else "n/a"
+    )
+    formatted["spearman_r"] = formatted["spearman_r"].apply(
+        lambda v: _format_with_precision(float(v), 3)
+    )
+    formatted["spearman_p"] = formatted["spearman_p"].apply(
         lambda v: f"{float(v):.2e}" if np.isfinite(v) else "n/a"
     )
     formatted["ci95_low"] = formatted["ci95_low"].apply(
@@ -14472,21 +14716,23 @@ def _render_noaa_correlation_summary(
         return "→"
 
     table_rows = [
-        "| Metric | Lag (h) | r | p-value | 95% CI | n |",
-        "|:--|:--:|:--:|:--:|:--:|:--:|",
+        "| Metric | Lag (h) | r | Spearman ρ | p (r) | q (FDR) | 95% CI | n |",
+        "|:--|:--:|:--:|:--:|:--:|:--:|:--:|:--:|",
     ]
     for row in summary.itertuples():
         metric = getattr(row, "metric", "")
         lag = int(getattr(row, "lag_hours", 0))
         r_val = float(getattr(row, "pearson_r", float("nan")))
         p_val = float(getattr(row, "p_value", float("nan")))
+        q_val = float(getattr(row, "q_value", float("nan")))
+        rho = float(getattr(row, "spearman_r", float("nan")))
         ci_low = float(getattr(row, "ci_low", float("nan")))
         ci_high = float(getattr(row, "ci_high", float("nan")))
         direction = getattr(row, "direction", "neutral")
         n_val = int(getattr(row, "n", 0))
         table_rows.append(
-            f"| **{metric}** | {lag:+d} | {_dir_icon(direction)} {r_val:.3f} | {_format_p_value(p_val)} "
-            f"| [{ci_low:.3f}, {ci_high:.3f}] | {n_val} |"
+            f"| **{metric}** | {lag:+d} | {_dir_icon(direction)} {r_val:.3f} | {rho:.3f} | "
+            f"{_format_p_value(p_val)} | {_format_p_value(q_val)} | [{ci_low:.3f}, {ci_high:.3f}] | {n_val} |"
         )
     st.markdown("\n".join(table_rows))
 
