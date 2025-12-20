@@ -854,6 +854,11 @@ Based on the Sleep, Activity, Fatigue, and Task Effectiveness model.
 - Optimal sleep time
 - 24-hour performance curve
 
+**Space weather correlations (Kp ↔ HRV):**
+- Planetary K-index (3h cadence) is fetched and cached; if already downloaded, the correlation tab auto-loads the cached Kp without a new fetch.
+- Lagged Pearson correlations are computed between windowed HRV metrics and Kp, with date-based alignment for daily predictors.
+- Requirements: run HRV analysis to produce windowed metrics, then click “Compute HRV-Kp Correlations”; cached Kp is reused when available.
+
 **Assumptions & limitations:**
 - Deterministic, bounded approximation (not full SAFTE-R parameterization).
 - No pharmacology/caffeine, no individualized reservoir size, no explicit shift-work light model.
