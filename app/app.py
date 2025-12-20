@@ -11925,11 +11925,11 @@ that predicts cognitive performance based on:
                         "pearson_r", key=lambda s: s.abs(), ascending=False
                     )
                 )
-                # Persist for exports
-                st.session_state["space_weather_export"] = {
-                    "corr_full": lag_results.copy(),
-                    "corr_best": best_rows.copy(),
-                }
+                # Persist for exports (merge to preserve prior ML results)
+                export_store = st.session_state.get("space_weather_export", {})
+                export_store["corr_full"] = lag_results.copy()
+                export_store["corr_best"] = best_rows.copy()
+                st.session_state["space_weather_export"] = export_store
                 # Export correlation tables
                 st.download_button(
                     "⬇️ Download full correlation table (CSV)",
@@ -12032,12 +12032,12 @@ that predicts cognitive performance based on:
                                 help=f"MAE = {rf.get('mae', float('nan')):.3f}",
                             )
                         imps = ml_results.get("feature_importances", [])
+                        if "space_weather_export" not in st.session_state:
+                            st.session_state["space_weather_export"] = {}
                         if imps:
                             imp_df = pd.DataFrame(imps).head(8)
                             st.markdown("Top feature importances (RandomForest, permutation)")
                             st.dataframe(imp_df, width="stretch")
-                            if "space_weather_export" not in st.session_state:
-                                st.session_state["space_weather_export"] = {}
                             st.session_state["space_weather_export"]["ml_importances"] = imp_df.copy()
                         # Export ML summaries
                         models_df = pd.DataFrame(
