@@ -2467,20 +2467,44 @@ def _render_profile_rr_library(user: UserProfile) -> None:
         "(no re-upload needed)."
     )
 
-    base_path = Path(__file__).resolve().parent / "data"
-    user_path = get_user_data_path(user.user_id, base_path=base_path)
-    rr_dir = user_path / "rr_intervals"
-    if not rr_dir.exists():
-        st.info("No stored RR directory found yet for this profile.")
-        return
+    # Mission-scoped storage (default): crew/<Mission>/subjects/<user_id>/rr_intervals
+    primary_user_path = get_user_data_path(user.user_id, base_path=None)
+    primary_rr_dir = primary_user_path / "rr_intervals"
 
-    files = sorted(rr_dir.glob("*.txt"), key=lambda p: p.name, reverse=True)
-    if not files:
+    # Legacy fallback: <project_root>/data/<user_id>/rr_intervals (copied into crew on first use)
+    legacy_root = Path(__file__).resolve().parents[1] / "data"
+    legacy_user_path = get_user_data_path(user.user_id, base_path=legacy_root)
+    legacy_rr_dir = legacy_user_path / "rr_intervals"
+
+    option_to_path: dict[str, Path] = {}
+    primary_files: list[Path] = []
+    legacy_files: list[Path] = []
+
+    if primary_rr_dir.exists():
+        primary_files = sorted(primary_rr_dir.glob("*.txt"), key=lambda p: p.name, reverse=True)
+        for p in primary_files:
+            option_to_path[p.name] = p
+
+    if legacy_rr_dir.exists():
+        legacy_files = sorted(legacy_rr_dir.glob("*.txt"), key=lambda p: p.name, reverse=True)
+        for p in legacy_files:
+            label = p.name if p.name not in option_to_path else f"{p.name} [legacy]"
+            option_to_path[label] = p
+
+    if not option_to_path:
         st.info("No stored RR recordings found yet for this profile.")
+        st.caption(f"Checked: {primary_rr_dir}")
+        if legacy_rr_dir != primary_rr_dir:
+            st.caption(f"Checked (legacy): {legacy_rr_dir}")
         return
 
-    options = [p.name for p in files]
-    st.caption(f"Stored RR recordings: {len(options)} file(s)")
+    st.caption(
+        "Storage: "
+        f"{len(primary_files)} file(s) in mission library"
+        + (f", {len(legacy_files)} file(s) in legacy library" if legacy_files else "")
+    )
+    options = list(option_to_path.keys())
+    options.sort(reverse=True)
 
     default_count = min(2, len(options))
     selected = st.multiselect(
@@ -2497,13 +2521,15 @@ def _render_profile_rr_library(user: UserProfile) -> None:
     def _build_queue_payload() -> list[dict[str, Any]]:
         payload: list[dict[str, Any]] = []
         for name in selected:
-            p = rr_dir / name
-            start_date = parse_filename_date(name) or date.today()
+            p = option_to_path.get(name)
+            if p is None:
+                continue
+            start_date = parse_filename_date(p.name) or date.today()
             start_ts = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
             payload.append(
                 {
                     "path": str(p),
-                    "name": name,
+                    "name": p.name,
                     "recording_start": start_ts.isoformat(),
                 }
             )
