@@ -257,7 +257,7 @@ def _render_longitudinal_timepoint_controls(user_id: str) -> Optional[str]:
 
         if label == "— (Unassigned)":
             st.info("New entries will not be linked to a study timepoint.")
-            submitted = st.form_submit_button("Apply", width="stretch")
+            submitted = st.form_submit_button("Apply")
             if submitted:
                 st.session_state[_timepoint_id_key(user_id)] = None
                 st.session_state[_timepoint_label_key(user_id)] = label
@@ -295,7 +295,7 @@ def _render_longitudinal_timepoint_controls(user_id: str) -> Optional[str]:
             key=f"longitudinal_timepoint_is_baseline_{user_id}",
         )
 
-        submitted = st.form_submit_button("💾 Save / Apply timepoint", type="primary", width="stretch")
+        submitted = st.form_submit_button("💾 Save / Apply timepoint", type="primary")
         if submitted:
             try:
                 timepoint = MeasurementTimepoint(
@@ -915,7 +915,7 @@ def _render_registration_form() -> Optional[UserProfile]:
             value="Moderate",
         )
         
-        submit = st.form_submit_button("✅ Create Profile", width="stretch")
+        submit = st.form_submit_button("✅ Create Profile")
         
         if submit:
             if not username or not full_name:
@@ -1103,7 +1103,7 @@ def _render_profile_edit(user: UserProfile) -> None:
         
         col_save, col_cancel = st.columns(2)
         with col_save:
-            if st.form_submit_button("💾 Save Changes", width="stretch"):
+            if st.form_submit_button("💾 Save Changes"):
                 user.full_name = full_name
                 user.email = email
                 user.date_of_birth = date_of_birth.isoformat()
@@ -1123,7 +1123,7 @@ def _render_profile_edit(user: UserProfile) -> None:
                     st.error(f"Failed to update: {exc}")
         
         with col_cancel:
-            if st.form_submit_button("❌ Cancel", width="stretch"):
+            if st.form_submit_button("❌ Cancel"):
                 st.session_state["edit_profile_mode"] = False
                 st.rerun()
 
