@@ -2565,7 +2565,11 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
         # Inline quick-look plots for the first uploaded file to avoid blank UI
         if preview_rr_ms is not None and preview_rr_ms.size >= 10:
             with st.spinner("Preparing quick RR preview..."):
+                # Downsample for responsiveness (keep up to 8k samples)
                 rr_ms = preview_rr_ms
+                if rr_ms.size > 8000:
+                    step = int(np.ceil(rr_ms.size / 8000))
+                    rr_ms = rr_ms[::step]
                 rr_s = rr_ms / 1000.0
                 t_s = np.cumsum(rr_s)
                 ts_df = pd.DataFrame({"Time (s)": t_s, "RR (ms)": rr_ms})
@@ -2577,7 +2581,8 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
                     from scipy.signal import welch  # type: ignore
 
                     fs = 1.0 / np.median(rr_s) if np.median(rr_s) > 0 else 1.0
-                    freqs, psd = welch(rr_ms, fs=fs, nperseg=min(256, rr_ms.size))
+                    # Limit segment length to keep computation fast
+                    freqs, psd = welch(rr_ms, fs=fs, nperseg=min(1024, rr_ms.size))
                     psd_df = pd.DataFrame({"Frequency (Hz)": freqs, "PSD": psd})
                     st.markdown("##### Power Spectral Density")
                     st.area_chart(psd_df.set_index("Frequency (Hz)"))
@@ -2585,7 +2590,7 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
                     st.info("PSD preview unavailable (scipy.signal not available).")
 
                 # Histogram
-                hist_vals, bin_edges = np.histogram(rr_ms, bins=20)
+                hist_vals, bin_edges = np.histogram(rr_ms, bins=30)
                 hist_df = pd.DataFrame({"RR bin (ms)": bin_edges[:-1], "Count": hist_vals})
                 st.markdown("##### RR Distribution")
                 st.bar_chart(hist_df.set_index("RR bin (ms)"))
