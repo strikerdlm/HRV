@@ -84,10 +84,10 @@ def render_user_selector() -> Optional[UserProfile]:
         
         col1, col2 = st.sidebar.columns(2)
         with col1:
-            if st.button("📝 Edit", key="edit_profile_btn", use_container_width=True):
+            if st.button("📝 Edit", key="edit_profile_btn", width="stretch"):
                 st.session_state["show_profile_editor"] = True
         with col2:
-            if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
+            if st.button("🚪 Logout", key="logout_btn", width="stretch"):
                 set_current_user(None)
                 st.rerun()
         
@@ -114,16 +114,16 @@ def render_user_selector() -> Optional[UserProfile]:
         )
         
         if selected == "➕ Create New User":
-            if st.sidebar.button("Create Profile", key="create_profile_btn", use_container_width=True):
+            if st.sidebar.button("Create Profile", key="create_profile_btn", width="stretch"):
                 st.session_state["show_profile_creator"] = True
         else:
             profile = user_options[selected]
-            if profile and st.sidebar.button("Login", key="login_btn", use_container_width=True):
+            if profile and st.sidebar.button("Login", key="login_btn", width="stretch"):
                 set_current_user(profile)
                 st.rerun()
     else:
         st.sidebar.info("No users found. Create your first profile!")
-        if st.sidebar.button("➕ Create Profile", key="create_first_profile", use_container_width=True):
+        if st.sidebar.button("➕ Create Profile", key="create_first_profile", width="stretch"):
             st.session_state["show_profile_creator"] = True
     
     return None
@@ -203,9 +203,9 @@ def render_profile_creator() -> None:
         
         col_submit, col_cancel = st.columns(2)
         with col_submit:
-            submitted = st.form_submit_button("✅ Create Profile", use_container_width=True, type="primary")
+            submitted = st.form_submit_button("✅ Create Profile", width="stretch", type="primary")
         with col_cancel:
-            cancelled = st.form_submit_button("❌ Cancel", use_container_width=True)
+            cancelled = st.form_submit_button("❌ Cancel", width="stretch")
         
         if cancelled:
             st.session_state["show_profile_creator"] = False
@@ -377,9 +377,9 @@ def render_profile_editor() -> None:
         
         col_submit, col_cancel = st.columns(2)
         with col_submit:
-            submitted = st.form_submit_button("💾 Save Changes", use_container_width=True, type="primary")
+            submitted = st.form_submit_button("💾 Save Changes", width="stretch", type="primary")
         with col_cancel:
-            cancelled = st.form_submit_button("❌ Cancel", use_container_width=True)
+            cancelled = st.form_submit_button("❌ Cancel", width="stretch")
         
         if cancelled:
             st.session_state["show_profile_editor"] = False
@@ -510,7 +510,7 @@ def render_clinical_scales_form() -> Optional[ClinicalScales]:
         
         notes = st.text_area("Notes", help="Any additional observations or context")
         
-        submitted = st.form_submit_button("💾 Save Assessment", use_container_width=True, type="primary")
+        submitted = st.form_submit_button("💾 Save Assessment", width="stretch", type="primary")
         
         if submitted:
             scales = ClinicalScales(

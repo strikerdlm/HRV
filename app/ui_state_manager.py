@@ -482,7 +482,7 @@ def render_conditional_compute_button(
             disabled=not is_enabled,
             help=help_text,
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
     else:
         clicked = st.button(
@@ -490,7 +490,7 @@ def render_conditional_compute_button(
             key=key,
             disabled=not is_enabled,
             help=help_text,
-            use_container_width=True,
+            width="stretch",
         )
     
     # Show warning for disabled state
