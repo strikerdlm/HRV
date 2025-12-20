@@ -2519,6 +2519,7 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
 
     queued: list[dict[str, Any]] = st.session_state.get("queued_rr_uploads", [])
     stored_any = False
+    preview_rr_ms: Optional[np.ndarray] = None
     for uploaded in uploaded_files:
         try:
             content = uploaded.read().decode("utf-8", errors="ignore")
@@ -2534,6 +2535,8 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
             if rr_ms.size < 10:
                 st.warning(f"{uploaded.name}: not enough RR intervals to store.")
                 continue
+            if preview_rr_ms is None:
+                preview_rr_ms = rr_ms
             start_date = parse_filename_date(uploaded.name) or date.today()
             start_ts = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
             try:
@@ -2559,6 +2562,38 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
     st.session_state["queued_rr_uploads"] = queued
     if stored_any:
         st.success("Files stored under this profile and queued for analysis.")
+        # Inline quick-look plots for the first uploaded file to avoid blank UI
+        if preview_rr_ms is not None and preview_rr_ms.size >= 10:
+            with st.spinner("Preparing quick RR preview..."):
+                rr_ms = preview_rr_ms
+                rr_s = rr_ms / 1000.0
+                t_s = np.cumsum(rr_s)
+                ts_df = pd.DataFrame({"Time (s)": t_s, "RR (ms)": rr_ms})
+                st.markdown("### 🔎 Quick RR Preview")
+                st.line_chart(ts_df.set_index("Time (s)"))
+
+                # PSD via Welch (optional)
+                try:
+                    from scipy.signal import welch  # type: ignore
+
+                    fs = 1.0 / np.median(rr_s) if np.median(rr_s) > 0 else 1.0
+                    freqs, psd = welch(rr_ms, fs=fs, nperseg=min(256, rr_ms.size))
+                    psd_df = pd.DataFrame({"Frequency (Hz)": freqs, "PSD": psd})
+                    st.markdown("##### Power Spectral Density")
+                    st.area_chart(psd_df.set_index("Frequency (Hz)"))
+                except Exception:
+                    st.info("PSD preview unavailable (scipy.signal not available).")
+
+                # Histogram
+                hist_vals, bin_edges = np.histogram(rr_ms, bins=20)
+                hist_df = pd.DataFrame({"RR bin (ms)": bin_edges[:-1], "Count": hist_vals})
+                st.markdown("##### RR Distribution")
+                st.bar_chart(hist_df.set_index("RR bin (ms)"))
+
+                st.caption(
+                    "For full time-domain, frequency-domain, nonlinear metrics, and spectrograms, "
+                    "open the main HRV analysis with these queued recordings."
+                )
 
 
 @_fragment_if_available
