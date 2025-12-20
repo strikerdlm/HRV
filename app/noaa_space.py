@@ -106,6 +106,16 @@ class NOAADataBundle:
 
 
 NOAA_SOURCES: Dict[str, NOAASourceSpec] = {
+    "planetary_k_index_3h": NOAASourceSpec(
+        key="planetary_k_index_3h",
+        path="https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json",
+        title="Planetary K index (3 h)",
+        description="NOAA SWPC planetary K index at 3-hour cadence (products feed; ~30 days).",
+        value_columns=("Kp",),
+        metadata_columns=("a_running", "station_count"),
+        units={"Kp": "Kp"},
+        cadence_minutes=180,
+    ),
     "f107_flux": NOAASourceSpec(
         key="f107_flux",
         path="f107_cm_flux.json",
@@ -374,6 +384,29 @@ def _read_cache(spec: NOAASourceSpec, *, allow_stale: bool = False) -> Optional[
     return df
 
 
+def _read_legacy_dataframe_cache(cache_file: Path) -> Optional[pd.DataFrame]:
+    """Read a legacy dataframe cache payload (no `stored_kind` wrapper).
+
+    Some app components cache SWPC datasets under `app/data_cache/space_weather/`
+    using a simpler JSON wrapper. This helper lets the NOAA Space dashboard
+    reuse that data when available (e.g., for long-horizon Kp).
+    """
+    if not cache_file.exists():
+        return None
+    try:
+        with cache_file.open("r", encoding="utf-8") as handle:
+            payload = json.load(handle)
+    except (OSError, json.JSONDecodeError):
+        return None
+    data_json = payload.get("data")
+    if not isinstance(data_json, str):
+        return None
+    try:
+        return pd.read_json(io.StringIO(data_json), orient="table", convert_dates=True)
+    except ValueError:
+        return None
+
+
 def _write_cache(spec: NOAASourceSpec, df: pd.DataFrame) -> None:
     payload = {
         "stored_at": pd.Timestamp.now(tz="UTC").isoformat(),
@@ -566,6 +599,12 @@ def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADa
         cached = _read_cache(spec)
         if cached is not None:
             return _prepare_frame(spec, cached)
+        # Fallback: reuse long-horizon SWPC cache for Kp when available.
+        if spec.key == "planetary_k_index_3h":
+            legacy_cache = NOAA_SPACE_CACHE_DIR.parent / "space_weather" / "kp_index_30.json"
+            legacy_df = _read_legacy_dataframe_cache(legacy_cache)
+            if legacy_df is not None and not legacy_df.empty:
+                return _prepare_frame(spec, legacy_df)
     try:
         raw_df = _download_dataset(spec)
         bundle = _prepare_frame(spec, raw_df)
@@ -646,6 +685,14 @@ def _sanitize_split_value(text: str) -> str:
 
 _NOAA_METRIC_EXPLANATIONS: Dict[Tuple[str, str], Dict[str, str]] = {
     # Geomagnetic activity
+    ("planetary_k_index_3h", "Kp"): {
+        "title": "Planetary K index (Kp, 3-hour)",
+        "what": "Global 0–9 index of geomagnetic disturbance strength (reported every 3 hours).",
+        "why": "Captures global geomagnetic storm phases driven by solar-wind/IMF coupling.",
+        "physiology": "Higher geomagnetic activity (higher Kp) is associated with small HRV decreases and increased cardiovascular event risk in population studies.",
+        "likely_effect": "Most probable HRV correlation: negative (higher Kp → lower vagal/total HRV), with lags from 0 to ~72 h.",
+        "refs": "Vieira 2022; Gaisenok 2025; McCraty 2017; Papailiou 2023.",
+    },
     ("planetary_k_index_1m", "kp_index"): {
         "title": "Planetary K index (Kp)",
         "what": "Global 0–9 index of geomagnetic disturbance strength from ground magnetometers.",
