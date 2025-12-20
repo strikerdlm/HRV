@@ -833,6 +833,7 @@ def build_markdown_report(
 	windowed_df: pd.DataFrame,
 	episodes_df: pd.DataFrame,
 	ml_summary_df: Optional[pd.DataFrame],
+	space_weather_export: Optional[Mapping[str, Any]] = None,
 	config: ExportConfiguration,
 	selected_sources: Sequence[str],
 	additional_notes: str = "",
@@ -941,6 +942,37 @@ def build_markdown_report(
 		lines.append("")
 		lines.append(_dataframe_to_markdown(ml_summary_df, max_rows=None if config.scope == ExportScope.COMPLETE else config.max_rows_summary))
 		lines.append("")
+
+	if space_weather_export:
+		lines.append("## Space Weather Analysis (HRV ↔ Solar/Geomagnetic)")
+		lines.append("")
+		lines.append(
+			"Robust stats: Pearson CI95, Spearman ρ, BH-FDR; HAC-robust p for autocorrelation; optional block bootstrap CI and permutation p for top findings."
+		)
+		lines.append(
+			"ML: ElasticNet, Lasso, RandomForest, Gradient Boosting on lagged Kp/Dst/F10.7/solar wind with time-aware CV; permutation importances."
+		)
+		lines.append("")
+		corr_best = space_weather_export.get("corr_best")
+		corr_full = space_weather_export.get("corr_full")
+		ml_metrics = space_weather_export.get("ml_metrics")
+		ml_importances = space_weather_export.get("ml_importances")
+		if isinstance(corr_best, pd.DataFrame) and not corr_best.empty:
+			lines.append("### Top correlations (by |r|)")
+			lines.append(_dataframe_to_markdown(corr_best, max_rows=20))
+			lines.append("")
+		if config.scope == ExportScope.COMPLETE and isinstance(corr_full, pd.DataFrame) and not corr_full.empty:
+			lines.append("### Full correlation table")
+			lines.append(_dataframe_to_markdown(corr_full, max_rows=None))
+			lines.append("")
+		if isinstance(ml_metrics, pd.DataFrame) and not ml_metrics.empty:
+			lines.append("### ML metrics (space-weather lag predictors)")
+			lines.append(_dataframe_to_markdown(ml_metrics, max_rows=None))
+			lines.append("")
+		if isinstance(ml_importances, pd.DataFrame) and not ml_importances.empty:
+			lines.append("### Feature importances (permutation, RandomForest)")
+			lines.append(_dataframe_to_markdown(ml_importances, max_rows=30))
+			lines.append("")
 
 	if additional_notes.strip():
 		lines.append("## Analyst Notes")
