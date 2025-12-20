@@ -3148,6 +3148,11 @@ def _render_library_loader() -> Dict[str, UploadedRR]:
             st.session_state.pop("_persisted_uploads", None)
             st.session_state.pop("_hrv_cached_datasets", None)
             st.session_state.pop("_hrv_cached_windowed_df", None)
+            st.session_state.pop("_hrv_cached_multi_results_df", None)
+            st.session_state.pop("_hrv_cached_meta_rows", None)
+            st.session_state.pop("_hrv_cached_meta_rows_for_context", None)
+            st.session_state.pop("_hrv_cached_ml_summary_df", None)
+            st.session_state.pop("_hrv_cached_episodes_df", None)
             st.session_state.pop("hrv_analysis_complete_signature", None)
             st.session_state.pop("hrv_analysis_signature", None)
             
@@ -4671,23 +4676,54 @@ def _compute_noaa_correlations(
         if predictor.empty:
             continue
 
+        use_daily_alignment = False
+        cadence_minutes = bundle.spec.cadence_minutes
+        if isinstance(cadence_minutes, int) and cadence_minutes >= 1440:
+            use_daily_alignment = True
+
         for lag in lag_values:
             lag_int = int(lag)
-            aligned = align_space_weather_series(
-                reference_times=hrv["start"],
-                predictor_df=predictor,
-                predictor_time_col=bundle.time_column,
-                predictor_value_col=value_column,
-                lag_hours=lag_int,
-                max_gap_minutes=int(merge_tolerance_minutes),
-            )
-            if aligned.empty:
-                continue
-            merged = (
-                hrv.set_index("start")
-                .join(aligned.rename(value_column), how="inner")
-                .dropna(subset=[value_column])
-            )
+            if use_daily_alignment:
+                # For daily cadence predictors, align on UTC date rather than
+                # sub-hour timestamps. This avoids empty joins when HRV windows
+                # occur far from midnight and avoids unintuitive day-shifts for
+                # small negative hour lags on midnight-based daily series.
+                lag_days = int(lag_int / 24)
+                hrv_dates = hrv["start"].dt.normalize()
+                pred_dates = pd.to_datetime(
+                    predictor[bundle.time_column], errors="coerce", utc=True
+                ).dt.normalize() + pd.to_timedelta(lag_days, unit="D")
+                pred_vals = pd.to_numeric(
+                    predictor[value_column], errors="coerce"
+                ).astype(float)
+                pred_by_date = (
+                    pd.DataFrame({"date": pred_dates, "value": pred_vals})
+                    .dropna(subset=["date", "value"])
+                    .groupby("date", sort=True)["value"]
+                    .mean()
+                )
+                if pred_by_date.empty:
+                    continue
+                aligned_values = hrv_dates.map(pred_by_date)
+                merged = hrv.copy()
+                merged[value_column] = aligned_values.to_numpy(dtype=float)
+                merged = merged.dropna(subset=[value_column])
+            else:
+                aligned = align_space_weather_series(
+                    reference_times=hrv["start"],
+                    predictor_df=predictor,
+                    predictor_time_col=bundle.time_column,
+                    predictor_value_col=value_column,
+                    lag_hours=lag_int,
+                    max_gap_minutes=int(merge_tolerance_minutes),
+                )
+                if aligned.empty:
+                    continue
+                merged = (
+                    hrv.set_index("start")
+                    .join(aligned.rename(value_column), how="inner")
+                    .dropna(subset=[value_column])
+                )
             if merged.empty:
                 continue
             corr_df = _corr_table(
@@ -5871,6 +5907,11 @@ def main() -> None:
         # Clear cached results when uploads change
         st.session_state.pop("_hrv_cached_datasets", None)
         st.session_state.pop("_hrv_cached_windowed_df", None)
+        st.session_state.pop("_hrv_cached_multi_results_df", None)
+        st.session_state.pop("_hrv_cached_meta_rows", None)
+        st.session_state.pop("_hrv_cached_meta_rows_for_context", None)
+        st.session_state.pop("_hrv_cached_ml_summary_df", None)
+        st.session_state.pop("_hrv_cached_episodes_df", None)
         # Clear completion signature to allow new analysis
         st.session_state.pop("hrv_analysis_complete_signature", None)
     # Prevent repeated runs for the same upload set once completed
@@ -5888,6 +5929,21 @@ def main() -> None:
         cached_windowed = st.session_state.get("_hrv_cached_windowed_df")
         if cached_windowed is not None and not cached_windowed.empty:
             windowed_df = cached_windowed
+        cached_multi = st.session_state.get("_hrv_cached_multi_results_df")
+        if isinstance(cached_multi, pd.DataFrame) and not cached_multi.empty:
+            multi_results_df = cached_multi
+        cached_meta = st.session_state.get("_hrv_cached_meta_rows")
+        if isinstance(cached_meta, list) and cached_meta:
+            meta_rows = cached_meta
+        cached_meta_context = st.session_state.get("_hrv_cached_meta_rows_for_context")
+        if isinstance(cached_meta_context, list) and cached_meta_context:
+            meta_rows_for_context = cached_meta_context
+        cached_ml_summary = st.session_state.get("_hrv_cached_ml_summary_df")
+        if isinstance(cached_ml_summary, pd.DataFrame) and not cached_ml_summary.empty:
+            ml_summary_df = cached_ml_summary
+        cached_episodes = st.session_state.get("_hrv_cached_episodes_df")
+        if isinstance(cached_episodes, pd.DataFrame) and not cached_episodes.empty:
+            episodes_df = cached_episodes
         #region agent log
         _agent_debug_log(
             "H6",
@@ -6356,6 +6412,15 @@ def main() -> None:
                     if cached_multi:
                         m = dict(cached_multi)
                         m["source"] = name
+                        start_ts: Optional[pd.Timestamp] = (
+                            up.recording_start_utc
+                            if isinstance(up.recording_start_utc, pd.Timestamp)
+                            else None
+                        )
+                        if start_ts is None:
+                            start_ts, _ = _infer_recording_start(name)
+                        if isinstance(start_ts, pd.Timestamp):
+                            m["timestamp"] = start_ts.isoformat()
                         multi_results.append(m)
                         ordered_sources.append(name)
                         done_full += 1
@@ -6375,6 +6440,15 @@ def main() -> None:
                     use_rr, include_advanced=bool(high_compute))
                 _compute_ms = (time.perf_counter() - _compute_start) * 1000.0
                 m["source"] = name
+                start_ts = (
+                    up.recording_start_utc
+                    if isinstance(up.recording_start_utc, pd.Timestamp)
+                    else None
+                )
+                if start_ts is None:
+                    start_ts, _ = _infer_recording_start(name)
+                if isinstance(start_ts, pd.Timestamp):
+                    m["timestamp"] = start_ts.isoformat()
                 if apply_clean and up.qc_summary:
                     m["qc_flagged_pct"] = float(
                         up.qc_summary.get("flagged_pct", 0.0))
@@ -6499,6 +6573,11 @@ def main() -> None:
         # Without this, tabs get empty datasets and show infinite loading
         st.session_state["_hrv_cached_datasets"] = datasets
         st.session_state["_hrv_cached_windowed_df"] = windowed_df
+        st.session_state["_hrv_cached_multi_results_df"] = multi_results_df
+        st.session_state["_hrv_cached_meta_rows"] = meta_rows
+        st.session_state["_hrv_cached_meta_rows_for_context"] = meta_rows_for_context
+        st.session_state["_hrv_cached_ml_summary_df"] = ml_summary_df
+        st.session_state["_hrv_cached_episodes_df"] = episodes_df
         
         # Mark comprehensive stage complete to avoid auto-reruns on the same upload set
         st.session_state["hrv_analysis_ready"] = False
@@ -6546,8 +6625,13 @@ def main() -> None:
     )
 
     # Track data availability for conditional UI elements
-    has_hrv_data = bool(uploads) and any(u.rr_ms is not None and len(u.rr_ms) > 0 for u in uploads.values())
-    total_rr_count = sum(len(u.rr_ms) for u in uploads.values() if u.rr_ms is not None)
+    _rr_sources = uploads if uploads else datasets
+    has_hrv_data = bool(_rr_sources) and any(
+        u.rr_ms is not None and len(u.rr_ms) > 0 for u in _rr_sources.values()
+    )
+    total_rr_count = sum(
+        len(u.rr_ms) for u in _rr_sources.values() if u.rr_ms is not None
+    )
     
     # Update state manager if available
     if UI_STATE_MANAGER_AVAILABLE and has_hrv_data:
@@ -8794,6 +8878,22 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                             st.session_state["fatigue_autofill_garmin_sig"] = sig
                             date_label = str(latest_garmin.get("metric_date") or "latest day")
                             st.caption(f"Auto-filled fatigue sleep inputs from Garmin ({date_label}).")
+
+                        # Seed bedtime/waketime when sleep timestamps are available
+                        sleep_start_iso = latest_garmin.get("sleep_start_utc")
+                        sleep_end_iso = latest_garmin.get("sleep_end_utc")
+                        try:
+                            start_dt = pd.to_datetime(sleep_start_iso, utc=True, errors="coerce")
+                            end_dt = pd.to_datetime(sleep_end_iso, utc=True, errors="coerce")
+                        except Exception:
+                            start_dt = None
+                            end_dt = None
+                        if start_dt is not None and not pd.isna(start_dt):
+                            st.session_state["fatigue_bedtime"] = int(start_dt.tz_convert("UTC").hour)
+                            fatigue_defaults["fatigue_bedtime"] = int(start_dt.tz_convert("UTC").hour)
+                        if end_dt is not None and not pd.isna(end_dt):
+                            st.session_state["fatigue_waketime"] = int(end_dt.tz_convert("UTC").hour)
+                            fatigue_defaults["fatigue_waketime"] = int(end_dt.tz_convert("UTC").hour)
 
             st.markdown("#### 🔄 Cross-tab correlation: Circadian ➜ Fatigue")
             circadian_context = cross_tab_broker.get_latest("circadian", fatigue_user_id)
@@ -15003,23 +15103,68 @@ def _scan_lag_correlations_generic(
             predictor_value_col]).sort_values(predictor_time_col)
     if pred.empty:
         return pd.DataFrame()
+
+    def _looks_daily(series: pd.Series) -> bool:
+        """Heuristic: treat predictor as daily when cadence ≳ 1 day."""
+        ts = pd.to_datetime(series, errors="coerce", utc=True).dropna()
+        if ts.shape[0] < 3:
+            return False
+        diffs = ts.sort_values().diff().dropna()
+        if diffs.empty:
+            return False
+        median_diff = diffs.median()
+        if not isinstance(median_diff, pd.Timedelta):
+            return False
+        median_minutes = float(median_diff.total_seconds() / 60.0)
+        if not np.isfinite(median_minutes) or median_minutes < 20 * 60:
+            return False
+        # Daily aggregates typically sit on (or very near) midnight UTC.
+        normalized = ts.dt.normalize()
+        near_midnight = (ts - normalized).abs() <= pd.Timedelta(minutes=10)
+        near_ratio = float(near_midnight.mean())
+        return near_ratio >= 0.8
+
+    use_daily_alignment = _looks_daily(pred[predictor_time_col])
     rows: List[pd.DataFrame] = []
     for lag in lags_hours:
-        aligned = align_space_weather_series(
-            reference_times=w["start"],
-            predictor_df=pred,
-            predictor_time_col=predictor_time_col,
-            predictor_value_col=predictor_value_col,
-            lag_hours=int(lag),
-            max_gap_minutes=int(merge_tolerance_minutes),
-        )
-        if aligned.empty:
-            continue
-        merged = (
-            w.set_index("start")
-            .join(aligned.rename(predictor_value_col), how="inner")
-            .dropna(subset=[predictor_value_col])
-        )
+        lag_int = int(lag)
+        if use_daily_alignment:
+            lag_days = int(lag_int / 24)
+            w_dates = w["start"].dt.normalize()
+            pred_dates = pred[predictor_time_col].dt.normalize() + pd.to_timedelta(
+                lag_days, unit="D"
+            )
+            pred_vals = pd.to_numeric(
+                pred[predictor_value_col], errors="coerce"
+            ).astype(float)
+            pred_by_date = (
+                pd.DataFrame({"date": pred_dates, "value": pred_vals})
+                .dropna(subset=["date", "value"])
+                .groupby("date", sort=True)["value"]
+                .mean()
+            )
+            if pred_by_date.empty:
+                continue
+            aligned_values = w_dates.map(pred_by_date)
+            merged = w.copy()
+            merged[predictor_value_col] = aligned_values.to_numpy(dtype=float)
+            merged = merged.dropna(subset=[predictor_value_col])
+        else:
+            aligned = align_space_weather_series(
+                reference_times=w["start"],
+                predictor_df=pred,
+                predictor_time_col=predictor_time_col,
+                predictor_value_col=predictor_value_col,
+                lag_hours=lag_int,
+                max_gap_minutes=int(merge_tolerance_minutes),
+            )
+            if aligned.empty:
+                continue
+            merged = (
+                w.set_index("start")
+                .join(aligned.rename(predictor_value_col), how="inner")
+                .dropna(subset=[predictor_value_col])
+            )
         if merged.empty:
             continue
         corr_df = _corr_table(
