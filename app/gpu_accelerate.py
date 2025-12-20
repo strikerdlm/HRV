@@ -59,13 +59,16 @@ def detect_gpu() -> GPUInfo:
         props = cp.cuda.runtime.getDeviceProperties(0)
         mem_info = device.mem_info
         
+        runtime_ver = cp.cuda.runtime.runtimeGetVersion()
+        cuda_version = f"{runtime_ver // 1000}.{(runtime_ver % 1000) // 10}"
+
         return GPUInfo(
             available=True,
             device_name=props["name"].decode() if isinstance(props["name"], bytes) else str(props["name"]),
             compute_capability=(props["major"], props["minor"]),
             total_memory_gb=mem_info[1] / (1024**3),
             free_memory_gb=mem_info[0] / (1024**3),
-            cuda_version=".".join(map(str, cp.cuda.runtime.runtimeGetVersion())),
+            cuda_version=cuda_version,
             cupy_version=cp.__version__,
         )
     except ImportError:
@@ -95,6 +98,12 @@ def detect_gpu() -> GPUInfo:
 def is_gpu_available() -> bool:
     """Check if GPU acceleration is available."""
     return detect_gpu().available
+
+
+def refresh_gpu_info() -> GPUInfo:
+    """Clear cached GPU detection and re-run detection."""
+    detect_gpu.cache_clear()
+    return detect_gpu()
 
 
 def get_array_module() -> Any:
@@ -545,6 +554,7 @@ def render_gpu_status() -> None:
 __all__ = [
     "GPUInfo",
     "detect_gpu",
+    "refresh_gpu_info",
     "is_gpu_available",
     "get_array_module",
     "to_gpu",
