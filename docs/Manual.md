@@ -1861,6 +1861,9 @@ Continue for 3 hours post-arrival for storm response capture.
 - Vieira CLZ, et al. (2022). Geomagnetic disturbances are associated with reduced heart rate variability. *Sci Total Environ, 839*, 156312.
 - Alabdulgader A, et al. (2018). Long-term study of HRV responses to changes in the solar and geomagnetic environment. *Sci Rep, 8*(1), 2663.
 - McCraty R, et al. (2017). Synchronization of human autonomic nervous system rhythms with geomagnetic activity. *Int J Environ Res Public Health, 14*(7), 770.
+- Ramishvili A, Janashia K, Tvildiani L. (2023). High Heart Rate Variability Causes Better Adaptation to the Impact of Geomagnetic Storms. *Atmosphere, 14*(12), 1707. https://doi.org/10.3390/atmos14121707
+- Mattoni M, Ahn S, Fröhlich C, Fröhlich F. (2019). Exploring the Relationship between Geomagnetic Activity and Human Heart Rate Variability. *bioRxiv*. https://doi.org/10.1101/684035
+- Papailiou MC, Mavromichalaki H. (2025). Heart Rate Variations During Two Historic Geomagnetic Storms: October and November 2003. *Atmosphere, 16*(6), 711. https://doi.org/10.3390/atmos16060711
 
 ---
 
