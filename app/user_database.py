@@ -1101,7 +1101,7 @@ class UserDatabase:
                 continue
             try:
                 preserved = restore_database_from_backup(backup_path=backup, db_path=self.db_path)
-            except (OSError, RuntimeError) as exc:
+            except (OSError, RuntimeError, ValueError) as exc:
                 _LOGGER.error("Auto-restore failed from %s: %s", backup, exc)
                 continue
             _LOGGER.info(
