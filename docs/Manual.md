@@ -866,6 +866,7 @@ Based on the Sleep, Activity, Fatigue, and Task Effectiveness model.
   - HAC-robust SE/p-values via statsmodels OLS (cov_type='HAC', maxlags=4) for autocorrelated series.
   - Spearman ρ alongside Pearson r; BH-FDR for multiple lags/predictors.
   - Extra ML baselines: Gradient Boosting, Lasso; TimeSeriesSplit CV (3 splits) for ElasticNet/RF; permutation importances.
+  - PDF/Markdown exports now embed space-weather correlation tables and ML metrics/importances when available.
 - Scientific context:
   - Ramishvili et al. 2023, Atmosphere 14(12):1707 — adaptation to geomagnetic storms (https://doi.org/10.3390/atmos14121707)
   - Mattoni et al. 2019, bioRxiv — highlights autocorrelation and small effect sizes (https://doi.org/10.1101/684035)
