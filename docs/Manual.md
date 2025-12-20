@@ -836,12 +836,16 @@ Reference: Kiviniemi AM, et al. *Med Sci Sports Exerc.* 2007;39(4):625-631.
 
 #### SAFTE Fatigue Prediction
 
-Based on the Sleep, Activity, Fatigue, and Task Effectiveness model:
+Based on the Sleep, Activity, Fatigue, and Task Effectiveness model.
 
-**Model Components:**
-- **Circadian Process**: 24-hour alertness rhythm adjusted for chronotype
-- **Homeostatic Process**: Sleep pressure accumulation (~2.4%/hour awake)
-- **Sleep Debt**: Cumulative deficit from insufficient sleep
+**Model components (implementation):**
+- **Circadian process**: cosine-shaped 24h alertness curve with chronotype offset.
+- **Homeostatic process**: sleep pressure accumulation (~2.4% effectiveness loss per hour awake), floored near 65% after 24h awake.
+- **Sleep debt**: deficit from insufficient sleep (baseline need 8h). Debt is bounded (≤24h equivalent) to avoid runaway penalties.
+- **Sleep quality**: scales effective sleep (sleep_quality × 0.95).
+- **Debt penalty**: up to 20 points (2.5 points per hour debt) applied after circadian × homeostatic.
+- **Workload penalty**: up to 5 points at workload_intensity = 1.0.
+- **Clamps**: outputs constrained to 45–100% for UI stability.
 
 **Outputs:**
 - Current effectiveness (%)
@@ -849,6 +853,11 @@ Based on the Sleep, Activity, Fatigue, and Task Effectiveness model:
 - Risk level (Minimal to Critical)
 - Optimal sleep time
 - 24-hour performance curve
+
+**Assumptions & limitations:**
+- Deterministic, bounded approximation (not full SAFTE-R parameterization).
+- No pharmacology/caffeine, no individualized reservoir size, no explicit shift-work light model.
+- For calibration with observed alertness/PVT labels, use FRMS v2 hooks to tune parameters.
 
 Reference: Hursh SR, et al. *Aviat Space Environ Med.* 2004;75(3):A44-A53.
 
