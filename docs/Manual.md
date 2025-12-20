@@ -858,6 +858,12 @@ Based on the Sleep, Activity, Fatigue, and Task Effectiveness model.
 - Planetary K-index (3h cadence) is fetched and cached; if already downloaded, the correlation tab auto-loads the cached Kp without a new fetch.
 - Lagged Pearson correlations are computed between windowed HRV metrics and Kp, with date-based alignment for daily predictors.
 - Requirements: run HRV analysis to produce windowed metrics, then click “Compute HRV-Kp Correlations”; cached Kp is reused when available.
+- Inference stack: Pearson r with 95% CI (Fisher z), Spearman ρ, Benjamini–Hochberg FDR for multiple lags/predictors. Optional weather covariates allow partial correlations.
+- ML stack: ElasticNet and RandomForest models on lagged Kp features with time-ordered train/test split; reports R²/MAE and permutation importances (top lag drivers).
+- Scientific context:
+  - Ramishvili et al. 2023, Atmosphere 14(12):1707 — adaptation to geomagnetic storms (https://doi.org/10.3390/atmos14121707)
+  - Mattoni et al. 2019, bioRxiv — highlights autocorrelation and small effect sizes (https://doi.org/10.1101/684035)
+  - Papailiou & Mavromichalaki 2025, Atmosphere 16(6):711 — HR changes around major storms (https://doi.org/10.3390/atmos16060711)
 
 **Assumptions & limitations:**
 - Deterministic, bounded approximation (not full SAFTE-R parameterization).
