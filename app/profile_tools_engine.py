@@ -377,8 +377,8 @@ def _sleep_homeostatic(hours_awake: float, base_effectiveness: float = 100.0) ->
     # With recovery during sleep ~7.5% per hour
     depletion_rate = 2.4
     
-    # Calculate depletion
-    depletion = hours_awake * depletion_rate
+    hours = max(0.0, float(hours_awake))
+    depletion = hours * depletion_rate
     effectiveness = base_effectiveness - depletion
     
     # Apply floor (minimum ~65% after 24h awake)
@@ -972,26 +972,34 @@ def predict_fatigue(
     Returns:
         FatiguePrediction dataclass with forecast and recommendations
     """
-    # Calculate base sleep reservoir
-    sleep_need = 8.0  # Baseline sleep need
+    # Normalize inputs to bounded, realistic ranges
+    sleep_hours_last_night = max(0.0, float(sleep_hours_last_night))
+    sleep_quality = min(1.0, max(0.0, float(sleep_quality)))
+    hours_awake = min(36.0, max(0.0, float(hours_awake)))  # cap to avoid runaway debt
+    accumulated_sleep_debt = max(0.0, float(accumulated_sleep_debt))
+    workload_intensity = min(1.0, max(0.0, float(workload_intensity)))
+
+    # Calculate base sleep reservoir (simplified SAFTE-inspired)
+    sleep_need = 8.0  # Baseline sleep need (hours)
     sleep_efficiency = sleep_quality * 0.95  # Quality affects efficiency
     effective_sleep = sleep_hours_last_night * sleep_efficiency
-    
-    # Sleep debt calculation
-    nightly_debt = max(0, sleep_need - effective_sleep)
-    total_debt = accumulated_sleep_debt + nightly_debt
-    
+
+    # Sleep debt calculation (bounded)
+    nightly_debt = max(0.0, sleep_need - effective_sleep)
+    total_debt = min(24.0, accumulated_sleep_debt + nightly_debt)  # cap debt to 24h equivalent
+
     # Calculate current effectiveness
     circadian = _circadian_effectiveness(current_hour, chronotype_offset)
     homeostatic = _sleep_homeostatic(hours_awake)
-    debt_penalty = min(15, total_debt * 2)  # Max 15% penalty for debt
-    
+    debt_penalty = min(20.0, total_debt * 2.5)  # bounded penalty scaled to debt
+
     current_effectiveness = homeostatic * circadian - debt_penalty
-    current_effectiveness = max(50, min(100, current_effectiveness))
-    
+    current_effectiveness = max(50.0, min(100.0, current_effectiveness))
+
     # Workload adjustment
-    current_effectiveness -= workload_intensity * 5
-    
+    current_effectiveness -= workload_intensity * 5.0
+    current_effectiveness = max(45.0, min(100.0, current_effectiveness))
+
     # Generate 24-hour forecast
     performance_curve: List[Tuple[int, float]] = []
     hourly_forecast: List[Dict[str, Any]] = []
