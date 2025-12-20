@@ -2967,60 +2967,88 @@ def _list_library_rr_files() -> Dict[str, List[Dict[str, Any]]]:
     from user_data_manager import parse_filename_date
     
     result: Dict[str, List[Dict[str, Any]]] = {}
-    base_path = Path(__file__).resolve().parent / "data"
-    
-    if not base_path.exists():
-        return result
-    
-    # Get all user directories
-    try:
-        user_dirs = [d for d in base_path.iterdir() if d.is_dir()]
-    except OSError:
-        return result
-    
-    for user_dir in user_dirs:
-        rr_dir = user_dir / "rr_intervals"
-        if not rr_dir.exists():
+
+    # Mission-scoped storage: crew/<Mission>/subjects/<user_id>/rr_intervals
+    from user_data_manager import get_default_data_root
+
+    project_root = Path(__file__).resolve().parents[1]
+    legacy_root = project_root / "data"
+    base_paths = [get_default_data_root()]
+    if legacy_root.exists():
+        base_paths.append(legacy_root)
+
+    max_users = 2000
+    scanned_users = 0
+
+    for base_path in base_paths:
+        if not base_path.exists():
             continue
-        
+
+        # Get all user directories
         try:
-            files = sorted(rr_dir.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True)
+            user_dirs = [d for d in base_path.iterdir() if d.is_dir()]
         except OSError:
             continue
-        
-        if not files:
-            continue
-        
-        # Try to get display name from user_info.json
-        user_info_file = user_dir / "user_info.json"
-        display_name = user_dir.name  # Default to folder name
-        try:
-            if user_info_file.exists():
-                import json
-                with open(user_info_file, "r", encoding="utf-8") as f:
-                    info = json.load(f)
-                    display_name = info.get("full_name") or info.get("username") or user_dir.name
-        except Exception:
-            pass
-        
-        file_list: List[Dict[str, Any]] = []
-        for f in files:
+
+        for user_dir in user_dirs:
+            scanned_users += 1
+            if scanned_users > max_users:
+                break
+
+            rr_dir = user_dir / "rr_intervals"
+            if not rr_dir.exists():
+                continue
+
             try:
-                stat = f.stat()
-                parsed_date = parse_filename_date(f.name)
-                file_list.append({
-                    "name": f.name,
-                    "path": str(f),
-                    "date": parsed_date.isoformat() if parsed_date else None,
-                    "size_kb": stat.st_size / 1024,
-                    "mtime": stat.st_mtime,
-                    "user_id": user_dir.name,
-                })
+                files = sorted(
+                    rr_dir.glob("*.txt"), key=lambda p: p.stat().st_mtime, reverse=True
+                )
             except OSError:
                 continue
-        
-        if file_list:
-            result[display_name] = file_list
+
+            if not files:
+                continue
+
+            # Try to get display name from user_info.json
+            user_info_file = user_dir / "user_info.json"
+            display_name = user_dir.name  # Default to folder name
+            try:
+                if user_info_file.exists():
+                    import json
+
+                    with open(user_info_file, "r", encoding="utf-8") as f:
+                        info = json.load(f)
+                        display_name = (
+                            info.get("full_name")
+                            or info.get("username")
+                            or user_dir.name
+                        )
+            except Exception:
+                pass
+
+            file_list: List[Dict[str, Any]] = []
+            for f in files:
+                try:
+                    stat = f.stat()
+                    parsed_date = parse_filename_date(f.name)
+                    file_list.append(
+                        {
+                            "name": f.name,
+                            "path": str(f),
+                            "date": parsed_date.isoformat() if parsed_date else None,
+                            "size_kb": stat.st_size / 1024,
+                            "mtime": stat.st_mtime,
+                            "user_id": user_dir.name,
+                        }
+                    )
+                except OSError:
+                    continue
+
+            if file_list:
+                if display_name in result:
+                    result[display_name].extend(file_list)
+                else:
+                    result[display_name] = file_list
     
     return result
 
@@ -3170,41 +3198,40 @@ def _save_uploaded_files_to_library(
     Returns:
         Number of files successfully saved.
     """
-    from user_data_manager import get_user_data_path, ensure_user_directories
-    
-    base_path = Path(__file__).resolve().parent / "data"
-    user_path = get_user_data_path(user_id, base_path=base_path)
-    dirs = ensure_user_directories(user_path)
-    rr_dir = dirs["rr"]
-    
     saved_count = 0
+    from user_data_manager import create_user_manager, parse_filename_date
+
+    try:
+        manager = create_user_manager()
+        manager.set_current_user(user_id=user_id, name="User", create_if_missing=True)
+    except Exception:
+        return 0
+
     for name, uploaded in files_to_save.items():
         if uploaded.rr_ms is None or len(uploaded.rr_ms) < 10:
             continue
-        
-        # Create filename with timestamp if not already present
-        safe_name = name
-        if not any(c.isdigit() for c in name):
-            # Add date prefix if filename has no numbers (likely no date)
-            ts = uploaded.recording_start_utc
-            if ts:
-                date_str = ts.strftime("%Y%m%d_%H%M")
-            else:
-                date_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M")
-            safe_name = f"{date_str}_{name}"
-        
-        file_path = rr_dir / safe_name
-        
-        # Don't overwrite existing files
-        if file_path.exists():
-            continue
-        
+
+        rec_date = None
+        if uploaded.recording_start_utc is not None and isinstance(
+            uploaded.recording_start_utc, pd.Timestamp
+        ):
+            rec_date = uploaded.recording_start_utc.date()
+        if rec_date is None:
+            rec_date = parse_filename_date(name)
+        if rec_date is None:
+            rec_date = date.today()
+
         try:
-            with open(file_path, "w", encoding="utf-8") as f:
-                for rr_val in uploaded.rr_ms:
-                    f.write(f"{int(rr_val)}\n")
+            manager.store_rr_intervals(
+                uploaded.rr_ms,
+                filename=name,
+                recording_date=rec_date,
+                overwrite=False,
+            )
             saved_count += 1
-        except OSError:
+        except FileExistsError:
+            continue
+        except Exception:
             continue
     
     return saved_count
@@ -11539,15 +11566,55 @@ that predicts cognitive performance based on:
                 key: bundle.spec.title for key, bundle in bundles.items()
             }
             dataset_options = sorted(option_labels.keys(), key=lambda k: option_labels[k])
+            default_dataset_key = (
+                "planetary_k_index_3h"
+                if "planetary_k_index_3h" in dataset_options
+                else (dataset_options[0] if dataset_options else "")
+            )
+            default_dataset_index = (
+                dataset_options.index(default_dataset_key)
+                if default_dataset_key in dataset_options
+                else 0
+            )
             selected_dataset = st.selectbox(
                 "Dataset",
                 options=dataset_options,
                 format_func=lambda k: option_labels.get(k, k),
+                index=default_dataset_index,
                 key="noaa_dataset_select",
             )
             bundle: NOAADataBundle = bundles[selected_dataset]
             if bundle.spec.description:
                 st.caption(bundle.spec.description)
+            # Quick sanity check: warn when the selected NOAA dataset does not
+            # cover the HRV windowed timeline (common for short-horizon feeds).
+            if not windowed_df.empty and bundle.time_column in bundle.frame.columns:
+                try:
+                    hrv_start = pd.to_datetime(windowed_df.get("start"), utc=True, errors="coerce")
+                    pred_times = pd.to_datetime(bundle.frame[bundle.time_column], utc=True, errors="coerce")
+                    hrv_min = hrv_start.min()
+                    hrv_max = hrv_start.max()
+                    pred_min = pred_times.min()
+                    pred_max = pred_times.max()
+                    if (
+                        pd.notna(hrv_min)
+                        and pd.notna(hrv_max)
+                        and pd.notna(pred_min)
+                        and pd.notna(pred_max)
+                        and (hrv_max < pred_min or hrv_min > pred_max)
+                    ):
+                        extra_hint = ""
+                        if selected_dataset == "planetary_k_index_1m":
+                            extra_hint = (
+                                " The 1-minute Kp nowcast feed typically only spans the most recent hours."
+                            )
+                        st.warning(
+                            "Selected NOAA dataset does not overlap your HRV timestamps; correlation results will be empty."
+                            + extra_hint
+                            + " Try a longer-horizon dataset (e.g., **Planetary K index (3 h)**) or refresh NOAA feeds."
+                        )
+                except Exception:
+                    pass
             cadence_minutes = bundle.spec.cadence_minutes or 60
             if cadence_minutes <= 60:
                 min_hours = 6
