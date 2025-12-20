@@ -11820,6 +11820,21 @@ that predicts cognitive performance based on:
                         "pearson_r", key=lambda s: s.abs(), ascending=False
                     )
                 )
+                # Export correlation tables
+                st.download_button(
+                    "⬇️ Download full correlation table (CSV)",
+                    data=lag_results.to_csv(index=False).encode("utf-8"),
+                    file_name="hrv_kp_correlations.csv",
+                    mime="text/csv",
+                    key="download_kp_corr_full",
+                )
+                st.download_button(
+                    "⬇️ Download top correlations (CSV)",
+                    data=best_rows.to_csv(index=False).encode("utf-8"),
+                    file_name="hrv_kp_correlations_top.csv",
+                    mime="text/csv",
+                    key="download_kp_corr_best",
+                )
                 # Optional bootstrap/permutation for strongest finding
                 with st.expander("Advanced inference (bootstrap/permutation)", expanded=False):
                     do_boot_perm = st.checkbox(
@@ -11846,23 +11861,42 @@ that predicts cognitive performance based on:
                             f"- Permutation p (two-sided): {_format_p_value(boot.get('perm_p', float('nan')))}"
                         )
                 # ML pattern recognition block
-                st.subheader("ML pattern recognition (HRV ~ Kp lags)")
+                st.subheader("ML pattern recognition (HRV ~ space-weather lags)")
                 target_metric = st.selectbox(
                     "Select HRV metric to model",
                     options=metric_list,
                     key="kp_ml_target_metric",
                 )
+                predictor_choices = list(bundles.keys()) if bundles else []
+                default_predictors = [
+                    key
+                    for key in predictor_choices
+                    if key in ("planetary_k_index_3h", "dst_index", "f10_7_cm_flux")
+                ]
+                predictors_selected = st.multiselect(
+                    "Predictors (NOAA feeds)",
+                    options=predictor_choices,
+                    default=default_predictors if default_predictors else predictor_choices[:1],
+                    format_func=lambda k: option_labels.get(k, k),
+                    help="Builds lagged feature matrix across selected predictors (e.g., Kp, Dst, F10.7, solar wind).",
+                    key="space_weather_predictors_ml",
+                )
                 if st.button(
-                    "Run ML models (ElasticNet + RandomForest)", key="run_ml_kp_models"
+                    "Run ML models (ElasticNet + RandomForest)", key="run_ml_space_weather"
                 ):
                     try:
                         with st.spinner("Training ML models..."):
-                            ml_results = _run_ml_models_on_kp(
+                            feature_df = _build_space_weather_feature_matrix(
                                 windowed_df,
-                                kp_df,
-                                target_metric=target_metric,
-                                lags_hours=lags,
+                                bundles,
+                                predictors_selected,
+                                lags,
                                 merge_tolerance_minutes=int(merge_tol),
+                            )
+                            feature_df[target_metric] = windowed_df[target_metric]
+                            ml_results = _run_ml_models_space_weather(
+                                feature_df,
+                                target_metric=target_metric,
                             )
                         st.markdown(
                             f"- Samples used: **{ml_results.get('samples', 0)}** | "
@@ -11887,10 +11921,30 @@ that predicts cognitive performance based on:
                         imps = ml_results.get("feature_importances", [])
                         if imps:
                             imp_df = pd.DataFrame(imps).head(8)
-                            st.markdown(
-                                "Top feature importances (RandomForest, permutation)"
-                            )
+                            st.markdown("Top feature importances (RandomForest, permutation)")
                             st.dataframe(imp_df, width="stretch")
+                        # Export ML summaries
+                        models_df = pd.DataFrame(
+                            [
+                                {"model": "elastic_net", **enet},
+                                {"model": "random_forest", **rf},
+                            ]
+                        )
+                        st.download_button(
+                            "⬇️ Download ML metrics (CSV)",
+                            data=models_df.to_csv(index=False).encode("utf-8"),
+                            file_name="hrv_space_weather_ml_metrics.csv",
+                            mime="text/csv",
+                            key="download_ml_metrics",
+                        )
+                        if imps:
+                            st.download_button(
+                                "⬇️ Download feature importances (CSV)",
+                                data=imp_df.to_csv(index=False).encode("utf-8"),
+                                file_name="hrv_space_weather_feature_importances.csv",
+                                mime="text/csv",
+                                key="download_ml_importances",
+                            )
                     except Exception as exc:  # noqa: BLE001
                         st.warning(f"ML run skipped: {exc}")
                 if not best_rows.empty and "pearson_r" in best_rows.columns:
