@@ -54,7 +54,7 @@ pyedflib>=0.1.30  # Uncomment for EDF file support (Somfit, PSG)
 
 # Garmin Connect (requires auth)
 fitparse>=1.2,<2.0  # Garmin FIT parsing for Vivosmart 5 and wellness FIT files
-# garminconnect>=0.2  # Uncomment for Garmin Connect API access
+garminconnect>=0.2.36
 
 # ===========================================================================
 # GPU ACCELERATION (Optional - NVIDIA CUDA)
