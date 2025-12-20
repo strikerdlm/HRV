@@ -14459,26 +14459,36 @@ def _render_noaa_correlation_summary(
     formatted["lag_hours"] = formatted["lag_hours"].astype(int)
     formatted["n"] = formatted["n"].astype(int)
     st.dataframe(formatted, use_container_width=True)
-    commentary_lines: List[str] = []
-    for row in subset.itertuples():
-        test_name = getattr(row, "test_name", "Pearson r")
+    # Present top findings in a compact scientific table
+    summary = subset.copy()
+    summary["abs_r"] = summary["pearson_r"].abs()
+    summary = summary.sort_values("abs_r", ascending=False).head(8)
+
+    def _dir_icon(direction: str) -> str:
+        if direction == "positive":
+            return "↑"
+        if direction == "negative":
+            return "↓"
+        return "→"
+
+    table_rows = [
+        "| Metric | Lag (h) | r | p-value | 95% CI | n |",
+        "|:--|:--:|:--:|:--:|:--:|:--:|",
+    ]
+    for row in summary.itertuples():
         metric = getattr(row, "metric", "")
-        r_val = getattr(row, "pearson_r", float("nan"))
-        p_val = getattr(row, "p_value", float("nan"))
-        ci_low = getattr(row, "ci_low", float("nan"))
-        ci_high = getattr(row, "ci_high", float("nan"))
+        lag = int(getattr(row, "lag_hours", 0))
+        r_val = float(getattr(row, "pearson_r", float("nan")))
+        p_val = float(getattr(row, "p_value", float("nan")))
+        ci_low = float(getattr(row, "ci_low", float("nan")))
+        ci_high = float(getattr(row, "ci_high", float("nan")))
         direction = getattr(row, "direction", "neutral")
-        lag = getattr(row, "lag_hours", 0)
-        sample_n = getattr(row, "n", 0)
-        if np.isfinite(r_val):
-            r_text = f"r = {r_val:.3f}"
-        else:
-            r_text = "r undefined"
-        commentary_lines.append(
-            f"- **{metric}** ({test_name}, {friendly_name}) shows a {direction} association at lag {lag} h: "
-            f"{r_text}, {_format_p_value(p_val)}, {_format_ci_text(ci_low, ci_high)}, n = {sample_n}."
+        n_val = int(getattr(row, "n", 0))
+        table_rows.append(
+            f"| **{metric}** | {lag:+d} | {_dir_icon(direction)} {r_val:.3f} | {_format_p_value(p_val)} "
+            f"| [{ci_low:.3f}, {ci_high:.3f}] | {n_val} |"
         )
-    st.markdown("\n".join(commentary_lines))
+    st.markdown("\n".join(table_rows))
 
 
 
