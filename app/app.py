@@ -4943,6 +4943,96 @@ def _scan_lag_correlations(
     return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
 
 
+def _block_bootstrap_corr(
+    x: np.ndarray,
+    y: np.ndarray,
+    *,
+    block_size: int = 8,
+    n_boot: int = 200,
+) -> Tuple[float, float]:
+    """Block bootstrap CI for Pearson r (basic percentile)."""
+    n = len(x)
+    if n < 4:
+        return float("nan"), float("nan")
+    rng = np.random.default_rng(42)
+    r_boot: List[float] = []
+    for _ in range(n_boot):
+        starts = rng.integers(0, max(1, n - block_size + 1), size=max(1, n // block_size))
+        idx: List[int] = []
+        for s in starts:
+            idx.extend(range(s, min(s + block_size, n)))
+            if len(idx) >= n:
+                break
+        idx = idx[:n]
+        xb = x[idx]
+        yb = y[idx]
+        if np.std(xb) == 0 or np.std(yb) == 0:
+            continue
+        r_boot.append(float(np.corrcoef(xb, yb)[0, 1]))
+    if not r_boot:
+        return float("nan"), float("nan")
+    r_sorted = np.sort(r_boot)
+    low = float(np.percentile(r_sorted, 2.5))
+    high = float(np.percentile(r_sorted, 97.5))
+    return low, high
+
+
+def _perm_test_corr(
+    x: np.ndarray,
+    y: np.ndarray,
+    *,
+    n_perm: int = 200,
+) -> float:
+    """Permutation p-value for Pearson r (two-sided)."""
+    n = len(x)
+    if n < 4:
+        return float("nan")
+    rng = np.random.default_rng(123)
+    obs = float(np.corrcoef(x, y)[0, 1]) if np.std(x) > 0 and np.std(y) > 0 else float("nan")
+    if not np.isfinite(obs):
+        return float("nan")
+    greater = 0
+    for _ in range(n_perm):
+        y_perm = rng.permutation(y)
+        r = float(np.corrcoef(x, y_perm)[0, 1]) if np.std(y_perm) > 0 else 0.0
+        if abs(r) >= abs(obs):
+            greater += 1
+    return float((greater + 1) / (n_perm + 1))
+
+
+def _compute_bootstrap_perm_for_best(
+    windowed_df: pd.DataFrame,
+    predictor_df: pd.DataFrame,
+    predictor_time_col: str,
+    predictor_value_col: str,
+    metric: str,
+    lag_hours: int,
+    *,
+    merge_tolerance_minutes: int = 90,
+) -> Dict[str, float]:
+    """Re-align a single metric/predictor/lag and compute block bootstrap CI + permutation p."""
+    aligned = align_space_weather_series(
+        reference_times=pd.to_datetime(windowed_df["start"], errors="coerce", utc=True),
+        predictor_df=predictor_df,
+        predictor_time_col=predictor_time_col,
+        predictor_value_col=predictor_value_col,
+        lag_hours=int(lag_hours),
+        max_gap_minutes=int(merge_tolerance_minutes),
+    )
+    merged = (
+        windowed_df.set_index("start")
+        .join(aligned.rename(predictor_value_col), how="inner")
+        .dropna(subset=[predictor_value_col, metric])
+    )
+    if merged.empty:
+        return {"boot_low": float("nan"), "boot_high": float("nan"), "perm_p": float("nan")}
+    x = merged[predictor_value_col].to_numpy(dtype=float)
+    y = merged[metric].to_numpy(dtype=float)
+    boot_low, boot_high = _block_bootstrap_corr(x, y)
+    perm_p = _perm_test_corr(x, y)
+    return {"boot_low": boot_low, "boot_high": boot_high, "perm_p": perm_p}
+
+
 def _build_kp_feature_matrix(
     windowed_df: pd.DataFrame,
     kp_df: pd.DataFrame,
@@ -5050,6 +5140,124 @@ def _run_ml_models_on_kp(
             {"feature": name, "importance": float(val)}
             for name, val in sorted(
                 zip([c for c in feature_df.columns if c.startswith("kp_lag_")], perm.importances_mean),
+                key=lambda t: t[1],
+                reverse=True,
+            )
+        ]
+        results["feature_importances"] = importances
+    except Exception:
+        results["feature_importances"] = []
+
+    return results
+
+
+def _build_space_weather_feature_matrix(
+    windowed_df: pd.DataFrame,
+    bundles: Mapping[str, NOAADataBundle],
+    predictors: Sequence[str],
+    lags_hours: List[int],
+    merge_tolerance_minutes: int = 90,
+) -> pd.DataFrame:
+    """Construct a wide feature matrix across selected NOAA predictors."""
+    if windowed_df.empty:
+        return pd.DataFrame()
+    w = windowed_df.copy()
+    w["start"] = pd.to_datetime(w["start"], errors="coerce", utc=True)
+    w = w.dropna(subset=["start"]).sort_values("start")
+    if w.empty:
+        return pd.DataFrame()
+    base = w.set_index("start")
+    for key in predictors:
+        bundle = bundles.get(key)
+        if not bundle or bundle.frame.empty:
+            continue
+        df = bundle.frame.copy()
+        df_time_col = bundle.time_column
+        df[df_time_col] = pd.to_datetime(df[df_time_col], errors="coerce", utc=True)
+        for value_col in bundle.value_columns or []:
+            if value_col not in df.columns:
+                continue
+            pred = df[[df_time_col, value_col]].dropna()
+            pred = pred.sort_values(df_time_col)
+            if pred.empty:
+                continue
+            for lag in lags_hours:
+                aligned = align_space_weather_series(
+                    reference_times=w["start"],
+                    predictor_df=pred,
+                    predictor_time_col=df_time_col,
+                    predictor_value_col=value_col,
+                    lag_hours=int(lag),
+                    max_gap_minutes=int(merge_tolerance_minutes),
+                )
+                if aligned.empty:
+                    continue
+                base[f"{key}_{value_col}_lag_{int(lag)}h"] = aligned
+    return base.reset_index()
+
+
+def _run_ml_models_space_weather(
+    feature_df: pd.DataFrame,
+    target_metric: str,
+) -> Dict[str, Any]:
+    """Train ElasticNet + RandomForest on a pre-built space-weather feature matrix."""
+    if feature_df.empty or target_metric not in feature_df.columns:
+        raise ValueError("No data for ML.")
+    y = pd.to_numeric(feature_df[target_metric], errors="coerce")
+    X_cols = [c for c in feature_df.columns if c != target_metric and c != "start"]
+    X = feature_df[X_cols].apply(pd.to_numeric, errors="coerce")
+    df = pd.concat([y, X], axis=1).dropna()
+    if df.shape[0] < 30 or len(X_cols) == 0:
+        raise ValueError("Not enough samples or predictors for ML (need ≥30 rows).")
+    y = df[target_metric].to_numpy(dtype=float)
+    X = df[X_cols].to_numpy(dtype=float)
+    n = X.shape[0]
+    # Walk-forward split: first 70% train, next 15% val, final 15% test
+    train_end = int(max(10, n * 0.7))
+    val_end = int(max(train_end + 5, n * 0.85))
+    X_train, X_val, X_test = X[:train_end], X[train_end:val_end], X[val_end:]
+    y_train, y_val, y_test = y[:train_end], y[train_end:val_end], y[val_end:]
+
+    results: Dict[str, Any] = {"samples": n, "features": X.shape[1]}
+
+    enet = ElasticNetCV(
+        l1_ratio=[0.1, 0.5, 0.9],
+        alphas=None,
+        cv=3,
+        max_iter=5000,
+        n_jobs=None,
+        fit_intercept=True,
+    )
+    enet.fit(X_train, y_train)
+    y_pred_en = enet.predict(X_test) if X_test.size else np.array([])
+    results["elastic_net"] = {
+        "r2": float(r2_score(y_test, y_pred_en)) if y_test.size else float("nan"),
+        "mae": float(mean_absolute_error(y_test, y_pred_en)) if y_test.size else float("nan"),
+        "alpha": float(enet.alpha_),
+        "l1_ratio": float(enet.l1_ratio_),
+    }
+
+    rf = RandomForestRegressor(
+        n_estimators=200,
+        max_depth=8,
+        random_state=42,
+        n_jobs=-1,
+        min_samples_leaf=2,
+    )
+    rf.fit(X_train, y_train)
+    y_pred_rf = rf.predict(X_test) if X_test.size else np.array([])
+    results["random_forest"] = {
+        "r2": float(r2_score(y_test, y_pred_rf)) if y_test.size else float("nan"),
+        "mae": float(mean_absolute_error(y_test, y_pred_rf)) if y_test.size else float("nan"),
+    }
+    try:
+        perm = permutation_importance(
+            rf, X_test, y_test, n_repeats=8, random_state=42, n_jobs=-1
+        )
+        importances = [
+            {"feature": name, "importance": float(val)}
+            for name, val in sorted(
+                zip(X_cols, perm.importances_mean),
                 key=lambda t: t[1],
                 reverse=True,
             )
@@ -11612,6 +11820,31 @@ that predicts cognitive performance based on:
                         "pearson_r", key=lambda s: s.abs(), ascending=False
                     )
                 )
+                # Optional bootstrap/permutation for strongest finding
+                with st.expander("Advanced inference (bootstrap/permutation)", expanded=False):
+                    do_boot_perm = st.checkbox(
+                        "Compute block bootstrap CI and permutation p for top finding",
+                        value=False,
+                        help="Block bootstrap (8-sample blocks, 200 reps) and permutation p (200 reps) on the top |r| row.",
+                    )
+                    if do_boot_perm and not best_rows.empty:
+                        top = best_rows.iloc[0]
+                        boot = _compute_bootstrap_perm_for_best(
+                            windowed_df,
+                            kp_df,
+                            predictor_time_col="time_tag",
+                            predictor_value_col="kp_index",
+                            metric=str(top.get("metric", "")),
+                            lag_hours=int(top.get("lag_hours", 0)),
+                            merge_tolerance_minutes=int(merge_tol),
+                        )
+                        st.markdown(
+                            f"- Block bootstrap CI95: [{boot.get('boot_low', float('nan')):.3f}, "
+                            f"{boot.get('boot_high', float('nan')):.3f}]"
+                        )
+                        st.markdown(
+                            f"- Permutation p (two-sided): {_format_p_value(boot.get('perm_p', float('nan')))}"
+                        )
                 # ML pattern recognition block
                 st.subheader("ML pattern recognition (HRV ~ Kp lags)")
                 target_metric = st.selectbox(
