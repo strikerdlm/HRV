@@ -5289,6 +5289,59 @@ def _run_ml_models_space_weather(
     except Exception:
         results["feature_importances"] = []
 
+    # Gradient Boosting as an additional nonlinear baseline
+    gb = GradientBoostingRegressor(random_state=42)
+    gb.fit(X_train, y_train)
+    y_pred_gb = gb.predict(X_test) if X_test.size else np.array([])
+    results["gradient_boosting"] = {
+        "r2": float(r2_score(y_test, y_pred_gb)) if y_test.size else float("nan"),
+        "mae": float(mean_absolute_error(y_test, y_pred_gb)) if y_test.size else float("nan"),
+    }
+
+    # LassoCV for sparsity encouragement
+    lasso = LassoCV(cv=3, max_iter=5000, n_jobs=None)
+    lasso.fit(X_train, y_train)
+    y_pred_lasso = lasso.predict(X_test) if X_test.size else np.array([])
+    results["lasso"] = {
+        "r2": float(r2_score(y_test, y_pred_lasso)) if y_test.size else float("nan"),
+        "mae": float(mean_absolute_error(y_test, y_pred_lasso)) if y_test.size else float("nan"),
+        "alpha": float(lasso.alpha_),
+    }
+
+    # TimeSeriesSplit CV for ElasticNet and RF
+    try:
+        tscv = TimeSeriesSplit(n_splits=3)
+        enet_cv_scores = []
+        rf_cv_scores = []
+        for train_idx, test_idx in tscv.split(X):
+            X_tr, X_te = X[train_idx], X[test_idx]
+            y_tr, y_te = y[train_idx], y[test_idx]
+            enet_cv = ElasticNetCV(
+                l1_ratio=[0.1, 0.5, 0.9],
+                alphas=None,
+                cv=3,
+                max_iter=5000,
+                n_jobs=None,
+                fit_intercept=True,
+            )
+            enet_cv.fit(X_tr, y_tr)
+            enet_cv_scores.append(r2_score(y_te, enet_cv.predict(X_te)))
+            rf_cv = RandomForestRegressor(
+                n_estimators=120,
+                max_depth=6,
+                random_state=42,
+                n_jobs=-1,
+                min_samples_leaf=2,
+            )
+            rf_cv.fit(X_tr, y_tr)
+            rf_cv_scores.append(r2_score(y_te, rf_cv.predict(X_te)))
+        if enet_cv_scores:
+            results["elastic_net"]["cv_r2_mean"] = float(np.nanmean(enet_cv_scores))
+        if rf_cv_scores:
+            results["random_forest"]["cv_r2_mean"] = float(np.nanmean(rf_cv_scores))
+    except Exception:
+        pass
+
     return results
 
 
