@@ -1878,12 +1878,13 @@ def _render_clinical_assessment(user: UserProfile) -> None:
         format_func=lambda x: f"{x}: {available_scales[x]}",
     )
     
-    # Session state keys for Garmin-autofilled context
-    ctx_hours_wake_key = f"clinical_ctx_hours_wake_{user.user_id}"
-    ctx_hours_sleep_key = f"clinical_ctx_hours_sleep_{user.user_id}"
-    ctx_caffeine_key = f"clinical_ctx_caffeine_{user.user_id}"
+    # Session state keys for context inputs (used by both Garmin autofill and form widgets)
+    # IMPORTANT: These keys are used directly by the st.number_input widgets
+    ctx_hours_wake_key = f"clinical_hours_wake_{user.user_id}"
+    ctx_hours_sleep_key = f"clinical_hours_sleep_{user.user_id}"
+    ctx_caffeine_key = f"clinical_caffeine_{user.user_id}"
     
-    # Initialize defaults
+    # Initialize defaults only if keys don't exist
     if ctx_hours_wake_key not in st.session_state:
         st.session_state[ctx_hours_wake_key] = 8.0
     if ctx_hours_sleep_key not in st.session_state:
@@ -1939,6 +1940,8 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                 with col_garmin_status:
                     st.info("ℹ️ No Garmin daily metrics stored. Sync Garmin data first in the Garmin Integration section.")
         except Exception as exc:
+            if log_exception is not None:
+                log_exception(_LOGGER, "Clinical assessment Garmin fetch failed", exc)
             with col_garmin_status:
                 st.error(f"❌ Failed to fetch Garmin data: {exc}")
     
@@ -1959,7 +1962,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                     max_value=48.0,
                     value=float(st.session_state[ctx_hours_wake_key]),
                     step=0.5,
-                    key=f"clinical_hours_wake_input_{user.user_id}",
+                    key=ctx_hours_wake_key,
                 )
             with col2:
                 hours_sleep = st.number_input(
@@ -1968,7 +1971,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                     max_value=24.0,
                     value=float(st.session_state[ctx_hours_sleep_key]),
                     step=0.5,
-                    key=f"clinical_hours_sleep_input_{user.user_id}",
+                    key=ctx_hours_sleep_key,
                 )
             with col3:
                 caffeine_cups = st.number_input(
@@ -1977,7 +1980,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                     max_value=20,
                     value=int(st.session_state[ctx_caffeine_key]),
                     step=1,
-                    key=f"clinical_caffeine_input_{user.user_id}",
+                    key=ctx_caffeine_key,
                 )
         context_data = {
             "hours_since_wake": hours_since_wake,
