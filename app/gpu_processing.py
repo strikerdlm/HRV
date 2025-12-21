@@ -853,90 +853,90 @@ def render_gpu_settings_sidebar() -> GPUConfig:
                             cols[2].metric("GPU", f"{test['gpu_time_ms']:.2f}ms", f"{test['speedup']:.1f}x")
                         else:
                             cols[2].metric("GPU", "N/A")
+        else:
+            st.warning("No GPU detected")
+            st.caption(info.device_name)
+            
+            # Check if it's a Blackwell GPU needing toolkit upgrade or PATH fix
+            toolkit_ver = _detect_cuda_toolkit_version()
+            toolkit_path = _get_cuda_toolkit_path(toolkit_ver) if toolkit_ver else None
+            needs_path_update = False
+            
+            if toolkit_ver and float(toolkit_ver) >= 12.8:
+                # CUDA 12.8+ is installed, but PATH might point to older version
+                nvcc_result = subprocess.run(
+                    ["where", "nvcc"],
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                    check=False,
+                )
+                if nvcc_result.returncode == 0 and nvcc_result.stdout:
+                    nvcc_path = nvcc_result.stdout.strip().splitlines()[0]
+                    nvcc_dir = Path(nvcc_path).parent.parent
+                    if toolkit_path and nvcc_dir != toolkit_path:
+                        needs_path_update = True
+            
+            if "update PATH" in info.device_name or needs_path_update:
+                st.markdown(f"""
+                **CUDA Toolkit {toolkit_ver} is installed, but PATH points to an older version:**
+                
+                1. **Update Environment Variables**:
+                   - Windows Settings → System → About → Advanced system settings
+                   - Click "Environment Variables"
+                   - Edit `CUDA_PATH`:
+                     - Set to: `C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v{toolkit_ver}`
+                   - Edit `PATH`:
+                     - Remove old CUDA entries (e.g., `...\\CUDA\\v12.5\\bin`)
+                     - Add: `%CUDA_PATH%\\bin`
+                     - Add: `%CUDA_PATH%\\libnvvp`
+                
+                2. **Alternative (PowerShell - current session only)**:
+                   ```powershell
+                   $env:CUDA_PATH = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v{toolkit_ver}"
+                   $env:PATH = "$env:CUDA_PATH\\bin;$env:PATH"
+                   ```
+                
+                3. **After updating**:
+                   - **Restart your computer** (required for permanent PATH changes)
+                   - Restart the Streamlit app
+                   - GPU acceleration will be automatically enabled
+                
+                **Note**: CUDA {toolkit_ver} supports your RTX 5070 (Blackwell, CC 12.0). The issue is that your PATH environment variable points to CUDA 12.5 instead of {toolkit_ver}.
+                """)
+            elif "needs CUDA Toolkit 12.8" in info.device_name or "needs CUDA 12.8" in info.device_name:
+                current_toolkit = f" (Currently installed: {toolkit_ver})" if toolkit_ver else ""
+                st.markdown(f"""
+                **RTX 50xx (Blackwell) requires CUDA Toolkit 12.8+{current_toolkit}:**
+                
+                1. **Download CUDA Toolkit 12.8+**:
+                   - Visit: [NVIDIA CUDA Toolkit Downloads](https://developer.nvidia.com/cuda-downloads)
+                   - Select: Windows → x86_64 → 10/11 → exe (local)
+                   - Download and run the installer
+                
+                2. **During installation**:
+                   - Choose "Custom" installation
+                   - Keep existing CUDA versions if needed (they can coexist)
+                   - Ensure "CUDA Toolkit" and "CUDA Samples" are selected
+                
+                3. **After installation**:
+                   - Update PATH to point to new version (see instructions above)
+                   - Restart your computer (recommended)
+                   - Restart the Streamlit app
+                   - GPU acceleration will be automatically enabled
+                
+                **Note**: Your RTX 5070 is detected, but the current CUDA Toolkit ({toolkit_ver if toolkit_ver else '12.5'}) doesn't support Blackwell architecture (CC 12.0). CUDA Toolkit 12.8+ includes the required `nvrtc64_120_0.dll` runtime compiler.
+                """)
             else:
-                st.warning("No GPU detected")
-                st.caption(info.device_name)
-                
-                # Check if it's a Blackwell GPU needing toolkit upgrade or PATH fix
-                toolkit_ver = _detect_cuda_toolkit_version()
-                toolkit_path = _get_cuda_toolkit_path(toolkit_ver) if toolkit_ver else None
-                needs_path_update = False
-                
-                if toolkit_ver and float(toolkit_ver) >= 12.8:
-                    # CUDA 12.8+ is installed, but PATH might point to older version
-                    nvcc_result = subprocess.run(
-                        ["where", "nvcc"],
-                        capture_output=True,
-                        text=True,
-                        timeout=5,
-                        check=False,
-                    )
-                    if nvcc_result.returncode == 0 and nvcc_result.stdout:
-                        nvcc_path = nvcc_result.stdout.strip().splitlines()[0]
-                        nvcc_dir = Path(nvcc_path).parent.parent
-                        if toolkit_path and nvcc_dir != toolkit_path:
-                            needs_path_update = True
-                
-                if "update PATH" in info.device_name or needs_path_update:
-                    st.markdown(f"""
-                    **CUDA Toolkit {toolkit_ver} is installed, but PATH points to an older version:**
-                    
-                    1. **Update Environment Variables**:
-                       - Windows Settings → System → About → Advanced system settings
-                       - Click "Environment Variables"
-                       - Edit `CUDA_PATH`:
-                         - Set to: `C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v{toolkit_ver}`
-                       - Edit `PATH`:
-                         - Remove old CUDA entries (e.g., `...\\CUDA\\v12.5\\bin`)
-                         - Add: `%CUDA_PATH%\\bin`
-                         - Add: `%CUDA_PATH%\\libnvvp`
-                    
-                    2. **Alternative (PowerShell - current session only)**:
-                       ```powershell
-                       $env:CUDA_PATH = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v{toolkit_ver}"
-                       $env:PATH = "$env:CUDA_PATH\\bin;$env:PATH"
-                       ```
-                    
-                    3. **After updating**:
-                       - **Restart your computer** (required for permanent PATH changes)
-                       - Restart the Streamlit app
-                       - GPU acceleration will be automatically enabled
-                    
-                    **Note**: CUDA {toolkit_ver} supports your RTX 5070 (Blackwell, CC 12.0). The issue is that your PATH environment variable points to CUDA 12.5 instead of {toolkit_ver}.
-                    """)
-                elif "needs CUDA Toolkit 12.8" in info.device_name or "needs CUDA 12.8" in info.device_name:
-                    current_toolkit = f" (Currently installed: {toolkit_ver})" if toolkit_ver else ""
-                    st.markdown(f"""
-                    **RTX 50xx (Blackwell) requires CUDA Toolkit 12.8+{current_toolkit}:**
-                    
-                    1. **Download CUDA Toolkit 12.8+**:
-                       - Visit: [NVIDIA CUDA Toolkit Downloads](https://developer.nvidia.com/cuda-downloads)
-                       - Select: Windows → x86_64 → 10/11 → exe (local)
-                       - Download and run the installer
-                    
-                    2. **During installation**:
-                       - Choose "Custom" installation
-                       - Keep existing CUDA versions if needed (they can coexist)
-                       - Ensure "CUDA Toolkit" and "CUDA Samples" are selected
-                    
-                    3. **After installation**:
-                       - Update PATH to point to new version (see instructions above)
-                       - Restart your computer (recommended)
-                       - Restart the Streamlit app
-                       - GPU acceleration will be automatically enabled
-                    
-                    **Note**: Your RTX 5070 is detected, but the current CUDA Toolkit ({toolkit_ver if toolkit_ver else '12.5'}) doesn't support Blackwell architecture (CC 12.0). CUDA Toolkit 12.8+ includes the required `nvrtc64_120_0.dll` runtime compiler.
-                    """)
-                else:
-                    st.markdown("""
-                    **To enable GPU:**
-                    1. Install latest NVIDIA drivers
-                    2. Install CuPy for your GPU:
-                       - **RTX 50xx**: `pip install cupy-cuda12x` + CUDA Toolkit 12.8+
-                       - **RTX 40xx/30xx**: `pip install cupy-cuda12x`
-                       - **RTX 20xx**: `pip install cupy-cuda11x`
-                    3. Restart the app
-                    """)
+                st.markdown("""
+                **To enable GPU:**
+                1. Install latest NVIDIA drivers
+                2. Install CuPy for your GPU:
+                   - **RTX 50xx**: `pip install cupy-cuda12x` + CUDA Toolkit 12.8+
+                   - **RTX 40xx/30xx**: `pip install cupy-cuda12x`
+                   - **RTX 20xx**: `pip install cupy-cuda11x`
+                3. Restart the app
+                """)
     
     set_gpu_config(config)
     return config
