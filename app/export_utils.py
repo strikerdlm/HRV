@@ -957,6 +957,7 @@ def build_markdown_report(
 		corr_full = space_weather_export.get("corr_full")
 		ml_metrics = space_weather_export.get("ml_metrics")
 		ml_importances = space_weather_export.get("ml_importances")
+		shap_importances = space_weather_export.get("shap_importances")
 		if isinstance(corr_best, pd.DataFrame) and not corr_best.empty:
 			lines.append("### Top correlations (by |r|)")
 			lines.append(_dataframe_to_markdown(corr_best, max_rows=20))
@@ -972,6 +973,11 @@ def build_markdown_report(
 		if isinstance(ml_importances, pd.DataFrame) and not ml_importances.empty:
 			lines.append("### Feature importances (permutation, RandomForest)")
 			lines.append(_dataframe_to_markdown(ml_importances, max_rows=30))
+			lines.append("")
+		if isinstance(shap_importances, pd.DataFrame) and not shap_importances.empty:
+			lines.append("### Feature importances (SHAP)")
+			lines.append("SHapley Additive exPlanations provide model-agnostic interpretability.")
+			lines.append(_dataframe_to_markdown(shap_importances, max_rows=30))
 			lines.append("")
 
 	if additional_notes.strip():
