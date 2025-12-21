@@ -28,6 +28,16 @@ scikit-learn>=1.3,<1.6  # ML algorithms (ElasticNet, RF, GB, etc.)
 statsmodels>=0.14,<0.15  # Mixed-effects models for longitudinal cohort inference
 
 # ===========================================================================
+# ADVANCED ML (Optional - High Priority Enhancements)
+# ===========================================================================
+# Enhanced gradient boosting and model interpretability
+# Install manually for improved ML performance:
+#   pip install xgboost lightgbm shap
+xgboost>=2.0,<3.0  # Gradient boosting (often outperforms RandomForest)
+lightgbm>=4.0,<5.0  # Fast gradient boosting
+shap>=0.43,<1.0  # Model interpretability (SHapley Additive exPlanations)
+
+# ===========================================================================
 # PERFORMANCE OPTIMIZATION (Recommended)
 # ===========================================================================
 # These packages significantly improve performance on CPU-only systems
