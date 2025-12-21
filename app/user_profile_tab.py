@@ -993,7 +993,7 @@ def _render_login_section() -> Optional[UserProfile]:
     
     with col_action:
         st.write("")  # Spacing
-        if st.button("✅ Select User", width="stretch"):
+        if st.button("✅ Select User", use_container_width=True):
             selected_data = user_options.get(selected_username)
             if selected_data:
                 # Fetch full user profile only when needed
@@ -3339,7 +3339,7 @@ def _render_data_management(user: UserProfile) -> None:
     
     with col1:
         st.markdown("### Export Data")
-        if st.button("📥 Export All User Data", width="stretch"):
+        if st.button("📥 Export All User Data", use_container_width=True):
             try:
                 import json
                 db = get_database()
@@ -3368,7 +3368,7 @@ def _render_data_management(user: UserProfile) -> None:
     with col2:
         st.markdown("### Account Actions")
         
-        if st.button("🚪 Logout", width="stretch"):
+        if st.button("🚪 Logout", use_container_width=True):
             _set_current_user(None)
             st.session_state.pop("edit_profile_mode", None)
             st.rerun()
