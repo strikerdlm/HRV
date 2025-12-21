@@ -793,6 +793,10 @@ The app includes Windows console safety workarounds (Colorama fix) in `app/app.p
 - **GPU not detected**: Verify CUDA installation: `nvidia-smi`
 - **CuPy import fails**: Install correct version: `pip install cupy-cuda12x`
 - **Out of memory**: Reduce batch size or disable GPU for large datasets
+- **RTX 50xx (Blackwell) kernel compilation fails**: See [RTX 5070 CUDA Fix Guide](docs/RTX_5070_CUDA_Fix.md)
+  - Error: `nvrtc64_120_0.dll` missing or `CUDA_ERROR_NO_BINARY_FOR_GPU`
+  - Solution: Install CUDA Toolkit 12.8+ (current: 12.5 doesn't support CC 12.0)
+  - Quick check: `nvcc --version` should show 12.8 or higher
 - Check `logs/app.log` for GPU initialization messages
 
 ### Import errors
