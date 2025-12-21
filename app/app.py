@@ -319,17 +319,15 @@ _SKLEARN_LOADED = False
 
 def _ensure_sklearn() -> None:
     """Lazy-load sklearn to avoid slowing the welcome page startup."""
-    global (
-        RandomForestRegressor,
-        GradientBoostingRegressor,
-        ElasticNetCV,
-        LassoCV,
-        TimeSeriesSplit,
-        permutation_importance,
-        mean_absolute_error,
-        r2_score,
-        _SKLEARN_LOADED,
-    )
+    global RandomForestRegressor
+    global GradientBoostingRegressor
+    global ElasticNetCV
+    global LassoCV
+    global TimeSeriesSplit
+    global permutation_importance
+    global mean_absolute_error
+    global r2_score
+    global _SKLEARN_LOADED
     if _SKLEARN_LOADED:
         return
 
