@@ -9,7 +9,7 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.8.36  
+**Version:** 1.8.37  
 **Last Updated:** 2025-12-21
 
 ---
@@ -609,9 +609,9 @@ The **Exploration Medical Analytics** section now displays EVA clearance states 
 
 Each indicator glows when active (count > 0) and dims when inactive. A summary panel shows the dominant status and total assessments. This visualization provides an at-a-glance operational readiness indicator for mission planners.
 
-### Sleep & Chronotype Inputs + Garmin Autofill (v1.8.36)
+### Sleep & Chronotype Inputs + Garmin Autofill (v1.8.37)
 
-- **Energy & Nutrition → Sleep & Chronotype**: New sliders/inputs for sleep hours, sleep quality, hours awake, chronotype offset, RMSSD, resting HR, and VO₂. A **Sync to Profile Tools Engine** button pushes these values into SAFTE fatigue and Operational Performance tools.
+- **Energy & Nutrition → Sleep & Chronotype**: Sliders/inputs for sleep hours, sleep quality, hours awake, chronotype offset, RMSSD, resting HR, and VO₂. A **Sync to Profile Tools Engine** button pushes these values into SAFTE fatigue and Operational Performance tools. A **📡 Autofill from Garmin** button pulls the latest Vivosmart sleep to fill these fields automatically.
 - **Profile Tools Engine → Garmin Autofill**: One-click Vivosmart/Garmin pull fills sleep hours, sleep quality, hours awake, RMSSD, and resting HR for SAFTE/Operational calculations. Users without a device can still enter values manually.
 
 ### Longitudinal timepoints (T0–T21)
