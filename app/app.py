@@ -11932,7 +11932,7 @@ that predicts cognitive performance based on:
         with perf_col1:
             auto_fetch_enabled = st.checkbox(
                 "Enable background auto-fetch (slower load)",
-                value=bool(st.session_state.get("space_auto_fetch_enabled", False)),
+                value=bool(st.session_state.get("space_auto_fetch_enabled", True)),
                 key="space_auto_fetch_enabled",
                 help="When enabled, NOAA/DONKI fetch runs automatically in the background when you open this tab.",
             )
@@ -11959,6 +11959,8 @@ that predicts cognitive performance based on:
                     "stale": False,
                 },
             }
+            if not space_state.get("loaded"):
+                st.info("Auto-fetch is off. Click “📥 Fetch space weather” or “🌐 Fetch NASA DONKI” to load data.")
 
         # Data age indicator
         data_age = _get_bg_fetch_age_str()
