@@ -10687,10 +10687,125 @@ that predicts cognitive performance based on:
                             help="Percent of in-scope time during the Window of Circadian Low (~02:00–06:00 local).",
                         )
 
-                    # Risk matrix (SMS-style)
+                    # Critical Job Time Input (shared by ICAO and USAF matrices)
+                    st.markdown("#### ⏰ Critical Job Window")
+                    st.caption(
+                        "Enter the scheduled time for safety-critical tasks. Both ICAO and USAF risk matrices "
+                        "will evaluate effectiveness during this window."
+                    )
+                    
+                    col_job_date, col_job_time, col_job_dur = st.columns(3)
+                    with col_job_date:
+                        critical_job_date = st.date_input(
+                            "Critical job date",
+                            value=date.today(),
+                            key="frms_critical_job_date",
+                        )
+                    with col_job_time:
+                        critical_job_time = st.time_input(
+                            "Critical job start time (local)",
+                            value=dt_time(8, 0),
+                            key="frms_critical_job_time",
+                        )
+                    with col_job_dur:
+                        critical_job_duration = st.number_input(
+                            "Duration (hours)",
+                            min_value=0.5,
+                            max_value=24.0,
+                            value=4.0,
+                            step=0.5,
+                            key="frms_critical_job_duration",
+                        )
+                    
+                    # Calculate effectiveness at critical job time from SAFTE curve
+                    critical_job_start_dt = datetime.combine(critical_job_date, critical_job_time)
+                    critical_job_end_dt = critical_job_start_dt + timedelta(hours=float(critical_job_duration))
+                    
+                    # Find effectiveness values during critical job window
+                    job_effectiveness_values: list[float] = []
+                    job_in_wocl_count = 0
+                    if dt_list and eff_list:
+                        for i, dt_val in enumerate(dt_list):
+                            if critical_job_start_dt <= dt_val <= critical_job_end_dt:
+                                job_effectiveness_values.append(eff_list[i])
+                                # Check if in WOCL (02:00-06:00)
+                                if 2 <= dt_val.hour < 6:
+                                    job_in_wocl_count += 1
+                    
+                    if job_effectiveness_values:
+                        job_min_eff = min(job_effectiveness_values)
+                        job_mean_eff = sum(job_effectiveness_values) / len(job_effectiveness_values)
+                        job_pct_below_77 = 100.0 * sum(1 for e in job_effectiveness_values if e <= 77) / len(job_effectiveness_values)
+                        job_pct_in_wocl = 100.0 * job_in_wocl_count / len(job_effectiveness_values)
+                    else:
+                        # Fallback to overall metrics if no points in window
+                        job_min_eff = frms_exposure.min_effectiveness or 70.0
+                        job_mean_eff = frms_exposure.mean_effectiveness or 75.0
+                        job_pct_below_77 = frms_exposure.pct_hours_at_or_below_77
+                        job_pct_in_wocl = frms_exposure.pct_hours_in_wocl
+                    
+                    # Display critical job metrics
+                    col_job_a, col_job_b, col_job_c, col_job_d = st.columns(4)
+                    with col_job_a:
+                        st.metric(
+                            "Min Effectiveness",
+                            f"{job_min_eff:.0f}%",
+                            help="Minimum predicted effectiveness during critical job window.",
+                        )
+                    with col_job_b:
+                        st.metric(
+                            "Mean Effectiveness",
+                            f"{job_mean_eff:.0f}%",
+                            help="Average predicted effectiveness during critical job window.",
+                        )
+                    with col_job_c:
+                        st.metric(
+                            "Time ≤77%",
+                            f"{job_pct_below_77:.0f}%",
+                            help="Percent of critical job window with effectiveness ≤77%.",
+                        )
+                    with col_job_d:
+                        st.metric(
+                            "WOCL Exposure",
+                            f"{job_pct_in_wocl:.0f}%",
+                            help="Percent of critical job window in Window of Circadian Low (02:00-06:00).",
+                        )
+
+                    # Common definitions for both matrices
                     severity_order = ["Negligible", "Minor", "Major", "Hazardous", "Catastrophic"]
                     likelihood_order = ["Rare", "Unlikely", "Possible", "Likely", "Almost certain"]
                     risk_value_map = {"Low": 1, "Medium": 2, "High": 3, "Extreme": 4}
+                    
+                    # ICAO severity based on min effectiveness during critical job
+                    def icao_severity_from_effectiveness(eff: float) -> str:
+                        if eff >= 85:
+                            return "Negligible"
+                        elif eff >= 77:
+                            return "Minor"
+                        elif eff >= 70:
+                            return "Major"
+                        elif eff >= 60:
+                            return "Hazardous"
+                        else:
+                            return "Catastrophic"
+                    
+                    # ICAO likelihood based on % time below 77% during critical job
+                    def icao_likelihood_from_exposure(pct_below_77: float) -> str:
+                        if pct_below_77 >= 50:
+                            return "Almost certain"
+                        elif pct_below_77 >= 30:
+                            return "Likely"
+                        elif pct_below_77 >= 15:
+                            return "Possible"
+                        elif pct_below_77 >= 5:
+                            return "Unlikely"
+                        else:
+                            return "Rare"
+                    
+                    icao_sev = icao_severity_from_effectiveness(job_min_eff)
+                    icao_lik = icao_likelihood_from_exposure(job_pct_below_77)
+                    
+                    # ICAO SMS matrix
                     sms_matrix = {
                         "Negligible": ["Low", "Low", "Low", "Medium", "Medium"],
                         "Minor": ["Low", "Low", "Medium", "High", "High"],
@@ -10705,11 +10820,22 @@ that predicts cognitive performance based on:
                             heatmap_data.append([x_idx, y_idx, int(risk_value_map.get(rlab, 1))])
 
                     try:
-                        sel_x = likelihood_order.index(frms_class.likelihood)
-                        sel_y = severity_order.index(frms_class.severity)
-                    except ValueError:
+                        sel_x = likelihood_order.index(icao_lik)
+                        sel_y = severity_order.index(icao_sev)
+                        icao_risk_level = sms_matrix[icao_sev][sel_x]
+                    except (ValueError, KeyError):
                         sel_x, sel_y = 0, 0
+                        icao_risk_level = "Low"
 
+                    # ICAO Risk Matrix
+                    st.markdown("#### 🌍 ICAO FRMS Risk Matrix")
+                    icao_risk_color = {"Low": "#28a745", "Medium": "#ffc107", "High": "#fd7e14", "Extreme": "#dc3545"}.get(icao_risk_level, "#6c757d")
+                    st.markdown(
+                        f"**ICAO Risk Level:** <span style='color:{icao_risk_color};font-weight:700;'>{icao_risk_level}</span> "
+                        f"(Severity: {icao_sev}, Likelihood: {icao_lik})",
+                        unsafe_allow_html=True,
+                    )
+                    
                     risk_matrix_config = {
                         "tooltip": {
                             "position": "top",
@@ -10723,26 +10849,28 @@ that predicts cognitive performance based on:
                                 "restore": {"show": True, "title": "Reset"},
                             },
                         },
-                        "grid": {"left": "18%", "right": "8%", "top": "10%", "bottom": "18%"},
+                        "grid": {"left": "18%", "right": "8%", "top": "8%", "bottom": "28%"},
                         "xAxis": {
                             "type": "category",
                             "data": likelihood_order,
-                            "name": "Likelihood (time ≤77% in-scope)",
+                            "name": "Likelihood (time ≤77% in critical window)",
                             "nameLocation": "middle",
-                            "nameGap": 35,
-                            "axisLabel": {"rotate": 20},
+                            "nameGap": 50,
+                            "axisLabel": {"rotate": 0, "fontSize": 10, "interval": 0},
                         },
                         "yAxis": {
                             "type": "category",
                             "data": severity_order,
-                            "name": "Severity (min effectiveness in-scope)",
+                            "name": "Severity (min effectiveness in critical window)",
                             "axisLabel": {"fontSize": 11},
                         },
                         "visualMap": {
                             "type": "piecewise",
                             "orient": "horizontal",
                             "left": "center",
-                            "bottom": 0,
+                            "bottom": 5,
+                            "itemGap": 25,
+                            "textStyle": {"fontSize": 11},
                             "pieces": [
                                 {"value": 1, "label": "Low", "color": "#28a745"},
                                 {"value": 2, "label": "Medium", "color": "#ffc107"},
@@ -10755,7 +10883,7 @@ that predicts cognitive performance based on:
                                 "name": "FRMS risk matrix",
                                 "type": "heatmap",
                                 "data": heatmap_data,
-                                "label": {"show": True, "formatter": "{c}"},
+                                "label": {"show": False},
                                 "emphasis": {
                                     "itemStyle": {
                                         "shadowBlur": 10,
@@ -10777,10 +10905,178 @@ that predicts cognitive performance based on:
                             },
                         ],
                     }
-                    render_echarts(risk_matrix_config, height_px=360, config=EChartsConfig())
+                    render_echarts(risk_matrix_config, height_px=380, config=EChartsConfig())
                     st.caption(
-                        "SMS-style risk matrix (x-axis: likelihood of high-fatigue exposure; y-axis: severity based on "
-                        "worst-case effectiveness). The outlined cell is the current classification."
+                        f"ICAO SMS-style risk matrix for critical job at {critical_job_time.strftime('%H:%M')}. "
+                        "Based on SAFTE effectiveness during the specified window."
+                    )
+
+                    # USAF FRMS Risk Matrix (effectiveness-based)
+                    st.markdown("#### 🇺🇸 USAF FRMS Risk Matrix")
+                    
+                    # USAF effectiveness-based severity (stricter than ICAO)
+                    # Based on AFMAN 11-202V3 and USAF fatigue science guidance
+                    def usaf_severity_from_effectiveness(eff: float) -> str:
+                        if eff >= 90:
+                            return "Negligible"
+                        elif eff >= 80:
+                            return "Minor"
+                        elif eff >= 70:
+                            return "Major"
+                        elif eff >= 60:
+                            return "Hazardous"
+                        else:
+                            return "Catastrophic"
+                    
+                    # USAF likelihood based on sleep debt and WOCL exposure
+                    sleep_debt_hrs = max(0.0, 8.0 - float(fatigue_sleep_duration))
+                    in_wocl = 2 <= critical_job_time.hour < 6
+                    
+                    def usaf_likelihood_from_factors(sleep_debt: float, wocl: bool, pct_below_77: float) -> str:
+                        risk_score = 0
+                        if sleep_debt >= 4:
+                            risk_score += 3
+                        elif sleep_debt >= 2:
+                            risk_score += 2
+                        elif sleep_debt >= 1:
+                            risk_score += 1
+                        if wocl:
+                            risk_score += 2
+                        if pct_below_77 >= 30:
+                            risk_score += 2
+                        elif pct_below_77 >= 15:
+                            risk_score += 1
+                        
+                        if risk_score >= 5:
+                            return "Almost certain"
+                        elif risk_score >= 4:
+                            return "Likely"
+                        elif risk_score >= 2:
+                            return "Possible"
+                        elif risk_score >= 1:
+                            return "Unlikely"
+                        else:
+                            return "Rare"
+                    
+                    usaf_sev = usaf_severity_from_effectiveness(job_min_eff)
+                    usaf_lik = usaf_likelihood_from_factors(
+                        sleep_debt_hrs, in_wocl, job_pct_below_77
+                    )
+                    
+                    # USAF SMS matrix (same structure, different interpretation)
+                    usaf_sms_matrix = {
+                        "Negligible": ["Low", "Low", "Low", "Medium", "Medium"],
+                        "Minor": ["Low", "Low", "Medium", "Medium", "High"],
+                        "Major": ["Low", "Medium", "Medium", "High", "Extreme"],
+                        "Hazardous": ["Medium", "Medium", "High", "Extreme", "Extreme"],
+                        "Catastrophic": ["Medium", "High", "Extreme", "Extreme", "Extreme"],
+                    }
+                    
+                    try:
+                        usaf_sel_x = likelihood_order.index(usaf_lik)
+                        usaf_sel_y = severity_order.index(usaf_sev)
+                        usaf_risk_level = usaf_sms_matrix[usaf_sev][usaf_sel_x]
+                    except (ValueError, KeyError):
+                        usaf_sel_x, usaf_sel_y = 0, 0
+                        usaf_risk_level = "Low"
+                    
+                    # Build USAF heatmap data
+                    usaf_heatmap_data: list[list[int]] = []
+                    for y_idx, sev in enumerate(severity_order):
+                        row = usaf_sms_matrix.get(sev, ["Low"] * 5)
+                        for x_idx, rlab in enumerate(row):
+                            usaf_heatmap_data.append([x_idx, y_idx, int(risk_value_map.get(rlab, 1))])
+                    
+                    # Display USAF-specific metrics
+                    usaf_risk_color = {"Low": "#28a745", "Medium": "#ffc107", "High": "#fd7e14", "Extreme": "#dc3545"}.get(usaf_risk_level, "#6c757d")
+                    col_usaf_a, col_usaf_b = st.columns(2)
+                    with col_usaf_a:
+                        st.markdown(
+                            f"**USAF Risk Level:** <span style='color:{usaf_risk_color};font-weight:700;'>{usaf_risk_level}</span> "
+                            f"(Severity: {usaf_sev}, Likelihood: {usaf_lik})",
+                            unsafe_allow_html=True,
+                        )
+                    with col_usaf_b:
+                        st.metric(
+                            "Sleep Debt",
+                            f"{sleep_debt_hrs:.1f}h",
+                            help="Estimated sleep debt (8h baseline - actual sleep).",
+                        )
+                    
+                    usaf_risk_matrix_config = {
+                        "tooltip": {
+                            "position": "top",
+                            "formatter": "USAF Risk: {c} (1=Low, 2=Medium, 3=High, 4=Extreme)",
+                        },
+                        "toolbox": {
+                            "show": True,
+                            "right": 10,
+                            "feature": {
+                                "saveAsImage": {"show": True, "title": "Save (PNG)", "pixelRatio": 4},
+                                "restore": {"show": True, "title": "Reset"},
+                            },
+                        },
+                        "grid": {"left": "18%", "right": "8%", "top": "8%", "bottom": "28%"},
+                        "xAxis": {
+                            "type": "category",
+                            "data": likelihood_order,
+                            "name": "Likelihood (sleep debt + WOCL + exposure)",
+                            "nameLocation": "middle",
+                            "nameGap": 50,
+                            "axisLabel": {"rotate": 0, "fontSize": 10, "interval": 0},
+                        },
+                        "yAxis": {
+                            "type": "category",
+                            "data": severity_order,
+                            "name": "Severity (effectiveness at critical job)",
+                            "axisLabel": {"fontSize": 11},
+                        },
+                        "visualMap": {
+                            "type": "piecewise",
+                            "orient": "horizontal",
+                            "left": "center",
+                            "bottom": 5,
+                            "itemGap": 25,
+                            "textStyle": {"fontSize": 11},
+                            "pieces": [
+                                {"value": 1, "label": "Low", "color": "#28a745"},
+                                {"value": 2, "label": "Medium", "color": "#ffc107"},
+                                {"value": 3, "label": "High", "color": "#fd7e14"},
+                                {"value": 4, "label": "Extreme", "color": "#dc3545"},
+                            ],
+                        },
+                        "series": [
+                            {
+                                "name": "USAF FRMS risk matrix",
+                                "type": "heatmap",
+                                "data": usaf_heatmap_data,
+                                "label": {"show": False},
+                                "emphasis": {
+                                    "itemStyle": {
+                                        "shadowBlur": 10,
+                                        "shadowColor": "rgba(0,0,0,0.35)",
+                                    }
+                                },
+                            },
+                            {
+                                "name": "Current classification",
+                                "type": "scatter",
+                                "data": [[usaf_sel_x, usaf_sel_y, 5]],
+                                "symbolSize": 26,
+                                "itemStyle": {
+                                    "color": "rgba(0,0,0,0)",
+                                    "borderColor": "#111",
+                                    "borderWidth": 3,
+                                },
+                                "tooltip": {"show": False},
+                            },
+                        ],
+                    }
+                    render_echarts(usaf_risk_matrix_config, height_px=380, config=EChartsConfig())
+                    st.caption(
+                        f"USAF FRMS risk matrix for critical job at {critical_job_time.strftime('%H:%M')}. "
+                        f"Severity={usaf_sev}, Likelihood={usaf_lik}. "
+                        "Based on SAFTE effectiveness, sleep debt, and WOCL exposure."
                     )
 
                     # USAF crew rest checker (AFMAN 11-202V3)
