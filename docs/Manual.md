@@ -864,14 +864,24 @@ Based on the Sleep, Activity, Fatigue, and Task Effectiveness model.
 - Lagged Pearson correlations are computed between windowed HRV metrics and Kp, with date-based alignment for daily predictors.
 - Requirements: run HRV analysis to produce windowed metrics, then click “Compute HRV-Kp Correlations”; cached Kp is reused when available.
 - Inference stack: Pearson r with 95% CI (Fisher z), Spearman ρ, Benjamini–Hochberg FDR for multiple lags/predictors. Optional weather covariates allow partial correlations.
-- ML stack: ElasticNet and RandomForest models on lagged space-weather features (Kp, Dst, F10.7, solar wind) with time-aware (walk-forward) splits; reports R²/MAE and permutation importances (top lag drivers).
+- ML stack: Multiple models on lagged space-weather features (Kp, Dst, F10.7, solar wind) with time-aware (walk-forward) splits:
+  - **ElasticNetCV** - Linear sparse regression with L1/L2 regularization
+  - **RandomForest** - Non-linear ensemble (200 trees, max_depth=8)
+  - **GradientBoosting** - Sequential boosting for non-linear patterns
+  - **LassoCV** - L1-regularized linear regression for feature selection
+  - **XGBoost** (optional) - Advanced gradient boosting (often outperforms RandomForest by 5-15%)
+  - **LightGBM** (optional) - Fast gradient boosting with efficient memory usage
+  - Reports R²/MAE for all models; permutation importances (RandomForest) and SHAP values for interpretability.
 - Advanced inference: optional block bootstrap CI and permutation p-values for top findings.
-- Exports: correlation tables (full + top) and ML summaries/feature importances are downloadable as CSV from the Space Weather tab; include them in PDF/Markdown exports for reporting.
+- Model interpretability: 
+  - **Permutation importance** (RandomForest) - Feature importance via permutation testing
+  - **SHAP values** (if installed) - SHapley Additive exPlanations for individual prediction explanations and feature interactions
+- Exports: correlation tables (full + top) and ML summaries/feature importances (permutation + SHAP) are downloadable as CSV from the Space Weather tab; include them in PDF/Markdown exports for reporting.
 - Additional models & robustness:
   - HAC-robust SE/p-values via statsmodels OLS (cov_type='HAC', maxlags=4) for autocorrelated series.
   - Spearman ρ alongside Pearson r; BH-FDR for multiple lags/predictors.
-  - Extra ML baselines: Gradient Boosting, Lasso; TimeSeriesSplit CV (3 splits) for ElasticNet/RF; permutation importances.
-  - PDF/Markdown exports now embed space-weather correlation tables and ML metrics/importances when available.
+  - TimeSeriesSplit CV (3 splits) for ElasticNet/RF; permutation importances.
+  - PDF/Markdown exports now embed space-weather correlation tables and ML metrics/importances (permutation + SHAP) when available.
 - Scientific context:
   - Ramishvili et al. 2023, Atmosphere 14(12):1707 — adaptation to geomagnetic storms (https://doi.org/10.3390/atmos14121707)
   - Mattoni et al. 2019, bioRxiv — highlights autocorrelation and small effect sizes (https://doi.org/10.1101/684035)
@@ -4013,7 +4023,7 @@ This section outlines completed features and remaining planned enhancements for 
 ✅ **Baseline/Δ analytics (T0–T21)** - User Profile → HRV Measurement History includes a baseline/Δ table grouped by longitudinal timepoint labels (T0…T21)  
 ✅ **Cohort longitudinal comparisons (T0–T21)** - Export tab supports control vs intervention comparisons using within-subject Δ vs baseline per timepoint, with CSV + Markdown exports  
 ✅ **Persisted study groups + mixed-effects inference** - Export tab supports persisted Study IDs/groups (SQLite) and optional random-intercept mixed-effects modeling for Group × Time on Δ vs baseline  
-✅ **Space-weather inference & ML (HRV ↔ Kp)** - Spearman + Pearson with CI95, BH-FDR, partials with weather covariates; optional ElasticNet + RandomForest on lagged Kp with permutation importances; citation-backed context in UI/docs.
+✅ **Space-weather inference & ML (HRV ↔ Kp)** - Spearman + Pearson with CI95, BH-FDR, partials with weather covariates; optional ElasticNet + RandomForest + XGBoost + LightGBM on lagged Kp with permutation importances and SHAP interpretability; citation-backed context in UI/docs.
 
 ### Remaining Enhancements
 
