@@ -10771,75 +10771,98 @@ that predicts cognitive performance based on:
                             help="Percent of critical job window in Window of Circadian Low (02:00-06:00).",
                         )
 
-                    # Common definitions for both matrices
-                    severity_order = ["Negligible", "Minor", "Major", "Hazardous", "Catastrophic"]
-                    likelihood_order = ["Rare", "Unlikely", "Possible", "Likely", "Almost certain"]
-                    risk_value_map = {"Low": 1, "Medium": 2, "High": 3, "Extreme": 4}
+                    # ══════════════════════════════════════════════════════════════════════════════
+                    # ICAO Doc 9859 Safety Management Manual - Risk Matrix Definitions
+                    # Reference: https://store.icao.int/en/safety-management-manual-doc-9859
+                    # ══════════════════════════════════════════════════════════════════════════════
+                    
+                    # ICAO probability levels (Doc 9859, Table 2-12)
+                    icao_likelihood_order = [
+                        "Extremely Improbable",  # Almost inconceivable
+                        "Improbable",            # Very unlikely to occur
+                        "Remote",                # Unlikely but possible
+                        "Occasional",            # Likely to occur sometimes
+                        "Frequent",              # Likely to occur many times
+                    ]
+                    
+                    # ICAO severity levels (Doc 9859, Table 2-11)
+                    icao_severity_order = ["Negligible", "Minor", "Major", "Hazardous", "Catastrophic"]
+                    
+                    # Risk tolerability: Acceptable, Tolerable (review required), Intolerable
+                    icao_risk_value_map = {"Acceptable": 1, "Tolerable": 2, "Undesirable": 3, "Intolerable": 4}
                     
                     # ICAO severity based on min effectiveness during critical job
                     def icao_severity_from_effectiveness(eff: float) -> str:
+                        """Map SAFTE effectiveness to ICAO severity per Doc 9859."""
                         if eff >= 85:
-                            return "Negligible"
+                            return "Negligible"  # E: Few consequences
                         elif eff >= 77:
-                            return "Minor"
+                            return "Minor"       # D: Operating limitations, minor incident
                         elif eff >= 70:
-                            return "Major"
+                            return "Major"       # C: Significant reduction in safety margins
                         elif eff >= 60:
-                            return "Hazardous"
+                            return "Hazardous"   # B: Large reduction in safety margins
                         else:
-                            return "Catastrophic"
+                            return "Catastrophic"  # A: Equipment destroyed, multiple deaths
                     
                     # ICAO likelihood based on % time below 77% during critical job
                     def icao_likelihood_from_exposure(pct_below_77: float) -> str:
+                        """Map degraded effectiveness exposure to ICAO probability per Doc 9859."""
                         if pct_below_77 >= 50:
-                            return "Almost certain"
+                            return "Frequent"              # 5: Likely to occur many times
                         elif pct_below_77 >= 30:
-                            return "Likely"
+                            return "Occasional"            # 4: Likely to occur sometimes
                         elif pct_below_77 >= 15:
-                            return "Possible"
+                            return "Remote"                # 3: Unlikely but possible
                         elif pct_below_77 >= 5:
-                            return "Unlikely"
+                            return "Improbable"            # 2: Very unlikely to occur
                         else:
-                            return "Rare"
+                            return "Extremely Improbable"  # 1: Almost inconceivable
                     
                     icao_sev = icao_severity_from_effectiveness(job_min_eff)
                     icao_lik = icao_likelihood_from_exposure(job_pct_below_77)
                     
-                    # ICAO SMS matrix
-                    sms_matrix = {
-                        "Negligible": ["Low", "Low", "Low", "Medium", "Medium"],
-                        "Minor": ["Low", "Low", "Medium", "High", "High"],
-                        "Major": ["Low", "Medium", "High", "High", "Extreme"],
-                        "Hazardous": ["Medium", "High", "High", "Extreme", "Extreme"],
-                        "Catastrophic": ["High", "High", "Extreme", "Extreme", "Extreme"],
+                    # ICAO SMS matrix (Doc 9859, Table 2-13 adapted)
+                    # Rows: Severity, Columns: Probability (Extremely Improbable → Frequent)
+                    icao_sms_matrix = {
+                        "Negligible":   ["Acceptable", "Acceptable", "Acceptable", "Tolerable", "Tolerable"],
+                        "Minor":        ["Acceptable", "Acceptable", "Tolerable", "Undesirable", "Undesirable"],
+                        "Major":        ["Acceptable", "Tolerable", "Undesirable", "Undesirable", "Intolerable"],
+                        "Hazardous":    ["Tolerable", "Undesirable", "Undesirable", "Intolerable", "Intolerable"],
+                        "Catastrophic": ["Undesirable", "Undesirable", "Intolerable", "Intolerable", "Intolerable"],
                     }
-                    heatmap_data: list[list[int]] = []
-                    for y_idx, sev in enumerate(severity_order):
-                        row = sms_matrix.get(sev, ["Low"] * 5)
+                    icao_heatmap_data: list[list[int]] = []
+                    for y_idx, sev in enumerate(icao_severity_order):
+                        row = icao_sms_matrix.get(sev, ["Acceptable"] * 5)
                         for x_idx, rlab in enumerate(row):
-                            heatmap_data.append([x_idx, y_idx, int(risk_value_map.get(rlab, 1))])
+                            icao_heatmap_data.append([x_idx, y_idx, int(icao_risk_value_map.get(rlab, 1))])
 
                     try:
-                        sel_x = likelihood_order.index(icao_lik)
-                        sel_y = severity_order.index(icao_sev)
-                        icao_risk_level = sms_matrix[icao_sev][sel_x]
+                        icao_sel_x = icao_likelihood_order.index(icao_lik)
+                        icao_sel_y = icao_severity_order.index(icao_sev)
+                        icao_risk_level = icao_sms_matrix[icao_sev][icao_sel_x]
                     except (ValueError, KeyError):
-                        sel_x, sel_y = 0, 0
-                        icao_risk_level = "Low"
+                        icao_sel_x, icao_sel_y = 0, 0
+                        icao_risk_level = "Acceptable"
 
                     # ICAO Risk Matrix
-                    st.markdown("#### 🌍 ICAO FRMS Risk Matrix")
-                    icao_risk_color = {"Low": "#28a745", "Medium": "#ffc107", "High": "#fd7e14", "Extreme": "#dc3545"}.get(icao_risk_level, "#6c757d")
+                    st.markdown("#### 🌍 ICAO FRMS Risk Matrix (Doc 9859)")
+                    icao_risk_color = {
+                        "Acceptable": "#28a745",
+                        "Tolerable": "#ffc107",
+                        "Undesirable": "#fd7e14",
+                        "Intolerable": "#dc3545",
+                    }.get(icao_risk_level, "#6c757d")
                     st.markdown(
                         f"**ICAO Risk Level:** <span style='color:{icao_risk_color};font-weight:700;'>{icao_risk_level}</span> "
-                        f"(Severity: {icao_sev}, Likelihood: {icao_lik})",
+                        f"(Severity: {icao_sev}, Probability: {icao_lik})",
                         unsafe_allow_html=True,
                     )
                     
-                    risk_matrix_config = {
+                    icao_risk_matrix_config = {
                         "tooltip": {
                             "position": "top",
-                            "formatter": "Risk level: {c} (1=Low, 2=Medium, 3=High, 4=Extreme)",
+                            "formatter": "Risk: {c} (1=Acceptable, 2=Tolerable, 3=Undesirable, 4=Intolerable)",
                         },
                         "toolbox": {
                             "show": True,
@@ -10849,40 +10872,40 @@ that predicts cognitive performance based on:
                                 "restore": {"show": True, "title": "Reset"},
                             },
                         },
-                        "grid": {"left": "18%", "right": "8%", "top": "8%", "bottom": "28%"},
+                        "grid": {"left": "22%", "right": "8%", "top": "8%", "bottom": "32%"},
                         "xAxis": {
                             "type": "category",
-                            "data": likelihood_order,
-                            "name": "Likelihood (time ≤77% in critical window)",
+                            "data": icao_likelihood_order,
+                            "name": "Probability (ICAO Doc 9859)",
                             "nameLocation": "middle",
-                            "nameGap": 50,
-                            "axisLabel": {"rotate": 0, "fontSize": 10, "interval": 0},
+                            "nameGap": 55,
+                            "axisLabel": {"rotate": 20, "fontSize": 9, "interval": 0},
                         },
                         "yAxis": {
                             "type": "category",
-                            "data": severity_order,
-                            "name": "Severity (min effectiveness in critical window)",
-                            "axisLabel": {"fontSize": 11},
+                            "data": icao_severity_order,
+                            "name": "Severity",
+                            "axisLabel": {"fontSize": 10},
                         },
                         "visualMap": {
                             "type": "piecewise",
                             "orient": "horizontal",
                             "left": "center",
                             "bottom": 5,
-                            "itemGap": 25,
-                            "textStyle": {"fontSize": 11},
+                            "itemGap": 12,
+                            "textStyle": {"fontSize": 10},
                             "pieces": [
-                                {"value": 1, "label": "Low", "color": "#28a745"},
-                                {"value": 2, "label": "Medium", "color": "#ffc107"},
-                                {"value": 3, "label": "High", "color": "#fd7e14"},
-                                {"value": 4, "label": "Extreme", "color": "#dc3545"},
+                                {"value": 1, "label": "Acceptable", "color": "#28a745"},
+                                {"value": 2, "label": "Tolerable", "color": "#ffc107"},
+                                {"value": 3, "label": "Undesirable", "color": "#fd7e14"},
+                                {"value": 4, "label": "Intolerable", "color": "#dc3545"},
                             ],
                         },
                         "series": [
                             {
-                                "name": "FRMS risk matrix",
+                                "name": "ICAO risk matrix",
                                 "type": "heatmap",
-                                "data": heatmap_data,
+                                "data": icao_heatmap_data,
                                 "label": {"show": False},
                                 "emphasis": {
                                     "itemStyle": {
@@ -10894,7 +10917,7 @@ that predicts cognitive performance based on:
                             {
                                 "name": "Current classification",
                                 "type": "scatter",
-                                "data": [[sel_x, sel_y, 5]],
+                                "data": [[icao_sel_x, icao_sel_y, 5]],
                                 "symbolSize": 26,
                                 "itemStyle": {
                                     "color": "rgba(0,0,0,0)",
@@ -10905,76 +10928,114 @@ that predicts cognitive performance based on:
                             },
                         ],
                     }
-                    render_echarts(risk_matrix_config, height_px=380, config=EChartsConfig())
-                    st.caption(
-                        f"ICAO SMS-style risk matrix for critical job at {critical_job_time.strftime('%H:%M')}. "
-                        "Based on SAFTE effectiveness during the specified window."
+                    render_echarts(icao_risk_matrix_config, height_px=400, config=EChartsConfig())
+                    
+                    # ICAO probability definitions with reference
+                    st.markdown(
+                        f"""
+                        <div style="font-size:0.85em; color:#555; margin-top:8px;">
+                        <strong>ICAO Doc 9859 Probability Definitions:</strong><br>
+                        • <b>Extremely Improbable</b> (<5%): Almost inconceivable the event will occur<br>
+                        • <b>Improbable</b> (5–15%): Very unlikely to occur; not known to have occurred<br>
+                        • <b>Remote</b> (15–30%): Unlikely but possible; has occurred rarely<br>
+                        • <b>Occasional</b> (30–50%): Likely to occur sometimes; has occurred infrequently<br>
+                        • <b>Frequent</b> (>50%): Likely to occur many times; has occurred frequently<br>
+                        <a href="https://store.icao.int/en/safety-management-manual-doc-9859" target="_blank" style="color:#0066cc;">
+                        📄 ICAO Doc 9859 Safety Management Manual</a>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
                     )
 
-                    # USAF FRMS Risk Matrix (effectiveness-based)
-                    st.markdown("#### 🇺🇸 USAF FRMS Risk Matrix")
+                    # ══════════════════════════════════════════════════════════════════════════════
+                    # USAF/DoD MIL-STD-882E Risk Matrix Definitions
+                    # Reference: https://safety.army.mil/Portals/0/Documents/ON-DUTY/SYSTEMSAFETY/Standard/MIL-STD-882E-change-1.pdf
+                    # USAF FRMS: https://www.usafe.af.mil/News/Article-Display/Article/809251/fatigue-risk-management-system-what-its-all-about
+                    # ══════════════════════════════════════════════════════════════════════════════
                     
-                    # USAF effectiveness-based severity (stricter than ICAO)
-                    # Based on AFMAN 11-202V3 and USAF fatigue science guidance
+                    st.markdown("#### 🇺🇸 USAF/DoD FRMS Risk Matrix (MIL-STD-882E)")
+                    
+                    # MIL-STD-882E probability levels (Table II)
+                    usaf_likelihood_order = [
+                        "Improbable",   # E: So unlikely, can be assumed not to occur
+                        "Remote",       # D: Unlikely, but possible to occur
+                        "Occasional",   # C: Likely to occur sometime in life of item
+                        "Probable",     # B: Will occur several times
+                        "Frequent",     # A: Likely to occur often
+                    ]
+                    
+                    # MIL-STD-882E severity categories (Table I)
+                    usaf_severity_order = ["Negligible", "Marginal", "Critical", "Catastrophic"]
+                    
+                    # MIL-STD-882E risk levels (Table III)
+                    usaf_risk_value_map = {"Low": 1, "Medium": 2, "Serious": 3, "High": 4}
+                    
+                    # USAF effectiveness-based severity (stricter thresholds per SAFTE guidance)
+                    # USAF targets 70% minimum effectiveness (AvORM guidance)
                     def usaf_severity_from_effectiveness(eff: float) -> str:
+                        """Map SAFTE effectiveness to MIL-STD-882E severity."""
                         if eff >= 90:
-                            return "Negligible"
-                        elif eff >= 80:
-                            return "Minor"
+                            return "Negligible"   # IV: Less than minor injury/damage
+                        elif eff >= 77:
+                            return "Marginal"     # III: Minor injury, minor damage
                         elif eff >= 70:
-                            return "Major"
-                        elif eff >= 60:
-                            return "Hazardous"
+                            return "Critical"     # II: Severe injury, major damage
                         else:
-                            return "Catastrophic"
+                            return "Catastrophic" # I: Death, system loss
                     
-                    # USAF likelihood based on sleep debt and WOCL exposure
+                    # USAF likelihood based on sleep debt, WOCL, and effectiveness exposure
                     sleep_debt_hrs = max(0.0, 8.0 - float(fatigue_sleep_duration))
                     in_wocl = 2 <= critical_job_time.hour < 6
                     
                     def usaf_likelihood_from_factors(sleep_debt: float, wocl: bool, pct_below_77: float) -> str:
+                        """Map fatigue factors to MIL-STD-882E probability per Table II."""
                         risk_score = 0
+                        # Sleep debt contribution
                         if sleep_debt >= 4:
-                            risk_score += 3
+                            risk_score += 3  # Severe cumulative fatigue
                         elif sleep_debt >= 2:
-                            risk_score += 2
+                            risk_score += 2  # Moderate cumulative fatigue
                         elif sleep_debt >= 1:
-                            risk_score += 1
+                            risk_score += 1  # Mild sleep restriction
+                        # WOCL contribution (circadian low)
                         if wocl:
-                            risk_score += 2
+                            risk_score += 2  # Operating during biological low
+                        # Effectiveness exposure contribution
                         if pct_below_77 >= 30:
-                            risk_score += 2
+                            risk_score += 2  # Significant degraded time
                         elif pct_below_77 >= 15:
-                            risk_score += 1
+                            risk_score += 1  # Some degraded time
                         
+                        # Map to MIL-STD-882E probability levels
                         if risk_score >= 5:
-                            return "Almost certain"
+                            return "Frequent"    # A: Likely to occur often
                         elif risk_score >= 4:
-                            return "Likely"
+                            return "Probable"    # B: Will occur several times
                         elif risk_score >= 2:
-                            return "Possible"
+                            return "Occasional"  # C: Likely to occur sometime
                         elif risk_score >= 1:
-                            return "Unlikely"
+                            return "Remote"      # D: Unlikely, but possible
                         else:
-                            return "Rare"
+                            return "Improbable"  # E: So unlikely, assumed not to occur
                     
                     usaf_sev = usaf_severity_from_effectiveness(job_min_eff)
                     usaf_lik = usaf_likelihood_from_factors(
                         sleep_debt_hrs, in_wocl, job_pct_below_77
                     )
                     
-                    # USAF SMS matrix (same structure, different interpretation)
+                    # MIL-STD-882E Risk Assessment Matrix (Table III)
+                    # Rows: Severity (Negligible → Catastrophic)
+                    # Columns: Probability (Improbable → Frequent)
                     usaf_sms_matrix = {
-                        "Negligible": ["Low", "Low", "Low", "Medium", "Medium"],
-                        "Minor": ["Low", "Low", "Medium", "Medium", "High"],
-                        "Major": ["Low", "Medium", "Medium", "High", "Extreme"],
-                        "Hazardous": ["Medium", "Medium", "High", "Extreme", "Extreme"],
-                        "Catastrophic": ["Medium", "High", "Extreme", "Extreme", "Extreme"],
+                        "Negligible":   ["Low", "Low", "Low", "Low", "Medium"],
+                        "Marginal":     ["Low", "Low", "Medium", "Medium", "Serious"],
+                        "Critical":     ["Low", "Medium", "Medium", "Serious", "High"],
+                        "Catastrophic": ["Medium", "Medium", "Serious", "High", "High"],
                     }
                     
                     try:
-                        usaf_sel_x = likelihood_order.index(usaf_lik)
-                        usaf_sel_y = severity_order.index(usaf_sev)
+                        usaf_sel_x = usaf_likelihood_order.index(usaf_lik)
+                        usaf_sel_y = usaf_severity_order.index(usaf_sev)
                         usaf_risk_level = usaf_sms_matrix[usaf_sev][usaf_sel_x]
                     except (ValueError, KeyError):
                         usaf_sel_x, usaf_sel_y = 0, 0
@@ -10982,18 +11043,23 @@ that predicts cognitive performance based on:
                     
                     # Build USAF heatmap data
                     usaf_heatmap_data: list[list[int]] = []
-                    for y_idx, sev in enumerate(severity_order):
+                    for y_idx, sev in enumerate(usaf_severity_order):
                         row = usaf_sms_matrix.get(sev, ["Low"] * 5)
                         for x_idx, rlab in enumerate(row):
-                            usaf_heatmap_data.append([x_idx, y_idx, int(risk_value_map.get(rlab, 1))])
+                            usaf_heatmap_data.append([x_idx, y_idx, int(usaf_risk_value_map.get(rlab, 1))])
                     
                     # Display USAF-specific metrics
-                    usaf_risk_color = {"Low": "#28a745", "Medium": "#ffc107", "High": "#fd7e14", "Extreme": "#dc3545"}.get(usaf_risk_level, "#6c757d")
+                    usaf_risk_color = {
+                        "Low": "#28a745",
+                        "Medium": "#ffc107",
+                        "Serious": "#fd7e14",
+                        "High": "#dc3545",
+                    }.get(usaf_risk_level, "#6c757d")
                     col_usaf_a, col_usaf_b = st.columns(2)
                     with col_usaf_a:
                         st.markdown(
                             f"**USAF Risk Level:** <span style='color:{usaf_risk_color};font-weight:700;'>{usaf_risk_level}</span> "
-                            f"(Severity: {usaf_sev}, Likelihood: {usaf_lik})",
+                            f"(Severity: {usaf_sev}, Probability: {usaf_lik})",
                             unsafe_allow_html=True,
                         )
                     with col_usaf_b:
@@ -11006,7 +11072,7 @@ that predicts cognitive performance based on:
                     usaf_risk_matrix_config = {
                         "tooltip": {
                             "position": "top",
-                            "formatter": "USAF Risk: {c} (1=Low, 2=Medium, 3=High, 4=Extreme)",
+                            "formatter": "Risk: {c} (1=Low, 2=Medium, 3=Serious, 4=High)",
                         },
                         "toolbox": {
                             "show": True,
@@ -11016,33 +11082,33 @@ that predicts cognitive performance based on:
                                 "restore": {"show": True, "title": "Reset"},
                             },
                         },
-                        "grid": {"left": "18%", "right": "8%", "top": "8%", "bottom": "28%"},
+                        "grid": {"left": "18%", "right": "8%", "top": "8%", "bottom": "32%"},
                         "xAxis": {
                             "type": "category",
-                            "data": likelihood_order,
-                            "name": "Likelihood (sleep debt + WOCL + exposure)",
+                            "data": usaf_likelihood_order,
+                            "name": "Probability (MIL-STD-882E)",
                             "nameLocation": "middle",
                             "nameGap": 50,
                             "axisLabel": {"rotate": 0, "fontSize": 10, "interval": 0},
                         },
                         "yAxis": {
                             "type": "category",
-                            "data": severity_order,
-                            "name": "Severity (effectiveness at critical job)",
-                            "axisLabel": {"fontSize": 11},
+                            "data": usaf_severity_order,
+                            "name": "Severity",
+                            "axisLabel": {"fontSize": 10},
                         },
                         "visualMap": {
                             "type": "piecewise",
                             "orient": "horizontal",
                             "left": "center",
                             "bottom": 5,
-                            "itemGap": 25,
-                            "textStyle": {"fontSize": 11},
+                            "itemGap": 18,
+                            "textStyle": {"fontSize": 10},
                             "pieces": [
                                 {"value": 1, "label": "Low", "color": "#28a745"},
                                 {"value": 2, "label": "Medium", "color": "#ffc107"},
-                                {"value": 3, "label": "High", "color": "#fd7e14"},
-                                {"value": 4, "label": "Extreme", "color": "#dc3545"},
+                                {"value": 3, "label": "Serious", "color": "#fd7e14"},
+                                {"value": 4, "label": "High", "color": "#dc3545"},
                             ],
                         },
                         "series": [
@@ -11072,11 +11138,27 @@ that predicts cognitive performance based on:
                             },
                         ],
                     }
-                    render_echarts(usaf_risk_matrix_config, height_px=380, config=EChartsConfig())
-                    st.caption(
-                        f"USAF FRMS risk matrix for critical job at {critical_job_time.strftime('%H:%M')}. "
-                        f"Severity={usaf_sev}, Likelihood={usaf_lik}. "
-                        "Based on SAFTE effectiveness, sleep debt, and WOCL exposure."
+                    render_echarts(usaf_risk_matrix_config, height_px=400, config=EChartsConfig())
+                    
+                    # MIL-STD-882E probability definitions with references
+                    st.markdown(
+                        f"""
+                        <div style="font-size:0.85em; color:#555; margin-top:8px;">
+                        <strong>MIL-STD-882E Probability Definitions (Table II):</strong><br>
+                        • <b>Improbable</b> (E): So unlikely, can be assumed occurrence may not be experienced<br>
+                        • <b>Remote</b> (D): Unlikely, but possible to occur in the life of an item<br>
+                        • <b>Occasional</b> (C): Likely to occur sometime in the life of an item<br>
+                        • <b>Probable</b> (B): Will occur several times in the life of an item<br>
+                        • <b>Frequent</b> (A): Likely to occur often in the life of an item<br>
+                        <a href="https://safety.army.mil/Portals/0/Documents/ON-DUTY/SYSTEMSAFETY/Standard/MIL-STD-882E-change-1.pdf" target="_blank" style="color:#0066cc;">
+                        📄 MIL-STD-882E Standard Practice for System Safety</a> |
+                        <a href="https://www.usafe.af.mil/News/Article-Display/Article/809251/fatigue-risk-management-system-what-its-all-about" target="_blank" style="color:#0066cc;">
+                        📄 USAF FRMS Overview</a> |
+                        <a href="https://corescholar.libraries.wright.edu/cgi/viewcontent.cgi?article=1000&context=isap_2017" target="_blank" style="color:#0066cc;">
+                        📄 SAFTE in USAF AvORM</a>
+                        </div>
+                        """,
+                        unsafe_allow_html=True,
                     )
 
                     # USAF crew rest checker (AFMAN 11-202V3)
