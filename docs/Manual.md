@@ -609,6 +609,11 @@ The **Exploration Medical Analytics** section now displays EVA clearance states 
 
 Each indicator glows when active (count > 0) and dims when inactive. A summary panel shows the dominant status and total assessments. This visualization provides an at-a-glance operational readiness indicator for mission planners.
 
+### Sleep & Chronotype Inputs + Garmin Autofill (v1.8.36)
+
+- **Energy & Nutrition → Sleep & Chronotype**: New sliders/inputs for sleep hours, sleep quality, hours awake, chronotype offset, RMSSD, resting HR, and VO₂. A **Sync to Profile Tools Engine** button pushes these values into SAFTE fatigue and Operational Performance tools.
+- **Profile Tools Engine → Garmin Autofill**: One-click Vivosmart/Garmin pull fills sleep hours, sleep quality, hours awake, RMSSD, and resting HR for SAFTE/Operational calculations. Users without a device can still enter values manually.
+
 ### Longitudinal timepoints (T0–T21)
 
 Mission Control now supports **study timepoints** so you can run baseline + follow-up workflows (e.g., **T0_baseline**, **T1** … **T21**) without losing determinism.
