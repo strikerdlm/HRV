@@ -41,6 +41,89 @@ conda deactivate
 | ModuleNotFoundError | `conda activate hrv-py312`<br>Verify with `pip list` |
 | Streamlit won't start | Check `conda env list` shows `*` next to hrv-py312 |
 | VS Code wrong interpreter | Ctrl+Shift+P → "Python: Select Interpreter"<br>Choose "Python 3.12.x ('hrv-py312': conda)" |
+| `TypeError: ButtonMixin.button() got an unexpected keyword argument 'width'` | See [Streamlit 1.36.0 Compatibility](#streamlit-1360-compatibility) below |
+| `TypeError: 'str' object cannot be interpreted as an integer` (dataframe) | See [Streamlit 1.36.0 Compatibility](#streamlit-1360-compatibility) below |
+
+---
+
+## Streamlit 1.36.0 Compatibility
+
+**CRITICAL**: This project uses Streamlit 1.36.0 (the last stable release before fragment changes). The `width` parameter syntax differs from newer Streamlit versions.
+
+### Widget Width Parameters
+
+In Streamlit 1.36.0, **DO NOT use `width="stretch"` or `width="content"`**. Instead, use `use_container_width=True` for full-width widgets.
+
+#### ✅ Correct Usage
+
+```python
+# Buttons
+st.button("Click me", use_container_width=True)
+st.sidebar.button("Sidebar button", use_container_width=True)
+
+# Form submit buttons (NO width parameter at all)
+st.form_submit_button("Save", type="primary")
+# ❌ WRONG: st.form_submit_button("Save", width="stretch")  # TypeError!
+
+# DataFrames
+st.dataframe(df, use_container_width=True, hide_index=True)
+
+# Download buttons
+st.download_button("Download", data=bytes, use_container_width=True)
+```
+
+#### ❌ Common Mistakes (Will Cause TypeError)
+
+```python
+# ❌ WRONG - st.button() doesn't support width parameter
+st.button("Click", width="stretch")  # TypeError!
+
+# ❌ WRONG - st.form_submit_button() doesn't support width at all
+st.form_submit_button("Save", width="stretch")  # TypeError!
+
+# ❌ WRONG - st.dataframe() expects use_container_width=True, not width="stretch"
+st.dataframe(df, width="stretch")  # TypeError: 'str' object cannot be interpreted as an integer
+```
+
+### Migration Checklist
+
+When updating code for Streamlit 1.36.0 compatibility:
+
+1. **Search for `width="stretch"`**:
+   ```powershell
+   Select-String -Path "app\*.py" -Pattern 'width="stretch"'
+   ```
+
+2. **Replace based on widget type**:
+   - `st.button(..., width="stretch")` → `st.button(..., use_container_width=True)`
+   - `st.dataframe(..., width="stretch")` → `st.dataframe(..., use_container_width=True)`
+   - `st.download_button(..., width="stretch")` → `st.download_button(..., use_container_width=True)`
+   - `st.form_submit_button(..., width="stretch")` → `st.form_submit_button(...)` (remove width entirely)
+
+3. **Verify no remaining issues**:
+   ```powershell
+   Select-String -Path "app\*.py" -Pattern 'width="stretch"|width="content"'
+   ```
+
+### Why Streamlit 1.36.0?
+
+- **1.35.0**: Tabs don't load properly - DO NOT USE
+- **1.36.0**: Last stable release BEFORE fragment changes (RECOMMENDED) ✅
+- **1.37.0+**: Introduced `@st.fragment` causing SessionInfo/setIn race errors
+- **1.40.2**: Has cosmetic error popups but functionally works
+
+**Current version**: `streamlit==1.36.0` (pinned in `requirements.txt`)
+
+### Testing Compatibility
+
+After making width parameter changes, verify:
+```powershell
+# Run tests
+pytest tests/ -v
+
+# Check for any width-related errors
+Select-String -Path "logs\app.log" -Pattern "width|TypeError.*ButtonMixin|TypeError.*str.*integer"
+```
 
 ---
 
@@ -671,6 +754,20 @@ pip list | Select-String "<package_name>"
 
 # If missing, install it
 conda run -n hrv-py312 pip install <package_name>
+```
+
+### Streamlit Widget Width Errors
+
+**Problem**: `TypeError: ButtonMixin.button() got an unexpected keyword argument 'width'` or `TypeError: 'str' object cannot be interpreted as an integer` (dataframe)
+
+**Solution**: See [Streamlit 1.36.0 Compatibility](#streamlit-1360-compatibility) section above. The `width="stretch"` syntax is not supported in Streamlit 1.36.0. Use `use_container_width=True` instead.
+
+**Quick fix**:
+```powershell
+# Find all width="stretch" occurrences
+Select-String -Path "app\*.py" -Pattern 'width="stretch"'
+
+# Replace globally (use_container_width=True for buttons/dataframes, remove for form_submit_button)
 ```
 
 ### Streamlit hangs on Windows shutdown
