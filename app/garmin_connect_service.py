@@ -79,7 +79,9 @@ class GarminConnectClient:
             raise GarminAuthError("python-garminconnect is not installed (see requirements.txt).")
         email, password = _env_credentials()
         try:
-            self.client = Garmin(email=email, password=password, is_cn=False, return_on_mfa=True)  # type: ignore[arg-type]
+            # Note: Do NOT use return_on_mfa=True as it prevents full login
+            # and leaves display_name=None, causing 403 errors on stats endpoints
+            self.client = Garmin(email=email, password=password, is_cn=False)  # type: ignore[arg-type]
             self.client.login()
         except GarminConnectAuthenticationError as exc:
             raise GarminAuthError(f"Garmin authentication failed: {exc}") from exc
@@ -106,7 +108,13 @@ class GarminConnectClient:
 
 
 def _extract_sleep(sleep_payload: Any) -> Dict[str, Any]:
-    """Parse sleep payload to duration (h), efficiency (0..1), score (0..100), start/end UTC ISO."""
+    """Parse sleep payload to duration (h), efficiency (0..1), score (0..100), start/end UTC ISO.
+    
+    Garmin API structure (as of 2025):
+    - dailySleepDTO.sleepTimeSeconds (duration in seconds)
+    - dailySleepDTO.sleepScores.overall.value (sleep score 0-100)
+    - sleepEfficiency may be missing; computed from awake/total if needed
+    """
     if not sleep_payload:
         return {}
     if isinstance(sleep_payload, dict) and "dailySleepDTO" in sleep_payload:
@@ -115,17 +123,22 @@ def _extract_sleep(sleep_payload: Any) -> Dict[str, Any]:
         main = sleep_payload if isinstance(sleep_payload, dict) else {}
 
     duration_s = (
-        main.get("sleepDurationInSeconds")
+        main.get("sleepTimeSeconds")
+        or main.get("sleepDurationInSeconds")
         or main.get("durationInSeconds")
-        or main.get("sleepTimeSeconds")
         or main.get("duration")
     )
     efficiency = main.get("sleepEfficiency")
-    score = (
-        main.get("sleepScore")
-        or main.get("overallScore")
-        or (main.get("sleepScores", {}).get("qualifiers"))  # some payloads
-    )
+    
+    # Extract sleep score from nested sleepScores.overall.value structure
+    score = main.get("sleepScore") or main.get("overallScore")
+    if score is None:
+        sleep_scores = main.get("sleepScores")
+        if isinstance(sleep_scores, dict):
+            overall = sleep_scores.get("overall")
+            if isinstance(overall, dict):
+                score = overall.get("value")
+    
     start_ts = main.get("sleepStartTimestampGMT") or main.get("sleepStartTimestamp")
     end_ts = main.get("sleepEndTimestampGMT") or main.get("sleepEndTimestamp")
 
@@ -181,7 +194,14 @@ def _extract_stress(stress_payload: Any) -> Optional[float]:
 
 
 def _extract_body_battery(body_payload: Any) -> Tuple[Optional[float], Optional[float], Optional[float]]:
-    """Return (avg, charge, drain)."""
+    """Return (avg, charge, drain).
+    
+    Garmin API structure (as of 2025):
+    - List of daily entries, each with:
+      - charged: total charge gained
+      - drained: total drain
+      - bodyBatteryValuesArray: [[timestamp_ms, level], ...] pairs
+    """
     if not body_payload:
         return None, None, None
     levels: List[float] = []
@@ -190,15 +210,47 @@ def _extract_body_battery(body_payload: Any) -> Tuple[Optional[float], Optional[
     try:
         if isinstance(body_payload, list):
             for row in body_payload:
-                lvl = _safe_float(row.get("bodyBatteryValue") or row.get("batteryLevel") or row.get("bodyBatteryLevel"))
-                if lvl is not None:
-                    levels.append(lvl)
+                # Extract charge/drain from daily summary
                 if charge is None:
                     charge = _safe_float(row.get("charged"))
                 if drain is None:
                     drain = _safe_float(row.get("drained"))
+                
+                # Extract levels from bodyBatteryValuesArray: [[ts, level], ...]
+                values_array = row.get("bodyBatteryValuesArray")
+                if isinstance(values_array, list):
+                    for entry in values_array:
+                        if isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                            lvl = _safe_float(entry[1])  # [timestamp, level]
+                            if lvl is not None:
+                                levels.append(lvl)
+                
+                # Fallback to single-value keys
+                if not levels:
+                    lvl = _safe_float(
+                        row.get("bodyBatteryValue")
+                        or row.get("batteryLevel")
+                        or row.get("bodyBatteryLevel")
+                    )
+                    if lvl is not None:
+                        levels.append(lvl)
+                        
         elif isinstance(body_payload, dict):
-            levels.append(_safe_float(body_payload.get("bodyBatteryValue") or body_payload.get("batteryLevel")) or 0.0)
+            # Single-day dict format
+            values_array = body_payload.get("bodyBatteryValuesArray")
+            if isinstance(values_array, list):
+                for entry in values_array:
+                    if isinstance(entry, (list, tuple)) and len(entry) >= 2:
+                        lvl = _safe_float(entry[1])
+                        if lvl is not None:
+                            levels.append(lvl)
+            if not levels:
+                lvl = _safe_float(
+                    body_payload.get("bodyBatteryValue")
+                    or body_payload.get("batteryLevel")
+                )
+                if lvl is not None:
+                    levels.append(lvl)
             charge = _safe_float(body_payload.get("charged"))
             drain = _safe_float(body_payload.get("drained"))
     except Exception:
@@ -208,35 +260,67 @@ def _extract_body_battery(body_payload: Any) -> Tuple[Optional[float], Optional[
 
 
 def _extract_respiration(resp_payload: Any) -> Tuple[Optional[float], Optional[float]]:
+    """Extract awake and sleep respiration averages from Garmin API response.
+    
+    Garmin API field names (as of 2025):
+    - avgWakingRespirationValue (waking/awake average)
+    - avgSleepRespirationValue (sleep average)
+    - Older/alternate: awakeRespirationAvg, sleepRespirationAvg
+    """
     awake = None
     sleep = None
     if isinstance(resp_payload, dict):
-        awake = _safe_float(resp_payload.get("awakeRespirationAvg"))
-        sleep = _safe_float(resp_payload.get("sleepRespirationAvg"))
+        # Try current API field names first, then fallback to legacy
+        awake = _safe_float(
+            resp_payload.get("avgWakingRespirationValue")
+            or resp_payload.get("awakeRespirationAvg")
+        )
+        sleep = _safe_float(
+            resp_payload.get("avgSleepRespirationValue")
+            or resp_payload.get("sleepRespirationAvg")
+        )
     elif isinstance(resp_payload, list) and resp_payload:
         try:
             first = resp_payload[0]
             if isinstance(first, dict):
-                awake = _safe_float(first.get("awakeRespirationAvg"))
-                sleep = _safe_float(first.get("sleepRespirationAvg"))
+                awake = _safe_float(
+                    first.get("avgWakingRespirationValue")
+                    or first.get("awakeRespirationAvg")
+                )
+                sleep = _safe_float(
+                    first.get("avgSleepRespirationValue")
+                    or first.get("sleepRespirationAvg")
+                )
         except Exception:
             return None, None
     return awake, sleep
 
 
 def _extract_spo2(spo_payload: Any) -> Optional[float]:
+    """Extract average SpO2 from Garmin API response.
+    
+    Garmin API field names (as of 2025):
+    - averageSpO2 (primary daily average)
+    - avgSleepSpO2 (sleep-specific average)
+    - avgSpO2Value, avgSpO2 (legacy/alternate)
+    """
     if isinstance(spo_payload, dict):
         return _safe_float(
-            spo_payload.get("avgSpO2Value")
+            spo_payload.get("averageSpO2")
+            or spo_payload.get("avgSleepSpO2")
+            or spo_payload.get("avgSpO2Value")
             or spo_payload.get("avgSpO2")
-            or spo_payload.get("averageSpO2")
             or spo_payload.get("spo2Value")
         )
     if isinstance(spo_payload, list) and spo_payload:
         try:
             first = spo_payload[0]
             if isinstance(first, dict):
-                return _safe_float(first.get("avgSpO2Value") or first.get("averageSpO2") or first.get("avgSpO2"))
+                return _safe_float(
+                    first.get("averageSpO2")
+                    or first.get("avgSpO2Value")
+                    or first.get("avgSpO2")
+                )
         except Exception:
             return None
     return None
@@ -286,25 +370,50 @@ def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDaily
             day = start_date + timedelta(days=idx)
             day_iso = day.isoformat()
 
-            # Activity + heart
-            summary = {}
+            # Use get_stats() which returns comprehensive daily data including
+            # activity, stress, body battery, SpO2, respiration, HR in one call
+            stats = {}
             try:
-                summary = client.get_user_summary(day_iso) or {}
+                stats = client.get_stats(day_iso) or {}
             except Exception:
-                summary = {}
+                # Fallback to user_summary if get_stats fails
+                try:
+                    stats = client.get_user_summary(day_iso) or {}
+                except Exception:
+                    stats = {}
 
-            steps = _safe_int(summary.get("totalSteps"))
+            # Activity metrics from stats
+            steps = _safe_int(stats.get("totalSteps"))
             distance_km = None
-            dist_m = summary.get("totalDistanceMeters") or summary.get("distance")
+            dist_m = stats.get("totalDistanceMeters") or stats.get("distance")
             if dist_m is not None:
                 distance_km = _safe_float(dist_m)
                 if distance_km is not None:
                     distance_km = distance_km / 1000.0
-            calories = _safe_float(summary.get("totalKilocalories") or summary.get("totalCalories"))
-            avg_hr = _safe_float(summary.get("averageHR") or summary.get("averageHeartRate"))
-            resting_hr = _safe_float(summary.get("restingHeartRate") or summary.get("restingHR"))
+            calories = _safe_float(stats.get("totalKilocalories") or stats.get("totalCalories"))
+            avg_hr = _safe_float(
+                stats.get("averageHR")
+                or stats.get("averageHeartRate")
+                or stats.get("maxAvgHeartRate")
+            )
+            resting_hr = _safe_float(stats.get("restingHeartRate") or stats.get("restingHR"))
+            
+            # Stress from stats (backup from dedicated endpoint)
+            stress_score = _safe_float(stats.get("averageStressLevel"))
+            
+            # SpO2 from stats
+            spo2_avg = _safe_float(stats.get("averageSpo2"))
+            
+            # Respiration from stats
+            resp_awake = _safe_float(stats.get("avgWakingRespirationValue"))
+            resp_sleep = None  # Sleep respiration needs separate call
+            
+            # Body battery from stats
+            body_charge = _safe_float(stats.get("bodyBatteryChargedValue"))
+            body_drain = _safe_float(stats.get("bodyBatteryDrainedValue"))
+            body_avg = _safe_float(stats.get("bodyBatteryMostRecentValue"))
 
-            # Sleep
+            # Sleep - need dedicated endpoint for score/duration/efficiency
             sleep_info: Dict[str, Any] = {}
             try:
                 sleep_payload = client.get_sleep_data(day_iso)
@@ -312,42 +421,50 @@ def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDaily
             except Exception:
                 sleep_info = {}
 
-            # Stress
-            stress_score = None
-            try:
-                stress_payload = client.get_all_day_stress(day_iso)
-                stress_score = _extract_stress(stress_payload)
-            except Exception:
-                stress_score = None
+            # If stress not in stats, try dedicated endpoint
+            if stress_score is None:
+                try:
+                    stress_payload = client.get_all_day_stress(day_iso)
+                    stress_score = _extract_stress(stress_payload)
+                except Exception:
+                    pass
 
-            # Respiration
-            resp_awake = None
-            resp_sleep = None
+            # Get sleep respiration from dedicated endpoint
             try:
                 resp_payload = client.get_respiration_data(day_iso)
-                resp_awake, resp_sleep = _extract_respiration(resp_payload)
+                _, resp_sleep_from_api = _extract_respiration(resp_payload)
+                if resp_sleep_from_api is not None:
+                    resp_sleep = resp_sleep_from_api
+                # Also fill awake if stats didn't have it
+                if resp_awake is None:
+                    resp_awake_from_api, _ = _extract_respiration(resp_payload)
+                    resp_awake = resp_awake_from_api
             except Exception:
-                resp_awake, resp_sleep = None, None
+                pass
 
-            # SpO2
-            spo2_avg = None
-            try:
-                spo2_payload = client.get_spo2_data(day_iso)
-                spo2_avg = _extract_spo2(spo2_payload)
-            except Exception:
-                spo2_avg = None
+            # If SpO2 not in stats, try dedicated endpoint
+            if spo2_avg is None:
+                try:
+                    spo2_payload = client.get_spo2_data(day_iso)
+                    spo2_avg = _extract_spo2(spo2_payload)
+                except Exception:
+                    pass
 
-            # Body battery
-            body_avg = None
-            body_charge = None
-            body_drain = None
-            try:
-                body_payload = client.get_body_battery(day_iso)
-                body_avg, body_charge, body_drain = _extract_body_battery(body_payload)
-            except Exception:
-                body_avg, body_charge, body_drain = None, None, None
+            # If body battery not complete from stats, try dedicated endpoint
+            if body_avg is None or body_charge is None or body_drain is None:
+                try:
+                    body_payload = client.get_body_battery(day_iso)
+                    bb_avg, bb_charge, bb_drain = _extract_body_battery(body_payload)
+                    if body_avg is None:
+                        body_avg = bb_avg
+                    if body_charge is None:
+                        body_charge = bb_charge
+                    if body_drain is None:
+                        body_drain = bb_drain
+                except Exception:
+                    pass
 
-            # HRV (nightly)
+            # HRV (nightly) - always from dedicated endpoint
             hrv_rmssd = None
             hrv_sdnn = None
             try:
