@@ -5309,6 +5309,17 @@ def _render_nasa_calculator(user: UserProfile) -> None:
             st.caption("ℹ️ Set POLAR_ACCESSLINK_TOKEN & POLAR_ACCESSLINK_USER_ID to enable.")
         
     st.markdown("##### 😴 Sleep & Chronotype Inputs (feeds SAFTE/Readiness)")
+
+    # Session keys shared with Profile Tools Engine for cross-section consistency
+    # Use unique widget keys (nasa_ prefix) but sync to shared session state
+    sleep_hours_key = f"tools_sleep_hours_{user.user_id}"
+    sleep_quality_key = f"tools_sleep_quality_{user.user_id}"
+    hours_awake_key = f"tools_hours_awake_{user.user_id}"
+    chrono_key = f"tools_chronotype_offset_{user.user_id}"
+    rmssd_key = f"tools_rmssd_{user.user_id}"
+    resting_hr_key = f"tools_resting_hr_{user.user_id}"
+    vo2_key = f"tools_vo2_{user.user_id}"
+
     fetch_col, _ = st.columns([1, 2])
     with fetch_col:
         if st.button(
@@ -5334,16 +5345,6 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                 )
     
     sleep_col1, sleep_col2, sleep_col3 = st.columns(3)
-    
-    # Session keys shared with Profile Tools Engine for cross-section consistency
-    # Use unique widget keys (nasa_ prefix) but sync to shared session state
-    sleep_hours_key = f"tools_sleep_hours_{user.user_id}"
-    sleep_quality_key = f"tools_sleep_quality_{user.user_id}"
-    hours_awake_key = f"tools_hours_awake_{user.user_id}"
-    chrono_key = f"tools_chronotype_offset_{user.user_id}"
-    rmssd_key = f"tools_rmssd_{user.user_id}"
-    resting_hr_key = f"tools_resting_hr_{user.user_id}"
-    vo2_key = f"tools_vo2_{user.user_id}"
     
     # Display read-only summary instead of duplicate editable widgets
     # (The Profile Tools Engine section below provides the editable inputs)
