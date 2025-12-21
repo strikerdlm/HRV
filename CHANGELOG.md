@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Background Space Weather Fetch with 12-hour Auto-Refresh** (`app/app.py`): Space weather data (NOAA, SWPC, NASA DONKI) now fetches in a background daemon thread on app startup. Data automatically refreshes every 12 hours without user intervention. The UI remains fully responsive during fetches. Each tab shows data age and refresh status (e.g., "✅ Data: 2h ago | Auto-refresh: 12h").
+- **Garmin sleep autofill in Profile Tools Engine** (`app/user_profile_tab.py`): One-click Vivosmart/Garmin pull populates sleep hours, sleep quality, hours awake, RMSSD, and resting HR for SAFTE/operational tools.
+- **Sleep & chronotype inputs under Energy & Nutrition** (`app/user_profile_tab.py`): Added synced sliders/inputs (sleep hours, hours awake, sleep quality, chronotype offset, RMSSD, resting HR, VO₂) that push values into the Profile Tools Engine for SAFTE fatigue and Operational Performance.
 
 ### Changed
 - **EVA Clearance Semaphore** (`app/user_profile_tab.py`): Replaced the bar chart for EVA Clearance States with a traffic-light semaphore visualization. Three circular indicators (GO/MONITOR/NO-GO) glow when active, with a summary panel showing the dominant status and total assessments.
