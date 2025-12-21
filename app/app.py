@@ -11273,28 +11273,31 @@ that predicts cognitive performance based on:
                         warning_alerts = [a for a in alerts if a.level == "warning"]
                         info_alerts = [a for a in alerts if a.level not in ("critical", "warning")]
                         
-                        # Alert styling configuration
+                        # Light theme alert styling
                         alert_styles = {
                             "critical": {
-                                "bg": "linear-gradient(135deg, #dc354520 0%, #ff634720 100%)",
-                                "border": "#dc3545",
-                                "icon": "🔴",
+                                "bg": "#fff5f5",
+                                "border": "#e53e3e",
+                                "icon": "🚨",
                                 "label": "CRITICAL",
-                                "label_bg": "#dc3545",
+                                "label_bg": "#e53e3e",
+                                "text_color": "#c53030",
                             },
                             "warning": {
-                                "bg": "linear-gradient(135deg, #ffc10720 0%, #fd7e1420 100%)",
-                                "border": "#ffc107",
-                                "icon": "🟡",
+                                "bg": "#fffaf0",
+                                "border": "#dd6b20",
+                                "icon": "⚠️",
                                 "label": "CAUTION",
-                                "label_bg": "#e6a200",
+                                "label_bg": "#dd6b20",
+                                "text_color": "#c05621",
                             },
                             "info": {
-                                "bg": "linear-gradient(135deg, #17a2b820 0%, #20c99720 100%)",
-                                "border": "#17a2b8",
-                                "icon": "🔵",
+                                "bg": "#e6fffa",
+                                "border": "#319795",
+                                "icon": "ℹ️",
                                 "label": "ADVISORY",
-                                "label_bg": "#17a2b8",
+                                "label_bg": "#319795",
+                                "text_color": "#285e61",
                             },
                         }
                         
@@ -11305,35 +11308,37 @@ that predicts cognitive performance based on:
                                 background: {style['bg']};
                                 border-left: 4px solid {style['border']};
                                 border-radius: 8px;
-                                padding: 12px 16px;
-                                margin-bottom: 10px;
-                                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                                padding: 14px 18px;
+                                margin-bottom: 12px;
+                                box-shadow: 0 1px 3px rgba(0,0,0,0.08);
                             ">
-                                <div style="display: flex; align-items: flex-start; gap: 12px;">
-                                    <div style="font-size: 1.5em; line-height: 1;">{style['icon']}</div>
+                                <div style="display: flex; align-items: flex-start; gap: 14px;">
+                                    <div style="font-size: 1.4em; line-height: 1; margin-top: 2px;">{style['icon']}</div>
                                     <div style="flex: 1;">
-                                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                                             <span style="
                                                 background: {style['label_bg']};
                                                 color: white;
                                                 font-size: 0.65em;
                                                 font-weight: 700;
-                                                padding: 2px 8px;
+                                                padding: 3px 10px;
                                                 border-radius: 4px;
-                                                letter-spacing: 0.5px;
+                                                letter-spacing: 0.8px;
+                                                text-transform: uppercase;
                                             ">{style['label']}</span>
                                             <code style="
-                                                background: rgba(0,0,0,0.15);
-                                                padding: 2px 6px;
-                                                border-radius: 3px;
-                                                font-size: 0.7em;
+                                                background: rgba(0,0,0,0.06);
+                                                padding: 3px 8px;
+                                                border-radius: 4px;
+                                                font-size: 0.72em;
                                                 color: #666;
+                                                font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
                                             ">{alert.code}</code>
                                         </div>
-                                        <div style="font-weight: 600; color: #1a1a2e; margin-bottom: 4px;">
+                                        <div style="font-weight: 600; color: {style['text_color']}; margin-bottom: 6px; font-size: 0.95em;">
                                             {alert.message}
                                         </div>
-                                        <div style="font-size: 0.85em; color: #555; line-height: 1.4;">
+                                        <div style="font-size: 0.85em; color: #4a5568; line-height: 1.5;">
                                             {alert.rationale}
                                         </div>
                                     </div>
@@ -11346,36 +11351,37 @@ that predicts cognitive performance based on:
                         for a in critical_alerts + warning_alerts + info_alerts:
                             all_alert_html += render_alert_card(a)
                         
-                        # Summary header
+                        # Summary header with light theme
                         summary_parts = []
                         if critical_alerts:
-                            summary_parts.append(f"<span style='color:#dc3545;font-weight:700;'>{len(critical_alerts)} Critical</span>")
+                            summary_parts.append(f"<span style='color:#e53e3e;font-weight:600;'>{len(critical_alerts)} Critical</span>")
                         if warning_alerts:
-                            summary_parts.append(f"<span style='color:#e6a200;font-weight:700;'>{len(warning_alerts)} Caution</span>")
+                            summary_parts.append(f"<span style='color:#dd6b20;font-weight:600;'>{len(warning_alerts)} Caution</span>")
                         if info_alerts:
-                            summary_parts.append(f"<span style='color:#17a2b8;font-weight:700;'>{len(info_alerts)} Advisory</span>")
+                            summary_parts.append(f"<span style='color:#319795;font-weight:600;'>{len(info_alerts)} Advisory</span>")
                         
                         st.markdown(
                             f"""
                             <div style="
-                                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-                                border-radius: 10px;
-                                padding: 16px;
+                                background: linear-gradient(135deg, #f7fafc 0%, #edf2f7 100%);
+                                border: 1px solid #e2e8f0;
+                                border-radius: 12px;
+                                padding: 18px;
                                 margin-bottom: 16px;
                             ">
                                 <div style="
                                     display: flex;
                                     justify-content: space-between;
                                     align-items: center;
-                                    margin-bottom: 12px;
-                                    padding-bottom: 10px;
-                                    border-bottom: 1px solid rgba(255,255,255,0.1);
+                                    margin-bottom: 14px;
+                                    padding-bottom: 12px;
+                                    border-bottom: 1px solid #e2e8f0;
                                 ">
-                                    <span style="color: #a0a0a0; font-size: 0.9em;">
+                                    <span style="color: #718096; font-size: 0.9em; font-weight: 500;">
                                         {len(alerts)} alert{'s' if len(alerts) != 1 else ''} triggered
                                     </span>
                                     <span style="font-size: 0.85em;">
-                                        {' • '.join(summary_parts)}
+                                        {' · '.join(summary_parts)}
                                     </span>
                                 </div>
                                 {all_alert_html}
