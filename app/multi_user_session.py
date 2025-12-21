@@ -297,7 +297,7 @@ def render_user_switcher() -> None:
                 label,
                 key=f"switch_user_{session['user_id']}",
                 type=btn_type,
-                width="stretch",
+                use_container_width=True,
                 help=session["full_name"],
             ):
                 if not is_active:
