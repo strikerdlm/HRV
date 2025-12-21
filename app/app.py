@@ -9864,13 +9864,15 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                         if start_dt is not None and not pd.isna(start_dt):
                             if start_dt.tzinfo is None:
                                 start_dt = start_dt.tz_localize(timezone.utc)
-                            local_start = start_dt.astimezone()
+                            # Convert to Python datetime for astimezone() compatibility
+                            local_start = start_dt.to_pydatetime().astimezone()
                             st.session_state["fatigue_bedtime"] = int(local_start.hour)
                             fatigue_defaults["fatigue_bedtime"] = int(local_start.hour)
                         if end_dt is not None and not pd.isna(end_dt):
                             if end_dt.tzinfo is None:
                                 end_dt = end_dt.tz_localize(timezone.utc)
-                            local_end = end_dt.astimezone()
+                            # Convert to Python datetime for astimezone() compatibility
+                            local_end = end_dt.to_pydatetime().astimezone()
                             st.session_state["fatigue_waketime"] = int(local_end.hour)
                             fatigue_defaults["fatigue_waketime"] = int(local_end.hour)
 
@@ -11740,7 +11742,7 @@ that predicts cognitive performance based on:
             st.info("Space Weather content is unloaded to speed startup. Click below to load.")
             if st.button("Load Space Weather content", key="load_space_weather_tab"):
                 st.session_state["_space_weather_tab_loaded"] = True
-                st.experimental_rerun()
+                st.rerun()
             return
 
         # =====================================================================
@@ -13357,7 +13359,7 @@ that predicts cognitive performance based on:
             st.info("NOAA Space dashboard is unloaded to speed startup. Click below to load.")
             if st.button("Load NOAA Space dashboard", key="load_noaa_space_tab"):
                 st.session_state["_noaa_space_tab_loaded"] = True
-                st.experimental_rerun()
+                st.rerun()
             return
 
         # Start background fetch lazily when this tab is opened
