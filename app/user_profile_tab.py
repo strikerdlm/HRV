@@ -864,6 +864,14 @@ def _set_current_user(user: Optional[UserProfile]) -> None:
                 pass  # Continue even if multi-user registration fails
 
 
+def _logout_and_preserve() -> None:
+    """Logout helper that preserves saved data and resets to guest view."""
+    # Data is already persisted at save-time; no additional flush required here.
+    _set_current_user(None)
+    st.session_state.pop("edit_profile_mode", None)
+    st.session_state["active_profile_label"] = "Guest"
+
+
 def _should_process_form_submission(form_key: str, debounce_seconds: float = _FORM_DEBOUNCE_SECONDS) -> bool:
     """Prevent duplicate form submissions within a short interval."""
     state_key = f"{_FORM_DEBOUNCE_PREFIX}{form_key}"
@@ -3653,8 +3661,7 @@ def _render_data_management(user: UserProfile) -> None:
         st.markdown("### Account Actions")
 
         if st.button("🚪 Logout", use_container_width=True):
-            _set_current_user(None)
-            st.session_state.pop("edit_profile_mode", None)
+            _logout_and_preserve()
             st.rerun()
 
         st.markdown("---")
@@ -7391,6 +7398,7 @@ def render_user_profile_tab() -> None:
     current_user = _get_current_user()
     
     if current_user is None:
+        st.info("Active Profile for Analysis: Guest")
         # Show login/registration
         tab_login, tab_register = st.tabs(["🔑 Login", "📝 Register"])
         
@@ -7406,11 +7414,10 @@ def render_user_profile_tab() -> None:
         # Top banner with login state and logout button (visible on all sections)
         banner_col1, banner_col2 = st.columns([3, 1])
         with banner_col1:
-            st.success(f"✅ Logged in as **{current_user.full_name}**")
+            st.success(f"✅ Active Profile for Analysis: **{current_user.full_name}**")
         with banner_col2:
             if st.button("🚪 Logout", key=f"top_logout_{current_user.user_id}", use_container_width=True):
-                _set_current_user(None)
-                st.session_state.pop("edit_profile_mode", None)
+                _logout_and_preserve()
                 st.rerun()
 
         # Show profile and assessments
