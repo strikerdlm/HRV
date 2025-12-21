@@ -2039,21 +2039,79 @@ The Sleep, Activity, Fatigue, and Task Effectiveness (SAFTE) model predicts cogn
 
 ### FRMS & USAF Upgrades (Safety Management Dashboard)
 
-The SAFTE tab includes an aviation-grade **FRMS-style dashboard** aligned with ICAO guidance:
+The SAFTE tab includes an aviation-grade **FRMS-style dashboard** aligned with ICAO and USAF/DoD guidance:
 
 - **Predictive (model-based) fatigue risk** using SAFTE effectiveness.
 - **WOCL exposure** (Window of Circadian Low, typically ~02:00–06:00 local).
 - **Operational effectiveness thresholds** commonly used with SAFTE/FAST:
-  - **≥90%**: low risk (“well-rested” baseline)
+  - **≥90%**: low risk ("well-rested" baseline)
   - **>77–<90%**: caution / transitional range
   - **>70–≤77%**: high risk (often compared to ~0.05% BAC impairment)
   - **≤70%**: severe impairment (often compared to ~0.08% BAC impairment)
-- **SMS-style risk matrix** classification (severity × likelihood) for structured decision support.
+- **Critical Job Window** input to evaluate risk specifically for scheduled safety-critical tasks.
+- **Dual risk matrix** classification using both ICAO and USAF/DoD standards for structured decision support.
+
+#### ICAO Risk Matrix (Doc 9859)
+
+The ICAO risk matrix follows the Safety Management Manual (Doc 9859) definitions:
+
+**Probability Levels (Table 2-12):**
+| Level | Name | Description | Mapping (% time ≤77%) |
+|-------|------|-------------|----------------------|
+| 5 | Frequent | Likely to occur many times; has occurred frequently | ≥50% |
+| 4 | Occasional | Likely to occur sometimes; has occurred infrequently | 30–50% |
+| 3 | Remote | Unlikely but possible; has occurred rarely | 15–30% |
+| 2 | Improbable | Very unlikely to occur; not known to have occurred | 5–15% |
+| 1 | Extremely Improbable | Almost inconceivable the event will occur | <5% |
+
+**Severity Levels (Table 2-11):**
+| Level | Name | Description | Mapping (Min Effectiveness) |
+|-------|------|-------------|----------------------------|
+| E | Negligible | Few consequences | ≥85% |
+| D | Minor | Operating limitations, minor incident | 77–85% |
+| C | Major | Significant reduction in safety margins | 70–77% |
+| B | Hazardous | Large reduction in safety margins | 60–70% |
+| A | Catastrophic | Equipment destroyed, multiple deaths | <60% |
+
+**Risk Tolerability:**
+- **Acceptable** (green): Risk is acceptable; no action required
+- **Tolerable** (yellow): Risk is tolerable with review; monitoring required
+- **Undesirable** (orange): Risk is undesirable; mitigation required
+- **Intolerable** (red): Risk is intolerable; operations must cease
+
+#### USAF/DoD Risk Matrix (MIL-STD-882E)
+
+The USAF risk matrix follows the DoD Standard Practice for System Safety (MIL-STD-882E):
+
+**Probability Levels (Table II):**
+| Level | Name | Description | Mapping (Risk Score) |
+|-------|------|-------------|---------------------|
+| A | Frequent | Likely to occur often in the life of an item | ≥5 |
+| B | Probable | Will occur several times in the life of an item | 4 |
+| C | Occasional | Likely to occur sometime in the life of an item | 2–3 |
+| D | Remote | Unlikely, but possible to occur in the life of an item | 1 |
+| E | Improbable | So unlikely, can be assumed occurrence may not be experienced | 0 |
+
+*Risk score combines: sleep debt (0–3 pts), WOCL exposure (0–2 pts), and time ≤77% (0–2 pts).*
+
+**Severity Categories (Table I):**
+| Level | Name | Description | Mapping (Min Effectiveness) |
+|-------|------|-------------|----------------------------|
+| IV | Negligible | Less than minor injury, less than minor damage | ≥90% |
+| III | Marginal | Minor injury, minor system damage | 77–90% |
+| II | Critical | Severe injury, major system damage | 70–77% |
+| I | Catastrophic | Death, system loss | <70% |
+
+**Risk Assessment (Table III):**
+- **Low** (green): Acceptable with review
+- **Medium** (yellow): Acceptable with controls
+- **Serious** (orange): Undesirable; senior leadership review required
+- **High** (red): Unacceptable; corrective action required
 
 It also includes a **USAF crew rest check** (AFMAN 11-202V3 baseline):
 
 - Crew rest typically requires **≥12 hours non-duty** before FDP with **≥8 hours uninterrupted sleep opportunity**.
-- If crew rest is interrupted by official business, it must restart (update the “crew rest start” time accordingly).
+- If crew rest is interrupted by official business, it must restart (update the "crew rest start" time accordingly).
 
 ### Exports (Publication-Grade)
 
@@ -2114,12 +2172,26 @@ Recommendations:
 
 ### Key References (Fatigue / FRMS)
 
+#### ICAO Safety Management Standards
+- International Civil Aviation Organization. (2018). *Safety Management Manual* (Doc 9859, 4th ed.). ICAO Store. https://store.icao.int/en/safety-management-manual-doc-9859
 - International Civil Aviation Organization. (2016). *Manual for the Oversight of Fatigue Management Approaches* (Doc 9966, 2nd ed.). https://www.icao.int/safety/fatiguemanagement/FRMS%20Tools/Doc%209966.FRMS.2016%20Edition.en.pdf
-- Gander, P. H., Mangie, J., Van Den Berg, M. J., Smith, A. A., Mulrine, H. M., & Signal, T. L. (2014). Crew fatigue safety performance indicators for fatigue risk management systems. *Aviation, Space, and Environmental Medicine, 85*(2), 139–147. https://doi.org/10.3357/asem.3748.2014
+- SKYbrary. (n.d.). *ICAO Safety Management Manual Doc 9859*. https://skybrary.aero/articles/icao-safety-management-manual-doc-9859
+
+#### USAF/DoD System Safety Standards
+- Department of Defense. (2023). *MIL-STD-882E w/Change 1: Standard Practice for System Safety* (27 September 2023). U.S. Army Combat Capabilities Development Command. https://safety.army.mil/Portals/0/Documents/ON-DUTY/SYSTEMSAFETY/Standard/MIL-STD-882E-change-1.pdf
 - Department of the Air Force. (n.d.). *AFMAN 11-202V3: General Flight Rules.* https://static.e-publishing.af.mil/production/1/af_a3/publication/afman11-202v3/afman11-202v3.pdf
+- United States Air Forces in Europe. (2016). *Fatigue Risk Management System: What it's all about*. USAFE Public Affairs. https://www.usafe.af.mil/News/Article-Display/Article/809251/fatigue-risk-management-system-what-its-all-about
+- Tvaryanas, A. P., & MacPherson, G. D. (2017). *Fatiguing the force: Using operational data to improve the United States Air Force fatigue risk management system*. International Symposium on Aviation Psychology. https://corescholar.libraries.wright.edu/cgi/viewcontent.cgi?article=1000&context=isap_2017
+
+#### FAA and Other Aviation Standards
 - Federal Aviation Administration. (2010). *Flightcrew Member Duty and Rest Requirements* (Docket No. FAA-2009-1093; Attachment 1). https://downloads.regulations.gov/FAA-2009-1093-2518/attachment_1.pdf
+- Federal Aviation Administration. (2013). *Advisory Circular 120-103A: Fatigue Risk Management Systems for Aviation Safety*. https://www.faa.gov/regulations_policies/advisory_circulars/index.cfm/go/document.information/documentid/1021088
+
+#### Fatigue Science Research
+- Gander, P. H., Mangie, J., Van Den Berg, M. J., Smith, A. A., Mulrine, H. M., & Signal, T. L. (2014). Crew fatigue safety performance indicators for fatigue risk management systems. *Aviation, Space, and Environmental Medicine, 85*(2), 139–147. https://doi.org/10.3357/asem.3748.2014
 - National Aeronautics and Space Administration. (2012). *NASA–easyJet Collaboration on the Human Factors Monitoring Program (HFMP) Study* (NASA NTRS No. 20120013448). https://ntrs.nasa.gov/api/citations/20120013448/downloads/20120013448.pdf
 - Federal Railroad Administration. (2006). *Validation and calibration of a fatigue assessment tool for railroad work schedules* (Final report; DOT/FRA/ORD-06/21). https://rosap.ntl.bts.gov/view/dot/62575
+- Hursh, S. R., Redmond, D. P., Johnson, M. L., et al. (2004). Fatigue models for applied research in warfighting. *Aviation, Space, and Environmental Medicine, 75*(3 Suppl), A44–A53.
 
 ---
 
