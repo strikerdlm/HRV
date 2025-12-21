@@ -3931,6 +3931,78 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
     
     sex = user.sex or "other"
     current_hour = datetime.now().hour
+    current_dt = datetime.now(tz=timezone.utc)
+    
+    def _parse_iso_utc(dt_str: Optional[str]) -> Optional[datetime]:
+        if not dt_str:
+            return None
+        try:
+            if dt_str.endswith("Z"):
+                return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+            return datetime.fromisoformat(dt_str)
+        except Exception:
+            return None
+    
+    def _autofill_sleep_from_garmin() -> None:
+        """Fetch latest Garmin daily metrics and populate SAFTE inputs."""
+        if fetch_garmin_daily_metrics is None:
+            st.warning("Garmin live import not available. Install python-garminconnect and set GARMIN_EMAIL/PASSWORD.")
+            return
+        try:
+            records = fetch_garmin_daily_metrics(user.user_id, days=7)
+        except Exception as exc:  # pragma: no cover - defensive
+            if log_exception:
+                log_exception(_LOGGER, "Garmin autofill failed", exc)
+            st.error(f"Garmin autofill failed: {exc}")
+            return
+        if not records:
+            st.info("No Garmin Vivosmart data returned.")
+            return
+        # Pick most recent with sleep duration
+        chosen = None
+        for rec in sorted(records, key=lambda r: r.metric_date, reverse=True):
+            if rec.sleep_duration_hours:
+                chosen = rec
+                break
+        if chosen is None:
+            st.info("No recent Garmin sleep data found.")
+            return
+        sleep_hours = float(chosen.sleep_duration_hours or 0.0)
+        sleep_quality = None
+        if chosen.sleep_efficiency is not None:
+            eff = float(chosen.sleep_efficiency)
+            sleep_quality = eff if 0.0 <= eff <= 1.2 else eff / 100.0
+        if sleep_quality is None and chosen.sleep_score is not None:
+            sleep_quality = float(chosen.sleep_score) / 100.0
+        if sleep_quality is None:
+            sleep_quality = 0.7
+        sleep_quality = max(0.0, min(1.0, sleep_quality))
+        
+        hours_awake = float(current_hour - 7 if current_hour >= 7 else current_hour + 17)
+        end_dt = _parse_iso_utc(chosen.sleep_end_utc)
+        if end_dt:
+            delta_hours = max(0.0, (current_dt - end_dt).total_seconds() / 3600.0)
+            hours_awake = max(0.0, min(48.0, delta_hours))
+        
+        rmssd_val = chosen.hrv_rmssd_ms if chosen.hrv_rmssd_ms is not None else None
+        resting_hr_val = (
+            chosen.resting_hr_bpm
+            if chosen.resting_hr_bpm is not None
+            else (chosen.avg_hr_bpm if chosen.avg_hr_bpm is not None else None)
+        )
+        
+        st.session_state[f"tools_sleep_hours_{user.user_id}"] = round(sleep_hours, 2)
+        st.session_state[f"tools_sleep_quality_{user.user_id}"] = round(sleep_quality, 2)
+        st.session_state[f"tools_hours_awake_{user.user_id}"] = round(hours_awake, 2)
+        if rmssd_val is not None:
+            st.session_state[f"tools_rmssd_{user.user_id}"] = float(rmssd_val)
+        if resting_hr_val is not None:
+            st.session_state[f"tools_resting_hr_{user.user_id}"] = float(resting_hr_val)
+        
+        st.success(
+            f"Garmin sleep synced (date {chosen.metric_date}): "
+            f"{sleep_hours:.2f}h, quality {sleep_quality:.2f}, hours awake {hours_awake:.1f}"
+        )
     
     # Tool selector
     st.markdown("##### 🔧 Select Tool")
@@ -3967,6 +4039,16 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
         key=f"profile_tools_show_params_{user.user_id}",
         help="Hide to reduce clutter; values are preserved in session state.",
     )
+    
+    autofill_col, _ = st.columns([1, 2])
+    with autofill_col:
+        if st.button(
+            "📡 Autofill sleep from Garmin",
+            key=f"garmin_autofill_tools_{user.user_id}",
+            help="Pulls latest Garmin Vivosmart sleep to fill SAFTE inputs (sleep hours, quality, hours awake, RMSSD, resting HR).",
+        ):
+            _autofill_sleep_from_garmin()
+    
     if show_parameters:
         col1, col2, col3 = st.columns(3)
 
@@ -4041,7 +4123,12 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
     hours_awake = float(hours_awake_raw) if hours_awake_raw is not None else hours_awake_default
 
     chronotype = str(st.session_state.get(f"tools_chronotype_{user.user_id}") or "Neutral (0h)")
-    chronotype_offset = float(chronotype_map.get(chronotype, 0.0))
+    chronotype_offset_override = _safe_float(st.session_state.get(f"tools_chronotype_offset_{user.user_id}"))
+    chronotype_offset = (
+        float(chronotype_offset_override)
+        if chronotype_offset_override is not None
+        else float(chronotype_map.get(chronotype, 0.0))
+    )
 
     rmssd_default = 35.0
     rmssd_raw = _safe_float(st.session_state.get(f"tools_rmssd_{user.user_id}"))
@@ -5196,6 +5283,87 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         else:
             st.caption("ℹ️ Set POLAR_ACCESSLINK_TOKEN & POLAR_ACCESSLINK_USER_ID to enable.")
         
+    st.markdown("##### 😴 Sleep & Chronotype Inputs (feeds SAFTE/Readiness)")
+    sleep_col1, sleep_col2, sleep_col3 = st.columns(3)
+    
+    # Shared session keys (same as Profile Tools Engine) for consistency
+    sleep_hours_key = f"tools_sleep_hours_{user.user_id}"
+    sleep_quality_key = f"tools_sleep_quality_{user.user_id}"
+    hours_awake_key = f"tools_hours_awake_{user.user_id}"
+    chrono_key = f"tools_chronotype_offset_{user.user_id}"
+    rmssd_key = f"tools_rmssd_{user.user_id}"
+    resting_hr_key = f"tools_resting_hr_{user.user_id}"
+    vo2_key = f"tools_vo2_{user.user_id}"
+    
+    with sleep_col1:
+        st.number_input(
+            "Sleep hours (last night)",
+            min_value=0.0,
+            max_value=14.0,
+            value=float(st.session_state.get(sleep_hours_key, 7.0)),
+            step=0.25,
+            key=sleep_hours_key,
+        )
+        st.slider(
+            "Sleep quality (0-1)",
+            min_value=0.0,
+            max_value=1.0,
+            value=float(st.session_state.get(sleep_quality_key, 0.7)),
+            step=0.05,
+            key=sleep_quality_key,
+        )
+    
+    with sleep_col2:
+        st.slider(
+            "Hours awake",
+            min_value=0.0,
+            max_value=48.0,
+            value=float(st.session_state.get(hours_awake_key, 12.0)),
+            step=0.5,
+            key=hours_awake_key,
+        )
+        st.slider(
+            "Chronotype offset (hours)",
+            min_value=-2.5,
+            max_value=2.5,
+            value=float(st.session_state.get(chrono_key, 0.0)),
+            step=0.25,
+            help="Negative = morning type, positive = evening type",
+            key=chrono_key,
+        )
+    
+    with sleep_col3:
+        st.number_input(
+            "RMSSD (ms)",
+            min_value=0.0,
+            max_value=200.0,
+            value=float(st.session_state.get(rmssd_key, user.latest_rmssd_ms or 35.0)),
+            step=1.0,
+            key=rmssd_key,
+        )
+        st.number_input(
+            "Resting HR (bpm)",
+            min_value=30,
+            max_value=120,
+            value=int(st.session_state.get(resting_hr_key, user.resting_hr_bpm or 65)),
+            step=1,
+            key=resting_hr_key,
+        )
+    
+    # Optional VO2 input linked to tools session key for downstream use
+    st.markdown("###### VO₂ for performance context (optional)")
+    vo2_sync_col, _ = st.columns([1, 3])
+    with vo2_sync_col:
+        st.number_input(
+            "VO₂max (mL·kg⁻¹·min⁻¹)",
+            min_value=10.0,
+            max_value=90.0,
+            value=float(st.session_state.get(vo2_key, vo2_manual)),
+            step=0.5,
+            key=vo2_key,
+        )
+    st.caption("These values are shared with the Profile Tools Engine (SAFTE, HRV readiness, operational performance).")
+    
         # Save manual entry button
         if st.button("💾 Save Manual Entry", key=f"save_manual_vo2_{user.user_id}"):
             if POLAR_MODULE_AVAILABLE:
