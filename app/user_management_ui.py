@@ -203,9 +203,9 @@ def render_profile_creator() -> None:
         
         col_submit, col_cancel = st.columns(2)
         with col_submit:
-            submitted = st.form_submit_button("✅ Create Profile", width="stretch", type="primary")
+            submitted = st.form_submit_button("✅ Create Profile", type="primary")
         with col_cancel:
-            cancelled = st.form_submit_button("❌ Cancel", width="stretch")
+            cancelled = st.form_submit_button("❌ Cancel")
         
         if cancelled:
             st.session_state["show_profile_creator"] = False
@@ -377,9 +377,9 @@ def render_profile_editor() -> None:
         
         col_submit, col_cancel = st.columns(2)
         with col_submit:
-            submitted = st.form_submit_button("💾 Save Changes", width="stretch", type="primary")
+            submitted = st.form_submit_button("💾 Save Changes", type="primary")
         with col_cancel:
-            cancelled = st.form_submit_button("❌ Cancel", width="stretch")
+            cancelled = st.form_submit_button("❌ Cancel")
         
         if cancelled:
             st.session_state["show_profile_editor"] = False
@@ -510,7 +510,7 @@ def render_clinical_scales_form() -> Optional[ClinicalScales]:
         
         notes = st.text_area("Notes", help="Any additional observations or context")
         
-        submitted = st.form_submit_button("💾 Save Assessment", width="stretch", type="primary")
+        submitted = st.form_submit_button("💾 Save Assessment", type="primary")
         
         if submitted:
             scales = ClinicalScales(
