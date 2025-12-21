@@ -481,6 +481,119 @@ def _render_profile_bar_chart(
     render_echarts(option, height_px=height_px)
 
 
+def _render_eva_semaphore(eva_counts: pd.Series) -> None:
+    """Render a traffic-light semaphore for EVA clearance states.
+
+    Args:
+        eva_counts: Series indexed by ["GO", "MONITOR", "NO-GO"] with integer counts.
+    """
+    go_count = int(eva_counts.get("GO", 0))
+    monitor_count = int(eva_counts.get("MONITOR", 0))
+    nogo_count = int(eva_counts.get("NO-GO", 0))
+    total = go_count + monitor_count + nogo_count
+
+    # Determine dominant status for display
+    if nogo_count > 0:
+        dominant = "NO-GO"
+        dominant_color = "#dc2626"  # red-600
+    elif monitor_count > 0:
+        dominant = "MONITOR"
+        dominant_color = "#f59e0b"  # amber-500
+    else:
+        dominant = "GO"
+        dominant_color = "#16a34a"  # green-600
+
+    st.markdown("##### 🚦 EVA Clearance Semaphore")
+
+    # Use columns to create a horizontal semaphore layout
+    col_go, col_mon, col_nogo, col_summary = st.columns([1, 1, 1, 2])
+
+    # Color logic: bright when active, dim when inactive
+    go_active = go_count > 0
+    mon_active = monitor_count > 0
+    nogo_active = nogo_count > 0
+
+    with col_go:
+        bg = "#16a34a" if go_active else "#e5e7eb"
+        text_color = "white" if go_active else "#9ca3af"
+        st.markdown(
+            f"""
+            <div style="
+                background: {bg};
+                color: {text_color};
+                border-radius: 50%;
+                width: 60px;
+                height: 60px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 14px;
+                margin: auto;
+                box-shadow: {'0 0 12px #16a34a' if go_active else 'none'};
+            ">GO<br>{go_count}</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col_mon:
+        bg = "#f59e0b" if mon_active else "#e5e7eb"
+        text_color = "white" if mon_active else "#9ca3af"
+        st.markdown(
+            f"""
+            <div style="
+                background: {bg};
+                color: {text_color};
+                border-radius: 50%;
+                width: 60px;
+                height: 60px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 11px;
+                margin: auto;
+                box-shadow: {'0 0 12px #f59e0b' if mon_active else 'none'};
+            ">MONITOR<br>{monitor_count}</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col_nogo:
+        bg = "#dc2626" if nogo_active else "#e5e7eb"
+        text_color = "white" if nogo_active else "#9ca3af"
+        st.markdown(
+            f"""
+            <div style="
+                background: {bg};
+                color: {text_color};
+                border-radius: 50%;
+                width: 60px;
+                height: 60px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: bold;
+                font-size: 11px;
+                margin: auto;
+                box-shadow: {'0 0 12px #dc2626' if nogo_active else 'none'};
+            ">NO-GO<br>{nogo_count}</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    with col_summary:
+        st.markdown(
+            f"""
+            <div style="padding: 8px; background: {dominant_color}22; border-left: 4px solid {dominant_color}; border-radius: 4px;">
+                <strong style="color: {dominant_color};">Current Status: {dominant}</strong><br>
+                <span style="font-size: 0.9em;">Total assessments: {total}</span>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+
 def _render_profile_scatter_chart(
     df: pd.DataFrame,
     *,
@@ -6040,11 +6153,7 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
         eva_norm = history_df["eva_status"].dropna().map(_normalize_eva_status)
         eva_status_counts = eva_norm.value_counts().reindex(["GO", "MONITOR", "NO-GO"]).fillna(0).astype(int)
         if eva_status_counts.sum() > 0:
-            _render_profile_bar_chart(
-                eva_status_counts.rename("EVA Clearance States"),
-                title="EVA Clearance States (standardized GO / MONITOR / NO-GO)",
-                y_axis_label="Count",
-            )
+            _render_eva_semaphore(eva_status_counts)
             st.caption(
                 "EVA clearance standardized: GO (cleared), MONITOR (requires mitigation/flight surgeon review), "
                 "NO-GO (not cleared)."
