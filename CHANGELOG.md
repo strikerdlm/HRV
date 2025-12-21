@@ -5,6 +5,22 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.35] - 2025-12-20
+
+### Added
+- **XGBoost and LightGBM ML models** (`app/app.py`): Added optional XGBoost and LightGBM gradient boosting models to space-weather ML analysis. These models often outperform RandomForest by 5-15% on tabular data. Models are automatically included if packages are installed (`pip install xgboost lightgbm`).
+- **SHAP model interpretability** (`app/app.py`): Added SHapley Additive exPlanations (SHAP) for model interpretability. SHAP provides individual prediction explanations, feature interaction effects, and global vs local importance rankings. Available if `shap` package is installed (`pip install shap`).
+- **Enhanced ML UI** (`app/app.py`): Updated Space Weather tab to display XGBoost and LightGBM metrics alongside existing models. Added tabs for Permutation Importance and SHAP Values with separate dataframes. Button text dynamically updates to show available models.
+- **SHAP export support** (`app/export_utils.py`): Added SHAP importances to PDF/Markdown export reports alongside permutation importances.
+
+### Changed
+- **ML model function signature** (`app/app.py`): Updated `_run_ml_models_space_weather()` to include XGBoost, LightGBM, and SHAP computation. Function gracefully handles missing optional dependencies.
+- **Requirements documentation** (`requirements.txt`): Added optional ML dependencies section with installation instructions for XGBoost, LightGBM, and SHAP.
+
+### Documentation
+- **ML enhancements guide** (`docs/ML_Enhancements_2025.md`): Created comprehensive guide documenting current ML implementations, recommended enhancements, priority matrix, and implementation roadmap.
+- **Manual updates** (`docs/Manual.md`): Updated Space Weather ML section to document new models (XGBoost, LightGBM) and SHAP interpretability features.
+
 ## [1.8.34] - 2025-12-19
 
 ### Documentation
