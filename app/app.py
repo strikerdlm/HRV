@@ -10841,29 +10841,47 @@ that predicts cognitive performance based on:
                 st.session_state["impact_snapshot"] = None
             if "impact_snapshot_error" not in st.session_state:
                 st.session_state["impact_snapshot_error"] = ""
+            if "impact_snapshot_loading" not in st.session_state:
+                st.session_state["impact_snapshot_loading"] = False
+            if "impact_snapshot_attempted" not in st.session_state:
+                st.session_state["impact_snapshot_attempted"] = False
             
-            if st.session_state.get("impact_snapshot") is None and not st.session_state.get(
-                "impact_snapshot_error"
+            # Only auto-fetch if not already loaded, not currently loading, and not already attempted
+            if (
+                st.session_state.get("impact_snapshot") is None
+                and not st.session_state.get("impact_snapshot_error")
+                and not st.session_state.get("impact_snapshot_loading")
+                and not st.session_state.get("impact_snapshot_attempted")
             ):
+                st.session_state["impact_snapshot_loading"] = True
                 try:
                     st.session_state["impact_snapshot"] = fetch_space_weather_snapshot()
                     st.session_state["impact_snapshot_error"] = ""
+                    st.session_state["impact_snapshot_attempted"] = True
                 except Exception as exc:
                     log_exception(_LOGGER, "Automatic impact prediction fetch failed", exc)
                     st.session_state["impact_snapshot_error"] = str(exc)
+                    st.session_state["impact_snapshot_attempted"] = True
+                finally:
+                    st.session_state["impact_snapshot_loading"] = False
             
             col_fetch_impact, col_refresh_info = st.columns([1, 2])
             with col_fetch_impact:
                 if st.button("🔄 Fetch Impact Predictions", key="fetch_impact_predictions"):
                     with st.spinner("Calculating arrival times..."):
+                        st.session_state["impact_snapshot_loading"] = True
                         try:
                             snapshot = fetch_space_weather_snapshot()
                             st.session_state["impact_snapshot"] = snapshot
                             st.session_state["impact_snapshot_error"] = ""
+                            st.session_state["impact_snapshot_attempted"] = True
                         except Exception as exc:
                             log_exception(_LOGGER, "Manual impact prediction fetch failed", exc)
                             st.session_state["impact_snapshot_error"] = str(exc)
+                            st.session_state["impact_snapshot_attempted"] = True
                             st.error(f"Failed to fetch impact predictions: {exc}")
+                        finally:
+                            st.session_state["impact_snapshot_loading"] = False
             with col_refresh_info:
                 if st.session_state.get("impact_snapshot"):
                     snap = st.session_state["impact_snapshot"]
