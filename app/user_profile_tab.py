@@ -522,17 +522,18 @@ def _render_eva_semaphore(eva_counts: pd.Series) -> None:
                 background: {bg};
                 color: {text_color};
                 border-radius: 50%;
-                width: 60px;
-                height: 60px;
+                width: 70px;
+                height: 70px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-weight: 700;
-                font-size: 10px;
-                line-height: 1.05;
+                font-weight: 800;
+                font-size: 12px;
+                letter-spacing: 0.5px;
                 margin: auto;
+                text-transform: uppercase;
                 box-shadow: {'0 0 12px #16a34a' if go_active else 'none'};
-            ">GO<br>{go_count}</div>
+            ">GO</div>
             """,
             unsafe_allow_html=True,
         )
@@ -546,17 +547,18 @@ def _render_eva_semaphore(eva_counts: pd.Series) -> None:
                 background: {bg};
                 color: {text_color};
                 border-radius: 50%;
-                width: 60px;
-                height: 60px;
+                width: 70px;
+                height: 70px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-weight: 700;
-                font-size: 9px;
-                line-height: 1.05;
+                font-weight: 800;
+                font-size: 10px;
+                letter-spacing: 0.5px;
                 margin: auto;
+                text-transform: uppercase;
                 box-shadow: {'0 0 12px #f59e0b' if mon_active else 'none'};
-            ">MONITOR<br>{monitor_count}</div>
+            ">MONITOR</div>
             """,
             unsafe_allow_html=True,
         )
@@ -570,27 +572,38 @@ def _render_eva_semaphore(eva_counts: pd.Series) -> None:
                 background: {bg};
                 color: {text_color};
                 border-radius: 50%;
-                width: 60px;
-                height: 60px;
+                width: 70px;
+                height: 70px;
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-weight: 700;
-                font-size: 9px;
-                line-height: 1.05;
+                font-weight: 800;
+                font-size: 10px;
+                letter-spacing: 0.5px;
                 margin: auto;
+                text-transform: uppercase;
                 box-shadow: {'0 0 12px #dc2626' if nogo_active else 'none'};
-            ">NO-GO<br>{nogo_count}</div>
+            ">NO-GO</div>
             """,
             unsafe_allow_html=True,
         )
 
+    # Summary badge showing only the dominant state (no numeric counts)
     with col_summary:
         st.markdown(
             f"""
-            <div style="padding: 8px; background: {dominant_color}22; border-left: 4px solid {dominant_color}; border-radius: 4px;">
-                <strong style="color: {dominant_color};">Current Status: {dominant}</strong><br>
-                <span style="font-size: 0.9em;">Total assessments: {total}</span>
+            <div style="
+                padding: 12px;
+                background: {dominant_color}22;
+                border: 1px solid {dominant_color}55;
+                border-radius: 8px;
+                text-align: center;
+                font-weight: 900;
+                letter-spacing: 0.6px;
+                text-transform: uppercase;
+                color: {dominant_color};
+            ">
+                {dominant}
             </div>
             """,
             unsafe_allow_html=True,
