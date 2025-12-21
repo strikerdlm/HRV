@@ -13424,8 +13424,10 @@ that predicts cognitive performance based on:
         except Exception:
             bg_status = {"noaa": {"done": False, "error": None, "stale": False}}
 
-        if not noaa_state.get("bundles") and not bg_status.get("noaa", {}).get("done"):
-            _auto_fetch_noaa_space_if_needed(noaa_state)
+        # NOTE: Auto-fetch disabled to prevent blocking UI. User can click fetch buttons.
+        # If background fetch completed, data will appear automatically.
+        # if not noaa_state.get("bundles") and not bg_status.get("noaa", {}).get("done"):
+        #     _auto_fetch_noaa_space_if_needed(noaa_state)
 
         # Data age indicator
         data_age = _get_bg_fetch_age_str()
@@ -13478,7 +13480,7 @@ that predicts cognitive performance based on:
                 and pd.api.types.is_numeric_dtype(windowed_df[metric])
             ]
         if not bundles:
-            st.info("Click “Fetch NOAA feeds” to populate the NOAA Space dashboard.")
+            st.info("📡 Click **Fetch NOAA feeds** above to load solar/geomagnetic data, or wait for the background fetch to complete.")
         else:
             option_labels = {
                 key: bundle.spec.title for key, bundle in bundles.items()
@@ -13897,14 +13899,51 @@ that predicts cognitive performance based on:
                     st.markdown("\n".join(summary_lines))
 
     with tab_export:
-        st.subheader("Group summaries (cohort export)")
+        # ---------------------------------------------------------------------
+        # EXPORT TAB — Always loads with basic options regardless of data state
+        # ---------------------------------------------------------------------
+        st.markdown("### 📄 Export & Download")
+        st.caption("Export HRV analysis results, user profile data, and cohort summaries.")
+
+        # Section 1: Current HRV Data Export (single-file)
+        st.markdown("---")
+        st.markdown("#### 📊 Current HRV Analysis")
+        if has_hrv_data and not windowed_df.empty:
+            st.success(f"✅ HRV data loaded: {len(windowed_df)} windows available for export.")
+            col_exp1, col_exp2 = st.columns(2)
+            with col_exp1:
+                csv_hrv = windowed_df.to_csv(index=False).encode("utf-8")
+                st.download_button(
+                    "⬇️ Download HRV Metrics (CSV)",
+                    data=csv_hrv,
+                    file_name=f"hrv_metrics_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                    mime="text/csv",
+                    key="export_tab_hrv_csv",
+                    use_container_width=True,
+                )
+            with col_exp2:
+                json_hrv = windowed_df.to_json(orient="records", indent=2)
+                st.download_button(
+                    "⬇️ Download HRV Metrics (JSON)",
+                    data=json_hrv.encode("utf-8"),
+                    file_name=f"hrv_metrics_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.json",
+                    mime="application/json",
+                    key="export_tab_hrv_json",
+                    use_container_width=True,
+                )
+        else:
+            st.info("📤 Upload RR interval data to enable HRV export.")
+
+        # Section 2: Cohort/Group Export
+        st.markdown("---")
+        st.subheader("👥 Group Summaries (Cohort Export)")
         if not USER_PROFILE_TAB_AVAILABLE:
             st.info("Cohort export requires the User Profile module.")
         else:
             active_users = get_all_active_users()
             if not active_users:
                 st.info(
-                    "No active cohort detected. Open 2+ user sessions (User Profile) to enable cohort export."
+                    "No active cohort detected. Open 2+ user sessions (User Profile tab) to enable cohort export."
                 )
             else:
                 # Build label map for selection UI
@@ -15120,80 +15159,199 @@ that predicts cognitive performance based on:
                 "GPT-5 interpretation is enabled; trigger the analysis to populate this section."
             )
     with tab_about:
+        # -------------------------------------------------------------------
+        # ABOUT TAB — Always loads immediately regardless of HRV data state
+        # -------------------------------------------------------------------
         st.markdown("### ℹ️ About & Documentation")
-        # Credentials first
+        st.caption("Author credentials, changelog, and user manual for the HRV Analysis Suite.")
+        
+        # Author credentials section (always visible)
+        st.markdown("---")
+        st.markdown("#### 👨‍⚕️ About the Author")
         st.markdown(
             "**Dr. Diego Leonel Malpica Hincapié** — Aerospace Medicine (Colombia)\n\n"
             "- Professional service within Colombian Military Health / Fuerza Aérea Colombiana (public record).\n"
             "- Focus areas: aerospace medicine, operational performance, fatigue, psychophysiology, and HRV.\n"
             "- This app and analysis workflow were authored and curated by Dr. Malpica.\n\n"
-            "Professional Profiles & Academic References:\n"
+            "**Professional Profiles & Academic References:**\n"
             "- **CVLAC** (Colciencias Research Profile): "
             "[https://scienti.minciencias.gov.co/cvlac/](https://scienti.minciencias.gov.co/cvlac/)\n"
             "- **LinkedIn**: [linkedin.com/in/diegoleonelmalpica](https://www.linkedin.com/in/diegoleonelmalpica)\n"
             "- **Universidad Nacional de Colombia** (Academic Reference): "
             "[UNAL Profile](https://medicina.bogota.unal.edu.co/formacion/especialidades-medicas/medicina-aeroespacial)\n\n"
-            "Project links:\n"
+            "**Project Links:**\n"
             "- GitHub repository: https://github.com/strikerdlm/HRV\n"
             "- HRV Normative review in this project: `docs/Normative.md`\n"
             "- Charting: [Apache ECharts](https://echarts.apache.org/handbook/en/get-started/)\n\n"
-            "Notes:\n"
+            "**Interpretation Notes:**\n"
             "- HRV interpretation is protocol- and cohort-dependent. Use within-subject trends and documented context "
             "(posture, time-of-day, respiration) for decisions.\n"
         )
-
+        
+        st.markdown("---")
+        
         # Changelog section
+        st.markdown("#### 📜 Changelog")
         changelog_path = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
-        with st.expander("📜 Changelog (CHANGELOG.md)", expanded=False):
-            try:
-                changelog_text = changelog_path.read_text(encoding="utf-8")
-                st.markdown(changelog_text)
-            except Exception as exc:
-                log_exception(_LOGGER, "Failed to load CHANGELOG.md", exc)
-                st.error("Unable to load CHANGELOG.md")
-
-        # Manual section
-        manual_path = Path(__file__).resolve().parents[1] / "docs" / "Manual.md"
-        with st.expander("📖 User Manual (docs/Manual.md)", expanded=True):
-            try:
-                manual_text = manual_path.read_text(encoding="utf-8")
-                st.markdown(manual_text)
-            except Exception as exc:
-                log_exception(_LOGGER, "Failed to load docs/Manual.md", exc)
-                st.error("Unable to load docs/Manual.md")
-    with tab_refs:
         try:
-            st.markdown("### 📚 References")
-            st.caption("Selected citations used across HRV, FRMS/SAFTE, and space-weather modules.")
-            st.markdown(
-                "**Selected references (APA format)**  \n"
-                "- Malik, M., Bigger, J. T., Camm, A. J., Kleiger, R. E., Malliani, A., Moss, A. J., & Schwartz, P. J. (1996). Heart rate variability: Standards of measurement, physiological interpretation, and clinical use. European Heart Journal, 17(3), 354–381. "
-                "https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf  \n"
-                "- Shaffer, F., & Ginsberg, J. P. (2017). An overview of heart rate variability metrics and norms. Frontiers in Public Health, 5, 258. "
-                "https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full  \n"
-                "- Nunan, D., Sandercock, G. R. H., & Brodie, D. A. (2010). A quantitative systematic review of normal values for short-term heart rate variability in healthy adults. Pacing and Clinical Electrophysiology, 33(11), 1407–1417. https://pubmed.ncbi.nlm.nih.gov/20663071/  \n"
-                "- Quigley, K. S., Berntson, G. G., Gianaros, P. J., Jennings, J. R., Norman, G. J., Thayer, J. F., & de Geus, E. (2024). Publication guidelines for human heart rate and heart rate variability studies in psychophysiology—Part 1: Physiological underpinnings and foundations of measurement. Psychophysiology. https://onlinelibrary.wiley.com/doi/10.1111/psyp.14604  \n"
-                "- Laborde, S., Mosley, E., & Thayer, J. F. (2017). Heart rate variability and cardiac vagal tone in psychophysiological research—Recommendations for experiment planning, data analysis, and data reporting. Frontiers in Psychology, 8, 213. "
-                "https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2017.00213/full  \n"
-                "- Sammito, S., & Böckelmann, I. (2016). Reference values for time- and frequency-domain heart rate variability measures. Heart Rhythm, 13(6), 1309–1316. https://pubmed.ncbi.nlm.nih.gov/27986557/  \n"
-                "- Berkoff, D. J., Cairns, C. B., Sanchez, L. D., & Moorman, C. T. (2007). Heart rate variability in elite American track-and-field athletes. Journal of Strength and Conditioning Research, 21(1), 227–231. https://pubmed.ncbi.nlm.nih.gov/17313294/  \n"
-                "\n\n"
-                "**Fatigue risk management (FRMS / SAFTE)**  \n"
-                "- International Civil Aviation Organization. (2016). *Manual for the Oversight of Fatigue Management Approaches* (Doc 9966, 2nd ed.). https://www.icao.int/safety/fatiguemanagement/FRMS%20Tools/Doc%209966.FRMS.2016%20Edition.en.pdf  \n"
-                "- Department of the Air Force. (n.d.). *AFMAN 11-202V3: General Flight Rules.* https://static.e-publishing.af.mil/production/1/af_a3/publication/afman11-202v3/afman11-202v3.pdf  \n"
-                "- Federal Aviation Administration. (2010). *Flightcrew Member Duty and Rest Requirements* (Docket No. FAA-2009-1093; Attachment 1). https://downloads.regulations.gov/FAA-2009-1093-2518/attachment_1.pdf  \n"
-                "- National Aeronautics and Space Administration. (2012). *NASA–easyJet Collaboration on the Human Factors Monitoring Program (HFMP) Study* (NASA NTRS No. 20120013448). https://ntrs.nasa.gov/api/citations/20120013448/downloads/20120013448.pdf  \n"
-                "- Federal Railroad Administration. (2006). *Validation and calibration of a fatigue assessment tool for railroad work schedules* (Final report; DOT/FRA/ORD-06/21). https://rosap.ntl.bts.gov/view/dot/62575  \n"
-                "\n\n"
-                "**Space radiation & space-weather scales (used in profile dose/alerts)**  \n"
-                "- National Aeronautics and Space Administration. (2022). *NASA Space Flight Human-System Standard, Volume 1: Crew Health* (NASA-STD-3001, Rev. B). https://www.nasa.gov/wp-content/uploads/2020/10/2022-01-05_nasa-std-3001_vol.1_rev._b_final_draft_with_signature_010522.pdf  \n"
-                "- Zhang, S., Berger, T., Matthiä, D., Hellweg, C. E., et al. (2020). First measurements of the radiation dose on the lunar surface. *Science Advances, 6*(39), eaaz1334. https://doi.org/10.1126/sciadv.aaz1334  \n"
-                "- Hassler, D. M., Zeitlin, C., Wimmer-Schweingruber, R. F., Ehresmann, B., et al. (2014). Mars' surface radiation environment measured with the Mars Science Laboratory's Curiosity rover. *Science, 343*(6169), 1244797. https://doi.org/10.1126/science.1244797  \n"
-                "- NOAA Space Weather Prediction Center. (n.d.). *Solar radiation storms (S-scale).* https://www.swpc.noaa.gov/phenomena/solar-radiation-storm"
-            )
+            changelog_text = changelog_path.read_text(encoding="utf-8")
+            with st.expander("View CHANGELOG.md", expanded=False):
+                st.markdown(changelog_text)
         except Exception as exc:
-            log_exception(_LOGGER, "References tab render failed", exc)
-            st.error("Unable to load references. Please check logs for details.")
+            log_exception(_LOGGER, "Failed to load CHANGELOG.md", exc)
+            st.warning("Unable to load CHANGELOG.md — check that the file exists in the project root.")
+        
+        st.markdown("---")
+        
+        # User Manual section
+        st.markdown("#### 📖 User Manual")
+        manual_path = Path(__file__).resolve().parents[1] / "docs" / "Manual.md"
+        try:
+            manual_text = manual_path.read_text(encoding="utf-8")
+            with st.expander("View User Manual (docs/Manual.md)", expanded=True):
+                st.markdown(manual_text)
+        except Exception as exc:
+            log_exception(_LOGGER, "Failed to load docs/Manual.md", exc)
+            st.warning("Unable to load docs/Manual.md — check that the file exists in the docs folder.")
+    with tab_refs:
+        # ---------------------------------------------------------------------
+        # REFERENCES TAB — Always loads immediately regardless of HRV data state
+        # ---------------------------------------------------------------------
+        st.markdown("### 📚 References")
+        st.caption("Selected peer-reviewed citations and technical documents used across HRV, FRMS/SAFTE, circadian, and space-weather modules.")
+
+        # HRV Standards & Measurement
+        st.markdown("---")
+        st.markdown("#### 📊 HRV Standards & Measurement")
+        st.markdown(
+            "- Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology. (1996). "
+            "Heart rate variability: Standards of measurement, physiological interpretation, and clinical use. *Circulation, 93*(5), 1043–1065. "
+            "[https://doi.org/10.1161/01.CIR.93.5.1043](https://doi.org/10.1161/01.CIR.93.5.1043)  \n"
+            "- Shaffer, F., & Ginsberg, J. P. (2017). An overview of heart rate variability metrics and norms. *Frontiers in Public Health, 5*, 258. "
+            "[https://doi.org/10.3389/fpubh.2017.00258](https://doi.org/10.3389/fpubh.2017.00258)  \n"
+            "- Nunan, D., Sandercock, G. R. H., & Brodie, D. A. (2010). A quantitative systematic review of normal values for short-term heart rate variability in healthy adults. "
+            "*Pacing and Clinical Electrophysiology, 33*(11), 1407–1417. [https://doi.org/10.1111/j.1540-8159.2010.02841.x](https://doi.org/10.1111/j.1540-8159.2010.02841.x)  \n"
+            "- Laborde, S., Mosley, E., & Thayer, J. F. (2017). Heart rate variability and cardiac vagal tone in psychophysiological research—Recommendations. "
+            "*Frontiers in Psychology, 8*, 213. [https://doi.org/10.3389/fpsyg.2017.00213](https://doi.org/10.3389/fpsyg.2017.00213)  \n"
+            "- Billman, G. E. (2013). The LF/HF ratio does not accurately measure cardiac sympatho-vagal balance. *Frontiers in Physiology, 4*. "
+            "[https://doi.org/10.3389/fphys.2013.00026](https://doi.org/10.3389/fphys.2013.00026)  \n"
+        )
+
+        # HRV Processing & Artifact Correction
+        st.markdown("#### 🔧 HRV Processing & Artifact Correction")
+        st.markdown(
+            "- Tarvainen, M. P., Niskanen, J.-P., Lipponen, J. A., Ranta-aho, P. O., & Karjalainen, P. A. (2014). Kubios HRV – Heart rate variability analysis software. "
+            "*Computer Methods and Programs in Biomedicine, 113*(1), 210–220. [https://doi.org/10.1016/j.cmpb.2013.07.024](https://doi.org/10.1016/j.cmpb.2013.07.024)  \n"
+            "- Lipponen, J. A., & Tarvainen, M. P. (2019). A robust algorithm for heart rate variability time series artefact correction. "
+            "*Journal of Medical Engineering & Technology, 43*(3), 173–181. [https://doi.org/10.1080/03091902.2019.1640306](https://doi.org/10.1080/03091902.2019.1640306)  \n"
+            "- Pan, J., & Tompkins, W. J. (1985). A real-time QRS detection algorithm. *IEEE Transactions on Biomedical Engineering, BME-32*(3), 230–236. "
+            "[https://doi.org/10.1109/TBME.1985.325532](https://doi.org/10.1109/TBME.1985.325532)  \n"
+        )
+
+        # Nonlinear HRV Analysis
+        st.markdown("#### 🧮 Nonlinear HRV Analysis")
+        st.markdown(
+            "- Pincus, S. M. (1991). Approximate entropy as a measure of system complexity. *Proceedings of the National Academy of Sciences, 88*(6), 2297–2301. "
+            "[https://doi.org/10.1073/pnas.88.6.2297](https://doi.org/10.1073/pnas.88.6.2297)  \n"
+            "- Richman, J. S., & Moorman, J. R. (2000). Physiological time-series analysis using approximate entropy and sample entropy. "
+            "*American Journal of Physiology-Heart and Circulatory Physiology, 278*(6), H2039–H2049. [https://doi.org/10.1152/ajpheart.2000.278.6.h2039](https://doi.org/10.1152/ajpheart.2000.278.6.h2039)  \n"
+            "- Peng, C.-K., Havlin, S., Stanley, H. E., & Goldberger, A. L. (1995). Quantification of scaling exponents and crossover phenomena in nonstationary heartbeat time series. "
+            "*Chaos, 5*(1), 82–87. [https://doi.org/10.1063/1.166141](https://doi.org/10.1063/1.166141)  \n"
+            "- Costa, M. D., Davis, R. B., & Goldberger, A. L. (2017). Heart rate fragmentation: A new approach to the analysis of cardiac interbeat interval dynamics. "
+            "*Frontiers in Physiology, 8*. [https://doi.org/10.3389/fphys.2017.00255](https://doi.org/10.3389/fphys.2017.00255)  \n"
+        )
+
+        # Circadian Biology & Modelling
+        st.markdown("#### 🌙 Circadian Biology & Modelling")
+        st.markdown(
+            "- Forger, D. B., Jewett, M. E., & Kronauer, R. E. (1999). A simpler model of the human circadian pacemaker. *Journal of Biological Rhythms, 14*(6), 533–538. "
+            "[https://doi.org/10.1177/074873099129000867](https://doi.org/10.1177/074873099129000867)  \n"
+            "- Khalsa, S. B. S., Jewett, M. E., Cajochen, C., & Czeisler, C. A. (2003). A phase response curve to single bright light pulses in human subjects. "
+            "*The Journal of Physiology, 549*(3), 945–952. [https://doi.org/10.1113/jphysiol.2003.040477](https://doi.org/10.1113/jphysiol.2003.040477)  \n"
+            "- St Hilaire, M. A., Gooley, J. J., Khalsa, S. B. S., Kronauer, R. E., Czeisler, C. A., & Lockley, S. W. (2012). Human phase response curve to a 1 h pulse of bright white light. "
+            "*The Journal of Physiology, 590*(13), 3035–3045. [https://doi.org/10.1113/jphysiol.2012.227892](https://doi.org/10.1113/jphysiol.2012.227892)  \n"
+            "- Hannay, K. M., Booth, V., & Forger, D. B. (2019). Macroscopic models for human circadian rhythms. *Journal of Biological Rhythms, 34*(6), 658–671. "
+            "[https://doi.org/10.1177/0748730419878298](https://doi.org/10.1177/0748730419878298)  \n"
+        )
+
+        # Fatigue Science & FRMS
+        st.markdown("#### 😴 Fatigue Science & FRMS")
+        st.markdown(
+            "- Van Dongen, H. P. A., Maislin, G., Mullington, J. M., & Dinges, D. F. (2003). The cumulative cost of additional wakefulness: Dose-response effects on neurobehavioral functions. "
+            "*Sleep, 26*(2), 117–126. [https://doi.org/10.1093/sleep/26.2.117](https://doi.org/10.1093/sleep/26.2.117)  \n"
+            "- Belenky, G., Wesensten, N. J., Thorne, D. R., et al. (2003). Patterns of performance degradation and restoration during sleep restriction and subsequent recovery. "
+            "*Journal of Sleep Research, 12*(1), 1–12. [https://doi.org/10.1046/j.1365-2869.2003.00337.x](https://doi.org/10.1046/j.1365-2869.2003.00337.x)  \n"
+            "- Basner, M., Moore, T. M., Nasrini, J., Gur, R. C., & Dinges, D. F. (2021). Standardization of psychomotor vigilance testing methods and reporting. "
+            "*Sleep, 44*(7). [https://doi.org/10.1093/sleep/zsab114](https://doi.org/10.1093/sleep/zsab114)  \n"
+            "- Dawson, D., Ian Noy, Y., Härmä, M., Åkerstedt, T., & Belenky, G. (2011). Modelling fatigue and the use of fatigue models in work settings. "
+            "*Accident Analysis & Prevention, 43*(2), 549–564. [https://doi.org/10.1016/j.aap.2009.12.030](https://doi.org/10.1016/j.aap.2009.12.030)  \n"
+            "- Federal Aviation Administration. (2013). *Fatigue Risk Management Systems for Aviation Safety* (AC 120-103A). "
+            "[https://www.faa.gov/documentlibrary/media/advisory_circular/ac_120-103a.pdf](https://www.faa.gov/documentlibrary/media/advisory_circular/ac_120-103a.pdf)  \n"
+        )
+
+        # Wearable Validation
+        st.markdown("#### ⌚ Wearable Validation")
+        st.markdown(
+            "- Schaffarczyk, M., Rogers, B., Reer, R., & Gronwald, T. (2022). Validity of the Polar H10 sensor for heart rate variability analysis during resting state and incremental exercise. "
+            "*Sensors, 22*(17), 6536. [https://doi.org/10.3390/s22176536](https://doi.org/10.3390/s22176536)  \n"
+            "- Nunan, D., Donovan, G., Jakovljevic, D. G., et al. (2009). Validity and reliability of short-term heart-rate variability from the Polar S810. "
+            "*Medicine & Science in Sports & Exercise, 41*(1), 243–250. [https://doi.org/10.1249/MSS.0b013e318184a4b1](https://doi.org/10.1249/MSS.0b013e318184a4b1)  \n"
+            "- de Zambotti, M., Cellini, N., Goldstone, A., Colrain, I. M., & Baker, F. C. (2019). Wearable sleep technology in clinical and research settings. "
+            "*Medicine & Science in Sports & Exercise, 51*(7), 1538–1557. [https://doi.org/10.1249/MSS.0000000000001947](https://doi.org/10.1249/MSS.0000000000001947)  \n"
+            "- Schäfer, A., & Vagedes, J. (2013). How accurate is pulse rate variability as an estimate of heart rate variability? "
+            "*International Journal of Cardiology, 166*(1), 15–29. [https://doi.org/10.1016/j.ijcard.2012.03.119](https://doi.org/10.1016/j.ijcard.2012.03.119)  \n"
+        )
+
+        # Space Weather & Geomagnetic Effects
+        st.markdown("#### 🌍 Space Weather & Geomagnetic Effects")
+        st.markdown(
+            "- Alabdulgader, A., McCraty, R., Atkinson, M., et al. (2018). Long-term study of heart rate variability responses to changes in the solar and geomagnetic environment. "
+            "*Scientific Reports, 8*(1). [https://doi.org/10.1038/s41598-018-20932-x](https://doi.org/10.1038/s41598-018-20932-x)  \n"
+            "- Vieira, C. L. Z., Chen, K., Garshick, E., et al. (2022). Geomagnetic disturbances reduce heart rate variability in the Normative Aging Study. "
+            "*Science of The Total Environment, 839*, 156235. [https://doi.org/10.1016/j.scitotenv.2022.156235](https://doi.org/10.1016/j.scitotenv.2022.156235)  \n"
+            "- NOAA Space Weather Prediction Center. (n.d.). The K-index. [https://www.swpc.noaa.gov/sites/default/files/images/u2/TheK-index.pdf](https://www.swpc.noaa.gov/sites/default/files/images/u2/TheK-index.pdf)  \n"
+            "- NOAA Space Weather Prediction Center. (n.d.). NOAA scales explanation. [https://www.swpc.noaa.gov/noaa-scales-explanation](https://www.swpc.noaa.gov/noaa-scales-explanation)  \n"
+            "- NASA/CCMC. (n.d.). DONKI: Space Weather Database of Notifications, Knowledge, Information. "
+            "[https://ccmc.gsfc.nasa.gov/tools/DONKI/](https://ccmc.gsfc.nasa.gov/tools/DONKI/)  \n"
+        )
+
+        # Governmental & Technical Standards
+        st.markdown("#### 📋 Governmental & Technical Standards")
+        st.markdown(
+            "- National Aeronautics and Space Administration. (2022). *NASA-STD-3001, Volume 2, Revision B: Human factors, habitability, and environmental health.* "
+            "[https://ntrs.nasa.gov/citations/20220001995](https://ntrs.nasa.gov/citations/20220001995)  \n"
+            "- European Union Aviation Safety Agency. (2023). Easy Access Rules for Air Operations. "
+            "[https://www.easa.europa.eu/en/document-library/easy-access-rules/online-publications/easy-access-rules-air-operations](https://www.easa.europa.eu/en/document-library/easy-access-rules/online-publications/easy-access-rules-air-operations)  \n"
+            "- International Civil Aviation Organization. (2016). *Manual for the Oversight of Fatigue Management Approaches* (Doc 9966, 2nd ed.). "
+            "[https://www.icao.int/safety/fatiguemanagement/](https://www.icao.int/safety/fatiguemanagement/)  \n"
+            "- Department of the Air Force. *AFMAN 11-202V3: General Flight Rules.* "
+            "[https://static.e-publishing.af.mil/production/1/af_a3/publication/afman11-202v3/afman11-202v3.pdf](https://static.e-publishing.af.mil/production/1/af_a3/publication/afman11-202v3/afman11-202v3.pdf)  \n"
+        )
+
+        # Blood Pressure Variability
+        st.markdown("#### 💉 Blood Pressure Variability")
+        st.markdown(
+            "- Parati, G., Stergiou, G. S., Dolan, E., & Bilo, G. (2018). Blood pressure variability: Clinical relevance and application. "
+            "*The Journal of Clinical Hypertension, 20*(7), 1133–1137. [https://doi.org/10.1111/jch.13304](https://doi.org/10.1111/jch.13304)  \n"
+            "- Rothwell, P. M., Howard, S. C., Dolan, E., et al. (2010). Prognostic significance of visit-to-visit variability, maximum systolic blood pressure, and episodic hypertension. "
+            "*The Lancet, 375*(9718), 895–905. [https://doi.org/10.1016/S0140-6736(10)60308-X](https://doi.org/10.1016/S0140-6736(10)60308-X)  \n"
+        )
+
+        # Statistical & ML Methods
+        st.markdown("#### 📈 Statistical & Machine Learning Methods")
+        st.markdown(
+            "- Benjamini, Y., & Hochberg, Y. (1995). Controlling the false discovery rate: A practical and powerful approach to multiple testing. "
+            "*Journal of the Royal Statistical Society Series B, 57*(1), 289–300. [https://doi.org/10.1111/j.2517-6161.1995.tb02031.x](https://doi.org/10.1111/j.2517-6161.1995.tb02031.x)  \n"
+            "- Killick, R., Fearnhead, P., & Eckley, I. A. (2012). Optimal detection of changepoints with a linear computational cost. "
+            "*Journal of the American Statistical Association, 107*(500), 1590–1598. [https://doi.org/10.1080/01621459.2012.737745](https://doi.org/10.1080/01621459.2012.737745)  \n"
+            "- Lundberg, S. M., Erion, G., Chen, H., et al. (2020). From local explanations to global understanding with explainable AI for trees. "
+            "*Nature Machine Intelligence, 2*(1), 56–67. [https://doi.org/10.1038/s42256-019-0138-9](https://doi.org/10.1038/s42256-019-0138-9)  \n"
+        )
+
+        st.markdown("---")
+        st.caption("Full literature review available in `docs/lit_review.md`.")
+
+        # Optional: NASA DONKI events (only when HRV data is loaded)
         st.markdown("### NASA DONKI events")
         if not NASA_API_KEY:
             st.info("Set NASA_API_KEY in your environment to enable DONKI events.")
