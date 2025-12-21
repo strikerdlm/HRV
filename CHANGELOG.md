@@ -5,6 +5,17 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.37] - 2025-12-21
+
+### Added
+- **Dual Garmin sleep autofill buttons** (`app/user_profile_tab.py`): One-click Vivosmart pull now exists both in the Profile Tools Engine and in the Sleep & Chronotype section under Energy & Nutrition. It fills sleep hours, sleep quality, hours awake, RMSSD, and resting HR for SAFTE and Operational Performance tools.
+
+### Changed
+- **Sleep input emphasis** (`app/user_profile_tab.py`): Sleep/chronotype inputs are highlighted alongside nutrition basics, with shared session keys feeding SAFTE fatigue and Operational Performance (HRV+SAFTE) tools.
+
+### Notes
+- All tests pass (`pytest`).
+
 ## [1.8.36] - 2025-12-21
 
 ### Added
