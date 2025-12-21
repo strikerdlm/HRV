@@ -3584,6 +3584,47 @@ def _render_data_management(user: UserProfile) -> None:
         fname = f"{username}_data_export.json"
         return fname, json_bytes
 
+    @st.cache_data(ttl=60, show_spinner=False)
+    def _build_export_csv_blob(user_id: str, username: str) -> tuple[str, bytes]:
+        """Flatten export data into a single CSV with section + JSON payload rows."""
+        import json
+        import pandas as pd
+
+        db = get_database()
+        export_data = {
+            "user_profile": [db.get_user(user_id).to_dict() if db.get_user(user_id) else {}],
+            "clinical_scales": [s.to_dict() for s in db.get_clinical_scales_history(user_id)],
+            "hrv_measurements": [m.to_dict() for m in db.get_hrv_history(user_id)],
+            "garmin_daily_metrics": [g.to_dict() for g in db.get_garmin_daily_metrics(user_id)],
+            "body_composition": [b.to_dict() for b in db.get_body_composition_history(user_id)],
+            "exploration_medical_history": db.get_medical_history(user_id, limit=500),
+        }
+
+        rows: list[dict[str, str]] = []
+        for section, items in export_data.items():
+            if isinstance(items, list):
+                for idx, rec in enumerate(items):
+                    rows.append(
+                        {
+                            "section": section,
+                            "index": idx,
+                            "data_json": json.dumps(rec, default=str),
+                        }
+                    )
+            else:
+                rows.append(
+                    {
+                        "section": section,
+                        "index": 0,
+                        "data_json": json.dumps(items, default=str),
+                    }
+                )
+
+        df = pd.DataFrame(rows)
+        csv_bytes = df.to_csv(index=False).encode("utf-8")
+        fname = f"{username}_data_export.csv"
+        return fname, csv_bytes
+
     col1, col2 = st.columns(2)
 
     with col1:
@@ -3595,6 +3636,14 @@ def _render_data_management(user: UserProfile) -> None:
                 data=blob,
                 file_name=fname,
                 mime="application/json",
+                use_container_width=True,
+            )
+            fname_csv, csv_blob = _build_export_csv_blob(user.user_id, user.username or "user")
+            st.download_button(
+                "📄 Download CSV",
+                data=csv_blob,
+                file_name=fname_csv,
+                mime="text/csv",
                 use_container_width=True,
             )
         except Exception as exc:
