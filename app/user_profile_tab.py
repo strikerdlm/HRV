@@ -4020,6 +4020,11 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
         options=tool_options,
         key=f"profile_tool_select_{user.user_id}",
     )
+    st.caption(
+        "Fatigue Prediction (SAFTE) uses sleep quantity/quality + hours awake. "
+        "Operational Performance (HRV+SAFTE) fuses SAFTE sleep drivers with HRV markers "
+        "(RMSSD, resting HR) for a combined readiness view."
+    )
     
     st.markdown("---")
     
@@ -4499,6 +4504,10 @@ def _render_fatigue_prediction_tool(
 ) -> None:
     """Render SAFTE fatigue prediction results."""
     st.markdown("### 😴 Fatigue Prediction (SAFTE Model)")
+    st.caption(
+        "Uses only SAFTE sleep drivers: sleep hours, sleep quality, hours awake, and chronotype. "
+        "No HRV metrics are mixed into this prediction."
+    )
     
     fatigue = predict_fatigue(
         sleep_hours_last_night=sleep_hours,
@@ -4719,8 +4728,8 @@ def _render_operational_performance_tool(
     """Render fused operational performance predictor (HRV + SAFTE)."""
     st.markdown("### 🧠 Operational Performance (HRV + SAFTE)")
     st.caption(
-        "Fuses SAFTE-style cognitive effectiveness (sleep/circadian) with HRV-derived recovery and autonomic markers. "
-        "Use for task scheduling and risk awareness (not a diagnosis)."
+        "Combines SAFTE sleep/circadian effectiveness with HRV (RMSSD, recovery) and autonomic markers. "
+        "This is distinct from the SAFTE-only fatigue prediction above."
     )
 
     op = predict_operational_performance(
@@ -5545,6 +5554,110 @@ def _render_nasa_calculator(user: UserProfile) -> None:
             "📚 **References**: Mifflin et al. (1990), NASA JSC67378 (2020), "
             "Scott et al. (2020). See Manual for full citations."
         )
+
+        st.markdown("---")
+        st.markdown("##### 😴 Sleep & Chronotype Inputs (SAFTE / Operational)")
+        st.caption(
+            "Enter sleep and chronotype values to feed SAFTE fatigue prediction and the Operational Performance (HRV+SAFTE) tool. "
+            "These values sync with the Profile Tools Engine below."
+        )
+
+        # Defaults pulled from shared session keys so UI stays consistent
+        sleep_key = f\"tools_sleep_hours_{user.user_id}\"
+        sleep_quality_key = f\"tools_sleep_quality_{user.user_id}\"
+        hours_awake_key = f\"tools_hours_awake_{user.user_id}\"
+        chrono_key = f\"tools_chronotype_offset_{user.user_id}\"
+        rmssd_key = f\"tools_rmssd_{user.user_id}\"
+        resting_hr_key = f\"tools_resting_hr_{user.user_id}\"
+        vo2_key = f\"tools_vo2_{user.user_id}\"
+
+        sleep_hours_val = float(_safe_float(st.session_state.get(sleep_key)) or 7.0)
+        sleep_quality_val = float(_safe_float(st.session_state.get(sleep_quality_key)) or 0.7)
+        hours_awake_val = float(_safe_float(st.session_state.get(hours_awake_key)) or 12.0)
+        chronotype_offset_val = float(_safe_float(st.session_state.get(chrono_key)) or 0.0)
+        rmssd_val = float(_safe_float(st.session_state.get(rmssd_key)) or 35.0)
+        resting_hr_val = float(_safe_float(st.session_state.get(resting_hr_key)) or (user.resting_hr_bpm or 65))
+        vo2_val = float(_safe_float(st.session_state.get(vo2_key)) or (user.vo2max_ml_kg_min or 38.0))
+
+        col_sleep_a, col_sleep_b, col_sleep_c = st.columns(3)
+        with col_sleep_a:
+            sleep_hours_val = st.number_input(
+                "Sleep hours (last night)",
+                min_value=0.0,
+                max_value=14.0,
+                step=0.5,
+                value=sleep_hours_val,
+                key=f"nasa_sleep_hours_{user.user_id}",
+            )
+            sleep_quality_val = st.slider(
+                "Sleep quality (0-1)",
+                min_value=0.0,
+                max_value=1.0,
+                step=0.05,
+                value=sleep_quality_val,
+                key=f"nasa_sleep_quality_{user.user_id}",
+            )
+        with col_sleep_b:
+            hours_awake_val = st.number_input(
+                "Hours awake",
+                min_value=0.0,
+                max_value=48.0,
+                step=0.5,
+                value=hours_awake_val,
+                key=f"nasa_hours_awake_{user.user_id}",
+            )
+            chronotype_offset_val = st.slider(
+                "Chronotype offset (hours)",
+                min_value=-2.5,
+                max_value=2.5,
+                step=0.25,
+                value=chronotype_offset_val,
+                help="Morning type negative; evening type positive.",
+                key=f"nasa_chronotype_offset_{user.user_id}",
+            )
+        with col_sleep_c:
+            rmssd_val = st.number_input(
+                "RMSSD (ms)",
+                min_value=0.0,
+                max_value=200.0,
+                step=1.0,
+                value=rmssd_val,
+                key=f"nasa_rmssd_{user.user_id}",
+            )
+            resting_hr_val = st.number_input(
+                "Resting HR (bpm)",
+                min_value=30,
+                max_value=120,
+                step=1,
+                value=int(resting_hr_val),
+                key=f"nasa_resting_hr_{user.user_id}",
+            )
+
+        col_vo2_sync, col_sleep_sync = st.columns([1, 1])
+        with col_vo2_sync:
+            vo2_val = st.number_input(
+                "VO₂ max (mL·kg⁻¹·min⁻¹)",
+                min_value=10.0,
+                max_value=90.0,
+                step=0.5,
+                value=vo2_val,
+                key=f"nasa_vo2_{user.user_id}",
+            )
+
+        with col_sleep_sync:
+            if st.button(
+                "🔄 Sync to Profile Tools Engine",
+                key=f"sync_sleep_to_tools_{user.user_id}",
+                help="Push these sleep/chronotype/HRV values into the Profile Tools Engine (SAFTE + Operational Performance).",
+            ):
+                st.session_state[sleep_key] = float(sleep_hours_val)
+                st.session_state[sleep_quality_key] = float(sleep_quality_val)
+                st.session_state[hours_awake_key] = float(hours_awake_val)
+                st.session_state[chrono_key] = float(chronotype_offset_val)
+                st.session_state[rmssd_key] = float(rmssd_val)
+                st.session_state[resting_hr_key] = float(resting_hr_val)
+                st.session_state[vo2_key] = float(vo2_val)
+                st.success("Synced sleep/chronotype/HRV inputs to Profile Tools Engine.")
         
     except Exception as exc:
         st.error(f"Calculation error: {exc}")
