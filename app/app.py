@@ -9767,10 +9767,14 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
             )
 
             fatigue_defaults = _sync_fatigue_widgets(active_user_context)
-            if stored_fatigue_settings:
-                for key, value in stored_fatigue_settings.items():
-                    st.session_state[key] = value
+            # Only apply stored settings on first load (don't overwrite user changes)
+            fatigue_settings_applied_key = f"_fatigue_settings_applied_{fatigue_user_id}"
+            if stored_fatigue_settings and not st.session_state.get(fatigue_settings_applied_key):
+                for skey, sval in stored_fatigue_settings.items():
+                    if skey not in st.session_state:
+                        st.session_state[skey] = sval
                 fatigue_defaults.update(stored_fatigue_settings)
+                st.session_state[fatigue_settings_applied_key] = True
 
             if fatigue_user_id and active_user_context.get("has_user") and not stored_fatigue_settings:
                 prof_defaults = _cached_fatigue_profile_settings(str(fatigue_user_id))
