@@ -92,9 +92,14 @@ All other tabs show **example data** and **reference values** to help you unders
 For heavy HRV computations, GPU acceleration is supported via NVIDIA CUDA:
 
 1. **Supported GPUs**: RTX 5070, RTX 4090, RTX 3080, and other CUDA-capable cards
-2. **Installation**: `pip install cupy-cuda12x` (for CUDA 12.x)
+2. **Installation by GPU family**:
+   - **RTX 50xx (Blackwell)**: `pip install cupy-cuda12x` + CUDA Toolkit 12.8+
+   - **RTX 40xx/30xx (Ada/Ampere)**: `pip install cupy-cuda12x`
+   - **RTX 20xx (Turing)**: `pip install cupy-cuda11x`
 3. **Usage**: Enable in sidebar under "🖥️ GPU Processing"
 4. **Benefits**: 2-10x speedup for FFT, PSD, and large array operations
+
+**RTX 50 Series (Blackwell) Note**: The RTX 5070/5080/5090 use Compute Capability 12.0 (sm_120), which requires CUDA Toolkit 12.8 or later for JIT kernel compilation. Download from [NVIDIA CUDA Toolkit](https://developer.nvidia.com/cuda-downloads). The app detects this automatically and shows a helpful message if upgrade is needed.
 
 The app automatically detects GPU availability and falls back to CPU when CUDA is not present.
 
