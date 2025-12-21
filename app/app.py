@@ -9875,7 +9875,9 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                             fatigue_defaults["fatigue_waketime"] = int(local_end.hour)
 
             st.markdown("#### 🔄 Cross-tab correlation: Circadian ➜ Fatigue")
-            circadian_context = cross_tab_broker.get_latest("circadian", fatigue_user_id)
+            circadian_entry = cross_tab_broker.get_latest("circadian", fatigue_user_id)
+            # Extract payload from the entry structure (data is nested under "payload")
+            circadian_context = circadian_entry.get("payload", {}) if circadian_entry else {}
             if circadian_context:
                 sleep_window = circadian_context.get("sleep_window", {})
                 bedtime_hour = int(
@@ -9887,31 +9889,36 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 models = circadian_context.get("models") or []
                 esri_info = circadian_context.get("esri", {})
                 esri_mean = esri_info.get("mean")
+                chronotype_offset = float(circadian_context.get("chronotype_offset", 0.0))
+                
+                # Display schedule type for context
+                schedule_info = circadian_context.get("schedule", {})
+                schedule_type = schedule_info.get("type", "Regular")
 
                 col_ctx1, col_ctx2, col_ctx3, col_ctx4 = st.columns(4)
                 with col_ctx1:
                     st.metric(
                         "Models",
                         ", ".join(models) if models else "—",
-                        help="Latest circadian models executed",
+                        help="Latest circadian models executed in the Circadian tab",
                     )
                 with col_ctx2:
                     st.metric(
                         "Sleep window",
                         f"{bedtime_hour:02d}:00 → {waketime_hour:02d}:00",
-                        help="From Circadian tab light schedule",
+                        help=f"From Circadian tab ({schedule_type} schedule)",
                     )
                 with col_ctx3:
                     st.metric(
                         "Chronotype Δ",
-                        f"{circadian_context.get('chronotype_offset', 0.0):+.1f} h",
-                        help="Offset from active circadian scenario",
+                        f"{chronotype_offset:+.1f} h",
+                        help="Chronotype offset from active user profile",
                     )
                 with col_ctx4:
                     st.metric(
                         "ESRI",
                         f"{esri_mean:.3f}" if esri_mean is not None else "—",
-                        help="Entrainment Signal Regularity Index (higher is better)",
+                        help="Entrainment Signal Regularity Index (run ESRI tab in Circadian to compute)",
                     )
 
                 if st.button(
@@ -9922,15 +9929,14 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 ):
                     st.session_state["fatigue_bedtime"] = bedtime_hour
                     st.session_state["fatigue_waketime"] = waketime_hour
-                    st.session_state["fatigue_chronotype"] = float(
-                        circadian_context.get(
-                            "chronotype_offset", fatigue_defaults["fatigue_chronotype"]
-                        )
+                    st.session_state["fatigue_chronotype"] = chronotype_offset
+                    st.success(
+                        f"Fatigue inputs updated from Circadian tab: "
+                        f"Bed {bedtime_hour:02d}:00, Wake {waketime_hour:02d}:00, Chrono {chronotype_offset:+.1f}h"
                     )
-                    st.success("Fatigue inputs updated from Circadian tab.")
             else:
                 st.caption(
-                    "No circadian scenario shared yet. Run the Circadian tab to sync cues for fatigue planning."
+                    "No circadian scenario shared yet. Run the Circadian tab (📈 Amplitude & Phase) to sync cues for fatigue planning."
                 )
             # Scientific explanation expander
             with st.expander("📖 **Understanding the SAFTE Model**", expanded=False):
@@ -11254,15 +11260,123 @@ that predicts cognitive performance based on:
                         alerts = []
                         log_exception(_LOGGER, "FRMS alerts computation failed", exc)
                     if alerts:
-                        st.markdown("#### 🚨 FRMS Alerts (rule-based)")
-                        for a in alerts:
-                            text = f"**{a.message}** — {a.rationale}"
-                            if a.level == "critical":
-                                st.error(text)
-                            elif a.level == "warning":
-                                st.warning(text)
-                            else:
-                                st.info(text)
+                        st.markdown("#### 🚨 FRMS Alerts (Rule-Based Triggers)")
+                        
+                        # Group alerts by level for organized display
+                        critical_alerts = [a for a in alerts if a.level == "critical"]
+                        warning_alerts = [a for a in alerts if a.level == "warning"]
+                        info_alerts = [a for a in alerts if a.level not in ("critical", "warning")]
+                        
+                        # Alert styling configuration
+                        alert_styles = {
+                            "critical": {
+                                "bg": "linear-gradient(135deg, #dc354520 0%, #ff634720 100%)",
+                                "border": "#dc3545",
+                                "icon": "🔴",
+                                "label": "CRITICAL",
+                                "label_bg": "#dc3545",
+                            },
+                            "warning": {
+                                "bg": "linear-gradient(135deg, #ffc10720 0%, #fd7e1420 100%)",
+                                "border": "#ffc107",
+                                "icon": "🟡",
+                                "label": "CAUTION",
+                                "label_bg": "#e6a200",
+                            },
+                            "info": {
+                                "bg": "linear-gradient(135deg, #17a2b820 0%, #20c99720 100%)",
+                                "border": "#17a2b8",
+                                "icon": "🔵",
+                                "label": "ADVISORY",
+                                "label_bg": "#17a2b8",
+                            },
+                        }
+                        
+                        def render_alert_card(alert: FRMSAlert) -> str:
+                            style = alert_styles.get(alert.level, alert_styles["info"])
+                            return f"""
+                            <div style="
+                                background: {style['bg']};
+                                border-left: 4px solid {style['border']};
+                                border-radius: 8px;
+                                padding: 12px 16px;
+                                margin-bottom: 10px;
+                                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+                            ">
+                                <div style="display: flex; align-items: flex-start; gap: 12px;">
+                                    <div style="font-size: 1.5em; line-height: 1;">{style['icon']}</div>
+                                    <div style="flex: 1;">
+                                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 6px;">
+                                            <span style="
+                                                background: {style['label_bg']};
+                                                color: white;
+                                                font-size: 0.65em;
+                                                font-weight: 700;
+                                                padding: 2px 8px;
+                                                border-radius: 4px;
+                                                letter-spacing: 0.5px;
+                                            ">{style['label']}</span>
+                                            <code style="
+                                                background: rgba(0,0,0,0.15);
+                                                padding: 2px 6px;
+                                                border-radius: 3px;
+                                                font-size: 0.7em;
+                                                color: #666;
+                                            ">{alert.code}</code>
+                                        </div>
+                                        <div style="font-weight: 600; color: #1a1a2e; margin-bottom: 4px;">
+                                            {alert.message}
+                                        </div>
+                                        <div style="font-size: 0.85em; color: #555; line-height: 1.4;">
+                                            {alert.rationale}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            """
+                        
+                        # Render alerts by priority
+                        all_alert_html = ""
+                        for a in critical_alerts + warning_alerts + info_alerts:
+                            all_alert_html += render_alert_card(a)
+                        
+                        # Summary header
+                        summary_parts = []
+                        if critical_alerts:
+                            summary_parts.append(f"<span style='color:#dc3545;font-weight:700;'>{len(critical_alerts)} Critical</span>")
+                        if warning_alerts:
+                            summary_parts.append(f"<span style='color:#e6a200;font-weight:700;'>{len(warning_alerts)} Caution</span>")
+                        if info_alerts:
+                            summary_parts.append(f"<span style='color:#17a2b8;font-weight:700;'>{len(info_alerts)} Advisory</span>")
+                        
+                        st.markdown(
+                            f"""
+                            <div style="
+                                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                                border-radius: 10px;
+                                padding: 16px;
+                                margin-bottom: 16px;
+                            ">
+                                <div style="
+                                    display: flex;
+                                    justify-content: space-between;
+                                    align-items: center;
+                                    margin-bottom: 12px;
+                                    padding-bottom: 10px;
+                                    border-bottom: 1px solid rgba(255,255,255,0.1);
+                                ">
+                                    <span style="color: #a0a0a0; font-size: 0.9em;">
+                                        {len(alerts)} alert{'s' if len(alerts) != 1 else ''} triggered
+                                    </span>
+                                    <span style="font-size: 0.85em;">
+                                        {' • '.join(summary_parts)}
+                                    </span>
+                                </div>
+                                {all_alert_html}
+                            </div>
+                            """,
+                            unsafe_allow_html=True,
+                        )
                 
                 # Recommendations
                 st.markdown("#### 💡 Recommendations")
