@@ -1941,7 +1941,7 @@ def _render_assessment_history(user: UserProfile) -> None:
                 "notes",
             ]
             display_df = df[[c for c in display_cols if c in df.columns]]
-            st.dataframe(display_df, width="stretch")
+            st.dataframe(display_df, use_container_width=True)
         
     except Exception as exc:
         st.error(f"Failed to load history: {exc}")
@@ -2387,7 +2387,7 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         stats_df = pd.DataFrame(stats_rows)
         if not stats_df.empty:
             st.markdown("#### Summary statistics (stored Garmin daily metrics)")
-            st.dataframe(stats_df, width="stretch", hide_index=True)
+            st.dataframe(stats_df, use_container_width=True, hide_index=True)
 
     # Trends (grouped so all Garmin fields can be visualized)
     if len(df_ts) > 1 and isinstance(df_ts.index, pd.DatetimeIndex):
@@ -2479,7 +2479,7 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         
         st.dataframe(
             display_df.reset_index(drop=True),
-            width="stretch",
+            use_container_width=True,
             hide_index=True,
         )
 
@@ -2681,7 +2681,7 @@ def _render_profile_rr_library(user: UserProfile) -> None:
         if st.button(
             "📥 Load into Analysis workspace",
             key=f"profile_rr_library_load_{user.user_id}",
-            width="stretch",
+            use_container_width=True,
         ):
             st.session_state["queued_rr_filepaths"] = _build_queue_payload()
             _set_current_user(user)
@@ -2692,7 +2692,7 @@ def _render_profile_rr_library(user: UserProfile) -> None:
             "🚀 Load + run HRV analysis",
             key=f"profile_rr_library_load_run_{user.user_id}",
             type="primary",
-            width="stretch",
+            use_container_width=True,
         ):
             st.session_state["queued_rr_filepaths"] = _build_queue_payload()
             st.session_state["auto_run_hrv_analysis"] = True
@@ -2940,7 +2940,7 @@ def _render_hrv_history(user: UserProfile) -> None:
                             "Ensure your HRV measurements are saved with a timepoint label (T0…T21)."
                         )
                     else:
-                        st.dataframe(tp_table, width="stretch")
+                        st.dataframe(tp_table, use_container_width=True)
                         st.caption(
                             "Columns prefixed with `baseline_` are the baseline values (T0), and `delta_` columns are "
                             "computed as (timepoint_value − baseline_value)."
@@ -3111,7 +3111,7 @@ def _render_hrv_history(user: UserProfile) -> None:
         
         # Full data table
         with st.expander("📊 All HRV Measurements"):
-            st.dataframe(df, width="stretch")
+            st.dataframe(df, use_container_width=True)
         
     except Exception as exc:
         if DATABASE_AVAILABLE and is_sqlite_database_corruption_error(exc):
@@ -3455,13 +3455,13 @@ def _render_fit_csv_tools(user: UserProfile) -> None:
                 csv_name = f"{Path(fit_file.name).stem}.csv"
                 preview = df.head(10) if not df.empty else pd.DataFrame()
                 if not preview.empty:
-                    st.dataframe(preview, width="stretch")
+                    st.dataframe(preview, use_container_width=True)
                 st.download_button(
                     "⬇️ Download CSV",
                     data=csv_bytes,
                     file_name=csv_name,
                     mime="text/csv",
-                    width="stretch",
+                    use_container_width=True,
                 )
                 try:
                     manager.store_device_file(
@@ -3494,7 +3494,7 @@ def _render_fit_csv_tools(user: UserProfile) -> None:
                     low_memory=False,
                 )
                 if not preview_df.empty:
-                    st.dataframe(preview_df.head(10), width="stretch")
+                    st.dataframe(preview_df.head(10), use_container_width=True)
             except Exception as exc:  # noqa: BLE001
                 st.error(f"Unable to read CSV: {exc}")
                 preview_df = None
@@ -3652,7 +3652,7 @@ def _render_garmin_ingest(user: UserProfile) -> None:
         
         st.dataframe(
             daily_df.sort_values("date", ascending=False).head(5),
-            width="stretch",
+            use_container_width=True,
         )
     except Exception as exc:  # noqa: BLE001
         if log_exception is not None:
@@ -4441,7 +4441,7 @@ def _render_hrv_analysis_tool(
                     "Percentile": f"~{data.get('percentile_estimate', 'N/A')}th" if data.get('percentile_estimate') else "N/A",
                 })
         if metric_rows:
-            st.dataframe(pd.DataFrame(metric_rows), width="stretch", hide_index=True)
+            st.dataframe(pd.DataFrame(metric_rows), use_container_width=True, hide_index=True)
     
     # Clinical significance
     if analysis.clinical_significance:
@@ -4781,7 +4781,7 @@ def _render_personalized_health_metrics(user: UserProfile) -> None:
                 "SD": f"{values['sd']:.1f}",
                 "Normal Range": f"{values['percentile_5']:.1f} - {values['percentile_95']:.1f}",
             })
-        st.dataframe(pd.DataFrame(norm_df_data), width="stretch", hide_index=True)
+        st.dataframe(pd.DataFrame(norm_df_data), use_container_width=True, hide_index=True)
     
     # --- Fitness Classification (if VO2max available) ---
     if "fitness_classification" in results.get("calculations_available", []):
@@ -5120,7 +5120,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                     }
                     for entry in vo2_history
                 ]
-                st.dataframe(history_data, width="stretch", hide_index=True)
+                st.dataframe(history_data, use_container_width=True, hide_index=True)
     
     # Exercise settings
     col1, col2 = st.columns(2)
@@ -5342,7 +5342,7 @@ def _render_body_composition_form(user: UserProfile) -> None:
             display_df = tmp[[c for c in display_cols if c in tmp.columns]].copy()
             if "measurement_date" in display_df.columns:
                 display_df["measurement_date"] = pd.to_datetime(display_df["measurement_date"], errors="coerce").dt.date
-            st.dataframe(display_df, width="stretch", hide_index=True)
+            st.dataframe(display_df, use_container_width=True, hide_index=True)
 
     def _default_float(val: Any, fallback: float) -> float:
         parsed = _safe_float(val)
@@ -6185,13 +6185,13 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
             st.caption("No acute symptom trends logged yet.")
         else:
             st.caption("Top acute symptoms (all-time)")
-            st.dataframe(symptom_df, width="stretch", hide_index=True)
+            st.dataframe(symptom_df, use_container_width=True, hide_index=True)
     with col_b2:
         if behavior_df.empty:
             st.caption("No behavioral flags logged yet.")
         else:
             st.caption("Behavioral health flags (frequency)")
-            st.dataframe(behavior_df, width="stretch", hide_index=True)
+            st.dataframe(behavior_df, use_container_width=True, hide_index=True)
 
 
 @_fragment_if_available
@@ -6760,7 +6760,7 @@ def _render_medical_record_form(user: UserProfile) -> None:
                     "exercise_minutes",
                 ]
             ],
-            width="stretch",
+            use_container_width=True,
         )
     else:
         st.info("No exploration medical records logged yet.")
