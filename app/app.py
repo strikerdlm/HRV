@@ -3159,14 +3159,14 @@ def _render_library_loader() -> Dict[str, UploadedRR]:
             load_clicked = st.button(
                 "📥 Load files",
                 key="library_load_btn",
-                width="stretch",
+                use_container_width=True,
             )
         with col2:
             load_run_clicked = st.button(
                 "🚀 Load + Analyze",
                 key="library_load_run_btn",
                 type="primary",
-                width="stretch",
+                use_container_width=True,
             )
         
         if load_clicked or load_run_clicked:
@@ -7639,7 +7639,7 @@ def main() -> None:
                             "citation",
                         ]
                     ],
-                    width="stretch",
+                    use_container_width=True,
                 )
             else:
                 st.info(
@@ -9927,7 +9927,7 @@ that predicts cognitive performance based on:
                     ]
                     st.dataframe(
                         assessment_df[display_cols],
-                        width="stretch",
+                        use_container_width=True,
                     )
                 
                 # Performance zone distribution
@@ -10822,7 +10822,7 @@ that predicts cognitive performance based on:
                         styled_df = impact_df.style.applymap(
                             style_severity, subset=["Severity"]
                         )
-                    st.dataframe(styled_df, width="stretch", hide_index=True)
+                    st.dataframe(styled_df, use_container_width=True, hide_index=True)
                 else:
                     st.info("No impact events detected. Click 'Fetch Impact Predictions' to update.")
                 
@@ -12037,7 +12037,7 @@ that predicts cognitive performance based on:
                         if imps:
                             imp_df = pd.DataFrame(imps).head(8)
                             st.markdown("Top feature importances (RandomForest, permutation)")
-                            st.dataframe(imp_df, width="stretch")
+                            st.dataframe(imp_df, use_container_width=True)
                             st.session_state["space_weather_export"]["ml_importances"] = imp_df.copy()
                         # Export ML summaries
                         models_df = pd.DataFrame(
@@ -12675,7 +12675,7 @@ that predicts cognitive performance based on:
                 formatted["lag_hours"] = formatted["lag_hours"].astype(int)
                 formatted["n"] = formatted["n"].astype(int)
                 top_n = min(25, formatted.shape[0])
-                st.dataframe(formatted.head(top_n), width="stretch")
+                st.dataframe(formatted.head(top_n), use_container_width=True)
                 csv_bytes = display_df.to_csv(index=False).encode("utf-8")
                 st.download_button(
                     "Download batch correlations (CSV)",
@@ -12887,7 +12887,7 @@ that predicts cognitive performance based on:
                 cohort_stats_df = st.session_state.get("cohort_export_stats_df")
                 if isinstance(cohort_df, pd.DataFrame) and not cohort_df.empty:
                     st.markdown("##### Cohort roster preview")
-                    st.dataframe(cohort_df, width="stretch")
+                    st.dataframe(cohort_df, use_container_width=True)
                     csv_bytes = cohort_df.to_csv(index=False).encode("utf-8")
                     st.download_button(
                         "Download cohort roster (CSV)",
@@ -12898,7 +12898,7 @@ that predicts cognitive performance based on:
                     )
                 if isinstance(cohort_stats_df, pd.DataFrame) and not cohort_stats_df.empty:
                     st.markdown("##### Cohort descriptive stats preview")
-                    st.dataframe(cohort_stats_df, width="stretch")
+                    st.dataframe(cohort_stats_df, use_container_width=True)
                     csv_bytes = cohort_stats_df.to_csv(index=False).encode("utf-8")
                     st.download_button(
                         "Download cohort stats (CSV)",
@@ -13276,7 +13276,7 @@ that predicts cognitive performance based on:
                                         }
                                     )
                                 board_df = pd.DataFrame(rows)
-                                st.dataframe(board_df, width="stretch")
+                                st.dataframe(board_df, use_container_width=True)
 
                                 # Data exports
                                 csv_bytes = board_df.to_csv(index=False).encode("utf-8")
@@ -13441,7 +13441,7 @@ that predicts cognitive performance based on:
                                     edited_roster = st.data_editor(
                                         roster_editor_df,
                                         hide_index=True,
-                                        width="stretch",
+                                        use_container_width=True,
                                         disabled=["user_id", "full_name", "username"],
                                         column_config={
                                             "group_name": st.column_config.SelectboxColumn(
@@ -13628,7 +13628,7 @@ that predicts cognitive performance based on:
 
                         if isinstance(group_summary_df, pd.DataFrame) and not group_summary_df.empty:
                             st.markdown("##### Group × timepoint delta summary (preview)")
-                            st.dataframe(group_summary_df, width="stretch")
+                            st.dataframe(group_summary_df, use_container_width=True)
                             csv_bytes = group_summary_df.to_csv(index=False).encode("utf-8")
                             st.download_button(
                                 "Download longitudinal group summary (CSV)",
@@ -13640,7 +13640,7 @@ that predicts cognitive performance based on:
 
                         if isinstance(comparisons_df, pd.DataFrame) and not comparisons_df.empty:
                             st.markdown("##### Between-group comparisons (preview)")
-                            st.dataframe(comparisons_df, width="stretch")
+                            st.dataframe(comparisons_df, use_container_width=True)
                             csv_bytes = comparisons_df.to_csv(index=False).encode("utf-8")
                             st.download_button(
                                 "Download longitudinal comparisons (CSV)",
@@ -13652,7 +13652,7 @@ that predicts cognitive performance based on:
 
                         if isinstance(mixed_df, pd.DataFrame) and not mixed_df.empty:
                             st.markdown("##### Mixed-effects model (preview)")
-                            st.dataframe(mixed_df, width="stretch")
+                            st.dataframe(mixed_df, use_container_width=True)
                             csv_bytes = mixed_df.to_csv(index=False).encode("utf-8")
                             st.download_button(
                                 "Download mixed-effects results (CSV)",
@@ -14976,7 +14976,7 @@ def _render_noaa_multifrequency_panel(
             snapshot[available_cols]
             .sort_values("frequency_mhz")
             .reset_index(drop=True),
-            width="stretch",
+            use_container_width=True,
         )
 
 
@@ -15109,7 +15109,7 @@ def _render_noaa_correlation_summary(
     )
     formatted["lag_hours"] = formatted["lag_hours"].astype(int)
     formatted["n"] = formatted["n"].astype(int)
-    st.dataframe(formatted, width="stretch")
+    st.dataframe(formatted, use_container_width=True)
     # Present top findings in a compact scientific table
     summary = subset.copy()
     summary["abs_r"] = summary["pearson_r"].abs()
