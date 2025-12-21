@@ -867,9 +867,20 @@ def _set_current_user(user: Optional[UserProfile]) -> None:
 def _logout_and_preserve() -> None:
     """Logout helper that preserves saved data and resets to guest view."""
     # Data is already persisted at save-time; no additional flush required here.
-    _set_current_user(None)
+    
+    # Clear user profile and user ID from session state
+    st.session_state[_SESSION_CURRENT_USER] = None
+    st.session_state.pop(_SESSION_USER_ID, None)
+    
+    # Clear UI mode flags
     st.session_state.pop("edit_profile_mode", None)
+    
+    # Set label to Guest
     st.session_state["active_profile_label"] = "Guest"
+    
+    # Clear any cached user-specific data
+    st.session_state.pop("login_username", None)
+    st.session_state.pop("login_password", None)
 
 
 def _should_process_form_submission(form_key: str, debounce_seconds: float = _FORM_DEBOUNCE_SECONDS) -> bool:
