@@ -6521,22 +6521,39 @@ def main() -> None:
         hrv_analysis_ready = True
         analysis_already_completed = False
     
-    if has_hrv_data_uploaded and not hrv_analysis_ready:
-        if analysis_already_completed:
-            st.info(
-                "HRV analysis already completed for this upload set. "
-                "You can switch tabs (e.g., **User Profile**) or click **Recompute HRV Analysis** to rerun."
-            )
-        else:
-            st.info("HRV data uploaded. Click **Run HRV Analysis** to start processing.")
+    # Always show the button when data is uploaded, regardless of analysis state
+    # This prevents the button from blanking out and ensures it's always accessible
+    if has_hrv_data_uploaded:
+        if not hrv_analysis_ready:
+            if analysis_already_completed:
+                st.info(
+                    "HRV analysis already completed for this upload set. "
+                    "You can switch tabs (e.g., **User Profile**) or click **Recompute HRV Analysis** to rerun."
+                )
+            else:
+                st.info("HRV data uploaded. Click **Run HRV Analysis** to start processing.")
+        
+        # Show button with consistent text based on completion state
+        button_text = "🔁 Recompute HRV Analysis" if analysis_already_completed else "🚀 Run HRV Analysis"
         if st.button(
-            "🔁 Recompute HRV Analysis" if analysis_already_completed else "🚀 Run HRV Analysis",
+            button_text,
             key="run_hrv_analysis",
             type="primary",
             help="Runs HRV cleaning, windowing, and metric computation for uploaded datasets.",
         ):
             hrv_analysis_ready = True
             st.session_state["hrv_analysis_ready"] = True
+            # Clear completion signature to allow recomputation
+            if analysis_already_completed:
+                st.session_state.pop("hrv_analysis_complete_signature", None)
+                # Clear cached results to force recomputation
+                st.session_state.pop("_hrv_cached_datasets", None)
+                st.session_state.pop("_hrv_cached_windowed_df", None)
+                st.session_state.pop("_hrv_cached_multi_results_df", None)
+                st.session_state.pop("_hrv_cached_meta_rows", None)
+                st.session_state.pop("_hrv_cached_meta_rows_for_context", None)
+                st.session_state.pop("_hrv_cached_ml_summary_df", None)
+                st.session_state.pop("_hrv_cached_episodes_df", None)
     
     if has_hrv_data_uploaded and hrv_analysis_ready:
         # Prepare dataset dict (limit number of datasets for performance)
