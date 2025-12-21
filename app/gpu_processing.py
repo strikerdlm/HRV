@@ -4,13 +4,19 @@ GPU Processing Module for Mission Control - Flight Surgeon.
 Provides NVIDIA CUDA-accelerated computation for CPU-intensive operations.
 Automatically falls back to CPU when GPU is unavailable.
 
-Supported GPUs: NVIDIA RTX series (5070, 4090, 3080, etc.) with CUDA support.
+Supported GPUs: NVIDIA RTX series with CUDA support:
+    - RTX 50xx (Blackwell, CC 12.0): CUDA 13.x
+    - RTX 40xx (Ada Lovelace, CC 8.9): CUDA 12.x
+    - RTX 30xx (Ampere, CC 8.6): CUDA 11.x/12.x
+    - RTX 20xx (Turing, CC 7.5): CUDA 11.x
 
 Author: AI Assistant
-Version: 1.0.0
+Version: 1.1.0
 
 Requirements:
-    - cupy-cuda12x (for CUDA 12.x) or cupy-cuda11x (for CUDA 11.x)
+    - cupy-cuda13x (for RTX 50xx with CUDA 13.x)
+    - cupy-cuda12x (for RTX 40xx/30xx with CUDA 12.x)
+    - cupy-cuda11x (for RTX 20xx with CUDA 11.x)
     - Optional: cudf for GPU DataFrames
 """
 
@@ -121,7 +127,6 @@ def _detect_gpu() -> GPUInfo:
 
                 props = cp.cuda.runtime.getDeviceProperties(device_id)
                 name = props["name"]
-                info.available = True
                 info.device_id = device_id
                 info.device_name = name.decode() if isinstance(name, bytes) else str(name)
 
@@ -140,7 +145,36 @@ def _detect_gpu() -> GPUInfo:
                 info.driver_version = f"{driver_ver // 1000}.{(driver_ver % 1000) // 10}"
 
                 # Compute capability
-                info.compute_capability = f"{props['major']}.{props['minor']}"
+                cc_major = props["major"]
+                cc_minor = props["minor"]
+                info.compute_capability = f"{cc_major}.{cc_minor}"
+
+                # Validate GPU can actually run kernels (Blackwell sm_120 needs CUDA 12.8+)
+                # Test with a simple kernel to ensure JIT compilation works
+                try:
+                    test_arr = cp.array([1.0, 2.0, 3.0])
+                    _ = float(cp.mean(test_arr))  # This requires kernel compilation
+                    info.available = True
+                except Exception as kernel_exc:
+                    # Kernel compilation failed - likely sm_120 without CUDA 12.8+ toolkit
+                    if cc_major >= 12:
+                        _LOGGER.warning(
+                            "GPU %s detected (CC %s) but kernel compilation failed. "
+                            "RTX 50xx (Blackwell) requires CUDA Toolkit 12.8+. "
+                            "Current toolkit: %s. Error: %s",
+                            info.device_name,
+                            info.compute_capability,
+                            info.cuda_version,
+                            kernel_exc,
+                        )
+                        info.device_name = f"{info.device_name} (needs CUDA 12.8+)"
+                        info.available = False
+                    else:
+                        _LOGGER.warning(
+                            "GPU kernel compilation failed: %s", kernel_exc
+                        )
+                        info.available = False
+                    break
 
                 _LOGGER.info(
                     "GPU detected: %s (device %d, %.1f GB, CUDA %s, CC %s)",
@@ -154,7 +188,7 @@ def _detect_gpu() -> GPUInfo:
             except Exception as exc:  # bounded by device_count attempts
                 _LOGGER.debug("GPU device %d unusable: %s", device_id, exc)
 
-        if not info.available:
+        if not info.available and "needs CUDA" not in info.device_name:
             info.device_name = "No usable CUDA device"
         
     except ImportError as exc:
@@ -672,12 +706,26 @@ def render_gpu_settings_sidebar() -> GPUConfig:
             st.warning("No GPU detected")
             st.caption(info.device_name)
             
-            st.markdown("""
-            **To enable GPU:**
-            1. Install NVIDIA drivers
-            2. Install CuPy: `pip install cupy-cuda12x`
-            3. Restart the app
-            """)
+            # Check if it's a Blackwell GPU needing toolkit upgrade
+            if "needs CUDA 12.8" in info.device_name:
+                st.markdown("""
+                **RTX 50xx (Blackwell) requires CUDA Toolkit 12.8+:**
+                1. Download from [NVIDIA CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
+                2. Install CUDA Toolkit 12.8 or newer
+                3. Restart the app
+                
+                *Your GPU is detected but needs a newer CUDA Toolkit.*
+                """)
+            else:
+                st.markdown("""
+                **To enable GPU:**
+                1. Install latest NVIDIA drivers
+                2. Install CuPy for your GPU:
+                   - **RTX 50xx**: `pip install cupy-cuda12x` + CUDA Toolkit 12.8+
+                   - **RTX 40xx/30xx**: `pip install cupy-cuda12x`
+                   - **RTX 20xx**: `pip install cupy-cuda11x`
+                3. Restart the app
+                """)
     
     set_gpu_config(config)
     return config
