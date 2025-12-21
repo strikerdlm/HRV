@@ -926,6 +926,78 @@ def _safe_int(value: Any) -> Optional[int]:
         return None
 
 
+def _parse_iso_utc(dt_str: Optional[str]) -> Optional[datetime]:
+    """Parse an ISO timestamp string into a timezone-aware UTC datetime."""
+    if not dt_str:
+        return None
+    try:
+        if dt_str.endswith("Z"):
+            return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(dt_str)
+        if parsed.tzinfo is None:
+            return parsed.replace(tzinfo=timezone.utc)
+        return parsed
+    except Exception:
+        return None
+
+
+def _get_latest_garmin_sleep_payload(user: UserProfile, now_dt: datetime) -> Optional[Dict[str, float]]:
+    """Fetch latest Garmin Vivosmart sleep metrics to feed SAFTE/HRV inputs."""
+    if fetch_garmin_daily_metrics is None:
+        return None
+    try:
+        records = fetch_garmin_daily_metrics(user.user_id, days=7)
+    except Exception as exc:  # pragma: no cover - defensive
+        if log_exception:
+            log_exception(_LOGGER, "Garmin autofill failed", exc)
+        return None
+    if not records:
+        return None
+
+    chosen = None
+    for rec in sorted(records, key=lambda r: r.metric_date, reverse=True):
+        if rec.sleep_duration_hours:
+            chosen = rec
+            break
+    if chosen is None:
+        return None
+
+    sleep_hours = float(chosen.sleep_duration_hours or 0.0)
+    sleep_quality = None
+    if chosen.sleep_efficiency is not None:
+        eff = float(chosen.sleep_efficiency)
+        sleep_quality = eff if 0.0 <= eff <= 1.2 else eff / 100.0
+    if sleep_quality is None and chosen.sleep_score is not None:
+        sleep_quality = float(chosen.sleep_score) / 100.0
+    if sleep_quality is None:
+        sleep_quality = 0.7
+    sleep_quality = max(0.0, min(1.0, sleep_quality))
+
+    hours_awake = float(now_dt.hour - 7 if now_dt.hour >= 7 else now_dt.hour + 17)
+    end_dt = _parse_iso_utc(chosen.sleep_end_utc)
+    if end_dt:
+        delta_hours = max(0.0, (now_dt - end_dt).total_seconds() / 3600.0)
+        hours_awake = max(0.0, min(48.0, delta_hours))
+
+    rmssd_val = chosen.hrv_rmssd_ms if chosen.hrv_rmssd_ms is not None else None
+    resting_hr_val = (
+        chosen.resting_hr_bpm
+        if chosen.resting_hr_bpm is not None
+        else (chosen.avg_hr_bpm if chosen.avg_hr_bpm is not None else None)
+    )
+
+    payload: Dict[str, float] = {
+        "sleep_hours": round(sleep_hours, 2),
+        "sleep_quality": round(sleep_quality, 2),
+        "hours_awake": round(hours_awake, 2),
+    }
+    if rmssd_val is not None:
+        payload["rmssd_ms"] = float(rmssd_val)
+    if resting_hr_val is not None:
+        payload["resting_hr"] = float(resting_hr_val)
+    return payload
+
+
 # ---------------------------------------------------------------------------
 # User Registration Form
 # ---------------------------------------------------------------------------
@@ -3933,77 +4005,6 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
     current_hour = datetime.now().hour
     current_dt = datetime.now(tz=timezone.utc)
     
-    def _parse_iso_utc(dt_str: Optional[str]) -> Optional[datetime]:
-        if not dt_str:
-            return None
-        try:
-            if dt_str.endswith("Z"):
-                return datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
-            return datetime.fromisoformat(dt_str)
-        except Exception:
-            return None
-    
-    def _autofill_sleep_from_garmin() -> None:
-        """Fetch latest Garmin daily metrics and populate SAFTE inputs."""
-        if fetch_garmin_daily_metrics is None:
-            st.warning("Garmin live import not available. Install python-garminconnect and set GARMIN_EMAIL/PASSWORD.")
-            return
-        try:
-            records = fetch_garmin_daily_metrics(user.user_id, days=7)
-        except Exception as exc:  # pragma: no cover - defensive
-            if log_exception:
-                log_exception(_LOGGER, "Garmin autofill failed", exc)
-            st.error(f"Garmin autofill failed: {exc}")
-            return
-        if not records:
-            st.info("No Garmin Vivosmart data returned.")
-            return
-        # Pick most recent with sleep duration
-        chosen = None
-        for rec in sorted(records, key=lambda r: r.metric_date, reverse=True):
-            if rec.sleep_duration_hours:
-                chosen = rec
-                break
-        if chosen is None:
-            st.info("No recent Garmin sleep data found.")
-            return
-        sleep_hours = float(chosen.sleep_duration_hours or 0.0)
-        sleep_quality = None
-        if chosen.sleep_efficiency is not None:
-            eff = float(chosen.sleep_efficiency)
-            sleep_quality = eff if 0.0 <= eff <= 1.2 else eff / 100.0
-        if sleep_quality is None and chosen.sleep_score is not None:
-            sleep_quality = float(chosen.sleep_score) / 100.0
-        if sleep_quality is None:
-            sleep_quality = 0.7
-        sleep_quality = max(0.0, min(1.0, sleep_quality))
-        
-        hours_awake = float(current_hour - 7 if current_hour >= 7 else current_hour + 17)
-        end_dt = _parse_iso_utc(chosen.sleep_end_utc)
-        if end_dt:
-            delta_hours = max(0.0, (current_dt - end_dt).total_seconds() / 3600.0)
-            hours_awake = max(0.0, min(48.0, delta_hours))
-        
-        rmssd_val = chosen.hrv_rmssd_ms if chosen.hrv_rmssd_ms is not None else None
-        resting_hr_val = (
-            chosen.resting_hr_bpm
-            if chosen.resting_hr_bpm is not None
-            else (chosen.avg_hr_bpm if chosen.avg_hr_bpm is not None else None)
-        )
-        
-        st.session_state[f"tools_sleep_hours_{user.user_id}"] = round(sleep_hours, 2)
-        st.session_state[f"tools_sleep_quality_{user.user_id}"] = round(sleep_quality, 2)
-        st.session_state[f"tools_hours_awake_{user.user_id}"] = round(hours_awake, 2)
-        if rmssd_val is not None:
-            st.session_state[f"tools_rmssd_{user.user_id}"] = float(rmssd_val)
-        if resting_hr_val is not None:
-            st.session_state[f"tools_resting_hr_{user.user_id}"] = float(resting_hr_val)
-        
-        st.success(
-            f"Garmin sleep synced (date {chosen.metric_date}): "
-            f"{sleep_hours:.2f}h, quality {sleep_quality:.2f}, hours awake {hours_awake:.1f}"
-        )
-    
     # Tool selector
     st.markdown("##### 🔧 Select Tool")
     tool_options = [
@@ -4050,9 +4051,24 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
         if st.button(
             "📡 Autofill sleep from Garmin",
             key=f"garmin_autofill_tools_{user.user_id}",
-            help="Pulls latest Garmin Vivosmart sleep to fill SAFTE inputs (sleep hours, quality, hours awake, RMSSD, resting HR).",
+            help="Pull latest Garmin Vivosmart sleep to fill SAFTE inputs (sleep hours, quality, hours awake, RMSSD, resting HR).",
         ):
-            _autofill_sleep_from_garmin()
+            with st.spinner("Fetching Garmin sleep..."):
+                payload = _get_latest_garmin_sleep_payload(user, current_dt)
+            if payload is None:
+                st.warning("No recent Garmin sleep data found or Garmin API unavailable.")
+            else:
+                st.session_state[f"tools_sleep_hours_{user.user_id}"] = payload["sleep_hours"]
+                st.session_state[f"tools_sleep_quality_{user.user_id}"] = payload["sleep_quality"]
+                st.session_state[f"tools_hours_awake_{user.user_id}"] = payload["hours_awake"]
+                if "rmssd_ms" in payload:
+                    st.session_state[f"tools_rmssd_{user.user_id}"] = payload["rmssd_ms"]
+                if "resting_hr" in payload:
+                    st.session_state[f"tools_resting_hr_{user.user_id}"] = payload["resting_hr"]
+                st.success(
+                    f"Garmin sleep synced: {payload['sleep_hours']:.2f}h, "
+                    f"quality {payload['sleep_quality']:.2f}, hours awake {payload['hours_awake']:.1f}"
+                )
     
     if show_parameters:
         col1, col2, col3 = st.columns(3)
@@ -5293,6 +5309,30 @@ def _render_nasa_calculator(user: UserProfile) -> None:
             st.caption("ℹ️ Set POLAR_ACCESSLINK_TOKEN & POLAR_ACCESSLINK_USER_ID to enable.")
         
     st.markdown("##### 😴 Sleep & Chronotype Inputs (feeds SAFTE/Readiness)")
+    fetch_col, _ = st.columns([1, 2])
+    with fetch_col:
+        if st.button(
+            "📡 Autofill from Garmin",
+            key=f"garmin_autofill_sleep_section_{user.user_id}",
+            help="Pull latest Garmin Vivosmart sleep to fill sleep/chronotype inputs.",
+        ):
+            with st.spinner("Fetching Garmin sleep..."):
+                payload = _get_latest_garmin_sleep_payload(user, datetime.now(tz=timezone.utc))
+            if payload is None:
+                st.warning("No recent Garmin sleep data found or Garmin API unavailable.")
+            else:
+                st.session_state[sleep_hours_key] = payload["sleep_hours"]
+                st.session_state[sleep_quality_key] = payload["sleep_quality"]
+                st.session_state[hours_awake_key] = payload["hours_awake"]
+                if "rmssd_ms" in payload:
+                    st.session_state[rmssd_key] = payload["rmssd_ms"]
+                if "resting_hr" in payload:
+                    st.session_state[resting_hr_key] = payload["resting_hr"]
+                st.success(
+                    f"Garmin sleep synced: {payload['sleep_hours']:.2f}h, "
+                    f"quality {payload['sleep_quality']:.2f}, hours awake {payload['hours_awake']:.1f}"
+                )
+    
     sleep_col1, sleep_col2, sleep_col3 = st.columns(3)
     
     # Shared session keys (same as Profile Tools Engine) for consistency
