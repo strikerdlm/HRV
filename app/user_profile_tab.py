@@ -5413,18 +5413,18 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         )
     st.caption("These values are shared with the Profile Tools Engine (SAFTE, HRV readiness, operational performance).")
     
-        # Save manual entry button
-        if st.button("💾 Save Manual Entry", key=f"save_manual_vo2_{user.user_id}"):
-            if POLAR_MODULE_AVAILABLE:
-                try:
-                    save_manual_vo2max(
-                        user_id=user.user_id,
-                        vo2max=vo2_manual,
-                        notes="Manual entry from NASA Nutrition Calculator",
-                    )
-                    st.success(f"Saved VO2max {vo2_manual:.1f} mL/kg/min to history")
-                except Exception as e:
-                    st.error(f"Failed to save: {e}")
+    # Save manual entry button
+    if st.button("💾 Save Manual Entry", key=f"save_manual_vo2_{user.user_id}"):
+        if POLAR_MODULE_AVAILABLE:
+            try:
+                save_manual_vo2max(
+                    user_id=user.user_id,
+                    vo2max=vo2_manual,
+                    notes="Manual entry from NASA Nutrition Calculator",
+                )
+                st.success(f"Saved VO2max {vo2_manual:.1f} mL/kg/min to history")
+            except Exception as e:
+                st.error(f"Failed to save: {e}")
     
     # Determine effective VO2max
     effective_vo2 = vo2_manual
@@ -5603,13 +5603,13 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         )
 
         # Defaults pulled from shared session keys so UI stays consistent
-        sleep_key = f\"tools_sleep_hours_{user.user_id}\"
-        sleep_quality_key = f\"tools_sleep_quality_{user.user_id}\"
-        hours_awake_key = f\"tools_hours_awake_{user.user_id}\"
-        chrono_key = f\"tools_chronotype_offset_{user.user_id}\"
-        rmssd_key = f\"tools_rmssd_{user.user_id}\"
-        resting_hr_key = f\"tools_resting_hr_{user.user_id}\"
-        vo2_key = f\"tools_vo2_{user.user_id}\"
+        sleep_key = f"tools_sleep_hours_{user.user_id}"
+        sleep_quality_key = f"tools_sleep_quality_{user.user_id}"
+        hours_awake_key = f"tools_hours_awake_{user.user_id}"
+        chrono_key = f"tools_chronotype_offset_{user.user_id}"
+        rmssd_key = f"tools_rmssd_{user.user_id}"
+        resting_hr_key = f"tools_resting_hr_{user.user_id}"
+        vo2_key = f"tools_vo2_{user.user_id}"
 
         sleep_hours_val = float(_safe_float(st.session_state.get(sleep_key)) or 7.0)
         sleep_quality_val = float(_safe_float(st.session_state.get(sleep_quality_key)) or 0.7)
