@@ -1614,6 +1614,7 @@ def _bg_fetch_all_space_data() -> None:
             _bg_fetch_results["space_weather"]["fetch_time"] = fetch_time
             _bg_fetch_results["space_weather"]["_applied"] = False
     except Exception as exc:
+        log_exception(_LOGGER, "Background fetch failed: space weather", exc)
         with _bg_fetch_lock:
             _bg_fetch_results["space_weather"]["error"] = str(exc)
             _bg_fetch_results["space_weather"]["done"] = True
@@ -1633,6 +1634,7 @@ def _bg_fetch_all_space_data() -> None:
             _bg_fetch_results["noaa"]["fetch_time"] = fetch_time
             _bg_fetch_results["noaa"]["_applied"] = False
     except Exception as exc:
+        log_exception(_LOGGER, "Background fetch failed: NOAA feeds", exc)
         with _bg_fetch_lock:
             _bg_fetch_results["noaa"]["error"] = str(exc)
             _bg_fetch_results["noaa"]["done"] = True
@@ -1669,6 +1671,7 @@ def _bg_fetch_all_space_data() -> None:
             _bg_fetch_results["donki"]["fetch_time"] = fetch_time
             _bg_fetch_results["donki"]["_applied"] = False
     except Exception as exc:
+        log_exception(_LOGGER, "Background fetch failed: NASA DONKI", exc)
         with _bg_fetch_lock:
             _bg_fetch_results["donki"]["error"] = str(exc)
             _bg_fetch_results["donki"]["done"] = True
@@ -1681,14 +1684,22 @@ def _is_bg_fetch_stale() -> bool:
 
     Returns True if any data source is stale or never fetched.
     """
-    now = time.time()
     with _bg_fetch_lock:
-        for key in ("space_weather", "noaa", "donki"):
-            fetch_time = _bg_fetch_results[key].get("fetch_time")
-            if fetch_time is None:
-                return True  # Never fetched
-            if (now - fetch_time) >= _BG_FETCH_INTERVAL_SECONDS:
-                return True  # Stale
+        fetch_times = {
+            key: _bg_fetch_results[key].get("fetch_time")
+            for key in ("space_weather", "noaa", "donki")
+        }
+    return _are_fetch_times_stale(fetch_times)
+
+
+def _are_fetch_times_stale(fetch_times: Dict[str, Optional[float]]) -> bool:
+    """Helper to evaluate staleness without acquiring locks."""
+    now = time.time()
+    for fetch_time in fetch_times.values():
+        if fetch_time is None:
+            return True  # Never fetched
+        if (now - fetch_time) >= _BG_FETCH_INTERVAL_SECONDS:
+            return True  # Stale
     return False
 
 
@@ -1721,17 +1732,24 @@ def _start_background_fetch(force: bool = False) -> bool:
         if _bg_fetch_thread is not None and _bg_fetch_thread.is_alive():
             return False
 
+        # Snapshot current fetch times to evaluate staleness without re-locking
+        fetch_times_snapshot = {
+            key: _bg_fetch_results[key].get("fetch_time")
+            for key in ("space_weather", "noaa", "donki")
+        }
+
         # If not forcing, check if data is still fresh
         if not force:
             all_done = all(
                 _bg_fetch_results[k]["done"]
                 for k in ("space_weather", "noaa", "donki")
             )
-            if all_done and not _is_bg_fetch_stale():
+            stale = _are_fetch_times_stale(fetch_times_snapshot)
+            if all_done and not stale:
                 return False  # Data is fresh, no need to refetch
 
         # Reset state for fresh fetch if forcing or if stale
-        if force or _is_bg_fetch_stale():
+        if force or _are_fetch_times_stale(fetch_times_snapshot):
             _reset_bg_fetch_for_refresh()
 
         # Start a new daemon thread while holding the lock to avoid races
