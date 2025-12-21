@@ -1739,11 +1739,9 @@ def _render_clinical_assessment(user: UserProfile) -> None:
         save_clicked = col_save.form_submit_button(
             t('save_assessment'),
             type="primary",
-            width="stretch",
         )
         preview_clicked = col_preview.form_submit_button(
             "🔁 Preview Scores",
-            width="stretch",
         )
     
     if preview_clicked or save_clicked:
@@ -5526,7 +5524,6 @@ def _render_body_composition_form(user: UserProfile) -> None:
 
         submitted = st.form_submit_button(
             "💾 Save Body Composition",
-            width="stretch",
         )
 
         if submitted:
