@@ -1573,15 +1573,18 @@ def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
 
 
 # ---------------------------------------------------------------------------
-# BACKGROUND SPACE WEATHER FETCH (Non-blocking)
+# BACKGROUND SPACE WEATHER FETCH (Non-blocking, 12-hour auto-refresh)
 # ---------------------------------------------------------------------------
 # These globals hold results from the background thread and allow the main
 # UI thread to poll for completion without blocking.
+# Auto-refresh interval: 12 hours (43200 seconds)
+_BG_FETCH_INTERVAL_SECONDS = 43200  # 12 hours
+
 _bg_fetch_lock = threading.Lock()
 _bg_fetch_results: Dict[str, Any] = {
-    "space_weather": {"done": False, "error": None, "data": {}},
-    "noaa": {"done": False, "error": None, "data": {}},
-    "donki": {"done": False, "error": None, "data": {}},
+    "space_weather": {"done": False, "error": None, "data": {}, "fetch_time": None},
+    "noaa": {"done": False, "error": None, "data": {}, "fetch_time": None},
+    "donki": {"done": False, "error": None, "data": {}, "fetch_time": None},
 }
 _bg_fetch_thread: Optional[threading.Thread] = None
 
@@ -1594,6 +1597,7 @@ def _bg_fetch_all_space_data() -> None:
     The main UI thread polls these results via _poll_background_fetch().
     """
     global _bg_fetch_results
+    fetch_time = time.time()
 
     # 1. Space Weather (Kp + Flux)
     try:
@@ -1606,10 +1610,14 @@ def _bg_fetch_all_space_data() -> None:
                 "last_updated": pd.Timestamp.utcnow(),
             }
             _bg_fetch_results["space_weather"]["done"] = True
+            _bg_fetch_results["space_weather"]["error"] = None
+            _bg_fetch_results["space_weather"]["fetch_time"] = fetch_time
+            _bg_fetch_results["space_weather"]["_applied"] = False
     except Exception as exc:
         with _bg_fetch_lock:
             _bg_fetch_results["space_weather"]["error"] = str(exc)
             _bg_fetch_results["space_weather"]["done"] = True
+            _bg_fetch_results["space_weather"]["fetch_time"] = fetch_time
 
     # 2. NOAA feeds
     try:
@@ -1621,10 +1629,14 @@ def _bg_fetch_all_space_data() -> None:
                 "last_updated": pd.Timestamp.utcnow(),
             }
             _bg_fetch_results["noaa"]["done"] = True
+            _bg_fetch_results["noaa"]["error"] = None
+            _bg_fetch_results["noaa"]["fetch_time"] = fetch_time
+            _bg_fetch_results["noaa"]["_applied"] = False
     except Exception as exc:
         with _bg_fetch_lock:
             _bg_fetch_results["noaa"]["error"] = str(exc)
             _bg_fetch_results["noaa"]["done"] = True
+            _bg_fetch_results["noaa"]["fetch_time"] = fetch_time
 
     # 3. DONKI (last 30 days by default)
     try:
@@ -1644,30 +1656,74 @@ def _bg_fetch_all_space_data() -> None:
                 "last_updated": pd.Timestamp.utcnow(),
             }
             _bg_fetch_results["donki"]["done"] = True
+            _bg_fetch_results["donki"]["error"] = None
+            _bg_fetch_results["donki"]["fetch_time"] = fetch_time
+            _bg_fetch_results["donki"]["_applied"] = False
     except Exception as exc:
         with _bg_fetch_lock:
             _bg_fetch_results["donki"]["error"] = str(exc)
             _bg_fetch_results["donki"]["done"] = True
+            _bg_fetch_results["donki"]["fetch_time"] = fetch_time
 
 
-def _start_background_fetch() -> bool:
+def _is_bg_fetch_stale() -> bool:
+    """
+    Check if the background fetch data is stale (older than 12 hours).
+
+    Returns True if any data source is stale or never fetched.
+    """
+    now = time.time()
+    with _bg_fetch_lock:
+        for key in ("space_weather", "noaa", "donki"):
+            fetch_time = _bg_fetch_results[key].get("fetch_time")
+            if fetch_time is None:
+                return True  # Never fetched
+            if (now - fetch_time) >= _BG_FETCH_INTERVAL_SECONDS:
+                return True  # Stale
+    return False
+
+
+def _reset_bg_fetch_for_refresh() -> None:
+    """
+    Reset the background fetch state to allow a fresh fetch cycle.
+
+    Call this before starting a new background fetch to ensure data is refreshed.
+    """
+    with _bg_fetch_lock:
+        for key in ("space_weather", "noaa", "donki"):
+            _bg_fetch_results[key]["done"] = False
+            _bg_fetch_results[key]["_applied"] = False
+
+
+def _start_background_fetch(force: bool = False) -> bool:
     """
     Spawn a background thread to fetch all space weather data.
 
-    Returns True if a new thread was started, False if already running or done.
+    Args:
+        force: If True, reset state and start a new fetch even if data exists.
+
+    Returns True if a new thread was started, False if already running or
+    data is fresh (unless force=True).
     """
     global _bg_fetch_thread
 
     with _bg_fetch_lock:
+        # Don't start if already running
         if _bg_fetch_thread is not None and _bg_fetch_thread.is_alive():
-            return False  # Already running
-        # Check if all fetches already completed (no need to restart)
-        all_done = all(
-            _bg_fetch_results[k]["done"]
-            for k in ("space_weather", "noaa", "donki")
-        )
-        if all_done:
             return False
+
+        # If not forcing, check if data is still fresh
+        if not force:
+            all_done = all(
+                _bg_fetch_results[k]["done"]
+                for k in ("space_weather", "noaa", "donki")
+            )
+            if all_done and not _is_bg_fetch_stale():
+                return False  # Data is fresh, no need to refetch
+
+    # Reset state for fresh fetch if forcing or if stale
+    if force or _is_bg_fetch_stale():
+        _reset_bg_fetch_for_refresh()
 
     # Start a new daemon thread
     _bg_fetch_thread = threading.Thread(
@@ -1679,18 +1735,56 @@ def _start_background_fetch() -> bool:
     return True
 
 
+def _get_bg_fetch_age_str() -> str:
+    """
+    Get a human-readable string showing how old the background fetch data is.
+
+    Returns a string like "2h 15m ago" or "Just now" or "Not fetched".
+    """
+    with _bg_fetch_lock:
+        # Get the oldest fetch time among all sources
+        fetch_times = [
+            _bg_fetch_results[k].get("fetch_time")
+            for k in ("space_weather", "noaa", "donki")
+        ]
+        valid_times = [t for t in fetch_times if t is not None]
+        if not valid_times:
+            return "Not fetched"
+        oldest = min(valid_times)
+
+    age_seconds = time.time() - oldest
+    if age_seconds < 60:
+        return "Just now"
+    if age_seconds < 3600:
+        return f"{int(age_seconds // 60)}m ago"
+    hours = age_seconds / 3600
+    if hours < 24:
+        return f"{hours:.1f}h ago"
+    return f"{hours / 24:.1f}d ago"
+
+
 def _poll_background_fetch() -> Dict[str, Any]:
     """
     Check the status of background fetch without blocking.
 
     Returns a dict with status for each category:
-      {"space_weather": {"done": bool, "error": str|None}, ...}
+      {"space_weather": {"done": bool, "error": str|None, "stale": bool}, ...}
     """
+    now = time.time()
     with _bg_fetch_lock:
-        return {
-            k: {"done": v["done"], "error": v["error"]}
-            for k, v in _bg_fetch_results.items()
-        }
+        result = {}
+        for k, v in _bg_fetch_results.items():
+            fetch_time = v.get("fetch_time")
+            is_stale = (
+                fetch_time is None
+                or (now - fetch_time) >= _BG_FETCH_INTERVAL_SECONDS
+            )
+            result[k] = {
+                "done": v["done"],
+                "error": v["error"],
+                "stale": is_stale,
+            }
+        return result
 
 
 def _apply_background_fetch_to_state() -> Tuple[bool, List[str]]:
@@ -1749,6 +1843,18 @@ def _apply_background_fetch_to_state() -> Tuple[bool, List[str]]:
             errors.append(f"DONKI: {donki['error']}")
 
     return applied, errors
+
+
+def _check_and_trigger_auto_refresh() -> bool:
+    """
+    Check if data is stale (>12h) and trigger a background refresh if needed.
+
+    Returns True if a refresh was triggered.
+    This is called on each page load to ensure data stays current.
+    """
+    if _is_bg_fetch_stale():
+        return _start_background_fetch(force=False)
+    return False
 
 
 def _donki_state() -> Dict[str, Any]:
@@ -5821,14 +5927,21 @@ def main() -> None:
     _inject_sessioninfo_suppressor()
 
     # -------------------------------------------------------------------------
-    # Start background fetch of space weather data (non-blocking)
-    # This runs in a daemon thread so the UI remains responsive.
+    # Background space weather fetch (non-blocking, 12-hour auto-refresh)
+    # - First load: start background fetch immediately
+    # - Subsequent loads: check if data is stale (>12h) and refresh if needed
     # -------------------------------------------------------------------------
     if "_bg_fetch_started" not in st.session_state:
+        # First load - start initial fetch
         started = _start_background_fetch()
         st.session_state["_bg_fetch_started"] = True
         if started:
-            logger.info("Background space weather fetch started")
+            logger.info("Background space weather fetch started (initial)")
+    else:
+        # Subsequent loads - check for auto-refresh if data is stale
+        refreshed = _check_and_trigger_auto_refresh()
+        if refreshed:
+            logger.info("Background space weather auto-refresh triggered (12h interval)")
 
     # Poll background fetch and apply completed data to session state
     _apply_background_fetch_to_state()
@@ -11215,38 +11328,47 @@ that predicts cognitive performance based on:
         if not space_state.get("loaded") and not bg_status["space_weather"]["done"]:
             _auto_fetch_space_weather_if_needed(space_state)
 
+        # Data age indicator
+        data_age = _get_bg_fetch_age_str()
+
         col_fetch_sw, col_fetch_donki, col_bg_info = st.columns([1, 1, 2])
         with col_fetch_sw:
             fetch_sw_clicked = st.button(
-                "Fetch space weather data", key="fetch_space_weather"
+                "📥 Fetch space weather", key="fetch_space_weather",
+                help="Fetch Kp index and solar radio flux from NOAA SWPC"
             )
         with col_fetch_donki:
             fetch_donki_clicked = st.button(
-                "Fetch NASA DONKI events",
+                "🌐 Fetch NASA DONKI",
                 key="fetch_donki",
                 disabled=not NASA_API_KEY,
                 help="Requires NASA_API_KEY in your .env file.",
             )
         with col_bg_info:
-            # Non-intrusive background fetch status
+            # Non-intrusive background fetch status with data age
             sw_done = bg_status["space_weather"]["done"]
             donki_done = bg_status["donki"]["done"]
+            sw_stale = bg_status["space_weather"].get("stale", False)
+            donki_stale = bg_status["donki"].get("stale", False)
+
             if not sw_done or not donki_done:
                 pending = []
                 if not sw_done:
-                    pending.append("Space Weather")
+                    pending.append("SW")
                 if not donki_done:
                     pending.append("DONKI")
-                st.caption(f"🔄 Background fetch in progress: {', '.join(pending)}")
+                st.caption(f"🔄 Fetching: {', '.join(pending)}…")
             elif bg_status["space_weather"]["error"] or bg_status["donki"]["error"]:
                 err_parts = []
                 if bg_status["space_weather"]["error"]:
-                    err_parts.append(f"SW: {bg_status['space_weather']['error'][:40]}")
+                    err_parts.append(f"SW: {bg_status['space_weather']['error'][:35]}")
                 if bg_status["donki"]["error"]:
-                    err_parts.append(f"DONKI: {bg_status['donki']['error'][:40]}")
+                    err_parts.append(f"DONKI: {bg_status['donki']['error'][:35]}")
                 st.caption(f"⚠️ {'; '.join(err_parts)}")
+            elif sw_stale or donki_stale:
+                st.caption(f"⏰ Data: {data_age} (auto-refresh pending)")
             else:
-                st.caption("✅ Data loaded from background fetch")
+                st.caption(f"✅ Data: {data_age} | Auto-refresh: 12h")
         donki_window_days = st.slider(
             "DONKI window (days)",
             min_value=7,
@@ -12663,23 +12785,30 @@ that predicts cognitive performance based on:
         if not noaa_state.get("bundles") and not bg_status["noaa"]["done"]:
             _auto_fetch_noaa_space_if_needed(noaa_state)
 
+        # Data age indicator
+        data_age = _get_bg_fetch_age_str()
+
         col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns([1, 1, 2])
         with col_fetch_noaa:
             fetch_noaa_clicked = st.button(
-                "Fetch NOAA feeds", key="fetch_noaa_space_data"
+                "📥 Fetch NOAA feeds", key="fetch_noaa_space_data",
+                help="Load NOAA feeds (uses cache if available)"
             )
         with col_refresh_noaa:
             refresh_noaa_clicked = st.button(
-                "Force refresh NOAA feeds", key="refresh_noaa_space_data"
+                "🔄 Force refresh", key="refresh_noaa_space_data",
+                help="Bypass cache and fetch fresh data from NOAA servers"
             )
         with col_bg_status:
-            # Show background fetch status (non-intrusive)
+            # Show background fetch status with data age (non-intrusive)
             if not bg_status["noaa"]["done"]:
                 st.caption("🔄 Background fetch in progress…")
             elif bg_status["noaa"]["error"]:
-                st.caption(f"⚠️ Background fetch issue: {bg_status['noaa']['error'][:60]}…")
+                st.caption(f"⚠️ Fetch issue: {bg_status['noaa']['error'][:50]}…")
+            elif bg_status["noaa"]["stale"]:
+                st.caption(f"⏰ Data: {data_age} (auto-refresh pending)")
             else:
-                st.caption("✅ Data loaded from background fetch")
+                st.caption(f"✅ Data: {data_age} | Auto-refresh: 12h")
 
         if fetch_noaa_clicked:
             with st.spinner("Fetching NOAA JSON feeds…"):
