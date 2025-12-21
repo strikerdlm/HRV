@@ -5,6 +5,17 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.36] - 2025-12-21
+
+### Added
+- **Background Space Weather Fetch** (`app/app.py`): Space weather data (NOAA, SWPC, NASA DONKI) now fetches in a background daemon thread on app startup. The UI remains fully responsive while data loads. Tabs show a non-intrusive status indicator and only trigger manual fetches if the user explicitly clicks the buttons.
+
+### Changed
+- **EVA Clearance Semaphore** (`app/user_profile_tab.py`): Replaced the bar chart for EVA Clearance States with a traffic-light semaphore visualization. Three circular indicators (GO/MONITOR/NO-GO) glow when active, with a summary panel showing the dominant status and total assessments.
+
+### Fixed
+- **node_modules restoration** (`node_modules/`): Restored ECharts npm package files that were inadvertently marked as deleted in git.
+
 ## [1.8.35] - 2025-12-20
 
 ### Added
