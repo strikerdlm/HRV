@@ -465,7 +465,7 @@ def render_sleep_overview(nights: list[SleepNight], summary: MultiNightSummary |
             })
 
     if nights_data:
-        st.dataframe(pd.DataFrame(nights_data), width="stretch")
+        st.dataframe(pd.DataFrame(nights_data), use_container_width=True)
 
 
 def render_hypnogram_section(nights: list[SleepNight]) -> None:
