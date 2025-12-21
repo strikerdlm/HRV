@@ -84,10 +84,10 @@ def render_user_selector() -> Optional[UserProfile]:
         
         col1, col2 = st.sidebar.columns(2)
         with col1:
-            if st.button("📝 Edit", key="edit_profile_btn", width="stretch"):
+            if st.button("📝 Edit", key="edit_profile_btn", use_container_width=True):
                 st.session_state["show_profile_editor"] = True
         with col2:
-            if st.button("🚪 Logout", key="logout_btn", width="stretch"):
+            if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
                 set_current_user(None)
                 st.rerun()
         
@@ -114,16 +114,16 @@ def render_user_selector() -> Optional[UserProfile]:
         )
         
         if selected == "➕ Create New User":
-            if st.sidebar.button("Create Profile", key="create_profile_btn", width="stretch"):
+            if st.sidebar.button("Create Profile", key="create_profile_btn", use_container_width=True):
                 st.session_state["show_profile_creator"] = True
         else:
             profile = user_options[selected]
-            if profile and st.sidebar.button("Login", key="login_btn", width="stretch"):
+            if profile and st.sidebar.button("Login", key="login_btn", use_container_width=True):
                 set_current_user(profile)
                 st.rerun()
     else:
         st.sidebar.info("No users found. Create your first profile!")
-        if st.sidebar.button("➕ Create Profile", key="create_first_profile", width="stretch"):
+        if st.sidebar.button("➕ Create Profile", key="create_first_profile", use_container_width=True):
             st.session_state["show_profile_creator"] = True
     
     return None
