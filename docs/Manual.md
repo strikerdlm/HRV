@@ -99,7 +99,7 @@ For heavy HRV computations, GPU acceleration is supported via NVIDIA CUDA:
 3. **Usage**: Enable in sidebar under "🖥️ GPU Processing"
 4. **Benefits**: 2-10x speedup for FFT, PSD, and large array operations
 
-**RTX 50 Series (Blackwell) Note**: The RTX 5070/5080/5090 use Compute Capability 12.0 (sm_120), which requires CUDA Toolkit 12.8 or later for JIT kernel compilation. Download from [NVIDIA CUDA Toolkit](https://developer.nvidia.com/cuda-downloads). The app detects this automatically and shows a helpful message if upgrade is needed.
+**RTX 50 Series (Blackwell) Note**: The RTX 5070/5080/5090 use Compute Capability 12.0 (sm_120), which requires CUDA Toolkit 12.8 or later for JIT kernel compilation. If you see `nvrtc64_120_0.dll` missing errors, see the [RTX 5070 CUDA Fix Guide](RTX_5070_CUDA_Fix.md) for step-by-step installation instructions. The app automatically detects your toolkit version and provides guidance if an upgrade is needed.
 
 The app automatically detects GPU availability and falls back to CPU when CUDA is not present.
 
