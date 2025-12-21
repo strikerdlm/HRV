@@ -66,16 +66,20 @@ pyserial==3.5.*
 # The app works perfectly without GPU - CPU fallback is automatic.
 # Install manually if you have an NVIDIA GPU for 2-10x speedup:
 #
-# For RTX 50xx/40xx/30xx (CUDA 12.x):
+# For RTX 50xx (Blackwell, CUDA 13.x):
+#   pip install cupy-cuda13x
+#
+# For RTX 40xx/30xx (Ada/Ampere, CUDA 12.x):
 #   pip install cupy-cuda12x
 #
-# For RTX 20xx/10xx (CUDA 11.x):
+# For RTX 20xx/10xx (Turing/Pascal, CUDA 11.x):
 #   pip install cupy-cuda11x
 #
 # Verify installation:
 #   python -c "import cupy; print(cupy.cuda.runtime.getDeviceProperties(0)['name'])"
 #
-# cupy-cuda12x>=13.0  # Uncomment for CUDA 12.x GPUs
+# cupy-cuda13x>=13.6  # For RTX 50xx (Blackwell) - CUDA 13.x
+# cupy-cuda12x>=13.0  # For RTX 40xx/30xx - CUDA 12.x
 
 # ===========================================================================
 # DATABASE & PERSISTENCE
