@@ -11927,13 +11927,38 @@ that predicts cognitive performance based on:
         space_state = _space_weather_state()
         donki_state = _donki_state()
 
-        # Start background fetch lazily when this tab is opened
-        _ensure_background_fetch_for_space_tabs()
+        # Performance control: allow disabling background auto-fetch for faster initial load
+        perf_col1, perf_col2 = st.columns([1, 3])
+        with perf_col1:
+            auto_fetch_enabled = st.checkbox(
+                "Enable background auto-fetch (slower load)",
+                value=bool(st.session_state.get("space_auto_fetch_enabled", False)),
+                key="space_auto_fetch_enabled",
+                help="When enabled, NOAA/DONKI fetch runs automatically in the background when you open this tab.",
+            )
+        with perf_col2:
+            st.caption("Tip: Leave this off for quicker tab load; use the fetch buttons below when needed.")
 
-        # Check background fetch status; skip redundant auto-fetch if already done
-        bg_status = _poll_background_fetch()
-        if not space_state.get("loaded") and not bg_status["space_weather"]["done"]:
-            _auto_fetch_space_weather_if_needed(space_state)
+        # Start background fetch lazily only when enabled
+        if auto_fetch_enabled:
+            _ensure_background_fetch_for_space_tabs()
+            bg_status = _poll_background_fetch()
+            if not space_state.get("loaded") and not bg_status["space_weather"]["done"]:
+                _auto_fetch_space_weather_if_needed(space_state)
+        else:
+            # Minimal status when auto-fetch is disabled
+            bg_status = {
+                "space_weather": {
+                    "done": bool(space_state.get("loaded")),
+                    "error": None,
+                    "stale": False,
+                },
+                "donki": {
+                    "done": bool(donki_state.get("loaded")),
+                    "error": None,
+                    "stale": False,
+                },
+            }
 
         # Data age indicator
         data_age = _get_bg_fetch_age_str()
@@ -11980,7 +12005,7 @@ that predicts cognitive performance based on:
             "DONKI window (days)",
             min_value=7,
             max_value=30,
-            value=30,
+            value=14,  # smaller default for faster queries
             step=1,
             key="donki_window_days",
         )
@@ -12068,7 +12093,7 @@ that predicts cognitive performance based on:
                     "F10.7 history (days)",
                     min_value=7,
                     max_value=90,
-                    value=30,
+                    value=14,  # smaller default to trim data processing
                     step=1,
                     key="flux_days",
                 )
