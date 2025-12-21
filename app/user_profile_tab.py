@@ -527,8 +527,9 @@ def _render_eva_semaphore(eva_counts: pd.Series) -> None:
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-weight: bold;
-                font-size: 14px;
+                font-weight: 700;
+                font-size: 10px;
+                line-height: 1.05;
                 margin: auto;
                 box-shadow: {'0 0 12px #16a34a' if go_active else 'none'};
             ">GO<br>{go_count}</div>
@@ -550,8 +551,9 @@ def _render_eva_semaphore(eva_counts: pd.Series) -> None:
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-weight: bold;
-                font-size: 11px;
+                font-weight: 700;
+                font-size: 9px;
+                line-height: 1.05;
                 margin: auto;
                 box-shadow: {'0 0 12px #f59e0b' if mon_active else 'none'};
             ">MONITOR<br>{monitor_count}</div>
@@ -573,8 +575,9 @@ def _render_eva_semaphore(eva_counts: pd.Series) -> None:
                 display: flex;
                 align-items: center;
                 justify-content: center;
-                font-weight: bold;
-                font-size: 11px;
+                font-weight: 700;
+                font-size: 9px;
+                line-height: 1.05;
                 margin: auto;
                 box-shadow: {'0 0 12px #dc2626' if nogo_active else 'none'};
             ">NO-GO<br>{nogo_count}</div>
