@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.8.27  
-**Last Updated:** 2025-12-18
+**Version:** 1.8.36  
+**Last Updated:** 2025-12-21
 
 ---
 
@@ -74,6 +74,14 @@ All other tabs show **example data** and **reference values** to help you unders
 **Cross-tab correlation:** The Circadian tab now publishes DLMO/CBT markers, ESRI, and light window details to the SAFTE/Fatigue tab. A single click in SAFTE applies the latest circadian sleep window and chronotype offset to fatigue simulations for tighter mission planning.
 
 **Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. Space Weather and NOAA tabs auto-load cache-first data on open (reusing cached Kp/F10.7/NOAA feeds if offline) even without RR uploads. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the active mission database is stored under `crew/<Mission>/db/hrv_users.db` (selected in the sidebar Crew workspace selector) for mission-scoped portability.
+
+**Background fetch with 12-hour auto-refresh (v1.8.36):** On app startup, space weather data (NOAA SWPC Kp/Flux, NOAA JSON feeds, and NASA DONKI events) loads in a background daemon thread. Data automatically refreshes every 12 hours without user intervention. The UI remains fully responsive during fetches. Each tab shows:
+- **Status indicator**: 🔄 in progress / ✅ complete / ⚠️ error
+- **Data age**: e.g., "2h ago" or "Just now"
+- **Auto-refresh schedule**: "Auto-refresh: 12h"
+- **Stale data warning**: "⏰ auto-refresh pending" when data is >12h old
+
+Manual fetch buttons remain available for on-demand refresh. Force refresh bypasses the cache to fetch fresh data directly from NOAA/NASA servers.
 
 **Release awareness:** The welcome header and About tab now read version, release date, and git commit metadata directly from `CHANGELOG.md`, so flight surgeons can confirm they are on v1.8.15 (or later) without leaving the UI. The indicator flips to “dirty” whenever the working tree has uncommitted changes.
 
@@ -590,6 +598,16 @@ LF/HF: 0.67 → Vagal predominance (typical at rest)
 This feature enables personalized HRV analysis and fatigue assessment by incorporating user-specific biometric data and validated clinical questionnaires.
 
 All longitudinal plots inside the profile (assessment history, Garmin wellness trends, HRV history, and Exploration Medical Analytics) now render with Apache ECharts for consistent styling and publication-ready exports.
+
+### EVA Clearance Semaphore (v1.8.36)
+
+The **Exploration Medical Analytics** section now displays EVA clearance states as a traffic-light semaphore instead of a bar chart:
+
+- **GO** (green) — Crew member is cleared for EVA
+- **MONITOR** (amber) — Requires mitigation or flight surgeon review before EVA
+- **NO-GO** (red) — Not cleared for EVA
+
+Each indicator glows when active (count > 0) and dims when inactive. A summary panel shows the dominant status and total assessments. This visualization provides an at-a-glance operational readiness indicator for mission planners.
 
 ### Longitudinal timepoints (T0–T21)
 
