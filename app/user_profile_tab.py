@@ -3565,52 +3565,56 @@ def _render_profile_readiness(user: UserProfile) -> None:
 def _render_data_management(user: UserProfile) -> None:
     """Render data export/import section."""
     st.markdown("## 📦 Data Management")
-    
+
+    @st.cache_data(ttl=60, show_spinner=False)
+    def _build_export_blob(user_id: str, username: str) -> tuple[str, bytes]:
+        import json
+
+        db = get_database()
+        export_data = {
+            "exported_at": datetime.now(timezone.utc).isoformat(),
+            "user_profile": db.get_user(user_id).to_dict() if db.get_user(user_id) else {},
+            "clinical_scales": [s.to_dict() for s in db.get_clinical_scales_history(user_id)],
+            "hrv_measurements": [m.to_dict() for m in db.get_hrv_history(user_id)],
+            "garmin_daily_metrics": [g.to_dict() for g in db.get_garmin_daily_metrics(user_id)],
+            "body_composition": [b.to_dict() for b in db.get_body_composition_history(user_id)],
+            "exploration_medical_history": db.get_medical_history(user_id, limit=500),
+        }
+        json_bytes = json.dumps(export_data, indent=2, default=str).encode("utf-8")
+        fname = f"{username}_data_export.json"
+        return fname, json_bytes
+
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.markdown("### Export Data")
-        if st.button("📥 Export All User Data", use_container_width=True):
-            try:
-                import json
-                db = get_database()
-                
-                export_data = {
-                    "exported_at": datetime.now(timezone.utc).isoformat(),
-                    "user_profile": user.to_dict(),
-                    "clinical_scales": [s.to_dict() for s in db.get_clinical_scales_history(user.user_id)],
-                    "hrv_measurements": [m.to_dict() for m in db.get_hrv_history(user.user_id)],
-                    "garmin_daily_metrics": [g.to_dict() for g in db.get_garmin_daily_metrics(user.user_id)],
-                    "body_composition": [b.to_dict() for b in db.get_body_composition_history(user.user_id)],
-                    "exploration_medical_history": db.get_medical_history(user.user_id, limit=500),
-                }
-                
-                json_str = json.dumps(export_data, indent=2, default=str)
-                st.download_button(
-                    "💾 Download JSON",
-                    data=json_str,
-                    file_name=f"{user.username}_data_export.json",
-                    mime="application/json",
-                )
-                
-            except Exception as exc:
-                st.error(f"Export failed: {exc}")
-    
+        try:
+            fname, blob = _build_export_blob(user.user_id, user.username or "user")
+            st.download_button(
+                "💾 Download JSON",
+                data=blob,
+                file_name=fname,
+                mime="application/json",
+                use_container_width=True,
+            )
+        except Exception as exc:
+            st.error(f"Export failed: {exc}")
+
     with col2:
         st.markdown("### Account Actions")
-        
+
         if st.button("🚪 Logout", use_container_width=True):
             _set_current_user(None)
             st.session_state.pop("edit_profile_mode", None)
             st.rerun()
-        
+
         st.markdown("---")
-        
+
         with st.expander("⚠️ Danger Zone"):
             st.warning("Deleting your account will remove all data permanently.")
             if st.button("🗑️ Delete Account", type="secondary"):
                 st.session_state["confirm_delete"] = True
-            
+
             if st.session_state.get("confirm_delete"):
                 st.error("Are you sure? This cannot be undone.")
                 col_yes, col_no = st.columns(2)
@@ -7350,6 +7354,16 @@ def render_user_profile_tab() -> None:
                 _set_current_user(new_user)
                 st.rerun()
     else:
+        # Top banner with login state and logout button (visible on all sections)
+        banner_col1, banner_col2 = st.columns([3, 1])
+        with banner_col1:
+            st.success(f"✅ Logged in as **{current_user.full_name}**")
+        with banner_col2:
+            if st.button("🚪 Logout", key=f"top_logout_{current_user.user_id}", use_container_width=True):
+                _set_current_user(None)
+                st.session_state.pop("edit_profile_mode", None)
+                st.rerun()
+
         # Show profile and assessments
         if st.session_state.get("edit_profile_mode"):
             _render_profile_edit(current_user)
