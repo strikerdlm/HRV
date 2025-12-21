@@ -308,6 +308,28 @@ from sklearn.inspection import permutation_importance
 from sklearn.linear_model import ElasticNetCV, LassoCV
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.model_selection import TimeSeriesSplit
+
+# Optional advanced ML libraries (graceful fallback if not installed)
+try:
+    from xgboost import XGBRegressor
+    XGBOOST_AVAILABLE = True
+except ImportError:
+    XGBOOST_AVAILABLE = False
+    XGBRegressor = None  # type: ignore
+
+try:
+    from lightgbm import LGBMRegressor
+    LIGHTGBM_AVAILABLE = True
+except ImportError:
+    LIGHTGBM_AVAILABLE = False
+    LGBMRegressor = None  # type: ignore
+
+try:
+    import shap
+    SHAP_AVAILABLE = True
+except ImportError:
+    SHAP_AVAILABLE = False
+    shap = None  # type: ignore
 from dotenv import load_dotenv
 from pathlib import Path
 from pandas.api.types import is_datetime64_any_dtype
@@ -5244,7 +5266,10 @@ def _run_ml_models_space_weather(
     feature_df: pd.DataFrame,
     target_metric: str,
 ) -> Dict[str, Any]:
-    """Train ElasticNet + RandomForest on a pre-built space-weather feature matrix."""
+    """Train ElasticNet + RandomForest + XGBoost/LightGBM on a pre-built space-weather feature matrix.
+    
+    Also computes SHAP values for model interpretability if available.
+    """
     if feature_df.empty or target_metric not in feature_df.columns:
         raise ValueError("No data for ML.")
     y = pd.to_numeric(feature_df[target_metric], errors="coerce")
@@ -5294,6 +5319,10 @@ def _run_ml_models_space_weather(
         "r2": float(r2_score(y_test, y_pred_rf)) if y_test.size else float("nan"),
         "mae": float(mean_absolute_error(y_test, y_pred_rf)) if y_test.size else float("nan"),
     }
+    
+    # Store trained models for SHAP analysis
+    trained_models: Dict[str, Any] = {"random_forest": rf}
+    
     try:
         perm = permutation_importance(
             rf, X_test, y_test, n_repeats=8, random_state=42, n_jobs=-1
@@ -5328,6 +5357,76 @@ def _run_ml_models_space_weather(
         "mae": float(mean_absolute_error(y_test, y_pred_lasso)) if y_test.size else float("nan"),
         "alpha": float(lasso.alpha_),
     }
+    
+    # XGBoost (if available) - often outperforms RandomForest
+    if XGBOOST_AVAILABLE and XGBRegressor is not None:
+        try:
+            xgb = XGBRegressor(
+                n_estimators=200,
+                max_depth=6,
+                learning_rate=0.1,
+                random_state=42,
+                n_jobs=-1,
+                verbosity=0,
+            )
+            xgb.fit(X_train, y_train)
+            y_pred_xgb = xgb.predict(X_test) if X_test.size else np.array([])
+            results["xgboost"] = {
+                "r2": float(r2_score(y_test, y_pred_xgb)) if y_test.size else float("nan"),
+                "mae": float(mean_absolute_error(y_test, y_pred_xgb)) if y_test.size else float("nan"),
+            }
+            trained_models["xgboost"] = xgb
+        except Exception as exc:
+            results["xgboost"] = {"error": str(exc)}
+    
+    # LightGBM (if available) - fast gradient boosting
+    if LIGHTGBM_AVAILABLE and LGBMRegressor is not None:
+        try:
+            lgbm = LGBMRegressor(
+                n_estimators=200,
+                max_depth=6,
+                learning_rate=0.1,
+                random_state=42,
+                n_jobs=-1,
+                verbosity=-1,
+            )
+            lgbm.fit(X_train, y_train)
+            y_pred_lgbm = lgbm.predict(X_test) if X_test.size else np.array([])
+            results["lightgbm"] = {
+                "r2": float(r2_score(y_test, y_pred_lgbm)) if y_test.size else float("nan"),
+                "mae": float(mean_absolute_error(y_test, y_pred_lgbm)) if y_test.size else float("nan"),
+            }
+            trained_models["lightgbm"] = lgbm
+        except Exception as exc:
+            results["lightgbm"] = {"error": str(exc)}
+    
+    # SHAP interpretability (if available)
+    if SHAP_AVAILABLE and shap is not None and X_test.size > 0:
+        try:
+            # Use RandomForest for SHAP (most interpretable tree model)
+            explainer = shap.TreeExplainer(rf)
+            shap_values = explainer.shap_values(X_test[:min(100, len(X_test))])  # Limit to 100 samples for performance
+            
+            # Compute mean absolute SHAP values for global importance
+            if isinstance(shap_values, np.ndarray):
+                mean_abs_shap = np.abs(shap_values).mean(axis=0)
+                shap_importances = [
+                    {"feature": name, "shap_importance": float(val)}
+                    for name, val in sorted(
+                        zip(X_cols, mean_abs_shap),
+                        key=lambda t: t[1],
+                        reverse=True,
+                    )
+                ]
+                results["shap_importances"] = shap_importances
+                results["shap_available"] = True
+                results["shap_base_value"] = float(explainer.expected_value)
+        except Exception as exc:
+            results["shap_importances"] = []
+            results["shap_available"] = False
+            results["shap_error"] = str(exc)
+    else:
+        results["shap_available"] = False
 
     # TimeSeriesSplit CV for ElasticNet and RF
     try:
@@ -11991,9 +12090,13 @@ that predicts cognitive performance based on:
                     help="Builds lagged feature matrix across selected predictors (e.g., Kp, Dst, F10.7, solar wind).",
                     key="space_weather_predictors_ml",
                 )
-                if st.button(
-                    "Run ML models (ElasticNet + RandomForest)", key="run_ml_space_weather"
-                ):
+                ml_button_text = "Run ML models (ElasticNet + RandomForest"
+                if XGBOOST_AVAILABLE:
+                    ml_button_text += " + XGBoost"
+                if LIGHTGBM_AVAILABLE:
+                    ml_button_text += " + LightGBM"
+                ml_button_text += ")"
+                if st.button(ml_button_text, key="run_ml_space_weather"):
                     try:
                         with st.spinner("Training ML models..."):
                             ml_start = time.perf_counter()
@@ -12015,9 +12118,17 @@ that predicts cognitive performance based on:
                             f"Features: **{ml_results.get('features', 0)}**"
                         )
                         st.caption(f"ML training time: {ml_duration:.0f} ms (CPU)")
+                        
+                        # Display model metrics in columns
                         enet = ml_results.get("elastic_net", {})
                         rf = ml_results.get("random_forest", {})
-                        col_m1, col_m2 = st.columns(2)
+                        xgb = ml_results.get("xgboost", {})
+                        lgbm = ml_results.get("lightgbm", {})
+                        gb = ml_results.get("gradient_boosting", {})
+                        lasso = ml_results.get("lasso", {})
+                        
+                        # Show available models
+                        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
                         with col_m1:
                             st.metric(
                                 "ElasticNet R²",
@@ -12031,23 +12142,70 @@ that predicts cognitive performance based on:
                                 f"{rf.get('r2', float('nan')):.3f}",
                                 help=f"MAE = {rf.get('mae', float('nan')):.3f}",
                             )
+                        with col_m3:
+                            if xgb and "r2" in xgb:
+                                st.metric(
+                                    "XGBoost R²",
+                                    f"{xgb.get('r2', float('nan')):.3f}",
+                                    help=f"MAE = {xgb.get('mae', float('nan')):.3f}",
+                                )
+                            else:
+                                st.metric("XGBoost R²", "N/A", help="Install: pip install xgboost")
+                        with col_m4:
+                            if lgbm and "r2" in lgbm:
+                                st.metric(
+                                    "LightGBM R²",
+                                    f"{lgbm.get('r2', float('nan')):.3f}",
+                                    help=f"MAE = {lgbm.get('mae', float('nan')):.3f}",
+                                )
+                            else:
+                                st.metric("LightGBM R²", "N/A", help="Install: pip install lightgbm")
+                        
                         imps = ml_results.get("feature_importances", [])
+                        shap_imps = ml_results.get("shap_importances", [])
                         if "space_weather_export" not in st.session_state:
                             st.session_state["space_weather_export"] = {}
-                        if imps:
-                            imp_df = pd.DataFrame(imps).head(8)
-                            st.markdown("Top feature importances (RandomForest, permutation)")
-                            st.dataframe(imp_df, use_container_width=True)
-                            st.session_state["space_weather_export"]["ml_importances"] = imp_df.copy()
+                        
+                        # Feature importances tabs
+                        if imps or shap_imps:
+                            tab1, tab2 = st.tabs(["Permutation Importance", "SHAP Values"])
+                            with tab1:
+                                if imps:
+                                    imp_df = pd.DataFrame(imps).head(8)
+                                    st.markdown("Top feature importances (RandomForest, permutation)")
+                                    st.dataframe(imp_df, use_container_width=True)
+                                    st.session_state["space_weather_export"]["ml_importances"] = imp_df.copy()
+                                else:
+                                    st.info("Permutation importance not available")
+                            with tab2:
+                                if shap_imps:
+                                    shap_df = pd.DataFrame(shap_imps).head(8)
+                                    st.markdown("Top feature importances (SHAP - mean |SHAP value|)")
+                                    st.dataframe(shap_df, use_container_width=True)
+                                    st.caption(
+                                        f"SHAP base value (expected prediction): {ml_results.get('shap_base_value', 'N/A'):.3f}"
+                                    )
+                                    st.session_state["space_weather_export"]["shap_importances"] = shap_df.copy()
+                                else:
+                                    if ml_results.get("shap_available", False):
+                                        st.info("SHAP computation completed but no importances available")
+                                    else:
+                                        st.info("SHAP not available. Install: pip install shap")
+                        else:
+                            st.info("Feature importances not available")
+                        
                         # Export ML summaries
-                        models_df = pd.DataFrame(
-                            [
-                                {"model": "elastic_net", **enet},
-                                {"model": "random_forest", **rf},
-                                {"model": "lasso", **ml_results.get("lasso", {})},
-                                {"model": "gradient_boosting", **ml_results.get("gradient_boosting", {})},
-                            ]
-                        )
+                        model_rows = [
+                            {"model": "elastic_net", **enet},
+                            {"model": "random_forest", **rf},
+                            {"model": "lasso", **lasso},
+                            {"model": "gradient_boosting", **gb},
+                        ]
+                        if xgb and "r2" in xgb:
+                            model_rows.append({"model": "xgboost", **xgb})
+                        if lgbm and "r2" in lgbm:
+                            model_rows.append({"model": "lightgbm", **lgbm})
+                        models_df = pd.DataFrame(model_rows)
                         st.download_button(
                             "⬇️ Download ML metrics (CSV)",
                             data=models_df.to_csv(index=False).encode("utf-8"),
