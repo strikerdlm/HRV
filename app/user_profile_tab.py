@@ -5335,7 +5335,8 @@ def _render_nasa_calculator(user: UserProfile) -> None:
     
     sleep_col1, sleep_col2, sleep_col3 = st.columns(3)
     
-    # Shared session keys (same as Profile Tools Engine) for consistency
+    # Session keys shared with Profile Tools Engine for cross-section consistency
+    # Use unique widget keys (nasa_ prefix) but sync to shared session state
     sleep_hours_key = f"tools_sleep_hours_{user.user_id}"
     sleep_quality_key = f"tools_sleep_quality_{user.user_id}"
     hours_awake_key = f"tools_hours_awake_{user.user_id}"
@@ -5344,60 +5345,32 @@ def _render_nasa_calculator(user: UserProfile) -> None:
     resting_hr_key = f"tools_resting_hr_{user.user_id}"
     vo2_key = f"tools_vo2_{user.user_id}"
     
+    # Display read-only summary instead of duplicate editable widgets
+    # (The Profile Tools Engine section below provides the editable inputs)
+    st.info(
+        "💡 **Tip:** Edit sleep/fatigue parameters in the **Profile Tools Engine** section below. "
+        "Values entered there will be used here automatically."
+    )
+    
+    # Show current values as read-only metrics
     with sleep_col1:
-        st.number_input(
-            "Sleep hours (last night)",
-            min_value=0.0,
-            max_value=14.0,
-            value=float(st.session_state.get(sleep_hours_key, 7.0)),
-            step=0.25,
-            key=sleep_hours_key,
-        )
-        st.slider(
-            "Sleep quality (0-1)",
-            min_value=0.0,
-            max_value=1.0,
-            value=float(st.session_state.get(sleep_quality_key, 0.7)),
-            step=0.05,
-            key=sleep_quality_key,
-        )
+        current_sleep_h = st.session_state.get(sleep_hours_key, 7.0)
+        current_sleep_q = st.session_state.get(sleep_quality_key, 0.7)
+        st.metric("Sleep hours", f"{float(current_sleep_h):.1f} h")
+        st.metric("Sleep quality", f"{float(current_sleep_q):.0%}")
     
     with sleep_col2:
-        st.slider(
-            "Hours awake",
-            min_value=0.0,
-            max_value=48.0,
-            value=float(st.session_state.get(hours_awake_key, 12.0)),
-            step=0.5,
-            key=hours_awake_key,
-        )
-        st.slider(
-            "Chronotype offset (hours)",
-            min_value=-2.5,
-            max_value=2.5,
-            value=float(st.session_state.get(chrono_key, 0.0)),
-            step=0.25,
-            help="Negative = morning type, positive = evening type",
-            key=chrono_key,
-        )
+        current_awake = st.session_state.get(hours_awake_key, 12.0)
+        current_chrono = st.session_state.get(chrono_key, 0.0)
+        st.metric("Hours awake", f"{float(current_awake):.1f} h")
+        chrono_label = "morning" if float(current_chrono) < 0 else ("evening" if float(current_chrono) > 0 else "neutral")
+        st.metric("Chronotype", f"{float(current_chrono):+.1f}h ({chrono_label})")
     
     with sleep_col3:
-        st.number_input(
-            "RMSSD (ms)",
-            min_value=0.0,
-            max_value=200.0,
-            value=float(st.session_state.get(rmssd_key, 35.0)),
-            step=1.0,
-            key=rmssd_key,
-        )
-        st.number_input(
-            "Resting HR (bpm)",
-            min_value=30,
-            max_value=120,
-            value=int(st.session_state.get(resting_hr_key, user.resting_hr_bpm or 65)),
-            step=1,
-            key=resting_hr_key,
-        )
+        current_rmssd = st.session_state.get(rmssd_key, 35.0)
+        current_rhr = st.session_state.get(resting_hr_key, user.resting_hr_bpm or 65)
+        st.metric("RMSSD", f"{float(current_rmssd):.0f} ms")
+        st.metric("Resting HR", f"{int(current_rhr)} bpm")
     
     # Optional VO2 input linked to tools session key for downstream use
     st.markdown("###### VO₂ for performance context (optional)")
