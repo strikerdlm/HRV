@@ -5372,19 +5372,16 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         st.metric("RMSSD", f"{float(current_rmssd):.0f} ms")
         st.metric("Resting HR", f"{int(current_rhr)} bpm")
     
-    # Optional VO2 input linked to tools session key for downstream use
-    st.markdown("###### VO₂ for performance context (optional)")
+    # VO2 summary (read-only here to avoid duplicate widget keys)
+    st.markdown("###### VO₂ for performance context (read-only here)")
     vo2_sync_col, _ = st.columns([1, 3])
     with vo2_sync_col:
-        st.number_input(
-            "VO₂max (mL·kg⁻¹·min⁻¹)",
-            min_value=10.0,
-            max_value=90.0,
-            value=float(st.session_state.get(vo2_key, vo2_manual)),
-            step=0.5,
-            key=vo2_key,
-        )
-    st.caption("These values are shared with the Profile Tools Engine (SAFTE, HRV readiness, operational performance).")
+        current_vo2 = float(st.session_state.get(vo2_key, vo2_manual))
+        st.metric("VO₂max", f"{current_vo2:.1f} mL·kg⁻¹·min⁻¹")
+    st.caption(
+        "Edit VO₂ in the Profile Tools Engine (or the NASA sync form below) — "
+        "the value is shared automatically."
+    )
     
     # Save manual entry button
     if st.button("💾 Save Manual Entry", key=f"save_manual_vo2_{user.user_id}"):
