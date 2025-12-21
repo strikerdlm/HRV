@@ -151,7 +151,6 @@ def _render_user_login_section() -> UserInfo | None:
 
             login_submitted = st.form_submit_button(
                 "🔑 Login / Create Account",
-                width="stretch",
             )
 
         if login_submitted:
