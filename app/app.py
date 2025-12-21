@@ -1644,16 +1644,25 @@ def _bg_fetch_all_space_data() -> None:
         start_dt = end_dt - pd.Timedelta(days=30)
         start_str = start_dt.strftime("%Y-%m-%d")
         end_str = end_dt.strftime("%Y-%m-%d")
-        from app.donki_service import fetch_donki_data
 
-        datasets, errors = fetch_donki_data(start_str, end_str, endpoints=None)
+        # Use existing DONKI fetch helper; run on a temporary state dict
+        donki_tmp_state: Dict[str, Any] = {
+            "loaded": False,
+            "datasets": {},
+            "errors": {},
+            "start_date": start_str,
+            "end_date": end_str,
+            "last_updated": None,
+        }
+        _fetch_donki_datasets(donki_tmp_state, start_str, end_str, endpoints=None)
+
         with _bg_fetch_lock:
             _bg_fetch_results["donki"]["data"] = {
-                "datasets": datasets,
-                "errors": errors,
-                "start_date": start_str,
-                "end_date": end_str,
-                "last_updated": pd.Timestamp.utcnow(),
+                "datasets": donki_tmp_state.get("datasets", {}),
+                "errors": donki_tmp_state.get("errors", {}),
+                "start_date": donki_tmp_state.get("start_date", start_str),
+                "end_date": donki_tmp_state.get("end_date", end_str),
+                "last_updated": donki_tmp_state.get("last_updated", pd.Timestamp.utcnow()),
             }
             _bg_fetch_results["donki"]["done"] = True
             _bg_fetch_results["donki"]["error"] = None
@@ -1721,18 +1730,18 @@ def _start_background_fetch(force: bool = False) -> bool:
             if all_done and not _is_bg_fetch_stale():
                 return False  # Data is fresh, no need to refetch
 
-    # Reset state for fresh fetch if forcing or if stale
-    if force or _is_bg_fetch_stale():
-        _reset_bg_fetch_for_refresh()
+        # Reset state for fresh fetch if forcing or if stale
+        if force or _is_bg_fetch_stale():
+            _reset_bg_fetch_for_refresh()
 
-    # Start a new daemon thread
-    _bg_fetch_thread = threading.Thread(
-        target=_bg_fetch_all_space_data,
-        name="SpaceWeatherBgFetch",
-        daemon=True,
-    )
-    _bg_fetch_thread.start()
-    return True
+        # Start a new daemon thread while holding the lock to avoid races
+        _bg_fetch_thread = threading.Thread(
+            target=_bg_fetch_all_space_data,
+            name="SpaceWeatherBgFetch",
+            daemon=True,
+        )
+        _bg_fetch_thread.start()
+        return True
 
 
 def _get_bg_fetch_age_str() -> str:
