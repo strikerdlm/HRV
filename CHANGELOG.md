@@ -8,10 +8,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.8.36] - 2025-12-21
 
 ### Added
-- **Background Space Weather Fetch** (`app/app.py`): Space weather data (NOAA, SWPC, NASA DONKI) now fetches in a background daemon thread on app startup. The UI remains fully responsive while data loads. Tabs show a non-intrusive status indicator and only trigger manual fetches if the user explicitly clicks the buttons.
+- **Background Space Weather Fetch with 12-hour Auto-Refresh** (`app/app.py`): Space weather data (NOAA, SWPC, NASA DONKI) now fetches in a background daemon thread on app startup. Data automatically refreshes every 12 hours without user intervention. The UI remains fully responsive during fetches. Each tab shows data age and refresh status (e.g., "✅ Data: 2h ago | Auto-refresh: 12h").
 
 ### Changed
 - **EVA Clearance Semaphore** (`app/user_profile_tab.py`): Replaced the bar chart for EVA Clearance States with a traffic-light semaphore visualization. Three circular indicators (GO/MONITOR/NO-GO) glow when active, with a summary panel showing the dominant status and total assessments.
+- **Space Weather Tab UI** (`app/app.py`): Updated fetch buttons with icons and clearer help text. Status indicators now show data age and auto-refresh schedule. Stale data (>12h) triggers automatic background refresh on next page load.
 
 ### Fixed
 - **node_modules restoration** (`node_modules/`): Restored ECharts npm package files that were inadvertently marked as deleted in git.
