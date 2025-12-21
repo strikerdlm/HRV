@@ -5386,7 +5386,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
             "RMSSD (ms)",
             min_value=0.0,
             max_value=200.0,
-            value=float(st.session_state.get(rmssd_key, user.latest_rmssd_ms or 35.0)),
+            value=float(st.session_state.get(rmssd_key, 35.0)),
             step=1.0,
             key=rmssd_key,
         )
