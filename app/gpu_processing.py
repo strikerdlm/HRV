@@ -26,9 +26,11 @@ import functools
 import logging
 import os
 import platform
+import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
+from pathlib import Path
 from typing import Any, Callable, Dict, Final, List, Optional, Tuple, TypeVar
 
 import numpy as np
@@ -97,6 +99,104 @@ _cupy_available: bool = False
 _cp: Optional[Any] = None  # cupy module if available
 
 
+def _detect_cuda_toolkit_version() -> Optional[str]:
+    """Detect installed CUDA Toolkit version by checking installation paths (highest version first).
+    
+    Returns the highest installed CUDA Toolkit version, not necessarily the one in PATH.
+    This is important when multiple versions are installed (e.g., 12.5 and 13.1).
+    """
+    # Check installation paths first (to find highest version, not just PATH version)
+    cuda_paths = [
+        Path("C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA"),
+        Path("C:/Program Files (x86)/NVIDIA GPU Computing Toolkit/CUDA"),
+    ]
+    
+    all_versions: List[Tuple[str, float]] = []
+    
+    for base_path in cuda_paths:
+        if base_path.exists():
+            for version_dir in base_path.iterdir():
+                if version_dir.is_dir() and version_dir.name.startswith("v"):
+                    version_str = version_dir.name.lstrip("v")
+                    parts = version_str.split(".")
+                    if len(parts) >= 2:
+                        try:
+                            major = int(parts[0])
+                            minor = int(parts[1])
+                            # Create sortable version number (e.g., 13.1 -> 13.1, 12.8 -> 12.8)
+                            version_num = float(f"{major}.{minor}")
+                            all_versions.append((f"{major}.{minor}", version_num))
+                        except (ValueError, IndexError):
+                            continue
+    
+    # Return highest version found
+    if all_versions:
+        all_versions.sort(key=lambda x: x[1], reverse=True)
+        return all_versions[0][0]
+    
+    # Fallback: Try nvcc --version (but this may be an older version in PATH)
+    try:
+        result = subprocess.run(
+            ["nvcc", "--version"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        if result.returncode == 0:
+            # Parse output like "release 12.5, V12.5.82"
+            for line in result.stdout.splitlines():
+                if "release" in line.lower():
+                    parts = line.split()
+                    for i, part in enumerate(parts):
+                        if part.lower() == "release" and i + 1 < len(parts):
+                            version_str = parts[i + 1].rstrip(",")
+                            return version_str
+    except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+        pass
+    
+    return None
+
+
+def _get_cuda_toolkit_path(version: Optional[str] = None) -> Optional[Path]:
+    """Get the installation path for a specific CUDA Toolkit version.
+    
+    Args:
+        version: Version string like "13.1" or "12.8". If None, uses highest found version.
+    
+    Returns:
+        Path to CUDA Toolkit installation, or None if not found.
+    """
+    if version is None:
+        version = _detect_cuda_toolkit_version()
+        if version is None:
+            return None
+    
+    cuda_paths = [
+        Path("C:/Program Files/NVIDIA GPU Computing Toolkit/CUDA"),
+        Path("C:/Program Files (x86)/NVIDIA GPU Computing Toolkit/CUDA"),
+    ]
+    
+    # Try exact version match first
+    for base_path in cuda_paths:
+        exact_path = base_path / f"v{version}"
+        if exact_path.exists():
+            return exact_path
+    
+    # Try matching major.minor (e.g., "13.1" matches "v13.1.0")
+    for base_path in cuda_paths:
+        if base_path.exists():
+            for version_dir in base_path.iterdir():
+                if version_dir.is_dir() and version_dir.name.startswith("v"):
+                    version_str = version_dir.name.lstrip("v")
+                    parts = version_str.split(".")
+                    if len(parts) >= 2:
+                        if f"{parts[0]}.{parts[1]}" == version:
+                            return version_dir
+    
+    return None
+
+
 def _detect_gpu() -> GPUInfo:
     """Detect available GPU hardware."""
     global _cupy_available, _cp
@@ -136,9 +236,10 @@ def _detect_gpu() -> GPUInfo:
                 info.total_memory_gb = total_mem / (1024 ** 3)
                 info.free_memory_gb = free_mem / (1024 ** 3)
 
-                # CUDA version
+                # CUDA runtime version (from driver)
                 cuda_ver = cp.cuda.runtime.runtimeGetVersion()
-                info.cuda_version = f"{cuda_ver // 1000}.{(cuda_ver % 1000) // 10}"
+                cuda_runtime_ver = f"{cuda_ver // 1000}.{(cuda_ver % 1000) // 10}"
+                info.cuda_version = cuda_runtime_ver
 
                 # Driver version
                 driver_ver = cp.cuda.runtime.driverGetVersion()
@@ -149,6 +250,10 @@ def _detect_gpu() -> GPUInfo:
                 cc_minor = props["minor"]
                 info.compute_capability = f"{cc_major}.{cc_minor}"
 
+                # Detect actual CUDA Toolkit version (highest installed)
+                toolkit_ver = _detect_cuda_toolkit_version()
+                toolkit_path: Optional[Path] = _get_cuda_toolkit_path(toolkit_ver) if toolkit_ver else None
+
                 # Validate GPU can actually run kernels (Blackwell sm_120 needs CUDA 12.8+)
                 # Test with a simple kernel to ensure JIT compilation works
                 try:
@@ -156,18 +261,64 @@ def _detect_gpu() -> GPUInfo:
                     _ = float(cp.mean(test_arr))  # This requires kernel compilation
                     info.available = True
                 except Exception as kernel_exc:
-                    # Kernel compilation failed - likely sm_120 without CUDA 12.8+ toolkit
+                    # Kernel compilation failed - likely sm_120 without CUDA 12.8+ toolkit or PATH issue
                     if cc_major >= 12:
-                        _LOGGER.warning(
-                            "GPU %s detected (CC %s) but kernel compilation failed. "
-                            "RTX 50xx (Blackwell) requires CUDA Toolkit 12.8+. "
-                            "Current toolkit: %s. Error: %s",
-                            info.device_name,
-                            info.compute_capability,
-                            info.cuda_version,
-                            kernel_exc,
+                        toolkit_info = f"Toolkit: {toolkit_ver}" if toolkit_ver else "Toolkit: unknown"
+                        
+                        # Check if PATH points to wrong version
+                        path_issue = ""
+                        nvcc_path_result = subprocess.run(
+                            ["where", "nvcc"],
+                            capture_output=True,
+                            text=True,
+                            timeout=5,
+                            check=False,
                         )
-                        info.device_name = f"{info.device_name} (needs CUDA 12.8+)"
+                        if nvcc_path_result.returncode == 0 and nvcc_path_result.stdout and toolkit_ver and toolkit_path:
+                            nvcc_path = nvcc_path_result.stdout.strip().splitlines()[0]
+                            nvcc_dir = Path(nvcc_path).parent.parent
+                            if nvcc_dir != toolkit_path:
+                                path_issue = f" (PATH points to {nvcc_dir.name} instead of v{toolkit_ver})"
+                        
+                        if toolkit_ver and float(toolkit_ver) >= 12.8:
+                            # CUDA 12.8+ is installed, but PATH may be wrong or wrong CuPy package
+                            if float(toolkit_ver) >= 13.0:
+                                msg = (
+                                    f"CUDA Toolkit {toolkit_ver} is installed{path_issue}. "
+                                    "Update PATH to point to v{0} and install cupy-cuda13x. "
+                                    "See docs/RTX_5070_CUDA_Fix.md"
+                                ).format(toolkit_ver)
+                                device_msg = f" (CUDA {toolkit_ver} installed, update PATH + install cupy-cuda13x)"
+                            else:
+                                msg = (
+                                    f"CUDA Toolkit {toolkit_ver} is installed{path_issue}. "
+                                    "Update PATH to point to v{0}. See docs/RTX_5070_CUDA_Fix.md"
+                                ).format(toolkit_ver)
+                                device_msg = f" (CUDA {toolkit_ver} installed, update PATH)"
+                            
+                            _LOGGER.warning(
+                                "GPU %s detected (CC %s) but kernel compilation failed. %s "
+                                "CUDA Runtime: %s. Error: %s",
+                                info.device_name,
+                                info.compute_capability,
+                                msg,
+                                cuda_runtime_ver,
+                                kernel_exc,
+                            )
+                            info.device_name = f"{info.device_name}{device_msg}"
+                        else:
+                            # CUDA 12.8+ not installed
+                            _LOGGER.warning(
+                                "GPU %s detected (CC %s) but kernel compilation failed. "
+                                "RTX 50xx (Blackwell) requires CUDA Toolkit 12.8+. "
+                                "CUDA Runtime: %s, %s. Error: %s",
+                                info.device_name,
+                                info.compute_capability,
+                                cuda_runtime_ver,
+                                toolkit_info,
+                                kernel_exc,
+                            )
+                            info.device_name = f"{info.device_name} (needs CUDA Toolkit 12.8+)"
                         info.available = False
                     else:
                         _LOGGER.warning(
@@ -188,7 +339,7 @@ def _detect_gpu() -> GPUInfo:
             except Exception as exc:  # bounded by device_count attempts
                 _LOGGER.debug("GPU device %d unusable: %s", device_id, exc)
 
-        if not info.available and "needs CUDA" not in info.device_name:
+        if not info.available and "needs CUDA" not in info.device_name and "CUDA" not in info.device_name and "update PATH" not in info.device_name:
             info.device_name = "No usable CUDA device"
         
     except ImportError as exc:
@@ -702,30 +853,90 @@ def render_gpu_settings_sidebar() -> GPUConfig:
                             cols[2].metric("GPU", f"{test['gpu_time_ms']:.2f}ms", f"{test['speedup']:.1f}x")
                         else:
                             cols[2].metric("GPU", "N/A")
-        else:
-            st.warning("No GPU detected")
-            st.caption(info.device_name)
-            
-            # Check if it's a Blackwell GPU needing toolkit upgrade
-            if "needs CUDA 12.8" in info.device_name:
-                st.markdown("""
-                **RTX 50xx (Blackwell) requires CUDA Toolkit 12.8+:**
-                1. Download from [NVIDIA CUDA Toolkit](https://developer.nvidia.com/cuda-downloads)
-                2. Install CUDA Toolkit 12.8 or newer
-                3. Restart the app
-                
-                *Your GPU is detected but needs a newer CUDA Toolkit.*
-                """)
             else:
-                st.markdown("""
-                **To enable GPU:**
-                1. Install latest NVIDIA drivers
-                2. Install CuPy for your GPU:
-                   - **RTX 50xx**: `pip install cupy-cuda12x` + CUDA Toolkit 12.8+
-                   - **RTX 40xx/30xx**: `pip install cupy-cuda12x`
-                   - **RTX 20xx**: `pip install cupy-cuda11x`
-                3. Restart the app
-                """)
+                st.warning("No GPU detected")
+                st.caption(info.device_name)
+                
+                # Check if it's a Blackwell GPU needing toolkit upgrade or PATH fix
+                toolkit_ver = _detect_cuda_toolkit_version()
+                toolkit_path = _get_cuda_toolkit_path(toolkit_ver) if toolkit_ver else None
+                needs_path_update = False
+                
+                if toolkit_ver and float(toolkit_ver) >= 12.8:
+                    # CUDA 12.8+ is installed, but PATH might point to older version
+                    nvcc_result = subprocess.run(
+                        ["where", "nvcc"],
+                        capture_output=True,
+                        text=True,
+                        timeout=5,
+                        check=False,
+                    )
+                    if nvcc_result.returncode == 0 and nvcc_result.stdout:
+                        nvcc_path = nvcc_result.stdout.strip().splitlines()[0]
+                        nvcc_dir = Path(nvcc_path).parent.parent
+                        if toolkit_path and nvcc_dir != toolkit_path:
+                            needs_path_update = True
+                
+                if "update PATH" in info.device_name or needs_path_update:
+                    st.markdown(f"""
+                    **CUDA Toolkit {toolkit_ver} is installed, but PATH points to an older version:**
+                    
+                    1. **Update Environment Variables**:
+                       - Windows Settings → System → About → Advanced system settings
+                       - Click "Environment Variables"
+                       - Edit `CUDA_PATH`:
+                         - Set to: `C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v{toolkit_ver}`
+                       - Edit `PATH`:
+                         - Remove old CUDA entries (e.g., `...\\CUDA\\v12.5\\bin`)
+                         - Add: `%CUDA_PATH%\\bin`
+                         - Add: `%CUDA_PATH%\\libnvvp`
+                    
+                    2. **Alternative (PowerShell - current session only)**:
+                       ```powershell
+                       $env:CUDA_PATH = "C:\\Program Files\\NVIDIA GPU Computing Toolkit\\CUDA\\v{toolkit_ver}"
+                       $env:PATH = "$env:CUDA_PATH\\bin;$env:PATH"
+                       ```
+                    
+                    3. **After updating**:
+                       - **Restart your computer** (required for permanent PATH changes)
+                       - Restart the Streamlit app
+                       - GPU acceleration will be automatically enabled
+                    
+                    **Note**: CUDA {toolkit_ver} supports your RTX 5070 (Blackwell, CC 12.0). The issue is that your PATH environment variable points to CUDA 12.5 instead of {toolkit_ver}.
+                    """)
+                elif "needs CUDA Toolkit 12.8" in info.device_name or "needs CUDA 12.8" in info.device_name:
+                    current_toolkit = f" (Currently installed: {toolkit_ver})" if toolkit_ver else ""
+                    st.markdown(f"""
+                    **RTX 50xx (Blackwell) requires CUDA Toolkit 12.8+{current_toolkit}:**
+                    
+                    1. **Download CUDA Toolkit 12.8+**:
+                       - Visit: [NVIDIA CUDA Toolkit Downloads](https://developer.nvidia.com/cuda-downloads)
+                       - Select: Windows → x86_64 → 10/11 → exe (local)
+                       - Download and run the installer
+                    
+                    2. **During installation**:
+                       - Choose "Custom" installation
+                       - Keep existing CUDA versions if needed (they can coexist)
+                       - Ensure "CUDA Toolkit" and "CUDA Samples" are selected
+                    
+                    3. **After installation**:
+                       - Update PATH to point to new version (see instructions above)
+                       - Restart your computer (recommended)
+                       - Restart the Streamlit app
+                       - GPU acceleration will be automatically enabled
+                    
+                    **Note**: Your RTX 5070 is detected, but the current CUDA Toolkit ({toolkit_ver if toolkit_ver else '12.5'}) doesn't support Blackwell architecture (CC 12.0). CUDA Toolkit 12.8+ includes the required `nvrtc64_120_0.dll` runtime compiler.
+                    """)
+                else:
+                    st.markdown("""
+                    **To enable GPU:**
+                    1. Install latest NVIDIA drivers
+                    2. Install CuPy for your GPU:
+                       - **RTX 50xx**: `pip install cupy-cuda12x` + CUDA Toolkit 12.8+
+                       - **RTX 40xx/30xx**: `pip install cupy-cuda12x`
+                       - **RTX 20xx**: `pip install cupy-cuda11x`
+                    3. Restart the app
+                    """)
     
     set_gpu_config(config)
     return config
