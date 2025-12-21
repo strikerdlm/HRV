@@ -304,33 +304,100 @@ import numpy as np
 import pandas as pd
 import requests
 import streamlit as st
-from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
-from sklearn.inspection import permutation_importance
-from sklearn.linear_model import ElasticNetCV, LassoCV
-from sklearn.metrics import mean_absolute_error, r2_score
-from sklearn.model_selection import TimeSeriesSplit
 
-# Optional advanced ML libraries (graceful fallback if not installed)
-try:
-    from xgboost import XGBRegressor
-    XGBOOST_AVAILABLE = True
-except ImportError:
-    XGBOOST_AVAILABLE = False
-    XGBRegressor = None  # type: ignore
+# Core ML primitives (lazy-loaded to speed startup)
+RandomForestRegressor = None  # type: ignore
+GradientBoostingRegressor = None  # type: ignore
+ElasticNetCV = None  # type: ignore
+LassoCV = None  # type: ignore
+TimeSeriesSplit = None  # type: ignore
+permutation_importance = None  # type: ignore
+mean_absolute_error = None  # type: ignore
+r2_score = None  # type: ignore
+_SKLEARN_LOADED = False
 
-try:
-    from lightgbm import LGBMRegressor
-    LIGHTGBM_AVAILABLE = True
-except ImportError:
-    LIGHTGBM_AVAILABLE = False
-    LGBMRegressor = None  # type: ignore
 
-try:
-    import shap
-    SHAP_AVAILABLE = True
-except ImportError:
-    SHAP_AVAILABLE = False
-    shap = None  # type: ignore
+def _ensure_sklearn() -> None:
+    """Lazy-load sklearn to avoid slowing the welcome page startup."""
+    global (
+        RandomForestRegressor,
+        GradientBoostingRegressor,
+        ElasticNetCV,
+        LassoCV,
+        TimeSeriesSplit,
+        permutation_importance,
+        mean_absolute_error,
+        r2_score,
+        _SKLEARN_LOADED,
+    )
+    if _SKLEARN_LOADED:
+        return
+
+    from sklearn.ensemble import RandomForestRegressor as _RF, GradientBoostingRegressor as _GB
+    from sklearn.inspection import permutation_importance as _perm
+    from sklearn.linear_model import ElasticNetCV as _EN, LassoCV as _Lasso
+    from sklearn.metrics import mean_absolute_error as _mae, r2_score as _r2
+    from sklearn.model_selection import TimeSeriesSplit as _TSCV
+
+    RandomForestRegressor = _RF
+    GradientBoostingRegressor = _GB
+    ElasticNetCV = _EN
+    LassoCV = _Lasso
+    TimeSeriesSplit = _TSCV
+    permutation_importance = _perm
+    mean_absolute_error = _mae
+    r2_score = _r2
+    _SKLEARN_LOADED = True
+
+
+# Optional advanced ML libraries (lazy-loaded for faster startup)
+XGBRegressor = None  # type: ignore
+LGBMRegressor = None  # type: ignore
+shap = None  # type: ignore
+XGBOOST_AVAILABLE = False
+LIGHTGBM_AVAILABLE = False
+SHAP_AVAILABLE = False
+_ML_LIBS_LOADED = False
+
+
+def _ensure_ml_libs() -> None:
+    """Lazy-load optional ML libs (XGBoost, LightGBM, SHAP) to speed startup."""
+    global XGBRegressor, LGBMRegressor, shap
+    global XGBOOST_AVAILABLE, LIGHTGBM_AVAILABLE, SHAP_AVAILABLE, _ML_LIBS_LOADED
+    if _ML_LIBS_LOADED:
+        return
+
+    # XGBoost
+    try:
+        from xgboost import XGBRegressor as _XGBRegressor  # type: ignore
+
+        XGBRegressor = _XGBRegressor
+        XGBOOST_AVAILABLE = True
+    except ImportError:
+        XGBRegressor = None  # type: ignore
+        XGBOOST_AVAILABLE = False
+
+    # LightGBM
+    try:
+        from lightgbm import LGBMRegressor as _LGBMRegressor  # type: ignore
+
+        LGBMRegressor = _LGBMRegressor
+        LIGHTGBM_AVAILABLE = True
+    except ImportError:
+        LGBMRegressor = None  # type: ignore
+        LIGHTGBM_AVAILABLE = False
+
+    # SHAP
+    try:
+        import shap as _shap  # type: ignore
+
+        shap = _shap  # type: ignore
+        SHAP_AVAILABLE = True
+    except ImportError:
+        shap = None  # type: ignore
+        SHAP_AVAILABLE = False
+
+    _ML_LIBS_LOADED = True
 from dotenv import load_dotenv
 from pathlib import Path
 from pandas.api.types import is_datetime64_any_dtype
@@ -1882,6 +1949,23 @@ def _check_and_trigger_auto_refresh() -> bool:
     if _is_bg_fetch_stale():
         return _start_background_fetch(force=False)
     return False
+
+
+def _ensure_background_fetch_for_space_tabs() -> None:
+    """
+    Lazy-start background space weather fetch when space-weather/NOAA tabs are used.
+
+    This avoids any startup delay on the welcome page while keeping data fresh
+    once the relevant tabs are opened. It also triggers auto-refresh if stale.
+    """
+    if "_bg_fetch_started" not in st.session_state:
+        started = _start_background_fetch()
+        st.session_state["_bg_fetch_started"] = True
+        if started:
+            _LOGGER.info("Background space weather fetch started (lazy)")
+    else:
+        _check_and_trigger_auto_refresh()
+    _apply_background_fetch_to_state()
 
 
 def _donki_state() -> Dict[str, Any]:
@@ -5455,6 +5539,7 @@ def _run_ml_models_on_kp(
     merge_tolerance_minutes: int = 90,
 ) -> Dict[str, Any]:
     """Train ElasticNet and RandomForest models predicting an HRV metric from Kp lags."""
+    _ensure_sklearn()
     feature_df = _build_kp_feature_matrix(
         windowed_df, kp_df, lags_hours, merge_tolerance_minutes=merge_tolerance_minutes
     )
@@ -5583,6 +5668,8 @@ def _run_ml_models_space_weather(
     
     Also computes SHAP values for model interpretability if available.
     """
+    _ensure_sklearn()
+    _ensure_ml_libs()
     if feature_df.empty or target_metric not in feature_df.columns:
         raise ValueError("No data for ML.")
     y = pd.to_numeric(feature_df[target_metric], errors="coerce")
@@ -5952,26 +6039,6 @@ def main() -> None:
         st.session_state["_app_session_ready"] = True
     
     _inject_sessioninfo_suppressor()
-
-    # -------------------------------------------------------------------------
-    # Background space weather fetch (non-blocking, 12-hour auto-refresh)
-    # - First load: start background fetch immediately
-    # - Subsequent loads: check if data is stale (>12h) and refresh if needed
-    # -------------------------------------------------------------------------
-    if "_bg_fetch_started" not in st.session_state:
-        # First load - start initial fetch
-        started = _start_background_fetch()
-        st.session_state["_bg_fetch_started"] = True
-        if started:
-            logger.info("Background space weather fetch started (initial)")
-    else:
-        # Subsequent loads - check for auto-refresh if data is stale
-        refreshed = _check_and_trigger_auto_refresh()
-        if refreshed:
-            logger.info("Background space weather auto-refresh triggered (12h interval)")
-
-    # Poll background fetch and apply completed data to session state
-    _apply_background_fetch_to_state()
 
     # Show error details in UI
     st.set_option("client.showErrorDetails", True)
@@ -11178,6 +11245,14 @@ that predicts cognitive performance based on:
     with tab_space_weather:
         st.subheader("Space Weather (NOAA SWPC)")
         
+        # Lazy gate: avoid rendering heavy content until user opts in
+        if not st.session_state.get("_space_weather_tab_loaded", False):
+            st.info("Space Weather content is unloaded to speed startup. Click below to load.")
+            if st.button("Load Space Weather content", key="load_space_weather_tab"):
+                st.session_state["_space_weather_tab_loaded"] = True
+                st.experimental_rerun()
+            return
+
         # =====================================================================
         # IMPACT PREDICTION SECTION - Expected hit times for Bogotá, Colombia
         # =====================================================================
@@ -11349,6 +11424,9 @@ that predicts cognitive performance based on:
         # =====================================================================
         space_state = _space_weather_state()
         donki_state = _donki_state()
+
+        # Start background fetch lazily when this tab is opened
+        _ensure_background_fetch_for_space_tabs()
 
         # Check background fetch status; skip redundant auto-fetch if already done
         bg_status = _poll_background_fetch()
@@ -12492,6 +12570,7 @@ that predicts cognitive performance based on:
                     help="Builds lagged feature matrix across selected predictors (e.g., Kp, Dst, F10.7, solar wind).",
                     key="space_weather_predictors_ml",
                 )
+                _ensure_ml_libs()
                 ml_button_text = "Run ML models (ElasticNet + RandomForest"
                 if XGBOOST_AVAILABLE:
                     ml_button_text += " + XGBoost"
@@ -12783,6 +12862,17 @@ that predicts cognitive performance based on:
         st.markdown("### 🌍 NOAA Space Weather Dashboard")
         st.markdown("*Real-time solar and geomagnetic data for physiology correlation analysis*")
         
+        # Lazy gate: avoid rendering heavy content until user opts in
+        if not st.session_state.get("_noaa_space_tab_loaded", False):
+            st.info("NOAA Space dashboard is unloaded to speed startup. Click below to load.")
+            if st.button("Load NOAA Space dashboard", key="load_noaa_space_tab"):
+                st.session_state["_noaa_space_tab_loaded"] = True
+                st.experimental_rerun()
+            return
+
+        # Start background fetch lazily when this tab is opened
+        _ensure_background_fetch_for_space_tabs()
+
         with st.expander("🌞 **Understanding Space Weather Metrics**", expanded=False):
             st.markdown("""
 **Solar Activity Indices:**
