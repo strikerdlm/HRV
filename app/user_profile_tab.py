@@ -1878,6 +1878,72 @@ def _render_clinical_assessment(user: UserProfile) -> None:
         format_func=lambda x: f"{x}: {available_scales[x]}",
     )
     
+    # Session state keys for Garmin-autofilled context
+    ctx_hours_wake_key = f"clinical_ctx_hours_wake_{user.user_id}"
+    ctx_hours_sleep_key = f"clinical_ctx_hours_sleep_{user.user_id}"
+    ctx_caffeine_key = f"clinical_ctx_caffeine_{user.user_id}"
+    
+    # Initialize defaults
+    if ctx_hours_wake_key not in st.session_state:
+        st.session_state[ctx_hours_wake_key] = 8.0
+    if ctx_hours_sleep_key not in st.session_state:
+        st.session_state[ctx_hours_sleep_key] = 7.0
+    if ctx_caffeine_key not in st.session_state:
+        st.session_state[ctx_caffeine_key] = 1
+    
+    # Garmin autofill section (outside form)
+    st.markdown("#### 📊 Assessment Context")
+    col_garmin_btn, col_garmin_status = st.columns([1, 2])
+    with col_garmin_btn:
+        fetch_garmin_context = st.button(
+            "📡 Fetch from Garmin",
+            key=f"clinical_fetch_garmin_{user.user_id}",
+            help="Pull sleep duration and wake time from your latest Garmin daily metrics.",
+        )
+    
+    if fetch_garmin_context:
+        try:
+            db = get_database()
+            garmin_rows = db.get_garmin_daily_metrics(user.user_id, limit=1)
+            if garmin_rows:
+                latest = garmin_rows[0]
+                updated_fields = []
+                
+                # Sleep duration
+                sleep_dur = latest.get("sleep_duration_hours")
+                if sleep_dur is not None and isinstance(sleep_dur, (int, float)):
+                    st.session_state[ctx_hours_sleep_key] = float(max(0.0, min(24.0, round(float(sleep_dur), 1))))
+                    updated_fields.append(f"Sleep: {st.session_state[ctx_hours_sleep_key]:.1f}h")
+                
+                # Calculate hours since waking from sleep end time
+                sleep_end_utc = latest.get("sleep_end_utc")
+                if sleep_end_utc:
+                    try:
+                        end_dt = pd.to_datetime(sleep_end_utc, utc=True, errors="coerce")
+                        if end_dt is not None and not pd.isna(end_dt):
+                            now_utc = pd.Timestamp.now(tz=timezone.utc)
+                            hours_awake = (now_utc - end_dt).total_seconds() / 3600.0
+                            if 0 <= hours_awake <= 48:
+                                st.session_state[ctx_hours_wake_key] = float(round(hours_awake, 1))
+                                updated_fields.append(f"Awake: {st.session_state[ctx_hours_wake_key]:.1f}h")
+                    except Exception:
+                        pass
+                
+                if updated_fields:
+                    with col_garmin_status:
+                        st.success(f"✅ Garmin data loaded: {', '.join(updated_fields)}")
+                else:
+                    with col_garmin_status:
+                        st.warning("⚠️ No sleep data found in latest Garmin metrics.")
+            else:
+                with col_garmin_status:
+                    st.info("ℹ️ No Garmin daily metrics stored. Sync Garmin data first in the Garmin Integration section.")
+        except Exception as exc:
+            with col_garmin_status:
+                st.error(f"❌ Failed to fetch Garmin data: {exc}")
+    
+    st.caption("💡 Click 'Fetch from Garmin' to auto-populate sleep context, or enter values manually below.")
+    
     form_key = f"clinical_assessment_form_{user.user_id}"
     results: Dict[str, Any] = {}
     context_data: Dict[str, Any] = {}
@@ -1891,24 +1957,27 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                     t('hours_since_waking'),
                     min_value=0.0,
                     max_value=48.0,
-                    value=8.0,
+                    value=float(st.session_state[ctx_hours_wake_key]),
                     step=0.5,
+                    key=f"clinical_hours_wake_input_{user.user_id}",
                 )
             with col2:
                 hours_sleep = st.number_input(
                     t('hours_slept'),
                     min_value=0.0,
                     max_value=24.0,
-                    value=7.0,
+                    value=float(st.session_state[ctx_hours_sleep_key]),
                     step=0.5,
+                    key=f"clinical_hours_sleep_input_{user.user_id}",
                 )
             with col3:
                 caffeine_cups = st.number_input(
                     t('caffeine_today'),
                     min_value=0,
                     max_value=20,
-                    value=1,
+                    value=int(st.session_state[ctx_caffeine_key]),
                     step=1,
+                    key=f"clinical_caffeine_input_{user.user_id}",
                 )
         context_data = {
             "hours_since_wake": hours_since_wake,
