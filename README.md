@@ -9,17 +9,17 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.36-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.37-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2025--12--18-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2025--12--21-blue)](CHANGELOG.md)
 
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
 
-**NEW in v1.8.36**: **Garmin sleep autofill + synced sleep/chronotype inputs** — One-click Vivosmart/Garmin pull fills sleep hours, quality, hours awake, RMSSD, resting HR; a new Sleep & Chronotype section under Energy & Nutrition pushes these values into the Profile Tools Engine for SAFTE fatigue and Operational Performance.
+**NEW in v1.8.37**: **Dual Garmin sleep autofill buttons + synced sleep/chronotype inputs** — One-click Vivosmart/Garmin pull now exists in both the Profile Tools Engine and the Sleep & Chronotype section under Energy & Nutrition. It fills sleep hours, quality, hours awake, RMSSD, resting HR, and feeds SAFTE fatigue plus Operational Performance.
 **NEW in v1.8.28**: **Crew mission workspaces** — The app now organizes data under `crew/` with **Mission 1** and **Mission 2**. The active mission’s **SQLite DB + backups** live in `crew/<Mission>/db/`, and per-subject files live in `crew/<Mission>/subjects/`.
 
 **NEW in v1.8.27**: **Per-user SAFTE/FRMS defaults** — Save a typical **sleep window**, **duty window**, and **weekend policy** per profile so SAFTE/FRMS workflows can auto-load reproducible schedules without re-entry.
