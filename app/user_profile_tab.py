@@ -2301,6 +2301,36 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         st.error(f"Unable to load Garmin history: {exc}")
         return
 
+    # Derive sleep efficiency when missing by computing (sleep_duration / time_in_bed)*100
+    def _compute_sleep_efficiency(row: pd.Series) -> float | None:
+        """Compute sleep efficiency as (sleep duration / time in bed) * 100."""
+        duration_h = _safe_float(row.get("sleep_duration_hours"))
+        start_ts = row.get("sleep_start_utc")
+        end_ts = row.get("sleep_end_utc")
+        if duration_h is None or start_ts is None or end_ts is None:
+            return None
+        try:
+            start_dt = pd.to_datetime(start_ts, utc=True, errors="coerce")
+            end_dt = pd.to_datetime(end_ts, utc=True, errors="coerce")
+        except Exception:
+            return None
+        if start_dt is None or end_dt is None or pd.isna(start_dt) or pd.isna(end_dt):
+            return None
+        time_in_bed_hours = (end_dt - start_dt).total_seconds() / 3600.0
+        if time_in_bed_hours <= 0:
+            return None
+        efficiency = (duration_h / time_in_bed_hours) * 100.0
+        # Clamp to a reasonable range
+        return float(max(0.0, min(100.0, efficiency)))
+
+    if "sleep_efficiency" not in df.columns:
+        df["sleep_efficiency"] = pd.NA
+    missing_eff = df["sleep_efficiency"].isna()
+    if bool(missing_eff.any()):
+        df.loc[missing_eff, "sleep_efficiency"] = (
+            df.loc[missing_eff].apply(_compute_sleep_efficiency, axis=1)
+        )
+
     if df.empty and not hasattr(get_database(), "get_garmin_daily_metrics"):
         st.warning(
             "Wrist monitoring history requires the updated database methods. "
