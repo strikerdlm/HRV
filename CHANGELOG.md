@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Clinical assessment Garmin autofill** (`app/user_profile_tab.py`): Handle GarminDailyMetrics dataclass objects when populating sleep context to prevent `'GarminDailyMetrics' object has no attribute 'get'` errors in the clinical assessment panel.
+- **Hours since waking calculation** (`app/user_profile_tab.py`): Hours awake now derives directly from wake time (manual or Garmin) and current clock time on every rerun, ensuring today's value stays accurate without extra Garmin fetches.
 
 ## [1.8.37] - 2025-12-21
 
