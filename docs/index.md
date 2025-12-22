@@ -45,6 +45,7 @@ If you use conda, activate the project environment first (see the root README fo
 
 - **Quick start + highlights**: see the root [`README.md`](../README.md)
 - **Full manual**: [`Manual.md`](Manual.md)
+- **Future performance (2026)**: [`future_2026.md`](future_2026.md)
 - [Scientific Discussion](Scientific_Discussion_Parasympathetic_Analysis.md)
 
 ## License
