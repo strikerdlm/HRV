@@ -973,6 +973,27 @@ def _parse_iso_utc(dt_str: Optional[str]) -> Optional[datetime]:
         return None
 
 
+def _compute_hours_since_wake(
+    wake_dt: datetime, reference_dt: Optional[datetime] = None
+) -> float:
+    """Compute bounded hours since wake_dt relative to reference_dt (default now)."""
+    ref_dt = reference_dt
+    if ref_dt is None:
+        ref_dt = datetime.now(timezone.utc) if wake_dt.tzinfo else datetime.now()
+    if wake_dt.tzinfo and ref_dt.tzinfo:
+        delta_seconds = (
+            ref_dt.astimezone(timezone.utc) - wake_dt.astimezone(timezone.utc)
+        ).total_seconds()
+    else:
+        if ref_dt.tzinfo and wake_dt.tzinfo is None:
+            ref_dt = ref_dt.replace(tzinfo=None)
+        delta_seconds = (ref_dt - wake_dt).total_seconds()
+    if delta_seconds < 0:
+        return 0.0
+    hours = delta_seconds / 3600.0
+    return float(round(max(0.0, min(48.0, hours)), 1))
+
+
 def _get_latest_garmin_sleep_payload(user: UserProfile, now_dt: datetime) -> Optional[Dict[str, float]]:
     """Fetch latest Garmin Vivosmart sleep metrics to feed SAFTE/HRV inputs."""
     if fetch_garmin_daily_metrics is None:
@@ -1008,8 +1029,7 @@ def _get_latest_garmin_sleep_payload(user: UserProfile, now_dt: datetime) -> Opt
     hours_awake = float(now_dt.hour - 7 if now_dt.hour >= 7 else now_dt.hour + 17)
     end_dt = _parse_iso_utc(chosen.sleep_end_utc)
     if end_dt:
-        delta_hours = max(0.0, (now_dt - end_dt).total_seconds() / 3600.0)
-        hours_awake = max(0.0, min(48.0, delta_hours))
+        hours_awake = _compute_hours_since_wake(end_dt, now_dt)
 
     rmssd_val = chosen.hrv_rmssd_ms if chosen.hrv_rmssd_ms is not None else None
     resting_hr_val = (
@@ -1894,6 +1914,8 @@ def _render_clinical_assessment(user: UserProfile) -> None:
     ctx_hours_wake_key = f"clinical_hours_wake_{user.user_id}"
     ctx_hours_sleep_key = f"clinical_hours_sleep_{user.user_id}"
     ctx_caffeine_key = f"clinical_caffeine_{user.user_id}"
+    ctx_wake_time_key = f"clinical_wake_dt_{user.user_id}"
+    ctx_wake_time_input_key = f"clinical_wake_time_input_{user.user_id}"
     
     # Initialize defaults only if keys don't exist
     if ctx_hours_wake_key not in st.session_state:
@@ -1902,6 +1924,17 @@ def _render_clinical_assessment(user: UserProfile) -> None:
         st.session_state[ctx_hours_sleep_key] = 7.0
     if ctx_caffeine_key not in st.session_state:
         st.session_state[ctx_caffeine_key] = 1
+    if ctx_wake_time_key not in st.session_state:
+        default_wake_dt = datetime.now() - timedelta(
+            hours=float(st.session_state[ctx_hours_wake_key])
+        )
+        st.session_state[ctx_wake_time_key] = default_wake_dt
+    wake_dt_val = st.session_state.get(ctx_wake_time_key)
+    if isinstance(wake_dt_val, datetime):
+        st.session_state[ctx_hours_wake_key] = _compute_hours_since_wake(
+            wake_dt_val,
+            datetime.now(timezone.utc) if wake_dt_val.tzinfo else datetime.now(),
+        )
     
     # Garmin autofill section (outside form)
     st.markdown("#### 📊 Assessment Context")
@@ -1940,16 +1973,16 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                 # Calculate hours since waking from sleep end time
                 sleep_end_utc = latest.get("sleep_end_utc")
                 if sleep_end_utc:
-                    try:
-                        end_dt = pd.to_datetime(sleep_end_utc, utc=True, errors="coerce")
-                        if end_dt is not None and not pd.isna(end_dt):
-                            now_utc = pd.Timestamp.now(tz=timezone.utc)
-                            hours_awake = (now_utc - end_dt).total_seconds() / 3600.0
-                            if 0 <= hours_awake <= 48:
-                                st.session_state[ctx_hours_wake_key] = float(round(hours_awake, 1))
-                                updated_fields.append(f"Awake: {st.session_state[ctx_hours_wake_key]:.1f}h")
-                    except Exception:
-                        pass
+                    parsed_end = _parse_iso_utc(str(sleep_end_utc))
+                    if parsed_end is not None:
+                        st.session_state[ctx_wake_time_key] = parsed_end
+                        computed_hours = _compute_hours_since_wake(
+                            parsed_end, datetime.now(timezone.utc)
+                        )
+                        st.session_state[ctx_hours_wake_key] = computed_hours
+                        updated_fields.append(
+                            f"Awake: {st.session_state[ctx_hours_wake_key]:.1f}h"
+                        )
                 
                 if updated_fields:
                     with col_garmin_status:
@@ -1975,6 +2008,24 @@ def _render_clinical_assessment(user: UserProfile) -> None:
     
     with st.form(form_key, clear_on_submit=False):
         with st.expander(t('assessment_context'), expanded=True):
+            stored_wake_dt = st.session_state.get(ctx_wake_time_key)
+            wake_time_value = (
+                stored_wake_dt.time()
+                if isinstance(stored_wake_dt, datetime)
+                else datetime.now().time()
+            )
+            wake_time_today = st.time_input(
+                "Wake time today",
+                value=wake_time_value,
+                key=ctx_wake_time_input_key,
+                help="Used to compute hours awake (current time minus wake time).",
+            )
+            wake_dt_today = datetime.combine(date.today(), wake_time_today)
+            st.session_state[ctx_wake_time_key] = wake_dt_today
+            st.session_state[ctx_hours_wake_key] = _compute_hours_since_wake(
+                wake_dt_today, datetime.now()
+            )
+            
             col1, col2, col3 = st.columns(3)
             with col1:
                 hours_since_wake = st.number_input(
@@ -1984,6 +2035,8 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                     value=float(st.session_state[ctx_hours_wake_key]),
                     step=0.5,
                     key=ctx_hours_wake_key,
+                    disabled=True,
+                    help="Calculated from wake time and current clock time.",
                 )
             with col2:
                 hours_sleep = st.number_input(
@@ -2003,6 +2056,11 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                     step=1,
                     key=ctx_caffeine_key,
                 )
+            st.caption(
+                f"Hours awake ({st.session_state[ctx_hours_wake_key]:.1f}h) "
+                f"= now ({datetime.now().strftime('%H:%M')}) minus wake "
+                f"time ({wake_time_today.strftime('%H:%M')})."
+            )
         context_data = {
             "hours_since_wake": hours_since_wake,
             "hours_sleep": hours_sleep,
