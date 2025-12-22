@@ -225,16 +225,17 @@ def render_quick_access_grid(has_data: bool = False) -> None:
     Args:
         has_data: Whether physiological data is loaded
     """
-    # Module definitions organized by category: (icon, name, tab_name, description, color)
+    # Module definitions organized by category: (icon, name, tab_name, description, color, highlight_no_data)
+    # highlight_no_data=True means this module should glow when user has no data loaded
     modules_available = [
-        ("👤", "User Profile", "👤 User Profile", "Profiles & Garmin sync", "#667eea"),
-        ("🌍", "Space Weather", "🌍 Space Weather", "Solar correlations", "#9b59b6"),
-        ("🛰️", "NOAA Space", "🛰️ NOAA Space", "Kp index & solar wind", "#00d2d3"),
-        ("☀️", "Circadian", "☀️ Circadian", "Jet lag planning", "#f39c12"),
-        ("😴", "SAFTE/Fatigue", "😴 SAFTE/Fatigue", "Fatigue forecasting", "#3498db"),
-        ("🫀", "Biofeedback", "🫀 Biofeedback", "Coherence training", "#e74c3c"),
-        ("📚", "References", "📚 References", "Scientific citations", "#1abc9c"),
-        ("ℹ️", "About", "ℹ️ About", "Changelog & manual", "#95a5a6"),
+        ("👤", "User Profile", "👤 User Profile", "Profiles & Garmin sync", "#667eea", False),
+        ("🌍", "Space Weather", "🌍 Space Weather", "Solar correlations", "#9b59b6", True),
+        ("🛰️", "NOAA Space", "🛰️ NOAA Space", "Kp index & solar wind", "#00d2d3", True),
+        ("☀️", "Circadian", "☀️ Circadian", "Jet lag planning", "#f39c12", True),
+        ("😴", "SAFTE/Fatigue", "😴 SAFTE/Fatigue", "Fatigue forecasting", "#3498db", True),
+        ("🫀", "Biofeedback", "🫀 Biofeedback", "Coherence training", "#e74c3c", True),
+        ("📚", "References", "📚 References", "Scientific citations", "#1abc9c", False),
+        ("ℹ️", "About", "ℹ️ About", "Changelog & manual", "#95a5a6", False),
     ]
     
     modules_data_required = [
@@ -248,18 +249,50 @@ def render_quick_access_grid(has_data: bool = False) -> None:
         ("📄", "Export", "📄 Export", "Download reports", "#6c757d"),
     ]
     
-    def _build_card(icon: str, name: str, tab: str, desc: str, color: str, available: bool) -> str:
-        """Build HTML for a single module card."""
+    def _build_card(
+        icon: str,
+        name: str,
+        tab: str,
+        desc: str,
+        color: str,
+        available: bool,
+        *,
+        glow: bool = False,
+    ) -> str:
+        """Build HTML for a single module card.
+        
+        Args:
+            icon: Emoji icon for the card
+            name: Module name
+            tab: Tab name to display
+            desc: Short description
+            color: Hex color for theming
+            available: Whether the module is accessible
+            glow: Whether to apply glow effect (for highlighting explorable modules)
+        """
         opacity = "1" if available else "0.35"
-        bg_color = f"rgba({int(color[1:3], 16)}, {int(color[3:5], 16)}, {int(color[5:7], 16)}, 0.12)" if available else "rgba(50, 50, 70, 0.3)"
+        r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
+        bg_color = f"rgba({r}, {g}, {b}, 0.12)" if available else "rgba(50, 50, 70, 0.3)"
         border_color = color if available else "rgba(100, 100, 120, 0.3)"
         status_text = "✓ Ready" if available else "Needs Data"
         status_color = "#2ecc71" if available else "#888"
+        
+        # Apply glow effect for highlighted modules (draws attention when no data loaded)
+        if glow:
+            box_shadow = f"0 0 20px rgba({r}, {g}, {b}, 0.5), 0 0 40px rgba({r}, {g}, {b}, 0.3)"
+            border_width = "2px"
+            status_text = "★ Explore Now"
+            status_color = color
+        else:
+            box_shadow = "none"
+            border_width = "1px"
+        
         return (
             f'<div style="background: {bg_color}; '
-            f'border: 1px solid {border_color}; border-radius: 14px; '
+            f'border: {border_width} solid {border_color}; border-radius: 14px; '
             f'padding: 1rem 0.8rem; text-align: center; opacity: {opacity}; '
-            f'position: relative;">'
+            f'position: relative; box-shadow: {box_shadow}; '
+            f'transition: box-shadow 0.3s ease, transform 0.2s ease;">'
             # Status badge
             f'<div style="position: absolute; top: 6px; right: 8px; font-size: 0.55rem; '
             f'color: {status_color}; font-weight: 600;">{status_text}</div>'
@@ -279,9 +312,13 @@ def render_quick_access_grid(has_data: bool = False) -> None:
         )
     
     # Build available modules grid
+    # Apply glow effect to highlighted modules when user has no data loaded
     available_cards = "".join(
-        _build_card(icon, name, tab, desc, color, True)
-        for icon, name, tab, desc, color in modules_available
+        _build_card(
+            icon, name, tab, desc, color, True,
+            glow=(highlight and not has_data),
+        )
+        for icon, name, tab, desc, color, highlight in modules_available
     )
     
     # Build data-required modules grid
