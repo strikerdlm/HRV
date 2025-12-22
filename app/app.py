@@ -11747,18 +11747,18 @@ that predicts cognitive performance based on:
     with tab_space_weather:
         st.subheader("Space Weather (NOAA SWPC)")
         
-        # Lazy gate: avoid rendering heavy content until user opts in
-        if not st.session_state.get("_space_weather_tab_loaded", False):
-            st.info("Space Weather content is unloaded to speed startup. Click below to load.")
-            if st.button("Load Space Weather content", key="load_space_weather_tab"):
-                st.session_state["_space_weather_tab_loaded"] = True
-                st.rerun()
-            return
-
+        # NOTE: Lazy loading removed because wrapping 1600+ lines of content
+        # in a conditional block required impractical re-indentation.
+        # The original `return` statement was removed because it prevented
+        # subsequent tabs (NOAA Space, Export, References, About) from rendering.
+        # Space weather content now always loads (slower startup, but all tabs work).
+        _sw_content_loaded = True
+        st.session_state["_space_weather_tab_loaded"] = True
+        
         # =====================================================================
         # IMPACT PREDICTION SECTION - Expected hit times for Bogotá, Colombia
         # =====================================================================
-        if SPACE_WEATHER_IMPACT_AVAILABLE:
+        if _sw_content_loaded and SPACE_WEATHER_IMPACT_AVAILABLE:
             st.markdown("---")
             st.markdown("### 🎯 Space Weather Impact Predictions")
             st.markdown(f"*All times in Bogotá, Colombia ({BOGOTA_TZ_NAME})*")
@@ -11771,7 +11771,9 @@ that predicts cognitive performance based on:
             if "impact_snapshot_loading" not in st.session_state:
                 st.session_state["impact_snapshot_loading"] = False
             if "impact_snapshot_attempted" not in st.session_state:
-                st.session_state["impact_snapshot_attempted"] = False
+                # Default to True so auto-fetch is disabled on initial load (faster startup)
+                # Users can click "Fetch Impact Predictions" button when they want the data
+                st.session_state["impact_snapshot_attempted"] = True
             
             # Only auto-fetch if not already loaded, not currently loading, and not already attempted
             if (
@@ -11922,7 +11924,7 @@ that predicts cognitive performance based on:
             st.markdown("---")
         
         # =====================================================================
-        # Original space weather content continues below
+        # Space weather state initialization
         # =====================================================================
         space_state = _space_weather_state()
         donki_state = _donki_state()
@@ -11932,7 +11934,7 @@ that predicts cognitive performance based on:
         with perf_col1:
             auto_fetch_enabled = st.checkbox(
                 "Enable background auto-fetch (slower load)",
-                value=bool(st.session_state.get("space_auto_fetch_enabled", True)),
+                value=bool(st.session_state.get("space_auto_fetch_enabled", False)),  # Default OFF for faster startup
                 key="space_auto_fetch_enabled",
                 help="When enabled, NOAA/DONKI fetch runs automatically in the background when you open this tab.",
             )
