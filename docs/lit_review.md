@@ -1,7 +1,7 @@
 # Physiological, Chronobiological, and Operational Foundations of a Multimodal Human-Performance Console
 ## A literature review aligned to the “Mission Control – Flight Surgeon” platform
 
-**Document type:** Narrative literature review (IMRaD-structured)
+**Document type:** Scoping review (PRISMA-ScR–reported) with module-aligned synthesis (IMRaD-structured)
 
 **Scope note:** This paper synthesizes peer-reviewed scientific literature and US/EU governmental technical documents that underpin the analytic modules implemented in the *Mission Control – Flight Surgeon* application: HRV signal processing and interpretation; circadian modelling and light scheduling; fatigue forecasting and FRMS-style governance; blood-pressure variability; wearable acquisition; and integration of space-weather context (NOAA/NASA) with time-aligned physiological analytics.
 
@@ -12,13 +12,13 @@
 
 **Objective:** To review the scientific and technical foundations relevant to a multimodal “flight surgeon console” approach, focusing on: (i) HRV standards, preprocessing, and interpretation across time/frequency/nonlinear domains; (ii) validated autonomic function testing paradigms; (iii) circadian pacemaker models and experimentally derived light phase-response curves; (iv) fatigue science, performance measurement, and biomathematical fatigue modelling; (v) blood pressure variability (BPV) as an autonomic/vascular risk construct; (vi) evidence on wearable acquisition validity; and (vii) the state of evidence linking space-weather indices to autonomic/cardiovascular outcomes.
 
-**Methods:** A targeted narrative review was performed using CrossRef and Semantic Scholar via MCP `paper-search` to identify peer-reviewed articles and high-impact consensus statements. US and European governmental/agency technical documents were collected from NOAA SWPC, NASA/CCMC, FAA, EASA, and ESA repositories. Literature was synthesized thematically along the major modules implemented in the app and app-adjacent operational requirements (auditability, reproducibility, conservative risk communication).
+**Methods:** A scoping review was conducted using established methodological frameworks and reported according to PRISMA-ScR (Arksey & O’Malley, 2005; Levac et al., 2010; Tricco et al., 2018; Peters et al., 2020). For the HRV–cognition component, we searched Europe PMC (REST API; English-language records with abstracts; publication dates 2000–2025) on 22 December 2025 using pre-specified title/abstract query families covering HRV and RR-interval terminology (e.g., heart rate variability, RMSSD, SDNN, HF-HRV, RR/NN interval) and cognitive domains (executive function, working memory, attention/vigilance, mental workload/cognitive load, cognitive impairment). Records were deduplicated by DOI (or PMID when DOI was absent) and mapped by year and domain. In parallel, official US/EU governmental and agency documents and high-impact consensus statements were included to support module-aligned operational context (circadian modelling, fatigue/FRMS, BPV, wearables, space weather).
 
-**Results:** HRV is a robust noninvasive marker of autonomic regulation when measurement protocols are standardized and analyses respect known physiological constraints (record length requirements, respiration effects, ectopy/artifact handling). Contemporary guidance emphasizes transparent preprocessing and cautious interpretation of frequency-domain ratios, including the well-documented limitations of LF/HF as a sympathovagal “balance” surrogate. Circadian models (limit-cycle oscillators with light preprocessing) can predict phase and entrainment under controlled assumptions and are supported by rigorous human light phase-response curve experiments. Fatigue risk is dominated by sleep loss, time awake, and circadian phase, with objective vigilance testing (PVT-family) offering sensitive, repeatable measurement of the operational failure mode. Biomathematical models such as SAFTE/FAST provide useful forecasts when calibrated and embedded within FRMS governance rather than treated as standalone truth. Evidence associating geomagnetic activity with HRV and cardiovascular endpoints exists but is heterogeneous; effect sizes are generally small and vulnerable to confounding and time-series artefacts.
+**Results:** HRV is a robust noninvasive marker of autonomic regulation when measurement protocols are standardized and analyses respect known physiological constraints (record length requirements, respiration effects, ectopy/artifact handling). Contemporary guidance emphasizes transparent preprocessing and cautious interpretation of frequency-domain ratios, including the well-documented limitations of LF/HF as a sympathovagal “balance” surrogate. Systematic syntheses also support modest associations between resting vagally mediated HRV and executive function (consistent with neurovisceral integration frameworks), but effect sizes are small and highly context dependent. Circadian models (limit-cycle oscillators with light preprocessing) can predict phase and entrainment under controlled assumptions and are supported by rigorous human light phase-response curve experiments. Fatigue risk is dominated by sleep loss, time awake, and circadian phase, with objective vigilance testing (PVT-family) offering sensitive, repeatable measurement of the operational failure mode. Biomathematical models such as SAFTE/FAST provide useful forecasts when calibrated and embedded within FRMS governance rather than treated as standalone truth. Evidence associating geomagnetic activity with HRV and cardiovascular endpoints exists but is heterogeneous; effect sizes are generally small and vulnerable to confounding and time-series artefacts.
 
 **Conclusions:** A multimodal console can be scientifically defensible if it prioritizes (i) signal validity and protocol metadata; (ii) within-person baselines; (iii) transparent modelling assumptions; (iv) conservative uncertainty communication; and (v) governance frameworks (FRMS-style) that separate “decision support” from clinical diagnosis.
 
-**Keywords:** heart rate variability; circadian rhythms; fatigue risk management; SAFTE; psychomotor vigilance test; blood pressure variability; wearable sensors; space weather; aerospace medicine.
+**Keywords:** heart rate variability; circadian rhythms; fatigue risk management; SAFTE; psychomotor vigilance test; executive function; neurovisceral integration; blood pressure variability; wearable sensors; space weather; aerospace medicine.
 
 ---
 
@@ -47,26 +47,27 @@ Third, evidence linking space weather to human physiology is heterogeneous. Some
 ---
 
 ## 2. Methods
-### 2.1. Review design
-This is a targeted narrative literature review structured using IMRaD headings to match the app’s module architecture. The intent is not to produce a PRISMA-grade systematic review for each subtopic, but to synthesize high-value evidence and technical standards that support (or constrain) operational deployment.
+### 2.1. Review design and reporting framework
+This manuscript is structured using a module-aligned approach corresponding to the *Mission Control – Flight Surgeon* platform. The HRV–cognition component was conducted as a scoping review and reported according to PRISMA-ScR (Tricco et al., 2018), guided by established scoping-review methodology (Arksey & O’Malley, 2005; Levac et al., 2010; Peters et al., 2020). Adjacent domains required for operational deployment (HRV measurement standards and preprocessing, circadian models, fatigue/FRMS science, BPV, wearable validity, space-weather context, and governance) were synthesized narratively using consensus standards, systematic reviews, and key validation studies.
 
-### 2.2. Information sources
-Peer-reviewed literature was identified using CrossRef and Semantic Scholar via MCP `paper-search`. Targeted searches were run for combinations of terms including:
+### 2.2. Review questions (HRV–cognition scoping component)
+The scoping component addressed four questions:
 
-- “heart rate variability standards,” “HRV reporting recommendations,” “RMSSD norms,” “artifact correction HRV,” “Kubios HRV software.”
-- “Poincaré plot HRV,” “detrended fluctuation analysis heartbeat,” “sample entropy HRV,” “heart rate fragmentation.”
-- “circadian pacemaker model,” “Forger Jewett Kronauer,” “human phase response curve bright light,” “circadian entrainment model Hannay.”
-- “sleep restriction dose response performance,” “psychomotor vigilance test standardization,” “fatigue risk management systems,” “SAFTE FAST model.”
-- “blood pressure variability clinical relevance,” “visit-to-visit blood pressure variability stroke risk.”
-- “geomagnetic disturbances heart rate variability,” “solar wind heart rate variability.”
-- “Polar H10 validity HRV,” “actigraphy sleep circadian,” “wearable sleep technology validation.”
-- “ultra-short-term HRV validity,” “smartphone HRV validity,” “short-segment RMSSD agreement.”
-- “neurovisceral integration HRV,” “central autonomic network,” “executive function HF-HRV.”
-- “HRV biofeedback meta-analysis,” “resonance frequency breathing,” “paced breathing intervention.”
-- “microgravity heart rate variability astronauts,” “ISS HRV,” “long-duration spaceflight autonomic.”
-- “acute hypoxia heart rate variability,” “altitude acute mountain sickness HRV,” “oximetry HRV AMS.”
-- “wearable illness detection,” “smartwatch COVID pre-symptomatic detection,” “wearables infection detection HRV.”
+1. What study designs and populations have been used to examine associations between vagally mediated HRV and cognitive outcomes?
+2. Which cognitive domains (executive function, working memory, attention/vigilance, mental workload/cognitive load, cognitive impairment) are most commonly linked to HRV metrics?
+3. How are HRV features operationalized (time-domain vs frequency-domain vs vagal proxies) and what measurement conditions (posture, respiration control, time-of-day) are reported?
+4. What recurring confounders and methodological limitations affect interpretation, and what evidence gaps remain for operational decision support?
 
+### 2.3. Eligibility criteria
+We included English-language records with abstracts published between 1 January 2000 and 31 December 2025. For the HRV–cognition scoping component, records were eligible if they addressed HRV (including commonly used vagally mediated indices such as RMSSD and HF-HRV, and related HRV/RR terminology such as SDNN and RR/NN interval) in relation to at least one cognitive domain: executive function, working memory, attention/vigilance, mental workload/cognitive load, or cognitive impairment/dementia. We included primary studies (observational and interventional) and reviews.
+
+Exclusion criteria were: missing abstract; non-English language metadata; and acronym ambiguity where “HRV” did not refer to heart rate variability (minimized by requiring explicit HRV terminology in the query families; residual ambiguity would require manual exclusion). Because indexing metadata do not reliably encode participant species across all sources, the search was designed to be human-focused but was not restricted using “Humans” MeSH filters; instead, we applied deterministic title/abstract screening rules (Section 2.5), including a conservative “non-human-only” exclusion filter and disambiguation of CPT (continuous performance test vs cold pressor test) within the attention/vigilance query family. Any remaining non-human-only records or false positives would require manual exclusion during downstream screening.
+
+### 2.4. Information sources
+#### 2.4.1. HRV–cognition scoping search
+The primary source was Europe PMC (accessed via its REST API). Searches were executed on **22 December 2025**. Five query families were run (Appendix B): executive function, working memory, attention/vigilance, mental workload, and cognitive impairment. A pilot (broader, higher-sensitivity) strategy is documented in Appendix A for transparency.
+
+#### 2.4.2. Module-aligned operational context sources (standards, models, and agency documents)
 Government/agency technical documents were collected from official portals:
 
 - NOAA Space Weather Prediction Center (SWPC) product documentation (Kp index; NOAA space weather scales).
@@ -75,41 +76,52 @@ Government/agency technical documents were collected from official portals:
 - EASA documents (fatigue management materials; air-operations/FTL rules).
 - ESA Space Weather service documentation.
 
-### 2.3. Inclusion and prioritization criteria
-Included sources were prioritized when they met one or more of the following:
+In addition, high-impact consensus statements and widely used methodological references underpinning non-cognition modules (e.g., HRV standards and reporting recommendations; circadian models and PRCs; fatigue-model evaluations; wearable validation) were included to support operational interpretation.
 
-1. Consensus statements or widely cited standards relevant to HRV measurement and reporting.
-2. Systematic reviews or large cohort studies that provide normative ranges or quantify variability.
-3. Method papers that define core analytic constructs used in the app (e.g., entropy, DFA, fragmentation) or validated processing (e.g., artefact correction).
-4. Controlled circadian PRC experiments and mechanistic circadian models used in sleep/circadian scheduling.
-5. High-quality fatigue/performance studies (dose-response sleep restriction; PVT standardization) and operational fatigue frameworks.
-6. Governmental technical documents that define operational standards (FRMS guidance; space-weather indices and scales).
+### 2.5. Search strategy and record management
+Search strings were pre-specified to emphasize HRV/RR-interval terminology (e.g., heart rate variability, RMSSD, SDNN, HF-HRV, RR/NN interval) and key cognitive constructs. Full query strings are provided verbatim in Appendix B to enable replication; the pilot strategy and counts are preserved in Appendix A.
 
-### 2.4. Synthesis approach
-Evidence was synthesized thematically according to the app’s modules. Within each module, findings are presented along three axes: (i) what the metric/model is intended to represent physiologically; (ii) conditions under which it is valid or interpretable; and (iii) known limitations and operational risks.
+Records were retrieved in JSON format (pageSize=1000; bounded pagination) and deduplicated using a deterministic rule: DOI (case-insensitive) when available; otherwise PMID; otherwise the source-specific record identifier.
 
-### 2.5. Evidence weighting and interpretive stance
-Because the platform is intended for operational decision support, this review weights evidence according to its relevance to *field deployment* and its vulnerability to confounding. In practice, this means that controlled laboratory evidence and consensus standards were treated as “load-bearing” for claims about mechanisms and validity constraints, while observational associations were treated as context that may motivate monitoring but rarely justifies deterministic inference.
+After deduplication, title/abstract screening was performed using deterministic, rule-based filters applied to Europe PMC core records (`abstractText`).
 
-Several pragmatic evidence tiers were used throughout the synthesis:
+A record was excluded as “non-human-only” if its title/abstract contained animal-species keywords (rat/rats; mouse/mice/murine; dog/dogs/canine; pig/pigs/porcine; sheep/ovine; rabbit/rabbits; monkey/monkeys/macaque/primate; zebrafish; drosophila; C. elegans) and did not contain human-study indicators (human(s); participant(s); patient(s); volunteer(s); clinical; trial; adult(s); child(ren); adolescent(s); student(s)). This conservative filter was designed to remove clear non-human-only records while minimizing false exclusions; ambiguous cases were retained for downstream screening.
 
-1. **Consensus standards and measurement guidance** (e.g., HRV standards; reporting recommendations) were treated as the default constraints on what can be claimed from a given protocol.
-2. **Controlled experimental studies** (e.g., human light PRCs; sleep restriction dose-response experiments) were prioritized for causal structure.
-3. **Systematic reviews and large cohort studies** were used to describe typical ranges, dispersion, and generalizability limits.
-4. **Operational and applied validation studies** (e.g., fatigue-model evaluations in aviation contexts) were prioritized when they directly tested a module’s assumptions in realistic settings.
-5. **Exploratory observational associations** (e.g., space-weather–physiology links) were treated as hypothesis-generating unless replication and robust time-series methods support stronger inference.
+Because “CPT” is ambiguous (continuous performance test vs cold pressor test), records retrieved by the attention/vigilance query family that contained “cold pressor” in title/abstract were excluded as false positives for cognition.
 
-This stance is conservative by design: when outputs may influence safety-critical decisions, the cost of overconfident inference is high.
+Records that matched only RR/NN interval terminology without explicit HRV descriptors (heart rate variability/HRV; RMSSD; SDNN; HF-HRV) were flagged for manual verification but retained.
 
-### 2.6. Reference verification and traceability
+### 2.6. Data charting
+For each unique record remaining after deduplication and title/abstract screening (non-human-only exclusion and CPT disambiguation), we charted: title, year, journal, DOI/PMID, publication type, open-access status (when available), and which query family/families retrieved the record. This charting enabled an evidence map across cognitive domains and years.
+
+### 2.7. Synthesis approach
+Scoping results are summarized as (i) a PRISMA-style accounting of records and (ii) an evidence map by cognitive domain and publication year (Section 3.0). These findings are then integrated with the broader module-aligned synthesis, emphasizing measurement validity, protocol constraints, and operational governance.
+
+### 2.8. Critical appraisal
+Consistent with PRISMA-ScR guidance, we did not perform formal risk-of-bias appraisal for every included study. Where mechanistic claims are made, we preferentially cite consensus standards, controlled studies, and systematic reviews, and treat observational associations as hypothesis-generating unless replicated.
+
+### 2.9. Reference verification and traceability
 To minimize citation error, all peer-reviewed sources were required to have a resolvable DOI or a stable URL. DOI-based references were verified using DOI resolution to ensure that the cited metadata corresponded to the intended publication. Older articles without DOI metadata were cited using stable bibliographic portals (e.g., PubMed). US/EU governmental and agency documents were cited from official publisher portals (e.g., FAA advisory circular PDFs; NOAA/ESA documentation portals; NASA NTRS), emphasizing stable URLs over transient mirrors.
 
-### 2.7. Limitations of this review
-This document is a narrative review rather than a PRISMA-grade systematic review for each topic domain. As such, it does not claim exhaustive capture of all eligible studies, nor does it compute formal risk-of-bias scores for each paper. Additionally, some operational modules (especially wearable algorithms and fatigue tools) exist within mixed proprietary ecosystems where firmware and vendor analytics may change over time; this creates a moving target for reproducibility. These limitations reinforce the governance emphasis: even well-supported modules should be deployed with audit trails, versioning, and validation in the intended population.
+### 2.10. Limitations of this review
+This manuscript includes a PRISMA-ScR scoping component focused on HRV–cognition evidence indexed in Europe PMC and retrievable using the query families in Appendix B (Appendix A documents the pilot strategy). Europe PMC indexing and metadata evolve over time; therefore, rerunning the same searches on a different date may yield different record counts. In addition, because “Humans” tagging is incomplete across sources and because acronym ambiguity can occur (e.g., CPT), the scoping search was not restricted using MeSH filters; instead, we applied deterministic title/abstract screening rules (non-human-only exclusion and CPT disambiguation). Downstream screening remains required to confirm species and remove residual non-human records and other false positives.
+
+Finally, the manuscript is multi-domain: while HRV–cognition evidence is mapped using scoping methods, non-cognition modules (circadian modelling, fatigue/FRMS, BPV, wearables, space weather) are synthesized using module-aligned consensus standards and key validation studies rather than exhaustive scoping searches for every subtopic.
 
 ---
 
 ## 3. Results
+### 3.0. Evidence identification and evidence map (HRV–cognition scoping component)
+Across five pre-specified query families (executive function, working memory, attention/vigilance, mental workload, cognitive impairment), Europe PMC returned **2,736** records (22 December 2025; Appendix B). After DOI/PMID-based deduplication, **2,090** unique records remained (58 without a DOI), with 646 duplicates removed. Deterministic title/abstract screening excluded 12 non-human-only records and an additional 61 records due to CPT ambiguity (“cold pressor” false positives within the attention/vigilance query family), leaving 2,017 records for evidence mapping. The query-family yields were: executive function (946), working memory (331), attention/vigilance (496), mental workload (504), and cognitive impairment (459). Because records can match multiple query families, these counts are not mutually exclusive.
+
+A PRISMA-ScR-style flow narrative for this scoping component is as follows: (i) **Identification:** 2,736 records were identified on 22 December 2025 across five query families (Appendix B). (ii) **Deduplication:** 646 duplicates were removed using DOI/PMID-based deduplication, leaving 2,090 unique records (58 without DOI metadata). (iii) **Title/abstract screening (rule-based):** 2,090 records were screened; 12 non-human-only records were excluded. Because CPT is ambiguous (continuous performance test vs cold pressor test), 61 additional records were excluded as “cold pressor” false positives within the attention/vigilance query family. This left 2,017 records for record-level charting and evidence mapping. Additionally, 14 records that matched RR/NN interval terms without explicit HRV descriptors were flagged for manual verification but retained. (iv) **Full-text eligibility:** full-text eligibility assessment was not performed in this step; therefore, counts for “full texts assessed” and “studies included” are not reported and would require downstream screening.
+
+Year distribution of records (Europe PMC `pubYear` metadata; after screening) was concentrated in recent years: 2020 (138), 2021 (196), 2022 (204), 2023 (205), 2024 (221), and 2025 (326) (Appendix B; retrieved 22 December 2025).
+
+Europe PMC open-access metadata flagged 1,239/2,017 records (61.4%) as open access. The most frequent journal titles were Sci Rep (87), PLoS One (85), Front Psychol (78), Sensors (Basel) (75), Psychophysiology (44), and Int J Psychophysiol (43). Publication-type tags were dominated by “journal article” (1,986); review-tagged records included “review” (168) and “systematic review” (43) (metadata tags are not mutually exclusive).
+
+Operationally, the map underscores two practical points: (i) HRV–cognition evidence spans heterogeneous populations (healthy, clinical, aging) and heterogeneous cognitive endpoints (task performance, neuropsychological batteries, workload paradigms), and therefore requires careful protocol metadata and confounder control; and (ii) the strongest mechanistic interpretations remain anchored to vagally mediated HRV proxies and to controlled measurement conditions, consistent with neurovisceral integration frameworks.
+
 ### 3.1. HRV as a measurement construct: physiology and standards
 HRV refers to variability in the timing of successive normal-to-normal (NN) intervals and reflects the combined action of intrinsic pacemaker dynamics and autonomic modulation. The landmark Task Force statement defines time-domain, frequency-domain, and geometric measures, and emphasizes that interpretation must consider recording duration and stationarity (Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology, 1996). Subsequent syntheses highlight that HRV is shaped by multiple physiological loops operating on distinct time scales: respiratory sinus arrhythmia (RSA) at high frequency, baroreflex-mediated oscillations in the low-frequency range, and slower influences such as thermoregulation and circadian rhythms (Shaffer & Ginsberg, 2017).
 
@@ -206,7 +218,7 @@ For an operational console, the design implication is not to remove LF/HF, but t
 
 Beyond interpretive controversies, frequency-domain HRV has methodological fragility that is operationally relevant.
 
-**Spectral estimation is not neutral.** Practical pipelines usually convert unevenly sampled RR intervals into an evenly sampled time series via interpolation and then apply spectral estimation (e.g., FFT-based modified periodograms such as Welch’s method) or use methods intended for uneven sampling (Welch, 1967). Choices about resampling rate, detrending, windowing, and segment rejection can shift LF/HF materially in short recordings. This matters in dashboards because users often interpret small changes as “physiological change,” when the dominant driver can be a different preprocessing path.
+**Spectral estimation is not neutral.** Practical pipelines usually convert unevenly sampled RR intervals into an evenly sampled time series via interpolation and then apply spectral estimation (e.g., FFT-based modified periodograms such as Welch’s method) or use methods designed for unevenly sampled series (e.g., Lomb–Scargle periodograms) (Welch, 1967; Lomb, 1976; Scargle, 1982). Choices about resampling rate, detrending, windowing, and segment rejection can shift LF/HF materially in short recordings. This matters in dashboards because users often interpret small changes as “physiological change,” when the dominant driver can be a different preprocessing path.
 
 **Normalization can conceal absolute changes.** Many implementations report “normalized units” (LFnu, HFnu) by dividing LF and HF by total power minus VLF. This can be useful for presentation but can also obscure whether both LF and HF fell (global suppression) or whether only one component shifted. In readiness contexts, absolute power and time-domain vagal proxies may be more interpretable than normalized ratios, particularly when record length and respiration are not controlled.
 
@@ -237,6 +249,16 @@ Many users implicitly interpret “low HRV” as “high stress.” That mapping
 The model’s operational value is that it provides a coherent hypothesis for why HRV correlates with executive function, affect regulation, and health outcomes: the same inhibitory control systems that support flexible behavior also modulate autonomic output through the central autonomic network. Later elaborations emphasize hierarchical organization and context dependence—i.e., “integration” is not uniform across tasks and may vary with threat, arousal, and individual differences (Smith et al., 2017; Thayer & Lane, 2009).
 
 At the same time, empirical evidence also supports caution. In large-sample work linking resting HF-HRV with executive function and regional cerebral blood flow, the expected “global” integration signal is not always observed; some analyses suggest that relationships are more circumscribed than the strongest forms of the hypothesis imply (Jennings et al., 2014). For a flight-surgeon console, this pushes toward conservative design: the HRV-stress link should be presented as a *non-specific* indicator whose interpretive weight depends on context (sleep loss, workload, illness, medication, paced breathing), and whose decision utility increases when triangulated with performance tasks, symptom reports, and schedule context.
+
+Systematic syntheses provide a useful “reality check” on effect size and heterogeneity. A systematic review and meta-analysis focused specifically on executive functions reported a small positive association between resting vagally mediated HRV and executive-function performance (overall r≈0.19), with stronger evidence for inhibition and shifting than for updating/working-memory outcomes (Magnon et al., 2022). This magnitude is operationally meaningful only when interpreted as a *probabilistic* contributor: even if the association is real, it will not support high-specificity individual classification.
+
+Broader reviews converge on a similar direction while underscoring confounding and design limitations. A systematic review of HRV and cognition found that reduced parasympathetic activity (and in some studies increased sympathetic activity) was associated with worse cognitive performance across multiple domains, with aging and cardiovascular status emerging as major moderators (Forte et al., 2019). Importantly, a narrative systematic review of longitudinal studies suggests that higher parasympathetic HRV may predict better future cognitive performance, but also emphasizes that the longitudinal evidence base remains comparatively small and methodologically heterogeneous (Nicolini et al., 2024). For an operational platform, the implication is that HRV can be a *risk and resilience marker* relevant to cognition, but not a stand-alone cognitive assay.
+
+Evidence in neurodegenerative disease and dementia contexts provides both supportive signals and heterogeneity. A systematic review and meta-analysis reported a moderate association between higher HRV and better cognition/behavior across neurodegenerative conditions (r≈0.25) (Liu et al., 2022). In contrast, meta-analytic comparisons of dementia/neurocognitive-disorder groups to controls show that resting HRV is lower on average, with variability by subtype and measurement (Cheng et al., 2022). At the individual-study level, null differences have also been reported under standardized short-term resting protocols in Alzheimer’s disease and vascular dementia (Allan et al., 2005), underscoring sensitivity to protocol, phenotype, comorbidity, and medication.
+
+Finally, cognition is not only an endpoint; it is also a state-dependent *perturbation* of autonomic dynamics. Experimental work shows that mental workload can acutely alter HRV and reduce nonlinear dynamics, meaning that “HRV suppression” may reflect momentary cognitive demand rather than degraded readiness per se (Delliaux et al., 2019). This creates a practical interpretive constraint: the console should explicitly separate **resting, protocol-controlled HRV** (trait-like baseline and recovery tracking) from **task-evoked HRV** (state reactivity during cognitive load), and should avoid interpreting task-related vagal withdrawal as a pathological signal without corroboration.
+
+Taken together, the most defensible translation is to treat HRV–cognition links as *contextual modifiers* that increase decision utility when combined with direct performance measures (e.g., PVT-family tasks) and schedule/sleep context, rather than as a replacement for cognitive testing.
 
 ### 3.4. Autonomic function tests: controlled provocations vs passive monitoring
 The app includes autonomic function tests (deep breathing, Valsalva, orthostatic responses). These tests differ from passive HRV monitoring because they intentionally provoke autonomic reflexes to probe specific pathways.
@@ -457,7 +479,7 @@ First, **paced breathing is a measurement confound** in HRV assessment. It can i
 
 Second, **paced breathing can be an intervention**. HRV biofeedback and resonance-frequency breathing aim to enhance baroreflex-mediated oscillations and autonomic regulation, and they have been studied across clinical and performance contexts. Reviews of HRV biofeedback describe plausible mechanistic pathways (baroreflex engagement, respiratory–cardiovascular coupling) and emphasize protocol specificity, particularly the need to individualize resonance frequency and to distinguish training effects from acute breathing-induced shifts (Lehrer & Gevirtz, 2014).
 
-More recent quantitative syntheses strengthen the evidence base while also clarifying its limits. A systematic review and meta-analysis concluded that HRV biofeedback can improve emotional and physical health and performance outcomes across studied contexts, while highlighting heterogeneity in protocols and endpoints (Lehrer et al., 2020). Meta-analytic evidence also suggests that HRV biofeedback may reduce depressive symptoms in adult samples, again with meaningful between-study variability (Pizzoli et al., 2021). Importantly for operational medicine, there is now meta-analytic synthesis specifically in military PTSD populations suggesting HRV biofeedback may reduce symptomatology with low attrition, although available studies remain small and the evidence base is still developing (Kenemore et al., 2024).
+More recent quantitative syntheses strengthen the evidence base while also clarifying its limits. A systematic review and meta-analysis concluded that HRV biofeedback can improve emotional and physical health and performance outcomes across studied contexts, while highlighting heterogeneity in protocols and endpoints (Lehrer et al., 2020). Meta-analytic evidence also suggests that HRV biofeedback may reduce depressive symptoms in adult samples, again with meaningful between-study variability (Pizzoli et al., 2021). In cognition-specific outcomes, a systematic review focused on executive functions across the lifespan suggests potential benefits of HRV biofeedback, while emphasizing heterogeneity and limited study quality (Tinello et al., 2022). Importantly for operational medicine, there is now meta-analytic synthesis specifically in military PTSD populations suggesting HRV biofeedback may reduce symptomatology with low attrition, although available studies remain small and the evidence base is still developing (Kenemore et al., 2024).
 
 For console design, these findings support a pragmatic role for biofeedback modules as structured training interventions. However, they also reinforce a separation-of-concerns requirement: the console should (i) log whether HRV was measured under paced breathing, (ii) avoid comparing paced-breathing sessions to free-breathing baselines without explicit adjustment, and (iii) avoid treating acute breathing-induced shifts as evidence of long-term autonomic change.
 
@@ -784,3 +806,107 @@ Tsai, T.-Y., Lin, J.-X., Ou, J.-C., & Huang, T.-Y. (2025). The role of heart rat
 Thuraisingham, R. A. (2006). Preprocessing RR interval time series for heart rate variability analysis and estimates of standard deviation of RR intervals. Computer Methods and Programs in Biomedicine, 83(1), 78–82. https://doi.org/10.1016/j.cmpb.2006.05.002
 
 Zhang, C., Lan, J., Shi, Y., Gao, R., Li, C., Lu, M., & Wang, L. (2014). Effect of acute hypoxia on heart rate variability, sample entropy and cardiorespiratory phase synchronization. BioMedical Engineering OnLine, 13(1), 73. https://doi.org/10.1186/1475-925x-13-73
+
+Delliaux, S., Delaforge, A., Deharo, J.-C., & Chaumet, G. (2019). Mental workload alters heart rate variability, lowering non-linear dynamics. Frontiers in Physiology, 10, 565. https://doi.org/10.3389/fphys.2019.00565
+
+Forte, G., Favieri, F., & Casagrande, M. (2019). Heart rate variability and cognitive function: A systematic review. Frontiers in Neuroscience, 13, 710. https://doi.org/10.3389/fnins.2019.00710
+
+Lomb, N. R. (1976). Least-squares frequency analysis of unequally spaced data. Astrophysics and Space Science, 39, 447–462. https://doi.org/10.1007/BF00648343
+
+Magnon, V., Vallet, G. T., Benson, A., Mermillod, M., Chausse, P., Lacroix, A., Bouillon-Minois, J.-B., & Dutheil, F. (2022). Does heart rate variability predict better executive functioning? A systematic review and meta-analysis. Cortex, 155, 218–236. https://doi.org/10.1016/j.cortex.2022.07.008
+
+Nicolini, P., Malfatto, G., & Lucchi, T. (2024). Heart rate variability and cognition: A narrative systematic review of longitudinal studies. Journal of Clinical Medicine, 13(1), 280. https://doi.org/10.3390/jcm13010280
+
+Cheng, Y.-C., Huang, Y.-C., & Huang, W.-L. (2022). Heart rate variability in patients with dementia or neurocognitive disorders: A systematic review and meta-analysis. The Australian and New Zealand Journal of Psychiatry, 56(1), 16–27. https://doi.org/10.1177/0004867420976853
+
+Liu, K. Y., Elliott, T., Knowles, M., & Howard, R. (2022). Heart rate variability in relation to cognition and behavior in neurodegenerative diseases: A systematic review and meta-analysis. Ageing Research Reviews, 73, 101539. https://doi.org/10.1016/j.arr.2021.101539
+
+Allan, L. M., Kerr, S. R. J., Ballard, C. G., Allen, J., Murray, A., McLaren, A. T., & Kenny, R. A. (2005). Autonomic function assessed by heart rate variability is normal in Alzheimer’s disease and vascular dementia. Dementia and Geriatric Cognitive Disorders, 19(2–3), 140–144. https://doi.org/10.1159/000082885
+
+Scargle, J. D. (1982). Studies in astronomical time series analysis. II - Statistical aspects of spectral analysis of unevenly spaced data. The Astrophysical Journal, 263, 835–853. https://doi.org/10.1086/160554
+
+Tinello, D., Kliegel, M., & Zuber, S. (2022). Does heart rate variability biofeedback enhance executive functions across the lifespan? A systematic review. Journal of Cognitive Enhancement, 6(1), 126–142. https://doi.org/10.1007/s41465-021-00218-3
+
+Arksey, H., & O’Malley, L. (2005). Scoping studies: towards a methodological framework. International Journal of Social Research Methodology, 8(1), 19–32. https://doi.org/10.1080/1364557032000119616
+
+Levac, D., Colquhoun, H., & O’Brien, K. K. (2010). Scoping studies: advancing the methodology. Implementation Science, 5, 69. https://doi.org/10.1186/1748-5908-5-69
+
+Munn, Z., Peters, M. D. J., Stern, C., Tufanaru, C., McArthur, A., & Aromataris, E. (2018). Systematic review or scoping review? Guidance for authors when choosing between a systematic or scoping review approach. BMC Medical Research Methodology, 18(1), 143. https://doi.org/10.1186/s12874-018-0611-x
+
+Peters, M. D. J., Marnie, C., Tricco, A. C., Pollock, D., Munn, Z., Alexander, L., McInerney, P., Godfrey, C. M., & Khalil, H. (2020). Updated methodological guidance for the conduct of scoping reviews. JBI Evidence Synthesis, 18(10), 2119–2126. https://doi.org/10.11124/JBIES-20-00167
+
+Tricco, A. C., Lillie, E., Zarin, W., O’Brien, K. K., Colquhoun, H., Levac, D., Moher, D., Peters, M. D. J., Horsley, T., Weeks, L., Hempel, S., Akl, E. A., Chang, C., McGowan, J., Stewart, L., et al. (2018). PRISMA Extension for Scoping Reviews (PRISMA-ScR): Checklist and Explanation. Annals of Internal Medicine, 169(7), 467–473. https://doi.org/10.7326/M18-0850
+
+---
+
+## Appendix A. Pilot Europe PMC search strategy for the HRV–cognition scoping component (higher sensitivity)
+**Search date:** 22 December 2025
+
+**Note:** This pilot strategy was used to assess sensitivity and inform refinement of the final query set reported in Appendix B.
+
+**Data source:** Europe PMC REST API (`https://www.ebi.ac.uk/europepmc/webservices/rest/search`)
+
+**Core settings:** `format=json`, `resultType=lite`, `pageSize=1000`, `cursorMark=*`
+
+**Deduplication rule:** case-insensitive DOI when available; otherwise PMID; otherwise source-specific record identifier.
+
+### A.1. Query families (verbatim)
+**Executive function**
+`TITLE_ABS:(rmssd OR "hf-hrv" OR "high frequency heart rate variability" OR "vagally mediated" OR "cardiac vagal" OR "cardiac vagal control") AND TITLE_ABS:("executive function" OR inhibition OR shifting OR updating OR stroop OR flanker OR "go/no-go" OR "cognitive control") AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
+
+**Working memory**
+`TITLE_ABS:(rmssd OR "hf-hrv" OR "high frequency heart rate variability" OR "vagally mediated" OR "cardiac vagal" OR "cardiac vagal control") AND TITLE_ABS:("working memory" OR "n-back" OR "digit span" OR "short-term memory") AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
+
+**Attention / vigilance**
+`TITLE_ABS:(rmssd OR "hf-hrv" OR "high frequency heart rate variability" OR "vagally mediated" OR "cardiac vagal" OR "cardiac vagal control") AND TITLE_ABS:(attention OR vigilance OR "psychomotor vigilance" OR PVT OR "sustained attention" OR "reaction time") AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
+
+**Mental workload / cognitive load**
+`TITLE_ABS:(rmssd OR "hf-hrv" OR "high frequency heart rate variability" OR "vagally mediated" OR "cardiac vagal" OR "cardiac vagal control") AND TITLE_ABS:("mental workload" OR workload OR "cognitive load" OR "NASA-TLX") AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
+
+**Cognitive impairment / dementia**
+`TITLE_ABS:("heart rate variability" OR rmssd OR "hf-hrv" OR "cardiac vagal") AND TITLE_ABS:(dementia OR alzheimer* OR "mild cognitive impairment" OR MCI) AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
+
+### A.2. Reproducible record counts (as retrieved on 22 December 2025)
+- Records identified (sum across query families): 2,571
+- Duplicates removed (DOI/PMID rule): 577
+- Unique records mapped: 1,994
+- Unique records without a DOI: 49
+
+**Query-family yields (not mutually exclusive due to overlap):** executive function (896), working memory (256), attention/vigilance (835), mental workload (265), cognitive impairment (319)
+
+---
+
+## Appendix B. Final Europe PMC search strategy for the HRV–cognition scoping component (higher precision)
+**Search date:** 22 December 2025
+
+**Data source:** Europe PMC REST API (`https://www.ebi.ac.uk/europepmc/webservices/rest/search`)
+
+**Core settings:** `format=json`, `resultType=lite`, `pageSize=1000`, `cursorMark=*`
+
+**Deduplication rule:** case-insensitive DOI when available; otherwise PMID; otherwise source-specific record identifier.
+
+### B.1. Query families (verbatim)
+**Executive function**
+`TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv" OR "rr interval" OR "nn interval") AND TITLE_ABS:("executive function" OR "cognitive control" OR "inhibitory control" OR "task switching" OR "set shifting" OR stroop OR flanker OR "go/no-go" OR "go no go") AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
+
+**Working memory**
+`TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv" OR "rr interval" OR "nn interval") AND TITLE_ABS:("working memory" OR "n-back" OR "digit span") AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
+
+**Attention / vigilance**
+`TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv" OR "rr interval" OR "nn interval") AND TITLE_ABS:("psychomotor vigilance" OR PVT OR vigilance OR "sustained attention" OR "continuous performance test" OR CPT) AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
+
+**Note:** The token “CPT” is ambiguous (continuous performance test vs cold pressor test). Records with “cold pressor” in title/abstract were excluded during screening (Section 2.5).
+
+**Mental workload / cognitive load**
+`TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv" OR "rr interval" OR "nn interval") AND TITLE_ABS:("mental workload" OR "cognitive load" OR "NASA-TLX") AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
+
+**Cognitive impairment / dementia**
+`TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv") AND TITLE_ABS:("cognitive impairment" OR "mild cognitive impairment" OR dementia OR alzheimer* OR "cognitive decline") AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
+
+### B.2. Reproducible record counts (as retrieved on 22 December 2025)
+- Records identified (sum across query families): 2,736
+- Duplicates removed (DOI/PMID rule): 646
+- Unique records mapped: 2,090
+- Unique records without a DOI: 58
+
+**Query-family yields (not mutually exclusive due to overlap):** executive function (946), working memory (331), attention/vigilance (496), mental workload (504), cognitive impairment (459)
