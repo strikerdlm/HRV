@@ -11774,8 +11774,9 @@ that predicts cognitive performance based on:
         if not render_space_weather:
             st.info("Space Weather dashboard loads on demand to keep the app responsive.")
             if st.button("Load Space Weather dashboard", key="btn_load_space_weather"):
-                st.session_state["_render_space_weather_dashboard"] = True
-                render_space_weather = True
+                with st.spinner("Loading Space Weather dashboard…"):
+                    st.session_state["_render_space_weather_dashboard"] = True
+                    render_space_weather = True
         if render_space_weather:
             _sw_loading_msg = st.empty()
             _sw_loading_msg.info("Loading Space Weather dashboard…")
@@ -13429,8 +13430,9 @@ that predicts cognitive performance based on:
         if not render_noaa_space:
             st.info("NOAA Space dashboard loads on demand to keep the app responsive.")
             if st.button("Load NOAA Space dashboard", key="btn_load_noaa_dashboard"):
-                st.session_state["_render_noaa_dashboard"] = True
-                render_noaa_space = True
+                with st.spinner("Loading NOAA Space dashboard…"):
+                    st.session_state["_render_noaa_dashboard"] = True
+                    render_noaa_space = True
         if render_noaa_space:
             _noaa_loading_msg = st.empty()
             _noaa_loading_msg.info("Loading NOAA Space dashboard…")
