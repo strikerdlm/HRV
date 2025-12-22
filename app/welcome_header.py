@@ -219,91 +219,199 @@ def render_quick_access_grid(has_data: bool = False) -> None:
     """
     Render quick access grid for navigating to different analysis modules.
     
+    Uses glassmorphism design with frosted glass effects and smooth hover animations.
+    
     Args:
         has_data: Whether physiological data is loaded
     """
-    st.markdown("### 🔬 Analysis Modules")
+    # Inject glassmorphism CSS styles
+    st.markdown("""
+    <style>
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50% { transform: translateY(-5px); }
+    }
+    @keyframes glow {
+        0%, 100% { box-shadow: 0 0 5px var(--glow-color), 0 8px 32px rgba(0,0,0,0.3); }
+        50% { box-shadow: 0 0 20px var(--glow-color), 0 8px 32px rgba(0,0,0,0.4); }
+    }
+    @keyframes iconPulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.1); }
+    }
+    .glass-card {
+        background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px solid rgba(255,255,255,0.18);
+        border-radius: 16px;
+        padding: 1.2rem;
+        margin-bottom: 0.8rem;
+        min-height: 130px;
+        cursor: pointer;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+    }
+    .glass-card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: -100%;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
+        transition: left 0.5s;
+    }
+    .glass-card:hover::before {
+        left: 100%;
+    }
+    .glass-card:hover {
+        transform: translateY(-8px) scale(1.02);
+        border-color: rgba(255,255,255,0.3);
+    }
+    .glass-card.available:hover {
+        animation: glow 2s ease-in-out infinite;
+    }
+    .glass-card.unavailable {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .glass-card .card-icon {
+        font-size: 2.5rem;
+        margin-bottom: 0.5rem;
+        display: block;
+        transition: transform 0.3s ease;
+    }
+    .glass-card:hover .card-icon {
+        animation: iconPulse 0.6s ease-in-out;
+    }
+    .glass-card .card-title {
+        font-weight: 700;
+        font-size: 1rem;
+        margin-bottom: 0.4rem;
+        letter-spacing: 0.5px;
+    }
+    .glass-card .card-desc {
+        font-size: 0.75rem;
+        line-height: 1.4;
+        opacity: 0.85;
+    }
+    .glass-card .card-status {
+        position: absolute;
+        top: 0.8rem;
+        right: 0.8rem;
+        font-size: 0.65rem;
+        padding: 0.2rem 0.5rem;
+        border-radius: 20px;
+        font-weight: 600;
+    }
+    .glass-card .card-tab {
+        font-size: 0.65rem;
+        opacity: 0.6;
+        margin-top: 0.5rem;
+        font-style: italic;
+    }
+    .module-section-title {
+        background: linear-gradient(90deg, #667eea, #764ba2, #f093fb);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+        font-size: 1.5rem;
+        font-weight: 800;
+        margin-bottom: 1rem;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    st.markdown('<div class="module-section-title">🔬 Analysis Modules</div>', unsafe_allow_html=True)
     
     if not has_data:
         st.markdown(
             """
             <div style="
-                background: linear-gradient(135deg, #1a472a 0%, #2d5a3f 100%);
+                background: linear-gradient(135deg, rgba(46, 204, 113, 0.15) 0%, rgba(39, 174, 96, 0.1) 100%);
+                backdrop-filter: blur(10px);
                 border: 1px solid rgba(46, 204, 113, 0.3);
-                border-radius: 12px;
-                padding: 1rem;
-                margin-bottom: 1rem;
+                border-radius: 16px;
+                padding: 1.2rem;
+                margin-bottom: 1.5rem;
             ">
-                <div style="color: #2ecc71; font-weight: 600; margin-bottom: 0.5rem;">
+                <div style="color: #2ecc71; font-weight: 700; margin-bottom: 0.5rem; font-size: 1.1rem;">
                     ✨ Explore Without Data
                 </div>
-                <div style="color: #90EE90; font-size: 0.9rem;">
-                    Modules marked with ✓ are fully functional without uploading HRV data. 
-                    Click any tab above to explore!
+                <div style="color: rgba(144, 238, 144, 0.9); font-size: 0.9rem; line-height: 1.5;">
+                    Glowing cards below are <strong>fully functional</strong> without uploading HRV data!<br/>
+                    Click any card to see which tab to navigate to.
                 </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
     
-    st.markdown("Select a tab above to explore each module. Modules marked with ✓ are available without data.")
-    
-    # Module definitions with categories
+    # Module definitions with gradient colors
     modules = [
-        # Data-independent modules (highlighted)
-        {"icon": "🌍", "name": "Space Weather", "desc": "Solar activity, CME predictions & Polar H10 timing", "no_data": True, "color": "#9b59b6", "highlight": True},
-        {"icon": "☀️", "name": "Circadian", "desc": "Circadian rhythm simulation & jet lag", "no_data": True, "color": "#fd9644", "highlight": True},
-        {"icon": "😴", "name": "SAFTE Model", "desc": "Fatigue & cognitive performance", "no_data": True, "color": "#3498db", "highlight": True},
-        {"icon": "🫀", "name": "Biofeedback", "desc": "Real-time coherence training demo", "no_data": True, "color": "#e74c3c", "highlight": True},
-        # Data-dependent modules
-        {"icon": "📊", "name": "Overview", "desc": "Summary statistics and key HRV metrics", "no_data": False, "color": "#667eea", "highlight": False},
-        {"icon": "📈", "name": "Time Series", "desc": "RR interval time-domain analysis", "no_data": False, "color": "#4ecdc4", "highlight": False},
-        {"icon": "🌊", "name": "Frequency", "desc": "Power spectral density (LF, HF, VLF)", "no_data": False, "color": "#ff6b6b", "highlight": False},
-        {"icon": "🔀", "name": "Nonlinear", "desc": "Poincaré, entropy, DFA analysis", "no_data": False, "color": "#f7b731", "highlight": False},
-        {"icon": "📉", "name": "Spectrogram", "desc": "Time-frequency analysis", "no_data": False, "color": "#a55eea", "highlight": False},
-        {"icon": "🪟", "name": "Windowed", "desc": "Segmented HRV analysis", "no_data": False, "color": "#26de81", "highlight": False},
-        {"icon": "📋", "name": "Population Norms", "desc": "Compare against reference values", "no_data": False, "color": "#1abc9c", "highlight": False},
-        {"icon": "📄", "name": "Export", "desc": "Generate reports & export data", "no_data": False, "color": "#95a5a6", "highlight": False},
+        # Row 1: Data-independent (highlighted)
+        {"icon": "👤", "name": "User Profile", "tab": "👤 User Profile", "desc": "Profiles, clinical assessments & Garmin sync", "no_data": True, "gradient": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", "glow": "#667eea"},
+        {"icon": "🌍", "name": "Space Weather", "tab": "🌍 Space Weather", "desc": "Solar activity & geomagnetic correlations", "no_data": True, "gradient": "linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%)", "glow": "#9b59b6"},
+        {"icon": "🛰️", "name": "NOAA Space", "tab": "🛰️ NOAA Space", "desc": "NOAA feeds, Kp index & solar wind", "no_data": True, "gradient": "linear-gradient(135deg, #00d2d3 0%, #00a8a8 100%)", "glow": "#00d2d3"},
+        {"icon": "☀️", "name": "Circadian", "tab": "☀️ Circadian", "desc": "Circadian simulation & jet lag planning", "no_data": True, "gradient": "linear-gradient(135deg, #f39c12 0%, #e67e22 100%)", "glow": "#f39c12"},
+        # Row 2: Data-independent
+        {"icon": "😴", "name": "SAFTE/Fatigue", "tab": "😴 SAFTE/Fatigue", "desc": "Fatigue forecasting & FRMS dashboard", "no_data": True, "gradient": "linear-gradient(135deg, #3498db 0%, #2980b9 100%)", "glow": "#3498db"},
+        {"icon": "🫀", "name": "Biofeedback", "tab": "🫀 Biofeedback", "desc": "Coherence training & breathing exercises", "no_data": True, "gradient": "linear-gradient(135deg, #e74c3c 0%, #c0392b 100%)", "glow": "#e74c3c"},
+        {"icon": "📚", "name": "References", "tab": "📚 References", "desc": "Scientific citations & documentation", "no_data": True, "gradient": "linear-gradient(135deg, #1abc9c 0%, #16a085 100%)", "glow": "#1abc9c"},
+        {"icon": "ℹ️", "name": "About", "tab": "ℹ️ About", "desc": "Author info, changelog & manual", "no_data": True, "gradient": "linear-gradient(135deg, #7f8c8d 0%, #636e72 100%)", "glow": "#95a5a6"},
+        # Row 3: Data-dependent
+        {"icon": "📊", "name": "Overview", "tab": "Overview", "desc": "Summary statistics & key metrics", "no_data": False, "gradient": "linear-gradient(135deg, #667eea 0%, #764ba2 100%)", "glow": "#667eea"},
+        {"icon": "📈", "name": "Time Series", "tab": "Time Series", "desc": "RR interval time-domain analysis", "no_data": False, "gradient": "linear-gradient(135deg, #4ecdc4 0%, #44a08d 100%)", "glow": "#4ecdc4"},
+        {"icon": "🌊", "name": "Frequency", "tab": "Frequency", "desc": "Power spectral density (LF/HF/VLF)", "no_data": False, "gradient": "linear-gradient(135deg, #ff6b6b 0%, #ee5a5a 100%)", "glow": "#ff6b6b"},
+        {"icon": "🔀", "name": "Nonlinear", "tab": "Nonlinear", "desc": "Poincaré, entropy & DFA", "no_data": False, "gradient": "linear-gradient(135deg, #f7b731 0%, #eb9b04 100%)", "glow": "#f7b731"},
+        # Row 4: Data-dependent
+        {"icon": "📉", "name": "Spectrogram", "tab": "Spectrogram", "desc": "Time-frequency wavelet analysis", "no_data": False, "gradient": "linear-gradient(135deg, #a55eea 0%, #8e44ad 100%)", "glow": "#a55eea"},
+        {"icon": "🪟", "name": "Windowed", "tab": "Windowed", "desc": "Segmented HRV with baselines", "no_data": False, "gradient": "linear-gradient(135deg, #26de81 0%, #20bf6b 100%)", "glow": "#26de81"},
+        {"icon": "📋", "name": "Norms", "tab": "📊 Population Norms", "desc": "Compare vs reference populations", "no_data": False, "gradient": "linear-gradient(135deg, #17a2b8 0%, #138496 100%)", "glow": "#17a2b8"},
+        {"icon": "📄", "name": "Export", "tab": "📄 Export", "desc": "Download data & reports", "no_data": False, "gradient": "linear-gradient(135deg, #6c757d 0%, #5a6268 100%)", "glow": "#6c757d"},
     ]
     
-    # Render in 4-column grid
-    cols = st.columns(4)
+    # Build HTML for all cards
+    cards_html = '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem;">'
+    
     for i, mod in enumerate(modules):
-        with cols[i % 4]:
-            # Determine availability
-            available = mod["no_data"] or has_data
-            status = "✓" if available else "○"
-            status_color = "#90EE90" if available else "#666"
-            opacity = "1" if available else "0.6"
-            
-            # Extra highlighting for available modules when no data
-            border_glow = ""
-            if mod.get("highlight") and not has_data:
-                border_glow = f"box-shadow: 0 0 10px {mod['color']}55;"
-            
-            # Build card style as single line to avoid Streamlit markdown parsing issues
-            card_style = (
-                f"background: linear-gradient(135deg, {mod['color']}22 0%, {mod['color']}11 100%); "
-                f"border: 1px solid {mod['color']}44; "
-                f"border-radius: 10px; "
-                f"padding: 0.75rem; "
-                f"margin-bottom: 0.5rem; "
-                f"min-height: 95px; "
-                f"opacity: {opacity}; "
-                f"{border_glow}"
-            )
-            
-            st.markdown(
-                f'<div style="{card_style}">'
-                f'<div style="font-size: 1.4rem; margin-bottom: 0.2rem;">{mod["icon"]}</div>'
-                f'<div style="color: {mod["color"]}; font-weight: 600; font-size: 0.85rem;">'
-                f'{mod["name"]} '
-                f'<span style="color: {status_color}; font-size: 0.7rem;">{status}</span>'
-                f'</div>'
-                f'<div style="color: #888; font-size: 0.7rem; line-height: 1.3;">{mod["desc"]}</div>'
-                f'</div>',
-                unsafe_allow_html=True,
-            )
+        available = mod["no_data"] or has_data
+        availability_class = "available" if available else "unavailable"
+        status_text = "✓ Ready" if available else "○ Needs Data"
+        status_bg = "rgba(46, 204, 113, 0.3)" if available else "rgba(127, 140, 141, 0.3)"
+        status_color = "#2ecc71" if available else "#95a5a6"
+        
+        # Glow effect for available cards
+        glow_style = f"--glow-color: {mod['glow']};" if available else ""
+        
+        cards_html += f'''
+        <a class="glass-card {availability_class}"
+           style="{glow_style}"
+           href="#analysis-modules"
+           title="Tab: {mod['tab']}">
+            <span class="card-status" style="background: {status_bg}; color: {status_color};">{status_text}</span>
+            <span class="card-icon">{mod["icon"]}</span>
+            <div class="card-title" style="background: {mod["gradient"]}; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;">
+                {mod["name"]}
+            </div>
+            <div class="card-desc" style="color: rgba(255,255,255,0.7);">{mod["desc"]}</div>
+            <div class="card-tab">Tab: {mod["tab"]}</div>
+        </a>
+        '''
+    
+    cards_html += '</div>'
+    
+    st.markdown(cards_html, unsafe_allow_html=True)
+    
+    # Add a subtle helper text
+    st.markdown(
+        '<div style="text-align: center; color: rgba(255,255,255,0.5); font-size: 0.8rem; margin-top: 1rem;">'
+        '💡 Click any card to see which tab to navigate to • Glowing cards work without data'
+        '</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def render_data_status_panel(
