@@ -1918,7 +1918,17 @@ def _render_clinical_assessment(user: UserProfile) -> None:
             db = get_database()
             garmin_rows = db.get_garmin_daily_metrics(user.user_id, limit=1)
             if garmin_rows:
-                latest = garmin_rows[0]
+                latest_entry = garmin_rows[0]
+                latest: Dict[str, Any]
+                if isinstance(latest_entry, dict):
+                    latest = latest_entry
+                elif hasattr(latest_entry, "to_dict"):
+                    latest = latest_entry.to_dict()  # type: ignore[assignment]
+                else:
+                    try:
+                        latest = vars(latest_entry)
+                    except TypeError:
+                        latest = {}
                 updated_fields = []
                 
                 # Sleep duration
