@@ -12,7 +12,7 @@
 
 **Objective:** To review the scientific and technical foundations relevant to a multimodal “flight surgeon console” approach, focusing on: (i) HRV standards, preprocessing, and interpretation across time/frequency/nonlinear domains; (ii) validated autonomic function testing paradigms; (iii) circadian pacemaker models and experimentally derived light phase-response curves; (iv) fatigue science, performance measurement, and biomathematical fatigue modelling; (v) blood pressure variability (BPV) as an autonomic/vascular risk construct; (vi) evidence on wearable acquisition validity; and (vii) the state of evidence linking space-weather indices to autonomic/cardiovascular outcomes.
 
-**Methods:** A targeted narrative review was performed using CrossRef and Semantic Scholar via MCP `paper-search` to identify peer-reviewed articles and high-impact consensus statements. US and European governmental/agency technical documents were collected from NOAA SWPC, NASA/CCMC, FAA, Department of the Air Force, EASA, and ESA repositories. Literature was synthesized thematically along the major modules implemented in the app and app-adjacent operational requirements (auditability, reproducibility, conservative risk communication).
+**Methods:** A targeted narrative review was performed using CrossRef and Semantic Scholar via MCP `paper-search` to identify peer-reviewed articles and high-impact consensus statements. US and European governmental/agency technical documents were collected from NOAA SWPC, NASA/CCMC, FAA, EASA, and ESA repositories. Literature was synthesized thematically along the major modules implemented in the app and app-adjacent operational requirements (auditability, reproducibility, conservative risk communication).
 
 **Results:** HRV is a robust noninvasive marker of autonomic regulation when measurement protocols are standardized and analyses respect known physiological constraints (record length requirements, respiration effects, ectopy/artifact handling). Contemporary guidance emphasizes transparent preprocessing and cautious interpretation of frequency-domain ratios, including the well-documented limitations of LF/HF as a sympathovagal “balance” surrogate. Circadian models (limit-cycle oscillators with light preprocessing) can predict phase and entrainment under controlled assumptions and are supported by rigorous human light phase-response curve experiments. Fatigue risk is dominated by sleep loss, time awake, and circadian phase, with objective vigilance testing (PVT-family) offering sensitive, repeatable measurement of the operational failure mode. Biomathematical models such as SAFTE/FAST provide useful forecasts when calibrated and embedded within FRMS governance rather than treated as standalone truth. Evidence associating geomagnetic activity with HRV and cardiovascular endpoints exists but is heterogeneous; effect sizes are generally small and vulnerable to confounding and time-series artefacts.
 
@@ -60,13 +60,18 @@ Peer-reviewed literature was identified using CrossRef and Semantic Scholar via 
 - “blood pressure variability clinical relevance,” “visit-to-visit blood pressure variability stroke risk.”
 - “geomagnetic disturbances heart rate variability,” “solar wind heart rate variability.”
 - “Polar H10 validity HRV,” “actigraphy sleep circadian,” “wearable sleep technology validation.”
+- “ultra-short-term HRV validity,” “smartphone HRV validity,” “short-segment RMSSD agreement.”
+- “neurovisceral integration HRV,” “central autonomic network,” “executive function HF-HRV.”
+- “HRV biofeedback meta-analysis,” “resonance frequency breathing,” “paced breathing intervention.”
+- “microgravity heart rate variability astronauts,” “ISS HRV,” “long-duration spaceflight autonomic.”
+- “acute hypoxia heart rate variability,” “altitude acute mountain sickness HRV,” “oximetry HRV AMS.”
+- “wearable illness detection,” “smartwatch COVID pre-symptomatic detection,” “wearables infection detection HRV.”
 
 Government/agency technical documents were collected from official portals:
 
 - NOAA Space Weather Prediction Center (SWPC) product documentation (Kp index; NOAA space weather scales).
 - NASA/CCMC DONKI documentation for event catalogs and API access.
 - FAA advisory circulars for FRMS.
-- Department of the Air Force publications for crew-rest rules.
 - EASA documents (fatigue management materials; air-operations/FTL rules).
 - ESA Space Weather service documentation.
 
@@ -82,6 +87,25 @@ Included sources were prioritized when they met one or more of the following:
 
 ### 2.4. Synthesis approach
 Evidence was synthesized thematically according to the app’s modules. Within each module, findings are presented along three axes: (i) what the metric/model is intended to represent physiologically; (ii) conditions under which it is valid or interpretable; and (iii) known limitations and operational risks.
+
+### 2.5. Evidence weighting and interpretive stance
+Because the platform is intended for operational decision support, this review weights evidence according to its relevance to *field deployment* and its vulnerability to confounding. In practice, this means that controlled laboratory evidence and consensus standards were treated as “load-bearing” for claims about mechanisms and validity constraints, while observational associations were treated as context that may motivate monitoring but rarely justifies deterministic inference.
+
+Several pragmatic evidence tiers were used throughout the synthesis:
+
+1. **Consensus standards and measurement guidance** (e.g., HRV standards; reporting recommendations) were treated as the default constraints on what can be claimed from a given protocol.
+2. **Controlled experimental studies** (e.g., human light PRCs; sleep restriction dose-response experiments) were prioritized for causal structure.
+3. **Systematic reviews and large cohort studies** were used to describe typical ranges, dispersion, and generalizability limits.
+4. **Operational and applied validation studies** (e.g., fatigue-model evaluations in aviation contexts) were prioritized when they directly tested a module’s assumptions in realistic settings.
+5. **Exploratory observational associations** (e.g., space-weather–physiology links) were treated as hypothesis-generating unless replication and robust time-series methods support stronger inference.
+
+This stance is conservative by design: when outputs may influence safety-critical decisions, the cost of overconfident inference is high.
+
+### 2.6. Reference verification and traceability
+To minimize citation error, all peer-reviewed sources were required to have a resolvable DOI or a stable URL. DOI-based references were verified using DOI resolution to ensure that the cited metadata corresponded to the intended publication. Older articles without DOI metadata were cited using stable bibliographic portals (e.g., PubMed). US/EU governmental and agency documents were cited from official publisher portals (e.g., FAA advisory circular PDFs; NOAA/ESA documentation portals; NASA NTRS), emphasizing stable URLs over transient mirrors.
+
+### 2.7. Limitations of this review
+This document is a narrative review rather than a PRISMA-grade systematic review for each topic domain. As such, it does not claim exhaustive capture of all eligible studies, nor does it compute formal risk-of-bias scores for each paper. Additionally, some operational modules (especially wearable algorithms and fatigue tools) exist within mixed proprietary ecosystems where firmware and vendor analytics may change over time; this creates a moving target for reproducibility. These limitations reinforce the governance emphasis: even well-supported modules should be deployed with audit trails, versioning, and validation in the intended population.
 
 ---
 
@@ -113,9 +137,37 @@ Because the app supports chest-strap and wearable ingestion, it is important to 
 - **ECG chest straps** (e.g., Polar systems) measure cardiac electrical activity and can provide RR intervals with high fidelity under many conditions.
 - **Wrist photoplethysmography (PPG)** infers pulse-to-pulse intervals from peripheral blood-volume changes and is more susceptible to motion artefact, vasoconstriction, and algorithmic smoothing.
 
-Validation studies indicate that the Polar H10 can provide RR intervals suitable for many HRV analyses, with caveats during higher-intensity exercise and for certain nonlinear metrics (Schaffarczyk et al., 2022). Earlier work validating Polar devices for short-term HRV similarly supports feasibility under resting conditions (Nunan et al., 2009).
+Validation studies indicate that the Polar H10 can provide RR intervals suitable for many HRV analyses, with caveats during higher-intensity exercise and for certain nonlinear metrics (Schaffarczyk et al., 2022).
 
 For sleep and circadian estimation, actigraphy remains foundational, but consumer multi-sensor wearables introduce both promise and risk: multi-sensor systems can capture autonomic parameters at scale, yet proprietary algorithms and firmware changes complicate reproducibility. Reviews in sleep medicine emphasize careful validation and standardized performance assessment before using consumer sleep tracking in research or clinical workflows (de Zambotti et al., 2019).
+
+#### 3.2.5. Protocol standardization, stationarity, and respiration metadata
+Short-term HRV features are often treated as “simple” because they can be computed quickly, but the inferential assumptions are not simple. Most HRV measures computed from short segments implicitly assume that the signal is *approximately stationary* over the analysis window, meaning that the statistical properties are not dominated by trends, step changes, or abrupt behavioral shifts. In field monitoring, this assumption is violated frequently: posture changes, speaking, anticipatory stress, and even minor movement can alter RR patterns within seconds.
+
+Two consequences follow. First, the console must treat protocol metadata as part of the measurement, not as optional annotation. A 5-minute supine recording immediately after waking is physiologically and statistically different from a 5-minute seated recording after commuting or exercise. Second, many “physiological interpretations” of HRV metrics rely on structured respiration-driven variability. Respiratory sinus arrhythmia (RSA) is a real physiological phenomenon, but respiration also acts as a controllable confound: changing breathing rate or depth changes the spectral placement and magnitude of RR oscillations (Grossman et al., 1991). Therefore, when a console presents frequency-domain features, the defensible practice is to either (i) standardize breathing instructions (and record the cadence) or (ii) measure respiration and interpret spectral power conditionally.
+
+Reporting recommendations emphasize documenting these factors precisely because they can create spurious longitudinal change: an apparent shift in HF power may reflect altered breathing, not altered autonomic regulation (Laborde et al., 2017; Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology, 1996). Operationally, this is a design constraint. If the app cannot verify stable measurement conditions, it should present results with reduced confidence and discourage fine-grained interpretation.
+
+#### 3.2.6. Quality gates: plausibility screening, ectopy, and correction thresholds
+Operational HRV systems should be designed to “fail closed” at the preprocessing layer. This is because many downstream metrics—especially nonlinear features—can change dramatically in the presence of missed beats, spurious detections, or excessive interpolation. A defensible preprocessing stack therefore includes at least three layers of QC.
+
+1. **Physiological plausibility checks.** RR values outside plausible human ranges (given context and heart rate) should be flagged. Sudden isolated RR spikes often indicate detection errors rather than physiology.
+2. **Beat classification and ectopy handling.** Ectopic beats are not just noise; they represent different electrophysiology. If an RR series contains ectopy, the console must decide whether it is in scope to correct, to segment, or to exclude. Robust artefact-correction methods provide a defensible rationale for correction when the fraction of affected beats is low (Lipponen & Tarvainen, 2019).
+3. **Correction transparency and thresholds.** Correction is not free: interpolation can artificially reduce or increase variability depending on method. Therefore, correction fraction should be reported alongside HRV outputs, and thresholds should be conservative. When a segment requires heavy correction, the appropriate response is typically to suppress interpretive claims and request re-measurement rather than to propagate low-quality data into a “readiness score.”
+
+These principles align with the broader philosophy of HRV standards and reporting guidance: preprocessing decisions materially shape interpretation and must be made explicit (Laborde et al., 2017; Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology, 1996).
+
+#### 3.2.7. Ultra-short-term HRV: what 30–60 seconds can (and cannot) support
+Ultra-short-term HRV (e.g., 30–60 seconds) is attractive in operations because it reduces friction: it can be performed during check-ins, pre-task briefings, or in constrained environments. However, the inferential problem is sharper than in 5-minute recordings. When record length is very short, preprocessing choices and transient nonstationarity can dominate the computed feature, and “accuracy” can refer either to agreement with a 5-minute reference or to decision validity for a downstream endpoint.
+
+Evidence suggests that some time-domain indices can be usable in ultra-short-term windows under *strictly controlled* resting conditions. For example, smartphone/app workflows have shown high agreement with ECG for ultra-short-term RMSSD in laboratory-rest settings (Flatt & Esco, 2013). Similarly, validation work comparing ECG to a smartphone app that computes HRV from short segments found that time-domain indices (including RMSSD) can exhibit acceptable agreement in 1-minute windows, while frequency-domain indices generally require longer segments for defensible estimation (Chen et al., 2020).
+
+Two operational caveats follow.
+
+1. **Ultra-short-term HRV is primarily a *screening* layer.** It can support rapid “quality checks” (e.g., unusually high artefact rates; unstable breathing; abrupt nonstationarity) and can provide coarse within-person tracking, but it should not be treated as a high-specificity diagnostic indicator.
+2. **Frequency-domain interpretation is disproportionately fragile in very short segments.** Even if an app outputs LF/HF from 60–120 seconds, the estimate may be dominated by resampling choices, windowing, and ectopy handling rather than by physiology. This places a premium on transparent preprocessing and conservative suppression rules.
+
+Methodologically, this is consistent with the broader signal-processing literature showing that RR preprocessing can materially affect downstream variability estimates, especially when data are noisy or edited aggressively (Thuraisingham, 2006). In the console’s governance terms, ultra-short-term HRV is best framed as a low-latency, low-confidence feature that should trigger either (i) standardized re-measurement (e.g., 5-minute post-waking session) or (ii) corroboration using higher-validity indicators.
 
 ### 3.3. HRV feature families and interpretive constraints
 The app reports metrics across time-, frequency-, and nonlinear domains. This is not merely a software convenience; it mirrors the reality that different HRV features emphasize different physiological time scales and respond differently to confounds.
@@ -129,7 +181,7 @@ Time-domain features are computed directly from NN intervals. Two measures domin
 
 A recurring theme in the monitoring literature is that the most defensible use of short-term HRV in readiness is *within-person*, not cross-sectional. In large systematic reviews, even healthy adults show wide dispersion of “normal” values (Nunan et al., 2010). This implies that population norms are better treated as contextual priors than as deterministic thresholds.
 
-Sports and occupational monitoring literature operationalizes this point via **log-transformed RMSSD (lnRMSSD)** and rolling baselines. Plews and colleagues argued that HRV is useful when interpreted as an adaptation signal within a periodized training context, and that averaging across multiple measurements improves stability and interpretability (Plews et al., 2014). The direct translation to aerospace contexts is conceptual rather than literal: the “training load” analogue may be cumulative operational stressors, sleep debt, circadian disruption, or illness. The key methodological move is the same—use repeated measurements, stabilize estimates via aggregation, and interpret deviations relative to a personalized baseline.
+Operational monitoring frameworks often operationalize this point via **log-transformed RMSSD (lnRMSSD)** and rolling baselines to stabilize variance and emphasize within-person deviation rather than cross-sectional ranking. In practice, averaging across repeated short measurements can improve stability and reduce sensitivity to transient noise sources (e.g., small protocol deviations or occasional artefacts), which is especially important when the decision horizon is short. The direct translation to aerospace contexts is conceptual rather than literal: the “training load” analogue may be cumulative operational stressors, sleep debt, circadian disruption, or illness. The key methodological move is the same—use repeated measurements, stabilize estimates via aggregation, and interpret deviations relative to a personalized baseline.
 
 Operationally, this implies that readiness scoring should:
 
@@ -152,6 +204,16 @@ For an operational console, the design implication is not to remove LF/HF, but t
 - Avoid presenting LF/HF as a direct measure of “sympathetic dominance.”
 - When LF/HF is shown, pair it with explicit caveats and with additional markers (e.g., RMSSD/SD1) that are more interpretable as vagal proxies under resting conditions.
 
+Beyond interpretive controversies, frequency-domain HRV has methodological fragility that is operationally relevant.
+
+**Spectral estimation is not neutral.** Practical pipelines usually convert unevenly sampled RR intervals into an evenly sampled time series via interpolation and then apply spectral estimation (e.g., FFT-based modified periodograms such as Welch’s method) or use methods intended for uneven sampling (Welch, 1967). Choices about resampling rate, detrending, windowing, and segment rejection can shift LF/HF materially in short recordings. This matters in dashboards because users often interpret small changes as “physiological change,” when the dominant driver can be a different preprocessing path.
+
+**Normalization can conceal absolute changes.** Many implementations report “normalized units” (LFnu, HFnu) by dividing LF and HF by total power minus VLF. This can be useful for presentation but can also obscure whether both LF and HF fell (global suppression) or whether only one component shifted. In readiness contexts, absolute power and time-domain vagal proxies may be more interpretable than normalized ratios, particularly when record length and respiration are not controlled.
+
+**VLF in short-term segments is frequently misused.** The Task Force guidance emphasized that VLF estimation is unreliable in short-term recordings. Operationally, this is a reason to either omit VLF-derived conclusions from short segments or to label them explicitly as low-confidence descriptive features (Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology, 1996).
+
+Taken together, these considerations argue for a conservative UI design: show frequency features with preprocessing provenance (window length, resampling method, respiration metadata) and avoid framing them as single-cause mechanistic readouts.
+
 #### 3.3.3. Nonlinear and complexity metrics: what they add (and what they require)
 Nonlinear features are often marketed as “advanced,” but their real value is that they capture properties not reducible to linear variance summaries. The app includes several prominent families.
 
@@ -169,6 +231,13 @@ A practical synthesis is that nonlinear metrics add value primarily when:
 2. Record lengths match the requirements of the metric (especially for scaling properties).
 3. Outputs are triangulated with time/frequency features and with contextual covariates.
 
+#### 3.3.4. HRV, self-regulation, and the neurovisceral integration framework
+Many users implicitly interpret “low HRV” as “high stress.” That mapping is directionally plausible in some contexts but is not a physiological law. A more defensible framing is provided by the neurovisceral integration perspective: vagally mediated HRV (often indexed by HF-HRV/RMSSD under resting conditions) is treated as an observable marker of functional coupling between central executive networks and peripheral autonomic regulation (Thayer & Lane, 2000; Thayer et al., 2009).
+
+The model’s operational value is that it provides a coherent hypothesis for why HRV correlates with executive function, affect regulation, and health outcomes: the same inhibitory control systems that support flexible behavior also modulate autonomic output through the central autonomic network. Later elaborations emphasize hierarchical organization and context dependence—i.e., “integration” is not uniform across tasks and may vary with threat, arousal, and individual differences (Smith et al., 2017; Thayer & Lane, 2009).
+
+At the same time, empirical evidence also supports caution. In large-sample work linking resting HF-HRV with executive function and regional cerebral blood flow, the expected “global” integration signal is not always observed; some analyses suggest that relationships are more circumscribed than the strongest forms of the hypothesis imply (Jennings et al., 2014). For a flight-surgeon console, this pushes toward conservative design: the HRV-stress link should be presented as a *non-specific* indicator whose interpretive weight depends on context (sleep loss, workload, illness, medication, paced breathing), and whose decision utility increases when triangulated with performance tasks, symptom reports, and schedule context.
+
 ### 3.4. Autonomic function tests: controlled provocations vs passive monitoring
 The app includes autonomic function tests (deep breathing, Valsalva, orthostatic responses). These tests differ from passive HRV monitoring because they intentionally provoke autonomic reflexes to probe specific pathways.
 
@@ -183,7 +252,7 @@ Operationally, deep breathing tests offer two advantages:
 However, deep breathing tests also introduce their own confounds: learning effects, poor compliance with breathing cadence, and anxiety-induced sympathetic activation.
 
 #### 3.4.2. Valsalva manoeuvre and orthostatic ratios
-The Valsalva manoeuvre probes baroreflex function across phases of pressure change, and the Valsalva ratio is a commonly reported summary. Orthostatic ratios (e.g., 30:15) reflect the immediate heart rate response to standing. In practice, these tests are used as part of batteries rather than interpreted in isolation. Selecting an appropriate test battery (or subset) is itself a methodological decision; data-driven work on test selection for cardiac autonomic neuropathy shows that not all components of the Ewing battery contribute equally to classification accuracy under practical constraints (Stranieri et al., 2013).
+The Valsalva manoeuvre probes baroreflex function across phases of pressure change, and the Valsalva ratio is a commonly reported summary. Orthostatic ratios (e.g., 30:15) reflect the immediate heart rate response to standing. In practice, these tests are used as part of batteries rather than interpreted in isolation. Selecting an appropriate test battery (or subset) is itself a methodological decision with trade-offs between sensitivity, specificity, user compliance, and operational feasibility.
 
 For a flight surgeon console, these tests can serve as periodic “calibration checks” of autonomic responsiveness, but they must be interpreted with operational constraints in mind (space suits, orthostatic intolerance risk, and mission safety constraints may limit provocative testing).
 
@@ -222,7 +291,7 @@ Human light PRCs quantify how timed light exposures advance or delay circadian p
 For operational tools, PRC evidence supports two pragmatic design choices:
 
 1. **Schedule interventions should be phase-targeted.** The same light exposure can be beneficial or counterproductive depending on phase.
-2. **Predictions must remain conservative.** Even in controlled studies, individuals vary in circadian period and response sensitivity, implying that model-based prescriptions should be presented as *risk-reducing guidance* rather than deterministic instructions.
+2. **Predictions must remain conservative.** Even in controlled studies, individuals vary in light sensitivity and in the magnitude of circadian responses, implying that model-based prescriptions should be presented as *risk-reducing guidance* rather than deterministic instructions (Chellappa, 2020).
 
 #### 3.7.3. Oscillator-based circadian pacemaker models: mechanistic structure with operational utility
 The app’s circadian module draws on a family of models that treat the circadian pacemaker as a limit-cycle oscillator coupled to light via photic preprocessing. Forger and colleagues presented a biologically grounded model capable of reproducing key human phase-resetting phenomena (Forger et al., 1999). Complementary work refined photic drive and oscillator structure to better match empirical PRCs and entrainment behavior (Jewett et al., 1998). More recent modelling work emphasizes “macroscopic” approaches and parameter identifiability—critical issues when applying models to individuals with limited calibration data (Hannay et al., 2019).
@@ -237,6 +306,13 @@ Therefore, a conservative multimodal console should incorporate at least one of:
 - **Protocol standardization:** measure at consistent times and conditions (e.g., post-waking, supine, fixed breathing instructions).
 - **Circadian-aware baselines:** maintain baselines stratified by clock time or model phase.
 - **Covariate adjustment:** include time-of-day (and ideally model phase) in statistical models to prevent spurious “fatigue” interpretations.
+
+#### 3.7.5. Sleep-stage structure: why “nightly HRV” is not a single physiological state
+Even if a wearable provides a single nocturnal RMSSD value, the underlying physiology is not constant over the night. Autonomic regulation shifts across sleep stages (NREM vs REM) and interacts with circadian phase. This matters because sleep-stage composition changes with sleep debt, alcohol, stress, and circadian misalignment—exactly the conditions that operational monitoring seeks to track.
+
+In controlled laboratory work, HRV exhibits systematic circadian variation across sleep stages, implying that both *when* in the circadian cycle a sleep episode occurs and *which stages dominate* can shift the distribution of HRV values (Boudreau et al., 2013). Operationally, this means that two “similar” nights can yield different nocturnal HRV summaries simply because of differences in stage structure or timing.
+
+For the console’s architecture, the implication is to treat nocturnal HRV as a structured time series rather than as a scalar. When possible, compute HRV on comparable within-night windows (e.g., stable 5-minute segments) and interpret changes alongside sleep staging or at least alongside sleep timing metadata.
 
 ### 3.8. Fatigue science, vigilance measurement, and FRMS governance
 Fatigue-related impairment is a central operational risk because it affects attention, reaction time, decision quality, and error monitoring. A flight surgeon console that includes fatigue forecasting must be grounded in three evidence layers: (i) dose-response relationships for sleep loss and time awake; (ii) objective measurement of the failure mode (vigilant attention lapses); and (iii) governance frameworks that prevent deterministic misuse.
@@ -258,17 +334,20 @@ A flight-surgeon console benefits from PVT-family integration for two reasons:
 2. It provides a validity check when physiological proxies (HRV, sleep tracking) disagree.
 
 #### 3.8.3. Biomathematical fatigue models (SAFTE/FAST): useful, but only under governance
-Biomathematical models typically integrate at least three drivers: **homeostatic sleep pressure**, **circadian modulation**, and **sleep inertia**. Peer-reviewed syntheses describe fatigue models used in work settings, including their structure, assumptions, and operational application in safety contexts (Dawson et al., 2011).
+Biomathematical fatigue models represent an attempt to formalize well-established drivers of performance impairment—sleep history (homeostatic sleep pressure), circadian phase, and sleep inertia—into a forecast of expected alertness or task effectiveness. Reviews of fatigue modelling in work settings describe how such models are used to compare schedules, identify periods of elevated risk, and support FRMS decision-making, while also documenting limitations and common misuses (Dawson et al., 2011).
 
-In operational deployments, such models may be implemented within scheduling tools to forecast performance risk from sleep-wake schedules. However, model validity remains conditional: forecasts can be systematically wrong when inputs are inaccurate, when schedules are extreme, or when unmodelled stressors (illness, high workload) dominate.
+A key operational distinction is that fatigue models are **schedule-to-risk mappings**, not direct measurements of performance. Their utility therefore depends on how accurately schedules and sleep opportunities are represented and how closely the model’s assumptions match the population and context. Many operational tools also include a layer that *predicts sleep obtained* during planned rest opportunities (e.g., inflight bunk rest). This can be highly valuable when objective sleep measurement is unavailable, but it also introduces additional uncertainty: errors in predicted sleep propagate directly into the predicted risk state.
 
-However, model validity is conditional:
+Applied aviation evidence illustrates both promise and constraint. Devine and colleagues compared biomathematical model predictions to sleep diary and actigraphy from ultra-long-range humanitarian flights and reported strong agreement between predicted and observed sleep estimates during these atypical operations (Devine et al., 2022). Such results support the use of modelling as a practical forecasting layer when direct measurement is sparse. However, they should not be overgeneralized into universal “validation.” Agreement in sleep prediction does not guarantee accurate prediction of all cognitive outcomes, and model performance can vary with rest quality, operational countermeasures, and circadian disruption patterns.
 
-- Inputs (sleep timing/quality) must be reasonably accurate.
-- Outputs are probabilistic and population-calibrated unless individualized.
-- Model error can be operationally meaningful when schedules are extreme, when individuals differ strongly, or when additional stressors (illness, high workload) are present.
+Consequently, a conservative console should treat fatigue-model outputs as *risk indicators* whose confidence depends on explicit conditions:
 
-Thus, model outputs should be framed as *risk indicators* rather than “fitness certificates.”
+- **Input validity.** Predictions are only as reliable as the underlying schedule and sleep inputs (including time-zone handling and duty/rest definitions).
+- **Population calibration.** Most models are calibrated at the population level; without individual calibration, uncertainty is larger for outliers and vulnerable subgroups.
+- **Unmodelled determinants.** Illness, acute stress, workload, medications, and stimulant use can materially shift risk but may not be captured.
+- **Operational extremes.** Very long duty periods, unusual rest environments, and rapidly shifting schedules can push models outside their intended calibration range.
+
+These constraints argue for “fail-closed” behaviour: when inputs are missing or conditions are outside calibration, the console should reduce confidence and prompt objective verification (e.g., PVT-family testing) rather than presenting a deceptively precise single-number forecast.
 
 #### 3.8.4. FRMS as a safety framework (US/EU governmental context)
 Fatigue risk management systems (FRMS) treat fatigue as a hazard managed through layered controls: scheduling rules, education, monitoring, reporting, and continuous improvement. FAA guidance explicitly emphasizes FRMS as a structured approach to manage fatigue risk rather than a single numerical model output (Federal Aviation Administration [FAA], 2013). European regulation similarly embeds fatigue management into air-operations frameworks (European Union Aviation Safety Agency [EASA], 2023).
@@ -287,7 +366,7 @@ This perspective also changes how a biomathematical fatigue forecast should be c
 Because the platform ingests wearable data, the validity of the upstream measurement chain is a first-order determinant of downstream analytic quality.
 
 #### 3.9.1. ECG-derived RR intervals vs PPG-derived pulse intervals
-Chest-strap ECG sensors estimate RR intervals from electrical depolarization and can be highly accurate at rest. Validation studies show that Polar H10 RR intervals exhibit high agreement with ECG across common resting protocols, supporting many HRV analyses (Schaffarczyk et al., 2022). Polar S810-family validation work similarly supports feasibility for short-term HRV monitoring under controlled conditions (Nunan et al., 2009).
+Chest-strap ECG sensors estimate RR intervals from electrical depolarization and can be highly accurate at rest. Validation studies show that Polar H10 RR intervals exhibit high agreement with ECG across common resting protocols, supporting many HRV analyses (Schaffarczyk et al., 2022).
 
 Wrist-worn PPG estimates inter-beat intervals indirectly via peripheral pulse arrival timing and waveform detection. A key conceptual distinction is that **pulse rate variability (PRV)** is not identical to HRV: PRV is influenced by vascular tone and pulse transit dynamics, and it is more susceptible to motion and vasoconstriction. A major review concluded that PRV can approximate HRV under resting, stable conditions, but agreement degrades with stressors, posture changes, and motion—conditions common in operations (Schäfer & Vagedes, 2013).
 
@@ -307,6 +386,21 @@ Modern consumer wearables combine accelerometry with PPG and sometimes skin temp
 
 rather than as definitive sleep stage or clinical diagnosis.
 
+#### 3.9.3. Wearables as clinical instruments: reliability, drift, and translation barriers
+Wearables create a “measurement abundance” problem: the limiting factor is not feature computation, but trust in the signal chain and in the stability of algorithms over time. Reviews of wearable devices in precision medicine emphasize both the promise (continuous longitudinal monitoring; detection of arrhythmias and infection-related physiological changes) and the translational barriers, including data standardization, privacy/security, regulatory alignment, and clinical validity (Babu et al., 2024).
+
+Similarly, focused reviews of wearable heart rate and HRV monitoring highlight that measurement validity depends on sensor modality, motion conditions, and the device’s processing pipeline, and that clinical value requires careful attention to accuracy and interpretability trade-offs (Alugubelli et al., 2022). For operational dashboards, these reviews support a conservative engineering stance: treat wearable-derived HRV as an *instrument output* that requires calibration, provenance tracking, and periodic revalidation.
+
+#### 3.9.4. Pre-symptomatic illness detection: baseline deviation as a detection strategy
+One reason HRV and related autonomic metrics are attractive in “mission control” concepts is that they may shift early in systemic illness, inflammation, or infection. A prominent example is the use of smartwatch-derived physiological data for pre-symptomatic detection of COVID-19, which demonstrated that individualized anomaly detection on wearable time series can flag a subset of cases before symptom onset (Mishra et al., 2020).
+
+This evidence supports a key design principle already emphasized in this review: **within-person baselines dominate cross-sectional thresholds**. The Mishra approach is fundamentally deviation-based—detecting departures from an individual’s own expected trajectory—rather than comparing to population cutoffs. However, it also reinforces the need for governance: deviation-based detectors will generate false positives whenever non-infectious perturbations (sleep restriction, psychological stress, alcohol, travel) shift physiology. Therefore, illness-detection modules should be framed as screening/triage tools that prompt corroboration (symptom checks, confirmatory testing, clinical assessment) rather than as diagnostic statements.
+
+#### 3.9.5. HRV for drowsiness and vigilance risk: promising signals, difficult ground truth
+In transportation and safety research, HRV features have been used as inputs to machine-learning models for drowsiness detection, typically paired with behavioral labels or proxy measures. Recent work demonstrates the feasibility of wearable HRV–based drowsiness classification using modern ML pipelines (AlArnaout et al., 2025). For a flight-surgeon console, the relevance is conceptual: HRV may carry information about autonomic arousal and fatigue-related state changes.
+
+However, this application also illustrates a recurrent limitation: “ground truth” for drowsiness is often noisy (self-report, lane-keeping proxies, or limited task batteries), and HRV can be confounded by workload, posture, and respiration. Therefore, HRV-based drowsiness indicators should be treated as adjunctive features and anchored—when feasible—to direct performance measures (e.g., PVT-family tasks).
+
 ### 3.10. Space-weather integration: indices, data products, and the evidentiary bar for physiology links
 The app integrates NOAA/NASA space-weather context with time-aligned physiological analytics. From a scientific perspective, this is best framed as a hypothesis-generating module: it merges a well-characterized geophysical measurement domain with a physiologic domain where effect sizes are likely small and confounding is substantial.
 
@@ -314,6 +408,8 @@ The app integrates NOAA/NASA space-weather context with time-aligned physiologic
 NOAA’s Space Weather Prediction Center (SWPC) provides standard indices and explanatory documentation. The planetary K index (Kp) reflects global geomagnetic activity derived from multiple magnetometer stations and is commonly used to characterize geomagnetic disturbances (NOAA Space Weather Prediction Center [SWPC], n.d.-a). NOAA also publishes standardized space weather scales (G for geomagnetic storms, S for solar radiation storms, R for radio blackouts), which support categorical operational communication (NOAA Space Weather Prediction Center [SWPC], n.d.-b).
 
 NASA’s Community Coordinated Modeling Center (CCMC) maintains the DONKI system to catalogue space-weather events (e.g., solar flares, CMEs, geomagnetic storms) and provides an API-oriented interface for retrieving event timing and metadata (NASA/CCMC, n.d.). These resources enable reproducible alignment between geophysical events and physiological time series if timestamps, time zones, and sampling windows are handled correctly.
+
+European operational documentation is also available. The ESA Space Weather Service Network maintains program documents (requirements, system descriptions, and product catalogues) that support standardized interpretation and integration of European space-weather products (European Space Agency [ESA], n.d.).
 
 #### 3.10.2. Evidence on geomagnetic activity and autonomic/cardiovascular outcomes: plausible pathways, mixed findings
 Mechanistic hypotheses linking geomagnetic activity to autonomic function include melatonin modulation, magnetoreception-related pathways, and indirect behavioral mediators. Empirically, studies report associations between geomagnetic indices and HRV in specific cohorts. For example, an experimental and observational analysis reported changes in HRV with geomagnetic activity in a cohort study context (Alabdulgader et al., 2018). Large longitudinal cohort work has also examined associations between solar and geomagnetic indices and HRV (Vieira et al., 2022).
@@ -349,7 +445,7 @@ Because physiological baselines vary widely, analyses that pool individuals with
 Operationally, the question “did something change?” is often more actionable than “what is the absolute value?” Change-point detection methods formalize this. The PELT algorithm provides an efficient approach for detecting multiple change points in time series under penalized likelihood, enabling detection of regime shifts such as sudden HRV suppression or step changes in sleep timing (Killick et al., 2012).
 
 #### 3.11.4. Validation, leakage, and time-series cross-validation
-Naïve validation approaches can dramatically overestimate performance when temporal dependence exists. Work on cross-validation for time series emphasizes that standard random-fold CV can be invalid under autocorrelation; blocked or forward-chaining CV approaches are needed to avoid leakage (Bergmeir et al., 2018). In addition, model selection and hyperparameter tuning performed on the same data used for evaluation can yield optimistic bias; formal analyses in bioinformatics show substantial bias in gene selection pipelines when evaluation is not nested correctly (Varma & Simon, 2006). These issues generalize to multimodal physiology: if feature engineering and threshold selection are tuned on past missions and then evaluated on the same data, the dashboard will appear more accurate than it is.
+Naïve validation approaches can dramatically overestimate performance when temporal dependence exists. Work on cross-validation for time series emphasizes that standard random-fold CV can be invalid under autocorrelation; blocked or forward-chaining CV approaches are needed to avoid leakage (Bergmeir et al., 2018). In addition, model selection, feature engineering, and threshold/hyperparameter tuning must be nested within the validation procedure to avoid optimistic bias. These issues generalize to multimodal physiology: if thresholds are tuned on past missions and then evaluated on the same data, the dashboard will appear more accurate than it is.
 
 #### 3.11.5. Interpretability: useful explanations without reification
 Operational adoption often requires explanations. Feature attribution methods such as SHAP (Shapley additive explanations) provide a mathematically grounded way to attribute model predictions to input features. Lundberg and colleagues introduced efficient algorithms for consistent feature attribution in tree ensembles and demonstrated how local explanations can aggregate to global understanding (Lundberg et al., 2020). In a flight-surgeon console, interpretability should be treated as a *communication layer* that aids oversight, not as a proof of causality.
@@ -357,16 +453,33 @@ Operational adoption often requires explanations. Feature attribution methods su
 ### 3.12. HRV biofeedback and controlled breathing: intervention science vs measurement confounding
 Because the app includes biofeedback capabilities, it is important to distinguish two roles for controlled breathing.
 
-First, **paced breathing is a measurement confound** in HRV assessment. It can increase HF power when breathing is in the HF band, or shift respiratory-driven variability into the LF band when breathing is slowed toward ~0.1 Hz, materially altering LF, HF, and LF/HF without any necessary change in sympathetic tone. Thus, when paced breathing is used for standardization, the breathing rate must be documented and the interpretation of spectral features must be adjusted accordingly.
+First, **paced breathing is a measurement confound** in HRV assessment. It can increase HF power when breathing is in the HF band, or shift respiratory-driven variability into the LF band when breathing is slowed toward ~0.1 Hz, materially altering LF, HF, and LF/HF without any necessary change in sympathetic tone. Thus, when paced breathing is used for standardization, the breathing rate must be documented and the interpretation of spectral features must be adjusted accordingly (Grossman et al., 1991).
 
 Second, **paced breathing can be an intervention**. HRV biofeedback and resonance-frequency breathing aim to enhance baroreflex-mediated oscillations and autonomic regulation, and they have been studied across clinical and performance contexts. Reviews of HRV biofeedback describe plausible mechanistic pathways (baroreflex engagement, respiratory–cardiovascular coupling) and emphasize protocol specificity, particularly the need to individualize resonance frequency and to distinguish training effects from acute breathing-induced shifts (Lehrer & Gevirtz, 2014).
+
+More recent quantitative syntheses strengthen the evidence base while also clarifying its limits. A systematic review and meta-analysis concluded that HRV biofeedback can improve emotional and physical health and performance outcomes across studied contexts, while highlighting heterogeneity in protocols and endpoints (Lehrer et al., 2020). Meta-analytic evidence also suggests that HRV biofeedback may reduce depressive symptoms in adult samples, again with meaningful between-study variability (Pizzoli et al., 2021). Importantly for operational medicine, there is now meta-analytic synthesis specifically in military PTSD populations suggesting HRV biofeedback may reduce symptomatology with low attrition, although available studies remain small and the evidence base is still developing (Kenemore et al., 2024).
+
+For console design, these findings support a pragmatic role for biofeedback modules as structured training interventions. However, they also reinforce a separation-of-concerns requirement: the console should (i) log whether HRV was measured under paced breathing, (ii) avoid comparing paced-breathing sessions to free-breathing baselines without explicit adjustment, and (iii) avoid treating acute breathing-induced shifts as evidence of long-term autonomic change.
 
 For an operational console, the safe synthesis is that biofeedback modules should be framed as training/skill-building tools, while analysis modules should clearly label when measurements were taken under paced-breathing conditions.
 
 ### 3.13. Brief environmental context (spaceflight): standards, human-system integration, and radiation as metadata
 The app’s “mission control” framing is consistent with aerospace medicine contexts where environment and operational constraints shape physiological baselines. NASA human-system integration standards (NASA-STD-3001 Volume 2) provide a comprehensive framework for designing and evaluating human health and performance requirements across spaceflight conditions (National Aeronautics and Space Administration [NASA], 2022).
 
-Within this review’s scope, radiation is treated only as contextual environmental metadata rather than as a radiobiological topic. The operationally relevant implication is that environmental factors (including radiation environment, cabin pressure/oxygenation, thermal load) can shift baselines and recovery trajectories; therefore, multimodal consoles should (i) capture environment metadata when available, and (ii) avoid attributing unexplained physiological deviations to a single environmental cause without stronger evidence.
+Within this review’s scope, radiation is treated only as contextual environmental metadata rather than as a radiobiological topic. The operationally relevant implication is that environmental factors (including radiation environment, cabin pressure/oxygenation, thermal load) can shift baselines and recovery trajectories; therefore, multimodal consoles should (i) capture environment metadata when available, and (ii) avoid attributing unexplained physiological deviations to a single environmental cause without stronger evidence (Yamazaki & Sone, 2001).
+
+#### 3.13.1. Acute cardiovascular responses to microgravity: baseline shifts, not necessarily “stress”
+Spaceflight introduces a set of physiological shifts (fluid redistribution, altered baroreflex loading, countermeasure exercise) that can change resting cardiovascular baselines. In-flight measurements from Shuttle astronauts show that heart rate and diastolic pressure can decrease in microgravity alongside reductions in heart rate variability and blood pressure variability, suggesting that the microgravity environment itself is not necessarily a chronic cardiovascular “stress” in the colloquial sense (Fritsch-Yelle et al., 1996). For an operational console, the key implication is that baseline shifts are expected: changes in HRV/BPV during flight should be interpreted relative to phase-of-mission baselines and countermeasure context, not compared directly to Earth baselines.
+
+#### 3.13.2. Long-duration missions: altered HRV time structure and “intrinsic” regulation
+Long-duration ISS missions enable analysis of HRV beyond short-term vagal proxies. Work examining the time structure and fractal properties of long-term HRV suggests that microgravity can alter aspects of the intrinsic cardiovascular autonomic regulatory system. For example, observational work using 24-hour ECG in astronauts reported changes in power-law scaling and related features during long-duration missions, with effects emerging early in flight and persisting (Otsuka et al., 2015). Complementary analyses report that long-term exposure to microgravity alters the time structure of HRV, implying that the distribution and temporal organization of interbeat dynamics differ in space versus on Earth (Otsuka et al., 2016).
+
+From a mission-medicine perspective, these findings strengthen the case for longitudinal analytics: if the time structure of HRV changes with mission phase, then a “one-size-fits-all” threshold for HRV suppression is unlikely to generalize across environments.
+
+#### 3.13.3. Circadian organization in space: synchronizers and the risk of misattribution
+Spaceflight operations can perturb circadian organization through unusual light exposure, altered sleep timing, and mission demands. Evidence indicates that long-duration microgravity exposure can affect circadian rhythms of HRV, with inter-individual variability changing over flight stages and recovery occurring later in flight for some indices (Yamamoto et al., 2014). Related analyses interpret HRV spectral structure as reflecting adaptation processes across mission time, including differential patterns across the day and early sleep periods (Otsuka et al., 2018).
+
+For a flight surgeon console, this reinforces a design constraint: circadian phase, sleep timing, and mission schedule should be treated as first-class covariates for interpreting autonomic metrics. In-flight deviations that look like “stress” on an Earth-calibrated dashboard may instead reflect altered circadian organization or environmental baseline shifts.
 
 ### 3.14. Windowed and longitudinal analytics: why trend features are not optional
 The app includes windowed HRV and time-series analyses because operational physiology is rarely stationary. Even under stable conditions, HRV varies across the day due to circadian timing and behavior. Across days, additional nonstationarities arise from sleep debt accumulation, illness, training/workload cycles, and changes in measurement protocol adherence. Consequently, “single-session” HRV snapshots are insufficient for high-stakes interpretation unless they are embedded in a longitudinal framework.
@@ -388,6 +501,15 @@ Operationally, this argues for three implementation constraints:
 - Keep window definitions explicit and user-visible (e.g., “rolling 7-day baseline from morning supine recordings”).
 - Preserve raw-session values alongside smoothed values to avoid hiding acute events.
 - Surface uncertainty driven by missing data, artefact correction, and protocol deviations.
+
+### 3.15. Hypoxia and low-oxygen environments: HRV signatures and operational interpretation
+Aviation, altitude exposure, and some spaceflight-adjacent contexts can involve reduced inspired oxygen pressure (hypobaric or normobaric hypoxia), which engages chemoreflex pathways and shifts autonomic balance. From an HRV perspective, hypoxia can produce changes in both time-domain and frequency-domain measures, and it can also alter higher-order dynamics such as entropy and cardiorespiratory synchronization.
+
+Controlled and quasi-controlled studies support that acute hypoxia perturbs multiple HRV features and coupling measures. For example, experimental work reported that acute hypoxia can alter HRV, sample entropy, and cardiorespiratory phase synchronization—highlighting that hypoxia is not merely a “heart rate increase,” but a broader dynamical perturbation (Zhang et al., 2014). In exercise-plus-hypoxia settings, studies have examined how HRV changes relate to acute mountain sickness and acclimatization processes, suggesting that autonomic markers may carry some predictive information but are not deterministic (Mairer et al., 2013). A recent meta-analysis synthesizing HRV findings in acute mountain sickness supports that some HRV parameters differ between AMS and non-AMS groups before and after ascent, but also underscores heterogeneity and the current lack of stable clinical thresholds (Tsai et al., 2025).
+
+Field-oriented evidence underscores that operational feasibility often drives measurement design. Smartphone-enabled HRV acquisition has been studied in altitude contexts in relation to acute mountain sickness, demonstrating that short, portable HRV workflows can be collected during ascent and may relate to symptom risk (Mellor et al., 2018). Other work combining oximetry and HRV similarly suggests that multimodal approaches (SpO2 plus autonomic features) may outperform either signal alone for mild-to-moderate altitude illness classification (Koehle et al., 2010).
+
+For a mission-medicine dashboard, the implication is not to use HRV as a standalone hypoxia detector, but to treat oxygenation state as a *confounder and covariate*. When low-oxygen exposure is plausible, the console should integrate SpO2 (or cabin/altitude metadata when available) and reduce confidence in autonomic interpretations that assume stable oxygenation.
 
 ---
 
@@ -432,7 +554,7 @@ A multimodal console is only as defensible as its validation. “Looks plausible
 
 **Define the endpoint first.** In high-consequence monitoring, the most meaningful endpoints are often operational: vigilance lapses, errors, near-misses, or task-performance degradation. Physiological proxies (HRV, BPV) are not direct measures of these endpoints. In contrast, PVT-family measures directly probe vigilant attention and have well-characterized dose-response sensitivity to sleep loss and circadian misalignment (Basner et al., 2021; Van Dongen et al., 2003). A practical validation strategy therefore uses PVT (or other performance tasks) as a reference outcome and evaluates whether the console improves the detection of performance-risk states beyond what could be achieved from sleep history alone.
 
-**Separate calibration from evaluation.** Physiological monitoring systems routinely embed choices: which HRV metric to emphasize, which artefact threshold to use, how to define a baseline window, which covariates to adjust for, and which thresholds trigger alerts. If these choices are tuned on the same data that later evaluate “accuracy,” the system will appear better than it is. Time-series dependence exacerbates this risk because adjacent days are correlated. The solution is methodological discipline: use temporally appropriate validation (blocked or forward-chaining approaches) and separate the tuning window from the evaluation window (Bergmeir et al., 2018; Varma & Simon, 2006).
+**Separate calibration from evaluation.** Physiological monitoring systems routinely embed choices: which HRV metric to emphasize, which artefact threshold to use, how to define a baseline window, which covariates to adjust for, and which thresholds trigger alerts. If these choices are tuned on the same data that later evaluate “accuracy,” the system will appear better than it is. Time-series dependence exacerbates this risk because adjacent days are correlated. The solution is methodological discipline: use temporally appropriate validation (blocked or forward-chaining approaches) and separate the tuning window from the evaluation window (Bergmeir et al., 2018).
 
 **Treat inference as conditional on protocol and metadata.** Many apparent failures of HRV monitoring are failures of protocol consistency (time-of-day, posture, breathing) rather than failures of physiology. A console that logs and enforces protocol metadata can prevent this category of error. In practice, validation should stratify by protocol adherence and quantify how much predictive value collapses when metadata is missing.
 
@@ -525,17 +647,25 @@ Billman, G. E. (2013). The LF/HF ratio does not accurately measure cardiac sympa
 
 Brennan, M., Palaniswami, M., & Kamen, P. (2001). Do existing measures of Poincaré plot geometry reflect nonlinear features of heart rate variability? IEEE Transactions on Biomedical Engineering, 48(11), 1342–1347. https://doi.org/10.1109/10.959330
 
+Chellappa, S. L. (2020). Individual differences in light sensitivity affect sleep and circadian rhythms. Sleep, 44(2). https://doi.org/10.1093/sleep/zsaa214
+
 Costa, M. D., Davis, R. B., & Goldberger, A. L. (2017). Heart rate fragmentation: A new approach to the analysis of cardiac interbeat interval dynamics. Frontiers in Physiology, 8. https://doi.org/10.3389/fphys.2017.00255
 
 Dawson, D., Ian Noy, Y., Härmä, M., Åkerstedt, T., & Belenky, G. (2011). Modelling fatigue and the use of fatigue models in work settings. Accident Analysis & Prevention, 43(2), 549–564. https://doi.org/10.1016/j.aap.2009.12.030
 
 de Zambotti, M., Cellini, N., Goldstone, A., Colrain, I. M., & Baker, F. C. (2019). Wearable sleep technology in clinical and research settings. Medicine & Science in Sports & Exercise, 51(7), 1538–1557. https://doi.org/10.1249/MSS.0000000000001947
 
+Devine, J. K., Garcia, C. R., Simoes, A. S., Guelere, M. R., de Godoy, B., Silva, D. S., Pacheco, P. C., Choynowski, J., & Hursh, S. R. (2022). Predictive biomathematical modeling compared to objective sleep during COVID-19 humanitarian flights. Aerospace Medicine and Human Performance, 93(1), 4–12. https://doi.org/10.3357/amhp.5909.2022
+
+European Space Agency. (n.d.). ESA Programme Documents - Space Weather. Retrieved December 21, 2025, from https://swe.ssa.esa.int/documents
+
 European Union Aviation Safety Agency. (2023). Easy Access Rules for Air Operations (online publication). Retrieved December 21, 2025, from https://www.easa.europa.eu/en/document-library/easy-access-rules/online-publications/easy-access-rules-air-operations
 
 Federal Aviation Administration. (2013). Fatigue Risk Management Systems for Aviation Safety (Advisory Circular No. 120-103A). U.S. Department of Transportation. https://www.faa.gov/documentlibrary/media/advisory_circular/ac_120-103a.pdf
 
 Forger, D. B., Jewett, M. E., & Kronauer, R. E. (1999). A simpler model of the human circadian pacemaker. Journal of Biological Rhythms, 14(6), 533–538. https://doi.org/10.1177/074873099129000867
+
+Grossman, P., Karemaker, J., & Wieling, W. (1991). Prediction of tonic parasympathetic cardiac control using respiratory sinus arrhythmia: The need for respiratory control. Psychophysiology, 28(2), 201–216. https://doi.org/10.1111/j.1469-8986.1991.tb00412.x
 
 Hannay, K. M., Booth, V., & Forger, D. B. (2019). Macroscopic models for human circadian rhythms. Journal of Biological Rhythms, 34(6), 658–671. https://doi.org/10.1177/0748730419878298
 
@@ -565,8 +695,6 @@ NOAA Space Weather Prediction Center. (n.d.-a). The K-index (PDF). Retrieved Dec
 
 NOAA Space Weather Prediction Center. (n.d.-b). NOAA scales explanation. Retrieved December 21, 2025, from https://www.swpc.noaa.gov/noaa-scales-explanation
 
-Nunan, D., Donovan, G., Jakovljevic, D. G., Hodges, L. D., Sandercock, G. R. H., & Brodie, D. A. (2009). Validity and reliability of short-term heart-rate variability from the Polar S810. Medicine & Science in Sports & Exercise, 41(1), 243–250. https://doi.org/10.1249/MSS.0b013e318184a4b1
-
 Nunan, D., Sandercock, G. R. H., & Brodie, D. A. (2010). A quantitative systematic review of normal values for short-term heart rate variability in healthy adults. Pacing and Clinical Electrophysiology, 33(11), 1407–1417. https://doi.org/10.1111/j.1540-8159.2010.02841.x
 
 Pan, J., & Tompkins, W. J. (1985). A real-time QRS detection algorithm. IEEE Transactions on Biomedical Engineering, BME-32(3), 230–236. https://doi.org/10.1109/TBME.1985.325532
@@ -576,8 +704,6 @@ Parati, G., Stergiou, G. S., Dolan, E., & Bilo, G. (2018). Blood pressure variab
 Peng, C.-K., Havlin, S., Stanley, H. E., & Goldberger, A. L. (1995). Quantification of scaling exponents and crossover phenomena in nonstationary heartbeat time series. Chaos: An Interdisciplinary Journal of Nonlinear Science, 5(1), 82–87. https://doi.org/10.1063/1.166141
 
 Pincus, S. M. (1991). Approximate entropy as a measure of system complexity. Proceedings of the National Academy of Sciences, 88(6), 2297–2301. https://doi.org/10.1073/pnas.88.6.2297
-
-Plews, D. J., Laursen, P. B., Meur, Y. L., Hausswirth, C., Kilding, A. E., & Buchheit, M. (2014). Monitoring training with heart-rate variability: How much compliance is needed for valid assessment? International Journal of Sports Physiology and Performance, 9(5), 783–790. https://doi.org/10.1123/ijspp.2013-0455
 
 Richman, J. S., & Moorman, J. R. (2000). Physiological time-series analysis using approximate entropy and sample entropy. American Journal of Physiology-Heart and Circulatory Physiology, 278(6), H2039–H2049. https://doi.org/10.1152/ajpheart.2000.278.6.h2039
 
@@ -593,9 +719,7 @@ Shields, R. W. (2009). Heart rate variability with deep breathing as a clinical 
 
 St Hilaire, M. A., Gooley, J. J., Khalsa, S. B. S., Kronauer, R. E., Czeisler, C. A., & Lockley, S. W. (2012). Human phase response curve to a 1 h pulse of bright white light. The Journal of Physiology, 590(13), 3035–3045. https://doi.org/10.1113/jphysiol.2012.227892
 
-Stranieri, A., Abawajy, J., Kelarev, A., Huda, S., Chowdhury, M., & Jelinek, H. F. (2013). An approach for Ewing test selection to support the clinical assessment of cardiac autonomic neuropathy. Artificial Intelligence in Medicine, 58(3), 185–193. https://doi.org/10.1016/j.artmed.2013.04.007
-
-Sundkvist, G., Lilja, B., & Almér, L.-O. (1982). Deep breathing, Valsalva, and tilt table tests in diabetics with and without symptoms of autonomic neuropathy. Acta Medica Scandinavica, 211(5), 369–373. https://pubmed.ncbi.nlm.nih.gov/7113752/
+Sundkvist, G., Lilja, B., & Almér, L.-O. (1982). Deep breathing, Valsalva, and tilt table tests in diabetics with and without symptoms of autonomic neuropathy. Acta Medica Scandinavica, 211(5), 369–373. https://doi.org/10.1111/j.0954-6820.1982.tb01964.x
 
 Tarvainen, M. P., Niskanen, J.-P., Lipponen, J. A., Ranta-aho, P. O., & Karjalainen, P. A. (2014). Kubios HRV – Heart rate variability analysis software. Computer Methods and Programs in Biomedicine, 113(1), 210–220. https://doi.org/10.1016/j.cmpb.2013.07.024
 
@@ -603,6 +727,60 @@ Task Force of the European Society of Cardiology and the North American Society 
 
 Van Dongen, H. P. A., Maislin, G., Mullington, J. M., & Dinges, D. F. (2003). The cumulative cost of additional wakefulness: Dose-response effects on neurobehavioral functions and sleep physiology from chronic sleep restriction and total sleep deprivation. Sleep, 26(2), 117–126. https://doi.org/10.1093/sleep/26.2.117
 
-Varma, S., & Simon, R. (2006). Bias in error estimation when using cross-validation for model selection. BMC Bioinformatics, 7(1), 91. https://doi.org/10.1186/1471-2105-7-91
-
 Vieira, C. L. Z., Chen, K., Garshick, E., Liu, M., Vokonas, P., Ljungman, P., Schwartz, J., & Koutrakis, P. (2022). Geomagnetic disturbances reduce heart rate variability in the Normative Aging Study. Science of The Total Environment, 839, 156235. https://doi.org/10.1016/j.scitotenv.2022.156235
+
+Welch, P. (1967). The use of fast Fourier transform for the estimation of power spectra: A method based on time averaging over short, modified periodograms. IEEE Transactions on Audio and Electroacoustics, 15(2), 70–73. https://doi.org/10.1109/TAU.1967.1161901
+
+Yamazaki, F., & Sone, R. (2001). Thermal stress modulates arterial pressure variability and arterial baroreflex response of heart rate during head-up tilt in humans. European Journal of Applied Physiology, 84(4), 350–357. https://doi.org/10.1007/s004210100387
+
+Yamamoto, N., Otsuka, K., Kubo, Y., Hayashi, M., Mizuno, K., Ohshima, H., & Mukai, C. (2014). Effects of long-term microgravity exposure in space on circadian rhythms of heart rate variability. Chronobiology International, 32(3), 327–340. https://doi.org/10.3109/07420528.2014.979940
+
+AlArnaout, Z., Zaki, C., Kotb, Y., AlAkkoumi, M., & Mostafa, N. (2025). Exploiting heart rate variability for driver drowsiness detection using wearable sensors and machine learning. Scientific Reports, 15(1). https://doi.org/10.1038/s41598-025-08582-2
+
+Alugubelli, N., Abuissa, H., & Roka, A. (2022). Wearable devices for remote monitoring of heart rate and heart rate variability: What we know and what is coming. Sensors, 22(22), 8903. https://doi.org/10.3390/s22228903
+
+Babu, S. G., Chandrashekar, P., Manjunath, N. K., Tran, P., & Shetty, D. K. (2024). Wearable devices in precision medicine: Translating innovations to clinic. Annual Review of Medicine, 75, 435–452. https://doi.org/10.1146/annurev-med-052422-020437
+
+Boudreau, P., Yeh, W.-H., Dumont, G. A., & Boivin, D. B. (2013). Circadian variation of heart rate variability across sleep stages. Sleep, 36(12), 1919–1928. https://doi.org/10.5665/sleep.3230
+
+Chen, Y.-S., Lu, W.-A., Pagaduan, J. C., & Kuo, C.-D. (2020). A novel smartphone app for the measurement of ultra–short-term and short-term heart rate variability: Validity and reliability study. JMIR mHealth and uHealth, 8(7), e18761. https://doi.org/10.2196/18761
+
+Flatt, A. A., & Esco, M. R. (2013). Validity of the ithlete™ smart phone application for determining ultra-short-term heart rate variability. Journal of Human Kinetics, 39, 85–92. https://doi.org/10.2478/hukin-2013-0071
+
+Fritsch-Yelle, J. M., Charles, J. B., Jones, M. M., Beightol, L. A., & Eckberg, D. L. (1996). Microgravity decreases heart rate and arterial pressure in humans. Journal of Applied Physiology, 80(3), 910–914. https://doi.org/10.1152/jappl.1996.80.3.910
+
+Jennings, J. R., Allen, B., Gianaros, P. J., Thayer, J. F., & Manuck, S. B. (2014). Focusing neurovisceral integration: Cognition, heart rate variability, and cerebral blood flow. Psychophysiology, 52(2), 214–224. https://doi.org/10.1111/psyp.12319
+
+Kenemore, J., Benham, G., Charak, R., & Hernandez Rodriguez, J. (2024). Heart rate variability biofeedback as a treatment for military PTSD: A meta-analysis. Military Medicine, 189(9–10), e1903–e1909. https://doi.org/10.1093/milmed/usae003
+
+Koehle, M. S., Guenette, J. A., & Warburton, D. E. R. (2010). Oximetry, heart rate variability, and the diagnosis of mild-to-moderate acute mountain sickness. European Journal of Emergency Medicine, 17(2), 119–122. https://doi.org/10.1097/mej.0b013e32832fa099
+
+Lehrer, P., Kaur, K., Sharma, A., Shah, K., Huseby, R., Bhavsar, J., Sgobba, P., & Zhang, Y. (2020). Heart rate variability biofeedback improves emotional and physical health and performance: A systematic review and meta analysis. Applied Psychophysiology and Biofeedback, 45(3), 109–129. https://doi.org/10.1007/s10484-020-09466-z
+
+Mairer, K., Wille, M., Grander, W., & Burtscher, M. (2013). Effects of exercise and hypoxia on heart rate variability and acute mountain sickness. International Journal of Sports Medicine, 34(8), 700–706. https://doi.org/10.1055/s-0032-1327577
+
+Mellor, A., Bakker-Dyos, J., O’Hara, J., Woods, D. R., Holdsworth, D. A., & Boos, C. J. (2018). Smartphone-enabled heart rate variability and acute mountain sickness. Clinical Journal of Sport Medicine, 28(1), 76–81. https://doi.org/10.1097/jsm.0000000000000427
+
+Mishra, T., Wang, M., Metwally, A. A., Bogu, G. K., Brooks, A. W., Bahmani, A., Alavi, A., Celli, A., Higgs, E., Dagan-Rosenfeld, O., Fay, B., Kirkpatrick, S., Kellogg, R., Gibson, M., Wang, T., Hunting, E. M., Mamic, P., Ganz, A. B., Rolnik, B., Li, X., & Snyder, M. P. (2020). Pre-symptomatic detection of COVID-19 from smartwatch data. Nature Biomedical Engineering, 4(12), 1208–1220. https://doi.org/10.1038/s41551-020-00640-6
+
+Otsuka, K., Cornelissen, G., Kubo, Y., Hayashi, M., Yamamoto, N., Shibata, K., Aiba, T., Furukawa, S., Ohshima, H., & Mukai, C. (2015). Intrinsic cardiovascular autonomic regulatory system of astronauts exposed long-term to microgravity in space: observational study. npj Microgravity, 1(1), 15018. https://doi.org/10.1038/npjmgrav.2015.18
+
+Otsuka, K., Cornelissen, G., Furukawa, S., Kubo, Y., Hayashi, M., Shibata, K., Mizuno, K., Aiba, T., Ohshima, H., & Mukai, C. (2016). Long-term exposure to space’s microgravity alters the time structure of heart rate variability of astronauts. Heliyon, 2(12), e00211. https://doi.org/10.1016/j.heliyon.2016.e00211
+
+Otsuka, K., Cornelissen, G., Kubo, Y., Shibata, K., Hayashi, M., Mizuno, K., Ohshima, H., Furukawa, S., & Mukai, C. (2018). Circadian challenge of astronauts’ unconscious mind adapting to microgravity in space, estimated by heart rate variability. Scientific Reports, 8(1). https://doi.org/10.1038/s41598-018-28740-z
+
+Pizzoli, S. F. M., Marzorati, C., Gatti, D., Monzani, D., Mazzocco, K., & Pravettoni, G. (2021). A meta-analysis on heart rate variability biofeedback and depressive symptoms. Scientific Reports, 11(1). https://doi.org/10.1038/s41598-021-86149-7
+
+Smith, R., Thayer, J. F., Khalsa, S. S., & Lane, R. D. (2017). The hierarchical basis of neurovisceral integration. Neuroscience & Biobehavioral Reviews, 75, 274–296. https://doi.org/10.1016/j.neubiorev.2017.02.003
+
+Thayer, J. F., & Lane, R. D. (2000). A model of neurovisceral integration in emotion regulation and dysregulation. Journal of Affective Disorders, 61(3), 201–216. https://doi.org/10.1016/S0165-0327(00)00338-4
+
+Thayer, J. F., & Lane, R. D. (2009). Claude Bernard and the heart–brain connection: Further elaboration of a model of neurovisceral integration. Neuroscience & Biobehavioral Reviews, 33(2), 81–88. https://doi.org/10.1016/j.neubiorev.2008.08.004
+
+Thayer, J. F., Hansen, A. L., Saus-Rose, E., & Johnsen, B. H. (2009). Heart rate variability, prefrontal neural function, and cognitive performance: The neurovisceral integration perspective on self-regulation, adaptation, and health. Annals of Behavioral Medicine, 37(2), 141–153. https://doi.org/10.1007/s12160-009-9101-z
+
+Tsai, T.-Y., Lin, J.-X., Ou, J.-C., & Huang, T.-Y. (2025). The role of heart rate variability in acute mountain sickness: A meta-analysis. Medicine, 104(24), e42692. https://doi.org/10.1097/md.0000000000042692
+
+Thuraisingham, R. A. (2006). Preprocessing RR interval time series for heart rate variability analysis and estimates of standard deviation of RR intervals. Computer Methods and Programs in Biomedicine, 83(1), 78–82. https://doi.org/10.1016/j.cmpb.2006.05.002
+
+Zhang, C., Lan, J., Shi, Y., Gao, R., Li, C., Lu, M., & Wang, L. (2014). Effect of acute hypoxia on heart rate variability, sample entropy and cardiorespiratory phase synchronization. BioMedical Engineering OnLine, 13(1), 73. https://doi.org/10.1186/1475-925x-13-73
