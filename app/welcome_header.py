@@ -220,11 +220,12 @@ def render_quick_access_grid(has_data: bool = False) -> None:
     Render quick access grid for navigating to different analysis modules.
     
     Styled to match the main welcome header container with deep purple gradients.
+    Cards show tab names - users click the tab bar above to navigate.
     
     Args:
         has_data: Whether physiological data is loaded
     """
-    # Module definitions organized by category
+    # Module definitions organized by category: (icon, name, tab_name, description, color)
     modules_available = [
         ("👤", "User Profile", "👤 User Profile", "Profiles & Garmin sync", "#667eea"),
         ("🌍", "Space Weather", "🌍 Space Weather", "Solar correlations", "#9b59b6"),
@@ -249,20 +250,31 @@ def render_quick_access_grid(has_data: bool = False) -> None:
     
     def _build_card(icon: str, name: str, tab: str, desc: str, color: str, available: bool) -> str:
         """Build HTML for a single module card."""
-        opacity = "1" if available else "0.4"
-        border_color = color if available else "rgba(255,255,255,0.1)"
-        dot_color = "#2ecc71" if available else "#666"
-        dot_char = "●" if available else "○"
+        opacity = "1" if available else "0.35"
+        bg_color = f"rgba({int(color[1:3], 16)}, {int(color[3:5], 16)}, {int(color[5:7], 16)}, 0.12)" if available else "rgba(50, 50, 70, 0.3)"
+        border_color = color if available else "rgba(100, 100, 120, 0.3)"
+        status_text = "✓ Ready" if available else "Needs Data"
+        status_color = "#2ecc71" if available else "#888"
         return (
-            f'<div style="background: rgba(102, 126, 234, 0.08); '
-            f'border: 1px solid {border_color}; border-radius: 12px; '
-            f'padding: 0.8rem; text-align: center; opacity: {opacity};">'
-            f'<div style="font-size: 1.5rem; margin-bottom: 0.3rem;">{icon}</div>'
-            f'<div style="color: {color}; font-weight: 600; font-size: 0.8rem; '
-            f'margin-bottom: 0.2rem;">{name}</div>'
-            f'<div style="color: #888; font-size: 0.65rem; line-height: 1.3;">{desc}</div>'
-            f'<div style="margin-top: 0.3rem; font-size: 0.6rem; color: #666;">'
-            f'<span style="color: {dot_color};">{dot_char}</span> {tab}</div>'
+            f'<div style="background: {bg_color}; '
+            f'border: 1px solid {border_color}; border-radius: 14px; '
+            f'padding: 1rem 0.8rem; text-align: center; opacity: {opacity}; '
+            f'position: relative;">'
+            # Status badge
+            f'<div style="position: absolute; top: 6px; right: 8px; font-size: 0.55rem; '
+            f'color: {status_color}; font-weight: 600;">{status_text}</div>'
+            # Icon
+            f'<div style="font-size: 1.8rem; margin-bottom: 0.4rem;">{icon}</div>'
+            # Name with gradient
+            f'<div style="color: {color}; font-weight: 700; font-size: 0.85rem; '
+            f'margin-bottom: 0.25rem;">{name}</div>'
+            # Description
+            f'<div style="color: #9ca3af; font-size: 0.7rem; line-height: 1.3; '
+            f'margin-bottom: 0.4rem;">{desc}</div>'
+            # Tab indicator
+            f'<div style="background: rgba(102, 126, 234, 0.15); border-radius: 8px; '
+            f'padding: 0.3rem 0.5rem; font-size: 0.6rem; color: #a0aec0; '
+            f'display: inline-block;">↑ Tab: <b>{tab}</b></div>'
             f'</div>'
         )
     
@@ -281,7 +293,7 @@ def render_quick_access_grid(has_data: bool = False) -> None:
     # Status indicator for data section
     data_dot_color = "#2ecc71" if has_data else "#666"
     data_dot_char = "●" if has_data else "○"
-    data_label = "HRV Data Loaded" if has_data else "Requires HRV Data"
+    data_label = "HRV Data Loaded — All Features Active" if has_data else "Requires HRV Data — Import via Sidebar"
     
     # Build HTML without leading whitespace (prevents Markdown code block interpretation)
     html_parts = [
@@ -289,38 +301,43 @@ def render_quick_access_grid(has_data: bool = False) -> None:
         'border-radius: 20px; padding: 1.5rem; margin-bottom: 1.5rem; ',
         'border: 1px solid rgba(102, 126, 234, 0.3); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);">',
         # Header
-        '<div style="text-align: center; margin-bottom: 1rem;">',
+        '<div style="text-align: center; margin-bottom: 0.8rem;">',
         '<span style="font-size: 1.8rem;">🔬</span>',
         '<div style="font-size: 1.3rem; font-weight: 800; ',
         'background: linear-gradient(135deg, #667eea 0%, #764ba2 40%, #f093fb 100%); ',
         '-webkit-background-clip: text; -webkit-text-fill-color: transparent; ',
         'background-clip: text; margin-top: 0.3rem;">Analysis Modules</div>',
+        '<div style="color: #666; font-size: 0.75rem; margin-top: 0.4rem;">',
+        '↑ Click the <b style="color: #a0aec0;">tab bar above</b> to navigate to each module</div>',
         '</div>',
         # Ready to Explore section
         '<div style="margin-bottom: 1rem;">',
         '<div style="display: flex; align-items: center; gap: 0.5rem; ',
         'margin-bottom: 0.6rem; padding-left: 0.3rem;">',
-        '<span style="color: #2ecc71; font-size: 0.75rem;">●</span>',
-        '<span style="color: #a0aec0; font-size: 0.8rem; font-weight: 600;">Ready to Explore</span>',
+        '<span style="color: #2ecc71; font-size: 0.8rem;">●</span>',
+        '<span style="color: #a0aec0; font-size: 0.85rem; font-weight: 600;">Ready to Explore</span>',
+        '<span style="color: #666; font-size: 0.7rem; margin-left: auto;">No data required</span>',
         '</div>',
-        '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem;">',
+        '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7rem;">',
         available_cards,
         '</div></div>',
         # Divider
-        '<hr style="margin: 1rem 0; border: none; border-top: 1px solid rgba(102, 126, 234, 0.2);">',
+        '<hr style="margin: 1.2rem 0; border: none; border-top: 1px solid rgba(102, 126, 234, 0.2);">',
         # Requires HRV Data section
         '<div>',
         '<div style="display: flex; align-items: center; gap: 0.5rem; ',
         'margin-bottom: 0.6rem; padding-left: 0.3rem;">',
-        f'<span style="color: {data_dot_color}; font-size: 0.75rem;">{data_dot_char}</span>',
-        f'<span style="color: #a0aec0; font-size: 0.8rem; font-weight: 600;">{data_label}</span>',
+        f'<span style="color: {data_dot_color}; font-size: 0.8rem;">{data_dot_char}</span>',
+        f'<span style="color: #a0aec0; font-size: 0.85rem; font-weight: 600;">{data_label}</span>',
         '</div>',
-        '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.6rem;">',
+        '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7rem;">',
         data_cards,
         '</div></div>',
         # Footer
-        '<div style="text-align: center; margin-top: 1rem; color: #666; font-size: 0.7rem;">',
-        '💡 Use sidebar to import RR intervals from Polar, Garmin, or text files',
+        '<div style="text-align: center; margin-top: 1.2rem; padding-top: 0.8rem; ',
+        'border-top: 1px solid rgba(102, 126, 234, 0.15);">',
+        '<div style="color: #888; font-size: 0.75rem;">',
+        '📱 <b>Import Data:</b> Sidebar → Polar H10 / Garmin / Text file</div>',
         '</div>',
         '</div>',
     ]
