@@ -5,6 +5,11 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.38] - 2025-12-22
+
+### Fixed
+- **Clinical assessment Garmin autofill** (`app/user_profile_tab.py`): Handle GarminDailyMetrics dataclass objects when populating sleep context to prevent `'GarminDailyMetrics' object has no attribute 'get'` errors in the clinical assessment panel.
+
 ## [1.8.37] - 2025-12-21
 
 ### Added
