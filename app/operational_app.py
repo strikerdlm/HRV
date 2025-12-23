@@ -118,7 +118,11 @@ def main() -> None:
     setup_logging()
 
     # MUST be the first Streamlit command (before importing modules that use Streamlit).
-    st.set_page_config(page_title="HRV Analysis — Operational", layout="wide")
+    try:
+        st.set_page_config(page_title="HRV Analysis — Operational", layout="wide")
+    except Exception:
+        # Never crash the operational app due to page config ordering.
+        pass
 
     # Delay-import UI modules until after page config to avoid StreamlitAPIException.
     try:
