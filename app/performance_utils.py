@@ -20,6 +20,7 @@ from __future__ import annotations
 import functools
 import hashlib
 import logging
+import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
@@ -33,6 +34,7 @@ import streamlit as st
 T = TypeVar("T")
 
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+_ENV_APP_MODE: Final[str] = "HRV_APP_MODE"
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -563,6 +565,9 @@ def is_computation_enabled(computation_key: str) -> bool:
     Returns:
         True if the computation is enabled
     """
+    # Operational mode: block research-grade heavy computations by policy.
+    if os.environ.get(_ENV_APP_MODE, "").strip().lower() == "operational":
+        return False
     settings = get_performance_settings()
     return settings.get(f"enable_{computation_key}", True)
 
@@ -577,6 +582,9 @@ def is_download_enabled(download_key: str) -> bool:
     Returns:
         True if the download is enabled
     """
+    # Operational mode: block heavy downloads by policy (keep UI responsive).
+    if os.environ.get(_ENV_APP_MODE, "").strip().lower() == "operational":
+        return False
     settings = get_performance_settings()
     return settings.get(f"enable_{download_key}", True)
 
