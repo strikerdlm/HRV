@@ -5,6 +5,11 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.42] - 2025-12-23
+
+### Added
+- **Operational vs Research apps** (`app/operational_app.py`, `app/research_app.py`): New split entrypoints in the same repo. Operational mode focuses on User Profile + lightweight space-weather context; Research mode keeps the full HRV/HRF computation + NOAA/Space Weather correlation dashboards.
+
 ## [1.8.41] - 2025-12-23
 
 ### Changed
