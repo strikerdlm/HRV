@@ -605,6 +605,15 @@ def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADa
             legacy_df = _read_legacy_dataframe_cache(legacy_cache)
             if legacy_df is not None and not legacy_df.empty:
                 return _prepare_frame(spec, legacy_df)
+
+    # Check performance settings before downloading
+    try:
+        from app.performance_utils import get_performance_settings
+        if not get_performance_settings().get("enable_heavy_downloads", True):
+            raise ValueError("Heavy downloads disabled by performance settings.")
+    except ImportError:
+        pass
+
     try:
         raw_df = _download_dataset(spec)
         bundle = _prepare_frame(spec, raw_df)

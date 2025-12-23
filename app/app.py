@@ -6492,6 +6492,19 @@ def main() -> None:
     # ==========================================================================
     if has_hrv_data_uploaded:
         st.sidebar.markdown("---")
+        # Performance settings (CPU optimization)
+        if PERFORMANCE_UTILS_AVAILABLE:
+            perf_settings = render_performance_settings_sidebar()
+        else:
+            perf_settings = {
+                "max_plot_points": 2000,
+                "max_dataframe_rows": 500,
+                "enable_heavy_plots": False,
+                "enable_heavy_computations": True,
+                "enable_heavy_downloads": True,
+                "optimize_memory": True,
+            }
+
         st.sidebar.subheader("⚙️ Analysis Settings")
         
         # Controls
@@ -6534,11 +6547,9 @@ def main() -> None:
         psd_method = st.sidebar.selectbox(
             "PSD method", ["welch", "periodogram", "ar"], index=0
         )
-        fast_windowing = st.sidebar.checkbox(
-            "Fast time-domain windowing (skip spectral/nonlinear in windows)", value=True)
-        high_compute = st.sidebar.checkbox(
-            "Advanced analysis (high compute for full-recording metrics)",
-            value=False)
+        # Derived from performance settings
+        high_compute = perf_settings.get("enable_heavy_computations", True)
+        fast_windowing = not high_compute
         st.sidebar.markdown("---")
         st.sidebar.subheader("Deviation detection")
         apply_dev = st.sidebar.checkbox(
@@ -6595,16 +6606,6 @@ def main() -> None:
             "Enable ML-assisted deviation clustering", value=True
         )
         
-        # Performance settings (CPU optimization)
-        if PERFORMANCE_UTILS_AVAILABLE:
-            perf_settings = render_performance_settings_sidebar()
-        else:
-            perf_settings = {
-                "max_plot_points": 2000,
-                "max_dataframe_rows": 500,
-                "enable_heavy_plots": False,
-                "optimize_memory": True,
-            }
         
         # GPU processing settings (NVIDIA CUDA)
         if GPU_PROCESSING_AVAILABLE:

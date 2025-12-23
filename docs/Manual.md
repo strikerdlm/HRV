@@ -2755,6 +2755,26 @@ RMSSD (ms) & 41.2 & 12.1 & [36.3, 46.1] \\
 
 ---
 
+## Performance Configuration
+
+Mission Control - Flight Surgeon includes adaptive performance settings to ensure responsiveness on various hardware profiles (low-power laptops vs. workstations).
+
+### Performance Settings Sidebar
+Located in the sidebar under **Performance Settings**, this panel allows you to control computational intensity:
+
+*   **Performance Preset**:
+    *   **Auto (Recommended)**: Detects CPU tier and applies optimal settings.
+    *   **Fast (Low CPU)**: Disables heavy plots/computations. Best for laptops or rapid screening.
+    *   **Quality (High CPU)**: Enables all advanced metrics and visualizations.
+    *   **Custom**: Fine-tune individual toggles.
+
+### Key Toggles (Custom Mode)
+*   **Enable heavy computations**: Controls advanced HRV metrics (DFA, Entropy, etc.). Disable for faster processing.
+*   **Enable heavy downloads**: Controls large dataset fetches (e.g., historical NOAA data). Disable to save bandwidth or offline use.
+*   **Max plot points**: Downsamples charts for smoother UI interaction.
+
+---
+
 ## Troubleshooting
 
 ### Streamlit Version Requirement

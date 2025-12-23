@@ -5,6 +5,14 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.39] - 2025-12-23
+
+### Added
+- **Performance Settings Sidebar**: New dedicated sidebar section to optimize app performance on low-end hardware.
+- **Heavy Computation Toggle**: Users can now disable advanced HRV metrics (DFA, Entropy) to speed up processing.
+- **Heavy Download Toggle**: Users can disable large dataset downloads (NOAA) to save bandwidth.
+- **Research Documentation**: Added `updates2026.md` covering Heart Rate Fragmentation and Biomathematical models.
+
 ## [1.8.38] - 2025-12-22
 
 ### Fixed

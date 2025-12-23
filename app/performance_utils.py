@@ -4,15 +4,16 @@ Performance Utilities for Mission Control - Flight Surgeon
 Provides CPU-optimized caching, lazy loading, and computation management
 to improve Streamlit app responsiveness.
 
-Features (v1.1.0):
+Features (v1.2.0):
 - Smart CPU detection and auto-tuning
 - Adaptive performance presets based on hardware
 - Session-state caching with TTL
 - DataFrame optimization utilities
 - Integration with cpu_optimization module
+- Configurable heavy computations and downloads
 
 Author: AI Assistant
-Version: 1.1.0
+Version: 1.2.0
 """
 
 from __future__ import annotations
@@ -423,6 +424,8 @@ def get_performance_settings() -> Dict[str, Any]:
             if cpu_info.performance_tier == "high":
                 defaults = {
                     "enable_heavy_plots": True,
+                    "enable_heavy_computations": True,
+                    "enable_heavy_downloads": True,
                     # Default to ultra-fast plotting for rapid identification demos.
                     # Users can raise this via Performance Preset / Custom sliders.
                     "max_plot_points": 500,
@@ -437,6 +440,8 @@ def get_performance_settings() -> Dict[str, Any]:
             elif cpu_info.performance_tier == "medium":
                 defaults = {
                     "enable_heavy_plots": False,
+                    "enable_heavy_computations": True,
+                    "enable_heavy_downloads": True,
                     "max_plot_points": 500,
                     "max_dataframe_rows": 300,
                     "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
@@ -449,6 +454,8 @@ def get_performance_settings() -> Dict[str, Any]:
             else:  # low
                 defaults = {
                     "enable_heavy_plots": False,
+                    "enable_heavy_computations": False,
+                    "enable_heavy_downloads": False,
                     "max_plot_points": 500,
                     "max_dataframe_rows": 150,
                     "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
@@ -474,6 +481,8 @@ def _get_fallback_defaults() -> Dict[str, Any]:
     """Get conservative fallback defaults when CPU detection is unavailable."""
     return {
         "enable_heavy_plots": False,
+        "enable_heavy_computations": False,
+        "enable_heavy_downloads": False,
         "max_plot_points": 500,
         "max_dataframe_rows": 200,
         "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
@@ -529,6 +538,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["max_dataframe_rows"] = 150
             settings["max_windows"] = 200
             settings["enable_heavy_plots"] = False
+            settings["enable_heavy_computations"] = False
+            settings["enable_heavy_downloads"] = False
             settings["optimize_memory"] = True
             settings["use_fast_entropy"] = True
         elif preset == "Quality (High CPU)":
@@ -536,6 +547,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["max_dataframe_rows"] = 1000
             settings["max_windows"] = 1000
             settings["enable_heavy_plots"] = True
+            settings["enable_heavy_computations"] = True
+            settings["enable_heavy_downloads"] = True
             settings["optimize_memory"] = False
             settings["use_fast_entropy"] = False
         elif preset == "Balanced":
@@ -543,6 +556,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["max_dataframe_rows"] = 500
             settings["max_windows"] = 500
             settings["enable_heavy_plots"] = False
+            settings["enable_heavy_computations"] = True
+            settings["enable_heavy_downloads"] = True
             settings["optimize_memory"] = True
             settings["use_fast_entropy"] = True
         
@@ -580,6 +595,18 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
                 value=settings.get("enable_heavy_plots", False),
                 help="Spectrograms, 3D plots, etc.",
             )
+
+            settings["enable_heavy_computations"] = st.checkbox(
+                "Enable heavy computations",
+                value=settings.get("enable_heavy_computations", True),
+                help="Advanced HRV metrics (DFA, Entropy, etc.)",
+            )
+
+            settings["enable_heavy_downloads"] = st.checkbox(
+                "Enable heavy downloads",
+                value=settings.get("enable_heavy_downloads", True),
+                help="Large external datasets (NOAA, etc.)",
+            )
             
             settings["optimize_memory"] = st.checkbox(
                 "Optimize memory usage",
@@ -599,6 +626,10 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
                 f"Rows: {settings.get('max_dataframe_rows', 200)} | "
                 f"Windows: {settings.get('max_windows', 500)}"
             )
+            if settings.get("enable_heavy_computations"):
+                st.caption("✓ Heavy computations enabled")
+            if settings.get("enable_heavy_downloads"):
+                st.caption("✓ Heavy downloads enabled")
         
         # Show current performance metrics
         if st.button("📈 Show Performance Stats", key="perf_stats_btn"):
@@ -650,4 +681,3 @@ class TimedExecution:
         
         if self.log:
             print(f"[PERF] {self.operation_name}: {self.duration:.3f}s")
-
