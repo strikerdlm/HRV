@@ -4410,3 +4410,25 @@ If you're interested in contributing to any of these developments:
 ---
 
 *Last updated: December 3, 2025*
+
+---
+
+## Performance & Offline Mode (2025-12-23)
+
+This release adds two master toggles designed to keep the app usable on low-end computers and low-bandwidth/offline environments.
+
+### Heavy computations (CPU)
+Location: Sidebar → **⚡ Performance Settings** → **Enable heavy computations**
+
+- When **OFF**, the app avoids advanced/high-cost HRV computations (e.g., entropy/MFDFA/RQA and related advanced bundles).
+- HRV sidebar behavior when OFF:
+  - windowed analysis is forced into **fast time-domain windowing**
+  - **advanced full-recording analysis** is disabled
+  - **ML-assisted deviation clustering** is disabled
+  - **spectrogram** is skipped
+
+### Heavy downloads (network)
+Location: Sidebar → **⚡ Performance Settings** → **Enable heavy downloads**
+
+- When **OFF**, the app runs **cache-only** for heavy network refreshes (NOAA SWPC, NOAA Space feeds, NASA DONKI).
+- “Force refresh” actions are disabled until heavy downloads are enabled again.

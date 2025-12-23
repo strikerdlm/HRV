@@ -1263,3 +1263,10 @@ UI updates and integration by Dr. Diego L. Malpica
 ---
 
 *For detailed feature documentation, see `docs/Manual.md`*
+
+---
+
+## 2025-12-23 — Performance toggles for low-end computers (app-level)
+
+- **Performance**: Added **Enable heavy computations** toggle (sidebar → Performance Settings) to gate advanced HRV computations and automatically force low-cost analysis paths when disabled.
+- **Networking**: Added **Enable heavy downloads** toggle (sidebar → Performance Settings) to support **cache-only/offline mode** for NOAA/DONKI refresh paths and disable force-refresh actions when downloads are disabled.

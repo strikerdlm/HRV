@@ -1203,7 +1203,7 @@ def _fetch_swpc_dataset(path: str) -> pd.DataFrame:
     return df
 
 
-def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
+def get_swpc_kp_index(days: int = 14, *, allow_downloads: bool = True) -> pd.DataFrame:
     if days is None or int(days) <= 0:
         raise ValueError("days must be a positive integer")
     cache_file = SPACE_WEATHER_CACHE_DIR / f"kp_index_{int(days)}.json"
@@ -1211,6 +1211,10 @@ def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
         cache_file, max_age=SPACE_WEATHER_CACHE_TTL)
     if cached_df is not None:
         return cached_df
+    if not allow_downloads:
+        # Cache-only/offline mode: no network allowed.
+        stale_df = _read_dataframe_cache(cache_file, max_age=None)
+        return stale_df if stale_df is not None else pd.DataFrame()
     try:
         url = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
         response = requests.get(url, timeout=SWPC_TIMEOUT)
@@ -1249,12 +1253,16 @@ def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
         raise
 
 
-def get_swpc_solar_radio_flux() -> pd.DataFrame:
+def get_swpc_solar_radio_flux(*, allow_downloads: bool = True) -> pd.DataFrame:
     cache_file = SPACE_WEATHER_CACHE_DIR / "solar_radio_flux.json"
     cached_df = _read_dataframe_cache(
         cache_file, max_age=SPACE_WEATHER_CACHE_TTL)
     if cached_df is not None:
         return cached_df
+    if not allow_downloads:
+        # Cache-only/offline mode: no network allowed.
+        stale_df = _read_dataframe_cache(cache_file, max_age=None)
+        return stale_df if stale_df is not None else pd.DataFrame()
     candidates = [
         "f107_cm_flux.json",
         "solar_radio_flux.json",
@@ -1529,6 +1537,36 @@ def _cached_fatigue_profile_settings(user_id: str) -> Dict[str, Any]:
 SPACE_WEATHER_MAX_DAYS = 30
 
 
+def _heavy_downloads_enabled() -> bool:
+    """
+    Return whether resource-heavy network downloads are enabled.
+
+    This is controlled by Performance Settings → "Enable heavy downloads".
+    """
+    if not PERFORMANCE_UTILS_AVAILABLE:
+        return True
+    try:
+        settings = get_performance_settings()
+    except Exception:
+        return True
+    return bool(settings.get("enable_heavy_downloads", True))
+
+
+def _heavy_computations_enabled() -> bool:
+    """
+    Return whether resource-heavy computations are enabled.
+
+    This is controlled by Performance Settings → "Enable heavy computations".
+    """
+    if not PERFORMANCE_UTILS_AVAILABLE:
+        return True
+    try:
+        settings = get_performance_settings()
+    except Exception:
+        return True
+    return bool(settings.get("enable_heavy_computations", False))
+
+
 def _space_weather_state() -> Dict[str, Any]:
     state = st.session_state.setdefault(
         "space_weather_state",
@@ -1580,6 +1618,7 @@ def _load_noaa_space_datasets(
     *,
     keys: Optional[Sequence[str]] = None,
     use_cache: bool = True,
+    allow_downloads: bool = True,
 ) -> None:
     """
     Populate the NOAA space datasets in session state.
@@ -1587,7 +1626,11 @@ def _load_noaa_space_datasets(
 
     state["loading"] = True
     try:
-        bundles, errors = load_noaa_space_data(keys=keys, use_cache=use_cache)
+        bundles, errors = load_noaa_space_data(
+            keys=keys,
+            use_cache=use_cache,
+            allow_downloads=allow_downloads,
+        )
     except requests.RequestException as exc:
         state["bundles"] = {}
         state["errors"] = {"__global__": str(exc)}
@@ -1615,6 +1658,7 @@ def _auto_fetch_space_weather_if_needed(state: Dict[str, Any]) -> None:
 
     if state.get("loaded") or state.get("auto_loading") or state.get("auto_attempted"):
         return
+    # Respect performance settings: when heavy downloads are disabled, only cache is allowed.
     state["auto_loading"] = True
     success = False
     try:
@@ -1645,13 +1689,21 @@ def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
     state["auto_loading"] = True
     success = False
     try:
-        _load_noaa_space_datasets(state, use_cache=True)
+        _load_noaa_space_datasets(
+            state,
+            use_cache=True,
+            allow_downloads=_heavy_downloads_enabled(),
+        )
         success = True
     except Exception as exc:  # pragma: no cover - defensive
         log_exception(_LOGGER, "Automatic NOAA preload failed", exc)
         try:
             time.sleep(0.5)
-            _load_noaa_space_datasets(state, use_cache=True)
+            _load_noaa_space_datasets(
+                state,
+                use_cache=True,
+                allow_downloads=_heavy_downloads_enabled(),
+            )
             success = True
         except Exception as retry_exc:  # pragma: no cover - defensive
             log_exception(_LOGGER, "NOAA preload retry failed", retry_exc)
@@ -1687,11 +1739,12 @@ def _bg_fetch_all_space_data() -> None:
     """
     global _bg_fetch_results
     fetch_time = time.time()
+    allow_downloads = _heavy_downloads_enabled()
 
     # 1. Space Weather (Kp + Flux)
     try:
-        kp_df = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
-        flux_df = get_swpc_solar_radio_flux()
+        kp_df = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS, allow_downloads=allow_downloads)
+        flux_df = get_swpc_solar_radio_flux(allow_downloads=allow_downloads)
         with _bg_fetch_lock:
             _bg_fetch_results["space_weather"]["data"] = {
                 "kp_df": kp_df,
@@ -1711,7 +1764,11 @@ def _bg_fetch_all_space_data() -> None:
 
     # 2. NOAA feeds
     try:
-        bundles, errors = load_noaa_space_data(keys=None, use_cache=True)
+        bundles, errors = load_noaa_space_data(
+            keys=None,
+            use_cache=True,
+            allow_downloads=allow_downloads,
+        )
         with _bg_fetch_lock:
             _bg_fetch_results["noaa"]["data"] = {
                 "bundles": bundles,
@@ -1745,7 +1802,13 @@ def _bg_fetch_all_space_data() -> None:
             "end_date": end_str,
             "last_updated": None,
         }
-        _fetch_donki_datasets(donki_tmp_state, start_str, end_str, endpoints=None)
+        _fetch_donki_datasets(
+            donki_tmp_state,
+            start_str,
+            end_str,
+            endpoints=None,
+            allow_downloads=allow_downloads,
+        )
 
         with _bg_fetch_lock:
             _bg_fetch_results["donki"]["data"] = {
@@ -1968,6 +2031,8 @@ def _check_and_trigger_auto_refresh() -> bool:
     Returns True if a refresh was triggered.
     This is called on each page load to ensure data stays current.
     """
+    if not _heavy_downloads_enabled():
+        return False
     if _is_bg_fetch_stale():
         return _start_background_fetch(force=False)
     return False
@@ -1980,6 +2045,10 @@ def _ensure_background_fetch_for_space_tabs() -> None:
     This avoids any startup delay on the welcome page while keeping data fresh
     once the relevant tabs are opened. It also triggers auto-refresh if stale.
     """
+    if not _heavy_downloads_enabled():
+        # Cache-only/offline mode: do not start background network refreshes.
+        _apply_background_fetch_to_state()
+        return
     if "_bg_fetch_started" not in st.session_state:
         started = _start_background_fetch()
         st.session_state["_bg_fetch_started"] = True
@@ -2863,8 +2932,10 @@ def _fetch_donki_datasets(
     start_date: str,
     end_date: str,
     endpoints: Optional[List[str]] = None,
+    *,
+    allow_downloads: bool = True,
 ) -> None:
-    if not NASA_API_KEY:
+    if not NASA_API_KEY and allow_downloads:
         state["loaded"] = False
         state["errors"] = {"auth": "NASA_API_KEY is not set."}
         return
@@ -2889,6 +2960,13 @@ def _fetch_donki_datasets(
                 cache_file, max_age=DONKI_CACHE_TTL)
             if cached_df is not None:
                 datasets[code] = cached_df
+                continue
+            if not allow_downloads:
+                stale_df = _read_dataframe_cache(cache_file, max_age=None)
+                if stale_df is not None:
+                    datasets[code] = stale_df
+                    continue
+                errors[code] = "Downloads disabled; no cached DONKI dataset available."
                 continue
             df = fetch_donki(code, start_to_use, end_to_use)
             _write_dataframe_cache(cache_file, df)
@@ -2917,16 +2995,17 @@ def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
     state["flux_error"] = ""
     kp_duration_ms: Optional[float] = None
     flux_duration_ms: Optional[float] = None
+    allow_downloads = _heavy_downloads_enabled()
     try:
         kp_start = time.perf_counter()
-        state["kp_df"] = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
+        state["kp_df"] = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS, allow_downloads=allow_downloads)
         kp_duration_ms = (time.perf_counter() - kp_start) * 1000.0
     except (requests.RequestException, ValueError) as exc:
         log_exception(_LOGGER, "Failed to fetch SWPC K-index", exc)
         state["kp_error"] = f"Failed to retrieve K-index data: {exc}"
     try:
         flux_start = time.perf_counter()
-        state["flux_df"] = get_swpc_solar_radio_flux()
+        state["flux_df"] = get_swpc_solar_radio_flux(allow_downloads=allow_downloads)
         flux_duration_ms = (time.perf_counter() - flux_start) * 1000.0
     except (requests.RequestException, ValueError) as exc:
         log_exception(_LOGGER, "Failed to fetch SWPC solar radio flux", exc)
@@ -6487,6 +6566,21 @@ def main() -> None:
     # Initialize flag for data availability - used throughout for conditional rendering
     has_hrv_data_uploaded = bool(uploads)
 
+    # -------------------------------------------------------------------------
+    # PERFORMANCE SETTINGS (always available; impacts HRV + Space tabs)
+    # -------------------------------------------------------------------------
+    if PERFORMANCE_UTILS_AVAILABLE:
+        perf_settings = render_performance_settings_sidebar()
+    else:
+        perf_settings = {
+            "max_plot_points": 2000,
+            "max_dataframe_rows": 500,
+            "enable_heavy_plots": False,
+            "enable_heavy_computations": True,
+            "enable_heavy_downloads": True,
+            "optimize_memory": True,
+        }
+
     # ==========================================================================
     # SIDEBAR CONTROLS - Show HRV settings only when data is available
     # ==========================================================================
@@ -6534,11 +6628,22 @@ def main() -> None:
         psd_method = st.sidebar.selectbox(
             "PSD method", ["welch", "periodogram", "ar"], index=0
         )
+        heavy_compute_master = bool(perf_settings.get("enable_heavy_computations", False))
+        if not heavy_compute_master:
+            st.sidebar.caption(
+                "⚠️ Heavy computations are disabled (Performance Settings). "
+                "Advanced metrics, ML clustering, and spectrogram can be enabled by toggling it on."
+            )
         fast_windowing = st.sidebar.checkbox(
-            "Fast time-domain windowing (skip spectral/nonlinear in windows)", value=True)
+            "Fast time-domain windowing (skip spectral/nonlinear in windows)",
+            value=True,
+            disabled=not heavy_compute_master,
+        )
         high_compute = st.sidebar.checkbox(
             "Advanced analysis (high compute for full-recording metrics)",
-            value=False)
+            value=False,
+            disabled=not heavy_compute_master,
+        )
         st.sidebar.markdown("---")
         st.sidebar.subheader("Deviation detection")
         apply_dev = st.sidebar.checkbox(
@@ -6581,7 +6686,11 @@ def main() -> None:
                 "500", "2000", "10000", "No limit"], index=0)
         skip_freq = st.sidebar.checkbox("Skip Frequency overlay plot", value=False)
         skip_poincare = st.sidebar.checkbox("Skip Poincaré plot", value=False)
-        skip_spectrogram = st.sidebar.checkbox("Skip Spectrogram", value=False)
+        skip_spectrogram = st.sidebar.checkbox(
+            "Skip Spectrogram",
+            value=not bool(heavy_compute_master),
+            disabled=not bool(heavy_compute_master),
+        )
         skip_gauges = st.sidebar.checkbox("Skip Gauges", value=False)
         show_debug = st.sidebar.checkbox(
             "Show detailed progress logs", value=False)
@@ -6592,19 +6701,10 @@ def main() -> None:
 
         st.sidebar.subheader("ML enhancements")
         enable_ml = st.sidebar.checkbox(
-            "Enable ML-assisted deviation clustering", value=True
+            "Enable ML-assisted deviation clustering",
+            value=bool(heavy_compute_master),
+            disabled=not bool(heavy_compute_master),
         )
-        
-        # Performance settings (CPU optimization)
-        if PERFORMANCE_UTILS_AVAILABLE:
-            perf_settings = render_performance_settings_sidebar()
-        else:
-            perf_settings = {
-                "max_plot_points": 2000,
-                "max_dataframe_rows": 500,
-                "enable_heavy_plots": False,
-                "optimize_memory": True,
-            }
         
         # GPU processing settings (NVIDIA CUDA)
         if GPU_PROCESSING_AVAILABLE:
@@ -6708,6 +6808,13 @@ def main() -> None:
             st.sidebar.caption(
                 "Minimal mode: processing 1 dataset, fast time-domain windowing, heavy plots/tabs skipped."
             )
+
+        # Enforce global heavy-computation toggle (low-end mode).
+        if not bool(heavy_compute_master):
+            fast_windowing = True
+            high_compute = False
+            enable_ml = False
+            skip_spectrogram = True
 
         analysis_settings = _build_analysis_settings(
             window=win,
@@ -12070,18 +12177,28 @@ that predicts cognitive performance based on:
                         )
                         st.error(f"Failed to fetch NOAA SWPC datasets: {exc}")
             if fetch_donki_clicked:
-                if not NASA_API_KEY:
+                downloads_enabled = _heavy_downloads_enabled()
+                if not downloads_enabled:
+                    st.info(
+                        "Heavy downloads are disabled (Performance Settings). "
+                        "Attempting cache-only load for DONKI."
+                    )
+                if not NASA_API_KEY and downloads_enabled:
                     st.warning(
                         "Set NASA_API_KEY in your .env file to query NASA DONKI APIs."
                     )
                 else:
-                    start_donki, end_donki = _donki_default_range(
-                        int(donki_window_days))
+                    start_donki, end_donki = _donki_default_range(int(donki_window_days))
                     with st.status(
                         "Fetching NASA DONKI datasets…", state="running", expanded=True
                     ) as status:
                         try:
-                            _fetch_donki_datasets(donki_state, start_donki, end_donki)
+                            _fetch_donki_datasets(
+                                donki_state,
+                                start_donki,
+                                end_donki,
+                                allow_downloads=downloads_enabled,
+                            )
                             last_donki = donki_state.get("last_updated")
                             if isinstance(last_donki, pd.Timestamp):
                                 label = (
@@ -13480,6 +13597,7 @@ that predicts cognitive performance based on:
             data_age = _get_bg_fetch_age_str()
 
             col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns([1, 1, 2])
+            downloads_enabled = _heavy_downloads_enabled()
             with col_fetch_noaa:
                 fetch_noaa_clicked = st.button(
                     "📥 Fetch NOAA feeds", key="fetch_noaa_space_data",
@@ -13489,6 +13607,9 @@ that predicts cognitive performance based on:
                 refresh_noaa_clicked = st.button(
                     "🔄 Force refresh", key="refresh_noaa_space_data",
                     help="Bypass cache and fetch fresh data from NOAA servers"
+                    if downloads_enabled
+                    else "Heavy downloads are disabled; enable them to force refresh.",
+                    disabled=not downloads_enabled,
                 )
             with col_bg_status:
                 # Show background fetch status with data age (non-intrusive)
@@ -13504,10 +13625,17 @@ that predicts cognitive performance based on:
 
             if fetch_noaa_clicked:
                 with st.spinner("Fetching NOAA JSON feeds…"):
-                    _load_noaa_space_datasets(noaa_state)
+                    _load_noaa_space_datasets(
+                        noaa_state,
+                        allow_downloads=downloads_enabled,
+                    )
             if refresh_noaa_clicked:
                 with st.spinner("Refreshing NOAA JSON feeds…"):
-                    _load_noaa_space_datasets(noaa_state, use_cache=False)
+                    _load_noaa_space_datasets(
+                        noaa_state,
+                        use_cache=False,
+                        allow_downloads=downloads_enabled,
+                    )
             # Auto-load uses cache-first; buttons remain for manual refresh/force refresh
             if noaa_state.get("loading"):
                 st.info("NOAA feeds are loading…")

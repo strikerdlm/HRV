@@ -423,6 +423,12 @@ def get_performance_settings() -> Dict[str, Any]:
             if cpu_info.performance_tier == "high":
                 defaults = {
                     "enable_heavy_plots": True,
+                    # Heavy computations include entropy, DFA/MFDFA/RQA, and some ML helpers.
+                    # Keep enabled on high-tier CPUs; users can still disable via checkbox.
+                    "enable_heavy_computations": True,
+                    # Heavy downloads include live NOAA/DONKI refresh and larger network payloads.
+                    # Keep enabled on high-tier CPUs by default; users can disable for offline/low-bandwidth use.
+                    "enable_heavy_downloads": True,
                     # Default to ultra-fast plotting for rapid identification demos.
                     # Users can raise this via Performance Preset / Custom sliders.
                     "max_plot_points": 500,
@@ -437,6 +443,9 @@ def get_performance_settings() -> Dict[str, Any]:
             elif cpu_info.performance_tier == "medium":
                 defaults = {
                     "enable_heavy_plots": False,
+                    # Default off for medium CPUs; can be enabled if desired.
+                    "enable_heavy_computations": False,
+                    "enable_heavy_downloads": True,
                     "max_plot_points": 500,
                     "max_dataframe_rows": 300,
                     "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
@@ -449,6 +458,9 @@ def get_performance_settings() -> Dict[str, Any]:
             else:  # low
                 defaults = {
                     "enable_heavy_plots": False,
+                    # Conservative defaults for low-end systems.
+                    "enable_heavy_computations": False,
+                    "enable_heavy_downloads": False,
                     "max_plot_points": 500,
                     "max_dataframe_rows": 150,
                     "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
@@ -474,6 +486,8 @@ def _get_fallback_defaults() -> Dict[str, Any]:
     """Get conservative fallback defaults when CPU detection is unavailable."""
     return {
         "enable_heavy_plots": False,
+        "enable_heavy_computations": False,
+        "enable_heavy_downloads": True,
         "max_plot_points": 500,
         "max_dataframe_rows": 200,
         "cache_ttl_seconds": DEFAULT_CACHE_TTL_SECONDS,
@@ -529,6 +543,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["max_dataframe_rows"] = 150
             settings["max_windows"] = 200
             settings["enable_heavy_plots"] = False
+            settings["enable_heavy_computations"] = False
+            settings["enable_heavy_downloads"] = False
             settings["optimize_memory"] = True
             settings["use_fast_entropy"] = True
         elif preset == "Quality (High CPU)":
@@ -536,6 +552,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["max_dataframe_rows"] = 1000
             settings["max_windows"] = 1000
             settings["enable_heavy_plots"] = True
+            settings["enable_heavy_computations"] = True
+            settings["enable_heavy_downloads"] = True
             settings["optimize_memory"] = False
             settings["use_fast_entropy"] = False
         elif preset == "Balanced":
@@ -543,6 +561,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["max_dataframe_rows"] = 500
             settings["max_windows"] = 500
             settings["enable_heavy_plots"] = False
+            settings["enable_heavy_computations"] = False
+            settings["enable_heavy_downloads"] = True
             settings["optimize_memory"] = True
             settings["use_fast_entropy"] = True
         
@@ -580,6 +600,20 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
                 value=settings.get("enable_heavy_plots", False),
                 help="Spectrograms, 3D plots, etc.",
             )
+
+            settings["enable_heavy_computations"] = st.checkbox(
+                "Enable heavy computations",
+                value=settings.get("enable_heavy_computations", False),
+                help="Enables entropy, DFA/MFDFA/RQA, and other advanced HRV computations. Disable for low-end CPUs.",
+                key="perf_enable_heavy_computations",
+            )
+
+            settings["enable_heavy_downloads"] = st.checkbox(
+                "Enable heavy downloads",
+                value=settings.get("enable_heavy_downloads", True),
+                help="Allows live NOAA/DONKI refresh and other large network calls. Disable to use cache-only/offline mode.",
+                key="perf_enable_heavy_downloads",
+            )
             
             settings["optimize_memory"] = st.checkbox(
                 "Optimize memory usage",
@@ -598,6 +632,22 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
                 f"📊 Points: {settings.get('max_plot_points', 1000)} | "
                 f"Rows: {settings.get('max_dataframe_rows', 200)} | "
                 f"Windows: {settings.get('max_windows', 500)}"
+            )
+
+            # Always expose resource-heavy toggles (even outside Custom) so low-end users
+            # can disable heavy computations/downloads without switching presets.
+            settings["enable_heavy_computations"] = st.checkbox(
+                "Enable heavy computations",
+                value=settings.get("enable_heavy_computations", False),
+                help="Enables entropy, DFA/MFDFA/RQA, and other advanced HRV computations. Disable for low-end CPUs.",
+                key="perf_enable_heavy_computations",
+            )
+
+            settings["enable_heavy_downloads"] = st.checkbox(
+                "Enable heavy downloads",
+                value=settings.get("enable_heavy_downloads", True),
+                help="Allows live NOAA/DONKI refresh and other large network calls. Disable to use cache-only/offline mode.",
+                key="perf_enable_heavy_downloads",
             )
         
         # Show current performance metrics

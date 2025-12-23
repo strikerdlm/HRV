@@ -571,7 +571,12 @@ def _prepare_frame(spec: NOAASourceSpec, raw_df: pd.DataFrame) -> NOAADataBundle
     )
 
 
-def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADataBundle:
+def fetch_noaa_source(
+    spec: NOAASourceSpec,
+    *,
+    use_cache: bool = True,
+    allow_downloads: bool = True,
+) -> NOAADataBundle:
     """
     Fetch and cache a NOAA feed according to the provided specification.
 
@@ -581,6 +586,9 @@ def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADa
         Data source specification.
     use_cache :
         When True, attempt to load from the local cache before performing a network request.
+    allow_downloads :
+        When False, disable network requests and return cached data only. If no cached copy exists,
+        a RuntimeError is raised.
 
     Returns
     -------
@@ -605,6 +613,20 @@ def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADa
             legacy_df = _read_legacy_dataframe_cache(legacy_cache)
             if legacy_df is not None and not legacy_df.empty:
                 return _prepare_frame(spec, legacy_df)
+
+    if not allow_downloads:
+        # Cache-only/offline mode: accept stale cache and avoid any network.
+        stale = _read_cache(spec, allow_stale=True)
+        if stale is not None:
+            return _prepare_frame(spec, stale)
+        if spec.key == "planetary_k_index_3h":
+            legacy_cache = NOAA_SPACE_CACHE_DIR.parent / "space_weather" / "kp_index_30.json"
+            legacy_df = _read_legacy_dataframe_cache(legacy_cache)
+            if legacy_df is not None and not legacy_df.empty:
+                return _prepare_frame(spec, legacy_df)
+        raise RuntimeError(
+            f"Downloads disabled and no cached NOAA dataset is available for '{spec.key}'."
+        )
     try:
         raw_df = _download_dataset(spec)
         bundle = _prepare_frame(spec, raw_df)
@@ -627,6 +649,7 @@ def load_noaa_space_data(
     keys: Optional[Sequence[str]] = None,
     *,
     use_cache: bool = True,
+    allow_downloads: bool = True,
 ) -> Tuple[Dict[str, NOAADataBundle], Dict[str, str]]:
     """
     Load one or more NOAA datasets defined in :data:`NOAA_SOURCES`.
@@ -637,6 +660,9 @@ def load_noaa_space_data(
         Optional iterable of source identifiers to load. When omitted, every configured source is fetched.
     use_cache :
         Toggle cache usage. Setting this to False forces a fresh download.
+    allow_downloads :
+        When False, disable network requests and return cached data only. Missing caches are
+        surfaced in the returned errors mapping.
 
     Returns
     -------
@@ -653,8 +679,12 @@ def load_noaa_space_data(
             errors[key] = "Unknown NOAA dataset key."
             continue
         try:
-            bundles[key] = fetch_noaa_source(spec, use_cache=use_cache)
-        except (requests.RequestException, ValueError) as exc:
+            bundles[key] = fetch_noaa_source(
+                spec,
+                use_cache=use_cache,
+                allow_downloads=allow_downloads,
+            )
+        except (requests.RequestException, ValueError, RuntimeError) as exc:
             errors[key] = str(exc)
     return bundles, errors
 

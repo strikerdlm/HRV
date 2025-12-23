@@ -841,3 +841,17 @@ MIT License — See [LICENSE](LICENSE) for details.
 - **Documentation**: See `docs/Manual.md` for comprehensive usage guide
 - **Issues**: Open a GitHub issue for bugs or feature requests
 - **Discussions**: Use GitHub Discussions for questions
+
+---
+
+## ⚡ Low-end performance & offline mode (2025-12-23)
+
+To improve responsiveness on low-end computers and on slow/unreliable networks:
+
+- **Heavy computations toggle** (Sidebar → **⚡ Performance Settings** → **Enable heavy computations**):
+  - When OFF, advanced HRV computations are kept off (e.g., entropy/MFDFA/RQA and some ML helpers).
+  - The HRV sidebar will force fast windowing, disable advanced full-recording analysis, disable ML clustering, and skip spectrograms.
+
+- **Heavy downloads toggle** (Sidebar → **⚡ Performance Settings** → **Enable heavy downloads**):
+  - When OFF, the app runs **cache-only** for large network fetches (NOAA SWPC/NOAA Space feeds and NASA DONKI refresh).
+  - “Force refresh” buttons are disabled until heavy downloads are enabled again.
