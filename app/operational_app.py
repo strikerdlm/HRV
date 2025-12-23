@@ -1,20 +1,9 @@
 from __future__ import annotations
 
-"""
-Operational Streamlit entrypoint (fast UI).
-
-This app keeps the same visual style as the Research app but limits features to:
-- User Profile & Clinical Assessments (including lightweight NOAA Kp / proton context)
-- About / References (optional, lightweight)
-
-Run:
-  streamlit run app/operational_app.py
-
-Notes
------
-The full analysis + correlation + ML dashboards remain in the Research app:
-  streamlit run app/app.py
-"""
+# Operational Streamlit entrypoint (fast UI).
+#
+# Run:
+#   streamlit run app/operational_app.py
 
 import os
 import sys
@@ -176,11 +165,6 @@ def main() -> None:
         render_welcome_header()  # type: ignore[misc]
     else:
         st.title("🧬 Mission Control - Flight Surgeon")
-
-    st.caption(
-        "Operational mode: focuses on user profile + lightweight space-weather context. "
-        "For correlations/ML dashboards, run the Research app (`streamlit run app/app.py`)."
-    )
 
     st.markdown("---")
     page = st.sidebar.radio(
