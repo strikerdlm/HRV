@@ -1,3 +1,19 @@
+[server]
+# OneDrive + synced folders can break Streamlit's default file-watcher.
+# Polling is more reliable for research/production use on Windows.
+fileWatcherType = "poll"
+
+# Keep sessions alive longer to reduce reconnect churn on Wi-Fi/VPN.
+disconnectedSessionTTL = 600
+
+[runner]
+# Prevent fast-rerun race conditions (Streamlit 1.36.0 stability).
+fastReruns = false
+
+[client]
+# Helpful for research debugging; the UI also enables this at runtime.
+showErrorDetails = true
+
 # =============================================================================
 # Streamlit Configuration - HRV Analysis Suite
 # =============================================================================
