@@ -5,6 +5,13 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.43] - 2025-12-23
+
+### Fixed
+- **Research app startup** (`app/app.py`, `app/research_app.py`): Resolved Streamlit `set_page_config()` ordering errors by ensuring page config is applied before importing Streamlit-cached modules.
+### Added
+- **Streamlit stability config** (`.streamlit/config.toml`): Enabled polling file watcher for OneDrive reliability and disabled fast reruns to reduce session race conditions.
+
 ## [1.8.42] - 2025-12-23
 
 ### Added
