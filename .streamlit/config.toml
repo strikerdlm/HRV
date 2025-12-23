@@ -1,125 +1,60 @@
+# Streamlit configuration for HRV Analysis Suite (Windows/OneDrive-friendly).
+#
+# Key stability goal:
+# - Avoid Streamlit "fade + restart" loops when the app writes data/cache files
+#   under the repo (e.g., `crew/` HRV outputs, `app/data_cache/` NOAA caches).
+
 [server]
 # OneDrive + synced folders can break Streamlit's default file-watcher.
 # Polling is more reliable for research/production use on Windows.
 fileWatcherType = "poll"
 
+# Prevent Streamlit from treating data/cache writes as source changes.
+folderWatchBlacklist = ["crew", "app/data_cache", "logs"]
+
 # Keep sessions alive longer to reduce reconnect churn on Wi-Fi/VPN.
 disconnectedSessionTTL = 600
 
-[runner]
-# Prevent fast-rerun race conditions (Streamlit 1.36.0 stability).
-fastReruns = false
-
-[client]
-# Helpful for research debugging; the UI also enables this at runtime.
-showErrorDetails = true
-
-# =============================================================================
-# Streamlit Configuration - HRV Analysis Suite
-# =============================================================================
-# Comprehensive logging and debugging configuration
-# Docs: https://docs.streamlit.io/develop/api-reference/configuration/config.toml
-# =============================================================================
-
-[global]
-# Development mode - set to true for verbose debugging
-# WARNING: Set to false in production for performance
-developmentMode = false
-
-# Show all deprecation warnings in the console
-showWarningOnDirectExecution = true
-
-[server]
-# File watcher type: "auto", "poll", "watchdog", or "none"
-# Use "poll" on network drives (OneDrive) for reliability
-fileWatcherType = "poll"
-
-# Run in headless mode (no browser auto-open)
+# Run in headless mode (no browser auto-open).
 headless = true
 
 # Enable serving static files from .streamlit/static/
 enableStaticServing = true
 
-# Session timeout settings (in seconds)
-# Increase to reduce "SessionInfo before initialized" errors
-disconnectedSessionTTL = 600
-
-# Maximum upload size in MB (default 200)
+# Maximum upload size in MB (default 200).
 maxUploadSize = 500
 
-# Enable Cross-Origin Resource Sharing (for debugging tools)
+# Enable Cross-Origin Resource Sharing (for debugging tools).
 enableCORS = true
 
-# Enable XSRF protection
+# Enable XSRF protection.
 enableXsrfProtection = true
 
-# Port (default 8501) - uncomment to override
-# port = 8501
-
-# Address to bind (default localhost)
-# address = "0.0.0.0"
-
-[browser]
-# Disable usage stats collection
-gatherUsageStats = false
-
-# Server address shown in browser (for debugging)
-# serverAddress = "localhost"
-
-# Server port shown in browser
-# serverPort = 8501
-
-[client]
-# Enable caching for better performance
-caching = true
-
-# Show error details in the browser (helpful for debugging)
-showErrorDetails = true
-
-# Toolbar mode: "auto", "developer", "viewer", "minimal"
-# "developer" shows all debug tools
-toolbarMode = "developer"
-
 [runner]
-# Magic commands enabled (st.write shorthand)
-magicEnabled = true
-
-# Install tracer for profiling (slows down app)
-# Set to true only when profiling performance
-installTracer = false
-
-# Fix matplotlib async issues
-# postScriptGC = true
-
-# DISABLED: Fast reruns can cause "SessionInfo before initialized" errors
-# fastReruns = true
+# Prevent fast-rerun race conditions (Streamlit 1.36.0 stability).
 fastReruns = false
-
-# Enforce type checking on inputs - helps catch session state issues
+magicEnabled = true
+installTracer = false
 enforceSerializableSessionState = false
 
+[client]
+# Helpful for research debugging; the UI also enables this at runtime.
+showErrorDetails = true
+toolbarMode = "developer"
+caching = true
+
+[browser]
+# Disable usage stats collection.
+gatherUsageStats = false
+
+[global]
+# Development mode - set to true only for verbose debugging.
+developmentMode = false
+showWarningOnDirectExecution = true
+
 [logger]
-# Logging level: "error", "warning", "info", "debug"
-# Set to "debug" for maximum verbosity during troubleshooting
-# Set to "warning" or "error" for production
 level = "info"
 
-# Log message format
-# messageFormat = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-[mapbox]
-# Mapbox token for maps (if using st.map with custom tiles)
-# token = ""
-
 [deprecation]
-# Show deprecation warnings in the app
 showfileUploaderEncoding = true
 showPyplotGlobalUse = true
-
-[theme]
-# Custom theme (optional)
-# primaryColor = "#FF4B4B"
-# backgroundColor = "#FFFFFF"
-# secondaryBackgroundColor = "#F0F2F6"
-# textColor = "#262730"
-# font = "sans serif"
