@@ -1,0 +1,195 @@
+from __future__ import annotations
+
+"""
+Operational Streamlit entrypoint (fast UI).
+
+This app keeps the same visual style as the Research app but limits features to:
+- User Profile & Clinical Assessments (including lightweight NOAA Kp / proton context)
+- About / References (optional, lightweight)
+
+Run:
+  streamlit run app/operational_app.py
+
+Notes
+-----
+The full analysis + correlation + ML dashboards remain in the Research app:
+  streamlit run app/app.py
+"""
+
+import os
+import sys
+from pathlib import Path
+from typing import Any, Set
+
+import streamlit as st
+
+from logging_config import (
+    enable_streamlit_debug,
+    get_logger,
+    log_rerun_trigger,
+    setup_logging,
+)
+
+try:
+    from welcome_header import render_welcome_header
+
+    _WELCOME_HEADER_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _WELCOME_HEADER_AVAILABLE = False
+
+try:
+    from user_profile_tab import render_user_profile_tab
+
+    _USER_PROFILE_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _USER_PROFILE_AVAILABLE = False
+
+try:
+    from about_tab import render_about_tab
+
+    _ABOUT_AVAILABLE = True
+except ImportError:  # pragma: no cover
+    _ABOUT_AVAILABLE = False
+
+
+_LOGGER = get_logger(__name__)
+
+
+def _ensure_app_dir_on_path() -> None:
+    """Ensure `app/` is on sys.path for intra-app absolute imports.
+
+    Streamlit typically adds the script directory to `sys.path`, but this keeps
+    behavior consistent when imported in tests/tools.
+    """
+
+    app_dir = Path(__file__).resolve().parent
+    if str(app_dir) not in sys.path:
+        sys.path.insert(0, str(app_dir))
+
+
+def _inject_sessioninfo_suppressor() -> None:
+    """Hide only known Streamlit error toasts (safety net)."""
+
+    st.markdown(
+        """
+        <style>
+        div[data-testid="stToast"]:has([data-testid="stNotificationContentError"]),
+        div[data-testid="stToastContainer"]:has([data-testid="stNotificationContentError"]) {
+            display: none !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_crew_workspace_sidebar() -> None:
+    """Render the mission-scoped workspace selector and enforce clean switching."""
+
+    crew_root = Path(__file__).resolve().parents[1] / "crew"
+    for mission_name in ("Mission 1", "Mission 2"):
+        (crew_root / mission_name / "db").mkdir(parents=True, exist_ok=True)
+        (crew_root / mission_name / "subjects").mkdir(parents=True, exist_ok=True)
+
+    st.sidebar.subheader("🧑‍🚀 Crew workspace")
+    active_mission = st.sidebar.selectbox(
+        "Active mission",
+        options=["Mission 1", "Mission 2"],
+        index=0,
+        key="crew_active_mission",
+        help="Each mission uses its own DB and subject folders under the `crew/` directory.",
+    )
+    previous_mission = st.session_state.get("_crew_previous_mission")
+    st.session_state["_crew_previous_mission"] = active_mission
+    os.environ["HRV_ACTIVE_MISSION"] = str(active_mission)
+
+    if previous_mission and previous_mission != active_mission:
+        keep_keys: Set[str] = {"crew_active_mission", "_crew_previous_mission", "_debug_mode_enabled"}
+        for key in list(st.session_state.keys()):
+            if key not in keep_keys:
+                st.session_state.pop(key, None)
+        try:
+            st.cache_data.clear()
+            st.cache_resource.clear()
+        except Exception:
+            pass
+        log_rerun_trigger("mission_switch", from_mission=previous_mission, to_mission=active_mission)
+        st.rerun()
+
+
+def _render_developer_tools_sidebar() -> None:
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("🔧 Developer Tools", expanded=False):
+        debug_mode = st.checkbox(
+            "Enable Debug Logging",
+            value=st.session_state.get("_debug_mode_enabled", False),
+            key="_debug_mode_checkbox",
+            help="Enable verbose Streamlit debugging. Logs written to logs/streamlit.log",
+        )
+        if debug_mode and not st.session_state.get("_debug_mode_enabled", False):
+            st.session_state["_debug_mode_enabled"] = True
+            enable_streamlit_debug(verbose=True)
+            st.success("Debug logging enabled. Check `logs/streamlit.log`")
+        elif not debug_mode and st.session_state.get("_debug_mode_enabled", False):
+            st.session_state["_debug_mode_enabled"] = False
+            st.info("Debug logging disabled (takes effect on next restart)")
+
+
+def main() -> None:
+    _ensure_app_dir_on_path()
+    setup_logging()
+
+    st.set_page_config(
+        page_title="HRV Analysis — Operational",
+        layout="wide",
+    )
+
+    if "_app_session_ready" not in st.session_state:
+        st.session_state["_app_session_ready"] = True
+
+    _inject_sessioninfo_suppressor()
+    st.set_option("client.showErrorDetails", True)
+
+    _render_crew_workspace_sidebar()
+    _render_developer_tools_sidebar()
+
+    # Header (shared aesthetic)
+    if _WELCOME_HEADER_AVAILABLE:
+        render_welcome_header()
+    else:
+        st.title("🧬 Mission Control - Flight Surgeon")
+
+    st.caption(
+        "Operational mode: focuses on user profile + lightweight space-weather context. "
+        "For correlations/ML dashboards, run the Research app (`streamlit run app/app.py`)."
+    )
+
+    st.markdown("---")
+    page = st.sidebar.radio(
+        "Navigation",
+        options=["👤 User Profile", "ℹ️ About"],
+        index=0,
+        key="operational_nav",
+    )
+
+    if page == "👤 User Profile":
+        if not _USER_PROFILE_AVAILABLE:
+            st.error("User Profile module unavailable (`user_profile_tab.py`).")
+            return
+        render_user_profile_tab()
+        return
+
+    if page == "ℹ️ About":
+        if _ABOUT_AVAILABLE:
+            render_about_tab()
+        else:
+            st.info("About module unavailable (`about_tab.py`).")
+        return
+
+    st.info("Select a page from the sidebar.")
+
+
+if __name__ == "__main__":
+    main()
+
+
