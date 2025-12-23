@@ -230,6 +230,8 @@ def _build_gpt5_messages(analysis_payload: str) -> list[dict[str, Any]]:
         "synthesizing insights across all computed metrics, time-domain, frequency-domain, "
         "and nonlinear analyses.\n\n"
         "REQUIREMENTS:\n"
+        "0. Use the code_interpreter tool to parse the JSON payload and compute any "
+        "derived statistics (deltas, z-scores, trends). Avoid doing manual arithmetic.\n"
         "1. Provide multi-paragraph interpretation for each metric domain\n"
         "2. Cite specific numeric values from the payload with proper units\n"
         "3. Compare values against published reference ranges (cite sources)\n"
@@ -291,7 +293,10 @@ def _request_gpt5_high_reasoning(
             "effort": "high",
             "summary": "detailed",
         },
-        tools=[{"type": "web_search", "web_search": {"mode": "auto"}}],
+        tools=[
+            {"type": "code_interpreter"},
+            {"type": "web_search", "web_search": {"mode": "auto"}},
+        ],
         store=False,
         include=["reasoning.encrypted_content"],
     )
