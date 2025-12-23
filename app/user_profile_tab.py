@@ -1004,6 +1004,17 @@ def _get_bogota_tz() -> tzinfo:
         return timezone(timedelta(hours=-5))
 
 
+def _format_tz_display(tz_value: tzinfo) -> str:
+    """Return readable timezone name with UTC offset."""
+    now_with_tz = datetime.now(tz_value)
+    offset = now_with_tz.utcoffset() or timedelta(0)
+    total_minutes = int(offset.total_seconds() // 60)
+    sign = "+" if total_minutes >= 0 else "-"
+    hours, minutes = divmod(abs(total_minutes), 60)
+    name = getattr(tz_value, "key", None) or now_with_tz.tzname() or "Local"
+    return f"{name} (UTC{sign}{hours:02d}:{minutes:02d})"
+
+
 def _get_latest_garmin_sleep_payload(user: UserProfile, now_dt: datetime) -> Optional[Dict[str, float]]:
     """Fetch latest Garmin Vivosmart sleep metrics to feed SAFTE/HRV inputs."""
     if fetch_garmin_daily_metrics is None:
@@ -2037,6 +2048,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
         with st.expander(t('assessment_context'), expanded=True):
             stored_wake_dt = st.session_state.get(ctx_wake_time_key)
             now_local = datetime.now(tz=local_tz)
+            st.caption(f"Timezone detected: {_format_tz_display(local_tz)}")
             if isinstance(stored_wake_dt, datetime):
                 stored_wake_local = (
                     stored_wake_dt.astimezone(local_tz)
@@ -2058,10 +2070,16 @@ def _render_clinical_assessment(user: UserProfile) -> None:
             wake_dt_today = datetime.combine(
                 date.today(), wake_time_today, tzinfo=local_tz
             )
+            prior_wake = st.session_state.get(ctx_wake_time_key)
             st.session_state[ctx_wake_time_key] = wake_dt_today
-            st.session_state[ctx_hours_wake_key] = _compute_hours_since_wake(
-                wake_dt_today, datetime.now(tz=local_tz)
+            wake_changed = not (
+                isinstance(prior_wake, datetime)
+                and prior_wake.replace(microsecond=0) == wake_dt_today.replace(microsecond=0)
             )
+            if wake_changed or ctx_hours_wake_key not in st.session_state:
+                st.session_state[ctx_hours_wake_key] = _compute_hours_since_wake(
+                    wake_dt_today, datetime.now(tz=local_tz)
+                )
             
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -2072,8 +2090,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                     value=float(st.session_state[ctx_hours_wake_key]),
                     step=0.5,
                     key=ctx_hours_wake_key,
-                    disabled=True,
-                    help="Calculated from wake time and current clock time.",
+                    help="Calculated from wake time and current clock time. You can override manually if needed.",
                 )
             with col2:
                 hours_sleep = st.number_input(
@@ -4271,6 +4288,7 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
         "Comprehensive calculation engines using your profile data. "
         "Run SAFTE fatigue models, recovery analysis, and readiness assessments."
     )
+    st.caption(f"Timezone detected: {_format_tz_display(_get_bogota_tz())}")
     
     if not PROFILE_TOOLS_ENGINE_AVAILABLE:
         st.warning(
