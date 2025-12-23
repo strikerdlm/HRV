@@ -1,14 +1,9 @@
 from __future__ import annotations
 
-"""
-Research Streamlit entrypoint (full dashboards).
-
-This wrapper exists so the repo exposes two explicit entrypoints:
-- Operational: `streamlit run app/operational_app.py`
-- Research:    `streamlit run app/research_app.py`
-
-The underlying implementation remains in `app/app.py` (historic entrypoint).
-"""
+# Research Streamlit entrypoint (full dashboards).
+#
+# Run:
+#   streamlit run app/research_app.py
 
 import os
 
