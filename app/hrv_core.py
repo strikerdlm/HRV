@@ -357,6 +357,28 @@ def compute_comprehensive_hrv(
 		results.update(compute_entropy_metrics(rr_intervals, m=2, r_ratio=0.2))
 	if include_advanced:
 		results.update(compute_heart_rate_fragmentation(rr_intervals))
+		# Add extended HRF (Heart Rate Fragmentation) metrics for research-grade analysis.
+		# This complements the lightweight `compute_heart_rate_fragmentation` outputs and
+		# enables richer performance/correlation analysis.
+		try:
+			from hrv_fragmentation import compute_hrf_metrics  # noqa: PLC0415
+		except Exception:
+			compute_hrf_metrics = None  # type: ignore[assignment]
+		if compute_hrf_metrics is not None:
+			hrf = compute_hrf_metrics(rr_intervals)
+			# Percent-based HRF features (0..100).
+			results["hrf_pip_h_pct"] = float(hrf.pip_h)
+			results["hrf_pip_s_pct"] = float(hrf.pip_s)
+			results["hrf_pas_pct"] = float(hrf.pas)
+			results["hrf_w0_pct"] = float(hrf.w0)
+			results["hrf_w1_pct"] = float(hrf.w1)
+			results["hrf_w2_pct"] = float(hrf.w2)
+			results["hrf_w3_pct"] = float(hrf.w3)
+			# Convenience aliases used by some gauge configurations.
+			if "hrf_pip_pct" in results:
+				results["hrf_pip"] = float(results["hrf_pip_pct"])
+			results["hrf_w3"] = float(hrf.w3)
+			results["hrf_quality_ok"] = bool(hrf.quality_ok)
 		results.update(compute_phase_rectified_capacity(rr_intervals, scale=2))
 		results.update(compute_symbolic_dynamics_metrics(rr_intervals))
 		results.update(compute_permutation_entropy(rr_intervals, order=3, delay=1))
