@@ -18,7 +18,7 @@
 
 **Conclusions:** A multimodal console can be scientifically defensible if it prioritizes (i) signal validity and protocol metadata; (ii) within-person baselines; (iii) transparent modelling assumptions; (iv) conservative uncertainty communication; and (v) governance frameworks (FRMS-style) that separate “decision support” from clinical diagnosis.
 
-**Keywords:** heart rate variability; circadian rhythms; fatigue risk management; SAFTE; psychomotor vigilance test; executive function; neurovisceral integration; blood pressure variability; wearable sensors; space weather; aerospace medicine.
+**Keywords:** heart rate variability; heart rate fragmentation; circadian rhythms; fatigue risk management; SAFTE; psychomotor vigilance test; executive function; neurovisceral integration; blood pressure variability; wearable sensors; space weather; aerospace medicine.
 
 ---
 
@@ -77,6 +77,13 @@ Government/agency technical documents were collected from official portals:
 - ESA Space Weather service documentation.
 
 In addition, high-impact consensus statements and widely used methodological references underpinning non-cognition modules (e.g., HRV standards and reporting recommendations; circadian models and PRCs; fatigue-model evaluations; wearable validation) were included to support operational interpretation.
+
+#### 2.4.3. Heart rate fragmentation (HRF) targeted literature and technical-document search
+Heart rate fragmentation is an emerging set of indices that is not explicitly defined in classic HRV standards, yet it directly affects how short-term HRV metrics (especially HF power and beat-to-beat indices) can be interpreted in aging and disease contexts. Therefore, we conducted a targeted narrative search on **23 December 2025** to identify: (i) foundational method papers defining HRF indices and related symbolic-dynamics formulations; (ii) large-cohort studies evaluating associations with cardiovascular outcomes, atrial fibrillation, and cognitive endpoints; (iii) papers focused on the methodological interaction between HRF and traditional HRV interpretation; and (iv) any governmental/agency documents that mention HRF in an operational monitoring context.
+
+Searches were conducted in PubMed and Crossref, with supplementary full-text retrieval from the U.S. National Library of Medicine’s PubMed Central when available. Search terms included “heart rate fragmentation”, “fragmented sinoatrial dynamics”, “percentage of inflection points”, “sinus alternans”, and “erratic sinus rhythm,” combined with operationally relevant constructs (sleep, recovery, cognitive decline, fatigue, workload, allostatic load, and atrial fibrillation screening).
+
+Because we did not identify major governmental/agency standards that directly operationalize HRF as of the search date, the translation in this review is framed primarily from peer-reviewed evidence, and explicitly bounded by the absence of consensus norms and the dependence of HRF estimates on beat classification and artefact control.
 
 ### 2.5. Search strategy and record management
 Search strings were pre-specified to emphasize HRV/RR-interval terminology (e.g., heart rate variability, RMSSD, SDNN, HF-HRV, RR/NN interval) and key cognitive constructs. Full query strings are provided verbatim in Appendix B to enable replication; the pilot strategy and counts are preserved in Appendix A.
@@ -235,7 +242,40 @@ Nonlinear features are often marketed as “advanced,” but their real value is
 
 **Poincaré geometry (SD1, SD2) and their limitations.** Poincaré plots visualize NN(i) vs NN(i+1) structure. SD1 and SD2 quantify dispersion perpendicular and parallel to the identity line. However, the question “do these capture nonlinear features?” is not trivial. Brennan and colleagues examined whether existing Poincaré measures reflect nonlinear structure and highlighted limitations when such measures are treated as inherently nonlinear markers rather than geometric summaries (Brennan et al., 2001). Operationally, SD1 is often treated as a proxy for short-term variability (closely related to RMSSD), while SD2 relates to longer-term variability; but interpretive claims beyond this require caution.
 
-**Heart rate fragmentation (HRF).** Fragmentation metrics aim to capture erratic switching in acceleration sign that is not well described by traditional HRV features. Costa and colleagues proposed HRF as a new approach to interbeat interval dynamics, suggesting it may represent altered pacemaker–autonomic interactions, particularly in aging and disease contexts (Costa et al., 2017). For an operational console, fragmentation indices are best treated as *adjuncts* for pattern recognition and risk stratification rather than as direct “stress scores,” because their clinical meaning depends on rhythm classification and the exclusion of arrhythmias.
+**Heart rate fragmentation (HRF).** Fragmentation metrics aim to capture erratic switching in acceleration sign that is not well described by traditional HRV features. Costa and colleagues proposed HRF as a new approach to interbeat interval dynamics, suggesting it may represent altered pacemaker–autonomic interactions, particularly in aging and disease contexts (Costa et al., 2017a). For an operational console, fragmentation indices are best treated as *adjuncts* for pattern recognition and risk stratification rather than as direct “stress scores,” because their clinical meaning depends on rhythm classification and the exclusion of arrhythmias.
+
+A key operational motivation for HRF is interpretive: traditional short-term HRV indices (including RMSSD and HF power) are often treated as proxies of cardiovagal modulation under resting conditions, but in some populations an apparent increase in beat-to-beat variability can reflect *instability* rather than adaptive vagal control. In other words, “high variability” is not always synonymous with “high vagal tone.” HRF was explicitly introduced to formalize this failure mode by quantifying *patterned volatility*—frequent reversals in acceleration sign—that can be difficult to recognize from ECG inspection and can inflate conventional short-term HRV metrics (Costa et al., 2017a; Hayano et al., 2020).
+
+**Definition and computation (PIP, IALS, PSS, PAS).** In its most widely used formulation, HRF is quantified from NN intervals via four closely related indices (Costa et al., 2017a):
+
+- **Percentage of inflection points (PIP):** the percentage of NN time points at which the sign of acceleration in NN intervals reverses (or transitions to/from a near-zero increment), operationalized via zero-crossings in the NN-increment series.
+- **Inverse of the average length of acceleration/deceleration segments (IALS):** segments are runs between inflection points in which NN intervals decrease monotonically (acceleration) or increase monotonically (deceleration). Shorter average segments imply more rapid switching and thus higher fragmentation.
+- **Percentage of short segments (PSS):** quantifies how much of the series is composed of very short acceleration/deceleration runs (a high density of brief segments).
+- **Percentage of alternation segments (PAS):** captures a specific subtype of fragmentation—alternation—where acceleration sign flips on every beat (an “ABAB” alternation pattern over a minimum run length).
+
+By construction, these indices are not redundant labels for “variability magnitude.” They are primarily probes of *local sign structure* and the persistence of monotonic runs. PAS is explicitly a subtype measure: a time series may be highly fragmented without exhibiting strict alternans, whereas a high PAS necessarily implies marked fragmentation (Costa et al., 2017a). This hierarchy is operationally useful because it supports interpretable rule-based gating (e.g., “fragmented but not alternans-dominant”).
+
+**Symbolic-dynamics formulations and sampling-resolution dependence.** A complementary HRF formulation maps NN increments to a ternary symbolic sequence (deceleration / no-change / acceleration) and evaluates the frequency of short “word” patterns with different numbers of inflection points, with thresholds chosen to respect timing resolution (Costa et al., 2017b; Costa et al., 2018). In operational systems that ingest RR series from wearables, the analogous constraint is *vendor and firmware behavior*: any proprietary smoothing or beat correction upstream can damp (or artifactually create) rapid sign changes, directly shifting HRF indices.
+
+**Beat classification, artefacts, and why HRF is also a quality-control primitive.** HRF is highly sensitive to beat-label integrity because missed beats, false detections, and ectopy create abrupt increments that appear as sign changes. Accordingly, foundational HRF work explicitly excludes segments around non-sinus beats when computing fragmentation indices, and also examines RR-series robustness as a secondary analysis (Costa et al., 2017a). Independent methodological work on HRV denoising confirms that fragmentation measures (e.g., PAS, PIP, PSS) are among the most artifact-sensitive HRV-derived features, meaning that signal quality issues can manifest as apparent “fragmentation” (Saleem et al., 2022). This has a practical implication for a flight-surgeon console: HRF should be treated not only as a physiological index but also as an **instrument-health flag**. When PIP/IALS/PSS rise concurrently with high artefact-correction fractions or implausible RR patterns, the first hypothesis should be measurement contamination rather than an acute physiological state change.
+
+**Evidence base and clinical signal: HRF as sinoatrial instability and risk marker.** Empirically, HRF indices increase with age and are elevated in coronary artery disease cohorts compared with ostensibly healthy subjects, while outperforming several traditional and nonlinear HRV measures in discrimination under free-running conditions (Costa et al., 2017a). In a large community cohort (MESA), higher fragmentation was associated with incident cardiovascular events and cardiovascular mortality in adjusted models, and added incremental value to established risk indices (Costa et al., 2018). Fragmentation indices—especially PIP—have also been evaluated for long-horizon atrial fibrillation prediction in community cohorts, supporting a role for HRF as a screening covariate when interpreting HRV in older adults (Costa et al., 2021a; Guichard et al., 2025). Beyond cohort associations, analyses in cardiology-clinic populations suggest that HRF captures information about beat-to-beat rhythm control mechanisms that is not reducible to canonical HRV measures, and that greater fragmentation predicts poorer survival independently of multiple clinical risk factors (Lensen et al., 2020). A complementary perspective paper frames HRF as a dynamical marker of altered pacemaker–neuroautonomic function that may track the “pace” of biological aging, with the hypothesis that truly system-level interventions would reduce fragmentation toward more fluent patterns (Costa & Goldberger, 2019).
+
+**From cardiovascular risk to human performance: what is defensible today.** Direct evidence linking HRF to acute operational performance endpoints (e.g., vigilance lapses, decision errors) remains limited. Nonetheless, HRF has several scientifically defensible relevance pathways to “human performance” monitoring:
+
+1. **Guardrail against false reassurance from high short-term HRV.** In readiness contexts, an increase in HF power or RMSSD is often interpreted as “better recovery.” HRF provides a mechanism-aware caution: high-frequency variability can include fragmented, non-vagal dynamics and can confound parasympathetic functional assessment (Hayano et al., 2020). Thus, incorporating HRF can prevent “green” interpretations based solely on variability amplitude.
+2. **Longitudinal risk context for cognition and brain health.** Within MESA, HRF has been used to predict cognitive decline, supporting the view that fragmented sinoatrial dynamics may relate to broader brain–heart health trajectories (Costa et al., 2021b). Complementary evidence links HRF indices to brain MRI markers of small vessel disease, providing a plausible vascular pathway through which fragmented cardiac control could covary with cognitive aging risk (Heckbert et al., 2024). These are not acute performance tests, but they are directly relevant to long-horizon mission readiness, selection, and health surveillance.
+3. **Recovery modelling: sleep as a restorative perturbation.** HRF has been operationalized as a dynamic “before vs after sleep” change (ΔHRF) to quantify sleep-related improvement in cardiac neuroautonomic functionality, with the hypothesis that diminished renewability tracks aging and future event risk (Costa et al., 2022). For human performance programs, this suggests a promising construct: not only *resting baseline* but also *restoration capacity*.
+4. **Stress and cumulative load constructs in ostensibly healthy samples.** HRF has been proposed as a biomarker of early allostatic load and stress reactivity in healthy adults, with evidence that HRF differentiates baseline, stressor, and recovery conditions and may show blunted reactivity patterns in individuals with elevated symptom burdens (Chan & Andersen, 2025). In parallel, HRV-based monitoring of stress and allostatic load has been studied in first responder and tactical operator populations, with systematic reviews underscoring both promise and methodological heterogeneity (Corrigan et al., 2021).
+
+**Operational synthesis and critique.** The most defensible use of HRF in a flight-surgeon console is therefore conservative and layered:
+
+- Use HRF as a **measurement and interpretation gate** for vagal-proxy HRV metrics (especially HF power and RMSSD), not as a standalone “stress score.”
+- Compute HRF only when rhythm classification is credible (sufficient normal sinus beats; ectopy and artefact rates below thresholds), and display HRF alongside quality indicators.
+- Treat persistently elevated fragmentation as a **risk-context marker** (possible sinoatrial instability, aging-related degradation, or disease risk) and as a trigger for corroboration (repeat high-fidelity ECG, clinical review), rather than as an acute workload readout.
+- Explicitly communicate that HRF is not codified in classic HRV standards and lacks widely accepted normative cut points for operational decision-making; its decision utility is highest in within-person, longitudinal contexts.
+
+In short, heart rate fragmentation provides a needed corrective to the “more HRV is always better” narrative. Its scientific value lies in separating smooth, vagally mediated variability from erratic beat-to-beat switching that can arise from degraded control, thereby reducing one important class of false inference in multimodal readiness monitoring.
 
 A practical synthesis is that nonlinear metrics add value primarily when:
 
@@ -671,7 +711,7 @@ Brennan, M., Palaniswami, M., & Kamen, P. (2001). Do existing measures of Poinca
 
 Chellappa, S. L. (2020). Individual differences in light sensitivity affect sleep and circadian rhythms. Sleep, 44(2). https://doi.org/10.1093/sleep/zsaa214
 
-Costa, M. D., Davis, R. B., & Goldberger, A. L. (2017). Heart rate fragmentation: A new approach to the analysis of cardiac interbeat interval dynamics. Frontiers in Physiology, 8. https://doi.org/10.3389/fphys.2017.00255
+Costa, M. D., Davis, R. B., & Goldberger, A. L. (2017a). Heart rate fragmentation: A new approach to the analysis of cardiac interbeat interval dynamics. Frontiers in Physiology, 8. https://doi.org/10.3389/fphys.2017.00255
 
 Dawson, D., Ian Noy, Y., Härmä, M., Åkerstedt, T., & Belenky, G. (2011). Modelling fatigue and the use of fatigue models in work settings. Accident Analysis & Prevention, 43(2), 549–564. https://doi.org/10.1016/j.aap.2009.12.030
 
@@ -836,6 +876,32 @@ Munn, Z., Peters, M. D. J., Stern, C., Tufanaru, C., McArthur, A., & Aromataris,
 Peters, M. D. J., Marnie, C., Tricco, A. C., Pollock, D., Munn, Z., Alexander, L., McInerney, P., Godfrey, C. M., & Khalil, H. (2020). Updated methodological guidance for the conduct of scoping reviews. JBI Evidence Synthesis, 18(10), 2119–2126. https://doi.org/10.11124/JBIES-20-00167
 
 Tricco, A. C., Lillie, E., Zarin, W., O’Brien, K. K., Colquhoun, H., Levac, D., Moher, D., Peters, M. D. J., Horsley, T., Weeks, L., Hempel, S., Akl, E. A., Chang, C., McGowan, J., Stewart, L., et al. (2018). PRISMA Extension for Scoping Reviews (PRISMA-ScR): Checklist and Explanation. Annals of Internal Medicine, 169(7), 467–473. https://doi.org/10.7326/M18-0850
+
+Chan, J. F., & Andersen, J. P. (2025). Heart Rate Fragmentation: A Novel Analytic Approach to Detect Allostatic Load Among Healthy Adults. Applied Psychophysiology and Biofeedback. https://doi.org/10.1007/s10484-025-09721-1
+
+Corrigan, S. L., Roberts, S., Warmington, S., Drain, J., & Main, L. C. (2021). Monitoring stress and allostatic load in first responders and tactical operators using heart rate variability: a systematic review. BMC Public Health, 21(1). https://doi.org/10.1186/s12889-021-11595-x
+
+Costa, M. D., Davis, R. B., & Goldberger, A. L. (2017b). Heart Rate Fragmentation: A Symbolic Dynamical Approach. Frontiers in Physiology, 8, 827. https://doi.org/10.3389/fphys.2017.00827
+
+Costa, M. D., Redline, S., Davis, R. B., Heckbert, S. R., Soliman, E. Z., & Goldberger, A. L. (2018). Heart Rate Fragmentation as a Novel Biomarker of Adverse Cardiovascular Events: The Multi-Ethnic Study of Atherosclerosis. Frontiers in Physiology, 9, 1117. https://doi.org/10.3389/fphys.2018.01117
+
+Costa, M. D., & Goldberger, A. L. (2019). Heart rate fragmentation: using cardiac pacemaker dynamics to probe the pace of biological aging. American Journal of Physiology-Heart and Circulatory Physiology. https://doi.org/10.1152/ajpheart.00110.2019
+
+Costa, M. D., Redline, S., Soliman, E. Z., Goldberger, A. L., & Heckbert, S. R. (2021a). Fragmented sinoatrial dynamics in the prediction of atrial fibrillation: the Multi-Ethnic Study of Atherosclerosis. American Journal of Physiology-Heart and Circulatory Physiology. https://doi.org/10.1152/ajpheart.00421.2020
+
+Costa, M. D., Redline, S., Hughes, T. M., Heckbert, S. R., & Goldberger, A. L. (2021b). Prediction of Cognitive Decline Using Heart Rate Fragmentation Analysis: The Multi-Ethnic Study of Atherosclerosis. Frontiers in Aging Neuroscience, 13, 708130. https://doi.org/10.3389/fnagi.2021.708130
+
+Costa, M. D., Heckbert, S. R., Redline, S., & Goldberger, A. L. (2022). Method to quantify the impact of sleep on cardiac neuroautonomic functionality: application to the prediction of cardiovascular events in the Multi-Ethnic Study of Atherosclerosis. American Journal of Physiology-Regulatory, Integrative and Comparative Physiology. https://doi.org/10.1152/ajpregu.00184.2022
+
+Guichard, J.-B., Hupin, D., Pichot, V., Berger, M., Celle, S., Borràs, R., Roca-Luque, I., Mont, L., Da Costa, A., Barthélémy, J.-C., & Roche, F. (2025). Assessing heart rate fragmentation to predict atrial fibrillation in the general population aged 65: the PROOF-AF study. European Heart Journal Open, 5(3). https://doi.org/10.1093/ehjopen/oeaf030
+
+Hayano, J., Kisohara, M., Ueda, N., & Yuda, E. (2020). Impact of Heart Rate Fragmentation on the Assessment of Heart Rate Variability. Applied Sciences, 10(9), 3314. https://doi.org/10.3390/app10093314
+
+Heckbert, S. R., Jensen, P. N., Erus, G., Nasrallah, I. M., Rashid, T., Habes, M., Austin, T. R., Floyd, J. S., Schaich, C. L., Redline, S., Bryan, R. N., & Costa, M. D. (2024). Heart rate fragmentation and brain MRI markers of small vessel disease in MESA. Alzheimer's & Dementia. https://doi.org/10.1002/alz.13554
+
+Lensen, I. S., Monfredi, O. J., Andris, R. T., Lake, D. E., & Moorman, J. R. (2020). Heart rate fragmentation gives novel insights into non-autonomic mechanisms governing beat-to-beat control of the heart’s rhythm. JRSM Cardiovascular Disease, 9. https://doi.org/10.1177/2048004020948732
+
+Saleem, S., Khandoker, A., Alkhodari, M., Hadjileontiadis, L., & Jelinek, H. F. (2022). A two-step pre-processing tool to remove Gaussian and ectopic noise for heart rate variability analysis. Scientific Reports, 12(1). https://doi.org/10.1038/s41598-022-21776-2
 
 ---
 
