@@ -1166,6 +1166,42 @@ def _ensure_cache_dir(path: Path) -> None:
         )
 
 
+def _clear_cache_dir(cache_dir: Path, *, max_files: int = 5000) -> Tuple[int, Optional[str]]:
+    """Delete cached files under `cache_dir` (keeps the directory).
+
+    This is intentionally bounded to avoid accidental large deletions.
+
+    Returns:
+        (deleted_file_count, error_message_or_None)
+    """
+    if max_files <= 0:
+        return 0, "Invalid max_files bound."
+    if not cache_dir.exists():
+        return 0, None
+    deleted = 0
+    try:
+        # Delete files first (bounded).
+        for entry in cache_dir.rglob("*"):
+            if entry.is_file():
+                deleted += 1
+                if deleted > max_files:
+                    return deleted, f"Refusing to delete more than {max_files} files."
+                try:
+                    entry.unlink()
+                except OSError as exc:
+                    return deleted, f"Failed to delete {entry.name}: {exc}"
+        # Best-effort: remove empty subdirectories (reverse depth order).
+        for entry in sorted(cache_dir.rglob("*"), reverse=True):
+            if entry.is_dir():
+                try:
+                    entry.rmdir()
+                except OSError:
+                    pass
+        return deleted, None
+    except OSError as exc:
+        return deleted, f"Cache clear failed: {exc}"
+
+
 def _read_dataframe_cache(
     cache_path: Path, *, max_age: Optional[pd.Timedelta]
 ) -> Optional[pd.DataFrame]:
@@ -1677,6 +1713,7 @@ def _load_noaa_space_datasets(
     *,
     keys: Optional[Sequence[str]] = None,
     use_cache: bool = True,
+    allow_stale_cache: bool = False,
 ) -> None:
     """
     Populate the NOAA space datasets in session state.
@@ -1684,7 +1721,15 @@ def _load_noaa_space_datasets(
 
     state["loading"] = True
     try:
-        bundles, errors = load_noaa_space_data(keys=keys, use_cache=use_cache)
+        # Full scope can be expensive; keep concurrency conservative to
+        # avoid Streamlit WebSocket disconnects on Windows/OneDrive setups.
+        max_workers = 4 if keys is not None else 2
+        bundles, errors = load_noaa_space_data(
+            keys=keys,
+            use_cache=use_cache,
+            max_workers=max_workers,
+            allow_stale_cache=allow_stale_cache,
+        )
     except requests.RequestException as exc:
         state["bundles"] = {}
         state["errors"] = {"__global__": str(exc)}
@@ -1821,10 +1866,15 @@ def _bg_fetch_all_space_data() -> None:
             _bg_fetch_results["space_weather"]["done"] = True
             _bg_fetch_results["space_weather"]["fetch_time"] = fetch_time
 
-    # 2. NOAA feeds (full library for downstream research/correlation)
+    # 2. NOAA feeds (Core scope by default to keep UI responsive)
     try:
-        # Force-refresh so the on-disk cache stays warm for analysis.
-        bundles, errors = load_noaa_space_data(keys=None, use_cache=False)
+        # Core feeds are sufficient for most HRV correlations and keep the
+        # background thread lightweight (prevents UI/WebSocket disconnects).
+        bundles, errors = load_noaa_space_data(
+            keys=list(NOAA_CORE_KEYS),
+            use_cache=True,
+            max_workers=4,
+        )
         with _bg_fetch_lock:
             _bg_fetch_results["noaa"]["data"] = {
                 "bundles": bundles,
@@ -1842,10 +1892,10 @@ def _bg_fetch_all_space_data() -> None:
             _bg_fetch_results["noaa"]["done"] = True
             _bg_fetch_results["noaa"]["fetch_time"] = fetch_time
 
-    # 3. DONKI (last 30 days by default)
+    # 3. DONKI (last 14 days by default; users can expand window manually)
     try:
         end_dt = pd.Timestamp.utcnow()
-        start_dt = end_dt - pd.Timedelta(days=30)
+        start_dt = end_dt - pd.Timedelta(days=14)
         start_str = start_dt.strftime("%Y-%m-%d")
         end_str = end_dt.strftime("%Y-%m-%d")
 
@@ -3171,11 +3221,53 @@ def _render_gpt_high_interpretation(
         st.session_state["gpt5_export_markdown"] = ""
         return
     payload_hash = hashlib.sha256(analysis_payload.encode("utf-8")).hexdigest()
-    regenerate = body_container.button(
-        "Regenerate interpretation", key="gpt5_high_regenerate"
+    # Load any previously stored report for this exact payload hash (no API call).
+    if state.get("payload_hash") != payload_hash and not state.get("markdown"):
+        try:
+            ctx = get_active_user_context()
+        except Exception:
+            ctx = _guest_user_context()
+        if ctx.get("has_user") and ctx.get("user_id"):
+            try:
+                db = get_database()
+                stored = db.get_ai_report(
+                    user_id=str(ctx.get("user_id")),
+                    report_type="hrv_gpt5_high",
+                    context_hash=payload_hash,
+                )
+            except Exception as exc:  # pragma: no cover - defensive
+                log_exception(_LOGGER, "Failed to load stored GPT-5 report", exc)
+            else:
+                if stored is not None and getattr(stored, "markdown", "").strip():
+                    state["payload_hash"] = payload_hash
+                    state["markdown"] = stored.markdown
+                    sources = getattr(stored, "sources", None)
+                    if isinstance(sources, list):
+                        state["sources"] = sources
+                    state["reasoning_encrypted"] = getattr(
+                        stored, "reasoning_encrypted", None
+                    )
+                    st.session_state["gpt5_export_markdown"] = stored.markdown
+
+    payload_changed = bool(state.get("payload_hash")) and state["payload_hash"] != payload_hash
+    if payload_changed and state.get("markdown"):
+        body_container.warning(
+            "The analysis inputs changed since the last GPT-5 run. "
+            "Click **Generate** to refresh the interpretation."
+        )
+
+    run_label = (
+        "Generate GPT-5.2 interpretation (code interpreter)"
+        if not state.get("markdown")
+        else "Regenerate GPT-5.2 interpretation"
     )
-    should_request = regenerate or state["payload_hash"] != payload_hash
-    if should_request:
+    run_now = body_container.button(
+        run_label,
+        key="gpt5_high_generate",
+        type="primary",
+        help="Runs OpenAI GPT-5.2 high reasoning with code interpreter. Only runs when you click this button.",
+    )
+    if run_now:
         try:
             result = _request_interpretation_with_progress(
                 body_container, analysis_payload
@@ -3216,7 +3308,8 @@ def _render_gpt_high_interpretation(
                 _LOGGER.debug("Unable to persist GPT report to DB: %s", exc)
     if not state["markdown"]:
         body_container.info(
-            "GPT-5 interpretation will appear here once generated.")
+            "Click **Generate** to run GPT-5.2 and produce an on-demand interpretation."
+        )
         st.session_state["gpt5_export_markdown"] = ""
         return
     body_container.markdown(state["markdown"])
@@ -6780,10 +6873,8 @@ def main() -> None:
 
         st.sidebar.markdown("---")
         st.sidebar.subheader("AI interpretation")
-        gpt_high_enabled = st.sidebar.toggle(
-            "GPT-5.2 High Reasoning Interpretation",
-            value=False,
-            help="Send analysis outputs to OpenAI GPT-5.2 with high reasoning effort to obtain a doctoral-level markdown report. Requires OPENAI_API_KEY in the .env file.",
+        st.sidebar.caption(
+            "OpenAI/Agents analysis is **on-demand** and only runs from the **Export & Download** tab."
         )
 
         st.sidebar.markdown("---")
@@ -6991,7 +7082,6 @@ def main() -> None:
         skip_gauges = True  # Fast mode: skip gauges
         show_debug = False
         enable_ml = False  # Fast mode: no ML clustering
-        gpt_high_enabled = False  # Fast mode: no GPT calls
         enable_cov = False  # Fast mode: no covariate adjustment
         age_years = 45
         sex = "Male"
@@ -8013,6 +8103,18 @@ def main() -> None:
             else:
                 st.markdown("### 📈 Time Series Analysis")
                 _render_dataset_info_header(ts_datasets, title="Recordings Displayed")
+                with st.expander(
+                    "How to read these plots (axes + what you’re seeing)", expanded=False
+                ):
+                    st.markdown(
+                        "- **X-axis (time)**: Timestamp in UTC derived from the recording start + cumulative RR.\n"
+                        "- **RR plot (ms)**: Beat-to-beat interval duration. **Higher RR = slower HR**, **lower RR = faster HR**.\n"
+                        "- **HR plot (bpm)**: Derived from RR via **HR ≈ 60,000 / RR(ms)**. Spikes in HR typically correspond to drops in RR.\n"
+                        "- **Overlays**: If artifact correction is enabled, you may see **raw vs cleaned** traces; **red points** mark flagged artifacts.\n"
+                        "- **Shaded regions**: Deviation zones (yellow/red) appear when deviation detection is enabled and indicate windows flagged as unusual.\n"
+                        "- **Navigation**: Drag to pan; use the slider/scroll to zoom; double‑click the chart to reset zoom.\n"
+                        "- **Performance note**: Very long recordings may be downsampled for plotting; computations use the full-resolution RR series."
+                    )
                 max_pts = None if rr_plot_cap == "No limit" else int(rr_plot_cap)
                 _plot_rr_timeseries(
                     ts_datasets,
@@ -8070,6 +8172,17 @@ def main() -> None:
             else:
                 st.markdown("### 🌊 Frequency Domain Analysis")
                 _render_dataset_info_header(freq_datasets, title="Recordings Analyzed")
+                with st.expander(
+                    "How to read the PSD plot (axes + bands)", expanded=False
+                ):
+                    st.markdown(
+                        "- **X-axis (Frequency, Hz)**: How fast the oscillation is.\n"
+                        "- **Y-axis (PSD, ms²/Hz)**: Power at each frequency on a **log scale** (equal vertical spacing means multiplicative changes).\n"
+                        "- **Shaded bands**: **VLF** 0.0033–0.04 Hz, **LF** 0.04–0.15 Hz, **HF** 0.15–0.40 Hz.\n"
+                        "- **What to look for**: A **peak in HF** often tracks breathing-related modulation; **LF** reflects slower baroreflex/autonomic rhythms.\n"
+                        "- **Tip**: Compare the **shape and peak locations** across recordings more than absolute power when posture/conditions differ.\n"
+                        "- **Navigation**: Drag to pan; use the slider/scroll to zoom; double‑click to reset."
+                    )
                 _plot_psd_overlay(freq_datasets, method=psd_method)
         st.markdown(
             "**Scientific notes (frequency domain)**  \n"
@@ -8114,6 +8227,17 @@ def main() -> None:
             else:
                 st.markdown("### 🔀 Nonlinear Dynamics")
                 _render_dataset_info_header(nl_datasets, title="Recordings Analyzed")
+                with st.expander(
+                    "How to read the Poincaré plot (RRₙ vs RRₙ₊₁)", expanded=False
+                ):
+                    st.markdown(
+                        "- **Each point**: A pair of consecutive intervals **(RRₙ, RRₙ₊₁)** in **milliseconds**.\n"
+                        "- **Axes**: X is RRₙ (ms); Y is RRₙ₊₁ (ms). Points near the diagonal mean consecutive beats are similar.\n"
+                        "- **Width (SD1)**: Spread *perpendicular* to the diagonal ≈ short‑term beat‑to‑beat variability (often vagal).\n"
+                        "- **Length (SD2)**: Spread *along* the diagonal reflects longer‑term variability.\n"
+                        "- **Outliers/stripes**: Often artifacts or ectopic beats—review cleaning settings if the cloud looks “broken.”\n"
+                        "- **Performance note**: The plot may downsample points for rendering; summary metrics use the full series."
+                    )
                 _plot_poincare(nl_datasets)
         st.markdown(
             "**Scientific notes (nonlinear)**  \n"
@@ -8136,6 +8260,17 @@ def main() -> None:
         else:
             st.markdown("### 📉 Spectrogram (Time-Frequency)")
             _render_dataset_info_header(datasets, title="Recordings Analyzed")
+            with st.expander(
+                "How to read the spectrogram (time–frequency heatmap)", expanded=False
+            ):
+                st.markdown(
+                    "- **X-axis (Time, s)**: Seconds since the recording start.\n"
+                    "- **Y-axis (Frequency, Hz)**: Oscillation frequency (how fast rhythms occur).\n"
+                    "- **Color**: Relative power (auto‑scaled to the 5th–95th percentile for readability).\n"
+                    "- **HF band (0.15–0.40 Hz)**: Often breathing-related; a bright ridge that moves suggests changing breathing rate.\n"
+                    "- **LF band (0.04–0.15 Hz)**: Slower autonomic/baroreflex rhythms; patches may reflect transient changes (posture, workload, arousal).\n"
+                    "- **Note**: This view is limited to ≤0.5 Hz to focus on HRV-relevant bands."
+                )
             _plot_spectrogram(datasets)
         st.markdown(
             "**Scientific notes (time–frequency)**  \n"
@@ -8271,139 +8406,12 @@ def main() -> None:
                         cols_to_show.append(c)
                 st.dataframe(multi_results_df[cols_to_show])
             st.divider()
-            st.markdown("### 🔍 Metric Explanations (Agent SDK)")
-            st.caption(
-                "Generates per-metric explanations with GPT-5.2 high reasoning and "
-                "code_interpreter; falls back to deterministic Task Force/Shaffer "
-                "ranges when the agent is offline."
+            st.markdown("### 🔍 AI metric explanations")
+            st.info(
+                "OpenAI/Agents-based explanations are generated **on-demand** from the "
+                "**Export & Download** tab to keep analysis tabs responsive. "
+                "Go to **Export & Download → AI analysis** when you want the AI appendix."
             )
-            metric_explainer_state = st.session_state.setdefault(
-                "metric_explainer_state",
-                {
-                    "signature": "",
-                    "explanations": [],
-                    "agent_markdown": "",
-                    "agent_payload": None,
-                    "agent_error": "",
-                    "used_agent": False,
-                    "markdown_appendix": "",
-                    "tts_audio": b"",
-                },
-            )
-            metrics_signature = hashlib.sha256(
-                multi_results_df.to_json(
-                    orient="split",
-                    date_format="iso",
-                ).encode("utf-8")
-            ).hexdigest()
-            auto_refresh = st.checkbox(
-                "Auto-refresh explanations when metrics change",
-                value=True,
-                key="metric_explainer_auto_refresh",
-            )
-            run_agent_checkbox = st.checkbox(
-                "Use GPT-5.2 agent (requires OPENAI_API_KEY)",
-                value=False,
-                key="metric_explainer_run_agent",
-            )
-            trigger_generation = st.button(
-                "Generate metric explanations",
-                key="metric_explainer_generate",
-            )
-            if trigger_generation or (
-                auto_refresh and metric_explainer_state["signature"] != metrics_signature
-            ):
-                manager = AgentInsightManager()
-                result = manager.generate_metric_insights(
-                    multi_results_df,
-                    user_context=active_user_context,
-                    run_agent=bool(run_agent_checkbox),
-                )
-                payload_display = None
-                if result.agent_payload is not None:
-                    try:
-                        payload_display = json.loads(
-                            json.dumps(result.agent_payload, default=str)
-                        )
-                    except (TypeError, ValueError):
-                        payload_display = result.agent_payload
-                metric_explainer_state["signature"] = metrics_signature
-                metric_explainer_state["explanations"] = [
-                    asdict(expl) for expl in result.explanations
-                ]
-                metric_explainer_state["agent_markdown"] = result.agent_markdown or ""
-                metric_explainer_state["agent_payload"] = payload_display
-                metric_explainer_state["agent_error"] = result.agent_error or ""
-                metric_explainer_state["used_agent"] = result.used_agent
-                metric_explainer_state["markdown_appendix"] = result.markdown_appendix
-                metric_explainer_state["tts_audio"] = b""
-            explanations = metric_explainer_state.get("explanations", [])
-            if explanations:
-                explanation_df = pd.DataFrame(explanations)
-                st.dataframe(
-                    explanation_df[
-                        [
-                            "dataset",
-                            "display_name",
-                            "value",
-                            "unit",
-                            "status",
-                            "explanation",
-                            "citation",
-                        ]
-                    ],
-                    use_container_width=True,
-                )
-            else:
-                st.info(
-                    "Run the explainer to annotate each metric with context-rich "
-                    "interpretations and reference citations."
-                )
-            agent_md = metric_explainer_state.get("agent_markdown", "")
-            if agent_md:
-                st.markdown("#### GPT-5.2 Agent Narrative")
-                st.markdown(agent_md)
-            if metric_explainer_state.get("agent_error"):
-                st.warning(metric_explainer_state["agent_error"])
-            payload_preview = metric_explainer_state.get("agent_payload")
-            if payload_preview:
-                with st.expander("View GPT-5.2 metric explanation request payload"):
-                    st.json(payload_preview)
-
-            appendix_markdown = metric_explainer_state.get("markdown_appendix", "")
-            if appendix_markdown:
-                with st.expander("⬇️ Markdown appendix ready for export", expanded=False):
-                    st.text_area(
-                        "Metric Explainability Appendix",
-                        appendix_markdown,
-                        height=240,
-                        key="metric_explainer_markdown_preview",
-                    )
-                file_name = (
-                    f"metric_explainability_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.md"
-                )
-                st.download_button(
-                    "Download metric explanations (Markdown)",
-                    data=appendix_markdown.encode("utf-8"),
-                    file_name=file_name,
-                    mime="text/markdown",
-                    key="metric_explainer_markdown_download",
-                )
-                audio_trigger = st.button(
-                    "Generate discrete audio playback (tts-hd)",
-                    key="metric_explainer_tts_button",
-                )
-                if audio_trigger:
-                    try:
-                        audio_bytes = synthesize_agent_speech(appendix_markdown)
-                    except Exception as exc:
-                        st.warning(f"TTS generation failed: {exc}")
-                    else:
-                        metric_explainer_state["tts_audio"] = audio_bytes
-                        st.success("Audio generated successfully.")
-                audio_bytes = metric_explainer_state.get("tts_audio")
-                if isinstance(audio_bytes, (bytes, bytearray)) and audio_bytes:
-                    st.audio(audio_bytes, format="audio/mp3")
         else:
             st.info("No metrics to display.")
     with tab_ans:
@@ -9458,61 +9466,55 @@ Context (posture, time of day, medications) strongly affects interpretation.*
             
             st.divider()
             
-            # Check for available HRV data
-            if has_hrv_data and not windowed_df.empty:
-                st.success(f"✓ HRV data available ({total_rr_count:,} RR intervals)")
-                
-                # Extract latest/mean metrics from windowed analysis
-                hrv_metrics_for_comparison = {}
-                
-                # Map windowed_df columns to population norm metric names
-                metric_mapping = {
-                    "sdnn": "sdnn",
-                    "rmssd": "rmssd",
-                    "pnn50": "pnn50",
-                    "lf_power": "lf_power",
-                    "hf_power": "hf_power",
-                    "lf_hf_ratio": "lf_hf_ratio",
-                    "sd1": "sd1",
-                    "sd2": "sd2",
-                    "mean_hr": "mean_hr",
-                }
-                
-                # Use mean values from windowed analysis
-                for col, norm_name in metric_mapping.items():
-                    if col in windowed_df.columns:
-                        valid_vals = windowed_df[col].dropna()
-                        if len(valid_vals) > 0:
-                            hrv_metrics_for_comparison[norm_name] = float(valid_vals.mean())
-                
-                if hrv_metrics_for_comparison:
-                    # Render population comparison UI
-                    render_population_comparison_ui(
-                        hrv_metrics=hrv_metrics_for_comparison,
-                        age=user_age,
-                        sex=sex_value,
-                    )
-                    
-                    # Additional export option
-                    st.divider()
-                    if st.button("📥 Export Comparison Report", key="export_pop_norms"):
-                        report = generate_population_comparison_report(
-                            hrv_metrics=hrv_metrics_for_comparison,
-                            age=user_age,
-                            sex=sex_value,
-                        )
-                        st.json(report)
-                        st.download_button(
-                            label="Download JSON Report",
-                            data=json.dumps(report, indent=2),
-                            file_name="hrv_population_comparison.json",
-                            mime="application/json",
-                        )
-                else:
-                    st.warning("Could not extract HRV metrics from the analysis. Ensure data has been processed.")
-            else:
+            # -----------------------------------------------------------------
+            # HRV metrics source selection
+            # -----------------------------------------------------------------
+            metric_mapping = {
+                "sdnn": "sdnn",
+                "rmssd": "rmssd",
+                "pnn50": "pnn50",
+                "lf_power": "lf_power",
+                "hf_power": "hf_power",
+                "lf_hf_ratio": "lf_hf_ratio",
+                "sd1": "sd1",
+                "sd2": "sd2",
+                "mean_hr": "mean_hr",
+            }
+            # Prefer processed sources when available; otherwise fall back to uploads.
+            source_options: List[str] = []
+            if (
+                isinstance(multi_results_df, pd.DataFrame)
+                and not multi_results_df.empty
+                and "source" in multi_results_df.columns
+            ):
+                source_options = [
+                    str(s)
+                    for s in multi_results_df["source"].dropna().astype(str).tolist()
+                ]
+            elif _rr_sources:
+                source_options = [str(s) for s in _rr_sources.keys()]
+            if ordered_sources:
+                source_options = (
+                    [s for s in ordered_sources if s in source_options]
+                    + [s for s in source_options if s not in ordered_sources]
+                )
+            # De-duplicate while preserving order
+            source_options = [s for s in dict.fromkeys(source_options)]
+            selected_source: Optional[str] = None
+            if source_options:
+                selected_source = st.selectbox(
+                    "Recording to compare",
+                    options=source_options,
+                    index=0,
+                    key="pop_norms_source_select",
+                )
+
+            # -----------------------------------------------------------------
+            # Compute or reuse metrics for comparison
+            # -----------------------------------------------------------------
+            if not has_hrv_data:
                 st.warning(
-                    "⚠️ **No HRV data loaded**\n\n"
+                    "⚠️ **No RR data loaded**\n\n"
                     "Upload RR interval data using the sidebar to compare your metrics against population norms.\n\n"
                     "**Available metrics for comparison:**\n"
                     "- Time domain: SDNN, RMSSD, pNN50\n"
@@ -9520,11 +9522,15 @@ Context (posture, time of day, medications) strongly affects interpretation.*
                     "- Nonlinear: SD1, SD2\n"
                     "- Heart rate: Mean HR"
                 )
-                
+
                 # Show example with simulated data - use checkbox instead of expander
                 # (render_population_comparison_ui uses expanders internally, can't nest)
                 st.markdown("---")
-                show_example = st.checkbox("📋 Show Example Comparison (Simulated Data)", value=False, key="pop_norms_example_checkbox")
+                show_example = st.checkbox(
+                    "📋 Show Example Comparison (Simulated Data)",
+                    value=False,
+                    key="pop_norms_example_checkbox",
+                )
                 if show_example:
                     example_metrics = {
                         "sdnn": 45.2,
@@ -9541,6 +9547,154 @@ Context (posture, time of day, medications) strongly affects interpretation.*
                         age=35,
                         sex=None,
                     )
+            else:
+                st.success(f"✓ RR data available ({total_rr_count:,} RR intervals)")
+                if selected_source is None:
+                    st.info("Select a recording above to compare against norms.")
+                else:
+                    selected_up = _rr_sources.get(selected_source) if _rr_sources else None
+                    duration_min: Optional[float] = None
+                    if (
+                        selected_up is not None
+                        and isinstance(selected_up.rr_ms, np.ndarray)
+                        and selected_up.rr_ms.size > 0
+                    ):
+                        duration_min = float(
+                            selected_up.rr_ms.size
+                            * float(np.mean(selected_up.rr_ms))
+                            / 60000.0
+                        )
+                        st.caption(
+                            f"Selected recording duration ≈ {duration_min:.1f} min. "
+                            "Most published population norms are for ~5-minute short-term HRV."
+                        )
+
+                    hrv_metrics_for_comparison: Dict[str, float] = {}
+                    comparison_basis = ""
+
+                    # 1) Preferred: mean of windowed metrics for the selected source (aligns with 5-min norms)
+                    if (
+                        isinstance(windowed_df, pd.DataFrame)
+                        and not windowed_df.empty
+                        and "source" in windowed_df.columns
+                    ):
+                        sub_df = windowed_df[windowed_df["source"] == selected_source]
+                        if not sub_df.empty:
+                            for col, norm_name in metric_mapping.items():
+                                if col not in sub_df.columns:
+                                    continue
+                                vals = pd.to_numeric(sub_df[col], errors="coerce").dropna()
+                                if len(vals) > 0:
+                                    hrv_metrics_for_comparison[norm_name] = float(vals.mean())
+                            if hrv_metrics_for_comparison:
+                                comparison_basis = "windowed_mean"
+
+                    # 2) Fallback: full-recording summary metrics (available after "Run HRV Analysis")
+                    if (
+                        not hrv_metrics_for_comparison
+                        and isinstance(multi_results_df, pd.DataFrame)
+                        and not multi_results_df.empty
+                        and "source" in multi_results_df.columns
+                    ):
+                        row_df = multi_results_df[multi_results_df["source"] == selected_source]
+                        if not row_df.empty:
+                            row = row_df.iloc[0]
+                            for col, norm_name in metric_mapping.items():
+                                if col not in row_df.columns:
+                                    continue
+                                try:
+                                    val = float(row[col])
+                                except (TypeError, ValueError):
+                                    continue
+                                if np.isfinite(val):
+                                    hrv_metrics_for_comparison[norm_name] = float(val)
+                            if hrv_metrics_for_comparison:
+                                comparison_basis = "full_recording"
+
+                    # 3) Final fallback: compute a quick summary directly from the RR series (no full analysis)
+                    if not hrv_metrics_for_comparison and selected_up is not None:
+                        rr = (
+                            selected_up.rr_ms_clean
+                            if (apply_clean and selected_up.rr_ms_clean is not None)
+                            else selected_up.rr_ms
+                        )
+                        if isinstance(rr, np.ndarray) and rr.size > 0:
+                            if rr.size > 200_000:
+                                st.info(
+                                    "This recording is very long. For stability and caching, "
+                                    "run **Run HRV Analysis** and then return to this tab."
+                                )
+                            else:
+                                include_freq_quick = st.checkbox(
+                                    "Include frequency-domain metrics (LF/HF) in quick comparison",
+                                    value=False,
+                                    key="pop_norms_quick_freq",
+                                    help="Computes LF/HF from interpolated PSD; slower than time-domain.",
+                                )
+                                from hrv_core import (
+                                    compute_frequency_domain_metrics as _fd,
+                                    compute_poincare_metrics as _pc,
+                                    compute_time_domain_metrics as _td,
+                                )
+
+                                td = _td(rr)
+                                pc = _pc(rr)
+                                for key in ("sdnn", "rmssd", "pnn50", "mean_hr"):
+                                    val = td.get(key)
+                                    if val is not None and np.isfinite(val):
+                                        hrv_metrics_for_comparison[key] = float(val)
+                                for key in ("sd1", "sd2"):
+                                    val = pc.get(key)
+                                    if val is not None and np.isfinite(val):
+                                        hrv_metrics_for_comparison[key] = float(val)
+                                if include_freq_quick:
+                                    freq = _fd(rr, method=str(psd_method))
+                                    for key in ("lf_power", "hf_power", "lf_hf_ratio"):
+                                        val = freq.get(key)
+                                        if val is not None and np.isfinite(val):
+                                            hrv_metrics_for_comparison[key] = float(val)
+                                if hrv_metrics_for_comparison:
+                                    comparison_basis = "quick_metrics"
+
+                    if hrv_metrics_for_comparison:
+                        basis_label = {
+                            "windowed_mean": "Windowed mean (recommended for ~5-min norms)",
+                            "full_recording": "Full-recording summary (may differ vs ~5-min norms)",
+                            "quick_metrics": "Quick RR-derived summary (may differ vs ~5-min norms)",
+                        }.get(comparison_basis, "Computed metrics")
+                        st.info(f"**Comparison basis**: {basis_label}")
+                        if duration_min is not None and duration_min < 5.0:
+                            st.warning(
+                                "Recording appears shorter than 5 minutes. "
+                                "Population percentiles shown are primarily derived from ~5-minute recordings, "
+                                "so interpret cautiously."
+                            )
+                        render_population_comparison_ui(
+                            hrv_metrics=hrv_metrics_for_comparison,
+                            age=user_age,
+                            sex=sex_value,
+                        )
+
+                        # Additional export option
+                        st.divider()
+                        if st.button("📥 Export Comparison Report", key="export_pop_norms"):
+                            report = generate_population_comparison_report(
+                                hrv_metrics=hrv_metrics_for_comparison,
+                                age=user_age,
+                                sex=sex_value,
+                            )
+                            st.json(report)
+                            st.download_button(
+                                label="Download JSON Report",
+                                data=json.dumps(report, indent=2),
+                                file_name="hrv_population_comparison.json",
+                                mime="application/json",
+                            )
+                    else:
+                        st.warning(
+                            "Could not extract HRV metrics for comparison yet. "
+                            "Click **Run HRV Analysis** (sidebar) or adjust window settings for longer recordings."
+                        )
             
             # Reference information
             st.divider()
@@ -12278,6 +12432,68 @@ that predicts cognitive performance based on:
                 step=1,
                 key="donki_window_days",
             )
+
+            # Cache maintenance (explicit user action; never automatic deletion)
+            with st.expander("🧹 Cache maintenance", expanded=False):
+                confirm_clear = st.checkbox(
+                    "Enable cache reset actions (deletes local cached files)",
+                    value=False,
+                    key="cache_reset_confirm_space_weather",
+                    help=(
+                        "Use only if caches are corrupted or you want a clean refetch. "
+                        "First load after clearing will be slower."
+                    ),
+                )
+                if st.button(
+                    "🧹 Clear Space Weather + NOAA + DONKI caches",
+                    key="cache_reset_all_space",
+                    disabled=not confirm_clear,
+                ):
+                    deleted_sw, err_sw = _clear_cache_dir(SPACE_WEATHER_CACHE_DIR)
+                    deleted_noaa, err_noaa = _clear_cache_dir(CACHE_BASE_DIR / "noaa_space")
+                    deleted_donki, err_donki = _clear_cache_dir(DONKI_CACHE_DIR)
+
+                    # Clear Streamlit in-memory caches (best-effort).
+                    try:
+                        st.cache_data.clear()
+                        st.cache_resource.clear()
+                    except Exception:
+                        pass
+
+                    # Reset session-state data holders so UI doesn't show stale values.
+                    space_state["loaded"] = False
+                    space_state["kp_df"] = pd.DataFrame()
+                    space_state["flux_df"] = pd.DataFrame()
+                    space_state["kp_error"] = ""
+                    space_state["flux_error"] = ""
+                    space_state["last_updated"] = None
+
+                    donki_state["loaded"] = False
+                    donki_state["datasets"] = {}
+                    donki_state["errors"] = {}
+                    donki_state["last_updated"] = None
+
+                    noaa_state = _noaa_space_state()
+                    noaa_state["bundles"] = {}
+                    noaa_state["errors"] = {}
+                    noaa_state["last_updated"] = None
+
+                    # Reset background fetch status so a fresh fetch can run.
+                    with _bg_fetch_lock:
+                        for k in ("space_weather", "noaa", "donki"):
+                            _bg_fetch_results[k]["done"] = False
+                            _bg_fetch_results[k]["error"] = None
+                            _bg_fetch_results[k]["data"] = {}
+                            _bg_fetch_results[k]["fetch_time"] = None
+                            _bg_fetch_results[k]["_applied"] = False
+
+                    errors_local = [e for e in (err_sw, err_noaa, err_donki) if e]
+                    if errors_local:
+                        st.error("Cache reset completed with errors: " + " | ".join(errors_local))
+                    else:
+                        st.success(
+                            f"Cleared caches: SWPC={deleted_sw} file(s), NOAA={deleted_noaa} file(s), DONKI={deleted_donki} file(s)."
+                        )
             if fetch_sw_clicked:
                 _sw_fetch_success = False
                 with st.status(
@@ -13747,6 +13963,41 @@ that predicts cognitive performance based on:
                 st.caption(f"⏰ Data: {data_age} (auto-refresh pending)")
             else:
                 st.caption(f"✅ Data: {data_age} | Auto-refresh: 12h")
+
+        with st.expander("🧹 Cache maintenance", expanded=False):
+            confirm_clear_noaa = st.checkbox(
+                "Enable NOAA cache reset (deletes local cached files)",
+                value=False,
+                key="cache_reset_confirm_noaa",
+                help=(
+                    "Use only if NOAA caches are corrupted or you want a clean refetch. "
+                    "First load after clearing will be slower."
+                ),
+            )
+            if st.button(
+                "🧹 Clear NOAA cache",
+                key="cache_reset_noaa_only",
+                disabled=not confirm_clear_noaa,
+            ):
+                deleted_noaa, err_noaa = _clear_cache_dir(CACHE_BASE_DIR / "noaa_space")
+                try:
+                    st.cache_data.clear()
+                    st.cache_resource.clear()
+                except Exception:
+                    pass
+                noaa_state["bundles"] = {}
+                noaa_state["errors"] = {}
+                noaa_state["last_updated"] = None
+                with _bg_fetch_lock:
+                    _bg_fetch_results["noaa"]["done"] = False
+                    _bg_fetch_results["noaa"]["error"] = None
+                    _bg_fetch_results["noaa"]["data"] = {}
+                    _bg_fetch_results["noaa"]["fetch_time"] = None
+                    _bg_fetch_results["noaa"]["_applied"] = False
+                if err_noaa:
+                    st.error(f"NOAA cache reset completed with errors: {err_noaa}")
+                else:
+                    st.success(f"Cleared NOAA cache: {deleted_noaa} file(s).")
 
         if fetch_noaa_clicked:
             with st.spinner("Fetching NOAA JSON feeds…"):
@@ -15373,7 +15624,13 @@ that predicts cognitive performance based on:
                 ):
                     st.info(
                         f"ML section included but no clusters were generated: {ml_error_message}")
-                if gpt_high_enabled:
+                st.markdown("---")
+                st.subheader("AI analysis (on-demand)")
+
+                with st.expander(
+                    "GPT-5.2 high reasoning interpretation (code interpreter)",
+                    expanded=False,
+                ):
                     gpt_section = st.container()
                     _render_gpt_high_interpretation(
                         gpt_section,
@@ -15385,33 +15642,120 @@ that predicts cognitive performance based on:
                         ml_summary_df=ml_summary_df,
                         report_markdown=report_markdown,
                     )
-                else:
-                    # If GPT is disabled, attempt to load the last stored report for this exact payload.
-                    loaded = False
-                    if active_user_context.get("has_user") and active_user_context.get("user_id"):
-                        try:
-                            payload = build_analysis_payload(
-                                meta_rows_for_context,
+
+                with st.expander(
+                    "Metric explanations appendix (Agent SDK, code interpreter)",
+                    expanded=False,
+                ):
+                    if multi_results_df.empty:
+                        st.info("Run an analysis to enable metric explanations.")
+                    else:
+                        export_metric_state = st.session_state.setdefault(
+                            "export_metric_explainer_state",
+                            {
+                                "signature": "",
+                                "explanations": [],
+                                "agent_markdown": "",
+                                "agent_payload": None,
+                                "agent_error": "",
+                                "used_agent": False,
+                                "markdown_appendix": "",
+                            },
+                        )
+                        use_openai_agent = st.checkbox(
+                            "Use OpenAI agent (requires OPENAI_API_KEY)",
+                            value=False,
+                            key="export_metric_explainer_use_openai",
+                            help="When enabled, the agent uses code interpreter + file search for deeper analysis.",
+                        )
+                        run_metric_explainer = st.button(
+                            "Generate metric explanations appendix",
+                            key="export_metric_explainer_generate",
+                            type="primary",
+                        )
+                        if run_metric_explainer:
+                            metrics_signature = hashlib.sha256(
+                                multi_results_df.to_json(
+                                    orient="split",
+                                    date_format="iso",
+                                ).encode("utf-8")
+                            ).hexdigest()
+                            manager = AgentInsightManager()
+                            result = manager.generate_metric_insights(
                                 multi_results_df,
-                                windowed_df,
-                                episodes_df,
-                                ml_summary_df,
-                                report_markdown=report_markdown,
+                                user_context=active_user_context,
+                                run_agent=bool(use_openai_agent),
                             )
-                            payload_hash = hashlib.sha256(payload.encode("utf-8")).hexdigest()
-                            db = get_database()
-                            report = db.get_ai_report(
-                                user_id=str(active_user_context.get("user_id")),
-                                report_type="hrv_gpt5_high",
-                                context_hash=payload_hash,
+                            payload_display = None
+                            if result.agent_payload is not None:
+                                try:
+                                    payload_display = json.loads(
+                                        json.dumps(result.agent_payload, default=str)
+                                    )
+                                except (TypeError, ValueError):
+                                    payload_display = result.agent_payload
+                            export_metric_state["signature"] = metrics_signature
+                            export_metric_state["explanations"] = [
+                                asdict(expl) for expl in result.explanations
+                            ]
+                            export_metric_state["agent_markdown"] = result.agent_markdown or ""
+                            export_metric_state["agent_payload"] = payload_display
+                            export_metric_state["agent_error"] = result.agent_error or ""
+                            export_metric_state["used_agent"] = result.used_agent
+                            export_metric_state["markdown_appendix"] = result.markdown_appendix
+
+                        explanations = export_metric_state.get("explanations", [])
+                        if explanations:
+                            explanation_df = pd.DataFrame(explanations)
+                            st.dataframe(
+                                explanation_df[
+                                    [
+                                        "dataset",
+                                        "display_name",
+                                        "value",
+                                        "unit",
+                                        "status",
+                                        "explanation",
+                                        "citation",
+                                    ]
+                                ],
+                                use_container_width=True,
                             )
-                            if report is not None and report.markdown.strip():
-                                st.session_state["gpt5_export_markdown"] = report.markdown
-                                loaded = True
-                        except Exception:
-                            loaded = False
-                    if not loaded:
-                        st.session_state["gpt5_export_markdown"] = ""
+                        else:
+                            st.info("Click **Generate** to build the metric appendix.")
+
+                        agent_md = export_metric_state.get("agent_markdown", "")
+                        if agent_md:
+                            st.markdown("#### GPT-5.2 agent narrative")
+                            st.markdown(agent_md)
+                        if export_metric_state.get("agent_error"):
+                            st.warning(export_metric_state["agent_error"])
+
+                        payload_preview = export_metric_state.get("agent_payload")
+                        if payload_preview:
+                            with st.expander("View request payload (debug)", expanded=False):
+                                st.json(payload_preview)
+
+                        appendix_markdown = export_metric_state.get("markdown_appendix", "")
+                        if appendix_markdown:
+                            st.text_area(
+                                "Appendix (markdown preview)",
+                                appendix_markdown,
+                                height=240,
+                                key="export_metric_explainer_markdown_preview",
+                            )
+                            file_name = (
+                                "metric_explainability_"
+                                + pd.Timestamp.utcnow().strftime("%Y%m%dT%H%M%SZ")
+                                + ".md"
+                            )
+                            st.download_button(
+                                "Download metric explanations appendix (Markdown)",
+                                data=appendix_markdown.encode("utf-8"),
+                                file_name=file_name,
+                                mime="text/markdown",
+                                key="export_metric_explainer_markdown_download",
+                            )
         gpt_report_md = st.session_state.get("gpt5_export_markdown", "")
         if gpt_report_md:
             st.markdown("---")
@@ -15462,10 +15806,6 @@ that predicts cognitive performance based on:
             audio_payload = st.session_state.get("gpt5_tts_audio")
             if isinstance(audio_payload, (bytes, bytearray)) and audio_payload:
                 st.audio(audio_payload, format="audio/mp3")
-        elif gpt_high_enabled:
-            st.info(
-                "GPT-5 interpretation is enabled; trigger the analysis to populate this section."
-            )
     with tab_about:
         # -------------------------------------------------------------------
         # ABOUT TAB — Always loads immediately regardless of HRV data state
