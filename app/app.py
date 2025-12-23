@@ -8652,6 +8652,104 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
         st.markdown(
             "*Compares current parasympathetic index with your historical baseline. "
             "Categories follow Kubios readiness definitions.*")
+
+        # ------------------------------------------------------------------
+        # HRF (Heart Rate Fragmentation) panel for performance-oriented review
+        # ------------------------------------------------------------------
+        if has_hrv_data and "multi_results_df" in locals() and not multi_results_df.empty:
+            with st.expander("⚡ HRF (Heart Rate Fragmentation) — Rhythm stability markers", expanded=False):
+                st.caption(
+                    "HRF quantifies rapid direction changes in RR dynamics (fragmentation). "
+                    "Use as an adjunct biomarker (not a standalone diagnosis)."
+                )
+                try:
+                    from hrv_fragmentation import HRFMetrics, interpret_hrf_metrics  # noqa: PLC0415
+                except Exception:
+                    HRFMetrics = None  # type: ignore[assignment]
+                    interpret_hrf_metrics = None  # type: ignore[assignment]
+
+                if HRFMetrics is None or interpret_hrf_metrics is None:
+                    st.info("HRF module not available.")
+                else:
+                    src_names = (
+                        multi_results_df["source"].astype(str).tolist()
+                        if "source" in multi_results_df.columns
+                        else ["Current"]
+                    )
+                    sel_src = st.selectbox(
+                        "Dataset",
+                        options=src_names,
+                        index=max(len(src_names) - 1, 0),
+                        key="readiness_hrf_source",
+                    )
+                    row_hrf = (
+                        multi_results_df[multi_results_df["source"] == sel_src].iloc[0]
+                        if "source" in multi_results_df.columns
+                        else multi_results_df.iloc[0]
+                    )
+                    pip = float(row_hrf.get("hrf_pip_pct", np.nan))
+                    pip_h = float(row_hrf.get("hrf_pip_h_pct", np.nan))
+                    pip_s = float(row_hrf.get("hrf_pip_s_pct", np.nan))
+                    ials = float(row_hrf.get("hrf_ials", np.nan))
+                    pss = float(row_hrf.get("hrf_pss_pct", np.nan))
+                    pas = float(row_hrf.get("hrf_pas_pct", np.nan))
+                    w0 = float(row_hrf.get("hrf_w0_pct", np.nan))
+                    w1 = float(row_hrf.get("hrf_w1_pct", np.nan))
+                    w2 = float(row_hrf.get("hrf_w2_pct", np.nan))
+                    w3 = float(
+                        row_hrf.get(
+                            "hrf_w3_pct",
+                            row_hrf.get("hrf_w3", np.nan),
+                        )
+                    )
+                    n_int = int(row_hrf.get("n_intervals", 0) or 0)
+                    quality_ok = bool(row_hrf.get("hrf_quality_ok", True))
+
+                    cols_hrf_1 = st.columns(4)
+                    cols_hrf_1[0].metric("PIP", f"{pip:.1f}%" if np.isfinite(pip) else "n/a")
+                    cols_hrf_1[1].metric("PIP_H", f"{pip_h:.1f}%" if np.isfinite(pip_h) else "n/a")
+                    cols_hrf_1[2].metric("PIP_S", f"{pip_s:.1f}%" if np.isfinite(pip_s) else "n/a")
+                    cols_hrf_1[3].metric("IALS", f"{ials:.3f}" if np.isfinite(ials) else "n/a")
+
+                    cols_hrf_2 = st.columns(4)
+                    cols_hrf_2[0].metric("PSS", f"{pss:.1f}%" if np.isfinite(pss) else "n/a")
+                    cols_hrf_2[1].metric("PAS", f"{pas:.1f}%" if np.isfinite(pas) else "n/a")
+                    cols_hrf_2[2].metric("W3", f"{w3:.1f}%" if np.isfinite(w3) else "n/a")
+                    cols_hrf_2[3].metric("Quality", "OK" if quality_ok else "Low")
+
+                    if all(
+                        np.isfinite(v)
+                        for v in (pip, pip_h, pip_s, ials, pss, pas, w0, w1, w2, w3)
+                    ):
+                        hrf_obj = HRFMetrics(
+                            pip=pip,
+                            pip_h=pip_h,
+                            pip_s=pip_s,
+                            ials=ials,
+                            pss=pss,
+                            pas=pas,
+                            w0=w0,
+                            w1=w1,
+                            w2=w2,
+                            w3=w3,
+                            n_intervals=n_int,
+                            quality_ok=quality_ok,
+                        )
+                        interp = interpret_hrf_metrics(hrf_obj)
+                        st.markdown(
+                            f"- **PIP**: {interp.get('pip', 'n/a')}\n"
+                            f"- **W3**: {interp.get('w3', 'n/a')}\n"
+                            f"- **IALS**: {interp.get('ials', 'n/a')}"
+                        )
+                        if "quality" in interp:
+                            st.warning(interp["quality"])
+                    else:
+                        st.info("HRF metrics will appear after you run HRV analysis with advanced metrics enabled.")
+
+                    st.caption(
+                        "Reference interpretation is based on published HRF cohorts (e.g., Costa et al., 2017; PROOF-AF). "
+                        "Generalization to younger/athletic cohorts is not yet fully validated."
+                    )
         pns_display_mapping: Dict[str, float] = {}
         ordered_names: List[str] = []
         if active_user_id:
