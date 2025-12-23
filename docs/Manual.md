@@ -75,11 +75,13 @@ All other tabs show **example data** and **reference values** to help you unders
 
 **Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. Space Weather and NOAA tabs auto-load cache-first data on open (reusing cached Kp/F10.7/NOAA feeds if offline) even without RR uploads. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the active mission database is stored under `crew/<Mission>/db/hrv_users.db` (selected in the sidebar Crew workspace selector) for mission-scoped portability.
 
-**Background fetch with 12-hour auto-refresh (v1.8.36):** On app startup, space weather data (NOAA SWPC Kp/Flux, NOAA JSON feeds, and NASA DONKI events) loads in a background daemon thread. Data automatically refreshes every 12 hours without user intervention. The UI remains fully responsive during fetches. Each tab shows:
+**Background fetch with 12-hour auto-refresh (v1.8.36+):** On app startup, space weather data (NOAA SWPC Kp/Flux, **full NOAA JSON feed library**, and NASA DONKI events) loads in a background daemon thread. Data automatically refreshes every 12 hours without user intervention. The UI remains fully responsive during fetches. Each tab shows:
 - **Status indicator**: 🔄 in progress / ✅ complete / ⚠️ error
 - **Data age**: e.g., "2h ago" or "Just now"
 - **Auto-refresh schedule**: "Auto-refresh: 12h"
 - **Stale data warning**: "⏰ auto-refresh pending" when data is >12h old
+
+**Cache storage:** Space weather/NOAA caches are persisted under `app/data_cache/` and mission HRV outputs under `crew/`. The Streamlit watcher is configured to ignore these folders to avoid unintended reload loops on Windows/OneDrive.
 
 Manual fetch buttons remain available for on-demand refresh. Force refresh bypasses the cache to fetch fresh data directly from NOAA/NASA servers.
 
