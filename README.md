@@ -73,11 +73,14 @@ cd HRV
 
 # Recommended: run commands explicitly in the correct env (avoids wrong-env issues)
 conda run -n hrv-py312 pip install -r requirements.txt
-conda run -n hrv-py312 streamlit run app/app.py
+conda run -n hrv-py312 streamlit run app/operational_app.py  # fast UI (profile + simple space-weather context)
+# or (full dashboards: correlations/ML + NOAA/Space Weather analysis)
+# conda run -n hrv-py312 streamlit run app/research_app.py
+# conda run -n hrv-py312 streamlit run app/app.py  # legacy research entrypoint
 
 # (Optional interactive shell)
 # conda activate hrv-py312
-# streamlit run app/app.py
+# streamlit run app/operational_app.py
 ```
 
 #### Option 2: Using Virtual Environment
@@ -97,7 +100,10 @@ source .venv/bin/activate  # macOS/Linux
 pip install -r requirements.txt
 
 # Run the application
-streamlit run app/app.py
+streamlit run app/operational_app.py
+# or (full dashboards)
+# streamlit run app/research_app.py
+# streamlit run app/app.py
 ```
 
 The app will open in your default browser at `http://localhost:8501`.
