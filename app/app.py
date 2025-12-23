@@ -6418,6 +6418,31 @@ def main() -> None:
         st.title("🧬 Mission Control - Flight Surgeon")
         st.caption("Dr. Diego L. Malpica, MD — Aerospace Medicine Specialist")
         st.caption("Contributing to AsterPhysiology Research Initiative")
+
+    # ---------------------------------------------------------------------
+    # App mode banner + enforcement (Operational vs Research philosophy)
+    # ---------------------------------------------------------------------
+    try:
+        from app_mode import AppMode, get_app_mode, render_app_mode_badge, set_app_mode  # noqa: PLC0415
+
+        current_mode = get_app_mode(default=AppMode.RESEARCH)
+        if current_mode != AppMode.RESEARCH:
+            # Enforce "fast operational app" philosophy by blocking research dashboards.
+            set_app_mode(current_mode)
+            render_app_mode_badge(current_mode)
+            st.error(
+                "This interface is **Research** (full dashboards: correlations/ML/NOAA/Space Weather). "
+                "Operational mode locks these features to keep the clinical UI fast and stable."
+            )
+            st.code("streamlit run app/operational_app.py")
+            st.stop()
+
+        # Default: research mode.
+        set_app_mode(AppMode.RESEARCH)
+        render_app_mode_badge(AppMode.RESEARCH)
+    except Exception:
+        # Mode banner is non-critical; never block the research UI if it fails.
+        pass
     
     # Initialize UI state manager for tracking data availability
     if UI_STATE_MANAGER_AVAILABLE:
