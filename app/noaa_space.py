@@ -598,7 +598,12 @@ def _prepare_frame(spec: NOAASourceSpec, raw_df: pd.DataFrame) -> NOAADataBundle
     )
 
 
-def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADataBundle:
+def fetch_noaa_source(
+    spec: NOAASourceSpec,
+    *,
+    use_cache: bool = True,
+    allow_stale_cache: bool = False,
+) -> NOAADataBundle:
     """
     Fetch and cache a NOAA feed according to the provided specification.
 
@@ -623,7 +628,7 @@ def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADa
     """
 
     if use_cache:
-        cached = _read_cache(spec)
+        cached = _read_cache(spec, allow_stale=bool(allow_stale_cache))
         if cached is not None:
             return _prepare_frame(spec, cached)
         # Fallback: reuse long-horizon SWPC cache for Kp when available.
@@ -651,7 +656,9 @@ def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADa
 
 
 def _fetch_single_source(
-    key: str, use_cache: bool
+    key: str,
+    use_cache: bool,
+    allow_stale_cache: bool,
 ) -> Tuple[str, Optional[NOAADataBundle], Optional[str]]:
     """
     Fetch a single NOAA source. Returns (key, bundle, error).
@@ -662,7 +669,11 @@ def _fetch_single_source(
     if spec is None:
         return key, None, "Unknown NOAA dataset key."
     try:
-        bundle = fetch_noaa_source(spec, use_cache=use_cache)
+        bundle = fetch_noaa_source(
+            spec,
+            use_cache=use_cache,
+            allow_stale_cache=allow_stale_cache,
+        )
         return key, bundle, None
     except (requests.RequestException, ValueError) as exc:
         return key, None, str(exc)
@@ -673,6 +684,7 @@ def load_noaa_space_data(
     *,
     use_cache: bool = True,
     max_workers: int = 8,
+    allow_stale_cache: bool = False,
 ) -> Tuple[Dict[str, NOAADataBundle], Dict[str, str]]:
     """
     Load one or more NOAA datasets defined in :data:`NOAA_SOURCES`.
@@ -700,7 +712,7 @@ def load_noaa_space_data(
     # Use parallel fetching for faster loading (especially when cache is stale)
     with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
         futures = {
-            executor.submit(_fetch_single_source, key, use_cache): key
+            executor.submit(_fetch_single_source, key, use_cache, bool(allow_stale_cache)): key
             for key in selected_keys
         }
         for future in concurrent.futures.as_completed(futures):
