@@ -10,17 +10,13 @@
 fileWatcherType = "poll"
 
 # Prevent Streamlit from treating data/cache/log writes as source changes.
-# IMPORTANT: Streamlit may resolve these relative to the current working dir
-# (which can be either repo root or `app/` depending on how the app is launched).
-# We include both forms to avoid accidental reload loops on Windows/OneDrive.
+# These paths are resolved relative to the working directory. For the documented
+# launch commands (run from repo root), these entries correctly target folders
+# inside the project.
 folderWatchBlacklist = [
   "logs",
-  "../logs",
   "crew",
-  "../crew",
   "app/data_cache",
-  "data_cache",
-  "../app/data_cache",
 ]
 
 # Never auto-rerun on file save in production/research runs.
