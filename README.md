@@ -19,6 +19,8 @@ Contributing to **AsterPhysiology** Research Initiative
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
 
+**NEW in v1.8.39**: **Performance Granularity & Research 2026** — New checkboxes in Performance Settings to toggle advanced analysis (entropy/HRF) and heavy downloads (NOAA) independently. `docs/updates2026.md` outlines the path for Heart Rate Fragmentation and Human-Autonomy Teaming simulations.
+
 **NEW in v1.8.37**: **Dual Garmin sleep autofill buttons + synced sleep/chronotype inputs** — One-click Vivosmart/Garmin pull now exists in both the Profile Tools Engine and the Sleep & Chronotype section under Energy & Nutrition. It fills sleep hours, quality, hours awake, RMSSD, resting HR, and feeds SAFTE fatigue plus Operational Performance.
 **NEW in v1.8.28**: **Crew mission workspaces** — The app now organizes data under `crew/` with **Mission 1** and **Mission 2**. The active mission’s **SQLite DB + backups** live in `crew/<Mission>/db/`, and per-subject files live in `crew/<Mission>/subjects/`.
 

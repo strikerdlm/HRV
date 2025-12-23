@@ -1584,10 +1584,16 @@ def _load_noaa_space_datasets(
     """
     Populate the NOAA space datasets in session state.
     """
+    
+    # Check performance settings for network permission
+    allow_network = True
+    if PERFORMANCE_UTILS_AVAILABLE:
+        perf = get_performance_settings()
+        allow_network = perf.get("enable_heavy_downloads", True)
 
     state["loading"] = True
     try:
-        bundles, errors = load_noaa_space_data(keys=keys, use_cache=use_cache)
+        bundles, errors = load_noaa_space_data(keys=keys, use_cache=use_cache, allow_network=allow_network)
     except requests.RequestException as exc:
         state["bundles"] = {}
         state["errors"] = {"__global__": str(exc)}
@@ -6493,6 +6499,25 @@ def main() -> None:
     if has_hrv_data_uploaded:
         st.sidebar.markdown("---")
         st.sidebar.subheader("⚙️ Analysis Settings")
+
+        # Performance settings (CPU optimization)
+        if PERFORMANCE_UTILS_AVAILABLE:
+            perf_settings = render_performance_settings_sidebar()
+        else:
+            perf_settings = {
+                "max_plot_points": 2000,
+                "max_dataframe_rows": 500,
+                "enable_heavy_plots": False,
+                "enable_advanced_computations": False,
+                "enable_heavy_downloads": True,
+                "optimize_memory": True,
+            }
+
+        # GPU processing settings (NVIDIA CUDA)
+        if GPU_PROCESSING_AVAILABLE:
+            gpu_config = render_gpu_settings_sidebar()
+        else:
+            gpu_config = None
         
         # Controls
         col_a, col_b, col_c = st.sidebar.columns(3)
@@ -6536,9 +6561,8 @@ def main() -> None:
         )
         fast_windowing = st.sidebar.checkbox(
             "Fast time-domain windowing (skip spectral/nonlinear in windows)", value=True)
-        high_compute = st.sidebar.checkbox(
-            "Advanced analysis (high compute for full-recording metrics)",
-            value=False)
+        # Advanced analysis setting derived from Performance Settings
+        high_compute = perf_settings.get("enable_advanced_computations", False)
         st.sidebar.markdown("---")
         st.sidebar.subheader("Deviation detection")
         apply_dev = st.sidebar.checkbox(
@@ -6595,23 +6619,6 @@ def main() -> None:
             "Enable ML-assisted deviation clustering", value=True
         )
         
-        # Performance settings (CPU optimization)
-        if PERFORMANCE_UTILS_AVAILABLE:
-            perf_settings = render_performance_settings_sidebar()
-        else:
-            perf_settings = {
-                "max_plot_points": 2000,
-                "max_dataframe_rows": 500,
-                "enable_heavy_plots": False,
-                "optimize_memory": True,
-            }
-        
-        # GPU processing settings (NVIDIA CUDA)
-        if GPU_PROCESSING_AVAILABLE:
-            gpu_config = render_gpu_settings_sidebar()
-        else:
-            gpu_config = None
-
         st.sidebar.markdown("---")
         st.sidebar.subheader("AI interpretation")
         gpt_high_enabled = st.sidebar.toggle(

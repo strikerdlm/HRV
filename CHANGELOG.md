@@ -5,6 +5,17 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.39] - 2025-12-23
+
+### Added
+- **Research & Roadmap 2026** (`docs/updates2026.md`): Comprehensive research document detailing Heart Rate Fragmentation (HRF) implementation plans, Biomathematical Models of Human Performance (SAFTE/Two-Process), and Human-Autonomy Teaming (HAT) simulation strategies for UAV/combat research.
+- **Performance Control Granularity** (`app/performance_utils.py`, `app/app.py`): Added specific checkboxes for "Enable advanced analysis" (Entropy, HRF) and "Enable heavy data downloads" (NOAA) within the Performance Settings sidebar. This allows low-end devices to disable heavy compute/network tasks while keeping basic analysis active.
+- **Network-aware NOAA fetching** (`app/noaa_space.py`): The NOAA data loader now respects the "Enable heavy downloads" setting; if disabled, it skips network requests and relies solely on cached data.
+
+### Changed
+- **Performance Settings Location** (`app/app.py`): Moved the "Performance Settings" and "GPU Processing" expanders to the top of the Analysis Settings sidebar section for better visibility.
+- **Simplified Sidebar** (`app/app.py`): Removed the standalone "Advanced analysis (high compute)" checkbox from Data Quality; this setting is now governed centrally by the Performance Settings preset (Fast/Balanced/Quality) or custom toggles.
+
 ## [1.8.38] - 2025-12-22
 
 ### Fixed

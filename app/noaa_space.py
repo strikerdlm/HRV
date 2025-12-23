@@ -571,7 +571,7 @@ def _prepare_frame(spec: NOAASourceSpec, raw_df: pd.DataFrame) -> NOAADataBundle
     )
 
 
-def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADataBundle:
+def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True, allow_network: bool = True) -> NOAADataBundle:
     """
     Fetch and cache a NOAA feed according to the provided specification.
 
@@ -581,6 +581,9 @@ def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADa
         Data source specification.
     use_cache :
         When True, attempt to load from the local cache before performing a network request.
+    allow_network :
+        When True, allow network requests if cache is missing or stale.
+        When False, only return cached data (if available), otherwise raise error or return empty.
 
     Returns
     -------
@@ -605,6 +608,14 @@ def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADa
             legacy_df = _read_legacy_dataframe_cache(legacy_cache)
             if legacy_df is not None and not legacy_df.empty:
                 return _prepare_frame(spec, legacy_df)
+    
+    if not allow_network:
+        # Try to read stale cache if network is disallowed
+        stale = _read_cache(spec, allow_stale=True)
+        if stale is not None:
+             return _prepare_frame(spec, stale)
+        raise requests.RequestException(f"Network disabled and no cache found for {spec.key}")
+
     try:
         raw_df = _download_dataset(spec)
         bundle = _prepare_frame(spec, raw_df)
@@ -627,6 +638,7 @@ def load_noaa_space_data(
     keys: Optional[Sequence[str]] = None,
     *,
     use_cache: bool = True,
+    allow_network: bool = True,
 ) -> Tuple[Dict[str, NOAADataBundle], Dict[str, str]]:
     """
     Load one or more NOAA datasets defined in :data:`NOAA_SOURCES`.
@@ -637,6 +649,8 @@ def load_noaa_space_data(
         Optional iterable of source identifiers to load. When omitted, every configured source is fetched.
     use_cache :
         Toggle cache usage. Setting this to False forces a fresh download.
+    allow_network :
+        Toggle network usage. Setting this to False prevents downloads.
 
     Returns
     -------
@@ -653,7 +667,7 @@ def load_noaa_space_data(
             errors[key] = "Unknown NOAA dataset key."
             continue
         try:
-            bundles[key] = fetch_noaa_source(spec, use_cache=use_cache)
+            bundles[key] = fetch_noaa_source(spec, use_cache=use_cache, allow_network=allow_network)
         except (requests.RequestException, ValueError) as exc:
             errors[key] = str(exc)
     return bundles, errors
