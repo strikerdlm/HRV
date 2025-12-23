@@ -17,6 +17,7 @@ folderWatchBlacklist = [
   "logs",
   "crew",
   "app/data_cache",
+  ".cursor",
 ]
 
 # Never auto-rerun on file save in production/research runs.
