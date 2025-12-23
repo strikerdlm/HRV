@@ -5,6 +5,16 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.41] - 2025-12-23
+
+### Changed
+- **Faster NOAA Space loads (Core vs Full)** (`app/app.py`): NOAA Space now defaults to a **Core** scope (key geomagnetic + solar-wind feeds) for fast loading, with an optional **Full** scope for the entire feed library.
+- **HTTP connection pooling** (`app/app.py`, `app/noaa_space.py`, `app/space_weather_impact.py`): Reuse pooled `requests.Session` connections to reduce repeated TLS handshakes when pulling many SWPC feeds.
+- **Background auto-fetch tuned for responsiveness** (`app/app.py`): Background fetch now preloads only the NOAA Core scope and uses a shorter DONKI default window to keep background refresh lightweight.
+
+### Fixed
+- **Space Weather fetch latency** (`app/app.py`): Kp and F10.7 fetches now run in parallel when using **📥 Fetch space weather**.
+
 ## [1.8.40] - 2025-12-23
 
 ### Fixed
