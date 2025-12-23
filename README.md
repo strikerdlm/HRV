@@ -108,6 +108,11 @@ streamlit run app/operational_app.py
 
 The app will open in your default browser at `http://localhost:8501`.
 
+### Operational vs Research — the “philosophy” (rules of thumb)
+
+- **Operational app** (`app/operational_app.py`): use for **clinical workflows** (User Profile, mission logs) and **lightweight space-weather context** (cached NOAA Kp/proton alerting inside the profile). Keep this app **fast, stable, and low-latency**.
+- **Research app** (`app/research_app.py`): use for **HRV/HRF computation**, **NOAA/Space Weather dashboards**, **correlations**, and **ML**. This app can be heavier and is where experimental/advanced analytics should live.
+
 ### Your First Analysis (5 Minutes)
 
 1. **Prepare your data**: Create a text file with one RR interval (in milliseconds) per line:
