@@ -214,9 +214,15 @@ GARMIN_PASSWORD=your_password
 
 ```bash
 # Conda (recommended)
-conda run -n hrv-py312 streamlit run app/app.py
+conda run -n hrv-py312 streamlit run app/operational_app.py
+# or (full dashboards: correlations/ML + NOAA/Space Weather analysis)
+# conda run -n hrv-py312 streamlit run app/research_app.py
+# conda run -n hrv-py312 streamlit run app/app.py
 
 # Virtualenv (after activating .venv)
+# streamlit run app/operational_app.py
+# or (full dashboards)
+# streamlit run app/research_app.py
 # streamlit run app/app.py
 ```
 
