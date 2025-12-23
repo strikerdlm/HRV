@@ -10,10 +10,26 @@ This wrapper exists so the repo exposes two explicit entrypoints:
 The underlying implementation remains in `app/app.py` (historic entrypoint).
 """
 
+import os
+
+
+_ENV_SKIP_PAGE_CONFIG = "HRV_SKIP_STREAMLIT_PAGE_CONFIG"
+
 
 def main() -> None:
-    # IMPORTANT: when running Streamlit from inside `app/`, `import app` resolves
-    # to `app/app.py` (not the package). That module defines `main()`.
+    import streamlit as st  # noqa: PLC0415
+
+    # IMPORTANT: must be the first Streamlit command in this entrypoint.
+    st.set_page_config(
+        page_title="HRV Analysis — Streamlit + ECharts",
+        layout="wide",
+    )
+
+    # Tell `app/app.py` to skip calling `st.set_page_config()` again.
+    os.environ[_ENV_SKIP_PAGE_CONFIG] = "1"
+
+    # When running Streamlit from inside `app/`, `import app` resolves to `app/app.py`
+    # (not the package). That module defines `main()`.
     import app as research_app  # noqa: PLC0415
 
     research_app.main()
