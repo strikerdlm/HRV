@@ -1821,9 +1821,10 @@ def _bg_fetch_all_space_data() -> None:
             _bg_fetch_results["space_weather"]["done"] = True
             _bg_fetch_results["space_weather"]["fetch_time"] = fetch_time
 
-    # 2. NOAA feeds
+    # 2. NOAA feeds (full library for downstream research/correlation)
     try:
-        bundles, errors = load_noaa_space_data(keys=list(NOAA_CORE_KEYS), use_cache=True)
+        # Force-refresh so the on-disk cache stays warm for analysis.
+        bundles, errors = load_noaa_space_data(keys=None, use_cache=False)
         with _bg_fetch_lock:
             _bg_fetch_results["noaa"]["data"] = {
                 "bundles": bundles,
@@ -1844,7 +1845,7 @@ def _bg_fetch_all_space_data() -> None:
     # 3. DONKI (last 30 days by default)
     try:
         end_dt = pd.Timestamp.utcnow()
-        start_dt = end_dt - pd.Timedelta(days=14)
+        start_dt = end_dt - pd.Timedelta(days=30)
         start_str = start_dt.strftime("%Y-%m-%d")
         end_str = end_dt.strftime("%Y-%m-%d")
 
@@ -8223,8 +8224,16 @@ def main() -> None:
             st.dataframe(multi_results_df)
             novel_columns = [
                 "hrf_pip_pct",
+                "hrf_pip_h_pct",
+                "hrf_pip_s_pct",
                 "hrf_ials",
                 "hrf_pss_pct",
+                "hrf_pas_pct",
+                "hrf_w0_pct",
+                "hrf_w1_pct",
+                "hrf_w2_pct",
+                "hrf_w3_pct",
+                "hrf_quality_ok",
                 "deceleration_capacity",
                 "acceleration_capacity",
                 "permutation_entropy",
@@ -12000,7 +12009,6 @@ that predicts cognitive performance based on:
                             st.error(f"Failed to fetch impact predictions: {exc}")
                         finally:
                             st.session_state["impact_snapshot_loading"] = False
-                        st.rerun()
                 with col_refresh_info:
                     if st.session_state.get("impact_snapshot"):
                         snap = st.session_state["impact_snapshot"]
@@ -12119,40 +12127,9 @@ that predicts cognitive performance based on:
             space_state = _space_weather_state()
             donki_state = _donki_state()
 
-            # Performance control: allow disabling background auto-fetch for faster initial load
-            perf_col1, perf_col2 = st.columns([1, 3])
-            with perf_col1:
-                auto_fetch_enabled = st.checkbox(
-                    "Enable background auto-fetch (slower load)",
-                    value=bool(st.session_state.get("space_auto_fetch_enabled", False)),  # Default OFF for faster startup
-                    key="space_auto_fetch_enabled",
-                    help="When enabled, NOAA/DONKI fetch runs automatically in the background when you open this tab.",
-                )
-            with perf_col2:
-                st.caption("Tip: Leave this off for quicker tab load; use the fetch buttons below when needed.")
-
-            # Start background fetch lazily only when enabled
-            if auto_fetch_enabled:
-                _ensure_background_fetch_for_space_tabs()
-                bg_status = _poll_background_fetch()
-                if not space_state.get("loaded") and not bg_status["space_weather"]["done"]:
-                    _auto_fetch_space_weather_if_needed(space_state)
-            else:
-                # Minimal status when auto-fetch is disabled
-                bg_status = {
-                    "space_weather": {
-                        "done": bool(space_state.get("loaded")),
-                        "error": None,
-                        "stale": False,
-                    },
-                    "donki": {
-                        "done": bool(donki_state.get("loaded")),
-                        "error": None,
-                        "stale": False,
-                    },
-                }
-                if not space_state.get("loaded"):
-                    st.info("Auto-fetch is off. Click “📥 Fetch space weather” or “🌐 Fetch NASA DONKI” to load data.")
+            # Background auto-refresh (12h): keep SWPC/NOAA/DONKI caches warm for research analysis.
+            _ensure_background_fetch_for_space_tabs()
+            bg_status = _poll_background_fetch()
 
             # Data age indicator
             data_age = _get_bg_fetch_age_str()
@@ -12227,7 +12204,8 @@ that predicts cognitive performance based on:
                         )
                         st.error(f"Failed to fetch NOAA SWPC datasets: {exc}")
                 if _sw_fetch_success:
-                    st.rerun()
+                    # Results are already in session state; avoid extra rerun/flicker.
+                    pass
             if fetch_donki_clicked:
                 if not NASA_API_KEY:
                     st.warning(
@@ -12261,7 +12239,8 @@ that predicts cognitive performance based on:
                             )
                             st.error(f"Failed to fetch NASA DONKI datasets: {exc}")
                     if _donki_fetch_success:
-                        st.rerun()
+                        # Results are already in session state; avoid extra rerun/flicker.
+                        pass
 
             if space_state.get("swl_loaded"):
                 last_swl = space_state.get("swl_last_updated")
@@ -12275,7 +12254,10 @@ that predicts cognitive performance based on:
             flux_df = pd.DataFrame()
             kp_error = False
             if not space_state.get("loaded"):
-                st.info("Click 'Fetch space weather data' to populate NOAA SWPC metrics.")
+                if not bg_status.get("space_weather", {}).get("done", False):
+                    st.info("Fetching space weather in the background… (you can also click **Fetch space weather**).")
+                else:
+                    st.info("Click **Fetch space weather** to populate NOAA SWPC metrics.")
             else:
                 last_fetch = space_state.get("last_updated")
                 if isinstance(last_fetch, pd.Timestamp):
@@ -13621,6 +13603,7 @@ that predicts cognitive performance based on:
         noaa_state = _noaa_space_state()
         # Check if background fetch already populated data
         try:
+            _ensure_background_fetch_for_space_tabs()
             bg_status = _poll_background_fetch()
         except Exception:
             bg_status = {"noaa": {"done": False, "error": None, "stale": False}}
@@ -13670,11 +13653,9 @@ that predicts cognitive performance based on:
         if fetch_noaa_clicked:
             with st.spinner("Fetching NOAA JSON feeds…"):
                 _load_noaa_space_datasets(noaa_state, keys=keys_to_fetch)
-            st.rerun()
         if refresh_noaa_clicked:
             with st.spinner("Refreshing NOAA JSON feeds…"):
                 _load_noaa_space_datasets(noaa_state, keys=keys_to_fetch, use_cache=False)
-            st.rerun()
         # Auto-load uses cache-first; buttons remain for manual refresh/force refresh
         if noaa_state.get("loading"):
             st.info("NOAA feeds are loading…")
@@ -13694,7 +13675,10 @@ that predicts cognitive performance based on:
                 and pd.api.types.is_numeric_dtype(windowed_df[metric])
             ]
         if not bundles:
-            st.info("📡 Click **Fetch NOAA feeds** above to load solar/geomagnetic data.")
+            if not bg_status.get("noaa", {}).get("done", False):
+                st.info("📡 Fetching NOAA feeds in the background… (you can also click **Fetch NOAA feeds**).")
+            else:
+                st.info("📡 Click **Fetch NOAA feeds** above to load solar/geomagnetic data.")
         else:
             option_labels = {
                 key: bundle.spec.title for key, bundle in bundles.items()
