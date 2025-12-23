@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Bogotá timezone alignment** (`app/user_profile_tab.py`): All user-facing wake times and “hours since waking” now use Bogotá time (UTC-5) across clinical assessment and Garmin autofill flows, avoiding Pacific/UTC drift.
 - **Visible timezone indicator** (`app/user_profile_tab.py`): Clinical Assessment and Profile Tools now display the detected Bogotá timezone (UTC-5) so users can confirm clock alignment.
 - **Auto-only hours awake** (`app/user_profile_tab.py`): Hours since waking is now strictly auto-computed from the selected wake time and local clock to prevent drift or manual inconsistencies.
+- **Space Weather/NOAA tab load guard** (`app/app.py`): Fixed an uninitialized loading placeholder that could raise an error before the NOAA Space tab rendered when the Space Weather dashboard wasn’t loaded, restoring the “Load Space Weather dashboard” and NOAA Space tabs.
 
 ## [1.8.39] - 2025-12-23
 
