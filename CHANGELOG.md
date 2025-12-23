@@ -11,7 +11,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Population Norms now works immediately after RR upload** (`app/app.py`): The norms comparison no longer depends on windowed metrics being present; it now falls back to full-recording or quick RR-derived summaries and lets you choose the recording to compare.
 
 ### Changed
-- **Metric Explainer is now strictly on-demand by default** (`app/app.py`): Auto-refresh defaults OFF and expensive signature hashing only runs when you click generate (or explicitly enable auto-refresh), reducing unintended background load.
+- **OpenAI/Agents analysis is now Export-tab only and strictly on-demand** (`app/app.py`): AI analysis no longer runs from analysis tabs and will never auto-trigger; it runs only when you click the Export-tab buttons.
+- **Metric Explainer is now Export-tab only and on-demand** (`app/app.py`): Explanations are generated only when requested from Export; auto-refresh is off by default.
+- **GPT-5.2 interpretation now exposes code interpreter** (`app/gpt_interpretation.py`): The export interpretation request now includes the `code_interpreter` tool for numeric/derived-stat computations from the payload.
 
 ### Added
 - **Friendly “How to read this plot” guidance** (`app/app.py`): Added concise axis/interpretation help expanders for Time Series, Frequency (PSD), Nonlinear (Poincaré), and Spectrogram tabs.
