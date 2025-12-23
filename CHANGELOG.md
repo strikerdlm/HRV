@@ -11,7 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Clinical Assessment wake time** (`app/user_profile_tab.py`): Garmin sleep end timestamps are now converted to the local timezone with timezone-aware defaults, and Garmin daily metric rows are normalized safely (dataclass/`asdict`). Wake time and hours-since-waking now reflect today's Vivosmart data instead of showing UTC-shifted times.
 - **Bogotá timezone alignment** (`app/user_profile_tab.py`): All user-facing wake times and “hours since waking” now use Bogotá time (UTC-5) across clinical assessment and Garmin autofill flows, avoiding Pacific/UTC drift.
 - **Visible timezone indicator** (`app/user_profile_tab.py`): Clinical Assessment and Profile Tools now display the detected Bogotá timezone (UTC-5) so users can confirm clock alignment.
-- **Editable hours awake** (`app/user_profile_tab.py`): Hours since waking is now user-editable (default still auto-computed) so you can correct cases where Garmin/default wake time differs from your actual wake time.
+- **Auto-only hours awake** (`app/user_profile_tab.py`): Hours since waking is now strictly auto-computed from the selected wake time and local clock to prevent drift or manual inconsistencies.
 
 ## [1.8.39] - 2025-12-23
 
