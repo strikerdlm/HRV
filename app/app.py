@@ -1183,11 +1183,14 @@ def _clear_cache_dir(cache_dir: Path, *, max_files: int = 5000) -> Tuple[int, Op
         # Delete files first (bounded).
         for entry in cache_dir.rglob("*"):
             if entry.is_file():
-                deleted += 1
-                if deleted > max_files:
-                    return deleted, f"Refusing to delete more than {max_files} files."
                 try:
+                    if deleted >= max_files:
+                        return (
+                            deleted,
+                            f"Refusing to delete more than {max_files} files.",
+                        )
                     entry.unlink()
+                    deleted += 1
                 except OSError as exc:
                     return deleted, f"Failed to delete {entry.name}: {exc}"
         # Best-effort: remove empty subdirectories (reverse depth order).
