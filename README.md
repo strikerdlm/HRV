@@ -841,3 +841,26 @@ MIT License — See [LICENSE](LICENSE) for details.
 - **Documentation**: See `docs/Manual.md` for comprehensive usage guide
 - **Issues**: Open a GitHub issue for bugs or feature requests
 - **Discussions**: Use GitHub Discussions for questions
+
+---
+
+## ⚡ Low-end performance controls (v1.8.39+)
+
+For low-end computers (and/or slow networks), you can now *opt out* of expensive operations.
+
+### Where to find the toggles
+
+Open the sidebar expander: **⚡ Performance Settings**
+
+- **Enable heavy computations**
+  - **Off**: disables compute-intensive features (advanced nonlinear metrics, ML clustering, and the Spectrogram tab compute path).
+  - **On**: restores advanced analytics.
+- **Enable heavy downloads (network)**
+  - **Off**: prevents new downloads from NOAA SWPC / NASA DONKI / SpaceWeatherLive (buttons and auto-fetch are disabled).
+  - **On**: allows on-demand fetching and background auto-fetch.
+
+### Recommended “low-end” configuration
+
+- Keep both toggles **off**
+- Use **Minimal mode (fastest)** in the HRV sidebar (when HRV data is loaded)
+- Keep RR plot point caps low (e.g., **500**)

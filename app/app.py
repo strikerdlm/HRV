@@ -6128,6 +6128,29 @@ def main() -> None:
         
         st.caption("Debug logs: `logs/app.log`, `logs/errors.log`, `logs/streamlit.log`")
 
+    # ----------------------------------------------------------------------
+    # Global performance gates (low-end friendly)
+    # ----------------------------------------------------------------------
+    # These are master switches for expensive compute and network fetch paths.
+    # They are rendered early so they apply even when no HRV data is loaded.
+    if PERFORMANCE_UTILS_AVAILABLE:
+        perf_settings = render_performance_settings_sidebar()
+    else:
+        perf_settings = {
+            "enable_heavy_computations": False,
+            "enable_heavy_downloads": False,
+            "max_plot_points": 2000,
+            "max_dataframe_rows": 500,
+            "enable_heavy_plots": False,
+            "optimize_memory": True,
+        }
+    st.session_state["_allow_heavy_compute"] = bool(
+        perf_settings.get("enable_heavy_computations", False)
+    )
+    st.session_state["_allow_heavy_downloads"] = bool(
+        perf_settings.get("enable_heavy_downloads", False)
+    )
+
     # Apply neutral layout refinements (responsive margins, full-width
     # components) + suppress known Streamlit toast errors
     st.markdown(
@@ -6536,9 +6559,18 @@ def main() -> None:
         )
         fast_windowing = st.sidebar.checkbox(
             "Fast time-domain windowing (skip spectral/nonlinear in windows)", value=True)
+        _allow_heavy_compute_sidebar = bool(
+            st.session_state.get("_allow_heavy_compute", True)
+        )
         high_compute = st.sidebar.checkbox(
             "Advanced analysis (high compute for full-recording metrics)",
-            value=False)
+            value=False,
+            disabled=not _allow_heavy_compute_sidebar,
+            help=(
+                "Requires 'Enable heavy computations' in ⚡ Performance Settings. "
+                "When enabled, the app will compute additional nonlinear/advanced metrics."
+            ),
+        )
         st.sidebar.markdown("---")
         st.sidebar.subheader("Deviation detection")
         apply_dev = st.sidebar.checkbox(
@@ -6592,14 +6624,26 @@ def main() -> None:
 
         st.sidebar.subheader("ML enhancements")
         enable_ml = st.sidebar.checkbox(
-            "Enable ML-assisted deviation clustering", value=True
+            "Enable ML-assisted deviation clustering",
+            value=True,
+            disabled=not _allow_heavy_compute_sidebar,
+            help=(
+                "Requires 'Enable heavy computations' in ⚡ Performance Settings. "
+                "Disable on low-end CPUs for faster interaction."
+            ),
         )
         
-        # Performance settings (CPU optimization)
+        # Performance settings (CPU optimization) already rendered globally above.
         if PERFORMANCE_UTILS_AVAILABLE:
-            perf_settings = render_performance_settings_sidebar()
+            perf_settings = get_performance_settings()
         else:
             perf_settings = {
+                "enable_heavy_computations": bool(
+                    st.session_state.get("_allow_heavy_compute", False)
+                ),
+                "enable_heavy_downloads": bool(
+                    st.session_state.get("_allow_heavy_downloads", False)
+                ),
                 "max_plot_points": 2000,
                 "max_dataframe_rows": 500,
                 "enable_heavy_plots": False,
@@ -6705,9 +6749,30 @@ def main() -> None:
             high_compute = False
             max_windows = min(int(max_windows), 800)
             enable_ml = False
+            # Minimal mode forces global heavy gates off for responsiveness.
+            if "performance_settings" in st.session_state:
+                st.session_state["performance_settings"]["enable_heavy_computations"] = False
+                st.session_state["performance_settings"]["enable_heavy_downloads"] = False
+            st.session_state["_allow_heavy_compute"] = False
+            st.session_state["_allow_heavy_downloads"] = False
             st.sidebar.caption(
                 "Minimal mode: processing 1 dataset, fast time-domain windowing, heavy plots/tabs skipped."
             )
+        else:
+            # Refresh local snapshot of the global toggles.
+            st.session_state["_allow_heavy_compute"] = bool(
+                perf_settings.get("enable_heavy_computations", True)
+            )
+            st.session_state["_allow_heavy_downloads"] = bool(
+                perf_settings.get("enable_heavy_downloads", True)
+            )
+
+        # Enforce global compute gate even if local checkboxes were previously enabled.
+        if not bool(st.session_state.get("_allow_heavy_compute", True)):
+            high_compute = False
+            enable_ml = False
+            fast_windowing = True
+            skip_spectrogram = True
 
         analysis_settings = _build_analysis_settings(
             window=win,
@@ -7433,8 +7498,10 @@ def main() -> None:
                     else up.rr_ms
                 )
                 _compute_start = time.perf_counter()
-                m = _cached_comprehensive(
-                    use_rr, include_advanced=bool(high_compute))
+                allow_adv = bool(
+                    bool(high_compute) and bool(st.session_state.get("_allow_heavy_compute", True))
+                )
+                m = _cached_comprehensive(use_rr, include_advanced=allow_adv)
                 _compute_ms = (time.perf_counter() - _compute_start) * 1000.0
                 m["source"] = name
                 start_ts = (
@@ -7964,7 +8031,7 @@ def main() -> None:
                 "- Color intensity: Power (ms²/Hz)\n\n"
                 "👈 **Upload HRV data to see time-frequency dynamics.**"
             )
-        elif skip_spectrogram:
+        elif skip_spectrogram or not bool(st.session_state.get("_allow_heavy_compute", True)):
             st.info("Spectrogram disabled (Performance & display).")
         else:
             st.markdown("### 📉 Spectrogram (Time-Frequency)")
@@ -11797,6 +11864,8 @@ that predicts cognitive performance based on:
                 st.markdown("### 🎯 Space Weather Impact Predictions")
                 st.markdown(f"*All times in Bogotá, Colombia ({BOGOTA_TZ_NAME})*")
             
+                _downloads_allowed = bool(st.session_state.get("_allow_heavy_downloads", True))
+            
                 # Session state for impact snapshot
                 if "impact_snapshot" not in st.session_state:
                     st.session_state["impact_snapshot"] = None
@@ -11815,6 +11884,7 @@ that predicts cognitive performance based on:
                     and not st.session_state.get("impact_snapshot_error")
                     and not st.session_state.get("impact_snapshot_loading")
                     and not st.session_state.get("impact_snapshot_attempted")
+                    and _downloads_allowed
                 ):
                     st.session_state["impact_snapshot_loading"] = True
                     try:
@@ -11830,7 +11900,16 @@ that predicts cognitive performance based on:
             
                 col_fetch_impact, col_refresh_info = st.columns([1, 2])
                 with col_fetch_impact:
-                    if st.button("🔄 Fetch Impact Predictions", key="fetch_impact_predictions"):
+                    if st.button(
+                        "🔄 Fetch Impact Predictions",
+                        key="fetch_impact_predictions",
+                        disabled=not _downloads_allowed,
+                        help=(
+                            "Requires 'Enable heavy downloads (network)' in ⚡ Performance Settings."
+                            if not _downloads_allowed
+                            else "Fetch current NOAA SWPC conditions and compute arrival times."
+                        ),
+                    ):
                         with st.spinner("Calculating arrival times..."):
                             st.session_state["impact_snapshot_loading"] = True
                             try:
@@ -11966,17 +12045,25 @@ that predicts cognitive performance based on:
             # Performance control: allow disabling background auto-fetch for faster initial load
             perf_col1, perf_col2 = st.columns([1, 3])
             with perf_col1:
+                _downloads_allowed = bool(st.session_state.get("_allow_heavy_downloads", True))
                 auto_fetch_enabled = st.checkbox(
                     "Enable background auto-fetch (slower load)",
                     value=bool(st.session_state.get("space_auto_fetch_enabled", False)),  # Default OFF for faster startup
                     key="space_auto_fetch_enabled",
                     help="When enabled, NOAA/DONKI fetch runs automatically in the background when you open this tab.",
+                    disabled=not _downloads_allowed,
                 )
             with perf_col2:
-                st.caption("Tip: Leave this off for quicker tab load; use the fetch buttons below when needed.")
+                if _downloads_allowed:
+                    st.caption("Tip: Leave this off for quicker tab load; use the fetch buttons below when needed.")
+                else:
+                    st.caption(
+                        "Network downloads are disabled in ⚡ Performance Settings. "
+                        "Enable them to fetch NOAA/DONKI/SWL data."
+                    )
 
             # Start background fetch lazily only when enabled
-            if auto_fetch_enabled:
+            if auto_fetch_enabled and _downloads_allowed:
                 _ensure_background_fetch_for_space_tabs()
                 bg_status = _poll_background_fetch()
                 if not space_state.get("loaded") and not bg_status["space_weather"]["done"]:
@@ -12005,13 +12092,14 @@ that predicts cognitive performance based on:
             with col_fetch_sw:
                 fetch_sw_clicked = st.button(
                     "📥 Fetch space weather", key="fetch_space_weather",
-                    help="Fetch Kp index and solar radio flux from NOAA SWPC"
+                    help="Fetch Kp index and solar radio flux from NOAA SWPC",
+                    disabled=not _downloads_allowed,
                 )
             with col_fetch_donki:
                 fetch_donki_clicked = st.button(
                     "🌐 Fetch NASA DONKI",
                     key="fetch_donki",
-                    disabled=not NASA_API_KEY,
+                    disabled=(not NASA_API_KEY) or (not _downloads_allowed),
                     help="Requires NASA_API_KEY in your .env file.",
                 )
             with col_bg_info:
@@ -12047,7 +12135,7 @@ that predicts cognitive performance based on:
                 step=1,
                 key="donki_window_days",
             )
-            if fetch_sw_clicked:
+            if fetch_sw_clicked and _downloads_allowed:
                 with st.status(
                     "Fetching NOAA SWPC datasets…", state="running", expanded=True
                 ) as status:
@@ -12069,7 +12157,7 @@ that predicts cognitive performance based on:
                             label=f"Fetch failed: {exc}", state="error", expanded=True
                         )
                         st.error(f"Failed to fetch NOAA SWPC datasets: {exc}")
-            if fetch_donki_clicked:
+            if fetch_donki_clicked and _downloads_allowed:
                 if not NASA_API_KEY:
                     st.warning(
                         "Set NASA_API_KEY in your .env file to query NASA DONKI APIs."
@@ -12642,28 +12730,35 @@ that predicts cognitive performance based on:
                 )
                 if selected_dataset:
                     with st.expander(f"{selected_dataset} (latest rows)"):
-                        try:
-                            extra_df = _fetch_swpc_dataset(
-                                SWPC_EXTRA_DATASETS[selected_dataset]
-                            )
-                        except requests.RequestException as exc:
-                            st.error(
-                                f"Failed to retrieve {selected_dataset.lower()}: {exc}"
-                            )
-                        except ValueError as exc:
-                            st.error(
-                                f"Unexpected response for {selected_dataset.lower()}: {exc}"
+                        if not _downloads_allowed:
+                            st.info(
+                                "Network downloads are disabled. Enable 'Enable heavy downloads (network)' "
+                                "in ⚡ Performance Settings to fetch this dataset."
                             )
                         else:
-                            if extra_df.empty:
-                                st.info("No data returned for this feed.")
+                            try:
+                                extra_df = _fetch_swpc_dataset(
+                                    SWPC_EXTRA_DATASETS[selected_dataset]
+                                )
+                            except requests.RequestException as exc:
+                                st.error(
+                                    f"Failed to retrieve {selected_dataset.lower()}: {exc}"
+                                )
+                            except ValueError as exc:
+                                st.error(
+                                    f"Unexpected response for {selected_dataset.lower()}: {exc}"
+                                )
                             else:
-                                st.dataframe(extra_df.tail(100))
+                                if extra_df.empty:
+                                    st.info("No data returned for this feed.")
+                                else:
+                                    st.dataframe(extra_df.tail(100))
 
                 with st.expander("SpaceWeatherLive snapshot (scrape + OpenAI fallback)"):
                     if st.button(
                         "Fetch SpaceWeatherLive data",
-                            key="btn_fetch_swl"):
+                            key="btn_fetch_swl",
+                            disabled=not _downloads_allowed):
                         snap = None
                         try:
                             snap = fetch_spaceweatherlive_snapshot()

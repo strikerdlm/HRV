@@ -11,6 +11,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Clinical assessment Garmin autofill** (`app/user_profile_tab.py`): Handle GarminDailyMetrics dataclass objects when populating sleep context to prevent `'GarminDailyMetrics' object has no attribute 'get'` errors in the clinical assessment panel.
 - **Hours since waking calculation** (`app/user_profile_tab.py`): Hours awake now derives directly from wake time (manual or Garmin) and current clock time on every rerun, ensuring today's value stays accurate without extra Garmin fetches.
 
+## [1.8.39] - 2025-12-23
+
+### Added
+- **Low-end performance master switches** (`app/performance_utils.py`, `app/app.py`): Added two opt-in checkboxes under **⚡ Performance Settings**:
+  - **Enable heavy computations** (gates advanced nonlinear metrics, ML clustering, and spectrogram computation)
+  - **Enable heavy downloads (network)** (gates NOAA SWPC / NASA DONKI / SpaceWeatherLive fetch workflows)
+
+### Changed
+- **Advanced analysis now respects global compute gate** (`app/app.py`): “Advanced analysis (high compute…)” is disabled unless heavy computations are enabled; full-recording metrics run with `include_advanced=False` when the global compute gate is off.
+- **Space Weather fetch UI respects global download gate** (`app/app.py`): Background auto-fetch and manual fetch buttons are disabled when heavy downloads are disabled; cached data can still be viewed when already loaded.
+
+### Fixed
+- **SpaceWeatherLive CLI fetch script formatting** (`app/swl_fetch.py`): Normalized indentation and formatting for reliability.
+
+### Tests
+- All tests pass (`pytest`).
+
 ## [1.8.37] - 2025-12-21
 
 ### Added

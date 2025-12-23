@@ -422,6 +422,9 @@ def get_performance_settings() -> Dict[str, Any]:
             # Set defaults based on CPU performance tier
             if cpu_info.performance_tier == "high":
                 defaults = {
+                    # Global feature gates (low-end friendly)
+                    "enable_heavy_computations": True,
+                    "enable_heavy_downloads": True,
                     "enable_heavy_plots": True,
                     # Default to ultra-fast plotting for rapid identification demos.
                     # Users can raise this via Performance Preset / Custom sliders.
@@ -436,6 +439,10 @@ def get_performance_settings() -> Dict[str, Any]:
                 }
             elif cpu_info.performance_tier == "medium":
                 defaults = {
+                    # Medium tier can usually handle advanced computation,
+                    # but network fetches can still stall UI on weak connections.
+                    "enable_heavy_computations": True,
+                    "enable_heavy_downloads": False,
                     "enable_heavy_plots": False,
                     "max_plot_points": 500,
                     "max_dataframe_rows": 300,
@@ -448,6 +455,9 @@ def get_performance_settings() -> Dict[str, Any]:
                 }
             else:  # low
                 defaults = {
+                    # Low-end default: keep the app responsive by default.
+                    "enable_heavy_computations": False,
+                    "enable_heavy_downloads": False,
                     "enable_heavy_plots": False,
                     "max_plot_points": 500,
                     "max_dataframe_rows": 150,
@@ -473,6 +483,8 @@ def get_performance_settings() -> Dict[str, Any]:
 def _get_fallback_defaults() -> Dict[str, Any]:
     """Get conservative fallback defaults when CPU detection is unavailable."""
     return {
+        "enable_heavy_computations": False,
+        "enable_heavy_downloads": False,
         "enable_heavy_plots": False,
         "max_plot_points": 500,
         "max_dataframe_rows": 200,
@@ -525,6 +537,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             st.caption("✓ Using auto-detected optimal settings")
         elif preset == "Fast (Low CPU)":
             # Ultra-fast preset for rapid identification / demo use.
+            settings["enable_heavy_computations"] = False
+            settings["enable_heavy_downloads"] = False
             settings["max_plot_points"] = 500
             settings["max_dataframe_rows"] = 150
             settings["max_windows"] = 200
@@ -532,6 +546,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["optimize_memory"] = True
             settings["use_fast_entropy"] = True
         elif preset == "Quality (High CPU)":
+            settings["enable_heavy_computations"] = True
+            settings["enable_heavy_downloads"] = True
             settings["max_plot_points"] = 5000
             settings["max_dataframe_rows"] = 1000
             settings["max_windows"] = 1000
@@ -539,12 +555,32 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["optimize_memory"] = False
             settings["use_fast_entropy"] = False
         elif preset == "Balanced":
+            settings["enable_heavy_computations"] = True
+            settings["enable_heavy_downloads"] = True
             settings["max_plot_points"] = 2000
             settings["max_dataframe_rows"] = 500
             settings["max_windows"] = 500
             settings["enable_heavy_plots"] = False
             settings["optimize_memory"] = True
             settings["use_fast_entropy"] = True
+
+        # Global gates (always visible, regardless of preset)
+        settings["enable_heavy_computations"] = st.checkbox(
+            "Enable heavy computations",
+            value=bool(settings.get("enable_heavy_computations", True)),
+            help=(
+                "Master switch for compute-intensive features (advanced nonlinear metrics, "
+                "ML clustering, and time–frequency spectrograms). Turn off for low-end CPUs."
+            ),
+        )
+        settings["enable_heavy_downloads"] = st.checkbox(
+            "Enable heavy downloads (network)",
+            value=bool(settings.get("enable_heavy_downloads", False)),
+            help=(
+                "Master switch for network fetches (NOAA SWPC, NASA DONKI, SpaceWeatherLive). "
+                "When disabled, the app will avoid new downloads and prefer cached/offline data."
+            ),
+        )
         
         # Only show sliders if Custom
         if preset == "Custom":

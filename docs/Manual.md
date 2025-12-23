@@ -4410,3 +4410,52 @@ If you're interested in contributing to any of these developments:
 ---
 
 *Last updated: December 3, 2025*
+
+---
+
+## 2025-12-23 Addendum — Low-end performance controls (v1.8.39+)
+
+To improve responsiveness on low-end computers (and/or slow networks), Mission Control now provides two **master switches** that gate expensive operations.
+
+### Where to enable/disable
+
+In the sidebar, open **⚡ Performance Settings**:
+
+- **Enable heavy computations**
+  - When **disabled**, the app avoids compute-intensive work (advanced nonlinear metrics, ML-assisted clustering, and spectrogram computation).
+  - The **Advanced analysis (high compute…)** checkbox is disabled unless this is enabled.
+- **Enable heavy downloads (network)**
+  - When **disabled**, the app avoids initiating new network fetches (NOAA SWPC, NASA DONKI, SpaceWeatherLive). Background auto-fetch and manual fetch buttons are disabled.
+  - Cached data can still be viewed if it was previously loaded.
+
+### Practical guidance
+
+- **Low-end CPU**: leave both toggles **off**, and use **Minimal mode (fastest)** when analyzing HRV.
+- **Good CPU but poor network**: enable heavy computations, keep heavy downloads off, and rely on cached datasets / manual fetch when needed.
+
+### Notes on secrets
+
+Never hardcode API keys. Use environment variables in a local `.env` file (e.g., `NASA_API_KEY`, `OPENAI_API_KEY`) and do not commit them to GitHub.
+
+---
+
+## 2026 Research References Addendum (HR fragmentation, fatigue models, UAV simulation)
+
+These references support planned research/roadmap work (see `updates2026.md`).
+
+### Heart Rate Fragmentation (HRF)
+
+- Costa, M. D., et al. (2017). *Heart Rate Fragmentation: A New Approach to the Analysis of Cardiac Interbeat Interval Dynamics*. **Frontiers in Physiology, 8**, 255. https://doi.org/10.3389/fphys.2017.00255
+- Costa, M. D., et al. (2021). *Prediction of Cognitive Decline Using Heart Rate Fragmentation Analysis: The Multi-Ethnic Study of Atherosclerosis*. **Frontiers in Aging Neuroscience, 13**, 708130. https://doi.org/10.3389/fnagi.2021.708130
+- Guichard, J. B., et al. (2025). *Assessing heart rate fragmentation to predict atrial fibrillation in the general population aged 65: the PROOF-AF study*. **European Heart Journal Open**. https://doi.org/10.1093/ehjopen/oeaf030
+
+### Biomathematical performance / fatigue models
+
+- Borbély, A. A. (1982). *A two process model of sleep regulation*. **Human Neurobiology**. https://pubmed.ncbi.nlm.nih.gov/7185792/
+- Jewett, M. E., & Kronauer, R. E. (1999). *Interactive mathematical models of subjective alertness and cognitive throughput in humans*. **Journal of Biological Rhythms**. https://doi.org/10.1177/074873099129000920
+- Hursh, S. R., et al. (2004). *Fatigue models for applied research in warfighting*. **Aviation, Space, and Environmental Medicine**. https://pubmed.ncbi.nlm.nih.gov/15018265/
+
+### UAV simulation platforms (open research)
+
+- Shah, S., Dey, D., Lovett, C., & Kapoor, A. (2017). *AirSim: High-Fidelity Visual and Physical Simulation for Autonomous Vehicles* (arXiv:1705.05065). https://arxiv.org/abs/1705.05065
+- Song, Y., et al. (2020/2021). *Flightmare: A Flexible Quadrotor Simulator* (arXiv:2009.00563). https://arxiv.org/abs/2009.00563
