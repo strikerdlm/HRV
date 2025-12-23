@@ -5,6 +5,34 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.39] - 2025-12-23
+
+### Added
+- **Low-End Computer Performance Mode** (`app/performance_utils.py`): New performance optimization features for users with limited CPU/memory resources:
+  - **Heavy Computation Toggles**: Checkboxes to enable/disable CPU-intensive operations:
+    - Spectrogram Analysis (FFT over sliding windows)
+    - Nonlinear Metrics (DFA, entropy, Poincaré)
+    - ML Pattern Detection (K-means clustering)
+    - Windowed HRV Analysis (time-varying metrics)
+    - Frequency Domain Analysis (PSD, band powers)
+  - **Heavy Download Toggles**: Checkboxes to enable/disable network-intensive operations:
+    - NOAA Space Weather Data (multiple feeds)
+    - SpaceWeatherLive Data (web scraping)
+    - NASA DONKI Events (CME, SEP, flares)
+    - Space Weather Impact Predictions
+    - GPT AI Interpretation (API calls)
+  - **Auto-Detection**: Performance settings automatically adjust based on detected CPU tier (high/medium/low)
+  - **Preset Integration**: Fast (Low CPU) preset now disables heavy computations and downloads automatically
+
+### Changed
+- **Performance Settings UI** (`app/performance_utils.py`): Reorganized sidebar expander with clear sections for computations and downloads
+- **ML Clustering** (`app/app.py`): ML checkbox now respects performance settings and shows help text when disabled
+- **Visualization Checkboxes** (`app/app.py`): Skip checkboxes for frequency/Poincaré/spectrogram now default to skip when respective computation is disabled in performance settings
+- **Space Weather Auto-Fetch** (`app/app.py`): Background fetching now respects download toggle settings
+
+### Documentation
+- **updates2026.md**: Created research document with Heart Rate Fragmentation literature review, biomathematical models for human performance, and UAV combat simulation research
+
 ## [1.8.38] - 2025-12-22
 
 ### Fixed

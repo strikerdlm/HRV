@@ -403,6 +403,26 @@ def downsample_array(
 # ---------------------------------------------------------------------------
 # Performance Mode Settings
 # ---------------------------------------------------------------------------
+
+# Heavy computation categories for low-end computer optimization
+HEAVY_COMPUTATIONS: Final[Dict[str, str]] = {
+    "spectrogram": "Spectrogram Analysis (FFT over sliding windows)",
+    "nonlinear": "Nonlinear Metrics (DFA, entropy, Poincaré)",
+    "ml_clustering": "ML Pattern Detection (K-means clustering)",
+    "windowed_hrv": "Windowed HRV Analysis (time-varying metrics)",
+    "frequency_domain": "Frequency Domain Analysis (PSD, band powers)",
+}
+
+# Heavy download categories for low-bandwidth/metered connections
+HEAVY_DOWNLOADS: Final[Dict[str, str]] = {
+    "noaa_space": "NOAA Space Weather Data (multiple feeds)",
+    "space_weather_live": "SpaceWeatherLive Data (web scraping)",
+    "nasa_donki": "NASA DONKI Events (CME, SEP, flares)",
+    "space_weather_impact": "Space Weather Impact Predictions",
+    "gpt_interpretation": "GPT AI Interpretation (API call)",
+}
+
+
 def get_performance_settings() -> Dict[str, Any]:
     """
     Get performance settings from session state with auto-tuned defaults.
@@ -433,6 +453,18 @@ def get_performance_settings() -> Dict[str, Any]:
                     "max_windows": adaptive.max_windows,
                     "use_fast_entropy": False,
                     "detected_tier": "high",
+                    # Heavy computations enabled by default on high-end systems
+                    "enable_spectrogram": True,
+                    "enable_nonlinear": True,
+                    "enable_ml_clustering": True,
+                    "enable_windowed_hrv": True,
+                    "enable_frequency_domain": True,
+                    # Heavy downloads enabled by default
+                    "enable_noaa_space": True,
+                    "enable_space_weather_live": True,
+                    "enable_nasa_donki": True,
+                    "enable_space_weather_impact": True,
+                    "enable_gpt_interpretation": True,
                 }
             elif cpu_info.performance_tier == "medium":
                 defaults = {
@@ -445,6 +477,18 @@ def get_performance_settings() -> Dict[str, Any]:
                     "max_windows": adaptive.max_windows,
                     "use_fast_entropy": True,
                     "detected_tier": "medium",
+                    # Some heavy computations disabled on medium systems
+                    "enable_spectrogram": True,
+                    "enable_nonlinear": True,
+                    "enable_ml_clustering": False,
+                    "enable_windowed_hrv": True,
+                    "enable_frequency_domain": True,
+                    # Heavy downloads enabled but can be toggled
+                    "enable_noaa_space": True,
+                    "enable_space_weather_live": True,
+                    "enable_nasa_donki": False,
+                    "enable_space_weather_impact": True,
+                    "enable_gpt_interpretation": True,
                 }
             else:  # low
                 defaults = {
@@ -457,6 +501,18 @@ def get_performance_settings() -> Dict[str, Any]:
                     "max_windows": adaptive.max_windows,
                     "use_fast_entropy": True,
                     "detected_tier": "low",
+                    # Heavy computations disabled by default on low-end systems
+                    "enable_spectrogram": False,
+                    "enable_nonlinear": False,
+                    "enable_ml_clustering": False,
+                    "enable_windowed_hrv": False,
+                    "enable_frequency_domain": True,
+                    # Heavy downloads disabled by default
+                    "enable_noaa_space": False,
+                    "enable_space_weather_live": False,
+                    "enable_nasa_donki": False,
+                    "enable_space_weather_impact": False,
+                    "enable_gpt_interpretation": False,
                 }
         except Exception as exc:
             _LOGGER.debug("CPU auto-detection failed: %s", exc)
@@ -482,7 +538,47 @@ def _get_fallback_defaults() -> Dict[str, Any]:
         "max_windows": 500,
         "use_fast_entropy": True,
         "detected_tier": "unknown",
+        # Conservative defaults for heavy computations
+        "enable_spectrogram": False,
+        "enable_nonlinear": True,
+        "enable_ml_clustering": False,
+        "enable_windowed_hrv": True,
+        "enable_frequency_domain": True,
+        # Conservative defaults for heavy downloads
+        "enable_noaa_space": True,
+        "enable_space_weather_live": False,
+        "enable_nasa_donki": False,
+        "enable_space_weather_impact": True,
+        "enable_gpt_interpretation": False,
     }
+
+
+def is_computation_enabled(computation_key: str) -> bool:
+    """
+    Check if a heavy computation is enabled.
+    
+    Args:
+        computation_key: Key from HEAVY_COMPUTATIONS dict
+        
+    Returns:
+        True if the computation is enabled
+    """
+    settings = get_performance_settings()
+    return settings.get(f"enable_{computation_key}", True)
+
+
+def is_download_enabled(download_key: str) -> bool:
+    """
+    Check if a heavy download is enabled.
+    
+    Args:
+        download_key: Key from HEAVY_DOWNLOADS dict
+        
+    Returns:
+        True if the download is enabled
+    """
+    settings = get_performance_settings()
+    return settings.get(f"enable_{download_key}", True)
 
 
 def render_performance_settings_sidebar() -> Dict[str, Any]:
@@ -531,6 +627,18 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["enable_heavy_plots"] = False
             settings["optimize_memory"] = True
             settings["use_fast_entropy"] = True
+            # Disable heavy computations for low-end systems
+            settings["enable_spectrogram"] = False
+            settings["enable_nonlinear"] = False
+            settings["enable_ml_clustering"] = False
+            settings["enable_windowed_hrv"] = False
+            settings["enable_frequency_domain"] = True
+            # Disable heavy downloads
+            settings["enable_noaa_space"] = False
+            settings["enable_space_weather_live"] = False
+            settings["enable_nasa_donki"] = False
+            settings["enable_space_weather_impact"] = False
+            settings["enable_gpt_interpretation"] = False
         elif preset == "Quality (High CPU)":
             settings["max_plot_points"] = 5000
             settings["max_dataframe_rows"] = 1000
@@ -538,6 +646,18 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["enable_heavy_plots"] = True
             settings["optimize_memory"] = False
             settings["use_fast_entropy"] = False
+            # Enable all heavy computations
+            settings["enable_spectrogram"] = True
+            settings["enable_nonlinear"] = True
+            settings["enable_ml_clustering"] = True
+            settings["enable_windowed_hrv"] = True
+            settings["enable_frequency_domain"] = True
+            # Enable all heavy downloads
+            settings["enable_noaa_space"] = True
+            settings["enable_space_weather_live"] = True
+            settings["enable_nasa_donki"] = True
+            settings["enable_space_weather_impact"] = True
+            settings["enable_gpt_interpretation"] = True
         elif preset == "Balanced":
             settings["max_plot_points"] = 2000
             settings["max_dataframe_rows"] = 500
@@ -545,6 +665,18 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["enable_heavy_plots"] = False
             settings["optimize_memory"] = True
             settings["use_fast_entropy"] = True
+            # Some heavy computations enabled
+            settings["enable_spectrogram"] = True
+            settings["enable_nonlinear"] = True
+            settings["enable_ml_clustering"] = False
+            settings["enable_windowed_hrv"] = True
+            settings["enable_frequency_domain"] = True
+            # Some heavy downloads enabled
+            settings["enable_noaa_space"] = True
+            settings["enable_space_weather_live"] = True
+            settings["enable_nasa_donki"] = False
+            settings["enable_space_weather_impact"] = True
+            settings["enable_gpt_interpretation"] = True
         
         # Only show sliders if Custom
         if preset == "Custom":
@@ -592,6 +724,84 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
                 value=settings.get("use_fast_entropy", True),
                 help="Use faster entropy approximations",
             )
+            
+            # Heavy computations section
+            st.markdown("**🔬 Heavy Computations**")
+            st.caption("Disable to improve performance on low-end systems")
+            
+            settings["enable_spectrogram"] = st.checkbox(
+                "Spectrogram Analysis",
+                value=settings.get("enable_spectrogram", True),
+                help="FFT over sliding windows - CPU intensive",
+                key="perf_spectrogram",
+            )
+            
+            settings["enable_nonlinear"] = st.checkbox(
+                "Nonlinear Metrics",
+                value=settings.get("enable_nonlinear", True),
+                help="DFA, entropy, Poincaré - CPU intensive",
+                key="perf_nonlinear",
+            )
+            
+            settings["enable_ml_clustering"] = st.checkbox(
+                "ML Pattern Detection",
+                value=settings.get("enable_ml_clustering", False),
+                help="K-means clustering - CPU intensive",
+                key="perf_ml_clustering",
+            )
+            
+            settings["enable_windowed_hrv"] = st.checkbox(
+                "Windowed HRV Analysis",
+                value=settings.get("enable_windowed_hrv", True),
+                help="Time-varying HRV metrics",
+                key="perf_windowed_hrv",
+            )
+            
+            settings["enable_frequency_domain"] = st.checkbox(
+                "Frequency Domain Analysis",
+                value=settings.get("enable_frequency_domain", True),
+                help="PSD and band powers",
+                key="perf_frequency_domain",
+            )
+            
+            # Heavy downloads section
+            st.markdown("**🌐 Network Downloads**")
+            st.caption("Disable for offline use or slow connections")
+            
+            settings["enable_noaa_space"] = st.checkbox(
+                "NOAA Space Weather",
+                value=settings.get("enable_noaa_space", True),
+                help="Multiple NOAA feeds - bandwidth intensive",
+                key="perf_noaa_space",
+            )
+            
+            settings["enable_space_weather_live"] = st.checkbox(
+                "SpaceWeatherLive",
+                value=settings.get("enable_space_weather_live", True),
+                help="Web scraping - moderate bandwidth",
+                key="perf_swl",
+            )
+            
+            settings["enable_nasa_donki"] = st.checkbox(
+                "NASA DONKI Events",
+                value=settings.get("enable_nasa_donki", False),
+                help="CME, SEP, flares - moderate bandwidth",
+                key="perf_donki",
+            )
+            
+            settings["enable_space_weather_impact"] = st.checkbox(
+                "Space Weather Impact",
+                value=settings.get("enable_space_weather_impact", True),
+                help="Impact predictions - moderate bandwidth",
+                key="perf_sw_impact",
+            )
+            
+            settings["enable_gpt_interpretation"] = st.checkbox(
+                "GPT AI Interpretation",
+                value=settings.get("enable_gpt_interpretation", True),
+                help="OpenAI API calls - requires API key",
+                key="perf_gpt",
+            )
         else:
             # Show current values as info
             st.caption(
@@ -599,6 +809,11 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
                 f"Rows: {settings.get('max_dataframe_rows', 200)} | "
                 f"Windows: {settings.get('max_windows', 500)}"
             )
+            
+            # Show computation/download status
+            enabled_comp = sum(1 for k in HEAVY_COMPUTATIONS if settings.get(f"enable_{k}", True))
+            enabled_dl = sum(1 for k in HEAVY_DOWNLOADS if settings.get(f"enable_{k}", True))
+            st.caption(f"🔬 Computations: {enabled_comp}/{len(HEAVY_COMPUTATIONS)} | 🌐 Downloads: {enabled_dl}/{len(HEAVY_DOWNLOADS)}")
         
         # Show current performance metrics
         if st.button("📈 Show Performance Stats", key="perf_stats_btn"):
