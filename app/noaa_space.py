@@ -3,6 +3,7 @@ from __future__ import annotations
 import io
 import json
 import logging
+import threading
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -21,11 +22,37 @@ except ImportError:  # pragma: no cover - fallback for script execution
     from logging_config import get_logger, log_exception
 
 SWPC_BASE_URL = "https://services.swpc.noaa.gov/json/"
-REQUEST_TIMEOUT = 10.0
+REQUEST_TIMEOUT = 5.0  # Reduced from 10.0 for faster failure on slow connections
 CACHE_TTL = pd.Timedelta(hours=6)
 NOAA_SPACE_CACHE_DIR = Path(__file__).resolve().parent / "data_cache" / "noaa_space"
 
 _LOGGER = get_logger(__name__)
+
+_HTTP_SESSION_LOCAL = threading.local()
+
+
+def _get_http_session() -> requests.Session:
+    """Return a thread-local HTTP session configured for connection pooling.
+
+    Notes
+    -----
+    NOAA Space can fetch many feeds in parallel. Using a pooled `requests.Session`
+    per worker thread reduces repeated TLS handshakes and improves load times
+    while avoiding cross-thread session mutation.
+    """
+
+    session = getattr(_HTTP_SESSION_LOCAL, "session", None)
+    if session is None:
+        session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=16,
+            pool_maxsize=16,
+            max_retries=0,
+        )
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _HTTP_SESSION_LOCAL.session = session
+    return session
 
 
 @dataclass(frozen=True, slots=True)
@@ -426,7 +453,7 @@ def _write_cache(spec: NOAASourceSpec, df: pd.DataFrame) -> None:
 def _download_dataset(spec: NOAASourceSpec) -> pd.DataFrame:
     path = spec.path
     url = path if path.startswith("http") else f"{SWPC_BASE_URL}{path}"
-    response = requests.get(url, timeout=REQUEST_TIMEOUT)
+    response = _get_http_session().get(url, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     payload = response.json()
     records: Sequence[Any]
@@ -623,10 +650,29 @@ def fetch_noaa_source(spec: NOAASourceSpec, *, use_cache: bool = True) -> NOAADa
         raise
 
 
+def _fetch_single_source(
+    key: str, use_cache: bool
+) -> Tuple[str, Optional[NOAADataBundle], Optional[str]]:
+    """
+    Fetch a single NOAA source. Returns (key, bundle, error).
+    
+    Used internally for parallel fetching.
+    """
+    spec = NOAA_SOURCES.get(key)
+    if spec is None:
+        return key, None, "Unknown NOAA dataset key."
+    try:
+        bundle = fetch_noaa_source(spec, use_cache=use_cache)
+        return key, bundle, None
+    except (requests.RequestException, ValueError) as exc:
+        return key, None, str(exc)
+
+
 def load_noaa_space_data(
     keys: Optional[Sequence[str]] = None,
     *,
     use_cache: bool = True,
+    max_workers: int = 8,
 ) -> Tuple[Dict[str, NOAADataBundle], Dict[str, str]]:
     """
     Load one or more NOAA datasets defined in :data:`NOAA_SOURCES`.
@@ -637,25 +683,33 @@ def load_noaa_space_data(
         Optional iterable of source identifiers to load. When omitted, every configured source is fetched.
     use_cache :
         Toggle cache usage. Setting this to False forces a fresh download.
+    max_workers :
+        Maximum number of parallel threads for fetching (default: 8).
 
     Returns
     -------
     Tuple[Dict[str, NOAADataBundle], Dict[str, str]]
         Mapping of key → data bundle and a mapping of key → error message for failed downloads.
     """
+    import concurrent.futures
 
     selected_keys = list(keys) if keys is not None else list(NOAA_SOURCES.keys())
     bundles: Dict[str, NOAADataBundle] = {}
     errors: Dict[str, str] = {}
-    for key in selected_keys:
-        spec = NOAA_SOURCES.get(key)
-        if spec is None:
-            errors[key] = "Unknown NOAA dataset key."
-            continue
-        try:
-            bundles[key] = fetch_noaa_source(spec, use_cache=use_cache)
-        except (requests.RequestException, ValueError) as exc:
-            errors[key] = str(exc)
+    
+    # Use parallel fetching for faster loading (especially when cache is stale)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(_fetch_single_source, key, use_cache): key
+            for key in selected_keys
+        }
+        for future in concurrent.futures.as_completed(futures):
+            key, bundle, error = future.result()
+            if bundle is not None:
+                bundles[key] = bundle
+            if error is not None:
+                errors[key] = error
+    
     return bundles, errors
 
 
