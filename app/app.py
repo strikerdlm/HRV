@@ -145,10 +145,24 @@ try:
         cached_in_session,
         TimedExecution,
         get_performance_metrics,
+        is_computation_enabled,
+        is_download_enabled,
+        HEAVY_COMPUTATIONS,
+        HEAVY_DOWNLOADS,
     )
     PERFORMANCE_UTILS_AVAILABLE = True
 except ImportError:
     PERFORMANCE_UTILS_AVAILABLE = False
+    
+    # Fallback functions when performance_utils is not available
+    def is_computation_enabled(key: str) -> bool:
+        return True
+    
+    def is_download_enabled(key: str) -> bool:
+        return True
+    
+    HEAVY_COMPUTATIONS: Dict[str, str] = {}
+    HEAVY_DOWNLOADS: Dict[str, str] = {}
 
 # GPU processing module for NVIDIA CUDA acceleration
 try:
@@ -1611,7 +1625,15 @@ def _load_noaa_space_datasets(
 def _auto_fetch_space_weather_if_needed(state: Dict[str, Any]) -> None:
     """
     Ensure the basic space weather datasets are available without user clicks.
+    
+    Respects performance settings - disabled on low-end systems or when
+    downloads are disabled to conserve bandwidth/resources.
     """
+    # Check if downloads are enabled in performance settings
+    if not is_download_enabled("space_weather_live"):
+        state["auto_attempted"] = True
+        state["download_disabled"] = True
+        return
 
     if state.get("loaded") or state.get("auto_loading") or state.get("auto_attempted"):
         return
@@ -1638,7 +1660,14 @@ def _auto_fetch_space_weather_if_needed(state: Dict[str, Any]) -> None:
 def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
     """
     Preload NOAA feeds using cache-first retrieval so the tab is always populated.
+    
+    Respects performance settings - disabled when NOAA downloads are disabled.
     """
+    # Check if NOAA downloads are enabled in performance settings
+    if not is_download_enabled("noaa_space"):
+        state["auto_attempted"] = True
+        state["download_disabled"] = True
+        return
 
     if state.get("bundles") or state.get("loading") or state.get("auto_loading") or state.get("auto_attempted"):
         return
@@ -6579,9 +6608,26 @@ def main() -> None:
         rr_plot_cap = st.sidebar.selectbox(
             "RR plot point cap per dataset", [
                 "500", "2000", "10000", "No limit"], index=0)
-        skip_freq = st.sidebar.checkbox("Skip Frequency overlay plot", value=False)
-        skip_poincare = st.sidebar.checkbox("Skip Poincaré plot", value=False)
-        skip_spectrogram = st.sidebar.checkbox("Skip Spectrogram", value=False)
+        # Check performance settings for heavy computations
+        freq_enabled = is_computation_enabled("frequency_domain")
+        nonlinear_enabled = is_computation_enabled("nonlinear")
+        spectrogram_enabled = is_computation_enabled("spectrogram")
+        
+        skip_freq = st.sidebar.checkbox(
+            "Skip Frequency overlay plot",
+            value=not freq_enabled,
+            help="Disabled in low-end mode" if not freq_enabled else None,
+        )
+        skip_poincare = st.sidebar.checkbox(
+            "Skip Poincaré plot",
+            value=not nonlinear_enabled,
+            help="Disabled in low-end mode" if not nonlinear_enabled else None,
+        )
+        skip_spectrogram = st.sidebar.checkbox(
+            "Skip Spectrogram",
+            value=not spectrogram_enabled,
+            help="Disabled in low-end mode (CPU-intensive)" if not spectrogram_enabled else None,
+        )
         skip_gauges = st.sidebar.checkbox("Skip Gauges", value=False)
         show_debug = st.sidebar.checkbox(
             "Show detailed progress logs", value=False)
@@ -6591,8 +6637,13 @@ def main() -> None:
             _handler.setLevel(logger.level)
 
         st.sidebar.subheader("ML enhancements")
+        # Check performance settings for ML clustering
+        ml_enabled_by_perf = is_computation_enabled("ml_clustering")
         enable_ml = st.sidebar.checkbox(
-            "Enable ML-assisted deviation clustering", value=True
+            "Enable ML-assisted deviation clustering",
+            value=ml_enabled_by_perf,
+            disabled=not ml_enabled_by_perf,
+            help="Disabled in low-end performance mode. Enable in Performance Settings → Custom." if not ml_enabled_by_perf else "K-means clustering for HRV pattern detection",
         )
         
         # Performance settings (CPU optimization)

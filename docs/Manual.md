@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.8.37  
-**Last Updated:** 2025-12-21
+**Version:** 1.8.39  
+**Last Updated:** 2025-12-23
 
 ---
 
@@ -110,6 +110,45 @@ For heavy HRV computations, GPU acceleration is supported via NVIDIA CUDA:
 **RTX 50 Series (Blackwell) Note**: The RTX 5070/5080/5090 use Compute Capability 12.0 (sm_120), which requires CUDA Toolkit 12.8 or later for JIT kernel compilation. If you see `nvrtc64_120_0.dll` missing errors, see the [RTX 5070 CUDA Fix Guide](RTX_5070_CUDA_Fix.md) for step-by-step installation instructions. The app automatically detects your toolkit version and provides guidance if an upgrade is needed.
 
 The app automatically detects GPU availability and falls back to CPU when CUDA is not present.
+
+### Low-End Computer Performance Mode (v1.8.39)
+
+For users with limited CPU, memory, or bandwidth, the app provides granular control over resource-intensive operations:
+
+**Performance Settings** (Sidebar → ⚡ Performance Settings):
+
+1. **Performance Presets**:
+   - **Auto (Recommended)**: Automatically adjusts based on detected CPU tier
+   - **Fast (Low CPU)**: Disables all heavy computations and downloads
+   - **Balanced**: Enables most computations, disables ML clustering and NASA DONKI
+   - **Quality (High CPU)**: Enables all features for full analysis
+   - **Custom**: Manual control over all toggles
+
+2. **Heavy Computation Toggles** (Custom preset):
+   | Feature | CPU Impact | Description |
+   |---------|------------|-------------|
+   | Spectrogram Analysis | High | FFT over sliding windows |
+   | Nonlinear Metrics | High | DFA, entropy, Poincaré |
+   | ML Pattern Detection | High | K-means clustering |
+   | Windowed HRV | Medium | Time-varying metrics |
+   | Frequency Domain | Medium | PSD, band powers |
+
+3. **Heavy Download Toggles** (Custom preset):
+   | Feature | Bandwidth | Description |
+   |---------|-----------|-------------|
+   | NOAA Space Weather | High | Multiple feeds |
+   | SpaceWeatherLive | Medium | Web scraping |
+   | NASA DONKI Events | Medium | CME, SEP, flares |
+   | Space Weather Impact | Medium | Predictions |
+   | GPT AI Interpretation | Low | API calls |
+
+**Performance Tier Auto-Detection**:
+The app detects your CPU capabilities at startup:
+- 🟢 **High**: ≥8 cores, ≥16GB RAM → All features enabled
+- 🟡 **Medium**: 4-7 cores, ≥8GB RAM → Some heavy features disabled
+- 🔴 **Low**: <4 cores or <8GB RAM → Most heavy features disabled
+
+**Offline Mode**: Disable all download toggles for completely offline HRV analysis. Cached data remains available.
 
 ### Installation Steps
 
