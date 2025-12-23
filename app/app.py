@@ -34,6 +34,21 @@ if __name__ == "app":
     __path__ = [str(_APP_DIR)]  # type: ignore[name-defined]
     sys.modules.setdefault("app.app", sys.modules[__name__])
 
+# -------------------------------------------------------------------------
+# Streamlit page config MUST be the first Streamlit command
+# -------------------------------------------------------------------------
+# NOTE: This module imports many submodules that themselves use Streamlit
+# (e.g., cache decorators). We must set page config *before* importing them.
+import os
+
+import streamlit as st
+
+if os.environ.get("HRV_SKIP_STREAMLIT_PAGE_CONFIG") != "1":
+    st.set_page_config(
+        page_title="HRV Analysis — Streamlit + ECharts",
+        layout="wide",
+    )
+
 from gpt_interpretation import (
     GPT5InterpretationError,
     InterpretationResult,
@@ -6122,16 +6137,6 @@ def main() -> None:
     
     # Set high process priority for better performance (if available)
     _set_process_priority()
-    
-    # -------------------------------------------------------------------------
-    # Streamlit page config MUST be the first Streamlit command
-    # -------------------------------------------------------------------------
-    # When launched via `app/research_app.py`, the wrapper sets page config first.
-    if os.environ.get("HRV_SKIP_STREAMLIT_PAGE_CONFIG") != "1":
-        st.set_page_config(
-            page_title="HRV Analysis — Streamlit + ECharts",
-            layout="wide",
-        )
     
     # -------------------------------------------------------------------------
     # Initialize session state early to prevent race conditions
