@@ -15,7 +15,13 @@ This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when
 conda activate hrv-py312
 
 # Run the application
-streamlit run app/app.py
+# Operational (fast UI: profile + simple space-weather context)
+streamlit run app/operational_app.py
+
+# Research (full dashboards: correlations/ML + NOAA/Space Weather analysis)
+streamlit run app/research_app.py
+# Legacy research entrypoint:
+# streamlit run app/app.py
 
 # Run tests
 pytest
@@ -367,7 +373,13 @@ ALTER TABLE lab_chemistry ADD COLUMN timepoint_id TEXT;
 conda activate hrv-py312
 
 # Start the Streamlit app
-streamlit run app/app.py
+# Operational (fast UI)
+streamlit run app/operational_app.py
+
+# Research (full dashboards)
+streamlit run app/research_app.py
+# Legacy research entrypoint:
+# streamlit run app/app.py
 ```
 
 ### First-Time Setup
@@ -434,46 +446,50 @@ The application follows a modular architecture with strict separation of concern
    - Supports F10.7 flux, planetary K-index, solar wind, IMF, GOES x-ray/proton flux, geomagnetic Dst
    - All timestamps normalized to UTC timezone-aware format
 
-3. **`app/app.py`** — Main Streamlit application
+3. **Streamlit entrypoints** (`app/operational_app.py`, `app/research_app.py`, legacy `app/app.py`)
+   - Operational app: User Profile + lightweight space-weather context for clinical logs
+   - Research app: full HRV/HRF computation + NOAA/Space Weather correlation dashboards
+
+4. **`app/app.py`** — Research UI implementation (legacy entrypoint)
    - Multi-tab interface: Overview, Time Series, Frequency, Nonlinear, Spectrogram, Windowed, Metrics, ANS Function Tests, Readiness, Gauges, Science, Space Weather, NOAA Space, Export, References, About
    - Manages Streamlit session state for uploaded files and computed metrics
    - Integrates HRV core, NOAA space data, NASA DONKI events, SpaceWeatherLive scraping, ECharts visualizations, and optional GPT‑5 interpretation
    - Correlation workflows for HRV↔space-weather analysis with lag scanning, FDR-adjusted p-values, partial correlations, and simple linear response models
 
-4. **`app/spaceweatherlive_client.py`** — SpaceWeatherLive scraper
+5. **`app/spaceweatherlive_client.py`** — SpaceWeatherLive scraper
    - Direct HTML parsing of https://www.spaceweatherlive.com/ for Kp forecast, solar wind, IMF, sunspot number
    - Parses CACTus CME table and SIDC Ursigram for CME velocity stats, halo rates, narrative highlights
    - Bounded retries/timeouts (≤10s)
 
-5. **`app/spaceweather_openai_fallback.py`** — OpenAI-assisted extraction
+6. **`app/spaceweather_openai_fallback.py`** — OpenAI-assisted extraction
    - Fallback for SpaceWeatherLive when direct scraping fails
    - Uses OpenAI API for structured data extraction from HTML
 
-6. **`app/ml_enhancements.py`** — Deterministic k-means clustering
+7. **`app/ml_enhancements.py`** — Deterministic k-means clustering
    - Clusters windowed HRV metrics to identify baseline vs high-deviation segments
    - No random sampling; bounded by `max_iterations` with early convergence exit
    - Returns enriched dataframe with cluster labels, scores, and summary
 
-7. **`app/gpt_interpretation.py`** — GPT-5 high-reasoning interpretation
+8. **`app/gpt_interpretation.py`** — GPT-5 high-reasoning interpretation
    - Builds JSON payload from HRV analysis (datasets overview, metrics tables, windowed results, episodes, ML clusters)
    - Requests doctoral-level markdown report from OpenAI GPT-5 (high reasoning)
    - Includes reasoning summary and source listing; UI surfaces the markdown only (reasoning is never logged)
 
-8. **`app/echarts_component.py`** — ECharts visualization wrapper
+9. **`app/echarts_component.py`** — ECharts visualization wrapper
    - Streamlit component for rendering Apache ECharts (gauge, line, scatter, heatmap)
    - Consistent styling (double-ring gauges, responsive layout, tooltips, color semantics)
 
-9. **`app/export_utils.py`** — Export utilities
+10. **`app/export_utils.py`** — Export utilities
    - Markdown report builder for exporting analysis results
    - Configurable export scope and formatting
 
-10. **`app/gpu_processing.py`** — GPU-accelerated HRV computations (NEW v1.6.4)
+11. **`app/gpu_processing.py`** — GPU-accelerated HRV computations (NEW v1.6.4)
     - CUDA-powered RMSSD, SDNN, pNN50, FFT-based PSD, band powers, Poincaré metrics
     - Automatic GPU detection with CPU fallback
     - Benchmark tool to compare GPU vs CPU performance
     - Requires `cupy-cuda12x` (optional dependency)
 
-11. **`app/user_profile_tab.py`** — User profile management (NEW v1.6.4)
+12. **`app/user_profile_tab.py`** — User profile management (NEW v1.6.4)
     - Centralized biometric data (age, weight, height, BMI, VO2max)
     - Clinical scale assessments (ESS, Samn-Perelli, KSS, VAS Fatigue/Pain)
     - Persistent SQLite storage via `user_database.py`
