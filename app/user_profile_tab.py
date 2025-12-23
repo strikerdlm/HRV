@@ -2070,16 +2070,10 @@ def _render_clinical_assessment(user: UserProfile) -> None:
             wake_dt_today = datetime.combine(
                 date.today(), wake_time_today, tzinfo=local_tz
             )
-            prior_wake = st.session_state.get(ctx_wake_time_key)
             st.session_state[ctx_wake_time_key] = wake_dt_today
-            wake_changed = not (
-                isinstance(prior_wake, datetime)
-                and prior_wake.replace(microsecond=0) == wake_dt_today.replace(microsecond=0)
+            st.session_state[ctx_hours_wake_key] = _compute_hours_since_wake(
+                wake_dt_today, datetime.now(tz=local_tz)
             )
-            if wake_changed or ctx_hours_wake_key not in st.session_state:
-                st.session_state[ctx_hours_wake_key] = _compute_hours_since_wake(
-                    wake_dt_today, datetime.now(tz=local_tz)
-                )
             
             col1, col2, col3 = st.columns(3)
             with col1:
@@ -2090,7 +2084,8 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                     value=float(st.session_state[ctx_hours_wake_key]),
                     step=0.5,
                     key=ctx_hours_wake_key,
-                    help="Calculated from wake time and current clock time. You can override manually if needed.",
+                    disabled=True,
+                    help="Calculated from wake time and current clock time.",
                 )
             with col2:
                 hours_sleep = st.number_input(
