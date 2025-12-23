@@ -5,6 +5,13 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.48] - 2025-12-23
+
+### Fixed
+- **Space Weather tab reliably renders** (`app/app.py`): Removed accidental gating of the SWPC dashboard on `SPACE_WEATHER_IMPACT_AVAILABLE` and fixed the Impact Predictions section so its controls render consistently.
+- **User Profile errors no longer block NOAA/Export** (`app/app.py`): Added a safety net around `render_user_profile_tab()` so a profile-side exception can’t stop the rest of the app from rendering.
+- **Streamlit rerun loops caused by repo file writes** (`app/app.py`, `.streamlit/config.toml`): Disabled file-based `_agent_debug_log` by default (logs to the main logger only when debug is enabled) and blacklisted `.cursor/` to prevent IDE background writes from triggering reloads.
+
 ## [1.8.47] - 2025-12-23
 
 ### Fixed
