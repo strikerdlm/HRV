@@ -6126,10 +6126,12 @@ def main() -> None:
     # -------------------------------------------------------------------------
     # Streamlit page config MUST be the first Streamlit command
     # -------------------------------------------------------------------------
-    st.set_page_config(
-        page_title="HRV Analysis — Streamlit + ECharts",
-        layout="wide",
-    )
+    # When launched via `app/research_app.py`, the wrapper sets page config first.
+    if os.environ.get("HRV_SKIP_STREAMLIT_PAGE_CONFIG") != "1":
+        st.set_page_config(
+            page_title="HRV Analysis — Streamlit + ECharts",
+            layout="wide",
+        )
     
     # -------------------------------------------------------------------------
     # Initialize session state early to prevent race conditions
