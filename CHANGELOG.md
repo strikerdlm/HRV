@@ -12,6 +12,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Streamlit stability config** (`.streamlit/config.toml`): Enabled polling file watcher for OneDrive reliability and disabled fast reruns to reduce session race conditions.
 
+## [1.8.44] - 2025-12-23
+
+### Fixed
+- **Startup stability (no crashes on page config)** (`app/app.py`, `app/operational_app.py`): Page config is now applied best-effort and will never crash the app if Streamlit disallows `set_page_config()` in a given run.
+
 ## [1.8.42] - 2025-12-23
 
 ### Added
