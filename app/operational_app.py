@@ -30,28 +30,6 @@ from logging_config import (
     setup_logging,
 )
 
-try:
-    from welcome_header import render_welcome_header
-
-    _WELCOME_HEADER_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    _WELCOME_HEADER_AVAILABLE = False
-
-try:
-    from user_profile_tab import render_user_profile_tab
-
-    _USER_PROFILE_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    _USER_PROFILE_AVAILABLE = False
-
-try:
-    from about_tab import render_about_tab
-
-    _ABOUT_AVAILABLE = True
-except ImportError:  # pragma: no cover
-    _ABOUT_AVAILABLE = False
-
-
 _LOGGER = get_logger(__name__)
 
 
@@ -139,10 +117,33 @@ def main() -> None:
     _ensure_app_dir_on_path()
     setup_logging()
 
-    st.set_page_config(
-        page_title="HRV Analysis — Operational",
-        layout="wide",
-    )
+    # MUST be the first Streamlit command (before importing modules that use Streamlit).
+    st.set_page_config(page_title="HRV Analysis — Operational", layout="wide")
+
+    # Delay-import UI modules until after page config to avoid StreamlitAPIException.
+    try:
+        from welcome_header import render_welcome_header  # noqa: PLC0415
+
+        welcome_header_available = True
+    except ImportError:  # pragma: no cover
+        welcome_header_available = False
+        render_welcome_header = None  # type: ignore[assignment]
+
+    try:
+        from user_profile_tab import render_user_profile_tab  # noqa: PLC0415
+
+        user_profile_available = True
+    except ImportError:  # pragma: no cover
+        user_profile_available = False
+        render_user_profile_tab = None  # type: ignore[assignment]
+
+    try:
+        from about_tab import render_about_tab  # noqa: PLC0415
+
+        about_available = True
+    except ImportError:  # pragma: no cover
+        about_available = False
+        render_about_tab = None  # type: ignore[assignment]
 
     if "_app_session_ready" not in st.session_state:
         st.session_state["_app_session_ready"] = True
@@ -154,8 +155,8 @@ def main() -> None:
     _render_developer_tools_sidebar()
 
     # Header (shared aesthetic)
-    if _WELCOME_HEADER_AVAILABLE:
-        render_welcome_header()
+    if welcome_header_available and render_welcome_header is not None:
+        render_welcome_header()  # type: ignore[misc]
     else:
         st.title("🧬 Mission Control - Flight Surgeon")
 
@@ -173,15 +174,15 @@ def main() -> None:
     )
 
     if page == "👤 User Profile":
-        if not _USER_PROFILE_AVAILABLE:
+        if not user_profile_available or render_user_profile_tab is None:
             st.error("User Profile module unavailable (`user_profile_tab.py`).")
             return
-        render_user_profile_tab()
+        render_user_profile_tab()  # type: ignore[misc]
         return
 
     if page == "ℹ️ About":
-        if _ABOUT_AVAILABLE:
-            render_about_tab()
+        if about_available and render_about_tab is not None:
+            render_about_tab()  # type: ignore[misc]
         else:
             st.info("About module unavailable (`about_tab.py`).")
         return
