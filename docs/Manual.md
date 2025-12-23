@@ -4410,3 +4410,22 @@ If you're interested in contributing to any of these developments:
 ---
 
 *Last updated: December 3, 2025*
+
+---
+
+## 🪶 Low-end & offline mode (performance controls)
+
+To improve stability and responsiveness on low-end computers (and to support offline workflows), the sidebar includes a **Low-end & offline controls** section:
+
+- **Enable heavy computations (advanced HRV metrics)**:
+  - **OFF (recommended on low-end PCs)**: skips advanced/high-cost computations and disables ML-assisted deviation clustering.
+  - **ON**: enables advanced full-recording computations (e.g., additional nonlinear/complexity features) and unlocks heavier analytics.
+- **Enable heavy downloads (live NOAA/NASA/SpaceWeatherLive/Garmin fetch)**:
+  - **OFF**: the app avoids network requests from space-weather-related panels and uses **cached datasets only** when available.
+  - **ON**: fetch buttons and background auto-fetch (if enabled) can download live data.
+
+### Notes
+- When downloads are disabled, “fetch” actions become **cache-only loads**. If no cached copy exists yet, the panel may remain empty until downloads are enabled at least once.
+- For repeatable research workflows, prefer cache-first operation and export the same dataset snapshot alongside analysis outputs.
+
+*Appended: December 23, 2025*

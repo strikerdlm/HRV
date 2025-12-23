@@ -841,3 +841,14 @@ MIT License — See [LICENSE](LICENSE) for details.
 - **Documentation**: See `docs/Manual.md` for comprehensive usage guide
 - **Issues**: Open a GitHub issue for bugs or feature requests
 - **Discussions**: Use GitHub Discussions for questions
+
+---
+
+## 🪶 Low-end & offline mode (performance)
+
+To improve responsiveness on low-end computers (and to support offline work), the sidebar includes:
+
+- **Enable heavy computations (advanced HRV metrics)**: When OFF, the app skips advanced/high-cost computations (e.g., entropy-style metrics and other advanced full-recording analyses) and disables ML-assisted clustering.
+- **Enable heavy downloads (live NOAA/NASA/SpaceWeatherLive/Garmin fetch)**: When OFF, the app avoids network requests and uses **cached datasets only** where available.
+
+See `docs/Manual.md` for the detailed behavior and troubleshooting guidance.

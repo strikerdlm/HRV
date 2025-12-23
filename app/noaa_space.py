@@ -627,6 +627,7 @@ def load_noaa_space_data(
     keys: Optional[Sequence[str]] = None,
     *,
     use_cache: bool = True,
+    allow_downloads: bool = True,
 ) -> Tuple[Dict[str, NOAADataBundle], Dict[str, str]]:
     """
     Load one or more NOAA datasets defined in :data:`NOAA_SOURCES`.
@@ -651,6 +652,20 @@ def load_noaa_space_data(
         spec = NOAA_SOURCES.get(key)
         if spec is None:
             errors[key] = "Unknown NOAA dataset key."
+            continue
+        if not allow_downloads:
+            cached = _read_cache(spec, allow_stale=True)
+            if cached is not None:
+                bundles[key] = _prepare_frame(spec, cached)
+                continue
+            # Fallback: reuse long-horizon SWPC cache for Kp when available.
+            if spec.key == "planetary_k_index_3h":
+                legacy_cache = NOAA_SPACE_CACHE_DIR.parent / "space_weather" / "kp_index_30.json"
+                legacy_df = _read_legacy_dataframe_cache(legacy_cache)
+                if legacy_df is not None and not legacy_df.empty:
+                    bundles[key] = _prepare_frame(spec, legacy_df)
+                    continue
+            errors[key] = "Downloads disabled and no cached copy is available."
             continue
         try:
             bundles[key] = fetch_noaa_source(spec, use_cache=use_cache)

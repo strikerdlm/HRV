@@ -1203,14 +1203,18 @@ def _fetch_swpc_dataset(path: str) -> pd.DataFrame:
     return df
 
 
-def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
+def get_swpc_kp_index(days: int = 14, *, allow_downloads: bool = True) -> pd.DataFrame:
     if days is None or int(days) <= 0:
         raise ValueError("days must be a positive integer")
     cache_file = SPACE_WEATHER_CACHE_DIR / f"kp_index_{int(days)}.json"
     cached_df = _read_dataframe_cache(
-        cache_file, max_age=SPACE_WEATHER_CACHE_TTL)
+        cache_file,
+        max_age=SPACE_WEATHER_CACHE_TTL if allow_downloads else None,
+    )
     if cached_df is not None:
         return cached_df
+    if not allow_downloads:
+        return pd.DataFrame()
     try:
         url = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
         response = requests.get(url, timeout=SWPC_TIMEOUT)
@@ -1249,12 +1253,16 @@ def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
         raise
 
 
-def get_swpc_solar_radio_flux() -> pd.DataFrame:
+def get_swpc_solar_radio_flux(*, allow_downloads: bool = True) -> pd.DataFrame:
     cache_file = SPACE_WEATHER_CACHE_DIR / "solar_radio_flux.json"
     cached_df = _read_dataframe_cache(
-        cache_file, max_age=SPACE_WEATHER_CACHE_TTL)
+        cache_file,
+        max_age=SPACE_WEATHER_CACHE_TTL if allow_downloads else None,
+    )
     if cached_df is not None:
         return cached_df
+    if not allow_downloads:
+        return pd.DataFrame()
     candidates = [
         "f107_cm_flux.json",
         "solar_radio_flux.json",
@@ -1587,7 +1595,12 @@ def _load_noaa_space_datasets(
 
     state["loading"] = True
     try:
-        bundles, errors = load_noaa_space_data(keys=keys, use_cache=use_cache)
+        allow_downloads = bool(st.session_state.get("downloads_enabled", False))
+        bundles, errors = load_noaa_space_data(
+            keys=keys,
+            use_cache=use_cache,
+            allow_downloads=allow_downloads,
+        )
     except requests.RequestException as exc:
         state["bundles"] = {}
         state["errors"] = {"__global__": str(exc)}
@@ -1678,7 +1691,7 @@ _bg_fetch_results: Dict[str, Any] = {
 _bg_fetch_thread: Optional[threading.Thread] = None
 
 
-def _bg_fetch_all_space_data() -> None:
+def _bg_fetch_all_space_data(*, allow_downloads: bool) -> None:
     """
     Background thread worker: fetch space weather, NOAA, and DONKI data.
 
@@ -1690,8 +1703,8 @@ def _bg_fetch_all_space_data() -> None:
 
     # 1. Space Weather (Kp + Flux)
     try:
-        kp_df = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
-        flux_df = get_swpc_solar_radio_flux()
+        kp_df = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS, allow_downloads=allow_downloads)
+        flux_df = get_swpc_solar_radio_flux(allow_downloads=allow_downloads)
         with _bg_fetch_lock:
             _bg_fetch_results["space_weather"]["data"] = {
                 "kp_df": kp_df,
@@ -1711,7 +1724,11 @@ def _bg_fetch_all_space_data() -> None:
 
     # 2. NOAA feeds
     try:
-        bundles, errors = load_noaa_space_data(keys=None, use_cache=True)
+        bundles, errors = load_noaa_space_data(
+            keys=None,
+            use_cache=True,
+            allow_downloads=allow_downloads,
+        )
         with _bg_fetch_lock:
             _bg_fetch_results["noaa"]["data"] = {
                 "bundles": bundles,
@@ -1731,6 +1748,20 @@ def _bg_fetch_all_space_data() -> None:
 
     # 3. DONKI (last 30 days by default)
     try:
+        if not allow_downloads:
+            with _bg_fetch_lock:
+                _bg_fetch_results["donki"]["data"] = {
+                    "datasets": {},
+                    "errors": {"__global__": "Downloads disabled."},
+                    "start_date": "",
+                    "end_date": "",
+                    "last_updated": pd.Timestamp.utcnow(),
+                }
+                _bg_fetch_results["donki"]["done"] = True
+                _bg_fetch_results["donki"]["error"] = None
+                _bg_fetch_results["donki"]["fetch_time"] = fetch_time
+                _bg_fetch_results["donki"]["_applied"] = False
+            return
         end_dt = pd.Timestamp.utcnow()
         start_dt = end_dt - pd.Timedelta(days=30)
         start_str = start_dt.strftime("%Y-%m-%d")
@@ -1816,6 +1847,7 @@ def _start_background_fetch(force: bool = False) -> bool:
     """
     global _bg_fetch_thread
 
+    allow_downloads = bool(st.session_state.get("downloads_enabled", False))
     with _bg_fetch_lock:
         # Don't start if already running
         if _bg_fetch_thread is not None and _bg_fetch_thread.is_alive():
@@ -1844,6 +1876,7 @@ def _start_background_fetch(force: bool = False) -> bool:
         # Start a new daemon thread while holding the lock to avoid races
         _bg_fetch_thread = threading.Thread(
             target=_bg_fetch_all_space_data,
+            kwargs={"allow_downloads": allow_downloads},
             name="SpaceWeatherBgFetch",
             daemon=True,
         )
@@ -1980,6 +2013,15 @@ def _ensure_background_fetch_for_space_tabs() -> None:
     This avoids any startup delay on the welcome page while keeping data fresh
     once the relevant tabs are opened. It also triggers auto-refresh if stale.
     """
+    allow_downloads = bool(st.session_state.get("downloads_enabled", False))
+    auto_fetch_enabled = bool(st.session_state.get("space_auto_fetch_enabled", False))
+
+    # Always apply results if they exist (e.g., prior runs), but only start/refresh
+    # the background fetch when both downloads + auto-fetch are enabled.
+    if not (allow_downloads and auto_fetch_enabled):
+        _apply_background_fetch_to_state()
+        return
+
     if "_bg_fetch_started" not in st.session_state:
         started = _start_background_fetch()
         st.session_state["_bg_fetch_started"] = True
@@ -2025,7 +2067,11 @@ def fetch_donki(
     start_date: str,
     end_date: str,
     params: Optional[Dict[str, Any]] = None,
+    *,
+    allow_downloads: bool = True,
 ) -> pd.DataFrame:
+    if not allow_downloads:
+        return pd.DataFrame()
     if not NASA_API_KEY:
         _LOGGER.warning("NASA_API_KEY is not set; skipping DONKI fetch for %s", endpoint)
         return pd.DataFrame()
@@ -2864,7 +2910,8 @@ def _fetch_donki_datasets(
     end_date: str,
     endpoints: Optional[List[str]] = None,
 ) -> None:
-    if not NASA_API_KEY:
+    allow_downloads = bool(st.session_state.get("downloads_enabled", False))
+    if allow_downloads and not NASA_API_KEY:
         state["loaded"] = False
         state["errors"] = {"auth": "NASA_API_KEY is not set."}
         return
@@ -2886,11 +2933,14 @@ def _fetch_donki_datasets(
                 / f"{code}_{start_to_use}_{end_to_use or 'auto'}.json"
             )
             cached_df = _read_dataframe_cache(
-                cache_file, max_age=DONKI_CACHE_TTL)
+                cache_file, max_age=DONKI_CACHE_TTL if allow_downloads else None)
             if cached_df is not None:
                 datasets[code] = cached_df
                 continue
-            df = fetch_donki(code, start_to_use, end_to_use)
+            if not allow_downloads:
+                errors[code] = "Downloads disabled."
+                continue
+            df = fetch_donki(code, start_to_use, end_to_use, allow_downloads=True)
             _write_dataframe_cache(cache_file, df)
             datasets[code] = df
         except requests.HTTPError as exc:
@@ -2915,18 +2965,19 @@ def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
     state["kp_error"] = ""
     state["flux_df"] = pd.DataFrame()
     state["flux_error"] = ""
+    allow_downloads = bool(st.session_state.get("downloads_enabled", False))
     kp_duration_ms: Optional[float] = None
     flux_duration_ms: Optional[float] = None
     try:
         kp_start = time.perf_counter()
-        state["kp_df"] = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
+        state["kp_df"] = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS, allow_downloads=allow_downloads)
         kp_duration_ms = (time.perf_counter() - kp_start) * 1000.0
     except (requests.RequestException, ValueError) as exc:
         log_exception(_LOGGER, "Failed to fetch SWPC K-index", exc)
         state["kp_error"] = f"Failed to retrieve K-index data: {exc}"
     try:
         flux_start = time.perf_counter()
-        state["flux_df"] = get_swpc_solar_radio_flux()
+        state["flux_df"] = get_swpc_solar_radio_flux(allow_downloads=allow_downloads)
         flux_duration_ms = (time.perf_counter() - flux_start) * 1000.0
     except (requests.RequestException, ValueError) as exc:
         log_exception(_LOGGER, "Failed to fetch SWPC solar radio flux", exc)
@@ -5898,7 +5949,10 @@ def fetch_open_meteo_hourly(
     *,
     latitude: float = BOGOTA["latitude"],
     longitude: float = BOGOTA["longitude"],
+    allow_downloads: bool = True,
 ) -> pd.DataFrame:
+    if not allow_downloads:
+        return pd.DataFrame()
     params = {
         "latitude": latitude,
         "longitude": longitude,
@@ -6488,6 +6542,21 @@ def main() -> None:
     has_hrv_data_uploaded = bool(uploads)
 
     # ==========================================================================
+    # GLOBAL PERFORMANCE CONTROLS (available even without uploads)
+    # ==========================================================================
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🪶 Low-end & offline controls")
+    downloads_enabled = st.sidebar.checkbox(
+        "Enable heavy downloads (live NOAA/NASA/SpaceWeatherLive/Garmin fetch)",
+        value=bool(st.session_state.get("downloads_enabled", False)),
+        key="downloads_enabled",
+        help=(
+            "When disabled, the app avoids network requests for space weather/DONKI/NOAA/SpaceWeatherLive "
+            "and shows only already-cached data (if available)."
+        ),
+    )
+
+    # ==========================================================================
     # SIDEBAR CONTROLS - Show HRV settings only when data is available
     # ==========================================================================
     if has_hrv_data_uploaded:
@@ -6534,11 +6603,20 @@ def main() -> None:
         psd_method = st.sidebar.selectbox(
             "PSD method", ["welch", "periodogram", "ar"], index=0
         )
+        heavy_compute_enabled = st.sidebar.checkbox(
+            "Enable heavy computations (advanced HRV metrics)",
+            value=bool(st.session_state.get("heavy_compute_enabled", False)),
+            key="heavy_compute_enabled",
+            help=(
+                "Enables advanced full-recording metrics (e.g., entropy/MFDFA/RQA) and unlocks heavier analytics. "
+                "Recommended OFF for low-end computers."
+            ),
+        )
         fast_windowing = st.sidebar.checkbox(
-            "Fast time-domain windowing (skip spectral/nonlinear in windows)", value=True)
-        high_compute = st.sidebar.checkbox(
-            "Advanced analysis (high compute for full-recording metrics)",
-            value=False)
+            "Fast time-domain windowing (skip spectral/nonlinear in windows)",
+            value=True,
+        )
+        high_compute = bool(heavy_compute_enabled)
         st.sidebar.markdown("---")
         st.sidebar.subheader("Deviation detection")
         apply_dev = st.sidebar.checkbox(
@@ -6591,8 +6669,14 @@ def main() -> None:
             _handler.setLevel(logger.level)
 
         st.sidebar.subheader("ML enhancements")
+        if not heavy_compute_enabled:
+            st.session_state["ml_enabled"] = False
         enable_ml = st.sidebar.checkbox(
-            "Enable ML-assisted deviation clustering", value=True
+            "Enable ML-assisted deviation clustering",
+            value=bool(st.session_state.get("ml_enabled", True)) if heavy_compute_enabled else False,
+            key="ml_enabled",
+            disabled=not heavy_compute_enabled,
+            help="Requires heavy computations to be enabled (advanced mode).",
         )
         
         # Performance settings (CPU optimization)
@@ -6702,6 +6786,8 @@ def main() -> None:
             skip_spectrogram = True
             skip_gauges = True
             fast_windowing = True
+            if st.session_state.get("heavy_compute_enabled", False):
+                st.session_state["heavy_compute_enabled"] = False
             high_compute = False
             max_windows = min(int(max_windows), 800)
             enable_ml = False
@@ -11964,19 +12050,26 @@ that predicts cognitive performance based on:
             donki_state = _donki_state()
 
             # Performance control: allow disabling background auto-fetch for faster initial load
+            downloads_ok = bool(st.session_state.get("downloads_enabled", False))
             perf_col1, perf_col2 = st.columns([1, 3])
             with perf_col1:
                 auto_fetch_enabled = st.checkbox(
                     "Enable background auto-fetch (slower load)",
                     value=bool(st.session_state.get("space_auto_fetch_enabled", False)),  # Default OFF for faster startup
                     key="space_auto_fetch_enabled",
+                    disabled=not downloads_ok,
                     help="When enabled, NOAA/DONKI fetch runs automatically in the background when you open this tab.",
                 )
             with perf_col2:
                 st.caption("Tip: Leave this off for quicker tab load; use the fetch buttons below when needed.")
 
+            if not downloads_ok and st.session_state.get("space_auto_fetch_enabled"):
+                # Enforce OFF when downloads are disabled (avoid accidental background traffic)
+                st.session_state["space_auto_fetch_enabled"] = False
+                auto_fetch_enabled = False
+
             # Start background fetch lazily only when enabled
-            if auto_fetch_enabled:
+            if auto_fetch_enabled and downloads_ok:
                 _ensure_background_fetch_for_space_tabs()
                 bg_status = _poll_background_fetch()
                 if not space_state.get("loaded") and not bg_status["space_weather"]["done"]:
@@ -12003,16 +12096,27 @@ that predicts cognitive performance based on:
 
             col_fetch_sw, col_fetch_donki, col_bg_info = st.columns([1, 1, 2])
             with col_fetch_sw:
+                sw_btn_label = "📥 Fetch space weather" if downloads_ok else "📦 Load cached space weather"
                 fetch_sw_clicked = st.button(
-                    "📥 Fetch space weather", key="fetch_space_weather",
-                    help="Fetch Kp index and solar radio flux from NOAA SWPC"
+                    sw_btn_label,
+                    key="fetch_space_weather",
+                    help=(
+                        "Fetch Kp index and solar radio flux from NOAA SWPC."
+                        if downloads_ok
+                        else "Downloads disabled: attempts to load only cached SWPC datasets."
+                    ),
                 )
             with col_fetch_donki:
+                donki_btn_label = "🌐 Fetch NASA DONKI" if downloads_ok else "📦 Load cached DONKI"
                 fetch_donki_clicked = st.button(
-                    "🌐 Fetch NASA DONKI",
+                    donki_btn_label,
                     key="fetch_donki",
-                    disabled=not NASA_API_KEY,
-                    help="Requires NASA_API_KEY in your .env file.",
+                    disabled=bool(downloads_ok and not NASA_API_KEY),
+                    help=(
+                        "Requires NASA_API_KEY in your .env file."
+                        if downloads_ok
+                        else "Downloads disabled: attempts to load only cached DONKI datasets."
+                    ),
                 )
             with col_bg_info:
                 # Non-intrusive background fetch status with data age
@@ -12049,7 +12153,9 @@ that predicts cognitive performance based on:
             )
             if fetch_sw_clicked:
                 with st.status(
-                    "Fetching NOAA SWPC datasets…", state="running", expanded=True
+                    ("Fetching NOAA SWPC datasets…" if downloads_ok else "Loading cached NOAA SWPC datasets…"),
+                    state="running",
+                    expanded=True,
                 ) as status:
                     try:
                         _fetch_space_weather_datasets(space_state)
@@ -12070,7 +12176,7 @@ that predicts cognitive performance based on:
                         )
                         st.error(f"Failed to fetch NOAA SWPC datasets: {exc}")
             if fetch_donki_clicked:
-                if not NASA_API_KEY:
+                if downloads_ok and not NASA_API_KEY:
                     st.warning(
                         "Set NASA_API_KEY in your .env file to query NASA DONKI APIs."
                     )
@@ -12078,7 +12184,9 @@ that predicts cognitive performance based on:
                     start_donki, end_donki = _donki_default_range(
                         int(donki_window_days))
                     with st.status(
-                        "Fetching NASA DONKI datasets…", state="running", expanded=True
+                        ("Fetching NASA DONKI datasets…" if downloads_ok else "Loading cached NASA DONKI datasets…"),
+                        state="running",
+                        expanded=True,
                     ) as status:
                         try:
                             _fetch_donki_datasets(donki_state, start_donki, end_donki)
@@ -12643,6 +12751,9 @@ that predicts cognitive performance based on:
                 if selected_dataset:
                     with st.expander(f"{selected_dataset} (latest rows)"):
                         try:
+                            if not bool(st.session_state.get("downloads_enabled", False)):
+                                st.info("Downloads disabled — enable network downloads to fetch this NOAA feed.")
+                                raise RuntimeError("Downloads disabled.")
                             extra_df = _fetch_swpc_dataset(
                                 SWPC_EXTRA_DATASETS[selected_dataset]
                             )
@@ -12654,6 +12765,8 @@ that predicts cognitive performance based on:
                             st.error(
                                 f"Unexpected response for {selected_dataset.lower()}: {exc}"
                             )
+                        except RuntimeError:
+                            extra_df = pd.DataFrame()
                         else:
                             if extra_df.empty:
                                 st.info("No data returned for this feed.")
@@ -12661,9 +12774,13 @@ that predicts cognitive performance based on:
                                 st.dataframe(extra_df.tail(100))
 
                 with st.expander("SpaceWeatherLive snapshot (scrape + OpenAI fallback)"):
+                    swl_downloads_enabled = bool(st.session_state.get("downloads_enabled", False))
                     if st.button(
                         "Fetch SpaceWeatherLive data",
-                            key="btn_fetch_swl"):
+                        key="btn_fetch_swl",
+                        disabled=not swl_downloads_enabled,
+                        help="Requires network downloads to be enabled (Low-end & offline controls).",
+                    ):
                         snap = None
                         try:
                             snap = fetch_spaceweatherlive_snapshot()
@@ -12671,6 +12788,8 @@ that predicts cognitive performance based on:
                             st.warning(
                                 f"Direct scrape failed ({exc}); attempting OpenAI fallback…")
                             try:
+                                if not swl_downloads_enabled:
+                                    raise RuntimeError("Downloads disabled.")
                                 home_html = requests.get(
                                     "https://www.spaceweatherlive.com/", timeout=12
                                 ).text
@@ -12969,7 +13088,11 @@ that predicts cognitive performance based on:
                         span_max = start_dt.max().date().isoformat()
                         try:
                             with st.spinner("Fetching weather data..."):
-                                cov_df = fetch_open_meteo_hourly(span_min, span_max)
+                                cov_df = fetch_open_meteo_hourly(
+                                    span_min,
+                                    span_max,
+                                    allow_downloads=bool(st.session_state.get("downloads_enabled", False)),
+                                )
                         except requests.RequestException as exc:
                             st.warning(f"Weather API error: {exc}")
                     if not cov_df.empty:
@@ -13481,14 +13604,22 @@ that predicts cognitive performance based on:
 
             col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns([1, 1, 2])
             with col_fetch_noaa:
+                noaa_downloads_ok = bool(st.session_state.get("downloads_enabled", False))
+                noaa_fetch_label = "📥 Fetch NOAA feeds" if noaa_downloads_ok else "📦 Load cached NOAA feeds"
                 fetch_noaa_clicked = st.button(
-                    "📥 Fetch NOAA feeds", key="fetch_noaa_space_data",
-                    help="Load NOAA feeds (uses cache if available)"
+                    noaa_fetch_label,
+                    key="fetch_noaa_space_data",
+                    help=(
+                        "Load NOAA feeds (uses cache if available)"
+                        if noaa_downloads_ok
+                        else "Downloads disabled: attempts to load only cached NOAA feeds."
+                    ),
                 )
             with col_refresh_noaa:
                 refresh_noaa_clicked = st.button(
                     "🔄 Force refresh", key="refresh_noaa_space_data",
-                    help="Bypass cache and fetch fresh data from NOAA servers"
+                    disabled=not bool(st.session_state.get("downloads_enabled", False)),
+                    help="Bypass cache and fetch fresh data from NOAA servers (requires downloads enabled).",
                 )
             with col_bg_status:
                 # Show background fetch status with data age (non-intrusive)
@@ -13503,7 +13634,9 @@ that predicts cognitive performance based on:
                     st.caption(f"✅ Data: {data_age} | Auto-refresh: 12h")
 
             if fetch_noaa_clicked:
-                with st.spinner("Fetching NOAA JSON feeds…"):
+                with st.spinner(
+                    "Fetching NOAA JSON feeds…" if bool(st.session_state.get("downloads_enabled", False)) else "Loading cached NOAA feeds…"
+                ):
                     _load_noaa_space_datasets(noaa_state)
             if refresh_noaa_clicked:
                 with st.spinner("Refreshing NOAA JSON feeds…"):

@@ -1263,3 +1263,22 @@ UI updates and integration by Dr. Diego L. Malpica
 ---
 
 *For detailed feature documentation, see `docs/Manual.md`*
+
+---
+
+## [1.8.39] - 2025-12-23
+
+### Performance
+- **Heavy computations now explicitly optional** (`app/app.py`): Added a dedicated sidebar control (**Enable heavy computations**) that gates advanced/high-cost HRV computations and disables ML-assisted deviation clustering when OFF.
+- **Heavy downloads now explicitly optional** (`app/app.py`, `app/noaa_space.py`): Added a dedicated sidebar control (**Enable heavy downloads**) to prevent network requests on low-end/offline systems and use cache-only behavior for space-weather panels.
+
+### Changed
+- **Space weather fetch behavior** (`app/app.py`): Fetch buttons now support cache-only operation when downloads are disabled; background auto-fetch is enforced OFF when downloads are disabled.
+- **NOAA Space loader** (`app/noaa_space.py`): Added cache-only loading path when downloads are disabled and no cached copy exists.
+
+### Documentation
+- Updated `README.md` and `docs/Manual.md` with the new low-end/offline controls.
+- Added `updates2026.md` (research + roadmap) with HRF and human performance literature notes and a simulation tooling plan.
+
+### Notes
+- This entry was appended to the end of the changelog to preserve prior content verbatim (append-only policy).
