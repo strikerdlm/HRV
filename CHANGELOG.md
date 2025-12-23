@@ -5,6 +5,19 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.46] - 2025-12-23
+
+### Fixed
+- **Streamlit “fade/restart” loops during HRV + space-weather work** (`.streamlit/config.toml`): Blacklisted `crew/`, `app/data_cache/`, and `logs/` from Streamlit’s watcher so writing HRV outputs / NOAA caches no longer triggers unintended reloads.
+- **Space Weather / NOAA button flicker** (`app/app.py`): Removed redundant `st.rerun()` calls after fetch actions so results render immediately without extra UI restart.
+
+### Changed
+- **12h background refresh now pulls full NOAA library** (`app/app.py`): Background auto-refresh refreshes **all** NOAA feeds (not just Core) and uses a 30‑day DONKI window, keeping on-disk caches warm for research correlations.
+
+### Added
+- **Extended HRF (Heart Rate Fragmentation) metrics in HRV computation** (`app/hrv_core.py`): Added PIP_H/PIP_S, PAS, W0–W3, and a quality flag to the computed metric set for performance-oriented analysis.
+- **HRF panel in Readiness tab** (`app/app.py`): New HRF expander summarizes fragmentation markers per dataset with literature-based interpretation.
+
 ## [1.8.45] - 2025-12-23
 
 ### Added
