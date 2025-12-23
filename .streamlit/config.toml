@@ -9,8 +9,22 @@
 # Polling is more reliable for research/production use on Windows.
 fileWatcherType = "poll"
 
-# Prevent Streamlit from treating data/cache writes as source changes.
-folderWatchBlacklist = ["crew", "app/data_cache", "logs"]
+# Prevent Streamlit from treating data/cache/log writes as source changes.
+# IMPORTANT: Streamlit may resolve these relative to the current working dir
+# (which can be either repo root or `app/` depending on how the app is launched).
+# We include both forms to avoid accidental reload loops on Windows/OneDrive.
+folderWatchBlacklist = [
+  "logs",
+  "../logs",
+  "crew",
+  "../crew",
+  "app/data_cache",
+  "data_cache",
+  "../app/data_cache",
+]
+
+# Never auto-rerun on file save in production/research runs.
+runOnSave = false
 
 # Keep sessions alive longer to reduce reconnect churn on Wi-Fi/VPN.
 disconnectedSessionTTL = 600
