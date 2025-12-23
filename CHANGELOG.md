@@ -5,6 +5,17 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.47] - 2025-12-23
+
+### Fixed
+- **Population Norms now works immediately after RR upload** (`app/app.py`): The norms comparison no longer depends on windowed metrics being present; it now falls back to full-recording or quick RR-derived summaries and lets you choose the recording to compare.
+
+### Changed
+- **Metric Explainer is now strictly on-demand by default** (`app/app.py`): Auto-refresh defaults OFF and expensive signature hashing only runs when you click generate (or explicitly enable auto-refresh), reducing unintended background load.
+
+### Added
+- **Friendly “How to read this plot” guidance** (`app/app.py`): Added concise axis/interpretation help expanders for Time Series, Frequency (PSD), Nonlinear (Poincaré), and Spectrogram tabs.
+
 ## [1.8.46] - 2025-12-23
 
 ### Fixed
@@ -12,11 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Space Weather / NOAA button flicker** (`app/app.py`): Removed redundant `st.rerun()` calls after fetch actions so results render immediately without extra UI restart.
 
 ### Changed
-- **12h background refresh now pulls full NOAA library** (`app/app.py`): Background auto-refresh refreshes **all** NOAA feeds (not just Core) and uses a 30‑day DONKI window, keeping on-disk caches warm for research correlations.
+- **12h background refresh scope tuned for responsiveness** (`app/app.py`): Background auto-refresh now preloads the **Core NOAA feeds** (fast) and keeps DONKI background queries conservative, preventing UI stalls while still supporting research correlations.
 
 ### Added
 - **Extended HRF (Heart Rate Fragmentation) metrics in HRV computation** (`app/hrv_core.py`): Added PIP_H/PIP_S, PAS, W0–W3, and a quality flag to the computed metric set for performance-oriented analysis.
 - **HRF panel in Readiness tab** (`app/app.py`): New HRF expander summarizes fragmentation markers per dataset with literature-based interpretation.
+- **Cache reset controls** (`app/app.py`): Added explicit (opt-in) buttons to clear NOAA/SWPC/DONKI cache folders for troubleshooting, without automatic deletion.
 
 ## [1.8.45] - 2025-12-23
 
