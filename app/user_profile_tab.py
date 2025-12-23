@@ -24,7 +24,8 @@ import io
 import os
 from dataclasses import asdict, is_dataclass
 from collections import Counter
-from datetime import datetime, date, timezone, timedelta
+from datetime import datetime, date, timezone, timedelta, tzinfo
+from zoneinfo import ZoneInfo
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any, Dict, Final, List, Optional, Sequence
@@ -995,10 +996,22 @@ def _compute_hours_since_wake(
     return float(round(max(0.0, min(48.0, hours)), 1))
 
 
+def _get_bogota_tz() -> tzinfo:
+    """Return Bogotá timezone (UTC-5) with ZoneInfo fallback."""
+    try:
+        return ZoneInfo("America/Bogota")
+    except Exception:
+        return timezone(timedelta(hours=-5))
+
+
 def _get_latest_garmin_sleep_payload(user: UserProfile, now_dt: datetime) -> Optional[Dict[str, float]]:
     """Fetch latest Garmin Vivosmart sleep metrics to feed SAFTE/HRV inputs."""
     if fetch_garmin_daily_metrics is None:
         return None
+    if now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=_get_bogota_tz())
+    else:
+        now_dt = now_dt.astimezone(_get_bogota_tz())
     try:
         records = fetch_garmin_daily_metrics(user.user_id, days=7)
     except Exception as exc:  # pragma: no cover - defensive
@@ -1917,7 +1930,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
     ctx_caffeine_key = f"clinical_caffeine_{user.user_id}"
     ctx_wake_time_key = f"clinical_wake_dt_{user.user_id}"
     ctx_wake_time_input_key = f"clinical_wake_time_input_{user.user_id}"
-    local_tz = datetime.now().astimezone().tzinfo or timezone.utc
+    local_tz = _get_bogota_tz()
     
     # Initialize defaults only if keys don't exist
     if ctx_hours_wake_key not in st.session_state:
@@ -4280,8 +4293,8 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
         return
     
     sex = user.sex or "other"
-    current_hour = datetime.now().hour
-    current_dt = datetime.now(tz=timezone.utc)
+    current_hour = datetime.now(tz=_get_bogota_tz()).hour
+    current_dt = datetime.now(tz=_get_bogota_tz())
     
     # Tool selector
     st.markdown("##### 🔧 Select Tool")
@@ -5606,7 +5619,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
             help="Pull latest Garmin Vivosmart sleep to fill sleep/chronotype inputs.",
         ):
             with st.spinner("Fetching Garmin sleep..."):
-                payload = _get_latest_garmin_sleep_payload(user, datetime.now(tz=timezone.utc))
+                payload = _get_latest_garmin_sleep_payload(user, datetime.now(tz=_get_bogota_tz()))
             if payload is None:
                 st.warning("No recent Garmin sleep data found or Garmin API unavailable.")
             else:
