@@ -7747,6 +7747,7 @@ def main() -> None:
             "ℹ️ About",
         ]
     )
+    _sw_loading_msg: Optional[st.delta_generator.DeltaGenerator] = None
     # Debug breadcrumbs: when the UI appears "blank", it's often because a rerun
     # was triggered mid-render or execution stopped before later tabs were
     # populated. Gate logs behind the explicit Developer Tools toggle to avoid
@@ -13473,7 +13474,8 @@ that predicts cognitive performance based on:
                     db_df.sort_values(
                         "created_utc",
                         ascending=False).head(200))
-            _sw_loading_msg.empty()
+            if _sw_loading_msg is not None:
+                _sw_loading_msg.empty()
 
     with tab_noaa_space:
         st.markdown("### 🌍 NOAA Space Weather Dashboard")
