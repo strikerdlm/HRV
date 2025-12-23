@@ -18,6 +18,7 @@ from __future__ import annotations
 import datetime
 import logging
 import math
+import threading
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Any, Dict, Final, List, Mapping, Optional, Sequence, Tuple
@@ -27,6 +28,31 @@ import pandas as pd
 import requests
 
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+
+_HTTP_SESSION_LOCAL = threading.local()
+
+
+def _get_http_session() -> requests.Session:
+    """Return a thread-local HTTP session configured for connection pooling.
+
+    This module is frequently called from Streamlit callbacks and may execute
+    multiple sequential SWPC requests (e.g., plasma + mag). Pooling reduces
+    repeated TLS handshakes and lowers latency without introducing shared
+    mutable session state across threads.
+    """
+
+    session = getattr(_HTTP_SESSION_LOCAL, "session", None)
+    if session is None:
+        session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=8,
+            pool_maxsize=8,
+            max_retries=0,
+        )
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _HTTP_SESSION_LOCAL.session = session
+    return session
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -45,7 +71,7 @@ SUN_EARTH_LIGHT_MINUTES: Final[float] = AU_KM / LIGHT_SPEED_KM_S / 60.0  # ~8.3 
 
 # NOAA SWPC endpoints
 SWPC_BASE_URL: Final[str] = "https://services.swpc.noaa.gov"
-REQUEST_TIMEOUT: Final[float] = 15.0
+REQUEST_TIMEOUT: Final[float] = 5.0  # Reduced from 15.0 for faster failure
 
 ENDPOINTS: Final[Dict[str, str]] = {
     "xray_1day": f"{SWPC_BASE_URL}/json/goes/primary/xrays-1-day.json",
@@ -270,7 +296,7 @@ def _classify_xray_flux(flux_long: float, flux_short: float) -> Tuple[str, Impac
 def fetch_xray_impact() -> Tuple[Optional[ImpactEvent], Optional[str]]:
     """Fetch and analyze X-ray flux for photon impact."""
     try:
-        response = requests.get(ENDPOINTS["xray_1day"], timeout=REQUEST_TIMEOUT)
+        response = _get_http_session().get(ENDPOINTS["xray_1day"], timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         data = response.json()
     except requests.RequestException as exc:
@@ -405,7 +431,7 @@ def _classify_sep_flux(p10_flux: float) -> Tuple[str, ImpactSeverity, str]:
 def fetch_sep_impact() -> Tuple[Optional[ImpactEvent], Optional[str]]:
     """Fetch and analyze proton flux for SEP impact."""
     try:
-        response = requests.get(ENDPOINTS["proton_1day"], timeout=REQUEST_TIMEOUT)
+        response = _get_http_session().get(ENDPOINTS["proton_1day"], timeout=REQUEST_TIMEOUT)
         response.raise_for_status()
         data = response.json()
     except requests.RequestException as exc:
@@ -568,7 +594,9 @@ def _classify_solar_wind(speed: float, density: float, bt: float, bz: float) -> 
 def fetch_plasma_impact() -> Tuple[Optional[ImpactEvent], Optional[str]]:
     """Fetch solar wind plasma data and compute L1-to-Earth arrival."""
     try:
-        resp_plasma = requests.get(ENDPOINTS["solar_wind_plasma"], timeout=REQUEST_TIMEOUT)
+        resp_plasma = _get_http_session().get(
+            ENDPOINTS["solar_wind_plasma"], timeout=REQUEST_TIMEOUT
+        )
         resp_plasma.raise_for_status()
         plasma_data = resp_plasma.json()
     except requests.RequestException as exc:
@@ -579,7 +607,9 @@ def fetch_plasma_impact() -> Tuple[Optional[ImpactEvent], Optional[str]]:
     # Fetch magnetic field data
     bt, bz = float("nan"), float("nan")
     try:
-        resp_mag = requests.get(ENDPOINTS["solar_wind_mag"], timeout=REQUEST_TIMEOUT)
+        resp_mag = _get_http_session().get(
+            ENDPOINTS["solar_wind_mag"], timeout=REQUEST_TIMEOUT
+        )
         resp_mag.raise_for_status()
         mag_data = resp_mag.json()
         if isinstance(mag_data, list) and len(mag_data) >= 2:
@@ -731,7 +761,7 @@ def fetch_geomagnetic_impact() -> Tuple[Optional[ImpactEvent], Optional[str]]:
     
     # Fetch Kp
     try:
-        resp = requests.get(ENDPOINTS["kp_1min"], timeout=REQUEST_TIMEOUT)
+        resp = _get_http_session().get(ENDPOINTS["kp_1min"], timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, list) and len(data) > 0:
@@ -747,7 +777,7 @@ def fetch_geomagnetic_impact() -> Tuple[Optional[ImpactEvent], Optional[str]]:
     
     # Fetch Dst
     try:
-        resp = requests.get(ENDPOINTS["dst_1hour"], timeout=REQUEST_TIMEOUT)
+        resp = _get_http_session().get(ENDPOINTS["dst_1hour"], timeout=REQUEST_TIMEOUT)
         resp.raise_for_status()
         data = resp.json()
         if isinstance(data, list) and len(data) > 0:
@@ -830,7 +860,11 @@ def fetch_space_weather_snapshot() -> SpaceWeatherSnapshot:
     
     Returns a SpaceWeatherSnapshot with all categories populated.
     All times are exact and expressed in UTC and Bogotá timezone.
+    
+    Uses parallel fetching for faster data retrieval.
     """
+    import concurrent.futures
+    
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     now_bogota = utc_to_bogota(now_utc)
     
@@ -839,30 +873,36 @@ def fetch_space_weather_snapshot() -> SpaceWeatherSnapshot:
         timestamp_bogota=now_bogota,
     )
     
-    # Fetch all event types
-    photon_event, photon_error = fetch_xray_impact()
-    if photon_event:
-        snapshot.photon_event = photon_event
-    if photon_error:
-        snapshot.errors["photon"] = photon_error
+    # Fetch all event types in parallel for faster loading
+    fetch_functions = {
+        "photon": fetch_xray_impact,
+        "sep": fetch_sep_impact,
+        "plasma": fetch_plasma_impact,
+        "geomagnetic": fetch_geomagnetic_impact,
+    }
     
-    sep_event, sep_error = fetch_sep_impact()
-    if sep_event:
-        snapshot.sep_event = sep_event
-    if sep_error:
-        snapshot.errors["sep"] = sep_error
-    
-    plasma_event, plasma_error = fetch_plasma_impact()
-    if plasma_event:
-        snapshot.plasma_event = plasma_event
-    if plasma_error:
-        snapshot.errors["plasma"] = plasma_error
-    
-    geomag_event, geomag_error = fetch_geomagnetic_impact()
-    if geomag_event:
-        snapshot.geomagnetic_event = geomag_event
-    if geomag_error:
-        snapshot.errors["geomagnetic"] = geomag_error
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
+        futures = {
+            executor.submit(func): name for name, func in fetch_functions.items()
+        }
+        
+        for future in concurrent.futures.as_completed(futures):
+            name = futures[future]
+            try:
+                event, error = future.result()
+                if event:
+                    if name == "photon":
+                        snapshot.photon_event = event
+                    elif name == "sep":
+                        snapshot.sep_event = event
+                    elif name == "plasma":
+                        snapshot.plasma_event = event
+                    elif name == "geomagnetic":
+                        snapshot.geomagnetic_event = event
+                if error:
+                    snapshot.errors[name] = error
+            except Exception as exc:
+                snapshot.errors[name] = str(exc)
     
     return snapshot
 
