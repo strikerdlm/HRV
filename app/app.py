@@ -896,12 +896,36 @@ def _sync_fatigue_widgets(
 
 
 SWPC_BASE_URL = "https://services.swpc.noaa.gov/json/"
-SWPC_TIMEOUT = 15
+SWPC_TIMEOUT = 8
 SWPC_EXTRA_DATASETS = {
     "Solar Regions": "solar_regions.json",
     "Solar Flare Probabilities": "solar_probabilities.json",
     "Electron Fluence Forecast": "electron_fluence_forecast.json",
 }
+
+_HTTP_SESSION_LOCAL = threading.local()
+
+
+def _get_http_session() -> requests.Session:
+    """Return a thread-local HTTP session configured for connection pooling.
+
+    Streamlit reruns can trigger many SWPC/DONKI requests (and NOAA Space can
+    fan out to 10+ feeds). Pooling reduces repeated TLS handshakes and improves
+    responsiveness while keeping session state isolated per thread.
+    """
+
+    session = getattr(_HTTP_SESSION_LOCAL, "session", None)
+    if session is None:
+        session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=16,
+            pool_maxsize=16,
+            max_retries=0,
+        )
+        session.mount("https://", adapter)
+        session.mount("http://", adapter)
+        _HTTP_SESSION_LOCAL.session = session
+    return session
 _KP_SUFFIX_OFFSETS: Dict[str, float] = {
     "-": -1.0 / 3.0, "o": 0.0, "+": 1.0 / 3.0}
 
@@ -1191,7 +1215,7 @@ def _safe_to_numeric_columns(df: pd.DataFrame) -> pd.DataFrame:
 @st.cache_data(ttl=300, max_entries=32, show_spinner=False)
 def _fetch_swpc_dataset(path: str) -> pd.DataFrame:
     url = f"{SWPC_BASE_URL}{path}"
-    response = requests.get(url, timeout=SWPC_TIMEOUT)
+    response = _get_http_session().get(url, timeout=SWPC_TIMEOUT)
     response.raise_for_status()
     payload = response.json()
     if isinstance(payload, dict):
@@ -1227,7 +1251,7 @@ def get_swpc_kp_index(days: int = 14) -> pd.DataFrame:
         return cached_df
     try:
         url = "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
-        response = requests.get(url, timeout=SWPC_TIMEOUT)
+        response = _get_http_session().get(url, timeout=SWPC_TIMEOUT)
         response.raise_for_status()
         payload = response.json()
         if not payload:
@@ -1589,6 +1613,17 @@ def _noaa_space_state() -> Dict[str, Any]:
     return state
 
 
+NOAA_CORE_KEYS: tuple[str, ...] = (
+    "planetary_k_index_3h",
+    "f107_flux",
+    "solar_wind_wind",
+    "solar_wind_mag",
+    "goes_xray_flux",
+    "goes_integral_protons",
+    "geospace_dst",
+)
+
+
 def _load_noaa_space_datasets(
     state: Dict[str, Any],
     *,
@@ -1740,7 +1775,7 @@ def _bg_fetch_all_space_data() -> None:
 
     # 2. NOAA feeds
     try:
-        bundles, errors = load_noaa_space_data(keys=None, use_cache=True)
+        bundles, errors = load_noaa_space_data(keys=list(NOAA_CORE_KEYS), use_cache=True)
         with _bg_fetch_lock:
             _bg_fetch_results["noaa"]["data"] = {
                 "bundles": bundles,
@@ -1761,7 +1796,7 @@ def _bg_fetch_all_space_data() -> None:
     # 3. DONKI (last 30 days by default)
     try:
         end_dt = pd.Timestamp.utcnow()
-        start_dt = end_dt - pd.Timedelta(days=30)
+        start_dt = end_dt - pd.Timedelta(days=14)
         start_str = start_dt.strftime("%Y-%m-%d")
         end_str = end_dt.strftime("%Y-%m-%d")
 
@@ -2069,7 +2104,7 @@ def fetch_donki(
     path = config.get("path", endpoint)
     url = f"{DONKI_API_BASE}/{path}"
     try:
-        response = requests.get(url, params=query, timeout=DONKI_TIMEOUT)
+        response = _get_http_session().get(url, params=query, timeout=DONKI_TIMEOUT)
         response.raise_for_status()
         data = response.json()
     except requests.RequestException as exc:
@@ -2946,20 +2981,34 @@ def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
     state["flux_error"] = ""
     kp_duration_ms: Optional[float] = None
     flux_duration_ms: Optional[float] = None
-    try:
-        kp_start = time.perf_counter()
-        state["kp_df"] = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
-        kp_duration_ms = (time.perf_counter() - kp_start) * 1000.0
-    except (requests.RequestException, ValueError) as exc:
-        log_exception(_LOGGER, "Failed to fetch SWPC K-index", exc)
-        state["kp_error"] = f"Failed to retrieve K-index data: {exc}"
-    try:
-        flux_start = time.perf_counter()
-        state["flux_df"] = get_swpc_solar_radio_flux()
-        flux_duration_ms = (time.perf_counter() - flux_start) * 1000.0
-    except (requests.RequestException, ValueError) as exc:
-        log_exception(_LOGGER, "Failed to fetch SWPC solar radio flux", exc)
-        state["flux_error"] = f"Failed to retrieve solar radio flux: {exc}"
+
+    def _timed_call(fn) -> Tuple[pd.DataFrame, float]:
+        start = time.perf_counter()
+        df = fn()
+        return df, (time.perf_counter() - start) * 1000.0
+
+    import concurrent.futures
+
+    # Fetch Kp + F10.7 in parallel to reduce wall-clock latency on slow networks.
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        future_kp = executor.submit(
+            _timed_call, lambda: get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
+        )
+        future_flux = executor.submit(_timed_call, get_swpc_solar_radio_flux)
+
+        try:
+            kp_df, kp_duration_ms = future_kp.result()
+            state["kp_df"] = kp_df
+        except (requests.RequestException, ValueError) as exc:
+            log_exception(_LOGGER, "Failed to fetch SWPC K-index", exc)
+            state["kp_error"] = f"Failed to retrieve K-index data: {exc}"
+
+        try:
+            flux_df, flux_duration_ms = future_flux.result()
+            state["flux_df"] = flux_df
+        except (requests.RequestException, ValueError) as exc:
+            log_exception(_LOGGER, "Failed to fetch SWPC solar radio flux", exc)
+            state["flux_error"] = f"Failed to retrieve solar radio flux: {exc}"
     state["last_updated"] = pd.Timestamp.utcnow()
     state["loaded"] = bool(
         (isinstance(state.get("kp_df"), pd.DataFrame) and not state["kp_df"].empty)
@@ -11822,44 +11871,33 @@ that predicts cognitive performance based on:
 
     with tab_space_weather:
         st.subheader("Space Weather (NOAA SWPC)")
-        render_space_weather = st.session_state.get("_render_space_weather_dashboard", False)
-        if not render_space_weather:
-            st.info("Space Weather dashboard loads on demand to keep the app responsive.")
-            if st.button("Load Space Weather dashboard", key="btn_load_space_weather"):
-                with st.spinner("Loading Space Weather dashboard…"):
-                    st.session_state["_render_space_weather_dashboard"] = True
-                    render_space_weather = True
-        if render_space_weather:
-            _sw_loading_msg = st.empty()
-            _sw_loading_msg.info("Loading Space Weather dashboard…")
         
-            # NOTE: Lazy loading removed because wrapping 1600+ lines of content
-            # in a conditional block required impractical re-indentation.
-            # The original `return` statement was removed because it prevented
-            # subsequent tabs (NOAA Space, Export, References, About) from rendering.
-            # Space weather content now always loads (slower startup, but all tabs work).
-            _sw_content_loaded = True
-            st.session_state["_space_weather_tab_loaded"] = True
+        # Dashboard renders immediately - no blocking background fetch
+        _sw_loading_msg = st.empty()
         
-            # =====================================================================
-            # IMPACT PREDICTION SECTION - Expected hit times for Bogotá, Colombia
-            # =====================================================================
-            if _sw_content_loaded and SPACE_WEATHER_IMPACT_AVAILABLE:
-                st.markdown("---")
-                st.markdown("### 🎯 Space Weather Impact Predictions")
-                st.markdown(f"*All times in Bogotá, Colombia ({BOGOTA_TZ_NAME})*")
+        # NOTE: Content always loads - no lazy loading gate.
+        _sw_content_loaded = True
+        st.session_state["_space_weather_tab_loaded"] = True
+        
+        # =====================================================================
+        # IMPACT PREDICTION SECTION - Expected hit times for Bogotá, Colombia
+        # =====================================================================
+        if _sw_content_loaded and SPACE_WEATHER_IMPACT_AVAILABLE:
+            st.markdown("---")
+            st.markdown("### 🎯 Space Weather Impact Predictions")
+            st.markdown(f"*All times in Bogotá, Colombia ({BOGOTA_TZ_NAME})*")
             
-                # Session state for impact snapshot
-                if "impact_snapshot" not in st.session_state:
-                    st.session_state["impact_snapshot"] = None
-                if "impact_snapshot_error" not in st.session_state:
-                    st.session_state["impact_snapshot_error"] = ""
-                if "impact_snapshot_loading" not in st.session_state:
-                    st.session_state["impact_snapshot_loading"] = False
-                if "impact_snapshot_attempted" not in st.session_state:
-                    # Default to True so auto-fetch is disabled on initial load (faster startup)
-                    # Users can click "Fetch Impact Predictions" button when they want the data
-                    st.session_state["impact_snapshot_attempted"] = True
+            # Session state for impact snapshot
+            if "impact_snapshot" not in st.session_state:
+                st.session_state["impact_snapshot"] = None
+            if "impact_snapshot_error" not in st.session_state:
+                st.session_state["impact_snapshot_error"] = ""
+            if "impact_snapshot_loading" not in st.session_state:
+                st.session_state["impact_snapshot_loading"] = False
+            if "impact_snapshot_attempted" not in st.session_state:
+                # Default to True so auto-fetch is disabled on initial load (faster startup)
+                # Users can click "Fetch Impact Predictions" button when they want the data
+                st.session_state["impact_snapshot_attempted"] = True
             
                 # Only auto-fetch if not already loaded, not currently loading, and not already attempted
                 if (
@@ -11883,20 +11921,21 @@ that predicts cognitive performance based on:
                 col_fetch_impact, col_refresh_info = st.columns([1, 2])
                 with col_fetch_impact:
                     if st.button("🔄 Fetch Impact Predictions", key="fetch_impact_predictions"):
-                        with st.spinner("Calculating arrival times..."):
-                            st.session_state["impact_snapshot_loading"] = True
-                            try:
+                        st.session_state["impact_snapshot_loading"] = True
+                        try:
+                            with st.spinner("Calculating arrival times..."):
                                 snapshot = fetch_space_weather_snapshot()
-                                st.session_state["impact_snapshot"] = snapshot
-                                st.session_state["impact_snapshot_error"] = ""
-                                st.session_state["impact_snapshot_attempted"] = True
-                            except Exception as exc:
-                                log_exception(_LOGGER, "Manual impact prediction fetch failed", exc)
-                                st.session_state["impact_snapshot_error"] = str(exc)
-                                st.session_state["impact_snapshot_attempted"] = True
-                                st.error(f"Failed to fetch impact predictions: {exc}")
-                            finally:
-                                st.session_state["impact_snapshot_loading"] = False
+                            st.session_state["impact_snapshot"] = snapshot
+                            st.session_state["impact_snapshot_error"] = ""
+                            st.session_state["impact_snapshot_attempted"] = True
+                        except Exception as exc:
+                            log_exception(_LOGGER, "Manual impact prediction fetch failed", exc)
+                            st.session_state["impact_snapshot_error"] = str(exc)
+                            st.session_state["impact_snapshot_attempted"] = True
+                            st.error(f"Failed to fetch impact predictions: {exc}")
+                        finally:
+                            st.session_state["impact_snapshot_loading"] = False
+                        st.rerun()
                 with col_refresh_info:
                     if st.session_state.get("impact_snapshot"):
                         snap = st.session_state["impact_snapshot"]
@@ -12100,6 +12139,7 @@ that predicts cognitive performance based on:
                 key="donki_window_days",
             )
             if fetch_sw_clicked:
+                _sw_fetch_success = False
                 with st.status(
                     "Fetching NOAA SWPC datasets…", state="running", expanded=True
                 ) as status:
@@ -12114,19 +12154,22 @@ that predicts cognitive performance based on:
                         else:
                             label = "Space weather datasets updated."
                         status.update(label=label, state="complete", expanded=False)
-                        st.success(label)
+                        _sw_fetch_success = True
                     except Exception as exc:
                         log_exception(_LOGGER, "NOAA SWPC fetch failed", exc)
                         status.update(
                             label=f"Fetch failed: {exc}", state="error", expanded=True
                         )
                         st.error(f"Failed to fetch NOAA SWPC datasets: {exc}")
+                if _sw_fetch_success:
+                    st.rerun()
             if fetch_donki_clicked:
                 if not NASA_API_KEY:
                     st.warning(
                         "Set NASA_API_KEY in your .env file to query NASA DONKI APIs."
                     )
                 else:
+                    _donki_fetch_success = False
                     start_donki, end_donki = _donki_default_range(
                         int(donki_window_days))
                     with st.status(
@@ -12143,7 +12186,7 @@ that predicts cognitive performance based on:
                             else:
                                 label = "DONKI datasets updated."
                             status.update(label=label, state="complete", expanded=False)
-                            st.success(label)
+                            _donki_fetch_success = True
                         except Exception as exc:
                             log_exception(_LOGGER, "NASA DONKI fetch failed", exc)
                             status.update(
@@ -12152,6 +12195,8 @@ that predicts cognitive performance based on:
                                 expanded=True,
                             )
                             st.error(f"Failed to fetch NASA DONKI datasets: {exc}")
+                    if _donki_fetch_success:
+                        st.rerun()
 
             if space_state.get("swl_loaded"):
                 last_swl = space_state.get("swl_last_updated")
@@ -13479,368 +13524,372 @@ that predicts cognitive performance based on:
 
     with tab_noaa_space:
         st.markdown("### 🌍 NOAA Space Weather Dashboard")
-        render_noaa_space = st.session_state.get("_render_noaa_dashboard", False)
-        if not render_noaa_space:
-            st.info("NOAA Space dashboard loads on demand to keep the app responsive.")
-            if st.button("Load NOAA Space dashboard", key="btn_load_noaa_dashboard"):
-                with st.spinner("Loading NOAA Space dashboard…"):
-                    st.session_state["_render_noaa_dashboard"] = True
-                    render_noaa_space = True
-        if render_noaa_space:
-            _noaa_loading_msg = st.empty()
-            _noaa_loading_msg.info("Loading NOAA Space dashboard…")
-            st.markdown("*Real-time solar and geomagnetic data for physiology correlation analysis*")
         
-            # Start background fetch lazily when this tab is opened
-            _ensure_background_fetch_for_space_tabs()
+        # Dashboard loads instantly - no blocking background fetch
+        # User clicks "Fetch NOAA feeds" button to load data
+        _noaa_loading_msg = st.empty()
+        st.markdown("*Real-time solar and geomagnetic data for physiology correlation analysis*")
 
-            with st.expander("🌞 **Understanding Space Weather Metrics**", expanded=False):
-                st.markdown("""
-    **Solar Activity Indices:**
-    | Metric | Definition | HRV Relevance |
-    |--------|------------|---------------|
-    | **Kp Index** | Global geomagnetic disturbance (0-9 scale) | ↑ Kp associated with ↓ HRV in multiple studies |
-    | **Dst Index** | Ring current strength (nT) | More negative = stronger storm; similar HRV effects as Kp |
-    | **F10.7 Flux** | 10.7 cm solar radio emission (sfu) | Proxy for overall solar activity; long-term associations |
+        with st.expander("🌞 **Understanding Space Weather Metrics**", expanded=False):
+            st.markdown("""
+**Solar Activity Indices:**
+| Metric | Definition | HRV Relevance |
+|--------|------------|---------------|
+| **Kp Index** | Global geomagnetic disturbance (0-9 scale) | ↑ Kp associated with ↓ HRV in multiple studies |
+| **Dst Index** | Ring current strength (nT) | More negative = stronger storm; similar HRV effects as Kp |
+| **F10.7 Flux** | 10.7 cm solar radio emission (sfu) | Proxy for overall solar activity; long-term associations |
 
-    **Solar Wind Parameters:**
-    | Metric | Definition | Physiological Link |
-    |--------|------------|-------------------|
-    | **Speed** | Solar wind velocity (km/s) | Higher speeds may increase stress responses |
-    | **Density** | Proton density (cm⁻³) | Contributes to magnetospheric pressure |
-    | **IMF Bz** | Interplanetary magnetic field z-component | Southward (negative) enhances geomagnetic coupling |
+**Solar Wind Parameters:**
+| Metric | Definition | Physiological Link |
+|--------|------------|-------------------|
+| **Speed** | Solar wind velocity (km/s) | Higher speeds may increase stress responses |
+| **Density** | Proton density (cm⁻³) | Contributes to magnetospheric pressure |
+| **IMF Bz** | Interplanetary magnetic field z-component | Southward (negative) enhances geomagnetic coupling |
 
-    **Interpretation Tips:**
-    - Correlations are typically **small** (r ≈ 0.1–0.3) but consistent across studies
-    - Test **multiple lag times** (0–72 hours) — effects may be delayed
-    - Always control for **time-of-day, season, and behavior**
-    - Treat findings as **exploratory** unless replicated
-                """)
+**Interpretation Tips:**
+- Correlations are typically **small** (r ≈ 0.1–0.3) but consistent across studies
+- Test **multiple lag times** (0–72 hours) — effects may be delayed
+- Always control for **time-of-day, season, and behavior**
+- Treat findings as **exploratory** unless replicated
+            """)
         
-            noaa_state = _noaa_space_state()
-            # Check if background fetch already populated data; skip redundant auto-fetch
-            try:
-                bg_status = _poll_background_fetch()
-            except Exception:
-                bg_status = {"noaa": {"done": False, "error": None, "stale": False}}
+        noaa_state = _noaa_space_state()
+        # Check if background fetch already populated data
+        try:
+            bg_status = _poll_background_fetch()
+        except Exception:
+            bg_status = {"noaa": {"done": False, "error": None, "stale": False}}
 
-            # NOTE: Auto-fetch disabled to prevent blocking UI. User can click fetch buttons.
-            # If background fetch completed, data will appear automatically.
-            # if not noaa_state.get("bundles") and not bg_status.get("noaa", {}).get("done"):
-            #     _auto_fetch_noaa_space_if_needed(noaa_state)
+        # Data age indicator
+        data_age = _get_bg_fetch_age_str()
 
-            # Data age indicator
-            data_age = _get_bg_fetch_age_str()
+        col_scope, col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns([1, 1, 1, 2])
+        with col_scope:
+            fetch_scope = st.selectbox(
+                "Scope",
+                options=["Core", "Full"],
+                index=0,
+                key="noaa_fetch_scope",
+                help=(
+                    "Core loads the most useful geomagnetic/solar-wind feeds (fast). "
+                    "Full loads the entire NOAA feed library (slower)."
+                ),
+            )
+        keys_to_fetch: Optional[Sequence[str]] = (
+            NOAA_CORE_KEYS if fetch_scope == "Core" else None
+        )
+        with col_fetch_noaa:
+            fetch_noaa_clicked = st.button(
+                "📥 Fetch NOAA feeds",
+                key="fetch_noaa_space_data",
+                help="Load NOAA feeds for the selected scope (uses cache if available).",
+            )
+        with col_refresh_noaa:
+            refresh_noaa_clicked = st.button(
+                "🔄 Force refresh",
+                key="refresh_noaa_space_data",
+                help="Bypass cache and fetch fresh data from NOAA servers for the selected scope.",
+            )
+        with col_bg_status:
+            # Show background fetch status with data age (non-intrusive)
+            noaa_status = bg_status.get("noaa", {"done": False, "error": None, "stale": False})
+            if not noaa_status.get("done"):
+                st.caption("🔄 Background fetch in progress…")
+            elif noaa_status.get("error"):
+                st.caption(f"⚠️ Fetch issue: {str(noaa_status['error'])[:50]}…")
+            elif noaa_status.get("stale"):
+                st.caption(f"⏰ Data: {data_age} (auto-refresh pending)")
+            else:
+                st.caption(f"✅ Data: {data_age} | Auto-refresh: 12h")
 
-            col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns([1, 1, 2])
-            with col_fetch_noaa:
-                fetch_noaa_clicked = st.button(
-                    "📥 Fetch NOAA feeds", key="fetch_noaa_space_data",
-                    help="Load NOAA feeds (uses cache if available)"
-                )
-            with col_refresh_noaa:
-                refresh_noaa_clicked = st.button(
-                    "🔄 Force refresh", key="refresh_noaa_space_data",
-                    help="Bypass cache and fetch fresh data from NOAA servers"
-                )
-            with col_bg_status:
-                # Show background fetch status with data age (non-intrusive)
-                noaa_status = bg_status.get("noaa", {"done": False, "error": None, "stale": False})
-                if not noaa_status.get("done"):
-                    st.caption("🔄 Background fetch in progress…")
-                elif noaa_status.get("error"):
-                    st.caption(f"⚠️ Fetch issue: {str(noaa_status['error'])[:50]}…")
-                elif noaa_status.get("stale"):
-                    st.caption(f"⏰ Data: {data_age} (auto-refresh pending)")
+        if fetch_noaa_clicked:
+            with st.spinner("Fetching NOAA JSON feeds…"):
+                _load_noaa_space_datasets(noaa_state, keys=keys_to_fetch)
+            st.rerun()
+        if refresh_noaa_clicked:
+            with st.spinner("Refreshing NOAA JSON feeds…"):
+                _load_noaa_space_datasets(noaa_state, keys=keys_to_fetch, use_cache=False)
+            st.rerun()
+        # Auto-load uses cache-first; buttons remain for manual refresh/force refresh
+        if noaa_state.get("loading"):
+            st.info("NOAA feeds are loading…")
+        errors = noaa_state.get("errors", {})
+        for key, message in errors.items():
+            label = "General" if key == "__global__" else key
+            st.error(f"{label}: {message}")
+        bundles = noaa_state.get("bundles", {})
+        option_labels: Dict[str, str] = {}
+        dataset_options: List[str] = []
+        metrics_available: List[str] = []
+        if not windowed_df.empty:
+            metrics_available = [
+                metric
+                for metric in metric_list
+                if metric in windowed_df.columns
+                and pd.api.types.is_numeric_dtype(windowed_df[metric])
+            ]
+        if not bundles:
+            st.info("📡 Click **Fetch NOAA feeds** above to load solar/geomagnetic data.")
+        else:
+            option_labels = {
+                key: bundle.spec.title for key, bundle in bundles.items()
+            }
+            dataset_options = sorted(option_labels.keys(), key=lambda k: option_labels[k])
+            default_dataset_key = (
+                "planetary_k_index_3h"
+                if "planetary_k_index_3h" in dataset_options
+                else (dataset_options[0] if dataset_options else "")
+            )
+            default_dataset_index = (
+                dataset_options.index(default_dataset_key)
+                if default_dataset_key in dataset_options
+                else 0
+            )
+            selected_dataset = st.selectbox(
+                "Dataset",
+                options=dataset_options,
+                format_func=lambda k: option_labels.get(k, k),
+                index=default_dataset_index,
+                key="noaa_dataset_select",
+            )
+            bundle: NOAADataBundle = bundles[selected_dataset]
+            if bundle.spec.description:
+                st.caption(bundle.spec.description)
+            # Quick sanity check: warn when the selected NOAA dataset does not
+            # cover the HRV windowed timeline (common for short-horizon feeds).
+            if not windowed_df.empty and bundle.time_column in bundle.frame.columns:
+                try:
+                    hrv_start = pd.to_datetime(windowed_df.get("start"), utc=True, errors="coerce")
+                    pred_times = pd.to_datetime(bundle.frame[bundle.time_column], utc=True, errors="coerce")
+                    hrv_min = hrv_start.min()
+                    hrv_max = hrv_start.max()
+                    pred_min = pred_times.min()
+                    pred_max = pred_times.max()
+                    if (
+                        pd.notna(hrv_min)
+                        and pd.notna(hrv_max)
+                        and pd.notna(pred_min)
+                        and pd.notna(pred_max)
+                        and (hrv_max < pred_min or hrv_min > pred_max)
+                    ):
+                        extra_hint = ""
+                        if selected_dataset == "planetary_k_index_1m":
+                            extra_hint = (
+                                " The 1-minute Kp nowcast feed typically only spans the most recent hours."
+                            )
+                        st.warning(
+                            "Selected NOAA dataset does not overlap your HRV timestamps; correlation results will be empty."
+                            + extra_hint
+                            + " Try a longer-horizon dataset (e.g., **Planetary K index (3 h)**) or refresh NOAA feeds."
+                        )
+                except Exception:
+                    pass
+            cadence_minutes = bundle.spec.cadence_minutes or 60
+            if cadence_minutes <= 60:
+                min_hours = 6
+                max_hours = 720
+                step_hours = 6
+                default_hours = 72
+            elif cadence_minutes <= 1440:
+                min_hours = 24
+                max_hours = 24 * 365 * 2  # up to two years
+                step_hours = 24
+                default_hours = 24 * 90
+            else:
+                min_hours = 24 * 30
+                max_hours = min(24 * 30 * 60, 24 * 365 * 30)  # up to ~30 years
+                step_hours = 24 * 30
+                default_hours = 24 * 30 * 12
+            default_hours = int(np.clip(default_hours, min_hours, max_hours))
+            history_hours = st.slider(
+                "History window (hours)",
+                min_value=int(min_hours),
+                max_value=int(max_hours),
+                value=int(default_hours),
+                step=int(step_hours),
+                key=f"noaa_history_{selected_dataset}",
+            )
+            history_df = _prepare_noaa_history(bundle, int(history_hours))
+            selected_value_column: Optional[str] = None
+            current_label_map: Dict[str, str] = {}
+            if bundle.spec.key == "solar_radio_multifrequency":
+                _render_noaa_multifrequency_panel(bundle, history_df)
+                if "flux_sfu" in history_df.columns:
+                    selected_value_column = "flux_sfu"
+                    current_label_map = {"flux_sfu": "Flux (sfu)"}
+            else:
+                value_columns = list(bundle.value_columns)
+                if not value_columns:
+                    value_columns = [
+                        col
+                        for col in history_df.columns
+                        if col != bundle.time_column
+                        and pd.api.types.is_numeric_dtype(history_df[col])
+                    ]
+                if not value_columns:
+                    st.info("No numeric columns available for this dataset.")
                 else:
-                    st.caption(f"✅ Data: {data_age} | Auto-refresh: 12h")
-
-            if fetch_noaa_clicked:
-                with st.spinner("Fetching NOAA JSON feeds…"):
-                    _load_noaa_space_datasets(noaa_state)
-            if refresh_noaa_clicked:
-                with st.spinner("Refreshing NOAA JSON feeds…"):
-                    _load_noaa_space_datasets(noaa_state, use_cache=False)
-            # Auto-load uses cache-first; buttons remain for manual refresh/force refresh
-            if noaa_state.get("loading"):
-                st.info("NOAA feeds are loading…")
-            errors = noaa_state.get("errors", {})
-            for key, message in errors.items():
-                label = "General" if key == "__global__" else key
-                st.error(f"{label}: {message}")
-            bundles = noaa_state.get("bundles", {})
-            option_labels: Dict[str, str] = {}
-            dataset_options: List[str] = []
-            metrics_available: List[str] = []
-            if not windowed_df.empty:
+                    default_index = 0
+                    if bundle.spec.key == "f107_flux" and "flux" in value_columns:
+                        default_index = value_columns.index("flux")
+                    label_map = {
+                        col: bundle.split_labels.get(
+                            col, col.replace("_", " ").title()
+                        )
+                        for col in value_columns
+                    }
+                    value_column = st.selectbox(
+                        "Primary metric",
+                        options=value_columns,
+                        index=default_index,
+                        format_func=lambda col: label_map.get(col, col),
+                        key=f"noaa_value_column_{selected_dataset}",
+                    )
+                    selected_value_column = value_column
+                    current_label_map = label_map
+                    overlay_candidates = [
+                        col for col in value_columns if col != value_column
+                    ]
+                    default_overlays: List[str]
+                    if (
+                        bundle.spec.key == "f107_flux"
+                        and "ninety_day_mean" in overlay_candidates
+                    ):
+                        default_overlays = ["ninety_day_mean"]
+                    else:
+                        default_overlays = overlay_candidates[: min(4, len(overlay_candidates))]
+                    overlay_selection = st.multiselect(
+                        "Additional overlays",
+                        options=overlay_candidates,
+                        default=default_overlays,
+                        format_func=lambda col: label_map.get(col, col),
+                        key=f"noaa_overlay_{selected_dataset}",
+                    )
+                    y_label = bundle.units.get(value_column) if bundle.units else None
+                    _render_noaa_metric_panel(
+                        bundle,
+                        history_df,
+                        value_column,
+                        overlay_columns=overlay_selection,
+                        line_title=f"{bundle.spec.title} trends",
+                        y_label=y_label or "Value",
+                    )
+            # Show concise scientific interpretation for the selected metric
+            try:
+                if selected_dataset and selected_value_column:
+                    info = explain_noaa_metric(selected_dataset, selected_value_column)
+                    if info:
+                        with st.expander("What this metric means (science-based)", expanded=True):
+                            st.markdown(
+                                f"**{info.get('title','')}**  \n"
+                                f"- **What it measures**: {info.get('what','')}  \n"
+                                f"- **Why it matters for space weather**: {info.get('why','')}  \n"
+                                f"- **What studies suggest for physiology/HRV**: {info.get('physiology','')}  \n"
+                                f"- **Most probable HRV relationship**: {info.get('likely_effect','')}  \n"
+                                f"- **Key references**: {info.get('refs','')}"
+                            )
+            except Exception:
+                pass
+            st.divider()
+            st.markdown("##### HRV correlation analysis")
+            if windowed_df.empty:
+                st.info("Run the HRV window analysis to enable correlations.")
+            else:
                 metrics_available = [
                     metric
                     for metric in metric_list
                     if metric in windowed_df.columns
                     and pd.api.types.is_numeric_dtype(windowed_df[metric])
                 ]
-            if not bundles:
-                st.info("📡 Click **Fetch NOAA feeds** above to load solar/geomagnetic data, or wait for the background fetch to complete.")
-            else:
-                option_labels = {
-                    key: bundle.spec.title for key, bundle in bundles.items()
-                }
-                dataset_options = sorted(option_labels.keys(), key=lambda k: option_labels[k])
-                default_dataset_key = (
-                    "planetary_k_index_3h"
-                    if "planetary_k_index_3h" in dataset_options
-                    else (dataset_options[0] if dataset_options else "")
-                )
-                default_dataset_index = (
-                    dataset_options.index(default_dataset_key)
-                    if default_dataset_key in dataset_options
-                    else 0
-                )
-                selected_dataset = st.selectbox(
-                    "Dataset",
-                    options=dataset_options,
-                    format_func=lambda k: option_labels.get(k, k),
-                    index=default_dataset_index,
-                    key="noaa_dataset_select",
-                )
-                bundle: NOAADataBundle = bundles[selected_dataset]
-                if bundle.spec.description:
-                    st.caption(bundle.spec.description)
-                # Quick sanity check: warn when the selected NOAA dataset does not
-                # cover the HRV windowed timeline (common for short-horizon feeds).
-                if not windowed_df.empty and bundle.time_column in bundle.frame.columns:
-                    try:
-                        hrv_start = pd.to_datetime(windowed_df.get("start"), utc=True, errors="coerce")
-                        pred_times = pd.to_datetime(bundle.frame[bundle.time_column], utc=True, errors="coerce")
-                        hrv_min = hrv_start.min()
-                        hrv_max = hrv_start.max()
-                        pred_min = pred_times.min()
-                        pred_max = pred_times.max()
-                        if (
-                            pd.notna(hrv_min)
-                            and pd.notna(hrv_max)
-                            and pd.notna(pred_min)
-                            and pd.notna(pred_max)
-                            and (hrv_max < pred_min or hrv_min > pred_max)
-                        ):
-                            extra_hint = ""
-                            if selected_dataset == "planetary_k_index_1m":
-                                extra_hint = (
-                                    " The 1-minute Kp nowcast feed typically only spans the most recent hours."
-                                )
-                            st.warning(
-                                "Selected NOAA dataset does not overlap your HRV timestamps; correlation results will be empty."
-                                + extra_hint
-                                + " Try a longer-horizon dataset (e.g., **Planetary K index (3 h)**) or refresh NOAA feeds."
-                            )
-                    except Exception:
-                        pass
-                cadence_minutes = bundle.spec.cadence_minutes or 60
-                if cadence_minutes <= 60:
-                    min_hours = 6
-                    max_hours = 720
-                    step_hours = 6
-                    default_hours = 72
-                elif cadence_minutes <= 1440:
-                    min_hours = 24
-                    max_hours = 24 * 365 * 2  # up to two years
-                    step_hours = 24
-                    default_hours = 24 * 90
+                if not metrics_available:
+                    st.info("No numeric HRV metrics available for correlation.")
                 else:
-                    min_hours = 24 * 30
-                    max_hours = min(24 * 30 * 60, 24 * 365 * 30)  # up to ~30 years
-                    step_hours = 24 * 30
-                    default_hours = 24 * 30 * 12
-                default_hours = int(np.clip(default_hours, min_hours, max_hours))
-                history_hours = st.slider(
-                    "History window (hours)",
-                    min_value=int(min_hours),
-                    max_value=int(max_hours),
-                    value=int(default_hours),
-                    step=int(step_hours),
-                    key=f"noaa_history_{selected_dataset}",
-                )
-                history_df = _prepare_noaa_history(bundle, int(history_hours))
-                selected_value_column: Optional[str] = None
-                current_label_map: Dict[str, str] = {}
-                if bundle.spec.key == "solar_radio_multifrequency":
-                    _render_noaa_multifrequency_panel(bundle, history_df)
-                    if "flux_sfu" in history_df.columns:
-                        selected_value_column = "flux_sfu"
-                        current_label_map = {"flux_sfu": "Flux (sfu)"}
-                else:
-                    value_columns = list(bundle.value_columns)
-                    if not value_columns:
-                        value_columns = [
-                            col
-                            for col in history_df.columns
-                            if col != bundle.time_column
-                            and pd.api.types.is_numeric_dtype(history_df[col])
-                        ]
-                    if not value_columns:
-                        st.info("No numeric columns available for this dataset.")
-                    else:
-                        default_index = 0
-                        if bundle.spec.key == "f107_flux" and "flux" in value_columns:
-                            default_index = value_columns.index("flux")
-                        label_map = {
-                            col: bundle.split_labels.get(
-                                col, col.replace("_", " ").title()
-                            )
-                            for col in value_columns
-                        }
-                        value_column = st.selectbox(
-                            "Primary metric",
-                            options=value_columns,
-                            index=default_index,
-                            format_func=lambda col: label_map.get(col, col),
-                            key=f"noaa_value_column_{selected_dataset}",
-                        )
-                        selected_value_column = value_column
-                        current_label_map = label_map
-                        overlay_candidates = [
-                            col for col in value_columns if col != value_column
-                        ]
-                        default_overlays: List[str]
-                        if (
-                            bundle.spec.key == "f107_flux"
-                            and "ninety_day_mean" in overlay_candidates
-                        ):
-                            default_overlays = ["ninety_day_mean"]
+                    default_metrics = metrics_available[: min(4, len(metrics_available))]
+                    selected_metrics = st.multiselect(
+                        "HRV metrics",
+                        options=metrics_available,
+                        default=default_metrics,
+                        key=f"noaa_metric_select_{selected_dataset}",
+                    )
+                    lag_min, lag_max = st.slider(
+                        "Lag window (hours)",
+                        min_value=-72,
+                        max_value=72,
+                        value=(-24, 24),
+                        step=1,
+                        key=f"noaa_lag_range_{selected_dataset}",
+                    )
+                    lag_step = st.number_input(
+                        "Lag step (hours)",
+                        min_value=1,
+                        max_value=24,
+                        value=3,
+                        step=1,
+                        key=f"noaa_lag_step_{selected_dataset}",
+                    )
+                    merge_tolerance = st.number_input(
+                        "Merge tolerance (minutes)",
+                        min_value=15,
+                        max_value=240,
+                        value=90,
+                        step=15,
+                        key=f"noaa_merge_tolerance_{selected_dataset}",
+                    )
+                    compute_corr = st.button(
+                        "Compute correlations",
+                        key=f"noaa_compute_corr_{selected_dataset}",
+                    )
+                    if compute_corr:
+                        if not selected_metrics:
+                            st.warning("Select at least one HRV metric to continue.")
                         else:
-                            default_overlays = overlay_candidates[: min(4, len(overlay_candidates))]
-                        overlay_selection = st.multiselect(
-                            "Additional overlays",
-                            options=overlay_candidates,
-                            default=default_overlays,
-                            format_func=lambda col: label_map.get(col, col),
-                            key=f"noaa_overlay_{selected_dataset}",
-                        )
-                        y_label = bundle.units.get(value_column) if bundle.units else None
-                        _render_noaa_metric_panel(
-                            bundle,
-                            history_df,
-                            value_column,
-                            overlay_columns=overlay_selection,
-                            line_title=f"{bundle.spec.title} trends",
-                            y_label=y_label or "Value",
-                        )
-                # Show concise scientific interpretation for the selected metric
-                try:
-                    if selected_dataset and selected_value_column:
-                        info = explain_noaa_metric(selected_dataset, selected_value_column)
-                        if info:
-                            with st.expander("What this metric means (science-based)", expanded=True):
-                                st.markdown(
-                                    f"**{info.get('title','')}**  \n"
-                                    f"- **What it measures**: {info.get('what','')}  \n"
-                                    f"- **Why it matters for space weather**: {info.get('why','')}  \n"
-                                    f"- **What studies suggest for physiology/HRV**: {info.get('physiology','')}  \n"
-                                    f"- **Most probable HRV relationship**: {info.get('likely_effect','')}  \n"
-                                    f"- **Key references**: {info.get('refs','')}"
+                            lag_start, lag_end = int(lag_min), int(lag_max)
+                            lag_step_int = max(int(lag_step), 1)
+                            if lag_start > lag_end:
+                                st.warning(
+                                    "Lag start must be less than or equal to lag end."
                                 )
-                except Exception:
-                    pass
-                st.divider()
-                st.markdown("##### HRV correlation analysis")
-                if windowed_df.empty:
-                    st.info("Run the HRV window analysis to enable correlations.")
-                else:
-                    metrics_available = [
-                        metric
-                        for metric in metric_list
-                        if metric in windowed_df.columns
-                        and pd.api.types.is_numeric_dtype(windowed_df[metric])
-                    ]
-                    if not metrics_available:
-                        st.info("No numeric HRV metrics available for correlation.")
-                    else:
-                        default_metrics = metrics_available[: min(4, len(metrics_available))]
-                        selected_metrics = st.multiselect(
-                            "HRV metrics",
-                            options=metrics_available,
-                            default=default_metrics,
-                            key=f"noaa_metric_select_{selected_dataset}",
-                        )
-                        lag_min, lag_max = st.slider(
-                            "Lag window (hours)",
-                            min_value=-72,
-                            max_value=72,
-                            value=(-24, 24),
-                            step=1,
-                            key=f"noaa_lag_range_{selected_dataset}",
-                        )
-                        lag_step = st.number_input(
-                            "Lag step (hours)",
-                            min_value=1,
-                            max_value=24,
-                            value=3,
-                            step=1,
-                            key=f"noaa_lag_step_{selected_dataset}",
-                        )
-                        merge_tolerance = st.number_input(
-                            "Merge tolerance (minutes)",
-                            min_value=15,
-                            max_value=240,
-                            value=90,
-                            step=15,
-                            key=f"noaa_merge_tolerance_{selected_dataset}",
-                        )
-                        compute_corr = st.button(
-                            "Compute correlations",
-                            key=f"noaa_compute_corr_{selected_dataset}",
-                        )
-                        if compute_corr:
-                            if not selected_metrics:
-                                st.warning("Select at least one HRV metric to continue.")
                             else:
-                                lag_start, lag_end = int(lag_min), int(lag_max)
-                                lag_step_int = max(int(lag_step), 1)
-                                if lag_start > lag_end:
+                                lags = list(range(lag_start, lag_end + 1, lag_step_int))
+                                if not lags:
                                     st.warning(
-                                        "Lag start must be less than or equal to lag end."
+                                        "Lag configuration results in an empty set."
                                     )
                                 else:
-                                    lags = list(range(lag_start, lag_end + 1, lag_step_int))
-                                    if not lags:
-                                        st.warning(
-                                            "Lag configuration results in an empty set."
+                                    with st.spinner("Computing Pearson correlations…"):
+                                        corr_df = _build_noaa_correlations(
+                                            windowed_df,
+                                            {selected_dataset: bundle},
+                                            selected_metrics,
+                                            lags,
+                                            merge_tolerance_minutes=int(
+                                                merge_tolerance
+                                            ),
+                                        )
+                                    noaa_state["correlations"][selected_dataset] = corr_df
+                                    noaa_state["corr_params"][selected_dataset] = {
+                                        "metrics": selected_metrics,
+                                        "lags": lags,
+                                        "merge_tolerance": int(merge_tolerance),
+                                    }
+                                    if corr_df.empty:
+                                        st.info(
+                                            "No correlations satisfied the selected configuration."
                                         )
                                     else:
-                                        with st.spinner("Computing Pearson correlations…"):
-                                            corr_df = _build_noaa_correlations(
-                                                windowed_df,
-                                                {selected_dataset: bundle},
-                                                selected_metrics,
-                                                lags,
-                                                merge_tolerance_minutes=int(
-                                                    merge_tolerance
-                                                ),
-                                            )
-                                        noaa_state["correlations"][selected_dataset] = corr_df
-                                        noaa_state["corr_params"][selected_dataset] = {
-                                            "metrics": selected_metrics,
-                                            "lags": lags,
-                                            "merge_tolerance": int(merge_tolerance),
-                                        }
-                                        if corr_df.empty:
-                                            st.info(
-                                                "No correlations satisfied the selected configuration."
-                                            )
-                                        else:
-                                            st.success("Correlation scan completed.")
-                        corr_df = noaa_state["correlations"].get(selected_dataset)
-                        if selected_value_column is None:
-                            st.info(
-                                "Select a primary NOAA metric above to view correlation results."
-                            )
-                        else:
-                            _render_noaa_correlation_summary(
-                                corr_df,
-                                selected_dataset,
-                                selected_value_column,
-                                label_map=current_label_map,
-                            )
+                                        st.success("Correlation scan completed.")
+                    corr_df = noaa_state["correlations"].get(selected_dataset)
+                    if selected_value_column is None:
+                        st.info(
+                            "Select a primary NOAA metric above to view correlation results."
+                        )
+                    else:
+                        _render_noaa_correlation_summary(
+                            corr_df,
+                            selected_dataset,
+                            selected_value_column,
+                            label_map=current_label_map,
+                        )
             st.divider()
             st.markdown("##### Batch NOAA correlation scan")
             if windowed_df.empty:
