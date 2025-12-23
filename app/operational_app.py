@@ -117,11 +117,24 @@ def main() -> None:
     _ensure_app_dir_on_path()
     setup_logging()
 
+    # Set app mode early for any downstream policy checks (no UI side effects).
+    os.environ["HRV_APP_MODE"] = "operational"
+
     # MUST be the first Streamlit command (before importing modules that use Streamlit).
     try:
         st.set_page_config(page_title="HRV Analysis — Operational", layout="wide")
     except Exception:
         # Never crash the operational app due to page config ordering.
+        pass
+
+    # Mode badge (shared philosophy)
+    try:
+        from app_mode import AppMode, render_app_mode_badge, set_app_mode  # noqa: PLC0415
+
+        set_app_mode(AppMode.OPERATIONAL)
+        render_app_mode_badge(AppMode.OPERATIONAL)
+    except Exception:
+        # Badge is non-critical; keep operational flow stable.
         pass
 
     # Delay-import UI modules until after page config to avoid StreamlitAPIException.
