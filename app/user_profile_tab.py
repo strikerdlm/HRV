@@ -22,6 +22,7 @@ import time
 import uuid
 import io
 import os
+from dataclasses import asdict, is_dataclass
 from collections import Counter
 from datetime import datetime, date, timezone, timedelta
 from pathlib import Path
@@ -1916,6 +1917,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
     ctx_caffeine_key = f"clinical_caffeine_{user.user_id}"
     ctx_wake_time_key = f"clinical_wake_dt_{user.user_id}"
     ctx_wake_time_input_key = f"clinical_wake_time_input_{user.user_id}"
+    local_tz = datetime.now().astimezone().tzinfo or timezone.utc
     
     # Initialize defaults only if keys don't exist
     if ctx_hours_wake_key not in st.session_state:
@@ -1925,15 +1927,21 @@ def _render_clinical_assessment(user: UserProfile) -> None:
     if ctx_caffeine_key not in st.session_state:
         st.session_state[ctx_caffeine_key] = 1
     if ctx_wake_time_key not in st.session_state:
-        default_wake_dt = datetime.now() - timedelta(
+        default_wake_dt = datetime.now(tz=local_tz) - timedelta(
             hours=float(st.session_state[ctx_hours_wake_key])
         )
         st.session_state[ctx_wake_time_key] = default_wake_dt
     wake_dt_val = st.session_state.get(ctx_wake_time_key)
     if isinstance(wake_dt_val, datetime):
+        wake_dt_local = (
+            wake_dt_val.astimezone(local_tz)
+            if wake_dt_val.tzinfo
+            else wake_dt_val.replace(tzinfo=local_tz)
+        )
+        st.session_state[ctx_wake_time_key] = wake_dt_local
         st.session_state[ctx_hours_wake_key] = _compute_hours_since_wake(
-            wake_dt_val,
-            datetime.now(timezone.utc) if wake_dt_val.tzinfo else datetime.now(),
+            wake_dt_local,
+            datetime.now(tz=local_tz),
         )
     
     # Garmin autofill section (outside form)
@@ -1955,6 +1963,8 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                 latest: Dict[str, Any]
                 if isinstance(latest_entry, dict):
                     latest = latest_entry
+                elif is_dataclass(latest_entry):
+                    latest = asdict(latest_entry)
                 elif hasattr(latest_entry, "to_dict"):
                     latest = latest_entry.to_dict()  # type: ignore[assignment]
                 else:
@@ -1975,11 +1985,15 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                 if sleep_end_utc:
                     parsed_end = _parse_iso_utc(str(sleep_end_utc))
                     if parsed_end is not None:
-                        st.session_state[ctx_wake_time_key] = parsed_end
+                        parsed_local_end = parsed_end.astimezone(local_tz)
+                        st.session_state[ctx_wake_time_key] = parsed_local_end
                         computed_hours = _compute_hours_since_wake(
-                            parsed_end, datetime.now(timezone.utc)
+                            parsed_local_end, datetime.now(tz=local_tz)
                         )
                         st.session_state[ctx_hours_wake_key] = computed_hours
+                        updated_fields.append(
+                            f"Wake: {parsed_local_end.strftime('%H:%M %Z')}"
+                        )
                         updated_fields.append(
                             f"Awake: {st.session_state[ctx_hours_wake_key]:.1f}h"
                         )
@@ -2009,21 +2023,31 @@ def _render_clinical_assessment(user: UserProfile) -> None:
     with st.form(form_key, clear_on_submit=False):
         with st.expander(t('assessment_context'), expanded=True):
             stored_wake_dt = st.session_state.get(ctx_wake_time_key)
-            wake_time_value = (
-                stored_wake_dt.time()
-                if isinstance(stored_wake_dt, datetime)
-                else datetime.now().time()
-            )
+            now_local = datetime.now(tz=local_tz)
+            if isinstance(stored_wake_dt, datetime):
+                stored_wake_local = (
+                    stored_wake_dt.astimezone(local_tz)
+                    if stored_wake_dt.tzinfo
+                    else stored_wake_dt.replace(tzinfo=local_tz)
+                )
+            else:
+                stored_wake_local = now_local - timedelta(
+                    hours=float(st.session_state[ctx_hours_wake_key])
+                )
+                st.session_state[ctx_wake_time_key] = stored_wake_local
+            wake_time_value = stored_wake_local.time()
             wake_time_today = st.time_input(
                 "Wake time today",
                 value=wake_time_value,
                 key=ctx_wake_time_input_key,
                 help="Used to compute hours awake (current time minus wake time).",
             )
-            wake_dt_today = datetime.combine(date.today(), wake_time_today)
+            wake_dt_today = datetime.combine(
+                date.today(), wake_time_today, tzinfo=local_tz
+            )
             st.session_state[ctx_wake_time_key] = wake_dt_today
             st.session_state[ctx_hours_wake_key] = _compute_hours_since_wake(
-                wake_dt_today, datetime.now()
+                wake_dt_today, datetime.now(tz=local_tz)
             )
             
             col1, col2, col3 = st.columns(3)
@@ -2058,7 +2082,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                 )
             st.caption(
                 f"Hours awake ({st.session_state[ctx_hours_wake_key]:.1f}h) "
-                f"= now ({datetime.now().strftime('%H:%M')}) minus wake "
+                f"= now ({datetime.now(tz=local_tz).strftime('%H:%M')}) minus wake "
                 f"time ({wake_time_today.strftime('%H:%M')})."
             )
         context_data = {
