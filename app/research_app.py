@@ -14,6 +14,7 @@ import os
 
 
 _ENV_SKIP_PAGE_CONFIG = "HRV_SKIP_STREAMLIT_PAGE_CONFIG"
+_ENV_APP_MODE = "HRV_APP_MODE"
 
 
 def main() -> None:
@@ -21,6 +22,7 @@ def main() -> None:
     # We keep this wrapper minimal to avoid Streamlit's `set_page_config` ordering
     # constraints being violated by import-time Streamlit usage in submodules.
     os.environ[_ENV_SKIP_PAGE_CONFIG] = "0"
+    os.environ[_ENV_APP_MODE] = "research"
 
     # When running Streamlit from inside `app/`, `import app` resolves to `app/app.py`
     # (not the package). That module defines `main()`.
