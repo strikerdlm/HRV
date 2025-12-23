@@ -43,11 +43,44 @@ import os
 
 import streamlit as st
 
-if os.environ.get("HRV_SKIP_STREAMLIT_PAGE_CONFIG") != "1":
-    st.set_page_config(
-        page_title="HRV Analysis — Streamlit + ECharts",
-        layout="wide",
-    )
+def _safe_set_page_config() -> None:
+    """Best-effort page config without crashing the app.
+
+    Streamlit requires `st.set_page_config()` be the first Streamlit command. In
+    complex apps, import-time decorators (e.g., `@st.cache_data`) or other
+    modules may enqueue a delta before this module is imported, making page
+    config illegal and raising StreamlitAPIException.
+
+    We fail closed on *crashes* (never crash the app due to page config), and
+    skip setting page config if Streamlit already disallowed it.
+    """
+
+    if os.environ.get("HRV_SKIP_STREAMLIT_PAGE_CONFIG") == "1":
+        return
+
+    try:
+        from streamlit.runtime.scriptrunner.script_run_context import (  # noqa: PLC0415
+            get_script_run_ctx,
+        )
+    except Exception:
+        get_script_run_ctx = None  # type: ignore[assignment]
+
+    if get_script_run_ctx is not None:
+        ctx = get_script_run_ctx()
+        if ctx is not None and not getattr(ctx, "_set_page_config_allowed", True):
+            return
+
+    try:
+        st.set_page_config(
+            page_title="HRV Analysis — Streamlit + ECharts",
+            layout="wide",
+        )
+    except Exception:
+        # Do not crash the app for cosmetic configuration.
+        return
+
+
+_safe_set_page_config()
 
 from gpt_interpretation import (
     GPT5InterpretationError,
