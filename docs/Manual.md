@@ -228,6 +228,10 @@ conda run -n hrv-py312 streamlit run app/operational_app.py
 
 The app opens at `http://localhost:8501` in your default browser.
 
+**Operational vs Research (rules of thumb)**:
+- **Operational app**: Use for **User Profile + clinical workflow** with **lightweight cached space-weather context**.
+- **Research app**: Use for **HRV/HRF computation**, **NOAA/Space Weather dashboards**, **correlations**, and **ML**.
+
 ---
 
 ## Data Preparation
