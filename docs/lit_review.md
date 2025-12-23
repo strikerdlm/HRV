@@ -1,5 +1,34 @@
 # Physiological, Chronobiological, and Operational Foundations of a Multimodal Human-Performance Console
+
 ## A literature review aligned to the “Mission Control – Flight Surgeon” platform
+
+Review:
+
+Major limitations / risks of bias (as reported or not reported)
+•  Scope asymmetry: Only the HRV–cognition component is handled as a scoping evidence map; other modules rely on narrative synthesis without comparable systematic search reporting (acknowledged as multi-domain; Section 2.10).
+•  No full-text eligibility and no study-level inclusion counts for the scoping component (explicitly not performed/reported), which limits interpretability of “evidence map” as evidence of high-quality human HRV–cognition studies vs. metadata-level hits (Section 3.0).
+•  Screening and extraction reliability: Number of reviewers, duplicate screening, adjudication, and inter-rater agreement are Not reported (Sections 2.5–2.7 describe deterministic screening, but reviewer-process metrics are not provided).
+•  Risk-of-bias/quality appraisal: Not performed for every included study (Section 2.8), which is acceptable for scoping reviews but reduces ability to weigh competing claims across modules.
+•  Protocol registration: Not prospectively registered; no preregistered protocol (Declarations).
+•  Reproducibility: Improved by including an executable reference implementation in Appendix C (Declarations; Appendix C). Still, reruns may not match counts due to evolving indexing (Section 2.10; Appendix C note).
+
+CONFLICTS OF INTEREST
+•  Competing interests: Not reported (Declarations).
+•  Funding: Not reported (Declarations).
+•  Comment: Because the review is explicitly aligned to a specific application/platform, disclosure of any author involvement in development, commercialization, or deployment is important; this is Not reported.
+
+RESEARCHER'S INTERPRETATION
+•  The manuscript’s interpretation is generally appropriately conservative for safety-critical deployment: it repeatedly separates measurement validity from decision utility, and emphasizes governance, uncertainty, and “decision support, not diagnosis” (Sections 4–5).
+•  The strongest interpretive risk is scope creep: readers may generalize the rigor of the HRV–cognition scoping component to the rest of the multi-domain synthesis. The text partially mitigates this by acknowledging that non-cognition modules are not exhaustively scoped (Section 2.10), but the manuscript would benefit from even clearer demarcation of “scoped evidence map” vs “selected narrative synthesis” in conclusions and limitations.
+•  Where cited meta-analytic effects are described, the manuscript generally stays within the evidence by emphasizing small effects and heterogeneity (Section 3.3.4). Where the manuscript discusses operational architectures and AI decision support, it is appropriately framed as design guidance rather than empirical validation (Sections 4.9–4.12).
+
+Prompt to improve it:
+
+
+
+---
+
+
 
 **Document type:** Scoping review (PRISMA-ScR–reported) with module-aligned synthesis (IMRaD-structured)
 
@@ -8,6 +37,7 @@
 ---
 
 ## Abstract
+
 **Background:** High-consequence aviation and space operations require continuous monitoring of physiological readiness under fluctuating sleep opportunity, circadian misalignment, workload, and environmental exposures. Modern field systems increasingly combine short-term heart rate variability (HRV) features, wearable-derived sleep metrics, circadian modelling, and biomathematical fatigue forecasts to support decision-making. Yet each component has non-trivial methodological dependencies (signal quality, protocol control, confounding, multiple testing) that determine whether outputs are interpretable and operationally safe.
 
 **Objective:** To review the scientific and technical foundations relevant to a multimodal “flight surgeon console” approach, focusing on: (i) HRV standards, preprocessing, and interpretation across time/frequency/nonlinear domains; (ii) validated autonomic function testing paradigms; (iii) circadian pacemaker models and experimentally derived light phase-response curves; (iv) fatigue science, performance measurement, and biomathematical fatigue modelling; (v) blood pressure variability (BPV) as an autonomic/vascular risk construct; (vi) evidence on wearable acquisition validity; and (vii) the state of evidence linking space-weather indices to autonomic/cardiovascular outcomes.
@@ -23,7 +53,9 @@
 ---
 
 ## 1. Introduction
+
 ### 1.1. Why a multimodal “flight surgeon console” exists
+
 Human performance failures in aviation and spaceflight rarely arise from a single physiological pathway. Operational impairment is typically multi-determined by sleep restriction, circadian misalignment, prolonged wakefulness, high workload, stress, and—especially in exploration analogs—environmental perturbations that modulate autonomic regulation and recovery. Because subjective insight into impairment can be unreliable under fatigue, safety-critical contexts increasingly seek objective or quasi-objective proxies: vigilance tests, sleep opportunity tracking, and physiological signals that reflect autonomic state.
 
 Heart rate variability (HRV) has emerged as an attractive candidate because it is noninvasive, comparatively easy to acquire in the field, and interpretable (within constraints) as a measure of autonomic modulation of the sinoatrial node (Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology, 1996; Shaffer & Ginsberg, 2017). However, HRV is not a monolithic biomarker. It is a family of features computed from interbeat interval (IBI/RR) series, and it is sensitive to measurement context (posture, respiration, time of day), signal quality (ectopy, motion artefact), and modelling/processing choices (filtering, detrending, spectral estimation). Consequently, building an operational tool around HRV requires careful alignment with standards and a principled treatment of uncertainty.
@@ -33,9 +65,11 @@ Parallel developments in chronobiology and fatigue science provide complementary
 The *Mission Control – Flight Surgeon* platform integrates these scientific domains into a single app: HRV analysis across time/frequency/nonlinear domains; circadian simulation and light scheduling; fatigue forecasting (SAFTE-family) and FRMS-like dashboards; population norms and personalized baselines; blood pressure variability analytics; wearable ingestion; and integration of space-weather data from NOAA SWPC and NASA DONKI for time-aligned exploratory correlations. This review therefore takes a “module-aligned” approach: it synthesizes the literature base for each module and emphasizes methodological dependencies that determine whether outputs are meaningful.
 
 ### 1.2. A note on interpretation vs. diagnosis
+
 HRV and related autonomic measures are probabilistic indicators. Low HRV is associated with elevated risk in multiple contexts, but it is not a diagnosis. Conversely, higher HRV is often interpreted as “better,” yet pathologically irregular rhythms (e.g., atrial fibrillation) can produce high variability that is not salutary. A system intended for operational decision support must therefore distinguish: (i) signal validity (is the RR series physiologically plausible and free of ectopy/artefact?); (ii) within-person change (is today different from this individual’s baseline under similar conditions?); and (iii) clinical interpretation (what does a deviation plausibly mean given confounders?). Contemporary reporting recommendations explicitly advocate documenting measurement conditions and preprocessing steps to prevent overinterpretation (Laborde et al., 2017).
 
 ### 1.3. Controversies that matter operationally
+
 Three controversies are especially operationally relevant.
 
 First, frequency-domain interpretation—particularly the LF/HF ratio—has a long history of being used as a proxy for “sympathovagal balance.” This interpretation is widely contested because LF power reflects baroreflex-related modulation with mixed sympathetic and parasympathetic contributions, and because the autonomic nervous system is nonlinear and context dependent. Direct critiques show that LF/HF is not a reliable measure of sympathovagal balance (Billman, 2013). Operational software that reports LF/HF should therefore treat it as a descriptive spectral feature, not a mechanistic readout.
@@ -47,10 +81,13 @@ Third, evidence linking space weather to human physiology is heterogeneous. Some
 ---
 
 ## 2. Methods
+
 ### 2.1. Review design and reporting framework
+
 This manuscript is structured using a module-aligned approach corresponding to the *Mission Control – Flight Surgeon* platform. The HRV–cognition component was conducted as a scoping review and reported according to PRISMA-ScR (Tricco et al., 2018), guided by established scoping-review methodology (Arksey & O’Malley, 2005; Levac et al., 2010; Peters et al., 2020). Adjacent domains required for operational deployment (HRV measurement standards and preprocessing, circadian models, fatigue/FRMS science, BPV, wearable validity, space-weather context, and governance) were synthesized narratively using consensus standards, systematic reviews, and key validation studies.
 
 ### 2.2. Review questions (HRV–cognition scoping component)
+
 The scoping component addressed four questions:
 
 1. What study designs and populations have been used to examine associations between vagally mediated HRV and cognitive outcomes?
@@ -59,15 +96,19 @@ The scoping component addressed four questions:
 4. What recurring confounders and methodological limitations affect interpretation, and what evidence gaps remain for operational decision support?
 
 ### 2.3. Eligibility criteria
+
 We included English-language records with abstracts published between 1 January 2000 and 31 December 2025. For the HRV–cognition scoping component, records were eligible if they addressed HRV (including commonly used vagally mediated indices such as RMSSD and HF-HRV, and related HRV/RR terminology such as SDNN and RR/NN interval) in relation to at least one cognitive domain: executive function, working memory, attention/vigilance, mental workload/cognitive load, or cognitive impairment/dementia. We included primary studies (observational and interventional) and reviews.
 
 Exclusion criteria were: missing abstract; non-English language metadata; and acronym ambiguity where “HRV” did not refer to heart rate variability (minimized by requiring explicit HRV terminology in the query families; residual ambiguity would require manual exclusion). Because indexing metadata do not reliably encode participant species across all sources, the search was designed to be human-focused but was not restricted using “Humans” MeSH filters; instead, we applied deterministic title/abstract screening rules (Section 2.5), including a conservative “non-human-only” exclusion filter and disambiguation of CPT (continuous performance test vs cold pressor test) within the attention/vigilance query family. Any remaining non-human-only records or false positives would require manual exclusion during downstream screening.
 
 ### 2.4. Information sources
+
 #### 2.4.1. HRV–cognition scoping search
+
 The primary source was Europe PMC (accessed via its REST API). Searches were executed on **22 December 2025**. Five query families were run (Appendix B): executive function, working memory, attention/vigilance, mental workload, and cognitive impairment. A pilot (broader, higher-sensitivity) strategy is documented in Appendix A for transparency.
 
 #### 2.4.2. Module-aligned operational context sources (standards, models, and agency documents)
+
 Government/agency technical documents were collected from official portals:
 
 - NOAA Space Weather Prediction Center (SWPC) product documentation (Kp index; NOAA space weather scales).
@@ -79,13 +120,21 @@ Government/agency technical documents were collected from official portals:
 In addition, high-impact consensus statements and widely used methodological references underpinning non-cognition modules (e.g., HRV standards and reporting recommendations; circadian models and PRCs; fatigue-model evaluations; wearable validation) were included to support operational interpretation.
 
 #### 2.4.3. Heart rate fragmentation (HRF) targeted literature and technical-document search
+
 Heart rate fragmentation is an emerging set of indices that is not explicitly defined in classic HRV standards, yet it directly affects how short-term HRV metrics (especially HF power and beat-to-beat indices) can be interpreted in aging and disease contexts. Therefore, we conducted a targeted narrative search on **23 December 2025** to identify: (i) foundational method papers defining HRF indices and related symbolic-dynamics formulations; (ii) large-cohort studies evaluating associations with cardiovascular outcomes, atrial fibrillation, and cognitive endpoints; (iii) papers focused on the methodological interaction between HRF and traditional HRV interpretation; and (iv) any governmental/agency documents that mention HRF in an operational monitoring context.
 
 Searches were conducted in PubMed and Crossref, with supplementary full-text retrieval from the U.S. National Library of Medicine’s PubMed Central when available. Search terms included “heart rate fragmentation”, “fragmented sinoatrial dynamics”, “percentage of inflection points”, “sinus alternans”, and “erratic sinus rhythm,” combined with operationally relevant constructs (sleep, recovery, cognitive decline, fatigue, workload, allostatic load, and atrial fibrillation screening).
 
 Because we did not identify major governmental/agency standards that directly operationalize HRF as of the search date, the translation in this review is framed primarily from peer-reviewed evidence, and explicitly bounded by the absence of consensus norms and the dependence of HRF estimates on beat classification and artefact control.
 
+#### 2.4.4. Socio-technical decision support and human–AI teaming targeted literature search
+
+Because the platform’s intended value is realized only when analytics are integrated into real operational decision-making, we conducted a targeted narrative search on **23 December 2025** focusing on socio-technical decision making, human factors, and human–AI teaming in safety-critical domains. We sought foundational frameworks for: (i) situation awareness and its measurement; (ii) naturalistic decision making and recognition-primed decision strategies; (iii) high reliability organizations and resilience engineering; (iv) system-theoretic safety and hazard analysis; (v) human–automation interaction, automation bias, and human-AI interaction design guidelines; and (vi) human-autonomy teaming methods and trust measurement relevant to tactical settings.
+
+Searches were conducted in Crossref and PubMed using key terms including “situation awareness,” “naturalistic decision making,” “recognition-primed,” “high reliability organization,” “resilience engineering,” “Safety-II,” “STAMP,” “human-automation interaction,” “automation bias,” “human-AI interaction,” “model cards,” “AI risk management framework,” and “human-autonomy teaming trust toolkit.” Priority was given to sources with DOI-based persistence (peer-reviewed articles, books/monographs, and technical reports) and to governmental standards where accessible. The resulting synthesis is explicitly positioned as cross-cutting operational context rather than exhaustive mapping.
+
 ### 2.5. Search strategy and record management
+
 Search strings were pre-specified to emphasize HRV/RR-interval terminology (e.g., heart rate variability, RMSSD, SDNN, HF-HRV, RR/NN interval) and key cognitive constructs. Full query strings are provided verbatim in Appendix B to enable replication; the pilot strategy and counts are preserved in Appendix A.
 
 Records were retrieved in JSON format (pageSize=1000; bounded pagination) and deduplicated using a deterministic rule: DOI (case-insensitive) when available; otherwise PMID; otherwise the source-specific record identifier.
@@ -99,18 +148,23 @@ Because “CPT” is ambiguous (continuous performance test vs cold pressor test
 Records that matched only RR/NN interval terminology without explicit HRV descriptors (heart rate variability/HRV; RMSSD; SDNN; HF-HRV) were flagged for manual verification but retained.
 
 ### 2.6. Data charting
+
 For each unique record remaining after deduplication and title/abstract screening (non-human-only exclusion and CPT disambiguation), we charted: title, year, journal, DOI/PMID, publication type, open-access status (when available), and which query family/families retrieved the record. This charting enabled an evidence map across cognitive domains and years.
 
 ### 2.7. Synthesis approach
+
 Scoping results are summarized as (i) a PRISMA-style accounting of records and (ii) an evidence map by cognitive domain and publication year (Section 3.0). These findings are then integrated with the broader module-aligned synthesis, emphasizing measurement validity, protocol constraints, and operational governance.
 
 ### 2.8. Critical appraisal
+
 Consistent with PRISMA-ScR guidance, we did not perform formal risk-of-bias appraisal for every included study. Where mechanistic claims are made, we preferentially cite consensus standards, controlled studies, and systematic reviews, and treat observational associations as hypothesis-generating unless replicated.
 
 ### 2.9. Reference verification and traceability
+
 To minimize citation error, all peer-reviewed sources were required to have a resolvable DOI or a stable URL. DOI-based references were verified using DOI resolution to ensure that the cited metadata corresponded to the intended publication. Older articles without DOI metadata were cited using stable bibliographic portals (e.g., PubMed). US/EU governmental and agency documents were cited from official publisher portals (e.g., FAA advisory circular PDFs; NOAA/ESA documentation portals; NASA NTRS), emphasizing stable URLs over transient mirrors.
 
 ### 2.10. Limitations of this review
+
 This manuscript includes a PRISMA-ScR scoping component focused on HRV–cognition evidence indexed in Europe PMC and retrievable using the query families in Appendix B (Appendix A documents the pilot strategy). Europe PMC indexing and metadata evolve over time; therefore, rerunning the same searches on a different date may yield different record counts. In addition, because “Humans” tagging is incomplete across sources and because acronym ambiguity can occur (e.g., CPT), the scoping search was not restricted using MeSH filters; instead, we applied deterministic title/abstract screening rules (non-human-only exclusion and CPT disambiguation). Downstream screening remains required to confirm species and remove residual non-human records and other false positives.
 
 Finally, the manuscript is multi-domain: while HRV–cognition evidence is mapped using scoping methods, non-cognition modules (circadian modelling, fatigue/FRMS, BPV, wearables, space weather) are synthesized using module-aligned consensus standards and key validation studies rather than exhaustive scoping searches for every subtopic.
@@ -118,7 +172,9 @@ Finally, the manuscript is multi-domain: while HRV–cognition evidence is mappe
 ---
 
 ## 3. Results
+
 ### 3.0. Evidence identification and evidence map (HRV–cognition scoping component)
+
 Across five pre-specified query families (executive function, working memory, attention/vigilance, mental workload, cognitive impairment), Europe PMC returned **2,736** records (22 December 2025; Appendix B). After DOI/PMID-based deduplication, **2,090** unique records remained (58 without a DOI), with 646 duplicates removed. Deterministic title/abstract screening excluded 12 non-human-only records and an additional 61 records due to CPT ambiguity (“cold pressor” false positives within the attention/vigilance query family), leaving 2,017 records for evidence mapping. The query-family yields were: executive function (946), working memory (331), attention/vigilance (496), mental workload (504), and cognitive impairment (459). Because records can match multiple query families, these counts are not mutually exclusive.
 
 A PRISMA-ScR-style flow narrative for this scoping component is as follows: (i) **Identification:** 2,736 records were identified on 22 December 2025 across five query families (Appendix B). (ii) **Deduplication:** 646 duplicates were removed using DOI/PMID-based deduplication, leaving 2,090 unique records (58 without DOI metadata). (iii) **Title/abstract screening (rule-based):** 2,090 records were screened; 12 non-human-only records were excluded. Because CPT is ambiguous (continuous performance test vs cold pressor test), 61 additional records were excluded as “cold pressor” false positives within the attention/vigilance query family. This left 2,017 records for record-level charting and evidence mapping. Additionally, 14 records that matched RR/NN interval terms without explicit HRV descriptors were flagged for manual verification but retained. (iv) **Full-text eligibility:** full-text eligibility assessment was not performed in this step; therefore, counts for “full texts assessed” and “studies included” are not reported and would require downstream screening.
@@ -130,6 +186,7 @@ Europe PMC open-access metadata flagged 1,239/2,017 records (61.4%) as open acce
 Operationally, the map underscores two practical points: (i) HRV–cognition evidence spans heterogeneous populations (healthy, clinical, aging) and heterogeneous cognitive endpoints (task performance, neuropsychological batteries, workload paradigms), and therefore requires careful protocol metadata and confounder control; and (ii) the strongest mechanistic interpretations remain anchored to vagally mediated HRV proxies and to controlled measurement conditions, consistent with neurovisceral integration frameworks.
 
 ### 3.1. HRV as a measurement construct: physiology and standards
+
 HRV refers to variability in the timing of successive normal-to-normal (NN) intervals and reflects the combined action of intrinsic pacemaker dynamics and autonomic modulation. The landmark Task Force statement defines time-domain, frequency-domain, and geometric measures, and emphasizes that interpretation must consider recording duration and stationarity (Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology, 1996). Subsequent syntheses highlight that HRV is shaped by multiple physiological loops operating on distinct time scales: respiratory sinus arrhythmia (RSA) at high frequency, baroreflex-mediated oscillations in the low-frequency range, and slower influences such as thermoregulation and circadian rhythms (Shaffer & Ginsberg, 2017).
 
 A central implication for operational tools is that “HRV” is not a single value but a vector of features whose meaning depends on context. For example, RMSSD is primarily sensitive to short-term beat-to-beat variability and is often interpreted as vagally mediated under resting conditions. SDNN reflects overall variability over the measurement period and aggregates multiple mechanisms. Frequency-domain measures decompose variance into bands (HF, LF, VLF), but these bands require sufficient recording length and are sensitive to respiration.
@@ -137,20 +194,25 @@ A central implication for operational tools is that “HRV” is not a single va
 The app’s design choice to separate analysis into time-domain, frequency-domain, nonlinear, and windowed modules aligns with the Task Force architecture, but modern reporting recommendations further stress the need to document protocol variables and preprocessing decisions (Laborde et al., 2017). For an operational console, this translates into metadata capture (posture, time-of-day, breathing protocol, recent exercise/caffeine) and explicit quality gates (artifact percentage, ectopy handling) before deriving interpretive claims.
 
 ### 3.2. Acquisition and preprocessing: why RR quality dominates downstream validity
+
 #### 3.2.1. R-peak detection and RR interval derivation
+
 Any HRV pipeline begins with detection of cardiac cycles. Classical ECG-based QRS detectors—such as the Pan–Tompkins algorithm—remain influential because they provide a transparent and computationally efficient method for real-time detection (Pan & Tompkins, 1985). Although modern detectors may use wavelets or machine learning, the operational requirement remains the same: missed or spurious detections produce artificial variability that contaminates HRV features.
 
 In RR-file workflows (as used by many chest-strap systems), the user receives a sequence of interbeat intervals rather than raw ECG. This shifts responsibility to the device firmware and vendor algorithms, which may be proprietary. Therefore, operational tools should incorporate plausibility filtering (e.g., rejecting physiologically implausible RR values) and artefact correction, while clearly marking when results depend on corrected data.
 
 #### 3.2.2. Artefact and ectopy correction
+
 Artefacts and ectopic beats are not minor nuisances; they can dominate spectral estimates and nonlinear features. In practice, artefact correction becomes a key determinant of reproducibility. Lipponen and Tarvainen proposed a robust correction algorithm using beat classification, demonstrating a method-oriented path to reduce artefact-induced bias while preserving physiological dynamics (Lipponen & Tarvainen, 2019). Such work underpins modern HRV software packages and provides a defensible rationale for correction routines.
 
 The Kubios HRV platform is widely used in research and provides a reference point for feature definitions and preprocessing options; its software description paper helps anchor methodological comparability across studies (Tarvainen et al., 2014). For an operational console, “Kubios-like” should not mean copying thresholds blindly, but rather adopting the same philosophy: transparent preprocessing settings, explicit reporting of correction intensity, and sensitivity analysis when results materially change after correction.
 
 #### 3.2.3. Reliability of short-term recordings
+
 Short-term HRV measures are appealing because they are feasible in daily operations, but reliability is not automatic. Short-term measures can be repeatable under controlled conditions, yet between-day variability and protocol sensitivity remain substantial—reinforcing the use of standardized acquisition and rolling within-person baselines rather than reliance on population thresholds (Nunan et al., 2010).
 
 #### 3.2.4. Wearable validity for RR acquisition (brief overview)
+
 Because the app supports chest-strap and wearable ingestion, it is important to distinguish sensor modalities.
 
 - **ECG chest straps** (e.g., Polar systems) measure cardiac electrical activity and can provide RR intervals with high fidelity under many conditions.
@@ -161,6 +223,7 @@ Validation studies indicate that the Polar H10 can provide RR intervals suitable
 For sleep and circadian estimation, actigraphy remains foundational, but consumer multi-sensor wearables introduce both promise and risk: multi-sensor systems can capture autonomic parameters at scale, yet proprietary algorithms and firmware changes complicate reproducibility. Reviews in sleep medicine emphasize careful validation and standardized performance assessment before using consumer sleep tracking in research or clinical workflows (de Zambotti et al., 2019).
 
 #### 3.2.5. Protocol standardization, stationarity, and respiration metadata
+
 Short-term HRV features are often treated as “simple” because they can be computed quickly, but the inferential assumptions are not simple. Most HRV measures computed from short segments implicitly assume that the signal is *approximately stationary* over the analysis window, meaning that the statistical properties are not dominated by trends, step changes, or abrupt behavioral shifts. In field monitoring, this assumption is violated frequently: posture changes, speaking, anticipatory stress, and even minor movement can alter RR patterns within seconds.
 
 Two consequences follow. First, the console must treat protocol metadata as part of the measurement, not as optional annotation. A 5-minute supine recording immediately after waking is physiologically and statistically different from a 5-minute seated recording after commuting or exercise. Second, many “physiological interpretations” of HRV metrics rely on structured respiration-driven variability. Respiratory sinus arrhythmia (RSA) is a real physiological phenomenon, but respiration also acts as a controllable confound: changing breathing rate or depth changes the spectral placement and magnitude of RR oscillations (Grossman et al., 1991). Therefore, when a console presents frequency-domain features, the defensible practice is to either (i) standardize breathing instructions (and record the cadence) or (ii) measure respiration and interpret spectral power conditionally.
@@ -168,6 +231,7 @@ Two consequences follow. First, the console must treat protocol metadata as part
 Reporting recommendations emphasize documenting these factors precisely because they can create spurious longitudinal change: an apparent shift in HF power may reflect altered breathing, not altered autonomic regulation (Laborde et al., 2017; Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology, 1996). Operationally, this is a design constraint. If the app cannot verify stable measurement conditions, it should present results with reduced confidence and discourage fine-grained interpretation.
 
 #### 3.2.6. Quality gates: plausibility screening, ectopy, and correction thresholds
+
 Operational HRV systems should be designed to “fail closed” at the preprocessing layer. This is because many downstream metrics—especially nonlinear features—can change dramatically in the presence of missed beats, spurious detections, or excessive interpolation. A defensible preprocessing stack therefore includes at least three layers of QC.
 
 1. **Physiological plausibility checks.** RR values outside plausible human ranges (given context and heart rate) should be flagged. Sudden isolated RR spikes often indicate detection errors rather than physiology.
@@ -177,6 +241,7 @@ Operational HRV systems should be designed to “fail closed” at the preproces
 These principles align with the broader philosophy of HRV standards and reporting guidance: preprocessing decisions materially shape interpretation and must be made explicit (Laborde et al., 2017; Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology, 1996).
 
 #### 3.2.7. Ultra-short-term HRV: what 30–60 seconds can (and cannot) support
+
 Ultra-short-term HRV (e.g., 30–60 seconds) is attractive in operations because it reduces friction: it can be performed during check-ins, pre-task briefings, or in constrained environments. However, the inferential problem is sharper than in 5-minute recordings. When record length is very short, preprocessing choices and transient nonstationarity can dominate the computed feature, and “accuracy” can refer either to agreement with a 5-minute reference or to decision validity for a downstream endpoint.
 
 Evidence suggests that some time-domain indices can be usable in ultra-short-term windows under *strictly controlled* resting conditions. For example, smartphone/app workflows have shown high agreement with ECG for ultra-short-term RMSSD in laboratory-rest settings (Flatt & Esco, 2013). Similarly, validation work comparing ECG to a smartphone app that computes HRV from short segments found that time-domain indices (including RMSSD) can exhibit acceptable agreement in 1-minute windows, while frequency-domain indices generally require longer segments for defensible estimation (Chen et al., 2020).
@@ -189,13 +254,14 @@ Two operational caveats follow.
 Methodologically, this is consistent with the broader signal-processing literature showing that RR preprocessing can materially affect downstream variability estimates, especially when data are noisy or edited aggressively (Thuraisingham, 2006). In the console’s governance terms, ultra-short-term HRV is best framed as a low-latency, low-confidence feature that should trigger either (i) standardized re-measurement (e.g., 5-minute post-waking session) or (ii) corroboration using higher-validity indicators.
 
 ### 3.3. HRV feature families and interpretive constraints
+
 The app reports metrics across time-, frequency-, and nonlinear domains. This is not merely a software convenience; it mirrors the reality that different HRV features emphasize different physiological time scales and respond differently to confounds.
 
 #### 3.3.1. Time-domain features: RMSSD, SDNN, and the logic of within-person baselines
+
 Time-domain features are computed directly from NN intervals. Two measures dominate operational monitoring: SDNN and RMSSD.
 
 - **SDNN** summarizes overall dispersion of NN intervals over the recording window. In short-term recordings, SDNN reflects a mixture of mechanisms; in 24-hour recordings, it integrates circadian and activity-driven variability and has strong prognostic associations in clinical cardiology. However, SDNN is not interchangeable across recording durations (Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology, 1996).
-
 - **RMSSD** captures beat-to-beat variability and is mathematically linked to vagally mediated changes under resting conditions. For operational readiness, RMSSD is attractive because it is comparatively robust to slow nonstationarity and can be derived from short recordings. Nonetheless, RMSSD is still sensitive to posture, breathing pattern, and ectopy artefacts.
 
 A recurring theme in the monitoring literature is that the most defensible use of short-term HRV in readiness is *within-person*, not cross-sectional. In large systematic reviews, even healthy adults show wide dispersion of “normal” values (Nunan et al., 2010). This implies that population norms are better treated as contextual priors than as deterministic thresholds.
@@ -209,6 +275,7 @@ Operationally, this implies that readiness scoring should:
 3. Preserve and surface **quality indicators** (artifact rate, amount of correction applied).
 
 #### 3.3.2. Frequency-domain features: band power, record-length constraints, and the LF/HF problem
+
 Spectral HRV features—HF, LF, VLF, total power—are often attractive to users because they appear mechanistically meaningful. However, their interpretability is bounded by basic signal-analysis constraints and physiological confounding.
 
 **Record length requirements.** The Task Force statement emphasized that a frequency component can only be meaningfully estimated when the recording contains multiple cycles of that oscillation (Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology, 1996). In practice, HF power (0.15–0.40 Hz) can be estimated from shorter segments than LF power (0.04–0.15 Hz), while VLF estimation is particularly fragile in short-term recordings.
@@ -234,6 +301,7 @@ Beyond interpretive controversies, frequency-domain HRV has methodological fragi
 Taken together, these considerations argue for a conservative UI design: show frequency features with preprocessing provenance (window length, resampling method, respiration metadata) and avoid framing them as single-cause mechanistic readouts.
 
 #### 3.3.3. Nonlinear and complexity metrics: what they add (and what they require)
+
 Nonlinear features are often marketed as “advanced,” but their real value is that they capture properties not reducible to linear variance summaries. The app includes several prominent families.
 
 **Entropy (ApEn, SampEn).** Approximate entropy (ApEn) was introduced as a statistic to quantify regularity/complexity in finite-length series (Pincus, 1991). Sample entropy (SampEn) was later proposed to reduce bias and improve consistency (Richman & Moorman, 2000). In HRV contexts, lower entropy is often interpreted as reduced adaptability or complexity-loss with aging and disease, but entropy estimates are sensitive to parameter choices (embedding dimension, tolerance) and to artefacts.
@@ -284,6 +352,7 @@ A practical synthesis is that nonlinear metrics add value primarily when:
 3. Outputs are triangulated with time/frequency features and with contextual covariates.
 
 #### 3.3.4. HRV, self-regulation, and the neurovisceral integration framework
+
 Many users implicitly interpret “low HRV” as “high stress.” That mapping is directionally plausible in some contexts but is not a physiological law. A more defensible framing is provided by the neurovisceral integration perspective: vagally mediated HRV (often indexed by HF-HRV/RMSSD under resting conditions) is treated as an observable marker of functional coupling between central executive networks and peripheral autonomic regulation (Thayer & Lane, 2000; Thayer et al., 2009).
 
 The model’s operational value is that it provides a coherent hypothesis for why HRV correlates with executive function, affect regulation, and health outcomes: the same inhibitory control systems that support flexible behavior also modulate autonomic output through the central autonomic network. Later elaborations emphasize hierarchical organization and context dependence—i.e., “integration” is not uniform across tasks and may vary with threat, arousal, and individual differences (Smith et al., 2017; Thayer & Lane, 2009).
@@ -301,9 +370,11 @@ Finally, cognition is not only an endpoint; it is also a state-dependent *pertur
 Taken together, the most defensible translation is to treat HRV–cognition links as *contextual modifiers* that increase decision utility when combined with direct performance measures (e.g., PVT-family tasks) and schedule/sleep context, rather than as a replacement for cognitive testing.
 
 ### 3.4. Autonomic function tests: controlled provocations vs passive monitoring
+
 The app includes autonomic function tests (deep breathing, Valsalva, orthostatic responses). These tests differ from passive HRV monitoring because they intentionally provoke autonomic reflexes to probe specific pathways.
 
 #### 3.4.1. Deep breathing tests (E:I responses)
+
 Deep breathing protocols aim to amplify RSA and quantify cardiovagal responsiveness. Classic clinical approaches compute the expiration–inspiration (E:I) ratio or related heart rate response metrics. Studies in diabetics with and without symptoms of autonomic neuropathy show that deep breathing responses can be sensitive to autonomic dysfunction, though specificity varies with protocol and patient group (Sundkvist et al., 1982). Reviews of clinical autonomic testing emphasize that HRV with deep breathing is a sensitive cardiovagal measure and that standardized coaching (especially breathing rate, depth, and posture) is essential for interpretability (Shields, 2009).
 
 Operationally, deep breathing tests offer two advantages:
@@ -314,11 +385,13 @@ Operationally, deep breathing tests offer two advantages:
 However, deep breathing tests also introduce their own confounds: learning effects, poor compliance with breathing cadence, and anxiety-induced sympathetic activation.
 
 #### 3.4.2. Valsalva manoeuvre and orthostatic ratios
+
 The Valsalva manoeuvre probes baroreflex function across phases of pressure change, and the Valsalva ratio is a commonly reported summary. Orthostatic ratios (e.g., 30:15) reflect the immediate heart rate response to standing. In practice, these tests are used as part of batteries rather than interpreted in isolation. Selecting an appropriate test battery (or subset) is itself a methodological decision with trade-offs between sensitivity, specificity, user compliance, and operational feasibility.
 
 For a flight surgeon console, these tests can serve as periodic “calibration checks” of autonomic responsiveness, but they must be interpreted with operational constraints in mind (space suits, orthostatic intolerance risk, and mission safety constraints may limit provocative testing).
 
 ### 3.5. Population norms and personalized interpretation: what norms can and cannot do
+
 Population norms are frequently requested by end-users because they enable immediate categorization (“low/normal/high”). Yet the HRV literature cautions that normative values are contingent on measurement protocol and sample characteristics.
 
 Nunan and colleagues synthesized short-term HRV values across tens of thousands of healthy participants, finding substantial dispersion and systematic differences from earlier reference values, likely reflecting heterogeneity in measurement protocols and populations (Nunan et al., 2010). This has two operational implications:
@@ -329,6 +402,7 @@ Nunan and colleagues synthesized short-term HRV values across tens of thousands 
 Shaffer and Ginsberg similarly emphasize that HRV interpretation requires attention to context and to the meaning of different metrics (Shaffer & Ginsberg, 2017). In practice, an operational tool should provide both: (i) normative context (as a prior), and (ii) individualized baselines (as the primary signal).
 
 ### 3.6. Blood pressure variability (BPV) and HRV–BPV coupling
+
 BPV is conceptually adjacent to HRV because both reflect regulatory dynamics, but BPV includes additional vascular and measurement components. Parati and colleagues framed BPV as a phenomenon spanning seconds to years with complex physiological determinants, and argued that BPV has independent clinical relevance beyond mean blood pressure (Parati et al., 2018). Visit-to-visit BPV, in particular, has been associated with stroke and coronary outcomes, suggesting that variability metrics can carry prognostic information (Rothwell et al., 2010).
 
 For an integrated console, BPV analytics are valuable for at least three reasons:
@@ -340,14 +414,17 @@ For an integrated console, BPV analytics are valuable for at least three reasons
 Methodologically, BPV metrics are sensitive to sampling and measurement conditions (office vs ambulatory; device type; posture). Thus, as with HRV, BPV interpretation requires protocol metadata and conservative inference.
 
 ### 3.7. Circadian biology and modelling: phase, light response, and operational confounding
+
 Circadian timing is not merely an explanatory backdrop; it is an active, measurable determinant of performance, sleep propensity, and many physiological endpoints that a flight-surgeon console monitors. When a system includes both HRV metrics and fatigue forecasts, circadian phase becomes a unifying latent variable: it modulates autonomic tone, alters sleep pressure dynamics, and changes the meaning of “normal” at a given clock time.
 
 #### 3.7.1. What circadian models try to estimate: internal phase under imperfect observability
+
 The operational quantity of interest is typically **internal circadian phase** (e.g., timing of melatonin onset, core body temperature minimum, or an equivalent model phase variable), not simply clock time. Yet in field settings, internal phase is rarely measured directly because gold-standard biomarkers require laboratory assays (e.g., dim light melatonin onset). Consequently, scheduling software often relies on *forward modelling* from observable inputs—light exposure, sleep timing, and sometimes activity—into predicted phase.
 
 This introduces an inferential asymmetry: models are easy to run but hard to validate in situ. A defensible app therefore treats model phase as an *estimate with uncertainty* rather than a ground truth, and emphasizes that error grows when inputs are missing or unreliable (e.g., poor light measurement; inaccurate sleep timing).
 
 #### 3.7.2. Light phase-response curves (PRCs): experimentally grounded but individual-specific
+
 Human light PRCs quantify how timed light exposures advance or delay circadian phase. Controlled laboratory studies using melatonin-based phase markers show strong phase dependence: light presented in the biological evening tends to produce phase delays, whereas light in the late biological night/early morning produces phase advances (Khalsa et al., 2003). Subsequent work using shorter (1 h) light pulses similarly demonstrates structured PRCs and highlights that response magnitude depends on pulse timing and intensity (St Hilaire et al., 2012).
 
 For operational tools, PRC evidence supports two pragmatic design choices:
@@ -356,11 +433,13 @@ For operational tools, PRC evidence supports two pragmatic design choices:
 2. **Predictions must remain conservative.** Even in controlled studies, individuals vary in light sensitivity and in the magnitude of circadian responses, implying that model-based prescriptions should be presented as *risk-reducing guidance* rather than deterministic instructions (Chellappa, 2020).
 
 #### 3.7.3. Oscillator-based circadian pacemaker models: mechanistic structure with operational utility
+
 The app’s circadian module draws on a family of models that treat the circadian pacemaker as a limit-cycle oscillator coupled to light via photic preprocessing. Forger and colleagues presented a biologically grounded model capable of reproducing key human phase-resetting phenomena (Forger et al., 1999). Complementary work refined photic drive and oscillator structure to better match empirical PRCs and entrainment behavior (Jewett et al., 1998). More recent modelling work emphasizes “macroscopic” approaches and parameter identifiability—critical issues when applying models to individuals with limited calibration data (Hannay et al., 2019).
 
 From an aerospace-human-factors perspective, the value of these models is not that they “prove” circadian mechanisms, but that they provide a **computable mapping** from schedules to predicted phase, enabling what-if analyses (e.g., projected phase at launch time given a light plan). The scientific defensibility of this mapping depends on transparent assumptions: light measurement, adherence to the schedule, baseline entrainment state, and whether the model is individualized.
 
 #### 3.7.4. Circadian modulation of HRV and cardiovascular physiology: time-of-day as a confound
+
 Even when a user’s behavior is stable, autonomic physiology exhibits circadian modulation. Early ambulatory work demonstrated a circadian pattern in HRV, with systematic variation across the 24-hour day (Mølgaard et al., 1991). This matters operationally because many HRV dashboards implicitly compare “today vs. yesterday” or “today vs. baseline,” yet a measurement taken at 0600 and one taken at 2200 are not comparable without time-of-day normalization and behavioral metadata.
 
 Therefore, a conservative multimodal console should incorporate at least one of:
@@ -370,6 +449,7 @@ Therefore, a conservative multimodal console should incorporate at least one of:
 - **Covariate adjustment:** include time-of-day (and ideally model phase) in statistical models to prevent spurious “fatigue” interpretations.
 
 #### 3.7.5. Sleep-stage structure: why “nightly HRV” is not a single physiological state
+
 Even if a wearable provides a single nocturnal RMSSD value, the underlying physiology is not constant over the night. Autonomic regulation shifts across sleep stages (NREM vs REM) and interacts with circadian phase. This matters because sleep-stage composition changes with sleep debt, alcohol, stress, and circadian misalignment—exactly the conditions that operational monitoring seeks to track.
 
 In controlled laboratory work, HRV exhibits systematic circadian variation across sleep stages, implying that both *when* in the circadian cycle a sleep episode occurs and *which stages dominate* can shift the distribution of HRV values (Boudreau et al., 2013). Operationally, this means that two “similar” nights can yield different nocturnal HRV summaries simply because of differences in stage structure or timing.
@@ -377,9 +457,11 @@ In controlled laboratory work, HRV exhibits systematic circadian variation acros
 For the console’s architecture, the implication is to treat nocturnal HRV as a structured time series rather than as a scalar. When possible, compute HRV on comparable within-night windows (e.g., stable 5-minute segments) and interpret changes alongside sleep staging or at least alongside sleep timing metadata.
 
 ### 3.8. Fatigue science, vigilance measurement, and FRMS governance
+
 Fatigue-related impairment is a central operational risk because it affects attention, reaction time, decision quality, and error monitoring. A flight surgeon console that includes fatigue forecasting must be grounded in three evidence layers: (i) dose-response relationships for sleep loss and time awake; (ii) objective measurement of the failure mode (vigilant attention lapses); and (iii) governance frameworks that prevent deterministic misuse.
 
 #### 3.8.1. Dose-response impairment from sleep restriction and extended wakefulness
+
 Controlled studies show that chronic partial sleep restriction produces cumulative neurobehavioral impairment that can be comparable to, or exceed, impairment from acute total sleep deprivation. Van Dongen and colleagues demonstrated dose-response impairment across multiple days of restricted sleep, with escalating performance lapses and subjective underestimation of impairment (Van Dongen et al., 2003). Belenky and colleagues similarly showed that reduced sleep opportunity (e.g., 3–7 h time in bed) yields systematic degradation in objective performance measures and that recovery requires more than a single night of unrestricted sleep (Belenky et al., 2003).
 
 For operational translation, these findings imply that:
@@ -388,6 +470,7 @@ For operational translation, these findings imply that:
 - Users may not perceive the extent of impairment, motivating objective measures and conservative thresholds.
 
 #### 3.8.2. Psychomotor vigilance testing (PVT): measuring the operational failure mode
+
 The psychomotor vigilance test family is a cornerstone measure because it targets vigilant attention and provides a near-ceiling-free metric of lapses and reaction time slowing. Standardization work emphasizes that PVT variants differ in duration (e.g., 3-min vs 10-min), outcome definitions, and susceptibility to strategy, motivating careful protocol control and clear reporting of metrics (Basner et al., 2021).
 
 A flight-surgeon console benefits from PVT-family integration for two reasons:
@@ -396,6 +479,7 @@ A flight-surgeon console benefits from PVT-family integration for two reasons:
 2. It provides a validity check when physiological proxies (HRV, sleep tracking) disagree.
 
 #### 3.8.3. Biomathematical fatigue models (SAFTE/FAST): useful, but only under governance
+
 Biomathematical fatigue models represent an attempt to formalize well-established drivers of performance impairment—sleep history (homeostatic sleep pressure), circadian phase, and sleep inertia—into a forecast of expected alertness or task effectiveness. Reviews of fatigue modelling in work settings describe how such models are used to compare schedules, identify periods of elevated risk, and support FRMS decision-making, while also documenting limitations and common misuses (Dawson et al., 2011).
 
 A key operational distinction is that fatigue models are **schedule-to-risk mappings**, not direct measurements of performance. Their utility therefore depends on how accurately schedules and sleep opportunities are represented and how closely the model’s assumptions match the population and context. Many operational tools also include a layer that *predicts sleep obtained* during planned rest opportunities (e.g., inflight bunk rest). This can be highly valuable when objective sleep measurement is unavailable, but it also introduces additional uncertainty: errors in predicted sleep propagate directly into the predicted risk state.
@@ -412,6 +496,7 @@ Consequently, a conservative console should treat fatigue-model outputs as *risk
 These constraints argue for “fail-closed” behaviour: when inputs are missing or conditions are outside calibration, the console should reduce confidence and prompt objective verification (e.g., PVT-family testing) rather than presenting a deceptively precise single-number forecast.
 
 #### 3.8.4. FRMS as a safety framework (US/EU governmental context)
+
 Fatigue risk management systems (FRMS) treat fatigue as a hazard managed through layered controls: scheduling rules, education, monitoring, reporting, and continuous improvement. FAA guidance explicitly emphasizes FRMS as a structured approach to manage fatigue risk rather than a single numerical model output (Federal Aviation Administration [FAA], 2013). European regulation similarly embeds fatigue management into air-operations frameworks (European Union Aviation Safety Agency [EASA], 2023).
 
 A console that integrates SAFTE-like forecasts should align with FRMS logic by:
@@ -425,9 +510,11 @@ Critically, FRMS is not “a model in a dashboard.” It is a structured safety 
 This perspective also changes how a biomathematical fatigue forecast should be communicated. The forecast should be treated as one layer in a barrier model, not as the barrier itself. For example, when a forecast indicates elevated fatigue risk, FRMS-consistent actions include operational mitigations (schedule adjustment, strategic napping when feasible, task reallocation, increased supervision, or additional objective testing), as well as documentation for later safety assurance. Conversely, when a forecast indicates low risk, it should not be interpreted as a waiver of other concerns (illness, acute stress, degraded sleep quality). In other words, the console should be designed to prevent “single-number clearance,” aligning the user’s mental model with the FRMS principle that fatigue risk is managed, not eliminated.
 
 ### 3.9. Wearable and field acquisition: what can be trusted, when, and why
+
 Because the platform ingests wearable data, the validity of the upstream measurement chain is a first-order determinant of downstream analytic quality.
 
 #### 3.9.1. ECG-derived RR intervals vs PPG-derived pulse intervals
+
 Chest-strap ECG sensors estimate RR intervals from electrical depolarization and can be highly accurate at rest. Validation studies show that Polar H10 RR intervals exhibit high agreement with ECG across common resting protocols, supporting many HRV analyses (Schaffarczyk et al., 2022).
 
 Wrist-worn PPG estimates inter-beat intervals indirectly via peripheral pulse arrival timing and waveform detection. A key conceptual distinction is that **pulse rate variability (PRV)** is not identical to HRV: PRV is influenced by vascular tone and pulse transit dynamics, and it is more susceptible to motion and vasoconstriction. A major review concluded that PRV can approximate HRV under resting, stable conditions, but agreement degrades with stressors, posture changes, and motion—conditions common in operations (Schäfer & Vagedes, 2013).
@@ -438,6 +525,7 @@ Operational implications include:
 - If PPG is used, restrict interpretation to conditions where PRV≈HRV is plausible (resting, minimal motion), and surface uncertainty flags.
 
 #### 3.9.2. Actigraphy and consumer sleep technologies: validated constructs and known failure modes
+
 Sleep timing and sleep opportunity are critical inputs for both circadian and fatigue modules. Actigraphy has long been used to estimate rest–activity cycles and sleep timing in field studies; guidance reviews emphasize that actigraphy is best for sleep–wake *timing* and less reliable for sleep staging without polysomnography (Ancoli-Israel et al., 2003).
 
 Modern consumer wearables combine accelerometry with PPG and sometimes skin temperature. Reviews in sports medicine and sleep research emphasize that proprietary algorithms can change without notice and that validation should be device- and firmware-specific (de Zambotti et al., 2019). For an operational console, the appropriate posture is therefore to treat wearable sleep outputs as *estimates* that are most useful for:
@@ -449,24 +537,29 @@ Modern consumer wearables combine accelerometry with PPG and sometimes skin temp
 rather than as definitive sleep stage or clinical diagnosis.
 
 #### 3.9.3. Wearables as clinical instruments: reliability, drift, and translation barriers
+
 Wearables create a “measurement abundance” problem: the limiting factor is not feature computation, but trust in the signal chain and in the stability of algorithms over time. Reviews of wearable devices in precision medicine emphasize both the promise (continuous longitudinal monitoring; detection of arrhythmias and infection-related physiological changes) and the translational barriers, including data standardization, privacy/security, regulatory alignment, and clinical validity (Babu et al., 2024).
 
 Similarly, focused reviews of wearable heart rate and HRV monitoring highlight that measurement validity depends on sensor modality, motion conditions, and the device’s processing pipeline, and that clinical value requires careful attention to accuracy and interpretability trade-offs (Alugubelli et al., 2022). For operational dashboards, these reviews support a conservative engineering stance: treat wearable-derived HRV as an *instrument output* that requires calibration, provenance tracking, and periodic revalidation.
 
 #### 3.9.4. Pre-symptomatic illness detection: baseline deviation as a detection strategy
+
 One reason HRV and related autonomic metrics are attractive in “mission control” concepts is that they may shift early in systemic illness, inflammation, or infection. A prominent example is the use of smartwatch-derived physiological data for pre-symptomatic detection of COVID-19, which demonstrated that individualized anomaly detection on wearable time series can flag a subset of cases before symptom onset (Mishra et al., 2020).
 
 This evidence supports a key design principle already emphasized in this review: **within-person baselines dominate cross-sectional thresholds**. The Mishra approach is fundamentally deviation-based—detecting departures from an individual’s own expected trajectory—rather than comparing to population cutoffs. However, it also reinforces the need for governance: deviation-based detectors will generate false positives whenever non-infectious perturbations (sleep restriction, psychological stress, alcohol, travel) shift physiology. Therefore, illness-detection modules should be framed as screening/triage tools that prompt corroboration (symptom checks, confirmatory testing, clinical assessment) rather than as diagnostic statements.
 
 #### 3.9.5. HRV for drowsiness and vigilance risk: promising signals, difficult ground truth
+
 In transportation and safety research, HRV features have been used as inputs to machine-learning models for drowsiness detection, typically paired with behavioral labels or proxy measures. Recent work demonstrates the feasibility of wearable HRV–based drowsiness classification using modern ML pipelines (AlArnaout et al., 2025). For a flight-surgeon console, the relevance is conceptual: HRV may carry information about autonomic arousal and fatigue-related state changes.
 
 However, this application also illustrates a recurrent limitation: “ground truth” for drowsiness is often noisy (self-report, lane-keeping proxies, or limited task batteries), and HRV can be confounded by workload, posture, and respiration. Therefore, HRV-based drowsiness indicators should be treated as adjunctive features and anchored—when feasible—to direct performance measures (e.g., PVT-family tasks).
 
 ### 3.10. Space-weather integration: indices, data products, and the evidentiary bar for physiology links
+
 The app integrates NOAA/NASA space-weather context with time-aligned physiological analytics. From a scientific perspective, this is best framed as a hypothesis-generating module: it merges a well-characterized geophysical measurement domain with a physiologic domain where effect sizes are likely small and confounding is substantial.
 
 #### 3.10.1. Data products: what Kp and event catalogs actually represent
+
 NOAA’s Space Weather Prediction Center (SWPC) provides standard indices and explanatory documentation. The planetary K index (Kp) reflects global geomagnetic activity derived from multiple magnetometer stations and is commonly used to characterize geomagnetic disturbances (NOAA Space Weather Prediction Center [SWPC], n.d.-a). NOAA also publishes standardized space weather scales (G for geomagnetic storms, S for solar radiation storms, R for radio blackouts), which support categorical operational communication (NOAA Space Weather Prediction Center [SWPC], n.d.-b).
 
 NASA’s Community Coordinated Modeling Center (CCMC) maintains the DONKI system to catalogue space-weather events (e.g., solar flares, CMEs, geomagnetic storms) and provides an API-oriented interface for retrieving event timing and metadata (NASA/CCMC, n.d.). These resources enable reproducible alignment between geophysical events and physiological time series if timestamps, time zones, and sampling windows are handled correctly.
@@ -474,6 +567,7 @@ NASA’s Community Coordinated Modeling Center (CCMC) maintains the DONKI system
 European operational documentation is also available. The ESA Space Weather Service Network maintains program documents (requirements, system descriptions, and product catalogues) that support standardized interpretation and integration of European space-weather products (European Space Agency [ESA], n.d.).
 
 #### 3.10.2. Evidence on geomagnetic activity and autonomic/cardiovascular outcomes: plausible pathways, mixed findings
+
 Mechanistic hypotheses linking geomagnetic activity to autonomic function include melatonin modulation, magnetoreception-related pathways, and indirect behavioral mediators. Empirically, studies report associations between geomagnetic indices and HRV in specific cohorts. For example, an experimental and observational analysis reported changes in HRV with geomagnetic activity in a cohort study context (Alabdulgader et al., 2018). Large longitudinal cohort work has also examined associations between solar and geomagnetic indices and HRV (Vieira et al., 2022).
 
 However, multiple threats to validity are salient:
@@ -495,24 +589,31 @@ A key design implication is that the console should separate *visual overlay* fr
 Therefore, a defensible operational app should present space-weather–physiology overlays as exploratory visual analytics, paired with conservative statistical controls (e.g., multiple-testing correction) and explicit warnings against causal inference.
 
 ### 3.11. Statistics, machine learning, and governance for physiological decision support
+
 A multimodal console combines multiple signals and can easily drift into “dashboard overconfidence.” The scientific literature on modelling and inference offers concrete governance tools to reduce error.
 
 #### 3.11.1. Multiple testing control and exploratory analytics
+
 When dozens of features are monitored (HRV time/frequency/nonlinear, BPV metrics, sleep metrics, fatigue model outputs), repeated hypothesis tests will generate false positives even if no true effect exists. The Benjamini–Hochberg procedure provides a practical false discovery rate (FDR) control method that is widely used in high-dimensional settings (Benjamini & Hochberg, 1995). For operational analytics, FDR control is particularly appropriate when the aim is *screening and prioritization* rather than confirmatory clinical diagnosis.
 
 #### 3.11.2. Mixed-effects models: separating within-person change from between-person differences
+
 Because physiological baselines vary widely, analyses that pool individuals without accounting for random effects risk misleading inference. Linear mixed-effects models provide a principled framework for longitudinal, repeated-measures data by separating within-subject and between-subject variance components (Laird & Ware, 1982). In a flight surgeon context, this supports: (i) estimating an individual’s deviation from baseline while borrowing strength across individuals; and (ii) adjusting for covariates such as time-of-day, posture, and recent sleep.
 
 #### 3.11.3. Change-point detection as an operationally meaningful analytic primitive
+
 Operationally, the question “did something change?” is often more actionable than “what is the absolute value?” Change-point detection methods formalize this. The PELT algorithm provides an efficient approach for detecting multiple change points in time series under penalized likelihood, enabling detection of regime shifts such as sudden HRV suppression or step changes in sleep timing (Killick et al., 2012).
 
 #### 3.11.4. Validation, leakage, and time-series cross-validation
+
 Naïve validation approaches can dramatically overestimate performance when temporal dependence exists. Work on cross-validation for time series emphasizes that standard random-fold CV can be invalid under autocorrelation; blocked or forward-chaining CV approaches are needed to avoid leakage (Bergmeir et al., 2018). In addition, model selection, feature engineering, and threshold/hyperparameter tuning must be nested within the validation procedure to avoid optimistic bias. These issues generalize to multimodal physiology: if thresholds are tuned on past missions and then evaluated on the same data, the dashboard will appear more accurate than it is.
 
 #### 3.11.5. Interpretability: useful explanations without reification
+
 Operational adoption often requires explanations. Feature attribution methods such as SHAP (Shapley additive explanations) provide a mathematically grounded way to attribute model predictions to input features. Lundberg and colleagues introduced efficient algorithms for consistent feature attribution in tree ensembles and demonstrated how local explanations can aggregate to global understanding (Lundberg et al., 2020). In a flight-surgeon console, interpretability should be treated as a *communication layer* that aids oversight, not as a proof of causality.
 
 #### 3.11.6. Reporting and appraisal frameworks for prediction models: TRIPOD, PROBAST, and extensions to AI/ML
+
 Physiological consoles routinely embed prediction logic, yet the transparency and rigor of such models often lag behind the standards expected in clinical prediction research. Reporting guidelines and risk-of-bias assessment tools developed for prognostic and diagnostic prediction models provide a blueprint for disciplined model development, evaluation, and deployment.
 
 **TRIPOD: Transparent reporting for prediction models.** The Transparent Reporting of a multivariable prediction model for Individual Prognosis Or Diagnosis (TRIPOD) statement was published to improve the quality and transparency of prediction model studies by specifying a 22-item checklist for reporting model development, validation, and updating studies (Collins et al., 2015). TRIPOD emphasizes that full and clear reporting of all aspects of a model—from participant selection and predictor definitions to model specification, performance metrics, and handling of missing data—is essential for readers to assess risk of bias and clinical usefulness. While TRIPOD was originally developed for regression-based models, its core principles (transparent study design, explicit handling of data, reproducible feature definitions, and honest reporting of limitations) apply equally to operational physiology dashboards.
@@ -526,6 +627,7 @@ Recently, PROBAST was updated to better accommodate prediction models developed 
 Together, TRIPOD+AI and PROBAST+AI establish a disciplined standard for any prediction component embedded in a physiological console. If a fatigue forecast or HRV classifier cannot meet these standards—or if meeting them reveals that performance is marginal, poorly calibrated, or non-generalizable—then the console design should either improve the model, restrict its use to narrow validated conditions, or remove it in favor of simpler indicators.
 
 #### 3.11.7. Decision-analytic evaluation: moving beyond discrimination to clinical utility
+
 Traditional prediction model evaluation emphasizes discrimination (e.g., area under the ROC curve, AUC) and calibration (agreement between predicted probabilities and observed event rates). While these metrics are necessary, they are not sufficient for operational decision support. A model with excellent AUC may still fail to improve decisions if its predictions do not align with the decision threshold that operators actually use, or if acting on the predictions does not change outcomes.
 
 **Decision curve analysis (DCA)** formalizes the idea that model evaluation should account for decision consequences. DCA explicitly incorporates the trade-off between false positives and false negatives as a function of the decision threshold, and it quantifies the net benefit of using a model compared to alternative strategies (treating all, treating none, or using a simpler model) across a range of thresholds (Vickers & Elkin, 2006). The key conceptual advantage of DCA is that it does not assume a single fixed threshold; instead, it recognizes that the acceptable trade-off between sensitivity and specificity depends on the clinical or operational context and the relative costs of action versus inaction.
@@ -535,6 +637,7 @@ For a flight surgeon console, DCA logic is directly applicable. Consider a fatig
 Crucially, DCA also exposes when a prediction model adds no value. If the decision curve for the model does not exceed the curves for "treat all" or "treat none" strategies—or if it does not exceed a simpler baseline model (e.g., using only sleep history without HRV)—then the added complexity is not justified. For operational consoles, this is a strong argument for incremental validation: each new module or feature should demonstrate decision-analytic value beyond what simpler inputs already provide, rather than being added because the feature is "available" or "interesting."
 
 #### 3.11.8. Regulatory and institutional guidance for clinical decision support software
+
 Physiological monitoring consoles occupy a gray zone in medical device regulation: they may support clinical or operational decisions without being explicitly labeled as diagnostic devices. However, the principles articulated in regulatory and institutional guidance for clinical decision support (CDS) software and software as a medical device (SaMD) are directly relevant to operational physiology platforms, particularly when those platforms influence safety-critical decisions.
 
 **FDA Clinical Decision Support Software guidance.** In September 2022, the U.S. Food and Drug Administration published final guidance clarifying its regulatory oversight of clinical decision support software (U.S. Food and Drug Administration [FDA], 2022). The guidance interprets section 520(o)(1)(E) of the Federal Food, Drug, and Cosmetic Act, which excludes certain CDS software functions from the definition of a medical device if they meet four criteria. A summary interpretation of these four criteria is provided in the FDA’s CDS guidance materials and FAQs (FDA, 2022; FDA, n.d.).
@@ -569,6 +672,7 @@ For a physiological console, GMLP principles reinforce several operational desig
 These principles apply even if the console is not formally submitted for regulatory review. They articulate best practice for any system where algorithmic outputs influence safety-critical decisions.
 
 #### 3.11.9. Construct validity and the endpoint problem in operational physiology
+
 A recurring challenge in operational physiology is the mismatch between what is measured and what is operationally meaningful. HRV is a measurable signal, but "stress," "fatigue," and "readiness" are latent constructs. Treating HRV as a direct proxy for these constructs—without validating that relationship in the operational context—risks reification: mistaking the measurement for the phenomenon.
 
 **The construct validity requirement.** In psychometrics and measurement theory, construct validity refers to the degree to which a test or instrument actually measures the theoretical construct it claims to measure. For physiological monitoring, construct validity demands empirical evidence linking the measured signal (e.g., RMSSD, LF/HF, sleep duration) to the operationally relevant outcome (e.g., error rate, vigilance lapses, decision quality). This linkage is not assumed; it must be demonstrated in the population and context of use.
@@ -592,6 +696,7 @@ This does not invalidate PVT or other proxy measures, but it does impose a respo
 Most consoles operate somewhere between tiers 2 and 3: they have evidence of predictive validity from controlled studies but lack direct evidence of operational impact. Recognizing this, the console should be framed as a decision-support aid that provides additional context to inform operational judgment, not as a validated diagnostic or clearance system. Over time, as operational data accumulate and outcomes are tracked, the evidence base can strengthen. However, this requires a commitment to continuous evaluation, feedback loops, and honest reporting of both successes and failures—consistent with the FRMS learning-system philosophy.
 
 ### 3.12. HRV biofeedback and controlled breathing: intervention science vs measurement confounding
+
 Because the app includes biofeedback capabilities, it is important to distinguish two roles for controlled breathing.
 
 First, **paced breathing is a measurement confound** in HRV assessment. It can increase HF power when breathing is in the HF band, or shift respiratory-driven variability into the LF band when breathing is slowed toward ~0.1 Hz, materially altering LF, HF, and LF/HF without any necessary change in sympathetic tone. Thus, when paced breathing is used for standardization, the breathing rate must be documented and the interpretation of spectral features must be adjusted accordingly (Grossman et al., 1991).
@@ -605,24 +710,29 @@ For console design, these findings support a pragmatic role for biofeedback modu
 For an operational console, the safe synthesis is that biofeedback modules should be framed as training/skill-building tools, while analysis modules should clearly label when measurements were taken under paced-breathing conditions.
 
 ### 3.13. Brief environmental context (spaceflight): standards, human-system integration, and radiation as metadata
+
 The app’s “mission control” framing is consistent with aerospace medicine contexts where environment and operational constraints shape physiological baselines. NASA human-system integration standards (NASA-STD-3001 Volume 2) provide a comprehensive framework for designing and evaluating human health and performance requirements across spaceflight conditions (National Aeronautics and Space Administration [NASA], 2022).
 
 Within this review’s scope, radiation is treated only as contextual environmental metadata rather than as a radiobiological topic. The operationally relevant implication is that environmental factors (including radiation environment, cabin pressure/oxygenation, thermal load) can shift baselines and recovery trajectories; therefore, multimodal consoles should (i) capture environment metadata when available, and (ii) avoid attributing unexplained physiological deviations to a single environmental cause without stronger evidence (Yamazaki & Sone, 2001).
 
 #### 3.13.1. Acute cardiovascular responses to microgravity: baseline shifts, not necessarily “stress”
+
 Spaceflight introduces a set of physiological shifts (fluid redistribution, altered baroreflex loading, countermeasure exercise) that can change resting cardiovascular baselines. In-flight measurements from Shuttle astronauts show that heart rate and diastolic pressure can decrease in microgravity alongside reductions in heart rate variability and blood pressure variability, suggesting that the microgravity environment itself is not necessarily a chronic cardiovascular “stress” in the colloquial sense (Fritsch-Yelle et al., 1996). For an operational console, the key implication is that baseline shifts are expected: changes in HRV/BPV during flight should be interpreted relative to phase-of-mission baselines and countermeasure context, not compared directly to Earth baselines.
 
 #### 3.13.2. Long-duration missions: altered HRV time structure and “intrinsic” regulation
+
 Long-duration ISS missions enable analysis of HRV beyond short-term vagal proxies. Work examining the time structure and fractal properties of long-term HRV suggests that microgravity can alter aspects of the intrinsic cardiovascular autonomic regulatory system. For example, observational work using 24-hour ECG in astronauts reported changes in power-law scaling and related features during long-duration missions, with effects emerging early in flight and persisting (Otsuka et al., 2015). Complementary analyses report that long-term exposure to microgravity alters the time structure of HRV, implying that the distribution and temporal organization of interbeat dynamics differ in space versus on Earth (Otsuka et al., 2016).
 
 From a mission-medicine perspective, these findings strengthen the case for longitudinal analytics: if the time structure of HRV changes with mission phase, then a “one-size-fits-all” threshold for HRV suppression is unlikely to generalize across environments.
 
 #### 3.13.3. Circadian organization in space: synchronizers and the risk of misattribution
+
 Spaceflight operations can perturb circadian organization through unusual light exposure, altered sleep timing, and mission demands. Evidence indicates that long-duration microgravity exposure can affect circadian rhythms of HRV, with inter-individual variability changing over flight stages and recovery occurring later in flight for some indices (Yamamoto et al., 2014). Related analyses interpret HRV spectral structure as reflecting adaptation processes across mission time, including differential patterns across the day and early sleep periods (Otsuka et al., 2018).
 
 For a flight surgeon console, this reinforces a design constraint: circadian phase, sleep timing, and mission schedule should be treated as first-class covariates for interpreting autonomic metrics. In-flight deviations that look like “stress” on an Earth-calibrated dashboard may instead reflect altered circadian organization or environmental baseline shifts.
 
 ### 3.14. Windowed and longitudinal analytics: why trend features are not optional
+
 The app includes windowed HRV and time-series analyses because operational physiology is rarely stationary. Even under stable conditions, HRV varies across the day due to circadian timing and behavior. Across days, additional nonstationarities arise from sleep debt accumulation, illness, training/workload cycles, and changes in measurement protocol adherence. Consequently, “single-session” HRV snapshots are insufficient for high-stakes interpretation unless they are embedded in a longitudinal framework.
 
 A windowed approach provides three forms of operational value.
@@ -644,6 +754,7 @@ Operationally, this argues for three implementation constraints:
 - Surface uncertainty driven by missing data, artefact correction, and protocol deviations.
 
 ### 3.15. Hypoxia and low-oxygen environments: HRV signatures and operational interpretation
+
 Aviation, altitude exposure, and some spaceflight-adjacent contexts can involve reduced inspired oxygen pressure (hypobaric or normobaric hypoxia), which engages chemoreflex pathways and shifts autonomic balance. From an HRV perspective, hypoxia can produce changes in both time-domain and frequency-domain measures, and it can also alter higher-order dynamics such as entropy and cardiorespiratory synchronization.
 
 Controlled and quasi-controlled studies support that acute hypoxia perturbs multiple HRV features and coupling measures. For example, experimental work reported that acute hypoxia can alter HRV, sample entropy, and cardiorespiratory phase synchronization—highlighting that hypoxia is not merely a “heart rate increase,” but a broader dynamical perturbation (Zhang et al., 2014). In exercise-plus-hypoxia settings, studies have examined how HRV changes relate to acute mountain sickness and acclimatization processes, suggesting that autonomic markers may carry some predictive information but are not deterministic (Mairer et al., 2013). A recent meta-analysis synthesizing HRV findings in acute mountain sickness supports that some HRV parameters differ between AMS and non-AMS groups before and after ascent, but also underscores heterogeneity and the current lack of stable clinical thresholds (Tsai et al., 2025).
@@ -655,12 +766,15 @@ For a mission-medicine dashboard, the implication is not to use HRV as a standal
 ---
 
 ## 4. Discussion
+
 ### 4.1. Why multimodal fusion is both necessary and dangerous
+
 The scientific case for multimodal fusion is straightforward: no single signal captures readiness. HRV reflects autonomic modulation but is confounded by posture, respiration, circadian phase, and signal quality. Fatigue models capture known determinants of impairment (sleep history, time awake, circadian phase) but depend on the accuracy of sleep inputs and population-level parameterization. PVT-family measures directly assess vigilant attention but are sensitive to motivation and require user compliance. Space-weather indices are precise geophysical measurements, but any physiological impacts are small and context dependent.
 
 The danger is equally straightforward: combining multiple imperfect signals can create an illusion of precision. A system that reports “readiness 73/100” without surfacing uncertainty and protocol dependencies invites misuse. Therefore, the defensible position is not to avoid fusion, but to design fusion under governance: conservative thresholds, audit trails, uncertainty visualization, and a clear separation between exploratory analytics and decision-critical indicators.
 
 ### 4.2. A defensible hierarchy of evidence for operational decision support
+
 For high-consequence contexts, a conservative hierarchy is appropriate:
 
 1. **Behavioral performance measures** (e.g., PVT) are closest to the operational failure mode.
@@ -676,6 +790,7 @@ In this hierarchy, HRV is most defensible when it is:
 - and triangulated with sleep and performance indicators.
 
 ### 4.3. Governance, auditability, and “fail-closed” design
+
 A flight surgeon console is ultimately a decision-support instrument. It should be designed to fail closed: when inputs are missing, low quality, or inconsistent, the system should *reduce* confidence rather than extrapolate. Practical mechanisms include:
 
 - Mandatory quality gates (artifact percentage, ectopy flags, missingness thresholds).
@@ -684,6 +799,7 @@ A flight surgeon console is ultimately a decision-support instrument. It should 
 - Multiple testing controls and pre-specified analytics for exploratory correlations.
 
 ### 4.4. Limitations and research directions
+
 Several limitations constrain current best practice.
 
 First, physiological features are high-dimensional and context sensitive; without careful protocol standardization, dashboards risk becoming collections of noisy indicators. Second, circadian phase prediction remains imperfect without biomarker calibration, particularly when light inputs are not measured. Third, fatigue models capture major determinants but cannot fully incorporate stress, illness, and workload without additional sensing and validated coupling.
@@ -691,6 +807,7 @@ First, physiological features are high-dimensional and context sensitive; withou
 A research-aligned roadmap for such platforms therefore includes: (i) calibration studies that directly compare wearable-derived inputs to gold standards (ECG, polysomnography, melatonin assays) in relevant operational populations; (ii) prospective evaluation of decision-support outputs against objective performance endpoints; and (iii) robust statistical governance that treats exploratory findings as hypotheses to be tested rather than as immediate operational rules.
 
 ### 4.5. Validation and calibration: linking dashboard outputs to operational outcomes
+
 A multimodal console is only as defensible as its validation. “Looks plausible” is not a sufficient criterion when outputs may influence mission-critical decisions. Validation should therefore be framed as an **evidence chain** that connects upstream measurements to downstream decision utility.
 
 **Define the endpoint first.** In high-consequence monitoring, the most meaningful endpoints are often operational: vigilance lapses, errors, near-misses, or task-performance degradation. Physiological proxies (HRV, BPV) are not direct measures of these endpoints. In contrast, PVT-family measures directly probe vigilant attention and have well-characterized dose-response sensitivity to sleep loss and circadian misalignment (Basner et al., 2021; Van Dongen et al., 2003). A practical validation strategy therefore uses PVT (or other performance tasks) as a reference outcome and evaluates whether the console improves the detection of performance-risk states beyond what could be achieved from sleep history alone.
@@ -702,6 +819,7 @@ A multimodal console is only as defensible as its validation. “Looks plausible
 **Quantify uncertainty and error budgets.** Operational systems should not present point estimates without uncertainty qualifiers. In a console context, uncertainty is not only statistical; it is also *data-quality uncertainty* (artefact correction fraction, missingness) and *model-input uncertainty* (sleep/wake estimates from wearables). A defensible approach treats the dashboard as a system that reports (i) an estimate, (ii) a confidence score driven by data quality, and (iii) the reasons confidence is reduced.
 
 #### 4.5.1. Validation is not one number: discrimination, calibration, subgroup performance, and drift
+
 Prediction models are often summarized by a single performance statistic (AUC, accuracy, correlation). For a multimodal console, this practice is scientifically insufficient and operationally unsafe.
 
 First, **discrimination is not calibration**. A classifier can rank individuals correctly (high AUC) while producing miscalibrated probability estimates that systematically overstate or understate risk. Miscalibration matters because operational decisions are threshold-based: whether to trigger additional monitoring, mandate rest, or reassign tasks depends not only on rank ordering but on the estimated magnitude of risk. In other words, if the console reports “high fatigue risk,” users will implicitly interpret that as a probability claim, even if the underlying model output is an uncalibrated score.
@@ -713,6 +831,7 @@ Third, **time is a confounder and a threat**. The validity of a model trained on
 In practice, a defensible evaluation package for a console’s prediction components should include: (i) discrimination metrics; (ii) calibration assessment (calibration-in-the-large, calibration slope, and calibration plots where feasible); (iii) subgroup analyses tied to plausible physiological or operational modifiers; and (iv) temporal and site/mission-stratified performance reporting to quantify generalizability.
 
 #### 4.5.2. Decision utility: do console outputs improve decisions, not just predictions?
+
 Operational medicine is fundamentally decision-oriented. The relevant question is not simply “does the model predict fatigue?” but “does the model improve decisions compared with what operators already do?” This is where many physiological dashboards fail: they provide plausible-looking numbers without demonstrating that those numbers lead to better actions.
 
 Decision curve analysis provides a formal method to evaluate whether a prediction model adds net benefit across a range of decision thresholds (Vickers & Elkin, 2006). For a flight surgeon console, the intervention triggered by an alert is often not treatment but *mitigation* (additional rest, task reallocation, increased supervision, strategic napping when feasible, or objective performance testing). The costs of mitigation are real: removing a crew member from duty may reduce mission capacity, and repeated false alarms can erode trust and induce alarm fatigue. Conversely, missing a truly impaired operator may carry a high safety cost.
@@ -722,6 +841,7 @@ DCA helps make these trade-offs explicit. It asks: given a threshold probability
 Importantly, “utility” must be evaluated at the system level, not only at the model level. A high-performing algorithm can still reduce safety if it induces automation bias, if it is used outside validated conditions, or if it diverts attention from higher-value indicators (such as objective vigilance testing). Therefore, the strongest validation evidence for a console is not retrospective model performance but prospective evaluation of decision outcomes: whether integrating console outputs into operational workflows reduces errors, near-misses, or measurable performance decrements.
 
 #### 4.5.3. Reporting and appraisal as governance: TRIPOD(+AI) and PROBAST(+AI) as templates for console validation
+
 A doctoral-level critique must acknowledge that many deployed “readiness” dashboards are, in effect, unreported prediction models: they produce scores that imply a prediction about a latent state (fatigue, stress, readiness) but provide insufficient documentation to appraise validity.
 
 TRIPOD was developed to improve transparent reporting of multivariable prediction models, specifying what should be reported so that readers can judge risk of bias and potential usefulness (Collins et al., 2015). TRIPOD+AI extends this to machine-learning-based prediction models and explicitly supersedes the original checklist for studies using AI/ML methods (Collins et al., 2024). In parallel, PROBAST provides a structured tool to assess risk of bias and applicability of prediction model studies (Wolff et al., 2019; Moons et al., 2019), and PROBAST+AI updates appraisal for modern AI/ML workflows (Moons et al., 2025).
@@ -737,6 +857,7 @@ For a mission-medicine console, these frameworks can be translated into concrete
 The practical implication is that console outputs should carry “model cards” in the broad sense: provenance, training context, evaluation context, known limitations, and conditions under which performance is expected to degrade. Without such documentation, the console becomes a high-dimensional generator of plausible noise rather than a defensible decision-support instrument.
 
 #### 4.5.4. Regulatory logic as an epistemic boundary: the FDA non-device CDS criteria and interpretability requirements
+
 Even when a platform is not marketed as a regulated medical device, regulatory guidance provides a useful epistemic boundary for safe design. The FDA’s Clinical Decision Support Software guidance clarifies the distinction between non-device CDS and device CDS functions, emphasizing clinician autonomy and the requirement that users can understand the basis for recommendations (FDA, 2022; FDA, n.d.). The FDA describes four criteria that must all be met for a CDS function to be considered non-device, including that the software does not analyze medical images/signals/patterns, is intended to support health care professionals with medical information, provides recommendations rather than directives, and provides the basis for recommendations so the professional does not primarily rely on them.
 
 For a mission-medicine console, this logic translates into a clear design constraint: **do not present algorithmic outputs as authoritative directives unless the evidence base and oversight mechanisms match the risk.** Many dashboards inadvertently violate this principle by rendering outputs as binary “fit/unfit” labels without surfacing data quality, assumptions, or rationale. Such design encourages inappropriate reliance.
@@ -746,6 +867,7 @@ A more defensible strategy is to treat algorithmic outputs as *structured argume
 This approach aligns with the broader theme of this review: measurement and modelling are conditional. A high-stakes console must embody that conditionality in its user interface and workflow design.
 
 #### 4.5.5. Lifecycle monitoring and change management: from static validation to continuous safety assurance
+
 A physiological console is not a static instrument. Its performance can change with shifts in operational tempo, changes in population characteristics, and changes in device vendors, firmware, or preprocessing pipelines. Therefore, a mature validation strategy must include continuous monitoring.
 
 Good Machine Learning Practice guiding principles explicitly emphasize lifecycle monitoring, representative datasets, independence of training and test sets, and the importance of evaluating the performance of the human-AI team (FDA, Health Canada, & MHRA, 2021; IMDRF, 2025). For operational physiology, these principles can be operationalized as:
@@ -758,6 +880,7 @@ Good Machine Learning Practice guiding principles explicitly emphasize lifecycle
 The underlying point is that “validation” is not a box to check at launch. For a flight surgeon console, validation is a living safety case: it evolves with the system, the population, and the measurement ecosystem.
 
 ### 4.6. Reproducibility in mixed-device ecosystems: provenance, versioning, and audit trails
+
 A core barrier to reproducible physiological analytics is that much of the pipeline is embedded in devices and proprietary firmware. Even when downstream analytics are open and well-defined, upstream data generation can change.
 
 **Provenance is part of the measurement.** For HRV, the effective “instrument” is not just the chest strap, but also the vendor’s peak-detection algorithm, filtering choices, and update cadence. For sleep estimation, the instrument is the wearable plus its classification model. Therefore, a console should log device type, sampling characteristics (when known), firmware/app versions, and acquisition conditions. Without this metadata, longitudinal comparisons can be contaminated by silent instrument drift.
@@ -774,6 +897,7 @@ A core barrier to reproducible physiological analytics is that much of the pipel
 **Design for auditability.** FRMS logic emphasizes learning systems and continuous improvement rather than punitive “gotcha” decisions (Federal Aviation Administration, 2013). In software terms, this maps to audit trails: what data were ingested, what processing settings were used, what outputs were displayed, and when. This is critical not only for scientific defensibility but also for operational investigations when outcomes are adverse.
 
 #### 4.6.1. Reproducibility as a safety requirement: retain raw signals, enable reprocessing, and make assumptions inspectable
+
 In high-consequence settings, reproducibility is not an academic virtue; it is a safety requirement. When a physiological console influences decisions about duty status, countermeasures, or medical evaluation, it must be possible to answer a simple after-action question: *why did the dashboard say what it said?* That question cannot be answered if only downstream summary scores are retained.
 
 **Retain raw data at the appropriate layer.** A console should store, at minimum, the highest-fidelity representation of the measurement that is realistically available: RR intervals (with timestamps) for ECG-derived HRV, beat-quality flags or artifact classifications when available, and session metadata (posture, time-of-day, acquisition duration). When only vendor summaries are available, the console should label those as vendor-derived and treat them as less reproducible inputs. The distinction matters because many HRV metrics—especially nonlinear features—are sensitive to preprocessing and artifact correction; reprocessing from raw or near-raw data enables retrospective verification and method comparison (Tarvainen et al., 2014; Lipponen & Tarvainen, 2019).
@@ -791,6 +915,7 @@ In high-consequence settings, reproducibility is not an academic virtue; it is a
 In summary, reproducibility is a core part of “fail-closed” design. When the system cannot defend its outputs with traceable inputs and logged assumptions, it should reduce confidence, request remeasurement, or defer to simpler, objective checks (e.g., standardized performance tasks). This conservative stance is not anti-automation; it is how automation earns trust.
 
 ### 4.7. Communicating uncertainty and preventing automation bias
+
 Human factors determine whether analytic quality translates into safety. When a dashboard is used under time pressure, users tend to overweight salient summary numbers. If the console presents a single readiness score without qualifiers, it risks inducing **automation bias**: unwarranted trust in the system’s output.
 
 A conservative design approach therefore emphasizes:
@@ -801,6 +926,7 @@ A conservative design approach therefore emphasizes:
 - **Fail-closed behavior:** when data quality is poor, suppress interpretive outputs and encourage re-measurement under standardized conditions.
 
 ### 4.8. Synthesis: operational principles for a scientifically defensible console
+
 Across modules, several principles recur.
 
 1. **Prefer within-person baselines over population thresholds** for short-term decision support.
@@ -808,10 +934,409 @@ Across modules, several principles recur.
 3. **Prioritize measurement validity**, especially RR quality, protocol metadata, and device provenance.
 4. **Control false positives** with explicit statistical governance in high-dimensional monitoring.
 5. **Communicate uncertainty** as a first-class output to reduce automation bias.
+6. **Treat the console as a socio-technical system.** Validate the human–AI team and workflow integration, not only the prediction model.
 
 These principles do not eliminate uncertainty, but they constrain how uncertainty can mislead, which is the core goal in operational medicine.
 
+### 4.9. Sociotechnical integration in complex safety-critical industries: the console as a joint cognitive system
+
+In complex safety-critical industries, the operational failure mode is rarely “lack of data.” Instead, failures commonly arise when limited attention, incomplete mental models, time pressure, and organizational constraints collide with ambiguous signals. In this environment, the value of a multimodal console is realized only if it changes *how decisions are made*, not merely what numbers are available. That premise forces a socio-technical framing: the console is not a passive readout but a cognitive artifact embedded in a larger system of roles, communication channels, policies, and accountability.
+
+This matters because the same analytic output can be either protective or hazardous depending on how it is integrated into workflow. For example, an alert intended as a prompt to *seek corroboration* can become a directive that overrides local expertise; conversely, a conservative “low confidence” indicator can be ignored if the organization implicitly rewards action over uncertainty acknowledgement. High reliability operations therefore treat decision support as a *system intervention* that must be engineered and evaluated at the level of the human–technology team (Weick & Sutcliffe, 2015; Hollnagel, 2006; Leveson, 2004).
+
+Two user classes are especially relevant for a “Mission Control – Flight Surgeon” style platform:
+
+- **Tactical personnel** make decisions under immediate hazard and uncertainty (seconds to minutes): continue/abort; push/hold; self-monitoring; buddy checks; execution of countermeasures; and rapid communication to team leaders.
+- **Supervisory personnel** make decisions about allocation of risk across people and time (minutes to days): staffing, task assignment, go/no-go at the system level, escalation thresholds, and structured mitigations (rest, supervision, re-planning).
+
+These roles have different information needs and different tolerance for false alarms. Tactical interfaces must privilege *salience, latency, and minimal cognitive overhead*, while supervisory interfaces must privilege *traceability, comparability, and justification*.
+
+#### 4.9.1. Distributed cognition and the “team + artifacts” unit of analysis
+
+A practical starting point is distributed cognition: cognition is not solely “in the head” but distributed across individuals, tools, representations, and communication routines. Hutchins’ analysis of ship navigation and bridge teamwork demonstrates that an operational team can be treated as a cognitive and computational system whose properties are not reducible to any one individual (Hutchins, 1995). The implication for a mission-medicine console is direct: the unit of analysis for safety is not “the model” and not even “the user,” but the **joint cognitive system** comprising the user(s), the console, and the surrounding procedures.
+
+This perspective clarifies a key integration requirement: the console must support *coordination and handoff* rather than merely *personal insight*. In dangerous scenarios, information must move reliably from the person closest to the hazard to supervisory personnel who can reallocate resources or adjust mission plans. A console that improves individual self-awareness but cannot support handoffs can still fail at the system level.
+
+Implementation-relevant design patterns that follow from distributed cognition include:
+
+- **Shared time-aligned representations.** A unified timeline that can display physiological sessions, sleep episodes, duty periods, countermeasures, and key operational events supports coordination because it externalizes memory and reduces reliance on verbal reconstruction.
+- **Annotation and rationale capture.** Supervisory decisions (e.g., “removed from duty,” “increased supervision,” “repeat test in 2 h”) should be recorded with structured rationale. This is not bureaucratic overhead; it is a mechanism for learning and auditability.
+- **Handoff views.** A tactical user should be able to generate a low-friction “handoff packet” (current state summary, last 24 h sleep opportunity, key trend deltas, data-quality flags) that is legible to a supervisor without requiring the supervisor to reconstruct context.
+
+In short, distributed cognition suggests that engineering should focus on the *interfaces between people*, not only the interface between a person and a model.
+
+#### 4.9.2. Situation awareness as an engineering requirement with measurable failure modes
+
+Situation awareness (SA) provides a complementary lens because it ties information design to decision errors in dynamic environments. Endsley’s framework distinguishes: (i) **perception** of elements in the environment; (ii) **comprehension** of their meaning; and (iii) **projection** of their status into the near future (Endsley, 1995a). For multimodal human-performance monitoring, this is a practical decomposition of what the console must do.
+
+- **Level 1 (perception):** acquire signals and metadata and make *data quality visible* (missingness, artifact correction fraction, device provenance).
+- **Level 2 (comprehension):** transform raw features into interpretable state descriptors (baseline deviation, rate of change, consistency across modalities).
+- **Level 3 (projection):** forecast near-term risk windows (“likely impairment risk elevated in next duty period”), with explicit confidence and actionable alternatives.
+
+The design hazard is that systems often jump to Level 3 outputs (“risk score”) while hiding Level 1 and Level 2 uncertainties. This is a recipe for overreliance because users implicitly treat forecasts as grounded in stable perception and comprehension. A defensible console therefore *forces the mapping* from SA levels into the UI: forecasts must carry the evidence chain (inputs, preprocessing quality, and the model’s validity conditions).
+
+Endsley also emphasizes that SA can be measured, including via query-based techniques in simulation that assess what operators know about the state of the system (Endsley, 1995b). This is operationally relevant because it provides an evaluation bridge: rather than treating “better SA” as a vague claim, the console can be tested in scenario-based simulations where interruption-based or post-trial probes quantify whether the tool actually improves users’ understanding and projection.
+
+Implementation implications for SA-driven evaluation and design include:
+
+- **Information pacing and attentional budgeting.** Tactical displays should be engineered to reduce working-memory demands (e.g., show “what changed since baseline” and “what the system is unsure about”) rather than listing many raw metrics.
+- **Error taxonomy instrumentation.** SA errors can be categorized as perception errors (missing data not noticed), comprehension errors (misinterpreting what a deviation means), and projection errors (misjudging time-to-risk). Logging and after-action review can classify console-related failures in these terms, which helps target improvements.
+
+#### 4.9.3. Naturalistic decision making and recognition-primed decisions under threat
+
+Naturalistic decision making (NDM) research emphasizes that experienced decision makers under time pressure rarely enumerate options and compute utilities. Instead, they often recognize patterns, generate a plausible course of action, and mentally simulate it. Klein and colleagues formalized this as recognition-primed decision strategies (Klein & Crandall, 1990), and later articulated the recognition-primed decision (RPD) model as a general account of expert decision behavior in real environments (Klein, 2017).
+
+This matters for AI-enabled decision support because many “AI dashboard” designs are implicitly analytic: they assume the user will inspect multiple charts, compare alternatives, and optimize. Under threat and time pressure, that workflow is unrealistic. Therefore, the console should be designed to **prime recognition and support mental simulation**, not to demand multi-step analytic reconstruction.
+
+Concrete implementation patterns consistent with NDM/RPD include:
+
+- **Cue-based summarization.** Present a small number of salient cues tied to known operational failure modes (sleep debt + adverse circadian phase; HRV deviation + high artifact correction; rising fragmentation + irregular RR patterns) rather than presenting dozens of raw features.
+- **“What would you expect to see?” checks.** The interface can prompt the user to compare a cue with an expected pattern (“If this is sleep-loss-driven, PVT lapses typically rise; do we have a recent vigilance check?”). This supports mental simulation and avoids single-signal domination.
+- **Trajectory over point estimates.** RPD depends on recognizing dynamic patterns. Therefore, deltas, slopes, and persistence (“3 consecutive sessions below baseline”) are often more decision-relevant than absolute values.
+- **Structured alternatives and mitigations.** Rather than providing a single directive, the console should provide a constrained set of mitigation options that map to operational levers (rest extension, strategic nap, increased supervision, objective performance test). This supports supervisory decisions without implying algorithmic authority.
+
+The NDM lens also clarifies why tactical and supervisory views must diverge. Tactical personnel often need rapid cues that support “continue vs pause vs escalate,” whereas supervisory personnel need decision products that support allocation and planning (who is at highest risk, how uncertainty is distributed, and what mitigations are available).
+
+#### 4.9.4. High reliability organizations (HRO) and resilience engineering: designing for learning and adaptation
+
+High reliability organization (HRO) theory is often summarized as an organizational property, but it has concrete design consequences for decision-support systems. In HRO contexts, safety is maintained by organizational “mindfulness,” including preoccupation with failure, reluctance to simplify, sensitivity to operations, commitment to resilience, and deference to expertise (Weick & Sutcliffe, 2015).
+
+A multimodal console can support—or undermine—these properties.
+
+- **Preoccupation with failure:** the console should help detect weak signals and near-misses (e.g., repeated borderline PVT results; increasing alert frequency) and should make it easy to capture context when anomalies occur.
+- **Reluctance to simplify:** avoid collapsing complex state into a single “readiness score” without decomposing contributors and uncertainty.
+- **Sensitivity to operations:** provide time-aligned context (duty periods, operational stressors, environmental exposures) so physiological changes are not interpreted in isolation.
+- **Deference to expertise:** implement role-aware workflows where clinical/supervisory expertise can override algorithmic suggestions, and where overrides are captured as learning opportunities rather than treated as “non-compliance.”
+
+Resilience engineering offers a complementary framing that emphasizes how systems succeed under variability and how they adapt. Hollnagel’s resilience framing emphasizes capacities to respond, monitor, anticipate, and learn, and argues that safety cannot be reduced to preventing component failures alone (Hollnagel, 2006). The Safety-II perspective further emphasizes learning from everyday successful performance, not only from accidents (Hollnagel, 2017).
+
+For implementation, this suggests a console should not be optimized only for “predicting rare bad outcomes.” It should also be optimized for **supporting adaptive performance** under routine variability. Examples include:
+
+- **Adaptive countermeasure tracking.** When a user deploys a countermeasure (nap, caffeine, bright light, schedule shift), the console should capture it explicitly and relate it to subsequent state changes. This transforms the console into a learning instrument.
+- **After-action review (AAR) support.** AAR is a mechanism for resilience. The console should make it easy to reconstruct the decision context (what data were available, what the confidence indicators were, what the decision was, and what happened next).
+- **Operational “known good” baselines.** Resilience is not only avoiding fatigue; it is preserving capacity to respond. The console should characterize not only baseline levels but also restoration dynamics (how quickly does HRV/alertness recover after rest), which aligns with the idea of resilience potential.
+
+#### 4.9.5. System-theoretic safety (STAMP): the console as part of the control structure
+
+Systems-theoretic accident models formalize why “good components” can produce unsafe system behavior. Leveson’s STAMP framework treats safety as a control problem: accidents arise when safety constraints are inadequately enforced within a control structure that includes humans, organizations, software, and physical processes (Leveson, 2004; Leveson, 2012).
+
+This is highly applicable to AI-enabled decision support because hazards often arise not from prediction error alone but from unsafe control actions induced by the tool. In a mission-medicine context, relevant control actions include: clearing someone for duty, escalating medical evaluation, removing someone from a high-risk task, initiating rest/nap, or increasing supervision.
+
+A STAMP-informed hazard analysis for the console should therefore ask:
+
+- What **unsafe control actions** could occur if the console is wrong, late, or misunderstood?
+- Under what conditions could the console encourage **commission errors** (acting on a wrong alert) or **omission errors** (failing to act because the console did not alert)?
+- What feedback loops exist to detect and correct these errors (objective performance tasks, supervisor review, post-event auditing)?
+
+From an implementation standpoint, STAMP suggests encoding safety constraints directly into both the UI and the backend:
+
+- **Constraint: no high-stakes binary labels without basis and confidence.** “Fit/unfit” labels should be avoided unless evidence, governance, and oversight match the risk.
+- **Constraint: require corroboration pathways.** When confidence is low or uncertainty is high, the system should route the user toward corroboration (repeat standardized measurement; PVT-family task) rather than forcing a fused verdict.
+- **Constraint: loggable, reviewable decision artifacts.** The system should emit machine-readable decision artifacts (inputs, model versions, thresholds, confidence) so that after-action review can be performed without reconstructing ad hoc narratives.
+
+STAMP also motivates a shift in evaluation: instead of asking only “How accurate is the model?” one asks “Under what conditions can this system produce unsafe control actions, and how are those prevented?”
+
+### 4.10. Technical implementation patterns for AI-enabled decision support in dangerous scenarios
+
+Socio-technical integration implies a corresponding technical requirement: the platform must be engineered as a reliable, auditable, latency-aware system that can degrade gracefully. In dangerous scenarios—whether aerospace, military, emergency response, or high-risk industrial operations—connectivity can be intermittent, the cost of false alarms can be high, and post-event investigation is not optional. Therefore, a defensible implementation prioritizes deterministic processing, explicit data contracts, and hard separation between exploratory analytics and decision-support outputs.
+
+#### 4.10.1. Data contracts and time alignment: from heterogeneous streams to coherent state estimates
+
+Multimodal monitoring creates a data integration problem before it creates an AI problem. A physiological console must reconcile:
+
+- different sampling rates (RR intervals vs per-minute activity vs per-epoch sleep staging),
+- different time bases (device clocks, time zones, clock drift),
+- heterogeneous units and definitions (vendor-specific sleep stages, proprietary recovery scores),
+- and variable data quality.
+
+A robust implementation begins with a **canonical event model** and a **schema versioned data contract**. Practically, every ingested record should carry:
+
+- a timestamp and time zone (and, when available, a clock-quality indicator),
+- a device identifier and device/firmware version,
+- measurement units and sampling/aggregation method,
+- and quality flags (artifact fraction, missingness, signal confidence).
+
+This echoes the reproducibility argument in Section 4.6 but sharpens it into an engineering primitive: without stable data contracts and provenance, longitudinal comparisons become unreliable and model monitoring becomes uninterpretable.
+
+A useful internal decomposition is to treat the system as managing three layers:
+
+1. **Raw observations:** RR intervals, PPG-derived pulse intervals, BP waveforms or summaries, sleep epochs, light exposure proxies, duty periods.
+2. **Derived features:** HRV metrics, fragmentation indices, sleep opportunity estimates, circadian phase estimates, fatigue model outputs.
+3. **Operational state estimates:** interpretable states tied to decisions (“sleep debt elevated,” “circadian phase adverse,” “data quality low,” “probability of impairment exceeds threshold with X confidence”).
+
+The engineering objective is to ensure that (i) transformations from layer 1→2 are deterministic and logged, and (ii) transformations from layer 2→3 are governed as decision-support artifacts, not exploratory charts.
+
+#### 4.10.2. Edge–hub–cloud partitioning: designing for connectivity loss and latency budgets
+
+A tactical/supervisory system must be explicitly partitioned by latency and connectivity assumptions:
+
+- **Edge (tactical):** compute low-latency quality gates and a small set of robust features; provide immediate feedback for measurement validity and “do we need a repeat?” decisions.
+- **Forward hub (team/supervisory local):** aggregate across team members, maintain a local cache for intermittent connectivity, and support supervisory decisions on a short horizon.
+- **Back-end (enterprise/cloud):** support model training, fleet-level monitoring, long-horizon analytics, and governance workflows.
+
+This partitioning is not only a deployment choice; it is a safety mechanism. If the edge device cannot reach the back-end, the system should still produce conservative outputs (quality gates, abstention, and prompts for corroboration), rather than silently failing or producing stale results.
+
+Implementation details consistent with safety-critical engineering include:
+
+- **Store-and-forward ingestion.** Edge nodes should buffer data with bounded storage and retry with explicit timeouts and backoff. Messages should be idempotent so that replays do not create duplicated sessions.
+- **Explicit latency budgets per decision class.** Tactical prompts must operate in seconds; supervisory planning can operate in minutes; model retraining operates on days/weeks. Mixing these budgets (e.g., running heavy inference in the tactical loop) can create unsafe delays.
+- **Role-based access controls and audit.** Tactical users should see their own data and immediate cues; supervisory users may see aggregated team state; administrators may access de-identified monitoring dashboards. Every access path should be logged.
+
+#### 4.10.3. Multimodal fusion architecture: modularity, missingness, and interpretable decomposition
+
+The multimodal fusion problem is often approached with end-to-end models that ingest many streams. However, in safety-critical deployments, modularity is frequently preferable because it supports traceability and graceful degradation. A modular architecture can treat each domain model as producing a bounded set of outputs with explicit confidence (e.g., a circadian model yields phase estimate + confidence based on schedule and light proxy completeness; a fatigue model yields risk based on sleep opportunity and time awake; an HRV module yields baseline deviation + quality score).
+
+A supervisory fusion layer can then combine these outputs using:
+
+- **Rule-based gating** (fail-closed thresholds for data quality),
+- **probabilistic aggregation** (combining independent evidence streams),
+- and **decision-analytic thresholds** tuned to mitigation costs.
+
+This approach has two advantages. First, it supports partial operation when one stream is unavailable. Second, it provides an interpretable decomposition of “why the system thinks risk is elevated,” which is central to safe CDS design.
+
+A common implementation pattern is to treat “readiness” as a latent state estimated from multiple noisy observations (physiological, behavioral, and schedule-derived). State estimation can be implemented with explicit probabilistic models (e.g., Bayesian filtering) or with machine learning models that are constrained to output calibrated risk estimates and uncertainty. Whichever method is used, the system should treat missingness as informative: missing physiological data during a high-motion mission phase may itself be a risk factor, and should reduce confidence rather than being silently imputed.
+
+#### 4.10.4. Uncertainty, abstention, and reject options as first-class outputs
+
+Operational decision support benefits from “knowing when not to know.” A key safety mechanism is **abstention**: the system should explicitly decline to provide a high-stakes recommendation when data quality is poor, when the case is out-of-distribution, or when confidence is low. This can be formalized as classification with a reject option, which has been studied as a method to control risk by rejecting ambiguous cases rather than forcing a label (Hanczar & Dougherty, 2008; Varshney, 2011).
+
+Conformal prediction provides another implementable mechanism: it wraps an underlying model to produce prediction sets or intervals with validity guarantees under exchangeability assumptions, thereby making uncertainty explicit and actionable (Vovk et al., 2022). In practice, conformal approaches can support the design objective “only output a high-confidence decision when error probability is bounded,” while otherwise returning a wider set or a “needs corroboration” recommendation.
+
+Implementation patterns for uncertainty-aware decision support include:
+
+- **Separate confidence channels:** report (i) data-quality confidence (sensor and preprocessing), (ii) model confidence (calibrated uncertainty), and (iii) coverage confidence (are we within validated conditions?).
+- **Decision-dependent abstention thresholds:** tactical alerts may require higher confidence than exploratory monitoring; supervisory planning may tolerate lower confidence if actions are reversible.
+- **Fallback pathways:** when abstaining, the system should point to the next-best action (repeat standardized HRV session; run PVT; consult supervisor) rather than leaving the user with an empty dashboard.
+
+#### 4.10.5. Model documentation, monitoring, and lifecycle change control as engineering primitives
+
+In socio-technical decision support, technical implementation cannot stop at “deploy the model.” Documentation and monitoring are part of the product.
+
+Model Cards were introduced as a structured approach to model reporting, including intended use, evaluation, ethical considerations, and caveats (Mitchell et al., 2019). For a mission-medicine console, model cards become an operational artifact: they inform what the UI can claim, what conditions trigger confidence reduction, and what changes require revalidation.
+
+The NIST AI Risk Management Framework provides a complementary governance structure for organizations to manage AI risks throughout the lifecycle (Tabassi, 2023). While the AI RMF is voluntary and cross-sector, its practical value here is that it forces explicit mapping from risks to controls:
+
+- **Govern:** define roles, accountability, and policies for model updates and use.
+- **Map:** define intended use, contexts, and plausible harms.
+- **Measure:** evaluate performance, calibration, bias, robustness, and human–AI team performance.
+- **Manage:** implement mitigations, monitoring, and incident response.
+
+In practice, this implies a set of “MLOps as safety ops” requirements:
+
+- a model registry with versioning and immutable artifact storage,
+- monitoring dashboards that track alert rates, calibration drift, and data-quality shifts,
+- change-control workflows that treat threshold changes and preprocessing changes as safety-relevant,
+- and structured post-deployment review of disagreement cases (console alert vs objective performance test vs clinical outcomes).
+
+This lifecycle view aligns with GMLP principles discussed earlier and makes explicit that socio-technical performance (how the human–AI team behaves) is a monitored variable, not a one-time usability test.
+
+#### 4.10.6. Reference implementation blueprint: event-driven architecture, feature stores, and audit-grade logging
+
+The design patterns above can be made concrete as a reference architecture that separates (i) sensing and ingestion, (ii) deterministic feature generation, (iii) model inference, and (iv) user-facing decision artifacts. In practice, an event-driven architecture is often the most robust fit for multimodal physiological monitoring because it naturally supports asynchronous ingestion, intermittent connectivity, and explicit traceability.
+
+A minimal set of components (conceptual rather than vendor-specific) includes:
+
+1. **Ingestion gateway (edge and hub).** Accepts sessions and events (RR series, sleep episodes, duty periods, countermeasures) and enforces schema validation. The gateway should attach or verify provenance metadata (device ID, firmware, sampling assumptions, time-zone normalization) and should reject malformed payloads rather than “best-effort” parsing.
+2. **Event bus / message queue.** Provides durable, ordered streams of events per user/unit. This enables downstream processors to be restarted without losing data and supports store-and-forward ingestion from contested networks.
+3. **Raw artifact store.** Stores the highest-fidelity available representations (RR series, epoch-level sleep staging, raw questionnaires) in immutable blobs referenced by content hashes. This is the foundation for auditability and deterministic reprocessing.
+4. **Time-series database for derived measures.** Stores derived features and state estimates (HRV metrics, fragmentation indices, circadian phase estimates) indexed by time and by analysis version.
+5. **Feature store / feature registry.** Stores feature definitions and feature computation versions, not only feature values. This matters because the same concept (e.g., “sleep debt”) can be operationalized differently across versions. A registry prevents “semantic drift,” where the same field name silently changes meaning across updates.
+6. **Model registry and inference service.** Stores model artifacts and exposes inference as a service that is called with explicit input feature versions. The inference service should return structured outputs (risk estimate, uncertainty, validity conditions, and suggested next steps) rather than free-form text.
+7. **Decision artifact layer.** Emits the user-facing “decision support objects” that are displayed and stored: alert packets, supervisory summaries, and handoff packets. Importantly, these artifacts should include (i) references to input data identifiers, (ii) feature and model versions, (iii) threshold versions, and (iv) confidence channels. This layer is where the system operationalizes “understand the basis” requirements (Section 4.5.4).
+8. **Audit-grade logging and review tooling.** An append-only log (or event-sourced log) should record what the system displayed, when, with what inputs and versions. Review tools should support reconstructing the state at decision time without relying on narrative memory.
+
+Two additional implementation details deserve emphasis.
+
+First, **determinism is a system property, not a model property**. Determinism requires that feature generation and inference be tied to versioned code and configuration, and that any stochastic elements (e.g., sampling-based uncertainty methods) record seeds or otherwise be made reproducible. Without determinism, the console cannot be a forensic instrument.
+
+Second, **interfaces should be designed for bounded failure**. In fielded operations, failure is expected. Therefore, ingestion retries must be bounded; timeouts must be finite; local storage must be bounded; and the UI must have explicit states for “stale,” “partial,” and “insufficient confidence.” These are not cosmetic: they prevent the system from presenting stale outputs as current truth.
+
+This reference architecture also supports disciplined experimentation: it allows the organization to run A/B comparisons of thresholds or fusion logic while maintaining audit trails and isolating exploratory analytics from operational decision artifacts.
+
+### 4.11. Human–AI teaming for tactical and supervisory personnel: interaction design, trust calibration, and role allocation
+
+A socio-technical system is safe only if it supports appropriate reliance. Under time pressure, humans tend to overweight salient numbers and underweight uncertainty. Automation bias—commission and omission errors induced by overreliance on automation—has been demonstrated across domains, including aviation contexts (Skitka et al., 1999; Mosier et al., 1998). Therefore, human–AI teaming design is not about “making the UI pretty”; it is a core risk control.
+
+#### 4.11.1. Levels of automation as a design dial for role allocation
+
+Parasuraman, Sheridan, and Wickens proposed a widely used model that decomposes automation across stages (information acquisition, information analysis, decision selection, and action implementation) and across levels of autonomy (Parasuraman et al., 2000). This provides a practical design framework for a flight-surgeon console because it clarifies what should be automated for tactical versus supervisory roles.
+
+- **Information acquisition automation** (sensor ingestion, QC) is generally high value and low risk if quality flags are surfaced.
+- **Information analysis automation** (feature extraction, baseline deviation, forecasting) can be high value but must be coupled to transparency and uncertainty.
+- **Decision selection automation** (recommendations) is more hazardous because it can implicitly transfer authority to the system.
+- **Action implementation automation** (automatic removal from duty, automatic schedule changes) is typically inappropriate unless governance, evidence, and oversight match the risk.
+
+This suggests an operationally conservative posture: automate acquisition and analysis strongly; automate recommendations cautiously; keep action implementation human-authorized, especially in dangerous scenarios.
+
+Sheridan and Parasuraman emphasize that automation does not remove humans; it changes the human role into supervision, monitoring, and exception handling—often the hardest cognitive work (Sheridan & Parasuraman, 2005). Therefore, “more automation” is not automatically safer; it can increase workload by creating monitoring burdens, especially if false alarms are frequent.
+
+#### 4.11.2. Automation bias, accountability, and trust calibration as safety mechanisms
+
+Skitka and colleagues showed that automation can induce both commission errors (following incorrect automation) and omission errors (failing to act when automation does not alert) (Skitka et al., 1999). They also demonstrated that accountability influences automation bias, suggesting that organizational and interface design can modulate reliance patterns (Skitka et al., 2000).
+
+For implementation, the goal is not to make users distrust the system; it is to calibrate trust so that reliance increases when the system is likely correct and decreases when the system is uncertain.
+
+Design patterns that directly reduce automation bias in mission-medicine decision support include:
+
+- **Confidence gating at the UI layer.** Do not render “green/yellow/red” or high-salience alerts when confidence is low. Instead, render “insufficient data” states that prompt remeasurement or corroboration.
+- **Counterfactual and consistency cues.** When signals conflict, display the conflict explicitly (“fatigue model high risk; PVT normal; HRV low confidence due to high artifact fraction”). This nudges users toward skepticism rather than forcing a single fused number.
+- **Accountability scaffolding.** For high-impact supervisory decisions, require a brief structured rationale (“action taken because…”). This reduces impulsive reliance and creates learning data.
+- **Training with controlled failure modes.** Provide simulation-based training where the system is sometimes wrong (within realistic rates) so users learn when to rely and when to seek corroboration.
+
+Mosier and colleagues’ demonstration of automation bias in high-tech cockpits underscores that even trained operators are vulnerable when automation is framed as authoritative (Mosier et al., 1998). Therefore, system designers must assume bias will occur and build mitigations into workflow.
+
+#### 4.11.3. Human-AI interaction guidelines as implementable UI and workflow requirements
+
+Human-AI interaction guidelines provide actionable “micro-requirements” that can be translated into UI and system behavior. Amershi and colleagues synthesized guidelines such as setting expectations, supporting efficient correction, and providing explanations at appropriate times (Amershi et al., 2019). In a mission-medicine console, these can be operationalized as follows:
+
+- **Make clear what the system can and cannot do.** The UI should indicate coverage and validity conditions (“validated for 5-minute morning HRV sessions with chest-strap ECG; lower confidence for wrist PPG under movement”).
+- **Show contextually relevant explanations.** Explanations should be tied to the decision at hand (why a mitigation is suggested) rather than generic model introspection.
+- **Support user correction and feedback.** Users must be able to correct obvious metadata errors (wrong posture, mis-tagged sleep window) and the system should propagate corrections downstream.
+- **Manage interruptions.** Tactical alerts should be interruptive only when action is time-sensitive and confidence is high; otherwise they should be reviewable asynchronously.
+
+These guidelines are especially valuable because they shift implementation from a vague goal (“be interpretable”) to concrete behaviors that can be tested.
+
+#### 4.11.4. Human-autonomy teaming for tactical contexts: trust measurement and instrumentation
+
+Human–autonomy teaming research in military and high-risk contexts emphasizes that trust is dynamic, context dependent, and influenced by system transparency and reliability. Technical reports such as the Human-Autonomy Teaming Trust Toolkit (HAT3) provide practical instruments and software guidance for measuring and reasoning about trust in human–autonomy teams (Neubauer et al., 2022; Neubauer et al., 2023). Complementary work describes mobile data collection for studying human autonomy teaming in conjunction with passive context and psychophysiological sensing (Adamson et al., 2021), and interaction paradigms that compare human–human teaming to human–autonomy teaming (Tokadlı & Dorneich, 2019).
+
+For a mission-medicine console, the actionable implication is that “trust” is not merely a subjective feeling; it is an empirically measurable variable that should be part of evaluation. Implementation-relevant instrumentation includes:
+
+- **Interaction logging:** what alerts were shown, what explanations were opened, what actions were taken, and how quickly.
+- **Outcome linkage:** what objective performance measures and operational outcomes followed.
+- **Trust/workload sampling:** short periodic measures (or structured AAR questions) that capture whether the system was relied upon appropriately.
+
+RAND’s synthesis on human–machine integration further emphasizes that effective teaming depends on system design, training, organizational structures, and feedback loops, not only algorithm performance (RAND Corporation, 2025).
+
+#### 4.11.5. LLM copilots and recent AI advancements: safe deployment patterns for multimodal decision support
+
+Recent advances in large language models (LLMs) create a temptation to add “chat-based” copilots to operational dashboards. In a mission-medicine context, LLMs can be useful if constrained to tasks where they add value without becoming an ungoverned decision authority. The safest pattern is to treat the LLM as an **interface and summarization layer** over already governed analytics, rather than as a primary inference engine.
+
+Implementable, safety-aligned uses include:
+
+- **Retrieval-augmented summarization (RAG).** The LLM can answer questions by retrieving from a curated knowledge base (protocols, SOPs, training manuals, and validated model cards) and returning grounded summaries rather than free-form advice.
+- **Structured report generation.** The LLM can generate a draft “handoff summary” that is explicitly derived from structured fields (sleep opportunity, HRV quality flags, recent alerts) and that can be reviewed and edited by a human.
+- **Decision rationale normalization.** Supervisors’ free-text rationales can be converted into standardized categories for later analysis (e.g., “fatigue risk,” “data quality,” “illness suspected”), supporting governance and learning.
+
+Risk controls for LLM integration should include:
+
+- **No direct actuation.** LLM outputs should not trigger actions without human approval.
+- **Strict grounding requirements.** Outputs should be traceable to retrieved documents or structured data fields; missing evidence should produce “cannot answer” rather than hallucination.
+- **Role-aware disclosure.** Tactical views should be minimal; supervisory views can include longer narratives and citations.
+- **Model documentation and monitoring.** The LLM itself requires documentation (intended use, limitations) consistent with “model card” principles (Mitchell et al., 2019) and risk management consistent with AI RMF logic (Tabassi, 2023).
+
+In short, LLMs can support communication and coordination (distributed cognition), but must be deployed as bounded tools, not as unbounded clinical reasoners.
+
+#### 4.11.6. Alerting, escalation ladders, and role-aware decision products
+
+A key operational design decision is how the console turns “evidence” into “interruptions.” In dangerous scenarios, attention is itself a scarce resource; therefore, alerting logic must be treated as part of the control structure (Section 4.9.5), not as a UI afterthought.
+
+A defensible pattern is to separate **detection** from **interruption**:
+
+- Detection can be frequent and continuous (compute deltas, watch for inconsistencies, monitor data quality).
+- Interruption must be rare and justified (only when action is time-sensitive *and* confidence is high).
+
+This separation enables the system to remain sensitive to weak signals (HRO “preoccupation with failure”) without saturating users with alarm fatigue.
+
+For implementation, alerting rules should be explicitly role-aware.
+
+**Tactical alert products (seconds to minutes):**
+
+- prioritize a small number of “stoplight” states only when confidence is high,
+- show a single dominant reason code plus a “why low confidence” cue when applicable,
+- provide a short next-step recommendation that is reversible and low harm (repeat measurement, buddy check, run a 2–3 minute vigilance task),
+- and be designed for rapid dismissal when inappropriate.
+
+**Supervisory alert products (minutes to days):**
+
+- prioritize ranking and triage (who should be reviewed first),
+- provide decomposed contributions (sleep history, circadian phase, physiological deviation, data quality),
+- include evidence links and audit trails (what data the decision is based on),
+- and provide structured mitigation playbooks rather than directives.
+
+A second implementation pattern is an explicit **escalation ladder** that defines how uncertainty is converted into action:
+
+1. **Self-check / remeasurement.** If the signal is low quality or inconsistent, the first action is to obtain a higher-quality standardized measurement.
+2. **Corroboration via objective task.** If the issue is “performance risk,” a short objective test (PVT-family) is often the most direct corroborator.
+3. **Buddy / team lead check.** Tactical environments benefit from redundancy: a second human perspective can catch misinterpretations and provide context.
+4. **Supervisory review.** If the risk remains elevated or uncertainty remains unresolved, escalate to supervisory personnel who can change assignments and mitigations.
+5. **Clinical evaluation / formal escalation.** Persistent or high-severity patterns trigger formal medical pathways.
+
+Encoding this ladder in the console’s workflow has two benefits. It reduces automation bias by making “seek corroboration” the default response to uncertainty, and it creates data that can be audited: the organization can later ask whether escalation steps were followed and whether they improved outcomes.
+
+Finally, alert governance should include **cooldown and suppression logic** that is transparent rather than hidden. If a user has already taken a mitigation action (nap, schedule change, repeat test), the system should suppress redundant alerts for a defined window unless new evidence emerges. This reduces nuisance alerts without losing sensitivity to real change.
+
+### 4.12. Evaluation and fielding: from model validation to system-level safety and decision utility
+
+The key methodological move in socio-technical integration is to evaluate the **human–AI team**. A system can be accurate yet unsafe if it induces automation bias or if it shifts attention away from higher-value checks. Conversely, a system with modest predictive performance can improve safety if it reliably triggers corroboration behaviors that prevent errors.
+
+#### 4.12.1. Scenario-based evaluation and measurement of situation awareness
+
+Because dangerous scenarios are difficult to study ethically in live operations, simulation and controlled exercises become central. Situation awareness measurement methods provide a way to quantify whether the console improves users’ understanding of state and trajectory, rather than merely increasing screen time. Endsley’s measurement framework, including query-based techniques, provides a methodological anchor for such evaluation (Endsley, 1995b).
+
+A practical evaluation approach is to embed the console into high-fidelity scenario exercises and measure:
+
+- SA (via structured probes or post-trial reconstruction),
+- workload and attention allocation (including whether the console creates distraction),
+- decision latency (does the tool speed or slow decisions?),
+- and decision appropriateness under uncertainty.
+
+Crucially, evaluation should separate **tactical** metrics (latency, interruption cost, simple action selection) from **supervisory** metrics (allocation quality, consistency across teams, auditability).
+
+#### 4.12.2. Prospective field evaluation and decision utility
+
+Where feasible, prospective field evaluation should focus on decision utility rather than only prediction performance. Decision curve analysis (Section 4.5.2) provides one quantitative approach to evaluate whether a model adds net benefit across thresholds (Vickers & Elkin, 2006), but field evaluation must extend to the socio-technical layer: how interventions affect mission capacity, false-alarm fatigue, and safety outcomes.
+
+Designs that can be feasible include stepped-wedge rollouts or cluster randomization by unit/site, with outcomes such as:
+
+- objective vigilance test performance (PVT-family) as an intermediate endpoint,
+- operational error/near-miss rates (when measurable),
+- compliance with mitigation protocols,
+- and alert burden metrics (false-alarm rates, time-to-acknowledge).
+
+In addition, evaluation must explicitly measure failure modes: cases where the console’s recommendation was followed and led to a poor outcome, and cases where it was ignored and led to a poor outcome. These are the cases that determine safety.
+
+#### 4.12.3. After-action review instrumentation and continuous improvement loops
+
+Resilience and high reliability depend on learning loops. Therefore, deployment should include mechanisms for structured after-action review:
+
+- capture the console’s displayed state and confidence at decision time,
+- capture the human decision and rationale,
+- link to subsequent outcomes (performance tests, mission events),
+- and review disagreement cases.
+
+This is where the auditability principles (Section 4.6) become operationally decisive. Without instrumentation, organizations cannot learn whether the tool is improving or harming decisions.
+
+#### 4.12.4. Governance frameworks for system-level safety
+
+Finally, socio-technical integration requires explicit governance structures for AI-enabled decision support. The AI RMF provides a practical scaffold for assigning roles and responsibilities and for managing risk across the lifecycle (Tabassi, 2023). In mission medicine, this governance should be risk-proportional and should treat model updates, threshold changes, and preprocessing changes as safety-relevant changes requiring review.
+
+#### 4.12.5. Post-deployment monitoring: metrics for the human–AI team, not only the model
+
+After fielding, the most important question becomes not only “is the model still accurate?” but “is the socio-technical system behaving safely?” In practice, a dashboard can remain statistically stable while becoming operationally unsafe due to changing device ecosystems, shifting workflows, or slow drift in how users interpret and act on outputs. Therefore, monitoring must include both *model-centric* and *interaction-centric* metrics.
+
+A minimal monitoring portfolio includes:
+
+- **Data integrity and provenance metrics:** sensor availability, artifact rates, missingness patterns, and shifts in device mix/firmware versions. These indicators act as early warnings for silent upstream changes that can invalidate downstream inference.
+- **Alert burden metrics:** alerts per user-day, distribution of alerts across units and missions, time-to-acknowledge, dismissal rates, and escalation rates. This provides a quantitative handle on alarm fatigue risk.
+- **Action coupling metrics:** proportions of high-confidence alerts that trigger the intended corroboration or mitigation behaviors (repeat standardized measurement, objective vigilance task, supervisor review), and proportions of low-confidence outputs that appropriately do *not* trigger irreversible actions. This is where the system tests whether uncertainty communication actually changes behavior.
+- **Disagreement and failure-mode metrics:** cases where the console disagrees with objective checks (e.g., PVT-family tasks) or with downstream outcomes. These should be reviewed in terms of commission and omission pathways (automation bias) and mapped back to data quality and validity conditions.
+- **Trust calibration metrics:** periodic lightweight sampling of user trust and perceived usefulness (e.g., during after-action review), coupled to observed reliance patterns. The goal is not to maximize trust but to align reliance with confidence and validity.
+
+Implementation-wise, these metrics require deliberate instrumentation.
+
+- The UI must log not just physiological values but interaction events (what was shown, what was opened, what was acknowledged or dismissed, what action was selected).
+- The backend must log model versions, threshold versions, and confidence channels so that changes in alert burden can be attributed to either real population change or pipeline change.
+- Review cadence should be explicit (e.g., weekly operational review of alert burden; monthly review of disagreement cases; quarterly revalidation checks), with clear ownership.
+
+This monitoring portfolio is a practical expression of the “learning system” principle in FRMS and HRO-style governance: the system is treated as a hypothesis that must be continuously tested against real-world behavior and outcomes.
+
+In addition, organizations should define an incident-response playbook for the console itself. Sudden spikes in alert rates after a device firmware update, systematic disagreement with objective checks, or clusters of user-reported “nonsense alerts” should trigger a temporary safety mode: suppress low-confidence recommendations, increase reliance on standardized remeasurement and performance tasks, and freeze threshold/model updates until root cause is understood. Treating the console as a monitored system with explicit rollback paths aligns with the control-structure view in STAMP: unsafe control actions can arise from organizational change and pipeline drift as much as from model error. Operationally, this requires pre-specified stop conditions (e.g., alert rate doubles week-over-week, calibration shifts beyond a bound, or data-quality confidence collapses) and a clear authority to invoke the freeze. Importantly, the UI should surface when safety mode is active so users do not infer that the absence of alerts implies safety; instead, the system should explicitly state that it is operating in a conservative, limited-confidence state.
+
+The synthesis is that technical quality, human factors, and governance are inseparable. A flight-surgeon console that aspires to improve safety in dangerous scenarios must be engineered as a socio-technical system: designed to support distributed cognition, measured in terms of situation awareness and decision utility, protected against automation bias, and governed as a lifecycle safety case.
+
 ## 5. Conclusions
+
 This review synthesized peer-reviewed evidence and US/EU governmental technical documents that underpin a multimodal “flight surgeon console” approach. The scientific foundation for such systems is strong *if* the console is treated as a governed decision-support stack rather than as an automated diagnostic engine.
 
 At the measurement layer, HRV and BPV analytics are defensible only when the upstream signal chain is credible. HRV standards emphasize that recording duration, stationarity, and preprocessing choices constrain interpretation (Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology, 1996). In operational settings, this translates into a simple rule: a console should privilege high-quality RR series acquired under standardized conditions over “always-on” but low-fidelity signals. Artefact correction can improve utility, yet it also introduces sensitivity to method; therefore, correction intensity and quality flags should be surfaced as part of the output rather than treated as hidden implementation details (Lipponen & Tarvainen, 2019).
@@ -821,6 +1346,7 @@ At the physiology and modelling layer, the key conclusion is that readiness is m
 At the integration layer, a console’s value is determined by whether it reduces error. Wearables can provide high-resolution longitudinal data, but they also introduce reproducibility risks due to proprietary algorithms and silent firmware changes; this makes provenance logging and stable feature definitions a safety requirement, not a luxury (de Zambotti et al., 2019; Tarvainen et al., 2014). Space-weather indices are precise and well-defined geophysical products, but evidence of physiological impacts is heterogeneous and likely small; thus, space-weather overlays are most defensible as hypothesis-generating context paired with conservative time-series governance (Alabdulgader et al., 2018; Vieira et al., 2022).
 
 ### 5.1. Minimum defensible operating assumptions
+
 To avoid “dashboard overconfidence,” a flight-surgeon console should adopt minimum assumptions that constrain misuse:
 
 - **Decision support, not diagnosis.** The system reports risk indicators and confidence, not clinical determinations.
@@ -830,6 +1356,7 @@ To avoid “dashboard overconfidence,” a flight-surgeon console should adopt m
 - **Uncertainty is explicit.** Every headline metric has a confidence indicator driven by data quality and model-input completeness.
 
 ### 5.2. Practical implications for the Mission Control – Flight Surgeon platform
+
 Within the scope reviewed here, several practical implications follow for the app’s module architecture.
 
 1. **HRV modules should remain modular and metadata-aware.** Time-, frequency-, and nonlinear features should be presented with protocol constraints and record-length requirements. Frequency-domain metrics should not be framed as direct sympathetic surrogates, and LF/HF should be treated as descriptive rather than mechanistic.
@@ -838,13 +1365,43 @@ Within the scope reviewed here, several practical implications follow for the ap
 4. **Governance controls should be part of the product.** Multiple testing control, time-series-aware validation, and audit trails are not “research add-ons”; they are safety features when outputs may influence operational decisions.
 
 ### 5.3. Closing statement
+
 A multimodal physiological console can be scientifically credible and operationally useful when it respects the conditional nature of its metrics and models. The core design goal is not to eliminate uncertainty, but to prevent uncertainty from masquerading as certainty. Achieving this requires disciplined measurement, transparent assumptions, conservative inference, and FRMS-style governance that keeps the system oriented toward safety and learning.
 
 Finally, the most constructive way to deploy such a system is iteratively: start with a narrow set of high-confidence measurements (standardized morning HRV, sleep opportunity, vigilance testing), establish within-person baselines, and only then layer more complex models (circadian phase estimation, biomathematical fatigue forecasts, exploratory environmental overlays). Each added module should be justified by incremental decision value and paired with an explicit failure analysis: how could this output be wrong, and what would the consequence be if it were trusted? In that framing, the console becomes a platform for disciplined operational physiology rather than a collection of attractive plots.
 
 ---
 
+## Declarations
+
+### Protocol and registration
+
+This review was not prospectively registered (e.g., PROSPERO) and does not have a preregistered protocol.
+
+### Ethics approval and consent to participate
+
+Not applicable: this manuscript is a review and does not involve new data collection from human participants.
+
+### Funding
+
+Not reported.
+
+### Competing interests
+
+Not reported.
+
+### Data availability
+
+This manuscript is based on publicly accessible sources (Europe PMC metadata, published literature, and public governmental/agency documents). The complete Europe PMC query families are reported verbatim in Appendix B. An executable reference implementation to reproduce the Europe PMC retrieval, deduplication, and rule-based screening steps for the HRV–cognition scoping component is provided in Appendix C.
+
+### Code availability
+
+See Appendix C.
+
+---
+
 ## References
+
 Alabdulgader, A., McCraty, R., Atkinson, M., Dobyns, Y., Vainoras, A., Ragulskis, M., & Stolc, V. (2018). Long-term study of heart rate variability responses to changes in the solar and geomagnetic environment. Scientific Reports, 8(1). https://doi.org/10.1038/s41598-018-20932-x
 
 Ancoli-Israel, S., Cole, R., Alessi, C., Chambers, M., Moorcroft, W., & Pollak, C. P. (2003). The role of actigraphy in the study of sleep and circadian rhythms. Sleep, 26(3), 342–392. https://doi.org/10.1093/sleep/26.3.342
@@ -1077,9 +1634,62 @@ Vickers, A. J., & Elkin, E. B. (2006). Decision curve analysis: a novel method f
 
 Wolff, R. F., Moons, K. G. M., Riley, R. D., Whiting, P. F., Westwood, M., Collins, G. S., Reitsma, J. B., Kleijnen, J., & Mallett, S. (2019). PROBAST: A Tool to Assess the Risk of Bias and Applicability of Prediction Model Studies. Annals of Internal Medicine, 170(1), 51–58. https://doi.org/10.7326/M18-1376
 
+Adamson, T., Hasan, Y., Tapia, L., Wang, W., Campbell, A., & Carter, E. (2021). A Mobile Data Collection System for Studying Human Autonomy Teaming in Conjunction with Passive Context and Psychophysiological Sensing. DEVCOM Army Research Laboratory. https://doi.org/10.21236/ad1156085
+
+Amershi, S., Weld, D., Vorvoreanu, M., Fourney, A., Nushi, B., Collisson, P., Suh, J., Iqbal, S., Bennett, P. N., Inkpen, K., Teevan, J., Kikin-Gil, R., & Horvitz, E. (2019). Guidelines for Human-AI Interaction. Proceedings of the 2019 CHI Conference on Human Factors in Computing Systems, 1–13. https://doi.org/10.1145/3290605.3300233
+
+Endsley, M. R. (1995a). Toward a Theory of Situation Awareness in Dynamic Systems. Human Factors, 37(1), 32–64. https://doi.org/10.1518/001872095779049543
+
+Endsley, M. R. (1995b). Measurement of Situation Awareness in Dynamic Systems. Human Factors, 37(1), 65–84. https://doi.org/10.1518/001872095779049499
+
+Hanczar, B., & Dougherty, E. R. (2008). Classification with reject option in gene expression data. Bioinformatics, 24(17), 1889–1895. https://doi.org/10.1093/bioinformatics/btn349
+
+Hollnagel, E. (2006). Achieving system safety by resilience engineering. 1st IET International Conference on System Safety, 184–195. https://doi.org/10.1049/cp:20060241
+
+Hollnagel, E. (2017). Safety-II in Practice: Developing the Resilience Potentials. Routledge. https://doi.org/10.4324/9781315201023
+
+Hutchins, E. (1995). Cognition in the Wild. The MIT Press. https://doi.org/10.7551/mitpress/1881.001.0001
+
+Klein, G., & Crandall, B. (1990). Recognition-Primed Decision Strategies. Defense Technical Information Center. https://doi.org/10.21236/ada226887
+
+Klein, G. A. (2017). Sources of Power. The MIT Press. https://doi.org/10.7551/mitpress/11307.001.0001
+
+Leveson, N. G. (2004). A new accident model for engineering safer systems. Safety Science, 42(4), 237–270. https://doi.org/10.1016/S0925-7535(03)00047-X
+
+Leveson, N. G. (2012). Engineering a Safer World. The MIT Press. https://doi.org/10.7551/mitpress/8179.001.0001
+
+Mitchell, M., Wu, S., Zaldivar, A., Barnes, P., Vasserman, L., Hutchinson, B., Spitzer, E., Raji, I. D., & Gebru, T. (2019). Model Cards for Model Reporting. Proceedings of the Conference on Fairness, Accountability, and Transparency, 220–229. https://doi.org/10.1145/3287560.3287596
+
+Mosier, K. L., Skitka, L. J., Heers, S., & Burdick, M. (1998). Automation Bias: Decision Making and Performance in High-Tech Cockpits. The International Journal of Aviation Psychology, 8(1), 47–63. https://doi.org/10.1207/s15327108ijap0801_3
+
+Neubauer, C., Baker, A., Fitzhugh, S., & Krausman, A. (2022). Human-Autonomy Teaming Trust Toolkit (HAT3) Executive Summary. DEVCOM Army Research Laboratory. https://doi.org/10.21236/ad1189513
+
+Neubauer, C., Baker, A., Fitzhugh, S., & Krausman, A. (2023). Human-Autonomy Teaming (HAT3) Trust Toolkit Software Development Documentation and User Guide. DEVCOM Army Research Laboratory. https://doi.org/10.21236/ad1197383
+
+Parasuraman, R., Sheridan, T. B., & Wickens, C. D. (2000). A model for types and levels of human interaction with automation. IEEE Transactions on Systems, Man, and Cybernetics - Part A: Systems and Humans, 30(3), 286–297. https://doi.org/10.1109/3468.844354
+
+RAND Corporation. (2025). One Team, One Fight: Volume I, Insights on Human-Machine Integration for the U.S. Army. https://doi.org/10.7249/rra2764-1
+
+Sheridan, T. B., & Parasuraman, R. (2005). Human-Automation Interaction. Reviews of Human Factors and Ergonomics, 1(1), 89–129. https://doi.org/10.1518/155723405783703082
+
+Skitka, L. J., Mosier, K. L., & Burdick, M. (1999). Does automation bias decision-making? International Journal of Human-Computer Studies, 51(5), 991–1006. https://doi.org/10.1006/ijhc.1999.0252
+
+Skitka, L. J., Mosier, K., & Burdick, M. D. (2000). Accountability and automation bias. International Journal of Human-Computer Studies, 52(4), 701–717. https://doi.org/10.1006/ijhc.1999.0349
+
+Tabassi, E. (2023). Artificial Intelligence Risk Management Framework (AI RMF 1.0). National Institute of Standards and Technology. https://doi.org/10.6028/NIST.AI.100-1
+
+Tokadlı, G., & Dorneich, M. C. (2019). Interaction Paradigms: from Human-Human Teaming to Human-Autonomy Teaming. 2019 IEEE/AIAA 38th Digital Avionics Systems Conference (DASC), 1–8. https://doi.org/10.1109/dasc43569.2019.9081665
+
+Varshney, K. R. (2011). A risk bound for ensemble classification with a reject option. 2011 IEEE Statistical Signal Processing Workshop (SSP), 769–772. https://doi.org/10.1109/ssp.2011.5967817
+
+Vovk, V., Gammerman, A., & Shafer, G. (2022). Conformal Prediction: General Case and Regression. In Algorithmic Learning in a Random World (pp. 19–69). Springer International Publishing. https://doi.org/10.1007/978-3-031-06649-8_2
+
+Weick, K. E., & Sutcliffe, K. M. (2015). Managing the Unexpected. Wiley. https://doi.org/10.1002/9781119175834
+
 ---
 
 ## Appendix A. Pilot Europe PMC search strategy for the HRV–cognition scoping component (higher sensitivity)
+
 **Search date:** 22 December 2025
 
 **Note:** This pilot strategy was used to assess sensitivity and inform refinement of the final query set reported in Appendix B.
@@ -1091,6 +1701,7 @@ Wolff, R. F., Moons, K. G. M., Riley, R. D., Whiting, P. F., Westwood, M., Colli
 **Deduplication rule:** case-insensitive DOI when available; otherwise PMID; otherwise source-specific record identifier.
 
 ### A.1. Query families (verbatim)
+
 **Executive function**
 `TITLE_ABS:(rmssd OR "hf-hrv" OR "high frequency heart rate variability" OR "vagally mediated" OR "cardiac vagal" OR "cardiac vagal control") AND TITLE_ABS:("executive function" OR inhibition OR shifting OR updating OR stroop OR flanker OR "go/no-go" OR "cognitive control") AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
 
@@ -1107,6 +1718,7 @@ Wolff, R. F., Moons, K. G. M., Riley, R. D., Whiting, P. F., Westwood, M., Colli
 `TITLE_ABS:("heart rate variability" OR rmssd OR "hf-hrv" OR "cardiac vagal") AND TITLE_ABS:(dementia OR alzheimer* OR "mild cognitive impairment" OR MCI) AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
 
 ### A.2. Reproducible record counts (as retrieved on 22 December 2025)
+
 - Records identified (sum across query families): 2,571
 - Duplicates removed (DOI/PMID rule): 577
 - Unique records mapped: 1,994
@@ -1117,6 +1729,7 @@ Wolff, R. F., Moons, K. G. M., Riley, R. D., Whiting, P. F., Westwood, M., Colli
 ---
 
 ## Appendix B. Final Europe PMC search strategy for the HRV–cognition scoping component (higher precision)
+
 **Search date:** 22 December 2025
 
 **Data source:** Europe PMC REST API (`https://www.ebi.ac.uk/europepmc/webservices/rest/search`)
@@ -1126,6 +1739,7 @@ Wolff, R. F., Moons, K. G. M., Riley, R. D., Whiting, P. F., Westwood, M., Colli
 **Deduplication rule:** case-insensitive DOI when available; otherwise PMID; otherwise source-specific record identifier.
 
 ### B.1. Query families (verbatim)
+
 **Executive function**
 `TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv" OR "rr interval" OR "nn interval") AND TITLE_ABS:("executive function" OR "cognitive control" OR "inhibitory control" OR "task switching" OR "set shifting" OR stroop OR flanker OR "go/no-go" OR "go no go") AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
 
@@ -1144,9 +1758,538 @@ Wolff, R. F., Moons, K. G. M., Riley, R. D., Whiting, P. F., Westwood, M., Colli
 `TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv") AND TITLE_ABS:("cognitive impairment" OR "mild cognitive impairment" OR dementia OR alzheimer* OR "cognitive decline") AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])`
 
 ### B.2. Reproducible record counts (as retrieved on 22 December 2025)
+
 - Records identified (sum across query families): 2,736
 - Duplicates removed (DOI/PMID rule): 646
 - Unique records mapped: 2,090
 - Unique records without a DOI: 58
 
 **Query-family yields (not mutually exclusive due to overlap):** executive function (946), working memory (331), attention/vigilance (496), mental workload (504), cognitive impairment (459)
+
+---
+
+## Appendix C. Reproducible reference implementation for the HRV–cognition scoping component (Europe PMC)
+
+**Purpose:** Provide executable reference code to reproduce the Europe PMC retrieval, deduplication, and deterministic title/abstract screening described in Methods (Section 2.5) and Appendices A–B.
+
+**Note on determinism:** Europe PMC indexing and metadata evolve. Rerunning the same queries on a different date may yield different record counts, even if the process is identical (Section 2.10). This appendix reproduces the *process* and supports auditability.
+
+### C.1. Requirements
+
+- Python 3.10+
+- Internet access to the Europe PMC REST API
+- No third-party packages required (standard library only)
+
+### C.2. How to run
+
+1. Copy the code block in Section C.3 into a local file (e.g., `reproduce_europempc_scoping.py`).
+2. Run: `python reproduce_europempc_scoping.py`
+3. The script prints:
+   - identification counts (records retrieved per query family and total),
+   - deduplication counts (DOI/PMID-based rule),
+   - deterministic screening exclusions (non-human-only; “cold pressor” CPT disambiguation),
+   - evidence-map summary counts (year distribution; open-access flag proportion; top journals).
+
+### C.3. Reference code (Python; standard library only)
+
+```python
+from __future__ import annotations
+
+import json
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+from collections import Counter
+from dataclasses import dataclass
+from typing import Any, Iterable, Mapping
+
+
+EUROPE_PMC_SEARCH_URL: str = "https://www.ebi.ac.uk/europepmc/webservices/rest/search"
+
+
+@dataclass(frozen=True, slots=True)
+class QueryFamily:
+    """A named Europe PMC query family used for the HRV–cognition scoping component."""
+
+    name: str
+    query: str
+
+
+def _build_query_families() -> tuple[QueryFamily, ...]:
+    """Return the Appendix B query families verbatim."""
+    return (
+        QueryFamily(
+            name="Executive function",
+            query=(
+                'TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv" OR "rr interval" OR "nn interval") '
+                'AND TITLE_ABS:("executive function" OR "cognitive control" OR "inhibitory control" OR "task switching" '
+                'OR "set shifting" OR stroop OR flanker OR "go/no-go" OR "go no go") '
+                'AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])'
+            ),
+        ),
+        QueryFamily(
+            name="Working memory",
+            query=(
+                'TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv" OR "rr interval" OR "nn interval") '
+                'AND TITLE_ABS:("working memory" OR "n-back" OR "digit span") '
+                'AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])'
+            ),
+        ),
+        QueryFamily(
+            name="Attention / vigilance",
+            query=(
+                'TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv" OR "rr interval" OR "nn interval") '
+                'AND TITLE_ABS:("psychomotor vigilance" OR PVT OR vigilance OR "sustained attention" '
+                'OR "continuous performance test" OR CPT) '
+                'AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])'
+            ),
+        ),
+        QueryFamily(
+            name="Mental workload / cognitive load",
+            query=(
+                'TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv" OR "rr interval" OR "nn interval") '
+                'AND TITLE_ABS:("mental workload" OR "cognitive load" OR "NASA-TLX") '
+                'AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])'
+            ),
+        ),
+        QueryFamily(
+            name="Cognitive impairment / dementia",
+            query=(
+                'TITLE_ABS:("heart rate variability" OR rmssd OR sdnn OR "hf-hrv") '
+                'AND TITLE_ABS:("cognitive impairment" OR "mild cognitive impairment" OR dementia OR alzheimer* OR "cognitive decline") '
+                'AND HAS_ABSTRACT:Y AND LANG:eng AND (FIRST_PDATE:[2000-01-01 TO 2025-12-31])'
+            ),
+        ),
+    )
+
+
+def _http_get_json(url: str, params: Mapping[str, str], *, timeout_s: float) -> dict[str, Any]:
+    """Perform an HTTP GET and parse a JSON response.
+
+    Args:
+        url: Endpoint URL.
+        params: Query parameters.
+        timeout_s: Finite network timeout.
+
+    Returns:
+        Parsed JSON as a dict.
+
+    Raises:
+        RuntimeError: If the request fails or JSON cannot be parsed.
+    """
+    if timeout_s <= 0:
+        raise ValueError("timeout_s must be > 0")
+
+    query_str = urllib.parse.urlencode(params)
+    full_url = f"{url}?{query_str}"
+
+    req = urllib.request.Request(full_url, headers={"Accept": "application/json"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout_s) as resp:
+            payload = resp.read()
+    except (urllib.error.URLError, TimeoutError) as e:
+        raise RuntimeError(f"HTTP request failed: {e}") from e
+
+    try:
+        decoded = payload.decode("utf-8")
+        data: Any = json.loads(decoded)
+    except (UnicodeDecodeError, json.JSONDecodeError) as e:
+        raise RuntimeError(f"Failed to parse JSON: {e}") from e
+
+    if not isinstance(data, dict):
+        raise RuntimeError("Unexpected JSON shape (expected object)")
+
+    return data
+
+
+def _iter_epmc_results(
+    query: str,
+    *,
+    page_size: int,
+    max_pages: int,
+    timeout_s: float,
+    polite_sleep_s: float,
+) -> Iterable[dict[str, Any]]:
+    """Yield Europe PMC 'lite' results for a query using cursorMark pagination.
+
+    This iterator is bounded by max_pages to prevent unbounded retries/loops.
+    """
+    if page_size <= 0 or page_size > 1000:
+        raise ValueError("page_size must be in 1..1000")
+    if max_pages <= 0:
+        raise ValueError("max_pages must be > 0")
+    if polite_sleep_s < 0:
+        raise ValueError("polite_sleep_s must be >= 0")
+
+    cursor = "*"
+    last_cursor: str | None = None
+
+    for _page_idx in range(max_pages):
+        if last_cursor is not None and cursor == last_cursor:
+            return
+
+        params = {
+            "query": query,
+            "format": "json",
+            "resultType": "lite",
+            "pageSize": str(page_size),
+            "cursorMark": cursor,
+        }
+        data = _http_get_json(EUROPE_PMC_SEARCH_URL, params, timeout_s=timeout_s)
+
+        results = data.get("resultList", {}).get("result", [])
+        if not isinstance(results, list):
+            raise RuntimeError("Unexpected resultList.result shape")
+
+        for item in results:
+            if isinstance(item, dict):
+                yield item
+
+        last_cursor = cursor
+        next_cursor = data.get("nextCursorMark")
+        if not isinstance(next_cursor, str) or not next_cursor:
+            return
+
+        cursor = next_cursor
+        if polite_sleep_s:
+            time.sleep(polite_sleep_s)
+
+
+def _record_text(rec: Mapping[str, Any]) -> str:
+    """Concatenate title and abstractText for deterministic keyword screening."""
+    title = rec.get("title") or ""
+    abstract = rec.get("abstractText") or ""
+    if not isinstance(title, str):
+        title = ""
+    if not isinstance(abstract, str):
+        abstract = ""
+    return f"{title} {abstract}".strip()
+
+
+def _dedup_key(rec: Mapping[str, Any]) -> str:
+    """Create a deterministic record key (DOI -> PMID -> Europe PMC id)."""
+    doi = rec.get("doi")
+    if isinstance(doi, str) and doi.strip():
+        return f"doi:{doi.strip().lower()}"
+
+    pmid = rec.get("pmid")
+    if isinstance(pmid, str) and pmid.strip():
+        return f"pmid:{pmid.strip()}"
+
+    rec_id = rec.get("id")
+    if isinstance(rec_id, str) and rec_id.strip():
+        return f"id:{rec_id.strip()}"
+
+    raise RuntimeError("Record missing DOI, PMID, and id")
+
+
+def _is_non_human_only(text: str) -> bool:
+    """Implements the deterministic 'non-human-only' exclusion filter (Section 2.5)."""
+    t = text.lower()
+
+    animal_terms = (
+        " rat ",
+        " rats ",
+        " mouse ",
+        " mice ",
+        " murine ",
+        " dog ",
+        " dogs ",
+        " canine ",
+        " pig ",
+        " pigs ",
+        " porcine ",
+        " sheep ",
+        " ovine ",
+        " rabbit ",
+        " rabbits ",
+        " monkey ",
+        " monkeys ",
+        " macaque ",
+        " primate ",
+        " zebrafish ",
+        " drosophila ",
+        " c. elegans ",
+    )
+
+    human_terms = (
+        " human",
+        " humans",
+        " participant",
+        " participants",
+        " patient",
+        " patients",
+        " volunteer",
+        " volunteers",
+        " clinical",
+        " trial",
+        " adult",
+        " adults",
+        " child",
+        " children",
+        " adolescent",
+        " adolescents",
+        " student",
+        " students",
+    )
+
+    has_animal = any(term in f" {t} " for term in animal_terms)
+    if not has_animal:
+        return False
+
+    has_human = any(term in t for term in human_terms)
+    return not has_human
+
+
+def _is_cold_pressor_false_positive(text: str) -> bool:
+    """Implements CPT disambiguation for the attention/vigilance query family (Section 2.5)."""
+    return "cold pressor" in text.lower()
+
+
+def _flag_rr_only_without_explicit_hrv(text: str) -> bool:
+    """Flag records mentioning RR/NN interval terms without explicit HRV descriptors (Section 2.5)."""
+    t = text.lower()
+    has_rr = "rr interval" in t or "nn interval" in t
+    has_explicit_hrv = any(
+        token in t
+        for token in (
+            "heart rate variability",
+            " hrv ",
+            "rmssd",
+            "sdnn",
+            "hf-hrv",
+        )
+    )
+    return has_rr and not has_explicit_hrv
+
+
+def _open_access_flag(rec: Mapping[str, Any]) -> bool:
+    """Parse Europe PMC open-access metadata when present."""
+    val = rec.get("isOpenAccess")
+    if isinstance(val, str):
+        return val.strip().upper() == "Y"
+    if isinstance(val, bool):
+        return val
+    return False
+
+
+def _doi_missing(rec: Mapping[str, Any]) -> bool:
+    """Return True if DOI metadata is absent/blank."""
+    doi = rec.get("doi")
+    return not (isinstance(doi, str) and doi.strip())
+
+
+def _retrieve_all(
+    query_families: Iterable[QueryFamily],
+    *,
+    page_size: int,
+    max_pages_per_query: int,
+    timeout_s: float,
+    polite_sleep_s: float,
+    max_total_records: int,
+) -> tuple[int, dict[str, int], list[tuple[str, dict[str, Any]]]]:
+    """Retrieve all query-family results (sum counts, keep raw records)."""
+    if max_total_records <= 0:
+        raise ValueError("max_total_records must be > 0")
+
+    identified_total = 0
+    per_family_counts: dict[str, int] = {}
+    raw: list[tuple[str, dict[str, Any]]] = []
+
+    for qf in query_families:
+        results = list(
+            _iter_epmc_results(
+                qf.query,
+                page_size=page_size,
+                max_pages=max_pages_per_query,
+                timeout_s=timeout_s,
+                polite_sleep_s=polite_sleep_s,
+            )
+        )
+        per_family_counts[qf.name] = len(results)
+        identified_total += len(results)
+
+        if identified_total > max_total_records:
+            raise RuntimeError(
+                f"Aborting: identified_total exceeded max_total_records ({identified_total} > {max_total_records})"
+            )
+
+        for rec in results:
+            raw.append((qf.name, rec))
+
+    return identified_total, per_family_counts, raw
+
+
+def _deduplicate(
+    raw: Iterable[tuple[str, Mapping[str, Any]]],
+) -> tuple[int, dict[str, dict[str, Any]], int]:
+    """Deduplicate by DOI (case-insensitive), else PMID, else Europe PMC id."""
+    duplicates_removed = 0
+    unique: dict[str, dict[str, Any]] = {}
+
+    for _family, rec in raw:
+        key = _dedup_key(rec)
+        if key in unique:
+            duplicates_removed += 1
+            continue
+        unique[key] = dict(rec)
+
+    unique_without_doi = sum(1 for rec in unique.values() if _doi_missing(rec))
+    return duplicates_removed, unique, unique_without_doi
+
+
+def _screen_records(
+    records: Mapping[str, Mapping[str, Any]],
+) -> tuple[int, int, int, dict[str, dict[str, Any]], int]:
+    """Apply deterministic screening (non-human-only; cold pressor CPT disambiguation)."""
+    excluded_non_human_only = 0
+    excluded_cold_pressor = 0
+    flagged_rr_only = 0
+    retained: dict[str, dict[str, Any]] = {}
+
+    for key, rec in records.items():
+        text = _record_text(rec)
+        if _is_non_human_only(text):
+            excluded_non_human_only += 1
+            continue
+        if _is_cold_pressor_false_positive(text):
+            excluded_cold_pressor += 1
+            continue
+
+        retained[key] = dict(rec)
+        if _flag_rr_only_without_explicit_hrv(text):
+            flagged_rr_only += 1
+
+    screened = len(records)
+    return screened, excluded_non_human_only, excluded_cold_pressor, retained, flagged_rr_only
+
+
+def _summarize_retained(
+    retained: Mapping[str, Mapping[str, Any]],
+) -> tuple[int, Counter[int], Counter[str]]:
+    """Summarize year, journal, and open-access counts for retained records."""
+    year_counter: Counter[int] = Counter()
+    journal_counter: Counter[str] = Counter()
+    open_access = 0
+
+    for rec in retained.values():
+        year_str = rec.get("pubYear")
+        if isinstance(year_str, str) and year_str.isdigit():
+            year_counter[int(year_str)] += 1
+
+        journal = rec.get("journalTitle")
+        if isinstance(journal, str) and journal.strip():
+            journal_counter[journal.strip()] += 1
+
+        if _open_access_flag(rec):
+            open_access += 1
+
+    return open_access, year_counter, journal_counter
+
+
+def _print_report(
+    *,
+    identified_total: int,
+    per_family_counts: Mapping[str, int],
+    duplicates_removed: int,
+    unique_count: int,
+    unique_without_doi: int,
+    screened: int,
+    excluded_non_human_only: int,
+    excluded_cold_pressor: int,
+    retained_count: int,
+    flagged_rr_only: int,
+    open_access: int,
+    year_counter: Counter[int],
+    journal_counter: Counter[str],
+) -> None:
+    """Print a process-level report that mirrors Section 3.0."""
+    print("=== Europe PMC scoping component: reproducible process output ===")
+    print(f"Records identified (sum across query families): {identified_total}")
+
+    print("Query-family yields (not mutually exclusive due to overlap):")
+    for name in sorted(per_family_counts):
+        print(f"- {name}: {per_family_counts[name]}")
+
+    print(f"Duplicates removed (DOI/PMID rule): {duplicates_removed}")
+    print(f"Unique records mapped: {unique_count}")
+    print(f"Unique records without a DOI: {unique_without_doi}")
+    print(f"Screened (title/abstract, rule-based): {screened}")
+    print(f"Excluded as non-human-only: {excluded_non_human_only}")
+    print(f"Excluded as cold pressor false positives: {excluded_cold_pressor}")
+    print(f"Records retained for evidence mapping: {retained_count}")
+    print(f"Flagged RR/NN-only without explicit HRV descriptors: {flagged_rr_only}")
+
+    if retained_count:
+        oa_pct = 100.0 * (open_access / retained_count)
+        print(f"Open access flagged: {open_access}/{retained_count} ({oa_pct:.1f}%)")
+
+    print("\nTop journals (by Europe PMC journalTitle):")
+    for title, n in journal_counter.most_common(10):
+        print(f"- {title}: {n}")
+
+    print("\nYear distribution (pubYear):")
+    for year in sorted(year_counter):
+        print(f"- {year}: {year_counter[year]}")
+
+
+def run_scoping_component() -> None:
+    """Execute the HRV–cognition scoping retrieval, deduplication, and screening."""
+    query_families = _build_query_families()
+
+    # Bounded networking / pagination controls.
+    page_size = 1000
+    max_pages_per_query = 50
+    timeout_s = 30.0
+    polite_sleep_s = 0.1
+    max_total_records = 250_000
+
+    identified_total, per_family_counts, raw = _retrieve_all(
+        query_families,
+        page_size=page_size,
+        max_pages_per_query=max_pages_per_query,
+        timeout_s=timeout_s,
+        polite_sleep_s=polite_sleep_s,
+        max_total_records=max_total_records,
+    )
+
+    duplicates_removed, unique_records, unique_without_doi = _deduplicate(raw)
+    screened, excluded_non_human_only, excluded_cold_pressor, retained, flagged_rr_only = _screen_records(
+        unique_records
+    )
+    open_access, year_counter, journal_counter = _summarize_retained(retained)
+
+    _print_report(
+        identified_total=identified_total,
+        per_family_counts=per_family_counts,
+        duplicates_removed=duplicates_removed,
+        unique_count=len(unique_records),
+        unique_without_doi=unique_without_doi,
+        screened=screened,
+        excluded_non_human_only=excluded_non_human_only,
+        excluded_cold_pressor=excluded_cold_pressor,
+        retained_count=len(retained),
+        flagged_rr_only=flagged_rr_only,
+        open_access=open_access,
+        year_counter=year_counter,
+        journal_counter=journal_counter,
+    )
+
+
+def main() -> None:
+    """Entry point."""
+    run_scoping_component()
+
+
+if __name__ == "__main__":
+    main()
+```
+
+### C.4. Alignment to Methods (Section 2.5)
+
+- **Retrieval:** Uses Europe PMC REST API with `resultType=lite`, `pageSize=1000`, and `cursorMark` pagination.
+- **Deduplication:** DOI (case-insensitive) → PMID → Europe PMC id.
+- **Title/abstract screening:** deterministic “non-human-only” exclusion and “cold pressor” CPT disambiguation.
+
+**Implementation note:** The script intentionally prints process-level counts and metadata summaries; it does not perform full-text eligibility or risk-of-bias assessment, consistent with the scoping design.
