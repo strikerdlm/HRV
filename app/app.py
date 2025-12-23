@@ -6534,11 +6534,53 @@ def main() -> None:
         psd_method = st.sidebar.selectbox(
             "PSD method", ["welch", "periodogram", "ar"], index=0
         )
+        # ------------------------------------------------------------------
+        # Low-end performance gates (master toggles)
+        # ------------------------------------------------------------------
+        _heavy_compute_default = False
+        _heavy_downloads_default = False
+        if PERFORMANCE_UTILS_AVAILABLE:
+            try:
+                _perf_defaults = get_performance_settings()
+                _heavy_compute_default = bool(_perf_defaults.get("enable_heavy_compute", False))
+                _heavy_downloads_default = bool(
+                    _perf_defaults.get("enable_heavy_downloads", False)
+                )
+            except Exception:
+                _perf_defaults = None
+        else:
+            _perf_defaults = None
+
+        heavy_compute_enabled = st.sidebar.checkbox(
+            "Enable heavy computations (advanced/ML)",
+            value=bool(_heavy_compute_default),
+            help="Master switch for expensive analytics. Recommended OFF on low-end CPUs.",
+            key="perf_gate_heavy_compute",
+        )
+        heavy_downloads_enabled = st.sidebar.checkbox(
+            "Enable heavy downloads (NOAA/DONKI/background fetch)",
+            value=bool(_heavy_downloads_default),
+            help="Master switch for large/background network fetches. Recommended OFF on slow networks/low-end PCs.",
+            key="perf_gate_heavy_downloads",
+        )
+        if isinstance(_perf_defaults, dict):
+            _perf_defaults["enable_heavy_compute"] = bool(heavy_compute_enabled)
+            _perf_defaults["enable_heavy_downloads"] = bool(heavy_downloads_enabled)
+
         fast_windowing = st.sidebar.checkbox(
-            "Fast time-domain windowing (skip spectral/nonlinear in windows)", value=True)
+            "Fast time-domain windowing (skip spectral/nonlinear in windows)",
+            value=True,
+            disabled=not bool(heavy_compute_enabled),
+        )
         high_compute = st.sidebar.checkbox(
             "Advanced analysis (high compute for full-recording metrics)",
-            value=False)
+            value=False,
+            disabled=not bool(heavy_compute_enabled),
+        )
+        if not heavy_compute_enabled:
+            # Enforce the safe/fast path (widgets are disabled but keep values explicit).
+            fast_windowing = True
+            high_compute = False
         st.sidebar.markdown("---")
         st.sidebar.subheader("Deviation detection")
         apply_dev = st.sidebar.checkbox(
@@ -6592,7 +6634,9 @@ def main() -> None:
 
         st.sidebar.subheader("ML enhancements")
         enable_ml = st.sidebar.checkbox(
-            "Enable ML-assisted deviation clustering", value=True
+            "Enable ML-assisted deviation clustering",
+            value=bool(heavy_compute_enabled),
+            disabled=not bool(heavy_compute_enabled),
         )
         
         # Performance settings (CPU optimization)
@@ -11964,6 +12008,22 @@ that predicts cognitive performance based on:
             donki_state = _donki_state()
 
             # Performance control: allow disabling background auto-fetch for faster initial load
+            # and provide a master "heavy downloads" gate for low-end hardware/networks.
+            _heavy_downloads_enabled = False
+            if PERFORMANCE_UTILS_AVAILABLE:
+                try:
+                    _heavy_downloads_enabled = bool(
+                        get_performance_settings().get("enable_heavy_downloads", False)
+                    )
+                except Exception:
+                    _heavy_downloads_enabled = False
+            else:
+                _heavy_downloads_enabled = bool(st.session_state.get("enable_heavy_downloads", False))
+
+            if not _heavy_downloads_enabled:
+                # Ensure the per-tab toggle is not left "on" when downloads are globally gated.
+                st.session_state["space_auto_fetch_enabled"] = False
+
             perf_col1, perf_col2 = st.columns([1, 3])
             with perf_col1:
                 auto_fetch_enabled = st.checkbox(
@@ -11971,9 +12031,13 @@ that predicts cognitive performance based on:
                     value=bool(st.session_state.get("space_auto_fetch_enabled", False)),  # Default OFF for faster startup
                     key="space_auto_fetch_enabled",
                     help="When enabled, NOAA/DONKI fetch runs automatically in the background when you open this tab.",
+                    disabled=not _heavy_downloads_enabled,
                 )
             with perf_col2:
-                st.caption("Tip: Leave this off for quicker tab load; use the fetch buttons below when needed.")
+                if not _heavy_downloads_enabled:
+                    st.caption("Enable heavy downloads in ⚡ Performance Settings to fetch NOAA/DONKI data.")
+                else:
+                    st.caption("Tip: Leave this off for quicker tab load; use the fetch buttons below when needed.")
 
             # Start background fetch lazily only when enabled
             if auto_fetch_enabled:
@@ -11996,7 +12060,14 @@ that predicts cognitive performance based on:
                     },
                 }
                 if not space_state.get("loaded"):
-                    st.info("Auto-fetch is off. Click “📥 Fetch space weather” or “🌐 Fetch NASA DONKI” to load data.")
+                    if not _heavy_downloads_enabled:
+                        st.info(
+                            "Heavy downloads are disabled. Enable them in ⚡ Performance Settings to fetch space weather / DONKI data."
+                        )
+                    else:
+                        st.info(
+                            "Auto-fetch is off. Click “📥 Fetch space weather” or “🌐 Fetch NASA DONKI” to load data."
+                        )
 
             # Data age indicator
             data_age = _get_bg_fetch_age_str()
@@ -12005,14 +12076,18 @@ that predicts cognitive performance based on:
             with col_fetch_sw:
                 fetch_sw_clicked = st.button(
                     "📥 Fetch space weather", key="fetch_space_weather",
-                    help="Fetch Kp index and solar radio flux from NOAA SWPC"
+                    help="Fetch Kp index and solar radio flux from NOAA SWPC",
+                    disabled=not _heavy_downloads_enabled,
                 )
             with col_fetch_donki:
                 fetch_donki_clicked = st.button(
                     "🌐 Fetch NASA DONKI",
                     key="fetch_donki",
-                    disabled=not NASA_API_KEY,
-                    help="Requires NASA_API_KEY in your .env file.",
+                    disabled=(not _heavy_downloads_enabled) or (not NASA_API_KEY),
+                    help=(
+                        "Requires NASA_API_KEY in your .env file. "
+                        "Also requires enabling heavy downloads in ⚡ Performance Settings."
+                    ),
                 )
             with col_bg_info:
                 # Non-intrusive background fetch status with data age
@@ -13438,8 +13513,20 @@ that predicts cognitive performance based on:
             _noaa_loading_msg.info("Loading NOAA Space dashboard…")
             st.markdown("*Real-time solar and geomagnetic data for physiology correlation analysis*")
         
-            # Start background fetch lazily when this tab is opened
-            _ensure_background_fetch_for_space_tabs()
+            _heavy_downloads_enabled = False
+            if PERFORMANCE_UTILS_AVAILABLE:
+                try:
+                    _heavy_downloads_enabled = bool(
+                        get_performance_settings().get("enable_heavy_downloads", False)
+                    )
+                except Exception:
+                    _heavy_downloads_enabled = False
+            else:
+                _heavy_downloads_enabled = bool(st.session_state.get("enable_heavy_downloads", False))
+
+            # Start background fetch lazily when this tab is opened (optional for low-end hardware)
+            if _heavy_downloads_enabled:
+                _ensure_background_fetch_for_space_tabs()
 
             with st.expander("🌞 **Understanding Space Weather Metrics**", expanded=False):
                 st.markdown("""
@@ -13466,10 +13553,13 @@ that predicts cognitive performance based on:
         
             noaa_state = _noaa_space_state()
             # Check if background fetch already populated data; skip redundant auto-fetch
-            try:
-                bg_status = _poll_background_fetch()
-            except Exception:
-                bg_status = {"noaa": {"done": False, "error": None, "stale": False}}
+            if _heavy_downloads_enabled:
+                try:
+                    bg_status = _poll_background_fetch()
+                except Exception:
+                    bg_status = {"noaa": {"done": False, "error": None, "stale": False}}
+            else:
+                bg_status = {"noaa": {"done": bool(noaa_state.get("bundles")), "error": None, "stale": False}}
 
             # NOTE: Auto-fetch disabled to prevent blocking UI. User can click fetch buttons.
             # If background fetch completed, data will appear automatically.
@@ -13483,12 +13573,14 @@ that predicts cognitive performance based on:
             with col_fetch_noaa:
                 fetch_noaa_clicked = st.button(
                     "📥 Fetch NOAA feeds", key="fetch_noaa_space_data",
-                    help="Load NOAA feeds (uses cache if available)"
+                    help="Load NOAA feeds (uses cache if available)",
+                    disabled=not _heavy_downloads_enabled,
                 )
             with col_refresh_noaa:
                 refresh_noaa_clicked = st.button(
                     "🔄 Force refresh", key="refresh_noaa_space_data",
-                    help="Bypass cache and fetch fresh data from NOAA servers"
+                    help="Bypass cache and fetch fresh data from NOAA servers",
+                    disabled=not _heavy_downloads_enabled,
                 )
             with col_bg_status:
                 # Show background fetch status with data age (non-intrusive)
@@ -13502,10 +13594,10 @@ that predicts cognitive performance based on:
                 else:
                     st.caption(f"✅ Data: {data_age} | Auto-refresh: 12h")
 
-            if fetch_noaa_clicked:
+            if fetch_noaa_clicked and _heavy_downloads_enabled:
                 with st.spinner("Fetching NOAA JSON feeds…"):
                     _load_noaa_space_datasets(noaa_state)
-            if refresh_noaa_clicked:
+            if refresh_noaa_clicked and _heavy_downloads_enabled:
                 with st.spinner("Refreshing NOAA JSON feeds…"):
                     _load_noaa_space_datasets(noaa_state, use_cache=False)
             # Auto-load uses cache-first; buttons remain for manual refresh/force refresh
@@ -13527,7 +13619,14 @@ that predicts cognitive performance based on:
                     and pd.api.types.is_numeric_dtype(windowed_df[metric])
                 ]
             if not bundles:
-                st.info("📡 Click **Fetch NOAA feeds** above to load solar/geomagnetic data, or wait for the background fetch to complete.")
+                if not _heavy_downloads_enabled:
+                    st.info(
+                        "📡 Heavy downloads are disabled. Enable them in ⚡ Performance Settings to fetch NOAA feeds."
+                    )
+                else:
+                    st.info(
+                        "📡 Click **Fetch NOAA feeds** above to load solar/geomagnetic data, or wait for the background fetch to complete."
+                    )
             else:
                 option_labels = {
                     key: bundle.spec.title for key, bundle in bundles.items()

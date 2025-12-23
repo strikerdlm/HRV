@@ -4410,3 +4410,28 @@ If you're interested in contributing to any of these developments:
 ---
 
 *Last updated: December 3, 2025*
+
+---
+
+## Performance Updates (Appendix — Dec 23, 2025)
+
+### Low-End Computers / Slow Networks: Two Master Gates
+
+To keep the app responsive on low-end hardware, two global checkboxes act as **master gates** for expensive work:
+
+- **Enable heavy computations (advanced/ML)** (sidebar):
+  - When **OFF**, the app forces the fast analysis path (advanced full-recording metrics and ML-assisted deviation clustering are disabled).
+  - Windowed analysis remains available in **fast time-domain** mode.
+- **Enable heavy downloads (NOAA/DONKI/background fetch)** (sidebar):
+  - When **OFF**, background fetching and large network pulls are disabled on Space Weather / NOAA Space tabs.
+  - This prevents slow or unstable networks from causing “always running / faded UI” behavior.
+
+### Where to Find the Controls
+
+- **Sidebar (HRV Analysis tab)**: controls that directly affect HRV computation and clustering.
+- **⚡ Performance Settings**: CPU-tier presets plus the same resource gates for quick tuning.
+
+### Recommended Settings (low-end)
+
+- Leave **Enable heavy computations** OFF unless you specifically need advanced metrics.
+- Leave **Enable heavy downloads** OFF unless you specifically need NOAA/DONKI data in the current session.

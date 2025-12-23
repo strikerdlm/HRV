@@ -1263,3 +1263,13 @@ UI updates and integration by Dr. Diego L. Malpica
 ---
 
 *For detailed feature documentation, see `docs/Manual.md`*
+
+## [Unreleased] - 2025-12-23
+
+### Performance
+- **Low-end “master gates”** (`app/app.py`, `app/performance_utils.py`): Added two checkboxes to make expensive work explicitly optional:
+  - **Enable heavy computations (advanced/ML)** gates advanced full-recording metrics + ML clustering.
+  - **Enable heavy downloads (NOAA/DONKI/background fetch)** gates background fetch + large network pulls in Space Weather / NOAA Space tabs.
+
+### Documentation
+- Appended low-end performance guidance to `README.md` and `docs/Manual.md`.

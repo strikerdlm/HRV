@@ -841,3 +841,14 @@ MIT License — See [LICENSE](LICENSE) for details.
 - **Documentation**: See `docs/Manual.md` for comprehensive usage guide
 - **Issues**: Open a GitHub issue for bugs or feature requests
 - **Discussions**: Use GitHub Discussions for questions
+
+---
+
+## ⚡ Low-End Performance Mode (New)
+
+If you are running on a low-end computer (or a slow network), use the **two master gates** in the sidebar **before** running analysis or fetching remote data:
+
+- **Enable heavy computations (advanced/ML)**: When OFF, advanced full-recording metrics and ML-assisted deviation clustering are disabled (fastest, most reliable).
+- **Enable heavy downloads (NOAA/DONKI/background fetch)**: When OFF, the Space Weather / NOAA Space tabs avoid background fetches and disable large fetch buttons to keep the UI responsive.
+
+These gates are also available under **⚡ Performance Settings** and default **OFF** for low/medium CPU tiers.

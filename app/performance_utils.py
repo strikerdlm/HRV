@@ -422,6 +422,8 @@ def get_performance_settings() -> Dict[str, Any]:
             # Set defaults based on CPU performance tier
             if cpu_info.performance_tier == "high":
                 defaults = {
+                    "enable_heavy_compute": True,
+                    "enable_heavy_downloads": True,
                     "enable_heavy_plots": True,
                     # Default to ultra-fast plotting for rapid identification demos.
                     # Users can raise this via Performance Preset / Custom sliders.
@@ -436,6 +438,8 @@ def get_performance_settings() -> Dict[str, Any]:
                 }
             elif cpu_info.performance_tier == "medium":
                 defaults = {
+                    "enable_heavy_compute": False,
+                    "enable_heavy_downloads": False,
                     "enable_heavy_plots": False,
                     "max_plot_points": 500,
                     "max_dataframe_rows": 300,
@@ -448,6 +452,8 @@ def get_performance_settings() -> Dict[str, Any]:
                 }
             else:  # low
                 defaults = {
+                    "enable_heavy_compute": False,
+                    "enable_heavy_downloads": False,
                     "enable_heavy_plots": False,
                     "max_plot_points": 500,
                     "max_dataframe_rows": 150,
@@ -473,6 +479,8 @@ def get_performance_settings() -> Dict[str, Any]:
 def _get_fallback_defaults() -> Dict[str, Any]:
     """Get conservative fallback defaults when CPU detection is unavailable."""
     return {
+        "enable_heavy_compute": False,
+        "enable_heavy_downloads": False,
         "enable_heavy_plots": False,
         "max_plot_points": 500,
         "max_dataframe_rows": 200,
@@ -531,6 +539,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["enable_heavy_plots"] = False
             settings["optimize_memory"] = True
             settings["use_fast_entropy"] = True
+            settings["enable_heavy_compute"] = False
+            settings["enable_heavy_downloads"] = False
         elif preset == "Quality (High CPU)":
             settings["max_plot_points"] = 5000
             settings["max_dataframe_rows"] = 1000
@@ -538,6 +548,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["enable_heavy_plots"] = True
             settings["optimize_memory"] = False
             settings["use_fast_entropy"] = False
+            settings["enable_heavy_compute"] = True
+            settings["enable_heavy_downloads"] = True
         elif preset == "Balanced":
             settings["max_plot_points"] = 2000
             settings["max_dataframe_rows"] = 500
@@ -545,6 +557,8 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
             settings["enable_heavy_plots"] = False
             settings["optimize_memory"] = True
             settings["use_fast_entropy"] = True
+            settings["enable_heavy_compute"] = False
+            settings["enable_heavy_downloads"] = False
         
         # Only show sliders if Custom
         if preset == "Custom":
@@ -599,6 +613,25 @@ def render_performance_settings_sidebar() -> Dict[str, Any]:
                 f"Rows: {settings.get('max_dataframe_rows', 200)} | "
                 f"Windows: {settings.get('max_windows', 500)}"
             )
+
+        st.markdown("---")
+        st.caption("Resource gates (recommended for low-end hardware):")
+        settings["enable_heavy_compute"] = st.checkbox(
+            "Enable heavy computations",
+            value=bool(settings.get("enable_heavy_compute", False)),
+            help=(
+                "Master switch for expensive computations (advanced full-recording metrics, "
+                "windowed spectral/nonlinear options, and other CPU-heavy analytics)."
+            ),
+        )
+        settings["enable_heavy_downloads"] = st.checkbox(
+            "Enable heavy downloads",
+            value=bool(settings.get("enable_heavy_downloads", False)),
+            help=(
+                "Allow large/background network fetches (e.g., NOAA SWPC feeds and NASA DONKI). "
+                "When disabled, tabs will avoid auto-fetch and may disable fetch buttons."
+            ),
+        )
         
         # Show current performance metrics
         if st.button("📈 Show Performance Stats", key="perf_stats_btn"):
