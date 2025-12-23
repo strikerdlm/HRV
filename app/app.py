@@ -521,7 +521,6 @@ load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
 _LOGGER = get_logger(__name__)
 NASA_API_KEY = os.getenv("NASA_API_KEY", "")
 ACCUWEATHER_API_KEY = os.getenv("ACCUWEATHER_API_KEY", "")
-DEBUG_LOG_PATH = Path(__file__).resolve().parents[1] / ".cursor" / "debug.log"
 
 
 def _agent_debug_log(
@@ -530,7 +529,28 @@ def _agent_debug_log(
     message: str,
     data: Mapping[str, Any],
 ) -> None:
-    """Append NDJSON instrumentation logs for debug runs."""
+    """Emit structured debug instrumentation to the main logger.
+
+    This is disabled by default to avoid triggering Streamlit file-watcher reruns
+    on Windows/OneDrive deployments. Enable via `HRV_AGENT_DEBUG_LOG=1` or the
+    Developer Tools debug toggle.
+    """
+
+    enabled = False
+    if os.environ.get("HRV_AGENT_DEBUG_LOG", "").strip() == "1":
+        enabled = True
+    else:
+        try:
+            enabled = bool(
+                st.session_state.get("_debug_mode_checkbox", False)
+                or st.session_state.get("_debug_mode_enabled", False)
+            )
+        except Exception:
+            enabled = False
+
+    if not enabled:
+        return
+
     payload = {
         "sessionId": "debug-session",
         "runId": "pre-fix",
@@ -541,10 +561,10 @@ def _agent_debug_log(
         "timestamp": int(time.time() * 1000),
     }
     try:
-        with open(DEBUG_LOG_PATH, "a", encoding="utf-8") as log_file:
-            log_file.write(json.dumps(payload, default=str) + "\n")
-    except OSError:
-        pass
+        _LOGGER.debug("agent_debug_event=%s", json.dumps(payload, default=str))
+    except Exception:
+        # Never crash the UI due to debug instrumentation.
+        return
 
 
 @lru_cache(maxsize=1)
@@ -8051,7 +8071,16 @@ def main() -> None:
             except Exception:
                 pass
         if USER_PROFILE_TAB_AVAILABLE:
-            render_user_profile_tab()
+            try:
+                render_user_profile_tab()
+            except Exception as exc:  # pragma: no cover - UI safety net
+                log_exception(_LOGGER, "User Profile tab crashed (skipping)", exc)
+                st.error(
+                    "User Profile encountered an error and was skipped so the rest of the app can continue. "
+                    "Check `logs/errors.log` for details."
+                )
+                with st.expander("Error details", expanded=False):
+                    st.code(str(exc))
         else:
             st.markdown("### 👤 User Profile")
             st.warning(
@@ -12211,42 +12240,27 @@ that predicts cognitive performance based on:
         # =====================================================================
         # IMPACT PREDICTION SECTION - Expected hit times for Bogotá, Colombia
         # =====================================================================
-        if _sw_content_loaded and SPACE_WEATHER_IMPACT_AVAILABLE:
-            st.markdown("---")
-            st.markdown("### 🎯 Space Weather Impact Predictions")
-            st.markdown(f"*All times in Bogotá, Colombia ({BOGOTA_TZ_NAME})*")
-            
-            # Session state for impact snapshot
-            if "impact_snapshot" not in st.session_state:
-                st.session_state["impact_snapshot"] = None
-            if "impact_snapshot_error" not in st.session_state:
-                st.session_state["impact_snapshot_error"] = ""
-            if "impact_snapshot_loading" not in st.session_state:
-                st.session_state["impact_snapshot_loading"] = False
-            if "impact_snapshot_attempted" not in st.session_state:
-                # Default to True so auto-fetch is disabled on initial load (faster startup)
-                # Users can click "Fetch Impact Predictions" button when they want the data
-                st.session_state["impact_snapshot_attempted"] = True
-            
-                # Only auto-fetch if not already loaded, not currently loading, and not already attempted
-                if (
-                    st.session_state.get("impact_snapshot") is None
-                    and not st.session_state.get("impact_snapshot_error")
-                    and not st.session_state.get("impact_snapshot_loading")
-                    and not st.session_state.get("impact_snapshot_attempted")
-                ):
-                    st.session_state["impact_snapshot_loading"] = True
-                    try:
-                        st.session_state["impact_snapshot"] = fetch_space_weather_snapshot()
-                        st.session_state["impact_snapshot_error"] = ""
-                        st.session_state["impact_snapshot_attempted"] = True
-                    except Exception as exc:
-                        log_exception(_LOGGER, "Automatic impact prediction fetch failed", exc)
-                        st.session_state["impact_snapshot_error"] = str(exc)
-                        st.session_state["impact_snapshot_attempted"] = True
-                    finally:
-                        st.session_state["impact_snapshot_loading"] = False
-            
+        if _sw_content_loaded:
+            if not is_download_enabled("space_weather_impact"):
+                st.markdown("---")
+                st.info(
+                    "Impact predictions are disabled by **⚡ Performance Settings → Downloads**. "
+                    "Enable **Space Weather Impact Predictions** to use this section."
+                )
+                st.markdown("---")
+            elif SPACE_WEATHER_IMPACT_AVAILABLE:
+                st.markdown("---")
+                st.markdown("### 🎯 Space Weather Impact Predictions")
+                st.markdown(f"*All times in Bogotá, Colombia ({BOGOTA_TZ_NAME})*")
+
+                # Session state for impact snapshot
+                if "impact_snapshot" not in st.session_state:
+                    st.session_state["impact_snapshot"] = None
+                if "impact_snapshot_error" not in st.session_state:
+                    st.session_state["impact_snapshot_error"] = ""
+                if "impact_snapshot_loading" not in st.session_state:
+                    st.session_state["impact_snapshot_loading"] = False
+
                 col_fetch_impact, col_refresh_info = st.columns([1, 2])
                 with col_fetch_impact:
                     if st.button("🔄 Fetch Impact Predictions", key="fetch_impact_predictions"):
@@ -12256,11 +12270,9 @@ that predicts cognitive performance based on:
                                 snapshot = fetch_space_weather_snapshot()
                             st.session_state["impact_snapshot"] = snapshot
                             st.session_state["impact_snapshot_error"] = ""
-                            st.session_state["impact_snapshot_attempted"] = True
                         except Exception as exc:
                             log_exception(_LOGGER, "Manual impact prediction fetch failed", exc)
                             st.session_state["impact_snapshot_error"] = str(exc)
-                            st.session_state["impact_snapshot_attempted"] = True
                             st.error(f"Failed to fetch impact predictions: {exc}")
                         finally:
                             st.session_state["impact_snapshot_loading"] = False
@@ -12268,13 +12280,13 @@ that predicts cognitive performance based on:
                     if st.session_state.get("impact_snapshot"):
                         snap = st.session_state["impact_snapshot"]
                         st.caption(f"Last updated: {format_datetime_bogota(snap.timestamp_utc)}")
-            
+
                 snapshot = st.session_state.get("impact_snapshot")
                 if snapshot is not None:
                     # Priority recommendation banner
                     recommendation = get_priority_recommendation(snapshot)
                     most_severe = snapshot.most_severe()
-                
+
                     if most_severe:
                         severity_color = get_severity_color(most_severe.severity)
                         st.markdown(
@@ -12294,11 +12306,11 @@ that predicts cognitive performance based on:
                             """,
                             unsafe_allow_html=True,
                         )
-                
+
                     # Impact arrival times table
                     st.markdown("#### ⏰ Expected Impact Times (Bogotá)")
                     impact_df = build_impact_summary_df(snapshot)
-                
+
                     if not impact_df.empty:
                         # Highlight styling for severity
                         def style_severity(val: str) -> str:
@@ -12311,20 +12323,16 @@ that predicts cognitive performance based on:
                                 "QUIET": "background-color: #64748b20; color: #64748b",
                             }
                             return colors.get(val, "")
-                    
+
                         # Use map for pandas >= 2.1, fallback to applymap for older versions
                         try:
-                            styled_df = impact_df.style.map(
-                                style_severity, subset=["Severity"]
-                            )
+                            styled_df = impact_df.style.map(style_severity, subset=["Severity"])
                         except AttributeError:
-                            styled_df = impact_df.style.applymap(
-                                style_severity, subset=["Severity"]
-                            )
+                            styled_df = impact_df.style.applymap(style_severity, subset=["Severity"])
                         st.dataframe(styled_df, use_container_width=True, hide_index=True)
                     else:
                         st.info("No impact events detected. Click 'Fetch Impact Predictions' to update.")
-                
+
                     # Individual event cards with detailed info
                     with st.expander("📋 Detailed Event Information & Polar H10 Instructions", expanded=True):
                         events = snapshot.all_events()
@@ -12332,7 +12340,7 @@ that predicts cognitive performance based on:
                             for event in events:
                                 icon = get_category_icon(event.category)
                                 severity_color = get_severity_color(event.severity)
-                            
+
                                 st.markdown(
                                     f"""
                                     <div style="
@@ -12356,7 +12364,7 @@ that predicts cognitive performance based on:
                                 )
                         else:
                             st.info("No significant events detected.")
-                
+
                     # Show any errors
                     if snapshot.errors:
                         with st.expander("⚠️ Data Fetch Warnings"):
@@ -12366,14 +12374,22 @@ that predicts cognitive performance based on:
                     error_msg = st.session_state.get("impact_snapshot_error")
                     if error_msg:
                         st.warning(
-                            f"Impact predictions are temporarily unavailable; using last known data when possible. Details: {error_msg}"
+                            "Impact predictions are temporarily unavailable; using last known data when possible. "
+                            f"Details: {error_msg}"
                         )
                     else:
                         st.info(
                             "Click **'Fetch Impact Predictions'** to calculate expected arrival times "
                             "for space weather events and get Polar H10 monitoring recommendations."
                         )
-            
+
+                st.markdown("---")
+            else:
+                st.markdown("---")
+                st.info(
+                    "Impact prediction module (`space_weather_impact.py`) is unavailable; "
+                    "continuing with the SWPC dashboard below."
+                )
                 st.markdown("---")
         
             # =====================================================================
