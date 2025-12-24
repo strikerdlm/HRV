@@ -1789,7 +1789,7 @@ def _load_noaa_space_datasets(
 def _load_noaa_space_cache_only(
     state: Dict[str, Any],
     *,
-    keys: Sequence[str],
+    keys: Optional[Sequence[str]] = None,
 ) -> None:
     """Populate NOAA datasets from local cache only (no network).
 
@@ -1799,7 +1799,7 @@ def _load_noaa_space_cache_only(
     state["loading"] = True
     try:
         bundles, errors = load_noaa_space_cache(
-            keys=list(keys),
+            keys=list(keys) if keys is not None else None,
             allow_stale_cache=True,
         )
         state["bundles"] = bundles
@@ -14057,6 +14057,12 @@ that predicts cognitive performance based on:
         # Background prefetch disabled: keep UI deterministic and instant.
         bg_status = {"noaa": {"done": True, "error": None, "stale": False}}
         data_age = "manual (click Fetch)"
+
+        # Auto-load a small cache-only snapshot once per session so the NOAA tab
+        # shows content immediately without any network calls.
+        if not bool(noaa_state.get("bundles")) and not bool(noaa_state.get("auto_attempted", False)):
+            _load_noaa_space_cache_only(noaa_state, keys=NOAA_FAST_KEYS)
+            noaa_state["auto_attempted"] = True
 
         col_load_cache, col_scope, col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns([1, 1, 1, 1, 2])
         with col_load_cache:
