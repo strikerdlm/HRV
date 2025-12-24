@@ -9466,6 +9466,10 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
                 if len(selected_metrics) < 2:
                     st.info("Select at least 2 metrics to compute correlations.")
                 else:
+                    st.info(
+                        "Correlations run only when you click **Run correlations**. "
+                        "A spinner will appear during computation; large selections may take a few seconds."
+                    )
                     run_metric_corr = st.button(
                         "Run correlations",
                         key="metric_corr_run",
@@ -9482,7 +9486,8 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
                             st.warning("Not enough valid metrics available for correlation analysis.")
                         else:
                             try:
-                                corr_df = multi_results_df[available_metrics].corr()
+                                with st.spinner("Computing correlations..."):
+                                    corr_df = multi_results_df[available_metrics].corr()
 
                                 if corr_df.empty or corr_df.isnull().all().all():
                                     st.warning("Could not compute correlations - insufficient data.")
@@ -14343,6 +14348,10 @@ that predicts cognitive performance based on:
                         st.session_state.pop("hrv_analysis_complete_signature", None)
                         st.rerun()
             else:
+                st.info(
+                    "Correlations run only when you click **Compute correlations**. "
+                    "This may take several seconds depending on window length; a spinner will show progress."
+                )
                 metrics_available = [
                     metric
                     for metric in metric_list
@@ -14462,6 +14471,10 @@ that predicts cognitive performance based on:
             elif not dataset_options:
                 st.info("Fetch NOAA feeds to enable batch correlations.")
             else:
+                st.info(
+                    "Batch correlations run only when you click **Run NOAA batch correlation**. "
+                    "Processing multiple feeds can take time; a spinner will be shown."
+                )
                 default_batch_metrics = metrics_available[: min(6, len(metrics_available))]
                 batch_metrics = st.multiselect(
                     "HRV metrics (batch)",
