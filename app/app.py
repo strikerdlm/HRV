@@ -16009,10 +16009,34 @@ that predicts cognitive performance based on:
         st.markdown("### ℹ️ About & Documentation")
         st.caption("Author credentials, changelog, and user manual for the HRV Analysis Suite.")
 
+        # The dedicated About renderer can be slow because it renders full docs.
+        # Default to a lightweight preview that always loads instantly; let users
+        # opt into the full page explicitly.
+        if "_about_show_full" not in st.session_state:
+            st.session_state["_about_show_full"] = False
+        show_full_about = bool(st.session_state.get("_about_show_full", False))
+
+        col_mode, col_hint = st.columns([1, 2])
+        with col_mode:
+            if not show_full_about:
+                if st.button("Load full About page", key="about_load_full"):
+                    st.session_state["_about_show_full"] = True
+                    st.rerun()
+            else:
+                if st.button("Show lightweight About (faster)", key="about_show_light"):
+                    st.session_state["_about_show_full"] = False
+                    st.rerun()
+        with col_hint:
+            st.caption(
+                "Tip: the full About page renders large documentation and may take longer. "
+                "Use lightweight mode for instant loading."
+            )
+
         rendered = False
-        if ABOUT_TAB_AVAILABLE and render_about_tab is not None:
+        if show_full_about and ABOUT_TAB_AVAILABLE and render_about_tab is not None:
             try:
-                render_about_tab()
+                with st.spinner("Loading the full About page..."):
+                    render_about_tab()
                 rendered = True
             except Exception as exc:  # pragma: no cover - defensive
                 log_exception(_LOGGER, "About tab render failed", exc)
