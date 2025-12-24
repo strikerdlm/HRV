@@ -10,9 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **HRV data survives WebSocket reconnects** (`app/app.py`): Added unconditional cache restoration at the start of `main()` so that `windowed_df`, `multi_results_df`, `meta_rows`, `ml_summary_df`, and `episodes_df` are always restored from session state on every script rerun. This ensures NOAA Space correlations, ML, and plots work correctly even after browser disconnects/reconnects.
 - **NOAA Space correlations and ML now display properly** (`app/app.py`): The correlation and batch ML sections no longer show "Run the HRV window analysis to enable…" after HRV analysis is completed; the cached results are now reliably available across tab switches and page scrolls.
+- **Red warning box placed directly below Mode badge** (`app/app.py`): Moved the "Heavy Computations" warning to render immediately after the Mode: Research badge at the top of the page, with matching purple/red styling.
 
 ### Changed
 - **Removed redundant cache rehydration code** (`app/app.py`): The late-stage rehydration block (added in 1.8.49) was replaced by the more robust unconditional restoration at variable initialization, simplifying the code flow.
+- **Removed misplaced tab disclaimers** (`app/app.py`): Removed the inline red disclaimer messages from inside Space Weather and NOAA Space tabs since the warning is now prominently placed at the top.
 
 ## [1.8.49] - 2025-12-23
 
