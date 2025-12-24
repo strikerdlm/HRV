@@ -841,6 +841,7 @@ def _get_current_user() -> Optional[UserProfile]:
 def _set_current_user(user: Optional[UserProfile]) -> None:
     """Set current user in session state, sync language, and register in multi-user manager."""
     st.session_state[_SESSION_CURRENT_USER] = user
+    st.session_state["user_logged_out"] = False
     if user:
         st.session_state[_SESSION_USER_ID] = user.user_id
         # Sync language preference from user profile
@@ -874,6 +875,7 @@ def _logout_and_preserve() -> None:
     current_id = st.session_state.get(_SESSION_USER_ID)
     st.session_state[_SESSION_CURRENT_USER] = None
     st.session_state.pop(_SESSION_USER_ID, None)
+    st.session_state["user_logged_out"] = True
     
     # Clear UI mode flags
     st.session_state.pop("edit_profile_mode", None)
