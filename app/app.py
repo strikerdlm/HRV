@@ -970,7 +970,8 @@ def _sync_fatigue_widgets(
 
 
 SWPC_BASE_URL = "https://services.swpc.noaa.gov/json/"
-SWPC_TIMEOUT = 8
+# Fast-fail SWPC fetches to avoid UI stalls on slow networks.
+SWPC_TIMEOUT = 4
 SWPC_EXTRA_DATASETS = {
     "Solar Regions": "solar_regions.json",
     "Solar Flare Probabilities": "solar_probabilities.json",
@@ -3198,15 +3199,19 @@ def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
         future_flux = executor.submit(_timed_call, get_swpc_solar_radio_flux)
 
         try:
-            kp_df, kp_duration_ms = future_kp.result()
+            kp_df, kp_duration_ms = future_kp.result(timeout=5.0)
             state["kp_df"] = kp_df
+        except concurrent.futures.TimeoutError:
+            state["kp_error"] = "Kp fetch timed out (>5s). Try again or use cached data."
         except (requests.RequestException, ValueError) as exc:
             log_exception(_LOGGER, "Failed to fetch SWPC K-index", exc)
             state["kp_error"] = f"Failed to retrieve K-index data: {exc}"
 
         try:
-            flux_df, flux_duration_ms = future_flux.result()
+            flux_df, flux_duration_ms = future_flux.result(timeout=5.0)
             state["flux_df"] = flux_df
+        except concurrent.futures.TimeoutError:
+            state["flux_error"] = "F10.7 fetch timed out (>5s). Try again or use cached data."
         except (requests.RequestException, ValueError) as exc:
             log_exception(_LOGGER, "Failed to fetch SWPC solar radio flux", exc)
             state["flux_error"] = f"Failed to retrieve solar radio flux: {exc}"
@@ -12482,27 +12487,13 @@ that predicts cognitive performance based on:
                 _load_space_weather_cache_only(space_state)
                 space_state["auto_attempted"] = True
 
-            # Optional background auto-refresh (OFF by default for fastest UI).
-            enable_bg_refresh = st.checkbox(
-                "Enable background prefetch (12h auto-refresh)",
-                value=False,
-                key="space_weather_bg_refresh_enable",
-                help=(
-                    "If enabled, SWPC + NOAA caches refresh in a background thread. "
-                    "Disable for fastest startup and to avoid UI slowdowns on some Windows/OneDrive setups."
-                ),
-            )
-            if enable_bg_refresh:
-                _ensure_background_fetch_for_space_tabs()
-                bg_status = _poll_background_fetch()
-                data_age = _get_bg_fetch_age_str()
-            else:
-                bg_status = {
-                    "space_weather": {"done": True, "error": None, "stale": False},
-                    "noaa": {"done": True, "error": None, "stale": False},
-                    "donki": {"done": True, "error": None, "stale": False},
-                }
-                data_age = "disabled"
+            # Background prefetch disabled: keep UI deterministic and instant.
+            bg_status = {
+                "space_weather": {"done": True, "error": None, "stale": False},
+                "noaa": {"done": True, "error": None, "stale": False},
+                "donki": {"done": True, "error": None, "stale": False},
+            }
+            data_age = "manual (click Fetch)"
 
             col_fetch_sw, col_fetch_donki, col_bg_info = st.columns([1, 1, 2])
             with col_fetch_sw:
@@ -12519,33 +12510,8 @@ that predicts cognitive performance based on:
                 )
             with col_bg_info:
                 # Non-intrusive background fetch status with data age
-                if not enable_bg_refresh:
-                    cache_hint = "cached" if space_state.get("loaded") else "no cache"
-                    st.caption(f"⏸️ Background prefetch: off | SWPC: {cache_hint}")
-                else:
-                    sw_done = bg_status["space_weather"]["done"]
-                    donki_done = bg_status["donki"]["done"]
-                    sw_stale = bg_status["space_weather"].get("stale", False)
-                    donki_stale = bg_status["donki"].get("stale", False)
-
-                    if not sw_done or not donki_done:
-                        pending = []
-                        if not sw_done:
-                            pending.append("SW")
-                        if not donki_done:
-                            pending.append("DONKI")
-                        st.caption(f"🔄 Fetching: {', '.join(pending)}…")
-                    elif bg_status["space_weather"]["error"] or bg_status["donki"]["error"]:
-                        err_parts = []
-                        if bg_status["space_weather"]["error"]:
-                            err_parts.append(f"SW: {bg_status['space_weather']['error'][:35]}")
-                        if bg_status["donki"]["error"]:
-                            err_parts.append(f"DONKI: {bg_status['donki']['error'][:35]}")
-                        st.caption(f"⚠️ {'; '.join(err_parts)}")
-                    elif sw_stale or donki_stale:
-                        st.caption(f"⏰ Data: {data_age} (auto-refresh pending)")
-                    else:
-                        st.caption(f"✅ Data: {data_age} | Auto-refresh: 12h")
+                cache_hint = "cached" if space_state.get("loaded") else "no cache"
+                st.caption(f"⏸️ Background prefetch disabled | SWPC cache: {cache_hint} | Refresh: click Fetch")
             donki_window_days = st.slider(
                 "DONKI window (days)",
                 min_value=7,
@@ -14048,26 +14014,9 @@ that predicts cognitive performance based on:
             _load_noaa_space_cache_only(noaa_state, keys=NOAA_FAST_KEYS)
             noaa_state["auto_attempted"] = True
 
-        # Optional background prefetch (OFF by default for fastest UI).
-        enable_noaa_bg = st.checkbox(
-            "Enable background prefetch (12h auto-refresh)",
-            value=False,
-            key="noaa_bg_refresh_enable",
-            help=(
-                "If enabled, SWPC + NOAA caches refresh in a background thread. "
-                "Disable for fastest startup and to avoid UI slowdowns on some Windows/OneDrive setups."
-            ),
-        )
-        if enable_noaa_bg:
-            try:
-                _ensure_background_fetch_for_space_tabs()
-                bg_status = _poll_background_fetch()
-            except Exception:
-                bg_status = {"noaa": {"done": False, "error": None, "stale": False}}
-            data_age = _get_bg_fetch_age_str()
-        else:
-            bg_status = {"noaa": {"done": True, "error": None, "stale": False}}
-            data_age = "disabled"
+        # Background prefetch disabled: keep UI deterministic and instant.
+        bg_status = {"noaa": {"done": True, "error": None, "stale": False}}
+        data_age = "manual (click Fetch)"
 
         col_scope, col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns([1, 1, 1, 2])
         with col_scope:
@@ -14101,19 +14050,8 @@ that predicts cognitive performance based on:
             )
         with col_bg_status:
             # Show background fetch status with data age (non-intrusive)
-            if not enable_noaa_bg:
-                cache_hint = "cached" if bool(noaa_state.get("bundles")) else "no cache"
-                st.caption(f"⏸️ Background prefetch: off | NOAA: {cache_hint}")
-            else:
-                noaa_status = bg_status.get("noaa", {"done": False, "error": None, "stale": False})
-                if not noaa_status.get("done"):
-                    st.caption("🔄 Background fetch in progress…")
-                elif noaa_status.get("error"):
-                    st.caption(f"⚠️ Fetch issue: {str(noaa_status['error'])[:50]}…")
-                elif noaa_status.get("stale"):
-                    st.caption(f"⏰ Data: {data_age} (auto-refresh pending)")
-                else:
-                    st.caption(f"✅ Data: {data_age} | Auto-refresh: 12h")
+            cache_hint = "cached" if bool(noaa_state.get("bundles")) else "no cache"
+            st.caption(f"⏸️ Background prefetch disabled | NOAA cache: {cache_hint} | Refresh: click Fetch")
 
         with st.expander("🧹 Cache maintenance", expanded=False):
             confirm_clear_noaa = st.checkbox(
