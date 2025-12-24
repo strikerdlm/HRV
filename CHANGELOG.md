@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - **Moved inline HRV “Key References” list** (`app/app.py`): Removed non-APA inline reference links from the Circadian tab area; references are consolidated in the **📚 References** tab (APA 7 format).
 - **NOAA Space tab reliability** (`app/app.py`, `app/noaa_space.py`, `app/user_profile_tab.py`): Fixed cache-load handling for “Full” scope, prevented Clinical Assessments from triggering NOAA network fetches, and added a hard overall fetch timeout so NOAA downloads can’t hang indefinitely.
+- **Space Weather tab reliability** (`app/app.py`): Prevented “Fetch space weather” from hanging due to executor shutdown waiting on stuck network threads; added cache-only auto-bootstrap so the tab renders immediately without any network calls.
+- **Logout reliability** (`app/user_profile_tab.py`, `app/app.py`): Logout is now executed via `on_click` callback (runs before rerender), preventing long “logout hangs”; and the `user_logged_out` flag is no longer accidentally cleared by unrelated flows.
+- **Logout hardening across modules** (`app/app.py`, `app/user_management_ui.py`, `app/sleep_tab.py`): All logout buttons now use unique keys; `user_management_ui` logout sets the global `user_logged_out` flag; and `app.py` enforces a hard logout guard that clears any restored profile when logged out.
+- **Disabled default auto-profile selection** (`app/app.py`): The app no longer silently auto-selects the author/single profile when none is set (this made logout appear broken). You can re-enable for demos via `HRV_AUTO_SELECT_DEFAULT_PROFILE=1`.
 
 ## [1.8.50] - 2025-12-23
 
