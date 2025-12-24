@@ -170,7 +170,13 @@ def setup_logging(
     root_logger.setLevel(logging.DEBUG)  # Capture all; handlers filter
 
     # Clear existing handlers to prevent duplicates on Streamlit rerun
-    root_logger.handlers.clear()
+    if root_logger.handlers:
+        for handler in list(root_logger.handlers):
+            try:
+                handler.close()
+            except Exception:
+                pass
+        root_logger.handlers.clear()
 
     formatter = logging.Formatter(_LOG_FORMAT, datefmt=_DATE_FORMAT)
     suppress_ws_closed = _SuppressAsyncioWebSocketClosed()
