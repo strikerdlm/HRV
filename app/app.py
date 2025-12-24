@@ -7237,7 +7237,35 @@ def main() -> None:
     ml_error_message = ""
     episodes_df = pd.DataFrame()
     meta_rows_for_context: List[Dict[str, Any]] = []
-    
+
+    # -------------------------------------------------------------------------
+    # UNCONDITIONAL cache restoration (runs on every rerun/reconnect).
+    # This ensures NOAA/Space Weather tabs have access to HRV results even after
+    # WebSocket disconnects or browser reconnects that clear in-memory state.
+    # -------------------------------------------------------------------------
+    _cached_windowed = st.session_state.get("_hrv_cached_windowed_df")
+    if isinstance(_cached_windowed, pd.DataFrame) and not _cached_windowed.empty:
+        windowed_df = _cached_windowed
+        _cached_datasets = st.session_state.get("_hrv_cached_datasets")
+        if _cached_datasets:
+            datasets = _cached_datasets
+        _cached_multi = st.session_state.get("_hrv_cached_multi_results_df")
+        if isinstance(_cached_multi, pd.DataFrame):
+            multi_results_df = _cached_multi
+        _cached_meta = st.session_state.get("_hrv_cached_meta_rows")
+        if isinstance(_cached_meta, list):
+            meta_rows = _cached_meta
+        _cached_meta_ctx = st.session_state.get("_hrv_cached_meta_rows_for_context")
+        if isinstance(_cached_meta_ctx, list):
+            meta_rows_for_context = _cached_meta_ctx
+        _cached_ml = st.session_state.get("_hrv_cached_ml_summary_df")
+        if isinstance(_cached_ml, pd.DataFrame):
+            ml_summary_df = _cached_ml
+        _cached_eps = st.session_state.get("_hrv_cached_episodes_df")
+        if isinstance(_cached_eps, pd.DataFrame):
+            episodes_df = _cached_eps
+    del _cached_windowed  # Clean up temp vars
+
     # Require explicit user action to run HRV analysis
     auto_run_requested = bool(st.session_state.pop("auto_run_hrv_analysis", False))
     hrv_analysis_ready = st.session_state.get("hrv_analysis_ready", False)
@@ -7978,29 +8006,6 @@ def main() -> None:
         # No data uploaded - set remaining defaults
         pns_mapping = {}
         ordered_sources = []
-
-    # Rehydrate cached HRV results after reruns so downstream tabs (NOAA/Space Weather)
-    # have access to windowed metrics and metadata without rerunning the full analysis.
-    if windowed_df.empty:
-        cached_windowed = st.session_state.get("_hrv_cached_windowed_df")
-        if isinstance(cached_windowed, pd.DataFrame) and not cached_windowed.empty:
-            windowed_df = cached_windowed
-            if multi_results_df.empty:
-                cached_multi = st.session_state.get("_hrv_cached_multi_results_df", pd.DataFrame())
-                if isinstance(cached_multi, pd.DataFrame):
-                    multi_results_df = cached_multi
-            if not meta_rows:
-                meta_rows = st.session_state.get("_hrv_cached_meta_rows", [])
-            if not meta_rows_for_context:
-                meta_rows_for_context = st.session_state.get("_hrv_cached_meta_rows_for_context", [])
-            if ml_summary_df.empty:
-                cached_ml = st.session_state.get("_hrv_cached_ml_summary_df", pd.DataFrame())
-                if isinstance(cached_ml, pd.DataFrame):
-                    ml_summary_df = cached_ml
-            if episodes_df.empty:
-                cached_eps = st.session_state.get("_hrv_cached_episodes_df", pd.DataFrame())
-                if isinstance(cached_eps, pd.DataFrame):
-                    episodes_df = cached_eps
 
     metric_list: List[str] = _select_hrv_metric_columns(
         windowed_df,
@@ -12339,6 +12344,15 @@ that predicts cognitive performance based on:
         
         # Dashboard renders immediately - no blocking background fetch
         _sw_loading_msg = st.empty()
+
+        # User-facing notice about compute cost and wait time
+        st.markdown(
+            "<div style='color:#dc2626;font-weight:600;margin-top:0.25rem;margin-bottom:0.5rem;'>"
+            "Complex space-weather/HRV computations can take time. Please allow the fetch/correlation to finish — "
+            "the UI will update when ready."
+            "</div>",
+            unsafe_allow_html=True,
+        )
         
         # NOTE: Content always loads - no lazy loading gate.
         _sw_content_loaded = True
@@ -14006,6 +14020,13 @@ that predicts cognitive performance based on:
         # Dashboard loads instantly - no blocking background fetch
         # User clicks "Fetch NOAA feeds" button to load data
         _noaa_loading_msg = st.empty()
+        st.markdown(
+            "<div style='color:#dc2626;font-weight:600;margin-top:0.25rem;margin-bottom:0.5rem;'>"
+            "NOAA correlations/ML can run heavy — please allow processing to complete after you fetch data. "
+            "CPU will be fully used during the calculations."
+            "</div>",
+            unsafe_allow_html=True,
+        )
         st.markdown("*Real-time solar and geomagnetic data for physiology correlation analysis*")
 
         with st.expander("🌞 **Understanding Space Weather Metrics**", expanded=False):
