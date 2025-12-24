@@ -871,6 +871,7 @@ def _logout_and_preserve() -> None:
     # Data is already persisted at save-time; no additional flush required here.
     
     # Clear user profile and user ID from session state
+    current_id = st.session_state.get(_SESSION_USER_ID)
     st.session_state[_SESSION_CURRENT_USER] = None
     st.session_state.pop(_SESSION_USER_ID, None)
     
@@ -883,6 +884,17 @@ def _logout_and_preserve() -> None:
     # Clear any cached user-specific data
     st.session_state.pop("login_username", None)
     st.session_state.pop("login_password", None)
+    st.session_state.pop("_persisted_uploads", None)
+    st.session_state.pop("hrv_analysis_signature", None)
+    st.session_state.pop("hrv_analysis_complete_signature", None)
+    
+    # Remove from multi-user session manager if present
+    if MULTI_USER_AVAILABLE and current_id:
+        try:
+            manager = get_multi_user_manager()
+            manager.remove_user_session(str(current_id))
+        except Exception:
+            pass  # best effort; do not block logout
 
 
 def _should_process_form_submission(form_key: str, debounce_seconds: float = _FORM_DEBOUNCE_SECONDS) -> bool:
@@ -3860,7 +3872,7 @@ def _render_data_management(user: UserProfile) -> None:
     with col2:
         st.markdown("### Account Actions")
 
-        if st.button("🚪 Logout", use_container_width=True):
+        if st.button("🚪 Logout", key=f"profile_logout_{user.user_id}", use_container_width=True):
             _logout_and_preserve()
             st.rerun()
 
