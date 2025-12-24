@@ -9,12 +9,23 @@ This module:
 
 from __future__ import annotations
 
+import logging
 import os
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Dict, Final, Iterable, List, Optional, Tuple
 
 import pandas as pd
+
+try:
+    from logging_config import get_logger, log_exception
+except ImportError:  # pragma: no cover - fallback for non-app contexts
+    get_logger = None  # type: ignore[assignment]
+    log_exception = None  # type: ignore[assignment]
+
+_LOGGER: Final[logging.Logger] = (
+    get_logger(__name__) if get_logger is not None else logging.getLogger(__name__)
+)
 
 try:
     from garminconnect import (  # type: ignore
@@ -48,7 +59,7 @@ def _env_credentials() -> Tuple[str, str]:
     email = os.getenv("GARMIN_EMAIL")
     password = os.getenv("GARMIN_PASSWORD")
     if not email or not password:
-        raise GarminAuthError("GARMIN_EMAIL/GARMIN_PASSWORD not configured in environment.")
+        raise GarminAuthError("GARMIN_EMAIL/GARMIN_PASSWORD not configured (set in .env).")
     return email, password
 
 
@@ -66,6 +77,55 @@ def _safe_int(val: Any) -> Optional[int]:
     except (TypeError, ValueError):
         return None
     return i
+
+
+def _dict_get_case_insensitive(dct: Dict[str, Any], key: str) -> Any:
+    """Best-effort case-insensitive dictionary lookup (bounded)."""
+    if key in dct:
+        return dct.get(key)
+    key_lower = key.lower()
+    for k, v in dct.items():
+        if isinstance(k, str) and k.lower() == key_lower:
+            return v
+    return None
+
+
+def _get_first_case_insensitive(dct: Dict[str, Any], keys: Iterable[str]) -> Any:
+    """Return the first non-None value for any candidate key (bounded)."""
+    for key in keys:
+        val = _dict_get_case_insensitive(dct, key)
+        if val is not None:
+            return val
+    return None
+
+
+def _record_has_any_metric(record: GarminDailyMetrics) -> bool:
+    """Return True if at least one metric field is populated."""
+    metric_fields = (
+        "steps",
+        "distance_km",
+        "calories_kcal",
+        "avg_hr_bpm",
+        "resting_hr_bpm",
+        "stress_score",
+        "sleep_score",
+        "sleep_efficiency",
+        "sleep_duration_hours",
+        "sleep_start_utc",
+        "sleep_end_utc",
+        "avg_spo2",
+        "avg_respiration_awake",
+        "avg_respiration_sleep",
+        "hrv_rmssd_ms",
+        "hrv_sdnn_ms",
+        "body_battery_avg",
+        "body_battery_charge",
+        "body_battery_drain",
+    )
+    for field_name in metric_fields:
+        if getattr(record, field_name, None) is not None:
+            return True
+    return False
 
 
 class GarminConnectClient:
@@ -358,11 +418,20 @@ def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDaily
     """
     if not user_id:
         raise ValueError("user_id is required to fetch Garmin metrics.")
+    try:
+        days = int(days)
+    except (TypeError, ValueError):
+        raise ValueError("days must be an integer.") from None
     if days <= 0:
         return []
+    if days > 30:
+        # Defensive cap to reduce rate-limit risk.
+        _LOGGER.info("Capping Garmin Connect fetch to 30 days (requested %d).", days)
+        days = 30
 
     start_date = date.today() - timedelta(days=days - 1)
     records: List[GarminDailyMetrics] = []
+    errors: list[str] = []
     now_iso = datetime.now(timezone.utc).isoformat()
 
     with GarminConnectClient() as client:
@@ -372,53 +441,161 @@ def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDaily
 
             # Use get_stats() which returns comprehensive daily data including
             # activity, stress, body battery, SpO2, respiration, HR in one call
-            stats = {}
+            day_errors: list[Exception] = []
+            stats: Dict[str, Any] = {}
             try:
                 stats = client.get_stats(day_iso) or {}
-            except Exception:
+            except Exception as exc:
+                day_errors.append(exc)
                 # Fallback to user_summary if get_stats fails
                 try:
                     stats = client.get_user_summary(day_iso) or {}
-                except Exception:
+                except Exception as exc2:
+                    day_errors.append(exc2)
                     stats = {}
+            if not isinstance(stats, dict):
+                stats = {}
 
             # Activity metrics from stats
-            steps = _safe_int(stats.get("totalSteps"))
-            distance_km = None
-            dist_m = stats.get("totalDistanceMeters") or stats.get("distance")
-            if dist_m is not None:
-                distance_km = _safe_float(dist_m)
-                if distance_km is not None:
-                    distance_km = distance_km / 1000.0
-            calories = _safe_float(stats.get("totalKilocalories") or stats.get("totalCalories"))
-            avg_hr = _safe_float(
-                stats.get("averageHR")
-                or stats.get("averageHeartRate")
-                or stats.get("maxAvgHeartRate")
+            steps = _safe_int(
+                _get_first_case_insensitive(stats, ("totalSteps", "steps", "total_steps"))
             )
-            resting_hr = _safe_float(stats.get("restingHeartRate") or stats.get("restingHR"))
+
+            distance_km: Optional[float] = None
+            dist_m = _safe_float(
+                _get_first_case_insensitive(stats, ("totalDistanceMeters", "totalDistanceInMeters"))
+            )
+            dist_km = _safe_float(
+                _get_first_case_insensitive(stats, ("distanceKm", "distance_km", "distanceKilometers"))
+            )
+            dist_any = _safe_float(
+                _get_first_case_insensitive(stats, ("totalDistance", "distance", "total_distance"))
+            )
+            if dist_m is not None:
+                distance_km = dist_m / 1000.0
+            elif dist_km is not None:
+                distance_km = dist_km
+            elif dist_any is not None:
+                # Heuristic: very large values are almost certainly meters.
+                distance_km = (dist_any / 1000.0) if dist_any > 100.0 else dist_any
+
+            calories = _safe_float(
+                _get_first_case_insensitive(
+                    stats,
+                    (
+                        "totalKilocalories",
+                        "totalCalories",
+                        "activeKilocalories",
+                        "activeCalories",
+                        "calories",
+                        "caloriesKcal",
+                    ),
+                )
+            )
+            avg_hr = _safe_float(
+                _get_first_case_insensitive(
+                    stats,
+                    (
+                        "averageHR",
+                        "averageHeartRate",
+                        "avgHeartRate",
+                        "avg_hr",
+                        "maxAvgHeartRate",
+                        "avg_heart_rate",
+                    ),
+                )
+            )
+            resting_hr = _safe_float(
+                _get_first_case_insensitive(
+                    stats,
+                    (
+                        "restingHeartRate",
+                        "restingHR",
+                        "currentDayRestingHeartRate",
+                        "restingHeartRateBpm",
+                    ),
+                )
+            )
             
             # Stress from stats (backup from dedicated endpoint)
-            stress_score = _safe_float(stats.get("averageStressLevel"))
+            stress_score = _safe_float(
+                _get_first_case_insensitive(
+                    stats,
+                    (
+                        "averageStressLevel",
+                        "avgStressLevel",
+                        "overallStressLevel",
+                    ),
+                )
+            )
             
             # SpO2 from stats
-            spo2_avg = _safe_float(stats.get("averageSpo2"))
+            spo2_avg = _safe_float(
+                _get_first_case_insensitive(
+                    stats,
+                    (
+                        "averageSpO2",
+                        "averageSpo2",
+                        "avgSpo2",
+                        "averageSpO2Value",
+                        "averageSpo2Value",
+                    ),
+                )
+            )
             
             # Respiration from stats
-            resp_awake = _safe_float(stats.get("avgWakingRespirationValue"))
+            resp_awake = _safe_float(
+                _get_first_case_insensitive(
+                    stats,
+                    (
+                        "avgWakingRespirationValue",
+                        "awakeRespirationAvg",
+                        "avgRespirationValue",
+                    ),
+                )
+            )
             resp_sleep = None  # Sleep respiration needs separate call
             
             # Body battery from stats
-            body_charge = _safe_float(stats.get("bodyBatteryChargedValue"))
-            body_drain = _safe_float(stats.get("bodyBatteryDrainedValue"))
-            body_avg = _safe_float(stats.get("bodyBatteryMostRecentValue"))
+            body_charge = _safe_float(
+                _get_first_case_insensitive(
+                    stats,
+                    (
+                        "bodyBatteryChargedValue",
+                        "bodyBatteryCharged",
+                        "chargedValue",
+                    ),
+                )
+            )
+            body_drain = _safe_float(
+                _get_first_case_insensitive(
+                    stats,
+                    (
+                        "bodyBatteryDrainedValue",
+                        "bodyBatteryDrained",
+                        "drainedValue",
+                    ),
+                )
+            )
+            body_avg = _safe_float(
+                _get_first_case_insensitive(
+                    stats,
+                    (
+                        "bodyBatteryMostRecentValue",
+                        "bodyBatteryValue",
+                        "bodyBatteryLevel",
+                        "bodyBatteryMostRecent",
+                    ),
+                )
+            )
 
             # Sleep - need dedicated endpoint for score/duration/efficiency
             sleep_info: Dict[str, Any] = {}
             try:
                 sleep_payload = client.get_sleep_data(day_iso)
                 sleep_info = _extract_sleep(sleep_payload)
-            except Exception:
+            except Exception as exc:
+                day_errors.append(exc)
                 sleep_info = {}
 
             # If stress not in stats, try dedicated endpoint
@@ -426,8 +603,8 @@ def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDaily
                 try:
                     stress_payload = client.get_all_day_stress(day_iso)
                     stress_score = _extract_stress(stress_payload)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    day_errors.append(exc)
 
             # Get sleep respiration from dedicated endpoint
             try:
@@ -439,16 +616,16 @@ def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDaily
                 if resp_awake is None:
                     resp_awake_from_api, _ = _extract_respiration(resp_payload)
                     resp_awake = resp_awake_from_api
-            except Exception:
-                pass
+            except Exception as exc:
+                day_errors.append(exc)
 
             # If SpO2 not in stats, try dedicated endpoint
             if spo2_avg is None:
                 try:
                     spo2_payload = client.get_spo2_data(day_iso)
                     spo2_avg = _extract_spo2(spo2_payload)
-                except Exception:
-                    pass
+                except Exception as exc:
+                    day_errors.append(exc)
 
             # If body battery not complete from stats, try dedicated endpoint
             if body_avg is None or body_charge is None or body_drain is None:
@@ -461,8 +638,8 @@ def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDaily
                         body_charge = bb_charge
                     if body_drain is None:
                         body_drain = bb_drain
-                except Exception:
-                    pass
+                except Exception as exc:
+                    day_errors.append(exc)
 
             # HRV (nightly) - always from dedicated endpoint
             hrv_rmssd = None
@@ -470,38 +647,50 @@ def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDaily
             try:
                 hrv_payload = client.get_hrv_data(day_iso)
                 hrv_rmssd, hrv_sdnn = _extract_hrv(hrv_payload)
-            except Exception:
+            except Exception as exc:
+                day_errors.append(exc)
                 hrv_rmssd, hrv_sdnn = None, None
 
-            records.append(
-                GarminDailyMetrics(
-                    entry_id="",
-                    user_id=user_id,
-                    metric_date=day_iso,
-                    steps=steps,
-                    distance_km=distance_km,
-                    calories_kcal=calories,
-                    avg_hr_bpm=avg_hr,
-                    resting_hr_bpm=resting_hr,
-                    stress_score=stress_score,
-                    sleep_score=sleep_info.get("sleep_score"),
-                    sleep_efficiency=sleep_info.get("sleep_efficiency"),
-                    sleep_duration_hours=sleep_info.get("sleep_duration_hours"),
-                    sleep_start_utc=sleep_info.get("sleep_start_utc"),
-                    sleep_end_utc=sleep_info.get("sleep_end_utc"),
-                    avg_spo2=spo2_avg,
-                    avg_respiration_awake=resp_awake,
-                    avg_respiration_sleep=resp_sleep,
-                    hrv_rmssd_ms=hrv_rmssd,
-                    hrv_sdnn_ms=hrv_sdnn,
-                    body_battery_avg=body_avg,
-                    body_battery_charge=body_charge,
-                    body_battery_drain=body_drain,
-                    source="garmin_connect_api",
-                    created_at=now_iso,
-                )
+            record = GarminDailyMetrics(
+                entry_id="",
+                user_id=user_id,
+                metric_date=day_iso,
+                steps=steps,
+                distance_km=distance_km,
+                calories_kcal=calories,
+                avg_hr_bpm=avg_hr,
+                resting_hr_bpm=resting_hr,
+                stress_score=stress_score,
+                sleep_score=sleep_info.get("sleep_score"),
+                sleep_efficiency=sleep_info.get("sleep_efficiency"),
+                sleep_duration_hours=sleep_info.get("sleep_duration_hours"),
+                sleep_start_utc=sleep_info.get("sleep_start_utc"),
+                sleep_end_utc=sleep_info.get("sleep_end_utc"),
+                avg_spo2=spo2_avg,
+                avg_respiration_awake=resp_awake,
+                avg_respiration_sleep=resp_sleep,
+                hrv_rmssd_ms=hrv_rmssd,
+                hrv_sdnn_ms=hrv_sdnn,
+                body_battery_avg=body_avg,
+                body_battery_charge=body_charge,
+                body_battery_drain=body_drain,
+                source="garmin_connect_api",
+                created_at=now_iso,
             )
+            if _record_has_any_metric(record):
+                records.append(record)
+            else:
+                # Avoid returning "all-null" placeholder rows that look like incorrect data.
+                if day_errors:
+                    errors.append(f"{day_iso}: {day_errors[-1]}")
+                    if log_exception is not None:
+                        log_exception(_LOGGER, f"Garmin Connect fetch produced no metrics for {day_iso}", day_errors[-1])
 
+    if not records and errors:
+        raise GarminAuthError(
+            "Garmin Connect returned no usable daily metrics. "
+            f"Most recent error: {errors[-1]}"
+        )
     return records
 
 
