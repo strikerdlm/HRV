@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **On-demand metric correlations** (`app/app.py`): The physiology correlation matrix now runs only when you click **Run correlations**, preventing any automatic correlation/analysis on render.
 - **User-facing on-demand notices** (`app/app.py`): Added explicit “click to run” info and spinners for NOAA correlations, batch NOAA scans, and the physiology correlation matrix so users see a clear warning that computations may take time.
 - **Instant Space Weather/NOAA tabs** (`app/app.py`): Removed automatic cache loads; both tabs now render immediately and only load cached or fresh data when you click **Load cached copy/NOAA** or **Fetch**, with spinners and success messaging. This keeps the UI responsive even with no HRV data.
+- **About tab performance fix** (`app/app.py`, `app/about_tab.py`): About now defaults to a lightweight preview (instant), with optional buttons to load the full page/manual/changelog on demand to avoid long UI hangs.
 
 ## [1.8.50] - 2025-12-23
 
