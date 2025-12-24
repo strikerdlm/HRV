@@ -14104,13 +14104,19 @@ that predicts cognitive performance based on:
         bundles = noaa_state.get("bundles", {})
         option_labels: Dict[str, str] = {}
         dataset_options: List[str] = []
+        # Reuse cached HRV windowed results if a rerun cleared the in-memory frame.
+        noaa_windowed_df = (
+            windowed_df
+            if not windowed_df.empty
+            else st.session_state.get("_hrv_cached_windowed_df", pd.DataFrame())
+        )
         metrics_available: List[str] = []
-        if not windowed_df.empty:
+        if not noaa_windowed_df.empty:
             metrics_available = [
                 metric
                 for metric in metric_list
-                if metric in windowed_df.columns
-                and pd.api.types.is_numeric_dtype(windowed_df[metric])
+                if metric in noaa_windowed_df.columns
+                and pd.api.types.is_numeric_dtype(noaa_windowed_df[metric])
             ]
         if not bundles:
             if not bg_status.get("noaa", {}).get("done", False):
@@ -14144,9 +14150,12 @@ that predicts cognitive performance based on:
                 st.caption(bundle.spec.description)
             # Quick sanity check: warn when the selected NOAA dataset does not
             # cover the HRV windowed timeline (common for short-horizon feeds).
-            if not windowed_df.empty and bundle.time_column in bundle.frame.columns:
+            if (
+                not noaa_windowed_df.empty
+                and bundle.time_column in bundle.frame.columns
+            ):
                 try:
-                    hrv_start = pd.to_datetime(windowed_df.get("start"), utc=True, errors="coerce")
+                    hrv_start = pd.to_datetime(noaa_windowed_df.get("start"), utc=True, errors="coerce")
                     pred_times = pd.to_datetime(bundle.frame[bundle.time_column], utc=True, errors="coerce")
                     hrv_min = hrv_start.min()
                     hrv_max = hrv_start.max()
@@ -14279,14 +14288,14 @@ that predicts cognitive performance based on:
                 pass
             st.divider()
             st.markdown("##### HRV correlation analysis")
-            if windowed_df.empty:
+            if noaa_windowed_df.empty:
                 st.info("Run the HRV window analysis to enable correlations.")
             else:
                 metrics_available = [
                     metric
                     for metric in metric_list
-                    if metric in windowed_df.columns
-                    and pd.api.types.is_numeric_dtype(windowed_df[metric])
+                    if metric in noaa_windowed_df.columns
+                    and pd.api.types.is_numeric_dtype(noaa_windowed_df[metric])
                 ]
                 if not metrics_available:
                     st.info("No numeric HRV metrics available for correlation.")
@@ -14345,7 +14354,7 @@ that predicts cognitive performance based on:
                                 else:
                                     with st.spinner("Computing Pearson correlations…"):
                                         corr_df = _build_noaa_correlations(
-                                            windowed_df,
+                        noaa_windowed_df,
                                             {selected_dataset: bundle},
                                             selected_metrics,
                                             lags,
@@ -14379,7 +14388,7 @@ that predicts cognitive performance based on:
                         )
             st.divider()
             st.markdown("##### Batch NOAA correlation scan")
-            if windowed_df.empty:
+            if noaa_windowed_df.empty:
                 st.info("Run the HRV window analysis to enable batch correlations.")
             elif not metrics_available:
                 st.info("No numeric HRV metrics available for correlation.")
