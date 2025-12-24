@@ -397,13 +397,26 @@ def render_about_tab() -> None:
     # Load documentation files
     manual_content = _load_file_content("Manual.md")
     changelog_content = _load_file_content("CHANGELOG.md")
+
+    manual_ok = "not found" not in manual_content.lower() and "error" not in manual_content.lower()
+    changelog_ok = "not found" not in changelog_content.lower() and "error" not in changelog_content.lower()
+
+    manual_preview_lines = 200
+    changelog_preview_lines = 200
+    manual_preview = "\n".join(manual_content.splitlines()[:manual_preview_lines]) if manual_ok else manual_content
+    changelog_preview = "\n".join(changelog_content.splitlines()[:changelog_preview_lines]) if changelog_ok else changelog_content
     
     manual_lines = len(manual_content.split('\n')) if "not found" not in manual_content.lower() else 0
     changelog_lines = len(changelog_content.split('\n')) if "not found" not in changelog_content.lower() else 0
     
     # Statistics cards
     st.markdown(_render_stats_cards(manual_lines, changelog_lines), unsafe_allow_html=True)
-    _render_agents_blueprint(AGENT_RUNTIME_CONFIG)
+    if "about_show_agents_blueprint" not in st.session_state:
+        st.session_state["about_show_agents_blueprint"] = False
+    if st.button("Load agent/tooling blueprint (advanced)", key="about_load_agents_blueprint"):
+        st.session_state["about_show_agents_blueprint"] = True
+    if st.session_state.get("about_show_agents_blueprint", False):
+        _render_agents_blueprint(AGENT_RUNTIME_CONFIG)
     
     # Tabbed content for Manual and Changelog
     doc_tab1, doc_tab2, doc_tab3 = st.tabs(["📖 User Manual", "📋 Changelog", "⚙️ Technical Info"])
@@ -416,7 +429,7 @@ def render_about_tab() -> None:
         </div>
         """, unsafe_allow_html=True)
         
-        if "not found" not in manual_content.lower() and "Error" not in manual_content:
+        if manual_ok:
             with st.expander("📋 Table of Contents", expanded=False):
                 # Extract TOC from manual
                 toc_lines = []
@@ -432,9 +445,20 @@ def render_about_tab() -> None:
                             toc_lines.append(line)
                 st.markdown('\n'.join(toc_lines))
             
-            st.markdown(f'<div class="manual-content">', unsafe_allow_html=True)
-            st.markdown(manual_content)
-            st.markdown('</div>', unsafe_allow_html=True)
+            if "about_show_full_manual" not in st.session_state:
+                st.session_state["about_show_full_manual"] = False
+            if not st.session_state.get("about_show_full_manual", False):
+                st.info("Showing a preview for performance. Click below to load the full manual.")
+                if st.button("Load full manual (may be slow)", key="about_full_manual"):
+                    st.session_state["about_show_full_manual"] = True
+                    st.rerun()
+                st.markdown(f'<div class="manual-content">', unsafe_allow_html=True)
+                st.markdown(manual_preview)
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="manual-content">', unsafe_allow_html=True)
+                st.markdown(manual_content)
+                st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("📄 Manual documentation is being loaded from `docs/Manual.md`")
             st.markdown(manual_content)
@@ -447,10 +471,21 @@ def render_about_tab() -> None:
         </div>
         """, unsafe_allow_html=True)
         
-        if "not found" not in changelog_content.lower() and "Error" not in changelog_content:
-            st.markdown(f'<div class="changelog-content">', unsafe_allow_html=True)
-            st.markdown(changelog_content)
-            st.markdown('</div>', unsafe_allow_html=True)
+        if changelog_ok:
+            if "about_show_full_changelog" not in st.session_state:
+                st.session_state["about_show_full_changelog"] = False
+            if not st.session_state.get("about_show_full_changelog", False):
+                st.info("Showing a preview for performance. Click below to load the full changelog.")
+                if st.button("Load full changelog (may be slow)", key="about_full_changelog"):
+                    st.session_state["about_show_full_changelog"] = True
+                    st.rerun()
+                st.markdown(f'<div class="changelog-content">', unsafe_allow_html=True)
+                st.markdown(changelog_preview)
+                st.markdown('</div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'<div class="changelog-content">', unsafe_allow_html=True)
+                st.markdown(changelog_content)
+                st.markdown('</div>', unsafe_allow_html=True)
         else:
             st.info("📄 Changelog is being loaded from `CHANGELOG.md`")
             st.markdown(changelog_content)
