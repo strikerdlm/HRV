@@ -111,7 +111,7 @@ def _render_user_login_section() -> UserInfo | None:
         st.sidebar.success(f"✅ Logged in: **{user.name}**")
         st.sidebar.caption(f"ID: {user.user_id}")
 
-        if st.sidebar.button("🚪 Logout", key="logout_btn"):
+        if st.sidebar.button("🚪 Logout", key="sleep_logout_btn"):
             st.session_state[_SESSION_CURRENT_USER] = None
             st.session_state[_SESSION_SLEEP_NIGHTS] = []
             st.rerun()
