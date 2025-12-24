@@ -3488,6 +3488,8 @@ def _get_user_identity(profile: Any) -> Tuple[Optional[str], str]:
 
 def _resolve_active_profile(logger: logging.Logger) -> Any:
     """Resolve the active user profile, favoring the author if unset."""
+    if st.session_state.get("user_logged_out"):
+        return None
     existing = st.session_state.get("current_user_profile")
     if existing:
         return existing
@@ -16002,75 +16004,71 @@ that predicts cognitive performance based on:
                 st.audio(audio_payload, format="audio/mp3")
     with tab_about:
         # -------------------------------------------------------------------
-        # ABOUT TAB — Always loads immediately regardless of HRV data state
+        # ABOUT TAB — Prefer dedicated renderer; fallback to lightweight preview
         # -------------------------------------------------------------------
         st.markdown("### ℹ️ About & Documentation")
         st.caption("Author credentials, changelog, and user manual for the HRV Analysis Suite.")
-        
-        # Author credentials section (always visible)
-        st.markdown("---")
-        st.markdown("#### 👨‍⚕️ About the Author")
-        st.markdown(
-            "**Dr. Diego Leonel Malpica Hincapié** — Aerospace Medicine (Colombia)\n\n"
-            "- Professional service within Colombian Military Health / Fuerza Aérea Colombiana (public record).\n"
-            "- Focus areas: aerospace medicine, operational performance, fatigue, psychophysiology, and HRV.\n"
-            "- This app and analysis workflow were authored and curated by Dr. Malpica.\n\n"
-            "**Professional Profiles & Academic References:**\n"
-            "- **CVLAC** (Colciencias Research Profile): "
-            "[https://scienti.minciencias.gov.co/cvlac/](https://scienti.minciencias.gov.co/cvlac/)\n"
-            "- **LinkedIn**: [linkedin.com/in/diegoleonelmalpica](https://www.linkedin.com/in/diegoleonelmalpica)\n"
-            "- **Universidad Nacional de Colombia** (Academic Reference): "
-            "[UNAL Profile](https://medicina.bogota.unal.edu.co/formacion/especialidades-medicas/medicina-aeroespacial)\n\n"
-            "**Project Links:**\n"
-            "- GitHub repository: https://github.com/strikerdlm/HRV\n"
-            "- HRV Normative review in this project: `docs/Normative.md`\n"
-            "- Charting: [Apache ECharts](https://echarts.apache.org/handbook/en/get-started/)\n\n"
-            "**Interpretation Notes:**\n"
-            "- HRV interpretation is protocol- and cohort-dependent. Use within-subject trends and documented context "
-            "(posture, time-of-day, respiration) for decisions.\n"
-        )
-        
-        st.markdown("---")
-        
-        # Changelog section
-        st.markdown("#### 📜 Changelog")
-        changelog_path = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
-        changelog_text = _load_text_file(changelog_path)
-        if changelog_text:
-            changelog_preview = "\n".join(changelog_text.splitlines()[:120])
-            with st.expander("View CHANGELOG.md (preview)", expanded=False):
-                st.markdown(changelog_preview)
-            st.download_button(
-                "Download CHANGELOG.md",
-                data=changelog_text.encode("utf-8"),
-                file_name="CHANGELOG.md",
-                mime="text/markdown",
-                key="download_changelog_md",
+
+        rendered = False
+        if ABOUT_TAB_AVAILABLE and render_about_tab is not None:
+            try:
+                render_about_tab()
+                rendered = True
+            except Exception as exc:  # pragma: no cover - defensive
+                log_exception(_LOGGER, "About tab render failed", exc)
+                st.warning("About tab renderer failed; showing lightweight fallback.")
+
+        if not rendered:
+            # Lightweight fallback (no external module dependency)
+            st.markdown("---")
+            st.markdown("#### 👨‍⚕️ About the Author")
+            st.markdown(
+                "**Dr. Diego Leonel Malpica Hincapié** — Aerospace Medicine (Colombia)\n\n"
+                "- Professional service within Colombian Military Health / Fuerza Aérea Colombiana (public record).\n"
+                "- Focus areas: aerospace medicine, operational performance, fatigue, psychophysiology, and HRV.\n"
+                "- This app and analysis workflow were authored and curated by Dr. Malpica.\n\n"
+                "**Project Links:**\n"
+                "- GitHub repository: https://github.com/strikerdlm/HRV\n"
+                "- HRV Normative review in this project: `docs/Normative.md`\n"
             )
-            st.caption("Preview trimmed to keep the tab responsive; download for full history.")
-        else:
-            st.warning("Unable to load CHANGELOG.md — check that the file exists in the project root.")
-        
-        st.markdown("---")
-        
-        # User Manual section
-        st.markdown("#### 📖 User Manual")
-        manual_path = Path(__file__).resolve().parents[1] / "docs" / "Manual.md"
-        manual_text = _load_text_file(manual_path)
-        if manual_text:
-            manual_preview = "\n".join(manual_text.splitlines()[:120])
-            with st.expander("View User Manual (preview)", expanded=False):
-                st.markdown(manual_preview)
-            st.download_button(
-                "Download docs/Manual.md",
-                data=manual_text.encode("utf-8"),
-                file_name="Manual.md",
-                mime="text/markdown",
-                key="download_manual_md",
-            )
-            st.caption("Full manual available via download; preview truncated for fast loading.")
-        else:
-            st.warning("Unable to load docs/Manual.md — check that the file exists in the docs folder.")
+
+            st.markdown("---")
+            st.markdown("#### 📜 Changelog (preview)")
+            changelog_path = Path(__file__).resolve().parents[1] / "CHANGELOG.md"
+            changelog_text = _load_text_file(changelog_path)
+            if changelog_text:
+                changelog_preview = "\n".join(changelog_text.splitlines()[:80])
+                with st.expander("View CHANGELOG.md (preview)", expanded=False):
+                    st.markdown(changelog_preview)
+                st.download_button(
+                    "Download CHANGELOG.md",
+                    data=changelog_text.encode("utf-8"),
+                    file_name="CHANGELOG.md",
+                    mime="text/markdown",
+                    key="download_changelog_md",
+                )
+                st.caption("Preview trimmed to keep the tab responsive; download for full history.")
+            else:
+                st.warning("Unable to load CHANGELOG.md — check that the file exists in the project root.")
+
+            st.markdown("---")
+            st.markdown("#### 📖 User Manual (preview)")
+            manual_path = Path(__file__).resolve().parents[1] / "docs" / "Manual.md"
+            manual_text = _load_text_file(manual_path)
+            if manual_text:
+                manual_preview = "\n".join(manual_text.splitlines()[:80])
+                with st.expander("View User Manual (preview)", expanded=False):
+                    st.markdown(manual_preview)
+                st.download_button(
+                    "Download docs/Manual.md",
+                    data=manual_text.encode("utf-8"),
+                    file_name="Manual.md",
+                    mime="text/markdown",
+                    key="download_manual_md",
+                )
+                st.caption("Full manual available via download; preview truncated for fast loading.")
+            else:
+                st.warning("Unable to load docs/Manual.md — check that the file exists in the docs folder.")
     with tab_refs:
         # ---------------------------------------------------------------------
         # REFERENCES TAB — Always loads immediately regardless of HRV data state
