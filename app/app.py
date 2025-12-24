@@ -7274,28 +7274,27 @@ def main() -> None:
     # This ensures NOAA/Space Weather tabs have access to HRV results even after
     # WebSocket disconnects or browser reconnects that clear in-memory state.
     # -------------------------------------------------------------------------
-    _cached_windowed = st.session_state.get("_hrv_cached_windowed_df")
-    if isinstance(_cached_windowed, pd.DataFrame) and not _cached_windowed.empty:
-        windowed_df = _cached_windowed
-        _cached_datasets = st.session_state.get("_hrv_cached_datasets")
-        if _cached_datasets:
-            datasets = _cached_datasets
-        _cached_multi = st.session_state.get("_hrv_cached_multi_results_df")
-        if isinstance(_cached_multi, pd.DataFrame):
-            multi_results_df = _cached_multi
-        _cached_meta = st.session_state.get("_hrv_cached_meta_rows")
-        if isinstance(_cached_meta, list):
-            meta_rows = _cached_meta
-        _cached_meta_ctx = st.session_state.get("_hrv_cached_meta_rows_for_context")
-        if isinstance(_cached_meta_ctx, list):
-            meta_rows_for_context = _cached_meta_ctx
-        _cached_ml = st.session_state.get("_hrv_cached_ml_summary_df")
-        if isinstance(_cached_ml, pd.DataFrame):
-            ml_summary_df = _cached_ml
-        _cached_eps = st.session_state.get("_hrv_cached_episodes_df")
-        if isinstance(_cached_eps, pd.DataFrame):
-            episodes_df = _cached_eps
-    del _cached_windowed  # Clean up temp vars
+    _restored_wdf = st.session_state.get("_hrv_cached_windowed_df")
+    if isinstance(_restored_wdf, pd.DataFrame) and not _restored_wdf.empty:
+        windowed_df = _restored_wdf
+        _restored_ds = st.session_state.get("_hrv_cached_datasets")
+        if _restored_ds:
+            datasets = _restored_ds
+        _restored_multi = st.session_state.get("_hrv_cached_multi_results_df")
+        if isinstance(_restored_multi, pd.DataFrame):
+            multi_results_df = _restored_multi
+        _restored_meta = st.session_state.get("_hrv_cached_meta_rows")
+        if isinstance(_restored_meta, list):
+            meta_rows = _restored_meta
+        _restored_meta_ctx = st.session_state.get("_hrv_cached_meta_rows_for_context")
+        if isinstance(_restored_meta_ctx, list):
+            meta_rows_for_context = _restored_meta_ctx
+        _restored_ml = st.session_state.get("_hrv_cached_ml_summary_df")
+        if isinstance(_restored_ml, pd.DataFrame):
+            ml_summary_df = _restored_ml
+        _restored_eps = st.session_state.get("_hrv_cached_episodes_df")
+        if isinstance(_restored_eps, pd.DataFrame):
+            episodes_df = _restored_eps
 
     # Require explicit user action to run HRV analysis
     auto_run_requested = bool(st.session_state.pop("auto_run_hrv_analysis", False))
