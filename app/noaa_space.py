@@ -22,7 +22,8 @@ except ImportError:  # pragma: no cover - fallback for script execution
     from logging_config import get_logger, log_exception
 
 SWPC_BASE_URL = "https://services.swpc.noaa.gov/json/"
-REQUEST_TIMEOUT = 5.0  # Reduced from 10.0 for faster failure on slow connections
+# Keep NOAA fetches fast-fail to avoid UI stalls on slow networks.
+REQUEST_TIMEOUT = 3.0
 CACHE_TTL = pd.Timedelta(hours=6)
 NOAA_SPACE_CACHE_DIR = Path(__file__).resolve().parent / "data_cache" / "noaa_space"
 
