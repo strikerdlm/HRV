@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Moved inline HRV “Key References” list** (`app/app.py`): Removed non-APA inline reference links from the Circadian tab area; references are consolidated in the **📚 References** tab (APA 7 format).
+- **NOAA Space tab reliability** (`app/app.py`, `app/noaa_space.py`, `app/user_profile_tab.py`): Fixed cache-load handling for “Full” scope, prevented Clinical Assessments from triggering NOAA network fetches, and added a hard overall fetch timeout so NOAA downloads can’t hang indefinitely.
 
 ## [1.8.50] - 2025-12-23
 
