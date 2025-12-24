@@ -24,6 +24,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Wrist Monitoring refresh + Garmin Connect integrity** (`app/user_profile_tab.py`, `app/garmin_connect_service.py`): Wrist Monitoring history now refreshes immediately after Garmin sync/import (token-based cache bust + Refresh button, no forced rerun). Garmin Connect fetch no longer reports success while returning all-null placeholder rows, and daily field extraction is more robust for Vivosmart 5 exports.
+- **Research app login reliability** (`app/user_profile_tab.py`): User selection login now uses stable widget keys + a pre-rerun `on_click` handler, and surfaces a clear error when the selected profile cannot be loaded. This fixes “login user does not work” in `app/research_app.py` (research mode).
 
 ## [1.8.50] - 2025-12-23
 
