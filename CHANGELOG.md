@@ -5,6 +5,12 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.51] - 2025-12-24
+
+### Added
+- **NOAA correlation CTAs** (`app/app.py`): Added inline buttons beside the NOAA correlation callouts to trigger HRV window analysis when windowed metrics are missing, so users can start correlations and batch scans directly from the NOAA tab.
+- **On-demand metric correlations** (`app/app.py`): The physiology correlation matrix now runs only when you click **Run correlations**, preventing any automatic correlation/analysis on render.
+
 ## [1.8.50] - 2025-12-23
 
 ### Fixed
