@@ -7269,33 +7269,6 @@ def main() -> None:
     episodes_df = pd.DataFrame()
     meta_rows_for_context: List[Dict[str, Any]] = []
 
-    # -------------------------------------------------------------------------
-    # UNCONDITIONAL cache restoration (runs on every rerun/reconnect).
-    # This ensures NOAA/Space Weather tabs have access to HRV results even after
-    # WebSocket disconnects or browser reconnects that clear in-memory state.
-    # -------------------------------------------------------------------------
-    _restored_wdf = st.session_state.get("_hrv_cached_windowed_df")
-    if isinstance(_restored_wdf, pd.DataFrame) and not _restored_wdf.empty:
-        windowed_df = _restored_wdf
-        _restored_ds = st.session_state.get("_hrv_cached_datasets")
-        if _restored_ds:
-            datasets = _restored_ds
-        _restored_multi = st.session_state.get("_hrv_cached_multi_results_df")
-        if isinstance(_restored_multi, pd.DataFrame):
-            multi_results_df = _restored_multi
-        _restored_meta = st.session_state.get("_hrv_cached_meta_rows")
-        if isinstance(_restored_meta, list):
-            meta_rows = _restored_meta
-        _restored_meta_ctx = st.session_state.get("_hrv_cached_meta_rows_for_context")
-        if isinstance(_restored_meta_ctx, list):
-            meta_rows_for_context = _restored_meta_ctx
-        _restored_ml = st.session_state.get("_hrv_cached_ml_summary_df")
-        if isinstance(_restored_ml, pd.DataFrame):
-            ml_summary_df = _restored_ml
-        _restored_eps = st.session_state.get("_hrv_cached_episodes_df")
-        if isinstance(_restored_eps, pd.DataFrame):
-            episodes_df = _restored_eps
-
     # Require explicit user action to run HRV analysis
     auto_run_requested = bool(st.session_state.pop("auto_run_hrv_analysis", False))
     hrv_analysis_ready = st.session_state.get("hrv_analysis_ready", False)
