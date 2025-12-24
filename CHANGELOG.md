@@ -14,6 +14,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Instant Space Weather/NOAA tabs** (`app/app.py`): Removed automatic cache loads; both tabs now render immediately and only load cached or fresh data when you click **Load cached copy/NOAA** or **Fetch**, with spinners and success messaging. This keeps the UI responsive even with no HRV data.
 - **About tab performance fix** (`app/app.py`, `app/about_tab.py`): About now defaults to a lightweight preview (instant), with optional buttons to load the full page/manual/changelog on demand to avoid long UI hangs.
 
+### Changed
+- **Moved inline HRV “Key References” list** (`app/app.py`): Removed non-APA inline reference links from the Circadian tab area; references are consolidated in the **📚 References** tab (APA 7 format).
+
 ## [1.8.50] - 2025-12-23
 
 ### Fixed
