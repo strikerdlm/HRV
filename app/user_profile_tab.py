@@ -1264,28 +1264,73 @@ def _render_login_section() -> Optional[UserProfile]:
     st.markdown("### 🔑 Select or Login")
     
     col_select, col_action = st.columns([3, 1])
+    error_state_key = "user_profile_login_error"
+    selection_state_key = "user_profile_login_selected_username"
     
     with col_select:
         # Build options from cached data (avoiding full DB query)
-        user_options = {u["username"]: u for u in cached_users}
-        selected_username = st.selectbox(
+        user_options = {
+            str(u.get("username")): u
+            for u in cached_users
+            if isinstance(u, dict) and u.get("username")
+        }
+        usernames = list(user_options.keys())
+        if not usernames:
+            st.info("No users registered. Create a new profile below.")
+            return None
+
+        def _clear_login_error() -> None:
+            st.session_state.pop(error_state_key, None)
+
+        st.selectbox(
             "Select User",
-            options=list(user_options.keys()),
-            format_func=lambda x: f"{user_options[x]['full_name']} (@{x})",
+            options=usernames,
+            format_func=lambda x: f"{(user_options.get(x, {}).get('full_name') or x)} (@{x})",
+            key=selection_state_key,
+            on_change=_clear_login_error,
         )
     
     with col_action:
         st.write("")  # Spacing
-        if st.button("✅ Select User", use_container_width=True):
-            selected_data = user_options.get(selected_username)
-            if selected_data:
-                # Fetch full user profile only when needed
+
+        def _login_selected_user() -> None:
+            """Login callback for the selected username (runs before rerun)."""
+            raw_username = st.session_state.get(selection_state_key)
+            username = str(raw_username).strip() if raw_username is not None else ""
+            if not username:
+                st.session_state[error_state_key] = "Select a user first."
+                return
+
+            try:
                 db = get_database()
-                user = db.get_user(selected_data["user_id"])
-                if user:
-                    _set_current_user(user)
-                    st.success(f"Logged in as {user.full_name}")
-                    st.rerun()
+                user = db.get_user_by_username(username)
+            except Exception as exc:  # pragma: no cover - defensive
+                if log_exception is not None:
+                    log_exception(_LOGGER, "User login failed", exc)
+                else:
+                    _LOGGER.exception("User login failed")
+                st.session_state[error_state_key] = "Login failed. Check `logs/errors.log`."
+                return
+
+            if user is None:
+                st.session_state[error_state_key] = (
+                    f"User '@{username}' not found in the active mission database."
+                )
+                return
+
+            _set_current_user(user)
+            st.session_state.pop(error_state_key, None)
+
+        st.button(
+            "✅ Select User",
+            key="user_profile_login_select_user_btn",
+            use_container_width=True,
+            on_click=_login_selected_user,
+        )
+
+    login_error = st.session_state.get(error_state_key)
+    if login_error:
+        st.error(str(login_error))
     
     return None
 
