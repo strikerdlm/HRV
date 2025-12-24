@@ -22,6 +22,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Logout hardening across modules** (`app/app.py`, `app/user_management_ui.py`, `app/sleep_tab.py`): All logout buttons now use unique keys; `user_management_ui` logout sets the global `user_logged_out` flag; and `app.py` enforces a hard logout guard that clears any restored profile when logged out.
 - **Disabled default auto-profile selection** (`app/app.py`): The app no longer silently auto-selects the author/single profile when none is set (this made logout appear broken). You can re-enable for demos via `HRV_AUTO_SELECT_DEFAULT_PROFILE=1`.
 
+### Fixed
+- **Wrist Monitoring refresh + Garmin Connect integrity** (`app/user_profile_tab.py`, `app/garmin_connect_service.py`): Wrist Monitoring history now refreshes immediately after Garmin sync/import (token-based cache bust + Refresh button, no forced rerun). Garmin Connect fetch no longer reports success while returning all-null placeholder rows, and daily field extraction is more robust for Vivosmart 5 exports.
+
 ## [1.8.50] - 2025-12-23
 
 ### Fixed
