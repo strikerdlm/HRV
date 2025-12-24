@@ -5,6 +5,16 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.49] - 2025-12-23
+
+### Fixed
+- **Space Weather loads fast (no hidden network fetches)** (`app/app.py`): Removed the automatic SWPC Kp download that was triggered during correlation UI rendering; Kp now loads from cache-only and requires an explicit user fetch to refresh.
+
+### Changed
+- **NOAA Space “Today (fast)” mode** (`app/app.py`): Added a fast default scope that loads only Kp + F10.7 for instant context; Core/Full remain available on demand.
+- **Cache-only bootstrap for Space Weather + NOAA Space** (`app/app.py`, `app/noaa_space.py`): Tabs now show the last cached copy immediately without hitting the network.
+- **Background prefetch now optional (default OFF)** (`app/app.py`): Background 12h refresh is no longer automatic; it’s a user toggle to avoid slow startup/CPU contention on Windows/OneDrive setups.
+
 ## [1.8.48] - 2025-12-23
 
 ### Fixed
