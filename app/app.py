@@ -3192,29 +3192,55 @@ def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
     import concurrent.futures
 
     # Fetch Kp + F10.7 in parallel to reduce wall-clock latency on slow networks.
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
-        future_kp = executor.submit(
-            _timed_call, lambda: get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
+    overall_timeout_s = 8.0  # hard bound total wait time for UI responsiveness
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=2)
+    future_kp = executor.submit(
+        _timed_call, lambda: get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
+    )
+    future_flux = executor.submit(_timed_call, get_swpc_solar_radio_flux)
+    futures = {"kp": future_kp, "flux": future_flux}
+
+    try:
+        done, not_done = concurrent.futures.wait(
+            set(futures.values()),
+            timeout=overall_timeout_s,
+            return_when=concurrent.futures.ALL_COMPLETED,
         )
-        future_flux = executor.submit(_timed_call, get_swpc_solar_radio_flux)
 
-        try:
-            kp_df, kp_duration_ms = future_kp.result(timeout=5.0)
-            state["kp_df"] = kp_df
-        except concurrent.futures.TimeoutError:
-            state["kp_error"] = "Kp fetch timed out (>5s). Try again or use cached data."
-        except (requests.RequestException, ValueError) as exc:
-            log_exception(_LOGGER, "Failed to fetch SWPC K-index", exc)
-            state["kp_error"] = f"Failed to retrieve K-index data: {exc}"
+        # Kp
+        if future_kp in done:
+            try:
+                kp_df, kp_duration_ms = future_kp.result()
+                state["kp_df"] = kp_df
+            except (requests.RequestException, ValueError) as exc:
+                log_exception(_LOGGER, "Failed to fetch SWPC K-index", exc)
+                state["kp_error"] = f"Failed to retrieve K-index data: {exc}"
+            except Exception as exc:  # pragma: no cover - defensive
+                log_exception(_LOGGER, "Unexpected SWPC K-index error", exc)
+                state["kp_error"] = f"Unexpected error fetching Kp: {exc}"
+        else:
+            state["kp_error"] = f"Kp fetch timed out (>{overall_timeout_s:.0f}s). Try again or use cached data."
 
-        try:
-            flux_df, flux_duration_ms = future_flux.result(timeout=5.0)
-            state["flux_df"] = flux_df
-        except concurrent.futures.TimeoutError:
-            state["flux_error"] = "F10.7 fetch timed out (>5s). Try again or use cached data."
-        except (requests.RequestException, ValueError) as exc:
-            log_exception(_LOGGER, "Failed to fetch SWPC solar radio flux", exc)
-            state["flux_error"] = f"Failed to retrieve solar radio flux: {exc}"
+        # F10.7
+        if future_flux in done:
+            try:
+                flux_df, flux_duration_ms = future_flux.result()
+                state["flux_df"] = flux_df
+            except (requests.RequestException, ValueError) as exc:
+                log_exception(_LOGGER, "Failed to fetch SWPC solar radio flux", exc)
+                state["flux_error"] = f"Failed to retrieve solar radio flux: {exc}"
+            except Exception as exc:  # pragma: no cover - defensive
+                log_exception(_LOGGER, "Unexpected SWPC solar radio flux error", exc)
+                state["flux_error"] = f"Unexpected error fetching F10.7: {exc}"
+        else:
+            state["flux_error"] = f"F10.7 fetch timed out (>{overall_timeout_s:.0f}s). Try again or use cached data."
+
+        # Best-effort cancel any remaining work (threads may still be stuck in DNS/TLS).
+        for pending in not_done:
+            _ = pending.cancel()
+    finally:
+        # Do not block Streamlit waiting for worker threads to finish.
+        executor.shutdown(wait=False, cancel_futures=True)
     state["last_updated"] = pd.Timestamp.utcnow()
     state["loaded"] = bool(
         (isinstance(state.get("kp_df"), pd.DataFrame) and not state["kp_df"].empty)
@@ -3487,30 +3513,39 @@ def _get_user_identity(profile: Any) -> Tuple[Optional[str], str]:
 
 
 def _resolve_active_profile(logger: logging.Logger) -> Any:
-    """Resolve the active user profile, favoring the author if unset."""
+    """Resolve the active user profile.
+
+    Important:
+        This must never silently "log in" a profile after a user has logged out.
+        Auto-selecting a default profile can make logout appear broken.
+    """
     if st.session_state.get("user_logged_out"):
         return None
     existing = st.session_state.get("current_user_profile")
     if existing:
         return existing
-    try:
-        db = get_database()
-        users = db.list_users()
-        if not users:
-            return None
-        for user in users:
-            full_name = (user.full_name or "").lower()
-            username = (user.username or "").lower()
-            if "malpica" in full_name or "diego" in full_name or "diego" in username:
-                st.session_state["current_user_profile"] = user
-                st.session_state["current_user_id"] = user.user_id
-                return user
-        if len(users) == 1:
-            st.session_state["current_user_profile"] = users[0]
-            st.session_state["current_user_id"] = users[0].user_id
-            return users[0]
-    except Exception as exc:  # pragma: no cover - defensive
-        logger.debug("Unable to resolve active profile: %s", exc)
+
+    # Opt-in only: allow auto-selecting a default profile for demo/test setups.
+    # Default is OFF to keep logout semantics correct and predictable.
+    if os.environ.get("HRV_AUTO_SELECT_DEFAULT_PROFILE", "0").strip() == "1":
+        try:
+            db = get_database()
+            users = db.list_users()
+            if not users:
+                return None
+            for user in users:
+                full_name = (user.full_name or "").lower()
+                username = (user.username or "").lower()
+                if "malpica" in full_name or "diego" in full_name or "diego" in username:
+                    st.session_state["current_user_profile"] = user
+                    st.session_state["current_user_id"] = user.user_id
+                    return user
+            if len(users) == 1:
+                st.session_state["current_user_profile"] = users[0]
+                st.session_state["current_user_id"] = users[0].user_id
+                return users[0]
+        except Exception as exc:  # pragma: no cover - defensive
+            logger.debug("Unable to resolve active profile: %s", exc)
     return None
 
 
@@ -6682,6 +6717,12 @@ def main() -> None:
     if UI_STATE_MANAGER_AVAILABLE:
         update_data_status_from_session()
     
+    # Hard logout guard: if the user explicitly logged out, ensure we do not
+    # accidentally keep/restore any profile in this run.
+    if st.session_state.get("user_logged_out"):
+        st.session_state.pop("current_user_profile", None)
+        st.session_state.pop("current_user_id", None)
+
     active_profile = _resolve_active_profile(logger)
     active_user_id, active_display_name = _get_user_identity(active_profile)
     st.markdown(
@@ -12526,6 +12567,12 @@ that predicts cognitive performance based on:
                 "donki": {"done": True, "error": None, "stale": False},
             }
             data_age = "manual (click Fetch)"
+
+            # Auto-load cache-only snapshot once per session so the tab shows
+            # content immediately without any network calls.
+            if not space_state.get("loaded") and not space_state.get("auto_attempted", False):
+                _load_space_weather_cache_only(space_state)
+                space_state["auto_attempted"] = True
 
             col_load_cache, col_fetch_sw, col_fetch_donki, col_bg_info = st.columns([1, 1, 1, 2])
             with col_load_cache:
