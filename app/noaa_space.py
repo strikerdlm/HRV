@@ -735,6 +735,7 @@ def load_noaa_space_data(
     use_cache: bool = True,
     max_workers: int = 8,
     allow_stale_cache: bool = False,
+    overall_timeout_s: Optional[float] = None,
 ) -> Tuple[Dict[str, NOAADataBundle], Dict[str, str]]:
     """
     Load one or more NOAA datasets defined in :data:`NOAA_SOURCES`.
@@ -758,20 +759,54 @@ def load_noaa_space_data(
     selected_keys = list(keys) if keys is not None else list(NOAA_SOURCES.keys())
     bundles: Dict[str, NOAADataBundle] = {}
     errors: Dict[str, str] = {}
-    
-    # Use parallel fetching for faster loading (especially when cache is stale)
-    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-        futures = {
-            executor.submit(_fetch_single_source, key, use_cache, bool(allow_stale_cache)): key
-            for key in selected_keys
-        }
-        for future in concurrent.futures.as_completed(futures):
-            key, bundle, error = future.result()
-            if bundle is not None:
-                bundles[key] = bundle
-            if error is not None:
-                errors[key] = error
-    
+
+    if max_workers < 1:
+        raise ValueError("max_workers must be >= 1")
+    if max_workers > 32:
+        raise ValueError("max_workers must be <= 32")
+
+    # Hard bound total wait time so Streamlit UI never appears to hang "forever".
+    # Note: if DNS resolution stalls inside a worker thread, cancelling the future
+    # won't interrupt the thread, but we can stop waiting and surface a timeout.
+    if overall_timeout_s is None:
+        # Conservative default: fast enough for UI, long enough for slow networks.
+        overall_timeout_s = 30.0 if len(selected_keys) <= 6 else 60.0
+    if overall_timeout_s <= 0:
+        raise ValueError("overall_timeout_s must be > 0")
+
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=max_workers)
+    futures: Dict[concurrent.futures.Future[Tuple[str, Optional[NOAADataBundle], Optional[str]]], str] = {
+        executor.submit(_fetch_single_source, key, use_cache, bool(allow_stale_cache)): key
+        for key in selected_keys
+    }
+
+    try:
+        try:
+            for future in concurrent.futures.as_completed(futures, timeout=float(overall_timeout_s)):
+                key = futures.get(future, "__unknown__")
+                try:
+                    result_key, bundle, error = future.result()
+                except (requests.RequestException, ValueError) as exc:
+                    errors[key] = str(exc)
+                    continue
+                except Exception as exc:  # pragma: no cover - defensive
+                    errors[key] = f"Unexpected error: {exc}"
+                    continue
+
+                if bundle is not None:
+                    bundles[result_key] = bundle
+                if error is not None:
+                    errors[result_key] = error
+        except concurrent.futures.TimeoutError:
+            # Mark remaining futures as timed out and stop waiting.
+            for future, key in futures.items():
+                if not future.done():
+                    errors[key] = f"Timed out fetching {key} (>{overall_timeout_s:.0f}s)."
+                    _ = future.cancel()  # best-effort; threads may still be running
+    finally:
+        # Do not wait for potentially-stuck worker threads; return control to the UI.
+        executor.shutdown(wait=False, cancel_futures=True)
+
     return bundles, errors
 
 
