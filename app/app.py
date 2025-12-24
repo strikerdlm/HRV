@@ -12296,14 +12296,7 @@ that predicts cognitive performance based on:
             """)
         
         st.markdown("---")
-        st.markdown("""
-**📖 Key References:**
-- [Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf) — Original HRV standards
-- [Shaffer & Ginsberg 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full) — Comprehensive HRV overview
-- [Nunan et al. 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/) — Short-term normative values
-- [Laborde et al. 2017](https://www.frontiersin.org/journals/psychology/articles/10.3389/fpsyg.2017.00213/full) — HRV guidelines for psychophysiology
-- [Quigley et al. 2024](https://onlinelibrary.wiley.com/doi/10.1111/psyp.14604) — Updated publication guidelines
-        """)
+        st.info("References are consolidated in the **📚 References** tab (APA 7 format).")
 
     # ==================== CIRCADIAN PHYSIOLOGY TAB ====================
     with tab_circadian:
