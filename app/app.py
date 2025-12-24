@@ -12524,11 +12524,6 @@ that predicts cognitive performance based on:
             space_state = _space_weather_state()
             donki_state = _donki_state()
 
-            # Fast cache-only bootstrap (no network): show the last cached copy instantly.
-            if not space_state.get("loaded") and not space_state.get("auto_attempted"):
-                _load_space_weather_cache_only(space_state)
-                space_state["auto_attempted"] = True
-
             # Background prefetch disabled: keep UI deterministic and instant.
             bg_status = {
                 "space_weather": {"done": True, "error": None, "stale": False},
@@ -12537,7 +12532,13 @@ that predicts cognitive performance based on:
             }
             data_age = "manual (click Fetch)"
 
-            col_fetch_sw, col_fetch_donki, col_bg_info = st.columns([1, 1, 2])
+            col_load_cache, col_fetch_sw, col_fetch_donki, col_bg_info = st.columns([1, 1, 1, 2])
+            with col_load_cache:
+                load_cache_clicked = st.button(
+                    "⚡ Load cached copy",
+                    key="load_space_weather_cache",
+                    help="Load last saved SWPC data from disk (no network).",
+                )
             with col_fetch_sw:
                 fetch_sw_clicked = st.button(
                     "📥 Fetch space weather", key="fetch_space_weather",
@@ -12551,9 +12552,11 @@ that predicts cognitive performance based on:
                     help="Requires NASA_API_KEY in your .env file.",
                 )
             with col_bg_info:
-                # Non-intrusive background fetch status with data age
                 cache_hint = "cached" if space_state.get("loaded") else "no cache"
-                st.caption(f"⏸️ Background prefetch disabled | SWPC cache: {cache_hint} | Refresh: click Fetch")
+                st.caption(
+                    "⏸️ Background prefetch disabled | "
+                    f"SWPC cache: {cache_hint} | Load cache or click Fetch"
+                )
             donki_window_days = st.slider(
                 "DONKI window (days)",
                 min_value=7,
@@ -12624,6 +12627,11 @@ that predicts cognitive performance based on:
                         st.success(
                             f"Cleared caches: SWPC={deleted_sw} file(s), NOAA={deleted_noaa} file(s), DONKI={deleted_donki} file(s)."
                         )
+            if load_cache_clicked:
+                with st.spinner("Loading cached space weather…"):
+                    _load_space_weather_cache_only(space_state)
+                st.success("Loaded cached space weather data (no network).")
+
             if fetch_sw_clicked:
                 _sw_fetch_success = False
                 with st.status(
@@ -14051,16 +14059,17 @@ that predicts cognitive performance based on:
             """)
         
         noaa_state = _noaa_space_state()
-        # Fast cache-only bootstrap (no network): show the last cached copy instantly.
-        if not noaa_state.get("bundles") and not noaa_state.get("auto_attempted"):
-            _load_noaa_space_cache_only(noaa_state, keys=NOAA_FAST_KEYS)
-            noaa_state["auto_attempted"] = True
-
         # Background prefetch disabled: keep UI deterministic and instant.
         bg_status = {"noaa": {"done": True, "error": None, "stale": False}}
         data_age = "manual (click Fetch)"
 
-        col_scope, col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns([1, 1, 1, 2])
+        col_load_cache, col_scope, col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns([1, 1, 1, 1, 2])
+        with col_load_cache:
+            load_noaa_cache_clicked = st.button(
+                "⚡ Load cached NOAA",
+                key="load_noaa_cache",
+                help="Load last saved NOAA feeds from disk (no network).",
+            )
         with col_scope:
             fetch_scope = st.selectbox(
                 "Scope",
@@ -14091,9 +14100,11 @@ that predicts cognitive performance based on:
                 help="Bypass cache and fetch fresh data from NOAA servers for the selected scope.",
             )
         with col_bg_status:
-            # Show background fetch status with data age (non-intrusive)
             cache_hint = "cached" if bool(noaa_state.get("bundles")) else "no cache"
-            st.caption(f"⏸️ Background prefetch disabled | NOAA cache: {cache_hint} | Refresh: click Fetch")
+            st.caption(
+                "⏸️ Background prefetch disabled | "
+                f"NOAA cache: {cache_hint} | Load cache or click Fetch"
+            )
 
         with st.expander("🧹 Cache maintenance", expanded=False):
             confirm_clear_noaa = st.checkbox(
@@ -14129,6 +14140,11 @@ that predicts cognitive performance based on:
                     st.error(f"NOAA cache reset completed with errors: {err_noaa}")
                 else:
                     st.success(f"Cleared NOAA cache: {deleted_noaa} file(s).")
+
+        if load_noaa_cache_clicked:
+            with st.spinner("Loading cached NOAA feeds…"):
+                _load_noaa_space_cache_only(noaa_state, keys=keys_to_fetch)
+            st.success("Loaded cached NOAA feeds (no network).")
 
         if fetch_noaa_clicked:
             with st.spinner("Fetching NOAA JSON feeds…"):
