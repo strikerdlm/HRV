@@ -6641,6 +6641,37 @@ def main() -> None:
         # Default: research mode.
         set_app_mode(AppMode.RESEARCH)
         render_app_mode_badge(AppMode.RESEARCH)
+        # Red warning box directly below the mode badge (user-requested placement).
+        st.markdown(
+            """
+            <div style="
+                display:flex;
+                align-items:center;
+                gap:12px;
+                padding:10px 14px;
+                border-radius:14px;
+                background:#450a0a;
+                border:1px solid #dc2626;
+                margin:0 0 14px 0;
+            ">
+                <div style="display:flex;align-items:center;gap:10px;">
+                    <div style="
+                        width:10px;height:10px;border-radius:999px;background:#ef4444;
+                        box-shadow:0 0 12px #ef4444;
+                    "></div>
+                    <div>
+                        <div style="font-weight:800;color:#fca5a5;line-height:1.2;">
+                            ⚠️ Heavy Computations
+                        </div>
+                        <div style="color:rgba(255,255,255,0.82);font-size:0.9rem;">
+                            Space Weather/NOAA correlations and ML take time. Let fetches complete—results appear when ready.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     except Exception:
         # Mode banner is non-critical; never block the research UI if it fails.
         pass
@@ -12345,15 +12376,6 @@ that predicts cognitive performance based on:
         # Dashboard renders immediately - no blocking background fetch
         _sw_loading_msg = st.empty()
 
-        # User-facing notice about compute cost and wait time
-        st.markdown(
-            "<div style='color:#dc2626;font-weight:600;margin-top:0.25rem;margin-bottom:0.5rem;'>"
-            "Complex space-weather/HRV computations can take time. Please allow the fetch/correlation to finish — "
-            "the UI will update when ready."
-            "</div>",
-            unsafe_allow_html=True,
-        )
-        
         # NOTE: Content always loads - no lazy loading gate.
         _sw_content_loaded = True
         st.session_state["_space_weather_tab_loaded"] = True
@@ -14020,13 +14042,6 @@ that predicts cognitive performance based on:
         # Dashboard loads instantly - no blocking background fetch
         # User clicks "Fetch NOAA feeds" button to load data
         _noaa_loading_msg = st.empty()
-        st.markdown(
-            "<div style='color:#dc2626;font-weight:600;margin-top:0.25rem;margin-bottom:0.5rem;'>"
-            "NOAA correlations/ML can run heavy — please allow processing to complete after you fetch data. "
-            "CPU will be fully used during the calculations."
-            "</div>",
-            unsafe_allow_html=True,
-        )
         st.markdown("*Real-time solar and geomagnetic data for physiology correlation analysis*")
 
         with st.expander("🌞 **Understanding Space Weather Metrics**", expanded=False):
