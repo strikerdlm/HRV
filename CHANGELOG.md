@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **NOAA correlation CTAs** (`app/app.py`): Added inline buttons beside the NOAA correlation callouts to trigger HRV window analysis when windowed metrics are missing, so users can start correlations and batch scans directly from the NOAA tab.
 - **On-demand metric correlations** (`app/app.py`): The physiology correlation matrix now runs only when you click **Run correlations**, preventing any automatic correlation/analysis on render.
 - **User-facing on-demand notices** (`app/app.py`): Added explicit “click to run” info and spinners for NOAA correlations, batch NOAA scans, and the physiology correlation matrix so users see a clear warning that computations may take time.
+- **Instant Space Weather/NOAA tabs** (`app/app.py`): Removed automatic cache loads; both tabs now render immediately and only load cached or fresh data when you click **Load cached copy/NOAA** or **Fetch**, with spinners and success messaging. This keeps the UI responsive even with no HRV data.
 
 ## [1.8.50] - 2025-12-23
 
