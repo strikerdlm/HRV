@@ -841,7 +841,11 @@ def _get_current_user() -> Optional[UserProfile]:
 def _set_current_user(user: Optional[UserProfile]) -> None:
     """Set current user in session state, sync language, and register in multi-user manager."""
     st.session_state[_SESSION_CURRENT_USER] = user
-    st.session_state["user_logged_out"] = False
+    # Only clear the explicit logout flag on successful login.
+    # Do NOT clear it when setting user=None, otherwise unrelated flows (e.g.,
+    # profile deletion) can accidentally re-enable auto-profile selection.
+    if user is not None:
+        st.session_state["user_logged_out"] = False
     if user:
         st.session_state[_SESSION_USER_ID] = user.user_id
         # Sync language preference from user profile
@@ -3874,9 +3878,14 @@ def _render_data_management(user: UserProfile) -> None:
     with col2:
         st.markdown("### Account Actions")
 
-        if st.button("🚪 Logout", key=f"profile_logout_{user.user_id}", use_container_width=True):
-            _logout_and_preserve()
-            st.rerun()
+        # Use an on_click callback so logout happens BEFORE the rest of the app
+        # executes on rerun (prevents "logout takes forever" when other tabs are heavy).
+        st.button(
+            "🚪 Logout",
+            key=f"profile_logout_{user.user_id}",
+            use_container_width=True,
+            on_click=_logout_and_preserve,
+        )
 
         st.markdown("---")
 
@@ -7637,9 +7646,12 @@ def render_user_profile_tab() -> None:
         with banner_col1:
             st.success(f"✅ Active Profile for Analysis: **{current_user.full_name}**")
         with banner_col2:
-            if st.button("🚪 Logout", key=f"top_logout_{current_user.user_id}", use_container_width=True):
-                _logout_and_preserve()
-                st.rerun()
+            st.button(
+                "🚪 Logout",
+                key=f"top_logout_{current_user.user_id}",
+                use_container_width=True,
+                on_click=_logout_and_preserve,
+            )
 
         # Show profile and assessments
         if st.session_state.get("edit_profile_mode"):
