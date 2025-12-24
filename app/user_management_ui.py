@@ -50,9 +50,11 @@ def set_current_user(profile: Optional[UserProfile]) -> None:
     if profile:
         st.session_state[SESSION_USER_ID] = profile.user_id
         st.session_state[SESSION_USER_PROFILE] = profile
+        st.session_state["user_logged_out"] = False
     else:
         st.session_state.pop(SESSION_USER_ID, None)
         st.session_state.pop(SESSION_USER_PROFILE, None)
+        st.session_state["user_logged_out"] = True
 
 
 def is_user_logged_in() -> bool:
@@ -87,7 +89,11 @@ def render_user_selector() -> Optional[UserProfile]:
             if st.button("📝 Edit", key="edit_profile_btn", use_container_width=True):
                 st.session_state["show_profile_editor"] = True
         with col2:
-            if st.button("🚪 Logout", key="logout_btn", use_container_width=True):
+            if st.button(
+                "🚪 Logout",
+                key=f"user_mgmt_logout_{current_user.user_id}",
+                use_container_width=True,
+            ):
                 set_current_user(None)
                 st.rerun()
         
