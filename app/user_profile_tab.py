@@ -144,7 +144,7 @@ except ImportError:
 
 # NOAA / space-weather datasets (used for profile radiation + alert enrichment)
 try:
-    from noaa_space import load_noaa_space_data
+    from noaa_space import load_noaa_space_cache
     NOAA_SPACE_AVAILABLE = True
 except ImportError:
     NOAA_SPACE_AVAILABLE = False
@@ -6492,12 +6492,18 @@ def _estimate_baseline_radiation_msv_per_day(
 
 @st.cache_data(ttl=1800, max_entries=16, show_spinner=False)
 def _load_noaa_profile_bundles() -> tuple[Dict[str, Any], Dict[str, str]]:
-    """Load a small subset of NOAA datasets used for profile alert estimation."""
+    """Load a small subset of NOAA datasets used for profile alert estimation.
+
+    Important:
+        This must NEVER hit the network during normal profile rendering. It loads
+        cache-only copies so the UI stays responsive. Users can refresh NOAA data
+        explicitly from the dedicated NOAA Space tab.
+    """
     if not NOAA_SPACE_AVAILABLE:
         return {}, {"__global__": "NOAA space module unavailable."}
-    bundles, errors = load_noaa_space_data(
+    bundles, errors = load_noaa_space_cache(
         keys=("planetary_k_index_1m", "goes_integral_protons"),
-        use_cache=True,
+        allow_stale_cache=True,
     )
     packed: Dict[str, Any] = {}
     for key, bundle in bundles.items():
