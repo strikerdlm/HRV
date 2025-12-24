@@ -7979,6 +7979,29 @@ def main() -> None:
         pns_mapping = {}
         ordered_sources = []
 
+    # Rehydrate cached HRV results after reruns so downstream tabs (NOAA/Space Weather)
+    # have access to windowed metrics and metadata without rerunning the full analysis.
+    if windowed_df.empty:
+        cached_windowed = st.session_state.get("_hrv_cached_windowed_df")
+        if isinstance(cached_windowed, pd.DataFrame) and not cached_windowed.empty:
+            windowed_df = cached_windowed
+            if multi_results_df.empty:
+                cached_multi = st.session_state.get("_hrv_cached_multi_results_df", pd.DataFrame())
+                if isinstance(cached_multi, pd.DataFrame):
+                    multi_results_df = cached_multi
+            if not meta_rows:
+                meta_rows = st.session_state.get("_hrv_cached_meta_rows", [])
+            if not meta_rows_for_context:
+                meta_rows_for_context = st.session_state.get("_hrv_cached_meta_rows_for_context", [])
+            if ml_summary_df.empty:
+                cached_ml = st.session_state.get("_hrv_cached_ml_summary_df", pd.DataFrame())
+                if isinstance(cached_ml, pd.DataFrame):
+                    ml_summary_df = cached_ml
+            if episodes_df.empty:
+                cached_eps = st.session_state.get("_hrv_cached_episodes_df", pd.DataFrame())
+                if isinstance(cached_eps, pd.DataFrame):
+                    episodes_df = cached_eps
+
     metric_list: List[str] = _select_hrv_metric_columns(
         windowed_df,
         exclude=("kp_index",),
