@@ -679,6 +679,55 @@ def _fetch_single_source(
         return key, None, str(exc)
 
 
+def load_noaa_space_cache(
+    keys: Optional[Sequence[str]] = None,
+    *,
+    allow_stale_cache: bool = True,
+) -> Tuple[Dict[str, NOAADataBundle], Dict[str, str]]:
+    """Load one or more NOAA datasets from the local cache ONLY (no network).
+
+    This is intended for fast UI startup: show the most recently cached copy
+    immediately, and let users trigger a refresh explicitly when desired.
+
+    Args:
+        keys: Optional iterable of dataset keys to load. When omitted, every
+            configured NOAA dataset is attempted.
+        allow_stale_cache: When True, returns cached data even if older than
+            :data:`CACHE_TTL`.
+
+    Returns:
+        (bundles, errors) where:
+          - bundles maps dataset key → NOAADataBundle
+          - errors maps dataset key → human-readable error message
+    """
+    selected_keys = list(keys) if keys is not None else list(NOAA_SOURCES.keys())
+    bundles: Dict[str, NOAADataBundle] = {}
+    errors: Dict[str, str] = {}
+
+    for key in selected_keys:
+        spec = NOAA_SOURCES.get(key)
+        if spec is None:
+            errors[key] = "Unknown NOAA dataset key."
+            continue
+
+        cached = _read_cache(spec, allow_stale=bool(allow_stale_cache))
+        if cached is not None:
+            bundles[key] = _prepare_frame(spec, cached)
+            continue
+
+        # Fallback: reuse long-horizon SWPC cache for Kp when available.
+        if spec.key == "planetary_k_index_3h":
+            legacy_cache = NOAA_SPACE_CACHE_DIR.parent / "space_weather" / "kp_index_30.json"
+            legacy_df = _read_legacy_dataframe_cache(legacy_cache)
+            if legacy_df is not None and not legacy_df.empty:
+                bundles[key] = _prepare_frame(spec, legacy_df)
+                continue
+
+        errors[key] = "No cached data available. Click 'Fetch NOAA feeds' to download."
+
+    return bundles, errors
+
+
 def load_noaa_space_data(
     keys: Optional[Sequence[str]] = None,
     *,
