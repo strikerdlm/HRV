@@ -9459,60 +9459,66 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
                 else:
                     st.info("ML analytics module not available.")
                 
-                # Correlation Matrix
+                # Correlation Matrix (explicitly on-demand)
                 st.markdown("---")
                 st.markdown("#### 🔗 Metric Correlations")
-                
-                if STATISTICAL_ANALYSIS_AVAILABLE and len(selected_metrics) >= 2:
-                    # Validate that selected metrics exist in the dataframe
-                    available_metrics = [m for m in selected_metrics if m in multi_results_df.columns]
-                    
-                    if len(available_metrics) < 2:
-                        st.warning("Not enough valid metrics available for correlation analysis.")
-                    else:
-                        try:
-                            # Compute correlation matrix only with available metrics
-                            corr_df = multi_results_df[available_metrics].corr()
-                            
-                            # Validate correlation computation succeeded
-                            if corr_df.empty or corr_df.isnull().all().all():
-                                st.warning("Could not compute correlations - insufficient data.")
-                            else:
-                                if SCIENTIFIC_CHARTS_AVAILABLE:
-                                    corr_chart = build_physiology_correlation_matrix(
-                                        correlation_df=corr_df,
-                                        title="Physiological Metrics Correlation Matrix",
-                                    )
-                                    
-                                    render_echarts(
-                                        corr_chart,
-                                        height_px=400,
-                                        config=EChartsConfig()
-                                    )
-                                else:
-                                    st.dataframe(corr_df.style.background_gradient(cmap="RdYlGn", vmin=-1, vmax=1))
-                                
-                                # Highlight significant correlations
-                                st.markdown("**Significant Correlations (|r| > 0.5):**")
-                                sig_corrs = []
-                                for i, m1 in enumerate(available_metrics):
-                                    for j, m2 in enumerate(available_metrics):
-                                        if i < j and m1 in corr_df.index and m2 in corr_df.columns:
-                                            r = corr_df.loc[m1, m2]
-                                            if pd.notna(r) and abs(r) > 0.5:
-                                                direction = "positive" if r > 0 else "negative"
-                                                strength = "strong" if abs(r) > 0.7 else "moderate"
-                                                sig_corrs.append(f"- **{m1}** ↔ **{m2}**: r = {r:.3f} ({strength} {direction})")
-                                
-                                if sig_corrs:
-                                    st.markdown("\n".join(sig_corrs))
-                                else:
-                                    st.info("No correlations with |r| > 0.5 found among selected metrics.")
-                        except Exception as e:
-                            logger.warning(f"Correlation computation failed: {e}")
-                            st.warning(f"Could not compute correlations: {e}")
-                elif len(selected_metrics) < 2:
+
+                if len(selected_metrics) < 2:
                     st.info("Select at least 2 metrics to compute correlations.")
+                else:
+                    run_metric_corr = st.button(
+                        "Run correlations",
+                        key="metric_corr_run",
+                        help="Compute the correlation matrix for the selected metrics.",
+                    )
+                    if not run_metric_corr:
+                        st.info("Click **Run correlations** to compute the correlation matrix.")
+                    elif not STATISTICAL_ANALYSIS_AVAILABLE:
+                        st.warning("Statistical analysis module not available.")
+                    else:
+                        available_metrics = [m for m in selected_metrics if m in multi_results_df.columns]
+
+                        if len(available_metrics) < 2:
+                            st.warning("Not enough valid metrics available for correlation analysis.")
+                        else:
+                            try:
+                                corr_df = multi_results_df[available_metrics].corr()
+
+                                if corr_df.empty or corr_df.isnull().all().all():
+                                    st.warning("Could not compute correlations - insufficient data.")
+                                else:
+                                    if SCIENTIFIC_CHARTS_AVAILABLE:
+                                        corr_chart = build_physiology_correlation_matrix(
+                                            correlation_df=corr_df,
+                                            title="Physiological Metrics Correlation Matrix",
+                                        )
+
+                                        render_echarts(
+                                            corr_chart,
+                                            height_px=400,
+                                            config=EChartsConfig()
+                                        )
+                                    else:
+                                        st.dataframe(corr_df.style.background_gradient(cmap="RdYlGn", vmin=-1, vmax=1))
+
+                                    st.markdown("**Significant Correlations (|r| > 0.5):**")
+                                    sig_corrs = []
+                                    for i, m1 in enumerate(available_metrics):
+                                        for j, m2 in enumerate(available_metrics):
+                                            if i < j and m1 in corr_df.index and m2 in corr_df.columns:
+                                                r = corr_df.loc[m1, m2]
+                                                if pd.notna(r) and abs(r) > 0.5:
+                                                    direction = "positive" if r > 0 else "negative"
+                                                    strength = "strong" if abs(r) > 0.7 else "moderate"
+                                                    sig_corrs.append(f"- **{m1}** ↔ **{m2}**: r = {r:.3f} ({strength} {direction})")
+
+                                    if sig_corrs:
+                                        st.markdown("\n".join(sig_corrs))
+                                    else:
+                                        st.info("No correlations with |r| > 0.5 found among selected metrics.")
+                            except Exception as e:
+                                logger.warning(f"Correlation computation failed: {e}")
+                                st.warning(f"Could not compute correlations: {e}")
             elif not selected_metrics:
                 st.info("Select at least one metric to display the timeline.")
         
@@ -14320,7 +14326,22 @@ that predicts cognitive performance based on:
             st.divider()
             st.markdown("##### HRV correlation analysis")
             if noaa_windowed_df.empty:
-                st.info("Run the HRV window analysis to enable correlations.")
+                info_col, action_col = st.columns([0.65, 0.35])
+                with info_col:
+                    st.info("Run the HRV window analysis to enable correlations.")
+                with action_col:
+                    trigger_hrv_corr = st.button(
+                        "Run HRV window analysis",
+                        key="noaa_trigger_hrv_corr",
+                        help="Compute HRV windowed metrics to unlock NOAA correlations.",
+                    )
+                if trigger_hrv_corr:
+                    if not has_hrv_data_uploaded:
+                        st.warning("Upload HRV data first, then run the HRV analysis.")
+                    else:
+                        st.session_state["auto_run_hrv_analysis"] = True
+                        st.session_state.pop("hrv_analysis_complete_signature", None)
+                        st.rerun()
             else:
                 metrics_available = [
                     metric
@@ -14420,7 +14441,22 @@ that predicts cognitive performance based on:
             st.divider()
             st.markdown("##### Batch NOAA correlation scan")
             if noaa_windowed_df.empty:
-                st.info("Run the HRV window analysis to enable batch correlations.")
+                info_col, action_col = st.columns([0.65, 0.35])
+                with info_col:
+                    st.info("Run the HRV window analysis to enable batch correlations.")
+                with action_col:
+                    trigger_hrv_batch = st.button(
+                        "Run HRV window analysis",
+                        key="noaa_trigger_hrv_batch",
+                        help="Compute HRV windowed metrics to unlock batch NOAA correlations.",
+                    )
+                if trigger_hrv_batch:
+                    if not has_hrv_data_uploaded:
+                        st.warning("Upload HRV data first, then run the HRV analysis.")
+                    else:
+                        st.session_state["auto_run_hrv_analysis"] = True
+                        st.session_state.pop("hrv_analysis_complete_signature", None)
+                        st.rerun()
             elif not metrics_available:
                 st.info("No numeric HRV metrics available for correlation.")
             elif not dataset_options:
