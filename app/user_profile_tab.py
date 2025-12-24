@@ -2378,6 +2378,15 @@ def _render_assessment_history(user: UserProfile) -> None:
 def _render_garmin_metrics_history(user: UserProfile) -> None:
     """Render wrist-wearable wellness/activity history with gauges."""
     st.markdown("## ⌚ Wrist Monitoring")
+
+    # Cache-busting token for wrist monitoring history.
+    # This avoids stale charts after new Garmin imports without clearing *all* cache_data.
+    refresh_state_key = f"garmin_history_refresh_token:{user.user_id}"
+    refresh_token_raw = st.session_state.get(refresh_state_key, 0)
+    try:
+        refresh_token = int(refresh_token_raw) if refresh_token_raw is not None else 0
+    except (TypeError, ValueError):
+        refresh_token = 0
     
     # Help section for complete data export
     with st.expander("ℹ️ Missing sleep/stress/body battery data? Click here", expanded=False):
@@ -2449,6 +2458,8 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
                 if entries:
                     db = get_database()
                     db.save_garmin_daily_metrics(entries)
+                    refresh_token += 1
+                    st.session_state[refresh_state_key] = refresh_token
         except Exception as exc:  # noqa: BLE001
             if log_exception is not None:
                 log_exception(_LOGGER, "Failed to persist sidebar Garmin metrics", exc)
@@ -2491,10 +2502,11 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
                     else:
                         db = get_database()
                         db.save_garmin_daily_metrics(records)
+                        refresh_token += 1
+                        st.session_state[refresh_state_key] = refresh_token
                         summary = summarize_garmin_daily(records)
                         label = summary.get("dates", "")
                         st.success(f"Imported {summary.get('count', len(records))} day(s) from Garmin Connect. {label}")
-                        st.experimental_rerun()
 
     if not GARMIN_IMPORT_AVAILABLE:
         st.info("Garmin import module unavailable. Install fitparse and rerun.")
@@ -2509,8 +2521,21 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         help="Loads the most recent N days stored in your profile database.",
     )
 
-    @st.cache_data(ttl=30, max_entries=64, show_spinner=False)
-    def _load_history(uid: str, limit: int) -> pd.DataFrame:
+    col_refresh, col_meta = st.columns([1, 3])
+    with col_refresh:
+        if st.button(
+            "🔄 Refresh wrist metrics",
+            key=f"garmin_history_refresh_{user.user_id}",
+            help="Reload stored Garmin daily metrics from the mission database.",
+        ):
+            refresh_token += 1
+            st.session_state[refresh_state_key] = refresh_token
+    with col_meta:
+        st.caption("If values look stale after a sync/import, click refresh.")
+
+    @st.cache_data(ttl=300, max_entries=64, show_spinner=False)
+    def _load_history(uid: str, limit: int, refresh: int) -> pd.DataFrame:
+        _ = refresh  # bust cache when imports occur or refresh is clicked
         db = get_database()
         if hasattr(db, "get_garmin_daily_dataframe"):
             return db.get_garmin_daily_dataframe(uid, limit=int(limit))  # type: ignore[attr-defined]
@@ -2522,7 +2547,7 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         return pd.DataFrame()
 
     try:
-        df = _load_history(user.user_id, int(history_limit))
+        df = _load_history(user.user_id, int(history_limit), refresh_token)
     except Exception as exc:  # noqa: BLE001
         st.error(f"Unable to load Garmin history: {exc}")
         return
