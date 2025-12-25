@@ -5,6 +5,11 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.58] - 2025-12-25
+
+### Added
+- **Space Analytics event-aligned analysis (prototype)** (`app/app.py`, `app/space_analytics_events.py`, `docs/Manual.md`): Added threshold-based event detection (Kp/Dst) with explicit start/end and an on-demand **baseline vs event delta table** for HRV/HRF targets to identify which physiology metrics shift during a space-weather event.
+
 ## [1.8.57] - 2025-12-25
 
 ### Changed
