@@ -1951,9 +1951,10 @@ Space Analytics now includes a **🧭 Event-aligned analysis (prototype)** secti
 **What it does (current prototype):**
 - Defines events deterministically using **threshold crossings** on a selected predictor time series (e.g., **Kp** or **Dst**).
 - Extracts explicit **event start/end** windows (with user-configurable max-gap and minimum duration).
-- Computes a **baseline vs event delta table** for selected HRV/HRF metrics using windowed HRV timelines:
+- Computes a **baseline vs event delta table** (and optional **recovery** deltas) for selected HRV/HRF metrics using windowed HRV timelines:
   - Baseline: \([event_start − baseline_hours, event_start)\)
   - Event: \([event_start, event_end]\)
+  - Recovery (optional): \((event_end, event_end + recovery_hours]\)
 - Ranks metrics by effect size and annotates results with short **physiology/operational meanings** for common HRV/HRF metrics.
 
 **How to use it:**
@@ -1964,7 +1965,12 @@ Space Analytics now includes a **🧭 Event-aligned analysis (prototype)** secti
    - Choose the value column, threshold, and condition (≥/≤)
    - Click **Detect events**
 4. Select the event you care about and set baseline duration (hours).
-5. Select HRV/HRF targets and click **Run baseline vs event delta table**.
+5. (Optional) Enable **Include recovery phase** and set recovery duration (hours).
+6. Select HRV/HRF targets and click **Run baseline vs event delta table**.
+
+**Sequencing (prototype): which changes first?**
+- The tab also supports an **onset detection** heuristic: it finds the first time a metric shows a **sustained deviation** from baseline using a simple **z-score threshold** for N consecutive windows.
+- Use this to explore whether HRV metrics tend to shift before HRF metrics (or vice versa) during an event window.
 
 **Interpretation guardrails:**
 - This is an **association discovery tool**, not causation.
