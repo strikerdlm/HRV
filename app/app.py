@@ -6147,13 +6147,26 @@ def _run_ml_models_space_weather(
     # XGBoost (if available) - often outperforms RandomForest
     if XGBOOST_AVAILABLE and XGBRegressor is not None:
         try:
+            # Prefer GPU acceleration when enabled (safe CPU fallback on any error).
+            xgb_params: Dict[str, Any] = {
+                "n_estimators": 200,
+                "max_depth": 6,
+                "learning_rate": 0.1,
+                "random_state": 42,
+                "n_jobs": -1,
+                "verbosity": 0,
+            }
+            if GPU_PROCESSING_AVAILABLE and is_gpu_enabled():
+                # XGBoost GPU parameters (will raise if build lacks GPU support).
+                xgb_params.update(
+                    {
+                        "tree_method": "gpu_hist",
+                        "predictor": "gpu_predictor",
+                        "gpu_id": 0,
+                    }
+                )
             xgb = XGBRegressor(
-                n_estimators=200,
-                max_depth=6,
-                learning_rate=0.1,
-                random_state=42,
-                n_jobs=-1,
-                verbosity=0,
+                **xgb_params,
             )
             xgb.fit(X_train, y_train)
             y_pred_xgb = xgb.predict(X_test) if X_test.size else np.array([])
@@ -6168,13 +6181,19 @@ def _run_ml_models_space_weather(
     # LightGBM (if available) - fast gradient boosting
     if LIGHTGBM_AVAILABLE and LGBMRegressor is not None:
         try:
+            lgbm_params: Dict[str, Any] = {
+                "n_estimators": 200,
+                "max_depth": 6,
+                "learning_rate": 0.1,
+                "random_state": 42,
+                "n_jobs": -1,
+                "verbosity": -1,
+            }
+            if GPU_PROCESSING_AVAILABLE and is_gpu_enabled():
+                # LightGBM GPU support depends on how the wheel was built.
+                lgbm_params.update({"device": "gpu"})
             lgbm = LGBMRegressor(
-                n_estimators=200,
-                max_depth=6,
-                learning_rate=0.1,
-                random_state=42,
-                n_jobs=-1,
-                verbosity=-1,
+                **lgbm_params,
             )
             lgbm.fit(X_train, y_train)
             y_pred_lgbm = lgbm.predict(X_test) if X_test.size else np.array([])
