@@ -1940,6 +1940,7 @@ The **🔬 Space Analytics** tab is the on-demand workspace for **correlations +
 - **Space Data remains data-only**: use **🌐 Space Data** to fetch and inspect SWPC/NOAA/DONKI datasets.
 - **Analytics is button-driven**: nothing auto-runs; you must click the relevant **Run** buttons for correlation scans and ML training.
 - **Targets supported**: standard HRV metrics (e.g., RMSSD/SDNN/HF) and heart-rate fragmentation (HRF) metrics (e.g., PIP/W3) when present in windowed outputs.
+- **GPT export integration**: when you generate the Export report + **GPT‑5.2 high‑reasoning interpretation**, any Space Analytics results from the current session are included automatically.
 
 ### NOAA dashboard (within Space Data)
 
