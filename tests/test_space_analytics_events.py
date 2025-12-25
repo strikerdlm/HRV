@@ -4,7 +4,9 @@ import pandas as pd
 
 from app.space_analytics_events import (
     ThresholdEventConfig,
+    compute_baseline_event_recovery_deltas,
     compute_baseline_vs_event_deltas,
+    detect_first_sustained_deviation,
     extract_threshold_events,
 )
 
@@ -105,5 +107,86 @@ def test_compute_baseline_vs_event_deltas_basic() -> None:
     assert abs(float(pip_row["baseline_mean"]) - 45.0) < 1e-9
     assert abs(float(pip_row["event_mean"]) - 61.0) < 1e-9
     assert abs(float(pip_row["delta"]) - 16.0) < 1e-9
+
+
+def test_compute_baseline_event_recovery_deltas_includes_recovery() -> None:
+    w = pd.DataFrame(
+        {
+            "start": pd.to_datetime(
+                [
+                    "2025-01-01T00:00:00Z",
+                    "2025-01-01T01:00:00Z",
+                    "2025-01-01T02:00:00Z",
+                    "2025-01-01T03:00:00Z",
+                    "2025-01-01T04:00:00Z",
+                    "2025-01-01T05:00:00Z",
+                    "2025-01-01T06:00:00Z",
+                    "2025-01-01T07:00:00Z",
+                    "2025-01-01T08:00:00Z",
+                ],
+                utc=True,
+            ),
+            "rmssd": [40.0, 42.0, 41.0, 30.0, 29.0, 31.0, 38.0, 39.0, 40.0],
+        }
+    )
+    event_start = pd.Timestamp("2025-01-01T03:00:00Z")
+    event_end = pd.Timestamp("2025-01-01T05:00:00Z")
+    out = compute_baseline_event_recovery_deltas(
+        w,
+        time_col="start",
+        metric_cols=["rmssd"],
+        event_start_utc=event_start,
+        event_end_utc=event_end,
+        baseline_pre=pd.Timedelta(hours=3),
+        recovery_post=pd.Timedelta(hours=3),
+        min_samples_per_phase=3,
+    )
+    assert out.shape[0] == 1
+    row = out.iloc[0]
+    assert row["metric"] == "rmssd"
+    # baseline mean 41, event mean 30, recovery mean (38+39+40)/3 = 39
+    assert abs(float(row["baseline_mean"]) - 41.0) < 1e-9
+    assert abs(float(row["event_mean"]) - 30.0) < 1e-9
+    assert abs(float(row["recovery_mean"]) - 39.0) < 1e-9
+    assert abs(float(row["delta"]) - (-11.0)) < 1e-9
+    assert abs(float(row["delta_recovery"]) - (-2.0)) < 1e-9
+
+
+def test_detect_first_sustained_deviation_finds_onset() -> None:
+    w = pd.DataFrame(
+        {
+            "start": pd.to_datetime(
+                [
+                    "2025-01-01T00:00:00Z",
+                    "2025-01-01T01:00:00Z",
+                    "2025-01-01T02:00:00Z",
+                    "2025-01-01T03:00:00Z",
+                    "2025-01-01T04:00:00Z",
+                    "2025-01-01T05:00:00Z",
+                ],
+                utc=True,
+            ),
+            # baseline: small variance around 10; event: jump to ~13 sustained
+            "rmssd": [10.0, 10.5, 9.5, 13.0, 13.2, 13.1],
+        }
+    )
+    onset = detect_first_sustained_deviation(
+        w,
+        time_col="start",
+        metric_cols=["rmssd"],
+        baseline_start_utc=pd.Timestamp("2025-01-01T00:00:00Z"),
+        baseline_end_utc=pd.Timestamp("2025-01-01T03:00:00Z"),
+        search_start_utc=pd.Timestamp("2025-01-01T03:00:00Z"),
+        search_end_utc=pd.Timestamp("2025-01-01T05:00:00Z"),
+        z_threshold=2.0,
+        sustain_windows=2,
+        min_baseline_samples=3,
+    )
+    assert onset.shape[0] == 1
+    row = onset.iloc[0]
+    assert row["metric"] == "rmssd"
+    assert row["onset_utc"] == pd.Timestamp("2025-01-01T03:00:00Z")
+    assert float(row["onset_offset_hours"]) == 0.0
+    assert row["direction"] == "increase"
 
 
