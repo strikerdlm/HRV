@@ -30,8 +30,8 @@ This manual provides step-by-step instructions for all features of Mission Contr
 8. [Blood Pressure Variability Analysis](#blood-pressure-variability-analysis)
 9. [Circadian Physiology Module](#circadian-physiology-module)
 10. [Autonomic Function Tests](#autonomic-function-tests)
-11. [Space Weather Impact Predictions](#space-weather-impact-predictions)
-12. [Space Weather Correlation](#space-weather-correlation)
+11. [Space Data: Impact Predictions](#space-data-impact-predictions)
+12. [Space Data: Correlations (Decommissioned)](#space-data-correlations-decommissioned)
 13. [Fatigue Prediction (SAFTE Model)](#fatigue-prediction-safte-model)
 14. [Biofeedback and Real-Time HRV](#biofeedback-and-real-time-hrv)
 15. [Garmin Integration](#garmin-integration)
@@ -62,7 +62,7 @@ The app is fully navigable **without uploading HRV data**. These features work i
 | Module | What You Can Do |
 |--------|-----------------|
 | 👤 **User Profile** | Register profile, complete clinical scales (ESS, Samn-Perelli, KSS), track history |
-| 🌍 **Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing |
+| 🌐 **Space Data** | Fetch live NOAA SWPC + NOAA feeds (+ NASA DONKI if configured), view Kp/F10.7/events (data-only; no correlations) |
 | ☀️ **Circadian** | Simulate circadian rhythms with different light schedules |
 | 😴 **SAFTE/Fatigue** | Model how sleep debt affects cognitive performance |
 | 🫀 **Biofeedback** | Try the paced breathing demo |
@@ -73,15 +73,11 @@ All other tabs show **example data** and **reference values** to help you unders
 
 **Cross-tab correlation:** The Circadian tab now publishes DLMO/CBT markers, ESRI, and light window details to the SAFTE/Fatigue tab. A single click in SAFTE applies the latest circadian sleep window and chronotype offset to fatigue simulations for tighter mission planning.
 
-**Navigation note:** The Science tab now sits next to References for quick access. About, Space Weather, and NOAA tabs stay fully visible regardless of data state. Space Weather and NOAA tabs auto-load cache-first data on open (reusing cached Kp/F10.7/NOAA feeds if offline) even without RR uploads. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the active mission database is stored under `crew/<Mission>/db/hrv_users.db` (selected in the sidebar Crew workspace selector) for mission-scoped portability.
+**Navigation note:** The Science tab now sits next to References for quick access. About and **Space Data** stay fully visible regardless of data state. Space Data loads instantly and uses explicit **Load cached / Fetch / Force refresh** controls (no auto-fetch on open) to stay stable on Windows/OneDrive. HRV history in the profile loads only the latest records for quicker switching. HRV analysis runs only after clicking **Run HRV Analysis**; the active mission database is stored under `crew/<Mission>/db/hrv_users.db` (selected in the sidebar Crew workspace selector) for mission-scoped portability.
 
-**Background fetch with 12-hour auto-refresh (v1.8.36+):** On app startup, space weather data (NOAA SWPC Kp/Flux, **Core NOAA feeds** used for correlations, and NASA DONKI events) loads in a background daemon thread. Data automatically refreshes every 12 hours without user intervention. The UI remains fully responsive during fetches. Each tab shows:
-- **Status indicator**: 🔄 in progress / ✅ complete / ⚠️ error
-- **Data age**: e.g., "2h ago" or "Just now"
-- **Auto-refresh schedule**: "Auto-refresh: 12h"
-- **Stale data warning**: "⏰ auto-refresh pending" when data is >12h old
+**External space-data fetch (manual by design):** The unified Space Data dashboard is intentionally **manual/on-demand** to keep runs deterministic and avoid slow reloads. Use **Load cached** to view the last snapshot without network calls, then **Fetch**/**Force refresh** to pull fresh data from NOAA/NASA.
 
-**Cache storage:** Space weather/NOAA caches are persisted under `app/data_cache/` and mission HRV outputs under `crew/`. The Streamlit watcher is configured to ignore these folders to avoid unintended reload loops on Windows/OneDrive. If you suspect a corrupted cache, use the **Cache maintenance** controls in the Space Weather / NOAA Space tabs to clear caches and refetch.
+**Cache storage:** Space-data caches are persisted under `app/data_cache/` and mission HRV outputs under `crew/`. The Streamlit watcher is configured to ignore these folders to avoid unintended reload loops on Windows/OneDrive. If you suspect a corrupted cache, use the **Cache maintenance** controls in the **Space Data** tab to clear caches and refetch.
 
 Manual fetch buttons remain available for on-demand refresh. Force refresh bypasses the cache to fetch fresh data directly from NOAA/NASA servers.
 
@@ -217,7 +213,7 @@ GARMIN_PASSWORD=your_password
 ```bash
 # Conda (recommended)
 conda run -n hrv-py312 streamlit run app/operational_app.py
-# or (full dashboards: correlations/ML + NOAA/Space Weather analysis)
+# or (research app: full HRV/HRF analysis + Space Data dashboard)
 # conda run -n hrv-py312 streamlit run app/research_app.py
 # conda run -n hrv-py312 streamlit run app/app.py
 
@@ -232,7 +228,7 @@ The app opens at `http://localhost:8501` in your default browser.
 
 **Operational vs Research (rules of thumb)**:
 - **Operational app**: Use for **User Profile + clinical workflow** with **lightweight cached space-weather context**.
-- **Research app**: Use for **HRV/HRF computation**, **NOAA/Space Weather dashboards**, **correlations**, and **ML**.
+- **Research app**: Use for **HRV/HRF computation**, the unified **🌐 Space Data** dashboard, and the offline **🧩 HRF ↔ HRV** correlations workspace.
 
 ---
 
@@ -933,30 +929,10 @@ Based on the Sleep, Activity, Fatigue, and Task Effectiveness model.
 - Optimal sleep time
 - 24-hour performance curve
 
-**Space weather correlations (Kp ↔ HRV):**
-- Planetary K-index (3h cadence) is fetched and cached; the Space Weather correlation panel reuses the cached Kp by default and avoids auto-fetching network data on render.
-- Lagged Pearson correlations are computed between windowed HRV metrics and Kp, with date-based alignment for daily predictors.
-- Requirements: run HRV analysis to produce windowed metrics (or click **Run HRV window analysis** from inside the Space Weather correlation panel), then click **Compute HRV-Kp Correlations**. Results are cached in-session so they persist across tab switches.
-- Inference stack: Pearson r with 95% CI (Fisher z), Spearman ρ, Benjamini–Hochberg FDR for multiple lags/predictors. Optional weather covariates allow partial correlations.
-- ML stack: Multiple models on lagged space-weather features (Kp, Dst, F10.7, solar wind) with time-aware (walk-forward) splits:
-  - **ElasticNetCV** - Linear sparse regression with L1/L2 regularization
-  - **RandomForest** - Non-linear ensemble (200 trees, max_depth=8)
-  - **GradientBoosting** - Sequential boosting for non-linear patterns
-  - **LassoCV** - L1-regularized linear regression for feature selection
-  - **XGBoost** (optional) - Advanced gradient boosting (often outperforms RandomForest by 5-15%)
-  - **LightGBM** (optional) - Fast gradient boosting with efficient memory usage
-  - Reports R²/MAE for all models; permutation importances (RandomForest) and SHAP values for interpretability.
-- Advanced inference: optional block bootstrap CI and permutation p-values for top findings.
-- Model interpretability: 
-  - **Permutation importance** (RandomForest) - Feature importance via permutation testing
-  - **SHAP values** (if installed) - SHapley Additive exPlanations for individual prediction explanations and feature interactions
-- Exports: correlation tables (full + top) and ML summaries/feature importances (permutation + SHAP) are downloadable as CSV from the Space Weather tab; include them in PDF/Markdown exports for reporting.
-- Additional models & robustness:
-  - HAC-robust SE/p-values via statsmodels OLS (cov_type='HAC', maxlags=4) for autocorrelated series.
-  - Spearman ρ alongside Pearson r; BH-FDR for multiple lags/predictors.
-  - TimeSeriesSplit CV (3 splits) for ElasticNet/RF; permutation importances.
-  - PDF/Markdown exports now embed space-weather correlation tables and ML metrics/importances (permutation + SHAP) when available.
-- Scientific context:
+**Space-data correlations (status):**
+- In-app space-weather/NOAA **correlations + ML are decommissioned**. The **🌐 Space Data** tab is intentionally **data-only**.
+- If you need correlations, export HRV windowed metrics + Space Data time series and analyze externally (Python/R) with your preferred lag/covariate model.
+- Scientific context (useful for study design):
   - Ramishvili et al. 2023, Atmosphere 14(12):1707 — adaptation to geomagnetic storms (https://doi.org/10.3390/atmos14121707)
   - Mattoni et al. 2019, bioRxiv — highlights autocorrelation and small effect sizes (https://doi.org/10.1101/684035)
   - Papailiou & Mavromichalaki 2025, Atmosphere 16(6):711 — HR changes around major storms (https://doi.org/10.3390/atmos16060711)
@@ -1798,11 +1774,11 @@ Interpretation: Normal (>1.04 in healthy adults)
 
 ---
 
-## Space Weather Impact Predictions
+## Space Data: Impact Predictions
 
 The Space Weather Impact Predictions feature calculates exact arrival times for different categories of solar energy hitting Earth, providing Polar H10 EKG monitoring recommendations optimized for your research on biological effects.
 
-Data now preloads automatically when you open the Space Weather tab (cache-first). If the network is unavailable, the app serves the last cached Kp/F10.7 snapshot and surfaces a warning; you can still click **🔄 Fetch Impact Predictions** to force a refresh.
+Impact predictions live in the **🌐 Space Data** tab. The dashboard is **manual/on-demand**: click **🔄 Fetch Impact Predictions** to compute updated arrival times. If the network is unavailable, the app will keep showing the last available cached context and surface any fetch errors.
 
 ### Energy Categories Tracked
 
@@ -1887,8 +1863,8 @@ Ideal time for baseline Polar H10 recording (control data).
 
 **Step 1: Fetch Predictions**
 
-1. Navigate to **Space Weather** tab (impact predictions auto-load using cache-first data)
-2. Click **"🔄 Fetch Impact Predictions"** if you want to force a refresh
+1. Navigate to **🌐 Space Data** tab
+2. Click **"🔄 Fetch Impact Predictions"** to compute/update arrivals
 3. Wait for data retrieval (~5-10 seconds)
 
 **Step 2: Review Arrival Times Table**
@@ -1957,73 +1933,14 @@ Continue for 3 hours post-arrival for storm response capture.
 
 ---
 
-## Space Weather Correlation
+## Space Data: Correlations (Decommissioned)
 
-### Setting Up Space Weather Analysis
+External space-weather/NOAA **correlation + ML workflows** have been intentionally removed from the UI. The unified **🌐 Space Data** tab is now a **data-only** dashboard so external fetch/render stays stable and independent from HRV processing.
 
-**Step 1: Configure HRV data**
+- **If you need HRF↔HRV correlations**: use the **🧩 HRF ↔ HRV** tab (offline).
+- **If you need HRV↔space-data correlations**: export HRV windowed metrics and Space Data time series, then compute correlations externally (Python/R) with your preferred lags and covariates.
 
-1. Upload RR files with timestamp-named filenames
-2. Ensure files span at least several days for meaningful correlation
-3. Process through windowed analysis
-
-**Step 2: Open Space Weather tab**
-
-1. Navigate to **Space Weather** tab
-2. Load cached SWPC Kp/F10.7 (cache-first) and click **Fetch space weather** only when you want a manual refresh
-3. If windowed HRV metrics are missing, use the **Run HRV window analysis** button in the correlation panel to compute them
-
-**Step 3: Configure correlation parameters**
-
-1. Set lag range: start=0h, end=72h, step=6h
-2. Enable/disable weather covariates (Bogotá temperature, humidity, pressure)
-3. Select HRV metrics to correlate
-
-**Step 4: Run correlation analysis**
-
-1. Click **Compute HRV-Kp Correlations**
-2. Review results table with:
-   - Pearson r coefficient
-   - p-value (statistical significance)
-   - q-value (FDR-adjusted for multiple comparisons)
-   - Optimal lag (hours before/after HRV measurement)
-3. Results are cached in-session and remain visible when switching tabs; use **Clear saved correlation results** to reset.
-
-> **Weather covariates & partial r:** When you enable **Include weather covariates (Bogotá)** the app fetches ERA5 temperature, humidity, pressure, wind, precipitation, and cloud-cover from Open-Meteo for the exact HRV timestamps. Each correlation is then recomputed as a **partial Pearson r**, removing the shared variance explained by those weather variables. This isolates geomagnetic/solar effects from local meteorology so you can distinguish heliobiology signals from hot/cold-day confounders.
-
-**Time alignment:** HRV windows and NOAA predictors are synchronized to the exact same timestamp before computing correlations—no nearest-neighbor merges. The app resamples solar/geomagnetic data onto the HRV window start times with bounded interpolation (default tolerance 90 min) so that each sample pair represents the same instant, mirroring the methodology recommended by McCraty et al. (2017) for peer-reviewed heliobiology studies.
-
-### Interpreting Space Weather Correlations
-
-**Correlation strength:**
-| |r| | Interpretation |
-|-----|----------------|
-| <0.1 | Negligible |
-| 0.1-0.3 | Weak |
-| 0.3-0.5 | Moderate |
-| 0.5-0.7 | Strong |
-| >0.7 | Very strong |
-
-**Statistical significance:**
-| p-value | Interpretation |
-|---------|----------------|
-| <0.001 | Highly significant |
-| 0.001-0.01 | Very significant |
-| 0.01-0.05 | Significant |
-| 0.05-0.10 | Marginally significant |
-| >0.10 | Not significant |
-
-**Example interpretation:**
-```
-Metric: RMSSD
-Kp correlation: r = -0.24, p = 0.032, lag = 24h
-
-Interpretation: Weak negative correlation between geomagnetic 
-activity and vagal HRV, with effects appearing 24 hours after 
-storm onset. Effect size is modest; individual sensitivity varies.
-```
-
-### NOAA Space Dashboard
+### NOAA dashboard (within Space Data)
 
 **Available data feeds:**
 | Feed | Description | Cadence |
@@ -2035,15 +1952,7 @@ storm onset. Effect size is modest; individual sensitivity varies.
 | X-ray flux | Solar flare activity | 1-min |
 | Proton flux | Radiation storm levels | 5-min |
 
-Data auto-loads when you open the **NOAA Space** tab (cache-first). Use **Fetch NOAA feeds** to refresh, or **Force refresh NOAA feeds** to bypass cache. If NOAA is unreachable, the dashboard shows the last cached snapshot and posts a warning.
-
-**Feature Matrix Builder:**
-
-1. Click "Generate Feature Matrix"
-2. Select HRV metrics and space weather predictors
-3. Set lag range for each predictor
-4. Click "Build Matrix"
-5. Download CSV for external analysis
+Use **⚡ Load cached NOAA** to view the last snapshot without network calls, then **📥 Fetch NOAA feeds** / **🔄 Force refresh** to update. If NOAA is unreachable, the dashboard shows the last cached snapshot and posts a warning.
 
 ---
 
