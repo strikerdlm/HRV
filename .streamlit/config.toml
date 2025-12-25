@@ -6,8 +6,10 @@
 
 [server]
 # OneDrive + synced folders can break Streamlit's default file-watcher.
-# Polling is more reliable for research/production use on Windows.
-fileWatcherType = "poll"
+# In this production research app, we disable the file watcher entirely to prevent
+# unrequested reruns ("screen fades") triggered by runtime cache/log writes.
+# This is especially important on Windows/OneDrive where filesystem events can be noisy.
+fileWatcherType = "none"
 
 # Prevent Streamlit from treating data/cache/log writes as source changes.
 # These paths are resolved relative to the working directory. For the documented
@@ -22,9 +24,6 @@ folderWatchBlacklist = [
 
 # Never auto-rerun on file save in production/research runs.
 runOnSave = false
-
-# Keep sessions alive longer to reduce reconnect churn on Wi-Fi/VPN.
-disconnectedSessionTTL = 600
 
 # Run in headless mode (no browser auto-open).
 headless = true
@@ -45,14 +44,12 @@ enableXsrfProtection = true
 # Prevent fast-rerun race conditions (Streamlit 1.36.0 stability).
 fastReruns = false
 magicEnabled = true
-installTracer = false
 enforceSerializableSessionState = false
 
 [client]
 # Helpful for research debugging; the UI also enables this at runtime.
 showErrorDetails = true
 toolbarMode = "developer"
-caching = true
 
 [browser]
 # Disable usage stats collection.
@@ -66,6 +63,3 @@ showWarningOnDirectExecution = true
 [logger]
 level = "info"
 
-[deprecation]
-showfileUploaderEncoding = true
-showPyplotGlobalUse = true
