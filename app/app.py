@@ -3343,6 +3343,16 @@ def _render_gpt_high_interpretation(
             windowed_df,
             episodes_df,
             ml_summary_df,
+            space_analytics_corr=(
+                st.session_state.get("space_analytics_corr_results")
+                if isinstance(st.session_state.get("space_analytics_corr_results"), dict)
+                else None
+            ),
+            space_analytics_ml=(
+                st.session_state.get("space_analytics_ml_results")
+                if isinstance(st.session_state.get("space_analytics_ml_results"), dict)
+                else None
+            ),
             report_markdown=report_markdown,
         )
     except (GPT5InterpretationError, ValueError, TypeError) as exc:
@@ -16795,6 +16805,16 @@ that predicts cognitive performance based on:
             notes_text = notes_input
             if noaa_notes_lines:
                 notes_text = (notes_text + "\n\n" if notes_text.strip() else "") + "\n".join(noaa_notes_lines)
+            # Space Analytics exports (correlation + ML) are session-persistent; include them in
+            # both the markdown report and the GPT-5.2 interpretation payload when available.
+            _space_analytics_corr = st.session_state.get("space_analytics_corr_results")
+            _space_analytics_ml = st.session_state.get("space_analytics_ml_results")
+            space_analytics_export = None
+            if isinstance(_space_analytics_corr, dict) or isinstance(_space_analytics_ml, dict):
+                space_analytics_export = {
+                    "corr": _space_analytics_corr if isinstance(_space_analytics_corr, dict) else None,
+                    "ml": _space_analytics_ml if isinstance(_space_analytics_ml, dict) else None,
+                }
             export_config = ExportConfiguration(
                 scope=scope_choice,
                 include_windowed=include_windowed_opt,
@@ -16808,6 +16828,7 @@ that predicts cognitive performance based on:
                     episodes_df=episodes_df,
                     ml_summary_df=ml_summary_df if include_ml_opt else None,
                     space_weather_export=st.session_state.get("space_weather_export"),
+                    space_analytics_export=space_analytics_export,
                     config=export_config,
                     selected_sources=selected_sources,
                     additional_notes=notes_text,
