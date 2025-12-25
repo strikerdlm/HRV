@@ -213,7 +213,7 @@ GARMIN_PASSWORD=your_password
 ```bash
 # Conda (recommended)
 conda run -n hrv-py312 streamlit run app/operational_app.py
-# or (research app: full HRV/HRF analysis + Space Data dashboard)
+# or (research app: core statistics/analytics dashboards)
 # conda run -n hrv-py312 streamlit run app/research_app.py
 # conda run -n hrv-py312 streamlit run app/app.py
 
@@ -227,8 +227,8 @@ conda run -n hrv-py312 streamlit run app/operational_app.py
 The app opens at `http://localhost:8501` in your default browser.
 
 **Operational vs Research (rules of thumb)**:
-- **Operational app**: Use for **User Profile + clinical workflow** with **lightweight cached space-weather context**.
-- **Research app**: Use for **HRV/HRF computation**, the unified **🌐 Space Data** dashboard, and the offline **🧩 HRF ↔ HRV** correlations workspace.
+- **Operational app**: **Crew-facing intake + mission operations** — collect and review crucial crew information (profiles/clinical logs) with lightweight context. Keep it **stable, fast, and non-analytic**.
+- **Research app**: **Core statistics/analytics** — HRV/HRF computation, Space Data/Space Analytics (correlations + ML), exports, and GPT‑5.2 interpretation.
 
 ---
 
