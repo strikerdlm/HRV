@@ -5,6 +5,15 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.52] - 2025-12-25
+
+### Added
+- **Dedicated HRF ↔ HRV tab** (`app/app.py`): Added **🧩 HRF ↔ HRV** — an offline workspace for heart-rate fragmentation (HRF) gauges and per-recording HRF↔HRV correlation matrices/scatter plots, intentionally decoupled from NOAA/SWPC/DONKI fetch pipelines.
+
+### Fixed
+- **Space Weather correlations persist across tab switches** (`app/app.py`): HRV↔Kp correlation outputs are now cached in session state and re-displayed when returning to the Space Weather tab, preventing “compute → switch tab → reset” behavior. Added a **Run HRV window analysis** CTA when windowed metrics are missing and stabilized Space Weather correlation widgets with explicit keys.
+- **Heart-rate fragmentation metrics available in fast workflows** (`app/hrv_core.py`): HRF metrics (PIP/IALS/PSS and PROOF‑AF-derived PIP_H/PIP_S/PAS/W0–W3) are now computed regardless of the `include_advanced` flag, so fragmentation metrics are available for windowed and per-recording analyses without requiring “high compute” mode.
+
 ## [1.8.51] - 2025-12-24
 
 ### Added
