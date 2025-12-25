@@ -13,6 +13,7 @@ Author: Dr. Diego L. Malpica, MD - Aerospace Medicine Specialist
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 
@@ -35,14 +36,29 @@ GIT_METADATA = get_git_metadata()
 AGENT_RUNTIME_CONFIG = build_default_agent_runtime_config()
 
 
-def _load_file_content(filename: str) -> str:
+@dataclass(frozen=True, slots=True)
+class _LoadedText:
+    """Result of loading a text file for the About tab."""
+
+    content: str
+    ok: bool
+    path: str
+    error: str
+
+
+def _load_file_content(filename: str) -> _LoadedText:
     """Load content from a file in the project root or docs folder.
-    
+
+    Notes
+    -----
+    This helper is intentionally strict: we return structured status so the About
+    UI never mistakes legitimate text containing words like "error" for a load failure.
+
     Args:
         filename: Name of the file to load.
-        
+
     Returns:
-        File content as string, or error message if not found.
+        Structured result with `.ok` flag and the loaded `content` (empty on failure).
     """
     # Try multiple possible locations
     base_paths = [
@@ -56,11 +72,21 @@ def _load_file_content(filename: str) -> str:
         filepath = base / filename
         if filepath.exists():
             try:
-                return filepath.read_text(encoding="utf-8")
-            except Exception as e:
-                return f"Error reading {filename}: {e}"
-    
-    return f"File '{filename}' not found."
+                return _LoadedText(
+                    content=filepath.read_text(encoding="utf-8"),
+                    ok=True,
+                    path=str(filepath),
+                    error="",
+                )
+            except Exception as exc:
+                return _LoadedText(
+                    content="",
+                    ok=False,
+                    path=str(filepath),
+                    error=f"Error reading {filename}: {exc}",
+                )
+
+    return _LoadedText(content="", ok=False, path="", error=f"File '{filename}' not found.")
 
 
 def _render_version_badge() -> str:
@@ -395,19 +421,21 @@ def render_about_tab() -> None:
     st.markdown(_render_author_card(), unsafe_allow_html=True)
     
     # Load documentation files
-    manual_content = _load_file_content("Manual.md")
-    changelog_content = _load_file_content("CHANGELOG.md")
+    manual_loaded = _load_file_content("Manual.md")
+    changelog_loaded = _load_file_content("CHANGELOG.md")
 
-    manual_ok = "not found" not in manual_content.lower() and "error" not in manual_content.lower()
-    changelog_ok = "not found" not in changelog_content.lower() and "error" not in changelog_content.lower()
+    manual_ok = bool(manual_loaded.ok and manual_loaded.content.strip())
+    changelog_ok = bool(changelog_loaded.ok and changelog_loaded.content.strip())
 
     manual_preview_lines = 200
     changelog_preview_lines = 200
-    manual_preview = "\n".join(manual_content.splitlines()[:manual_preview_lines]) if manual_ok else manual_content
-    changelog_preview = "\n".join(changelog_content.splitlines()[:changelog_preview_lines]) if changelog_ok else changelog_content
+    manual_content = manual_loaded.content
+    changelog_content = changelog_loaded.content
+    manual_preview = "\n".join(manual_content.splitlines()[:manual_preview_lines]) if manual_ok else ""
+    changelog_preview = "\n".join(changelog_content.splitlines()[:changelog_preview_lines]) if changelog_ok else ""
     
-    manual_lines = len(manual_content.split('\n')) if "not found" not in manual_content.lower() else 0
-    changelog_lines = len(changelog_content.split('\n')) if "not found" not in changelog_content.lower() else 0
+    manual_lines = len(manual_content.splitlines()) if manual_ok else 0
+    changelog_lines = len(changelog_content.splitlines()) if changelog_ok else 0
     
     # Statistics cards
     st.markdown(_render_stats_cards(manual_lines, changelog_lines), unsafe_allow_html=True)
@@ -460,8 +488,12 @@ def render_about_tab() -> None:
                 st.markdown(manual_content)
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
-            st.info("📄 Manual documentation is being loaded from `docs/Manual.md`")
-            st.markdown(manual_content)
+            st.warning(
+                "Unable to load `docs/Manual.md` for the About tab. "
+                + (manual_loaded.error if manual_loaded.error else "")
+            )
+            if manual_loaded.path:
+                st.caption(f"Path attempted: `{manual_loaded.path}`")
     
     with doc_tab2:
         st.markdown("""
@@ -487,8 +519,12 @@ def render_about_tab() -> None:
                 st.markdown(changelog_content)
                 st.markdown('</div>', unsafe_allow_html=True)
         else:
-            st.info("📄 Changelog is being loaded from `CHANGELOG.md`")
-            st.markdown(changelog_content)
+            st.warning(
+                "Unable to load `CHANGELOG.md` for the About tab. "
+                + (changelog_loaded.error if changelog_loaded.error else "")
+            )
+            if changelog_loaded.path:
+                st.caption(f"Path attempted: `{changelog_loaded.path}`")
     
     with doc_tab3:
         st.markdown("""
