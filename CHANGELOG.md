@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **GPU-aware boosting** (`app/app.py`): When GPU processing is enabled, XGBoost and LightGBM models now attempt GPU acceleration (safe CPU fallback on unsupported builds).
 - **Unified Space Data tab (data-only)** (`app/app.py`): Space Data remains a stable, data-only dashboard for SWPC + NOAA + DONKI fetch/visualization. Correlation/ML workflows live in **🔬 Space Analytics**.
 - **GPT-5.2 report interpretation includes Space Analytics results** (`app/app.py`, `app/gpt_interpretation.py`, `app/export_utils.py`): Export report generation now passes Space Analytics correlation/ML outputs into the **GPT‑5.2 high reasoning** payload and renders a bounded Space Analytics section in the markdown report when available.
+- **Documented app-mode separation** (`docs/Manual.md`, `WARP.md`): Operational app is the crew-facing intake/mission workflow; Research app is the core statistics/analytics workspace.
+
+### Fixed
+- **Research app entrypoint loads the full UI reliably** (`app/research_app.py`): Hardened import path setup so `streamlit run app/research_app.py` always launches `app/app.py` (and therefore exposes Space Data/Space Analytics tabs) regardless of Streamlit/sys.path ordering.
 
 ## [1.8.52] - 2025-12-25
 
