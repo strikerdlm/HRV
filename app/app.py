@@ -8822,11 +8822,18 @@ def main() -> None:
 
                     with st.expander("What these HRF metrics mean (quick guide)", expanded=False):
                         st.markdown(
-                            "- **PIP**: % of inflection points in beat-to-beat RR changes (higher = more fragmented dynamics).  \n"
-                            "- **IALS**: inverse average length of monotonic RR segments (higher = shorter segments / more fragmentation).  \n"
-                            "- **W3**: symbolic-dynamics word frequency associated with highly fragmented patterns (higher = more fragmentation)."
+                            "**Heart Rate Fragmentation (HRF)** captures *beat-to-beat “jerkiness”* — frequent switches between "
+                            "RR-interval acceleration and deceleration — even when the ECG appears sinus rhythm.  \n\n"
+                            "- **PIP**: % of inflection points (direction changes) in successive RR differences (↑ = more fragmented dynamics).  \n"
+                            "- **IALS**: inverse average length of monotonic RR segments (↑ = shorter runs = more fragmentation).  \n"
+                            "- **W3**: frequency of 4-beat “words” with 3 inflections (a maximally fragmented pattern; ↑ = more fragmentation).  \n\n"
+                            "**Interpretation note:** HRF can inflate short‑term/high‑frequency variability, so a “high HRV” reading may not "
+                            "always reflect higher vagal modulation when fragmentation is elevated."
                         )
-                        st.caption("Reference: Costa, Davis, & Goldberger (2017), Frontiers in Physiology.")
+                        st.caption(
+                            "Key references: Costa et al. (2017) https://doi.org/10.3389/fphys.2017.00255; "
+                            "Hayano et al. (2020) https://doi.org/10.3390/app10093314."
+                        )
 
                     # ------------------------------------------------------------
                     # HRF ↔ HRV correlations (per-recording)
@@ -9324,9 +9331,36 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
         # ------------------------------------------------------------------
         if has_hrv_data and "multi_results_df" in locals() and not multi_results_df.empty:
             with st.expander("⚡ HRF (Heart Rate Fragmentation) — Rhythm stability markers", expanded=False):
+                st.markdown(
+                    "**What is Heart Rate Fragmentation (HRF)?**  \n"
+                    "HRF quantifies how often the beat‑to‑beat RR interval dynamics *switch direction* (acceleration ↔ deceleration), "
+                    "creating short, alternating runs in the RR time series — a pattern described as **sinoatrial instability** that can "
+                    "be present even when the ECG appears sinus rhythm.  \n\n"
+                    "**Medical / physiology meaning (high‑level)**  \n"
+                    "- HRF reflects a *breakdown of smooth, organized beat‑to‑beat regulation* and may represent components of short‑term "
+                    "variability that are **not purely parasympathetic (vagal) modulation**.  \n"
+                    "- Because of this, elevated HRF can **confound interpretation** of short‑term HRV magnitude (e.g., HF power / RMSSD) "
+                    "as “more vagal tone” in some cases.  \n"
+                    "- In older cohorts, HRF markers (e.g., PIP) have been studied as predictors of long‑term incident atrial fibrillation "
+                    "(PROOF‑AF).  \n\n"
+                    "**Operational interpretation (research / crew context)**  \n"
+                    "- **High HRF + low quality / many artifacts** → treat as a *data-quality and ectopy* flag first (motion, poor contact, "
+                    "or uncorrected ectopic beats can raise fragmentation).  \n"
+                    "- **High HRF + good quality + persistent vs your baseline** → may indicate reduced autonomic stability/recovery or a "
+                    "subclinical stressor; interpret alongside mean HR, RMSSD/HF, sleep, symptoms, illness, and training/load context.  \n\n"
+                    "**How to decrease / increase HRF (practical levers)**  \n"
+                    "- To **decrease measured HRF**: record at true rest (quiet breathing, no talking/movement), ensure good sensor contact, "
+                    "and prefer the app’s cleaned RR series when available.  \n"
+                    "- Factors that can **increase HRF (or the appearance of HRF)** include irregular breathing, acute stress, sleep loss, "
+                    "alcohol, illness/inflammation, stimulants, and ectopic beats/arrhythmia. Treat single-session spikes cautiously and "
+                    "focus on trends.  \n\n"
+                    "*HRF is an adjunct biomarker and not a standalone diagnosis.*"
+                )
                 st.caption(
-                    "HRF quantifies rapid direction changes in RR dynamics (fragmentation). "
-                    "Use as an adjunct biomarker (not a standalone diagnosis)."
+                    "Key references: Costa et al. (2017) https://doi.org/10.3389/fphys.2017.00255; "
+                    "Costa et al. (2017) https://doi.org/10.3389/fphys.2017.00827; "
+                    "Hayano et al. (2020) https://doi.org/10.3390/app10093314; "
+                    "Guichard et al. (2025, PROOF‑AF) https://doi.org/10.1093/ehjopen/oeaf030."
                 )
                 try:
                     from hrv_fragmentation import HRFMetrics, interpret_hrf_metrics  # noqa: PLC0415
@@ -9413,8 +9447,8 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
                         st.info("HRF metrics will appear after you run HRV analysis with advanced metrics enabled.")
 
                     st.caption(
-                        "Reference interpretation is based on published HRF cohorts (e.g., Costa et al., 2017; PROOF-AF). "
-                        "Generalization to younger/athletic cohorts is not yet fully validated."
+                        "Interpretation is based on published HRF cohorts and may not generalize to younger/athletic cohorts "
+                        "or recordings with substantial ectopy/artifacts. Use trends and clinical/operational context."
                     )
         pns_display_mapping: Dict[str, float] = {}
         ordered_names: List[str] = []
@@ -12734,6 +12768,17 @@ that predicts cognitive performance based on:
                 "| **SampEn** | Irregularity/complexity | ↓ = more regular/rigid control |\n"
             ),
             "Heart Rate Fragmentation (HRF)": (
+                "**What HRF is**  \n"
+                "Heart Rate Fragmentation (HRF) describes frequent beat‑to‑beat direction changes in RR‑interval dynamics "
+                "(acceleration ↔ deceleration) — a pattern sometimes described as *sinoatrial instability* that can occur even when "
+                "the ECG appears sinus rhythm (Costa et al., 2017; Hayano et al., 2020).  \n\n"
+                "**Why it matters**  \n"
+                "- HRF captures a component of short‑term variability that may not reflect pure vagal modulation, and can therefore "
+                "confound interpretation of HF/RMSSD‑driven “high HRV” in some cases (Costa et al., 2017; Hayano et al., 2020).  \n"
+                "- HRF markers have been studied in older cohorts for long‑term incident atrial fibrillation prediction (Guichard et al., 2025).  \n\n"
+                "**Operational note**  \n"
+                "If HRF is high, first verify recording quality (motion/contact/ectopy). If quality is good and HRF is persistently "
+                "elevated versus your baseline, treat it as a *rhythm stability* flag and interpret alongside mean HR, RMSSD/HF, sleep, and symptoms.  \n\n"
                 "| Metric | Meaning |\n"
                 "|---|---|\n"
                 "| **PIP** | % inflection points (direction changes) |\n"
@@ -17443,8 +17488,20 @@ that predicts cognitive performance based on:
             "*American Journal of Physiology-Heart and Circulatory Physiology, 278*(6), H2039–H2049. [https://doi.org/10.1152/ajpheart.2000.278.6.h2039](https://doi.org/10.1152/ajpheart.2000.278.6.h2039)  \n"
             "- Peng, C.-K., Havlin, S., Stanley, H. E., & Goldberger, A. L. (1995). Quantification of scaling exponents and crossover phenomena in nonstationary heartbeat time series. "
             "*Chaos, 5*(1), 82–87. [https://doi.org/10.1063/1.166141](https://doi.org/10.1063/1.166141)  \n"
+        )
+
+        # Heart Rate Fragmentation (HRF)
+        st.markdown("#### 🧩 Heart Rate Fragmentation (HRF)")
+        st.markdown(
             "- Costa, M. D., Davis, R. B., & Goldberger, A. L. (2017). Heart rate fragmentation: A new approach to the analysis of cardiac interbeat interval dynamics. "
-            "*Frontiers in Physiology, 8*. [https://doi.org/10.3389/fphys.2017.00255](https://doi.org/10.3389/fphys.2017.00255)  \n"
+            "*Frontiers in Physiology, 8*, 255. [https://doi.org/10.3389/fphys.2017.00255](https://doi.org/10.3389/fphys.2017.00255)  \n"
+            "- Costa, M. D., Davis, R. B., & Goldberger, A. L. (2017). Heart rate fragmentation: A symbolic dynamical approach. "
+            "*Frontiers in Physiology, 8*, 827. [https://doi.org/10.3389/fphys.2017.00827](https://doi.org/10.3389/fphys.2017.00827)  \n"
+            "- Hayano, J., Kisohara, M., Ueda, N., & Yuda, E. (2020). Impact of heart rate fragmentation on the assessment of heart rate variability. "
+            "*Applied Sciences, 10*(9), 3314. [https://doi.org/10.3390/app10093314](https://doi.org/10.3390/app10093314)  \n"
+            "- Guichard, J.-B., Hupin, D., Pichot, V., Berger, M., Celle, S., Borràs, R., Roca-Luque, I., Mont, L., Da Costa, A., Barthélémy, J.-C., & Roche, F. (2025). "
+            "Assessing heart rate fragmentation to predict atrial fibrillation in the general population aged 65: The PROOF-AF study. *European Heart Journal Open, 5*(3), oeaf030. "
+            "[https://doi.org/10.1093/ehjopen/oeaf030](https://doi.org/10.1093/ehjopen/oeaf030)  \n"
         )
 
         # Circadian Biology & Modelling
