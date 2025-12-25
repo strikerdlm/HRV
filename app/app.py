@@ -14083,7 +14083,7 @@ that predicts cognitive performance based on:
                 "This Space Data dashboard is intentionally **data-only**. "
                 "HRV↔space-weather correlations/ML have been decommissioned to keep this tab stable and independent."
             )
-            '''
+            _DECOMMISSIONED_SPACE_WEATHER_CORR_BLOCK = '''
             st.markdown("### HRV window metrics vs. planetary K-index")
             st.caption(
                 "Align HRV windows to expected arrival by applying a time lag before merging."
@@ -15068,7 +15068,7 @@ that predicts cognitive performance based on:
                 "Correlation workflows were intentionally removed from this unified Space Data dashboard. "
                 "This keeps external data fetch/render stable and independent from HRV processing."
             )
-            '''
+            _DECOMMISSIONED_NOAA_CORR_BLOCK = '''
             st.markdown("##### HRV correlation analysis")
             if noaa_windowed_df.empty:
                 info_col, action_col = st.columns([0.65, 0.35])
