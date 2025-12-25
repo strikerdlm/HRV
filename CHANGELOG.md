@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - **Space Analytics tab (Correlations + ML)** (`app/app.py`): Added **🔬 Space Analytics** — an on-demand workspace to correlate NOAA predictors against **HRV + HRF** windowed metrics and train ML models from lagged space-data features. All analyses are **button-driven** and results persist in session state.
+- **HRF↔HRV pairwise stats table** (`app/app.py`): The **🧩 HRF ↔ HRV** tab now includes a per-pair statistical summary table (test, result, p-value, meaning) with p-values formatted to **4 decimals**.
 
 ### Changed
 - **GPU-aware boosting** (`app/app.py`): When GPU processing is enabled, XGBoost and LightGBM models now attempt GPU acceleration (safe CPU fallback on unsupported builds).
