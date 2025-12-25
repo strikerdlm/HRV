@@ -934,9 +934,9 @@ Based on the Sleep, Activity, Fatigue, and Task Effectiveness model.
 - 24-hour performance curve
 
 **Space weather correlations (Kp ↔ HRV):**
-- Planetary K-index (3h cadence) is fetched and cached; if already downloaded, the correlation tab auto-loads the cached Kp without a new fetch.
+- Planetary K-index (3h cadence) is fetched and cached; the Space Weather correlation panel reuses the cached Kp by default and avoids auto-fetching network data on render.
 - Lagged Pearson correlations are computed between windowed HRV metrics and Kp, with date-based alignment for daily predictors.
-- Requirements: run HRV analysis to produce windowed metrics, then click “Compute HRV-Kp Correlations”; cached Kp is reused when available.
+- Requirements: run HRV analysis to produce windowed metrics (or click **Run HRV window analysis** from inside the Space Weather correlation panel), then click **Compute HRV-Kp Correlations**. Results are cached in-session so they persist across tab switches.
 - Inference stack: Pearson r with 95% CI (Fisher z), Spearman ρ, Benjamini–Hochberg FDR for multiple lags/predictors. Optional weather covariates allow partial correlations.
 - ML stack: Multiple models on lagged space-weather features (Kp, Dst, F10.7, solar wind) with time-aware (walk-forward) splits:
   - **ElasticNetCV** - Linear sparse regression with L1/L2 regularization
@@ -1970,8 +1970,8 @@ Continue for 3 hours post-arrival for storm response capture.
 **Step 2: Open Space Weather tab**
 
 1. Navigate to **Space Weather** tab
-2. The app auto-loads SWPC Kp/F10.7 data cache-first; click **"Fetch space weather data"** if you want to force a refresh
-3. Data is cached for 6 hours; if offline, the last cached copy is shown with a warning
+2. Load cached SWPC Kp/F10.7 (cache-first) and click **Fetch space weather** only when you want a manual refresh
+3. If windowed HRV metrics are missing, use the **Run HRV window analysis** button in the correlation panel to compute them
 
 **Step 3: Configure correlation parameters**
 
@@ -1981,12 +1981,13 @@ Continue for 3 hours post-arrival for storm response capture.
 
 **Step 4: Run correlation analysis**
 
-1. Click "Compute correlations"
+1. Click **Compute HRV-Kp Correlations**
 2. Review results table with:
    - Pearson r coefficient
    - p-value (statistical significance)
    - q-value (FDR-adjusted for multiple comparisons)
    - Optimal lag (hours before/after HRV measurement)
+3. Results are cached in-session and remain visible when switching tabs; use **Clear saved correlation results** to reset.
 
 > **Weather covariates & partial r:** When you enable **Include weather covariates (Bogotá)** the app fetches ERA5 temperature, humidity, pressure, wind, precipitation, and cloud-cover from Open-Meteo for the exact HRV timestamps. Each correlation is then recomputed as a **partial Pearson r**, removing the shared variance explained by those weather variables. This isolates geomagnetic/solar effects from local meteorology so you can distinguish heliobiology signals from hot/cold-day confounders.
 
@@ -2804,6 +2805,8 @@ RMSSD (ms) & 41.2 & 12.1 & [36.3, 46.1] \\
 | IALS | - | Inverse average segment length | 0.3-0.5 | How often direction changes |
 | PSS | % | Percentage of short segments | 30-50 | Short run frequency |
 | W3 | % | 3-variation word frequency | 10-25 | Maximum fragmentation pattern |
+
+**HRF ↔ HRV workspace:** Use the **🧩 HRF ↔ HRV** tab (Research app) to view HRF gauges (PIP/IALS/W3) and compute **HRF↔HRV correlation matrices and scatter plots**. This tab is offline and does not depend on Space Weather / NOAA / DONKI fetches.
 
 ---
 
