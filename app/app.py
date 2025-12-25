@@ -8102,8 +8102,8 @@ def main() -> None:
         tab_biofeedback,
         tab_fatigue,
         tab_circadian,
-        tab_space_weather,
-        tab_noaa_space,
+        tab_space_data,
+        tab_space_analytics,
         tab_export,
         tab_science,
         tab_refs,
@@ -8127,8 +8127,8 @@ def main() -> None:
             "🫀 Biofeedback",
             "😴 SAFTE/Fatigue",
             "☀️ Circadian",
-            "🌍 Space Weather",
-            "🛰️ NOAA Space",
+            "🌐 Space Data",
+            "🔬 Space Analytics",
             "📄 Export",
             "Science",
             "📚 References",
@@ -12768,15 +12768,15 @@ that predicts cognitive performance based on:
                 **Original Package:** [Arcascope/circadian](https://github.com/Arcascope/circadian)
                 """)
 
-    with tab_space_weather:
-        st.subheader("Space Weather (NOAA SWPC)")
+    with tab_space_data:
+        st.subheader("🌐 Space Data Dashboard (SWPC + NOAA + DONKI)")
         
         # Dashboard renders immediately - no blocking background fetch
         _sw_loading_msg = st.empty()
 
         # NOTE: Content always loads - no lazy loading gate.
         _sw_content_loaded = True
-        st.session_state["_space_weather_tab_loaded"] = True
+        st.session_state["_space_data_tab_loaded"] = True
         
         # =====================================================================
         # IMPACT PREDICTION SECTION - Expected hit times for Bogotá, Colombia
@@ -13905,6 +13905,12 @@ that predicts cognitive performance based on:
                         else:
                             st.info("No SpaceWeatherLive data available.")
 
+            st.markdown("### Correlations (disabled in Space Data)")
+            st.info(
+                "This Space Data dashboard is intentionally **data-only**. "
+                "HRV↔space-weather correlations/ML have been decommissioned to keep this tab stable and independent."
+            )
+            '''
             st.markdown("### HRV window metrics vs. planetary K-index")
             st.caption(
                 "Align HRV windows to expected arrival by applying a time lag before merging."
@@ -14559,6 +14565,7 @@ that predicts cognitive performance based on:
                             "Interpret DONKI correlations as exploratory links between specific solar/geomagnetic drivers and HRV metrics; the lag points to the most likely propagation delay from solar activity to physiological response."
                         )
 
+            '''
             st.markdown("#### Database summary")
             db_df = _load_jsonl()
             if db_df.empty:
@@ -14571,13 +14578,14 @@ that predicts cognitive performance based on:
             if _sw_loading_msg is not None:
                 _sw_loading_msg.empty()
 
-    with tab_noaa_space:
-        st.markdown("### 🌍 NOAA Space Weather Dashboard")
+    with tab_space_data:
+        st.markdown("---")
+        st.markdown("### 🛰️ NOAA Space Weather Dashboard")
         
         # Dashboard loads instantly - no blocking background fetch
         # User clicks "Fetch NOAA feeds" button to load data
         _noaa_loading_msg = st.empty()
-        st.markdown("*Real-time solar and geomagnetic data for physiology correlation analysis*")
+        st.markdown("*Real-time solar and geomagnetic data (data-only; correlations removed)*")
 
         with st.expander("🌞 **Understanding Space Weather Metrics**", expanded=False):
             st.markdown("""
@@ -14712,20 +14720,10 @@ that predicts cognitive performance based on:
         bundles = noaa_state.get("bundles", {})
         option_labels: Dict[str, str] = {}
         dataset_options: List[str] = []
-        # Reuse cached HRV windowed results if a rerun cleared the in-memory frame.
-        noaa_windowed_df = (
-            windowed_df
-            if not windowed_df.empty
-            else st.session_state.get("_hrv_cached_windowed_df", pd.DataFrame())
-        )
+        # Data-only dashboard: correlations are decommissioned, so HRV windowed metrics
+        # are intentionally not referenced here.
+        noaa_windowed_df = pd.DataFrame()
         metrics_available: List[str] = []
-        if not noaa_windowed_df.empty:
-            metrics_available = [
-                metric
-                for metric in metric_list
-                if metric in noaa_windowed_df.columns
-                and pd.api.types.is_numeric_dtype(noaa_windowed_df[metric])
-            ]
         if not bundles:
             if not bg_status.get("noaa", {}).get("done", False):
                 st.info("📡 Fetching NOAA feeds in the background… (you can also click **Fetch NOAA feeds**).")
@@ -14895,6 +14893,12 @@ that predicts cognitive performance based on:
             except Exception:
                 pass
             st.divider()
+            st.markdown("##### Correlations (decommissioned)")
+            st.info(
+                "Correlation workflows were intentionally removed from this unified Space Data dashboard. "
+                "This keeps external data fetch/render stable and independent from HRV processing."
+            )
+            '''
             st.markdown("##### HRV correlation analysis")
             if noaa_windowed_df.empty:
                 info_col, action_col = st.columns([0.65, 0.35])
@@ -15188,7 +15192,454 @@ that predicts cognitive performance based on:
                         summary_lines.append(msg)
                     if summary_lines:
                         st.markdown("\n".join(summary_lines))
+            '''
             _noaa_loading_msg.empty()
+
+    with tab_space_analytics:
+        st.markdown("### 🔬 Space Analytics (Correlations + ML)")
+        st.caption(
+            "On-demand statistical analysis and machine learning linking **space-data predictors** "
+            "to **HRV + HRF metrics**. Nothing runs automatically — use the buttons below."
+        )
+
+        # ------------------------------------------------------------------
+        # Data prerequisites (no network calls on render)
+        # ------------------------------------------------------------------
+        space_state = _space_weather_state()
+        noaa_state = _noaa_space_state()
+        donki_state = _donki_state()
+
+        # HRV windowed metrics (cache-first fallback)
+        analytics_windowed_df = (
+            windowed_df
+            if isinstance(windowed_df, pd.DataFrame) and not windowed_df.empty
+            else st.session_state.get("_hrv_cached_windowed_df", pd.DataFrame())
+        )
+
+        has_windowed = isinstance(analytics_windowed_df, pd.DataFrame) and not analytics_windowed_df.empty
+        has_noaa = bool(noaa_state.get("bundles"))
+        has_swpc = (
+            isinstance(space_state.get("kp_df"), pd.DataFrame)
+            and not space_state.get("kp_df", pd.DataFrame()).empty
+        ) or (
+            isinstance(space_state.get("flux_df"), pd.DataFrame)
+            and not space_state.get("flux_df", pd.DataFrame()).empty
+        )
+        has_donki = bool(donki_state.get("loaded"))
+
+        with st.expander("📦 Data status", expanded=True):
+            cols = st.columns(4)
+            with cols[0]:
+                st.metric("HRV windows", "✅" if has_windowed else "—")
+                if has_windowed:
+                    st.caption(f"Rows: {int(analytics_windowed_df.shape[0])}")
+            with cols[1]:
+                st.metric("NOAA bundles", "✅" if has_noaa else "—")
+                if has_noaa:
+                    st.caption(f"Datasets: {len(noaa_state.get('bundles', {}))}")
+            with cols[2]:
+                st.metric("SWPC cache", "✅" if has_swpc else "—")
+                last_sw = space_state.get("last_updated")
+                if last_sw is not None:
+                    st.caption(f"Updated: {last_sw}")
+            with cols[3]:
+                st.metric("DONKI", "✅" if has_donki else "—")
+                last_dk = donki_state.get("last_updated")
+                if last_dk is not None:
+                    st.caption(f"Updated: {last_dk}")
+
+            st.markdown("---")
+            c1, c2, c3, c4 = st.columns(4)
+            with c1:
+                if st.button("⚡ Load cached SWPC", key="space_analytics_load_swpc_cache"):
+                    _load_space_weather_cache_only(space_state)
+                    st.success("Loaded cached SWPC datasets (no network).")
+            with c2:
+                if st.button("⚡ Load cached NOAA", key="space_analytics_load_noaa_cache"):
+                    _load_noaa_space_cache_only(noaa_state, keys=NOAA_FAST_KEYS)
+                    st.success("Loaded cached NOAA datasets (no network).")
+            with c3:
+                if st.button("📥 Fetch NOAA (Core)", key="space_analytics_fetch_noaa_core"):
+                    with st.spinner("Fetching NOAA feeds…"):
+                        _load_noaa_space_datasets(noaa_state, keys=NOAA_CORE_KEYS)
+                    st.success("Fetched NOAA Core feeds.")
+            with c4:
+                if st.button("🔄 Force refresh NOAA (Core)", key="space_analytics_refresh_noaa_core"):
+                    with st.spinner("Refreshing NOAA feeds…"):
+                        _load_noaa_space_datasets(noaa_state, keys=NOAA_CORE_KEYS, use_cache=False)
+                    st.success("Refreshed NOAA Core feeds.")
+
+        # GPU context (display only; actual acceleration depends on backend)
+        gpu_info = get_gpu_info() if GPU_PROCESSING_AVAILABLE else None
+        gpu_enabled = bool(GPU_PROCESSING_AVAILABLE and is_gpu_enabled())
+        if gpu_info is not None:
+            st.caption(
+                f"GPU: **{gpu_info.available}** ({gpu_info.device_name}) | "
+                f"GPU processing enabled: **{gpu_enabled}**"
+            )
+
+        st.markdown("---")
+
+        # ------------------------------------------------------------------
+        # Correlation suite (button-driven)
+        # ------------------------------------------------------------------
+        st.markdown("#### 📈 Correlation Suite (HRV/HRF ↔ NOAA)")
+        if not has_windowed:
+            st.warning(
+                "Windowed HRV/HRF metrics are not available. Run HRV window analysis first, "
+                "then return here."
+            )
+            if st.button("Run HRV window analysis", key="space_analytics_trigger_hrv_window"):
+                if not has_hrv_data_uploaded:
+                    st.warning("Upload HRV data first, then run the HRV analysis.")
+                else:
+                    st.session_state["auto_run_hrv_analysis"] = True
+                    st.session_state.pop("hrv_analysis_complete_signature", None)
+                    st.rerun()
+        elif not has_noaa:
+            st.info("Load cached NOAA or fetch NOAA feeds above to enable correlations.")
+        else:
+            bundles: Dict[str, NOAADataBundle] = dict(noaa_state.get("bundles", {}))
+            dataset_options = sorted(bundles.keys())
+
+            # Targets: include HRF metrics by default when present
+            numeric_cols = [
+                c
+                for c in analytics_windowed_df.columns
+                if c not in ("start", "end")
+                and pd.api.types.is_numeric_dtype(analytics_windowed_df[c])
+            ]
+            hrf_preferred = [
+                "hrf_pip_pct",
+                "hrf_ials",
+                "hrf_pss_pct",
+                "hrf_pip_h_pct",
+                "hrf_pip_s_pct",
+                "hrf_pas_pct",
+                "hrf_w0_pct",
+                "hrf_w1_pct",
+                "hrf_w2_pct",
+                "hrf_w3_pct",
+                "hrf_w3",
+            ]
+            default_targets = [
+                c for c in ("rmssd", "sdnn", "hf_power", "lf_hf_ratio", "mean_hr") if c in numeric_cols
+            ] + [c for c in hrf_preferred if c in numeric_cols]
+            default_targets = default_targets[: min(10, len(default_targets))]
+
+            col_sel1, col_sel2 = st.columns(2)
+            with col_sel1:
+                predictors_selected = st.multiselect(
+                    "NOAA predictors (datasets)",
+                    options=dataset_options,
+                    default=[k for k in ("planetary_k_index_3h", "geospace_dst", "f107_flux") if k in dataset_options],
+                    key="space_analytics_predictors",
+                )
+            with col_sel2:
+                target_metrics = st.multiselect(
+                    "HRV/HRF target metrics",
+                    options=sorted(numeric_cols),
+                    default=default_targets,
+                    key="space_analytics_targets",
+                )
+
+            lag_min, lag_max = st.slider(
+                "Lag window (hours, applied to predictor timestamps)",
+                min_value=-72,
+                max_value=72,
+                value=(-24, 24),
+                step=1,
+                key="space_analytics_lag_range",
+            )
+            lag_step = st.number_input(
+                "Lag step (hours)",
+                min_value=1,
+                max_value=24,
+                value=3,
+                step=1,
+                key="space_analytics_lag_step",
+            )
+            merge_tolerance = st.number_input(
+                "Merge tolerance (minutes)",
+                min_value=15,
+                max_value=240,
+                value=90,
+                step=15,
+                key="space_analytics_merge_tol",
+            )
+            use_all_value_cols = st.checkbox(
+                "Use all value columns per dataset (slower)",
+                value=False,
+                help="Some datasets expose multiple numeric columns; enable to scan all.",
+                key="space_analytics_all_value_cols",
+            )
+
+            # Bounds / complexity guardrails
+            lags = list(range(int(lag_min), int(lag_max) + 1, int(max(int(lag_step), 1))))
+            if len(lags) > 97:
+                st.warning("Lag configuration is too large; reduce the lag window or increase the step.")
+                lags = lags[:97]
+
+            est_value_cols = 0
+            for k in predictors_selected:
+                b = bundles.get(k)
+                if not b:
+                    continue
+                est_value_cols += len(b.value_columns) if use_all_value_cols else min(1, len(b.value_columns))
+            est_tests = int(len(lags) * est_value_cols * max(len(target_metrics), 1))
+            st.caption(f"Estimated tests: **{est_tests}** (lags × value cols × targets).")
+
+            run_corr = st.button(
+                "🔬 Run correlation scan",
+                key="space_analytics_run_corr",
+                disabled=not predictors_selected or not target_metrics,
+                help="Computes Pearson r (+ Spearman + HAC p) and BH-FDR across all tests.",
+            )
+
+            if run_corr:
+                if "start" not in analytics_windowed_df.columns:
+                    st.error("Windowed metrics are missing the required 'start' timestamp column.")
+                else:
+                    # Build correlations (robust table) without network calls.
+                    w = analytics_windowed_df.copy()
+                    w["start"] = pd.to_datetime(w["start"], errors="coerce", utc=True)
+                    w = w.dropna(subset=["start"]).sort_values("start")
+                    if w.empty:
+                        st.error("Windowed metrics contain no valid timestamps.")
+                    else:
+                        max_tests = 12000
+                        if est_tests > max_tests:
+                            st.error(
+                                f"Requested scan is too large ({est_tests} tests). "
+                                f"Reduce predictors/targets/lag range (max {max_tests})."
+                            )
+                        else:
+                            rows: List[pd.DataFrame] = []
+                            with st.spinner("Computing correlations…"):
+                                for pred_key in predictors_selected:
+                                    bundle = bundles.get(pred_key)
+                                    if not bundle or bundle.frame.empty:
+                                        continue
+                                    df = bundle.frame.copy()
+                                    tcol = bundle.time_column
+                                    df[tcol] = pd.to_datetime(df[tcol], errors="coerce", utc=True)
+                                    if not bundle.value_columns:
+                                        continue
+                                    value_cols = (
+                                        list(bundle.value_columns)
+                                        if use_all_value_cols
+                                        else [bundle.value_columns[0]]
+                                    )
+                                    for value_col in value_cols:
+                                        if value_col not in df.columns:
+                                            continue
+                                        pred = df[[tcol, value_col]].dropna().sort_values(tcol)
+                                        if pred.empty:
+                                            continue
+                                        for lag in lags:
+                                            aligned = align_space_weather_series(
+                                                reference_times=w["start"],
+                                                predictor_df=pred,
+                                                predictor_time_col=tcol,
+                                                predictor_value_col=value_col,
+                                                lag_hours=int(lag),
+                                                max_gap_minutes=int(merge_tolerance),
+                                            )
+                                            if aligned.empty:
+                                                continue
+                                            merged = (
+                                                w.set_index("start")
+                                                .join(aligned.rename("predictor"), how="inner")
+                                                .dropna(subset=["predictor"])
+                                            )
+                                            if merged.empty:
+                                                continue
+                                            corr_df = _corr_table(
+                                                merged.reset_index(drop=True),
+                                                "predictor",
+                                                list(target_metrics),
+                                            )
+                                            if corr_df.empty:
+                                                continue
+                                            corr_df["predictor_key"] = pred_key
+                                            corr_df["predictor_title"] = bundle.spec.title
+                                            corr_df["value_column"] = value_col
+                                            corr_df["unit"] = (
+                                                bundle.units.get(value_col) if bundle.units else None
+                                            )
+                                            corr_df["lag_hours"] = int(lag)
+                                            rows.append(corr_df)
+
+                            result_df = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
+                            if result_df.empty:
+                                st.info("No correlations could be computed for the selected configuration.")
+                            else:
+                                # Multiple-comparisons correction
+                                pvals = pd.to_numeric(result_df["p_value"], errors="coerce").fillna(1.0).to_numpy(dtype=float)
+                                qvals, _ = fdr_bh(pvals, alpha=0.05)
+                                result_df["q_value"] = qvals
+                                result_df["abs_r"] = result_df["pearson_r"].abs()
+                                result_df = result_df.sort_values(
+                                    ["abs_r", "q_value"],
+                                    ascending=[False, True],
+                                    ignore_index=True,
+                                )
+
+                                st.session_state["space_analytics_corr_results"] = {
+                                    "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                                    "params": {
+                                        "predictors": list(predictors_selected),
+                                        "targets": list(target_metrics),
+                                        "lags": list(lags),
+                                        "merge_tol_minutes": int(merge_tolerance),
+                                        "all_value_cols": bool(use_all_value_cols),
+                                    },
+                                    "results": result_df,
+                                }
+                                st.success("Correlation scan completed.")
+
+            stored = st.session_state.get("space_analytics_corr_results")
+            if isinstance(stored, dict) and isinstance(stored.get("results"), pd.DataFrame):
+                out_df = stored["results"]
+                with st.expander("✅ Correlation results (saved for this session)", expanded=True):
+                    st.caption(f"Computed: {stored.get('computed_at_utc', 'unknown')}")
+                    st.dataframe(out_df.head(250), use_container_width=True)
+                    st.download_button(
+                        "⬇️ Download correlations (CSV)",
+                        data=out_df.to_csv(index=False).encode("utf-8"),
+                        file_name="space_analytics_correlations.csv",
+                        mime="text/csv",
+                        key="space_analytics_corr_download",
+                    )
+                    if st.button("🧹 Clear correlation results", key="space_analytics_clear_corr"):
+                        st.session_state.pop("space_analytics_corr_results", None)
+                        st.rerun()
+
+        st.markdown("---")
+
+        # ------------------------------------------------------------------
+        # ML suite (button-driven; GPU boosting when available)
+        # ------------------------------------------------------------------
+        st.markdown("#### 🤖 ML Suite (Predict HRV/HRF from lagged space-data features)")
+        if not has_windowed or not has_noaa:
+            st.info("Load windowed HRV/HRF metrics and NOAA datasets to enable ML.")
+        else:
+            bundles = dict(noaa_state.get("bundles", {}))
+            dataset_options = sorted(bundles.keys())
+            default_ml_predictors = [
+                k for k in ("planetary_k_index_3h", "geospace_dst", "f107_flux", "solar_wind_wind", "solar_wind_mag") if k in dataset_options
+            ]
+            ml_predictors = st.multiselect(
+                "Predictors (NOAA datasets)",
+                options=dataset_options,
+                default=default_ml_predictors,
+                key="space_analytics_ml_predictors",
+            )
+            # ML target choices: numeric columns only
+            ml_numeric_cols = [
+                c
+                for c in analytics_windowed_df.columns
+                if c not in ("start", "end") and pd.api.types.is_numeric_dtype(analytics_windowed_df[c])
+            ]
+            ml_target = st.selectbox(
+                "Target metric (HRV or HRF)",
+                options=sorted(ml_numeric_cols),
+                index=0,
+                key="space_analytics_ml_target",
+            )
+            ml_lag_min, ml_lag_max = st.slider(
+                "Lag window (hours) — ML features",
+                min_value=-72,
+                max_value=72,
+                value=(-24, 24),
+                step=1,
+                key="space_analytics_ml_lag_range",
+            )
+            ml_lag_step = st.number_input(
+                "Lag step (hours) — ML",
+                min_value=1,
+                max_value=24,
+                value=6,
+                step=1,
+                key="space_analytics_ml_lag_step",
+            )
+            ml_merge_tol = st.number_input(
+                "Merge tolerance (minutes) — ML",
+                min_value=15,
+                max_value=240,
+                value=90,
+                step=15,
+                key="space_analytics_ml_merge_tol",
+            )
+            run_ml = st.button(
+                "🚀 Train models (ElasticNet + RF + Boosting if available)",
+                key="space_analytics_run_ml",
+                disabled=not bool(ml_predictors) or not bool(ml_target),
+            )
+
+            if run_ml:
+                if "start" not in analytics_windowed_df.columns:
+                    st.error("Windowed metrics are missing the required 'start' timestamp column.")
+                else:
+                    lags_ml = list(
+                        range(
+                            int(ml_lag_min),
+                            int(ml_lag_max) + 1,
+                            int(max(int(ml_lag_step), 1)),
+                        )
+                    )
+                    if len(lags_ml) > 97:
+                        st.warning("Lag configuration is too large; reducing to the first 97 lags.")
+                        lags_ml = lags_ml[:97]
+                    with st.spinner("Building feature matrix…"):
+                        full_matrix = _build_space_weather_feature_matrix(
+                            analytics_windowed_df,
+                            bundles,
+                            ml_predictors,
+                            lags_ml,
+                            merge_tolerance_minutes=int(ml_merge_tol),
+                        )
+                    if full_matrix.empty:
+                        st.error("No feature matrix could be built (insufficient overlap with predictors).")
+                    else:
+                        # Keep only lagged predictor columns + target (+ start)
+                        feature_cols = [
+                            c
+                            for c in full_matrix.columns
+                            if c not in ("start", ml_target)
+                            and c.startswith(tuple(f"{k}_" for k in ml_predictors))
+                        ]
+                        ml_df = full_matrix[["start", ml_target] + feature_cols].copy()
+                        with st.spinner("Training ML models…"):
+                            try:
+                                ml_results = _run_ml_models_space_weather(
+                                    ml_df,
+                                    target_metric=str(ml_target),
+                                )
+                                st.session_state["space_analytics_ml_results"] = {
+                                    "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                                    "params": {
+                                        "predictors": list(ml_predictors),
+                                        "target": str(ml_target),
+                                        "lags": list(lags_ml),
+                                        "merge_tol_minutes": int(ml_merge_tol),
+                                        "gpu_enabled": bool(gpu_enabled),
+                                    },
+                                    "results": ml_results,
+                                }
+                                st.success("ML training completed.")
+                            except Exception as exc:
+                                log_exception(_LOGGER, "Space Analytics ML training failed", exc)
+                                st.error(f"ML training failed: {exc}")
+
+            stored_ml = st.session_state.get("space_analytics_ml_results")
+            if isinstance(stored_ml, dict) and isinstance(stored_ml.get("results"), dict):
+                with st.expander("✅ ML results (saved for this session)", expanded=True):
+                    st.caption(f"Computed: {stored_ml.get('computed_at_utc', 'unknown')}")
+                    st.json(stored_ml.get("results", {}))
+                    if st.button("🧹 Clear ML results", key="space_analytics_clear_ml"):
+                        st.session_state.pop("space_analytics_ml_results", None)
+                        st.rerun()
 
     with tab_export:
         # ---------------------------------------------------------------------
