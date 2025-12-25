@@ -5,6 +5,22 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.56] - 2025-12-25
+
+### Fixed
+- **Export tab responsiveness** (`app/app.py`): Prevented heavy, unrequested work on reruns by making **markdown report generation** explicitly button-driven (session-cached) and by requiring an explicit **Prepare HRV export files** click before serializing large windowed data to CSV/JSON.
+- **Science tab responsiveness** (`app/app.py`): Replaced the always-rendered full “Scientific Reference Guide” expanders with a **fast section picker** so the Research app stays responsive while switching tabs (Streamlit tabs are not lazy).
+
+## [1.8.55] - 2025-12-25
+
+### Fixed
+- **Space Data tab “fade” rerun loops** (`.streamlit/config.toml`, `app/app.py`): Disabled Streamlit’s file watcher (`server.fileWatcherType = "none"`) to prevent unrequested reruns triggered by runtime cache/log writes (common on Windows/OneDrive). Also removed an unnecessary `st.rerun()` from the Space Data “Clear fetched feed” action to avoid extra flicker.
+- **References tab loads reliably** (`app/app.py`): Removed legacy DONKI/correlation/feature-matrix logic that was incorrectly embedded in the **📚 References** tab and could trigger slow/failed renders. References now remain lightweight and point users to **🌐 Space Data** and **🔬 Space Analytics** for data and analysis.
+- **About tab full renderer no longer mis-detects docs as errors** (`app/about_tab.py`): Replaced the fragile “contains the word ‘error’” heuristic with structured file-load status so `docs/Manual.md` and `CHANGELOG.md` previews render reliably.
+
+### Changed
+- **Streamlit config cleanup** (`.streamlit/config.toml`): Removed deprecated/invalid options (Streamlit 1.36.0) to eliminate startup warnings.
+
 ## [1.8.54] - 2025-12-25
 
 ### Added
@@ -19,16 +35,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Research app entrypoint loads the full UI reliably** (`app/research_app.py`): Hardened import path setup so `streamlit run app/research_app.py` always launches `app/app.py` (and therefore exposes Space Data/Space Analytics tabs) regardless of Streamlit/sys.path ordering.
-
-## [1.8.55] - 2025-12-25
-
-### Fixed
-- **Space Data tab “fade” rerun loops** (`.streamlit/config.toml`, `app/app.py`): Disabled Streamlit’s file watcher (`server.fileWatcherType = "none"`) to prevent unrequested reruns triggered by runtime cache/log writes (common on Windows/OneDrive). Also removed an unnecessary `st.rerun()` from the Space Data “Clear fetched feed” action to avoid extra flicker.
-- **References tab loads reliably** (`app/app.py`): Removed legacy DONKI/correlation/feature-matrix logic that was incorrectly embedded in the **📚 References** tab and could trigger slow/failed renders. References now remain lightweight and point users to **🌐 Space Data** and **🔬 Space Analytics** for data and analysis.
-- **About tab full renderer no longer mis-detects docs as errors** (`app/about_tab.py`): Replaced the fragile “contains the word ‘error’” heuristic with structured file-load status so `docs/Manual.md` and `CHANGELOG.md` previews render reliably.
-
-### Changed
-- **Streamlit config cleanup** (`.streamlit/config.toml`): Removed deprecated/invalid options (Streamlit 1.36.0) to eliminate startup warnings.
 
 ## [1.8.52] - 2025-12-25
 
