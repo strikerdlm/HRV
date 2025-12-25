@@ -8093,6 +8093,7 @@ def main() -> None:
         tab_tfr,
         tab_window,
         tab_metrics,
+        tab_hrf_hrv,
         tab_ans,
         tab_readiness,
         tab_gauges,
@@ -8117,6 +8118,7 @@ def main() -> None:
             "Spectrogram",
             "Windowed",
             "Metrics",
+            "🧩 HRF ↔ HRV",
             "ANS Function Tests",
             "Readiness",
             "Gauges",
@@ -8604,6 +8606,383 @@ def main() -> None:
             )
         else:
             st.info("No metrics to display.")
+    with tab_hrf_hrv:
+        st.markdown("### 🧩 HRF ↔ HRV (Fragmentation + Correlations)")
+        st.markdown(
+            "*Offline analysis of **Heart Rate Fragmentation (HRF)** metrics and their relationships to HRV metrics.*"
+        )
+        st.caption(
+            "This tab is intentionally **decoupled** from NOAA/SWPC/DONKI fetch pipelines. "
+            "It uses only your uploaded HRV recordings and computed metrics."
+        )
+
+        if not has_hrv_data:
+            if has_hrv_data_uploaded:
+                st.info(
+                    "HRV data is uploaded. Click **Run HRV Analysis** (top of page) to compute metrics, then return here."
+                )
+            else:
+                st.info("Upload HRV RR data to compute HRF/HRV metrics and correlations.")
+        else:
+            # Prefer in-memory analysis outputs; fall back to session-cached frames.
+            base_results = (
+                multi_results_df
+                if isinstance(multi_results_df, pd.DataFrame) and not multi_results_df.empty
+                else st.session_state.get("_hrv_cached_multi_results_df", pd.DataFrame())
+            )
+            if not isinstance(base_results, pd.DataFrame) or base_results.empty:
+                st.info("Run HRV analysis to generate per-recording metrics for HRF/HRV correlations.")
+            elif "source" not in base_results.columns:
+                st.warning(
+                    "Metrics table is missing the `source` column; cannot build per-recording HRF summaries."
+                )
+            else:
+                use_clean_for_hrf = st.checkbox(
+                    "Use cleaned RR series (if available) for HRF computations",
+                    value=bool(apply_clean),
+                    key="hrf_tab_use_clean_rr",
+                    help="If enabled, HRF metrics are computed from the cleaned RR series when present.",
+                )
+
+                # If cached results were computed before HRF metrics were added (or if fast mode skipped them),
+                # compute HRF metrics quickly (O(n)) from the RR series and merge them into the per-recording frame.
+                need_hrf_cols = (
+                    "hrf_pip_pct",
+                    "hrf_ials",
+                    "hrf_pss_pct",
+                    "hrf_pip_h_pct",
+                    "hrf_pip_s_pct",
+                    "hrf_pas_pct",
+                    "hrf_w0_pct",
+                    "hrf_w1_pct",
+                    "hrf_w2_pct",
+                    "hrf_w3_pct",
+                    "hrf_quality_ok",
+                    "hrf_pip",
+                    "hrf_w3",
+                )
+                missing_any_hrf = any(col not in base_results.columns for col in need_hrf_cols)
+                merged_results = base_results.copy()
+
+                if missing_any_hrf:
+                    cache_key = "hrf_hrv_tab_hrf_cache"
+                    cache_payload = st.session_state.get(cache_key, {})
+                    sig = {
+                        "upload_signature": list(upload_signature),
+                        "use_clean": bool(use_clean_for_hrf),
+                    }
+                    cached_df = cache_payload.get("df")
+                    if cache_payload.get("sig") == sig and isinstance(cached_df, pd.DataFrame):
+                        hrf_df = cached_df
+                    else:
+                        from hrv_core import compute_heart_rate_fragmentation  # noqa: PLC0415
+
+                        try:
+                            from hrv_fragmentation import compute_hrf_metrics  # noqa: PLC0415
+                        except Exception:
+                            compute_hrf_metrics = None  # type: ignore[assignment]
+
+                        rr_sources = datasets if datasets else uploads
+                        rows: List[Dict[str, Any]] = []
+                        for src_name, up in rr_sources.items():
+                            rr_arr = getattr(up, "rr_ms", None)
+                            if use_clean_for_hrf:
+                                rr_clean = getattr(up, "rr_ms_clean", None)
+                                if isinstance(rr_clean, np.ndarray) and rr_clean.size >= 10:
+                                    rr_arr = rr_clean
+                            if not isinstance(rr_arr, np.ndarray) or rr_arr.size < 10:
+                                continue
+                            row: Dict[str, Any] = {"source": str(src_name)}
+                            row.update(compute_heart_rate_fragmentation(rr_arr))
+                            if compute_hrf_metrics is not None:
+                                hrf = compute_hrf_metrics(rr_arr)
+                                row["hrf_pip_h_pct"] = float(hrf.pip_h)
+                                row["hrf_pip_s_pct"] = float(hrf.pip_s)
+                                row["hrf_pas_pct"] = float(hrf.pas)
+                                row["hrf_w0_pct"] = float(hrf.w0)
+                                row["hrf_w1_pct"] = float(hrf.w1)
+                                row["hrf_w2_pct"] = float(hrf.w2)
+                                row["hrf_w3_pct"] = float(hrf.w3)
+                                row["hrf_w3"] = float(hrf.w3)
+                                row["hrf_quality_ok"] = bool(hrf.quality_ok)
+                            if "hrf_pip_pct" in row:
+                                row["hrf_pip"] = float(row["hrf_pip_pct"])
+                            rows.append(row)
+                        hrf_df = pd.DataFrame(rows)
+                        st.session_state[cache_key] = {"sig": sig, "df": hrf_df}
+
+                    if isinstance(hrf_df, pd.DataFrame) and not hrf_df.empty:
+                        merged_results = merged_results.merge(
+                            hrf_df, on="source", how="left", suffixes=("", "_calc")
+                        )
+                        for col in hrf_df.columns:
+                            if col == "source":
+                                continue
+                            calc_col = f"{col}_calc"
+                            if calc_col in merged_results.columns:
+                                if col in merged_results.columns:
+                                    merged_results[col] = pd.to_numeric(
+                                        merged_results[col], errors="coerce"
+                                    )
+                                    merged_results[calc_col] = pd.to_numeric(
+                                        merged_results[calc_col], errors="coerce"
+                                    )
+                                    merged_results[col] = merged_results[col].fillna(
+                                        merged_results[calc_col]
+                                    )
+                                    merged_results = merged_results.drop(columns=[calc_col])
+                                else:
+                                    merged_results = merged_results.rename(
+                                        columns={calc_col: col}
+                                    )
+                        # Persist into session cache so other tabs can reuse after rerun.
+                        st.session_state["_hrv_cached_multi_results_df"] = merged_results
+
+                st.markdown("#### HRF summary (selected recording)")
+                sources = merged_results["source"].astype(str).tolist()
+                if not sources:
+                    st.info("No per-recording summaries available.")
+                else:
+                    selected_source = st.selectbox(
+                        "Recording",
+                        options=sources,
+                        index=0,
+                        key="hrf_tab_selected_recording",
+                        help="Select a recording to view HRF gauges and details.",
+                    )
+                    sel_row = merged_results[merged_results["source"] == selected_source].iloc[0]
+
+                    pip_val = float(sel_row.get("hrf_pip", sel_row.get("hrf_pip_pct", np.nan)))
+                    ials_val = float(sel_row.get("hrf_ials", np.nan))
+                    w3_val = float(sel_row.get("hrf_w3", sel_row.get("hrf_w3_pct", np.nan)))
+
+                    g1, g2, g3 = st.columns(3)
+                    with g1:
+                        _echarts_gauge(
+                            pip_val,
+                            min_val=0.0,
+                            max_val=100.0,
+                            title="PIP (fragmentation)",
+                            unit="%",
+                            precision=1,
+                            thresholds=[(50.0, "#22c55e"), (65.0, "#facc15"), (100.0, "#ef4444")],
+                            height_px=300,
+                        )
+                    with g2:
+                        _echarts_gauge(
+                            ials_val,
+                            min_val=0.0,
+                            max_val=1.0,
+                            title="IALS",
+                            unit="",
+                            precision=3,
+                            thresholds=[(0.4, "#22c55e"), (0.6, "#facc15"), (1.0, "#ef4444")],
+                            height_px=300,
+                        )
+                    with g3:
+                        _echarts_gauge(
+                            w3_val,
+                            min_val=0.0,
+                            max_val=100.0,
+                            title="W3 (fragmentation word)",
+                            unit="%",
+                            precision=1,
+                            thresholds=[(20.0, "#22c55e"), (30.0, "#facc15"), (100.0, "#ef4444")],
+                            height_px=300,
+                        )
+
+                    with st.expander("What these HRF metrics mean (quick guide)", expanded=False):
+                        st.markdown(
+                            "- **PIP**: % of inflection points in beat-to-beat RR changes (higher = more fragmented dynamics).  \n"
+                            "- **IALS**: inverse average length of monotonic RR segments (higher = shorter segments / more fragmentation).  \n"
+                            "- **W3**: symbolic-dynamics word frequency associated with highly fragmented patterns (higher = more fragmentation)."
+                        )
+                        st.caption("Reference: Costa, Davis, & Goldberger (2017), Frontiers in Physiology.")
+
+                    # ------------------------------------------------------------
+                    # HRF ↔ HRV correlations (per-recording)
+                    # ------------------------------------------------------------
+                    st.markdown("---")
+                    st.markdown("#### 🔗 HRF ↔ HRV correlations (per-recording)")
+                    numeric_cols = [
+                        c
+                        for c in merged_results.columns
+                        if c not in {"source"}
+                        and pd.api.types.is_numeric_dtype(merged_results[c])
+                    ]
+                    hrf_candidates = [
+                        c
+                        for c in [
+                            "hrf_pip",
+                            "hrf_ials",
+                            "hrf_w3",
+                            "hrf_pss_pct",
+                            "hrf_pip_h_pct",
+                            "hrf_pip_s_pct",
+                            "hrf_pas_pct",
+                            "hrf_w0_pct",
+                            "hrf_w1_pct",
+                            "hrf_w2_pct",
+                        ]
+                        if c in numeric_cols
+                    ]
+                    hrv_candidates = [
+                        c
+                        for c in [
+                            "rmssd",
+                            "sdnn",
+                            "mean_hr",
+                            "lf_hf_ratio",
+                            "hf_power",
+                            "lf_power",
+                            "total_power",
+                            "pnn50",
+                            "sd1",
+                            "sd2",
+                            "dfa_alpha1",
+                            "sampen",
+                            "stress_index",
+                            "parasympathetic_index",
+                            "sympathetic_index",
+                            "ans_balance",
+                        ]
+                        if c in numeric_cols
+                    ]
+                    if len(hrf_candidates) < 1 or len(hrv_candidates) < 1:
+                        st.info(
+                            "Not enough HRF/HRV numeric metrics are available yet. "
+                            "If you just upgraded, click **Recompute HRV Analysis** once to populate the full metric set."
+                        )
+                    else:
+                        col_sel_a, col_sel_b = st.columns(2)
+                        with col_sel_a:
+                            selected_hrf = st.multiselect(
+                                "HRF metrics",
+                                options=hrf_candidates,
+                                default=hrf_candidates[: min(3, len(hrf_candidates))],
+                                key="hrf_corr_hrf_metrics",
+                            )
+                        with col_sel_b:
+                            selected_hrv = st.multiselect(
+                                "HRV metrics",
+                                options=hrv_candidates,
+                                default=hrv_candidates[: min(4, len(hrv_candidates))],
+                                key="hrf_corr_hrv_metrics",
+                            )
+                        selected_metrics = [*selected_hrf, *selected_hrv]
+                        if len(selected_metrics) < 2:
+                            st.info("Select at least 2 metrics to compute correlations.")
+                        else:
+                            st.info(
+                                "Correlations run only when you click **Compute HRF↔HRV correlations**. "
+                                "Results are cached in-session so they persist across tab switches."
+                            )
+                            cache_key = "hrf_hrv_corr_cache"
+                            if st.button(
+                                "Compute HRF↔HRV correlations",
+                                key="hrf_corr_compute_btn",
+                                help="Compute a Pearson correlation matrix across recordings (per-recording metrics).",
+                            ):
+                                corr_input = merged_results[selected_metrics].apply(
+                                    pd.to_numeric, errors="coerce"
+                                )
+                                corr_df = corr_input.corr()
+                                st.session_state[cache_key] = {
+                                    "upload_signature": list(upload_signature),
+                                    "metrics": list(selected_metrics),
+                                    "corr": corr_df,
+                                }
+                            cached = st.session_state.get(cache_key, {})
+                            cached_corr = cached.get("corr")
+                            if (
+                                isinstance(cached, dict)
+                                and cached.get("upload_signature") == list(upload_signature)
+                                and cached.get("metrics") == list(selected_metrics)
+                                and isinstance(cached_corr, pd.DataFrame)
+                                and not cached_corr.empty
+                            ):
+                                if SCIENTIFIC_CHARTS_AVAILABLE:
+                                    corr_chart = build_physiology_correlation_matrix(
+                                        correlation_df=cached_corr,
+                                        title="HRF ↔ HRV Correlation Matrix (Pearson r)",
+                                    )
+                                    render_echarts(
+                                        corr_chart,
+                                        height_px=420,
+                                        config=EChartsConfig(),
+                                    )
+                                else:
+                                    st.dataframe(
+                                        cached_corr.style.background_gradient(
+                                            cmap="RdYlGn", vmin=-1, vmax=1
+                                        )
+                                    )
+
+                                # Top HRF↔HRV pairs (by |r|) with a scatter for the top pair.
+                                pair_rows: List[Dict[str, Any]] = []
+                                corr_input = merged_results[selected_metrics].apply(
+                                    pd.to_numeric, errors="coerce"
+                                )
+                                for hrf_m in selected_hrf:
+                                    for hrv_m in selected_hrv:
+                                        x = pd.to_numeric(corr_input[hrf_m], errors="coerce")
+                                        y = pd.to_numeric(corr_input[hrv_m], errors="coerce")
+                                        mask = x.notna() & y.notna()
+                                        n = int(mask.sum())
+                                        if n < 3:
+                                            continue
+                                        r_val = float(x[mask].corr(y[mask]))
+                                        if np.isfinite(r_val):
+                                            pair_rows.append(
+                                                {
+                                                    "hrf_metric": hrf_m,
+                                                    "hrv_metric": hrv_m,
+                                                    "pearson_r": r_val,
+                                                    "n": n,
+                                                }
+                                            )
+                                if pair_rows:
+                                    pairs_df = pd.DataFrame(pair_rows).sort_values(
+                                        "pearson_r",
+                                        key=lambda s: s.abs(),
+                                        ascending=False,
+                                        ignore_index=True,
+                                    )
+                                    st.markdown("**Top HRF↔HRV pairs (by |r|)**")
+                                    st.dataframe(pairs_df.head(12))
+
+                                    top = pairs_df.iloc[0].to_dict()
+                                    x_name = str(top["hrf_metric"])
+                                    y_name = str(top["hrv_metric"])
+                                    x = pd.to_numeric(merged_results[x_name], errors="coerce")
+                                    y = pd.to_numeric(merged_results[y_name], errors="coerce")
+                                    mask = x.notna() & y.notna()
+                                    if int(mask.sum()) >= 3:
+                                        opt = {
+                                            "title": {"text": f"{x_name} vs {y_name}", "left": "center"},
+                                            "tooltip": {"trigger": "item"},
+                                            "grid": {"left": 48, "right": 18, "containLabel": True},
+                                            "xAxis": {"type": "value", "name": x_name},
+                                            "yAxis": {"type": "value", "name": y_name},
+                                            "series": [
+                                                _echarts_scatter_series(
+                                                    "points",
+                                                    x_vals=x[mask].to_numpy(),
+                                                    y_vals=y[mask].to_numpy(),
+                                                )
+                                            ],
+                                        }
+                                        render_echarts(
+                                            opt, height_px=360, width="100%", config=EChartsConfig()
+                                        )
+                                        st.caption(
+                                            f"Top pair: r = {float(top['pearson_r']):.3f} (n={int(top['n'])}). "
+                                            "Use this as exploratory association; interpret alongside protocol, posture, and breathing context."
+                                        )
+                                else:
+                                    st.info(
+                                        "Not enough overlapping samples to compute HRF↔HRV pairs (need ≥3 recordings)."
+                                    )
     with tab_ans:
         st.markdown("### 🫀 Autonomic Function Tests")
         st.markdown("*Clinical-grade autonomic reflex assessments*")
@@ -13531,28 +13910,55 @@ that predicts cognitive performance based on:
                 "Align HRV windows to expected arrival by applying a time lag before merging."
             )
             lag_min, lag_max = st.slider(
-                "Lag range (hours, applied to Kp times)", -48, 48, (-12, 12), step=1)
+                "Lag range (hours, applied to Kp times)",
+                -48,
+                48,
+                (-12, 12),
+                step=1,
+                key="sw_kp_lag_range_hours",
+            )
             lag_step = st.number_input(
-                "Lag step (hours)", min_value=1, max_value=12, value=3, step=1
+                "Lag step (hours)",
+                min_value=1,
+                max_value=12,
+                value=3,
+                step=1,
+                key="sw_kp_lag_step_hours",
             )
             merge_tol = st.number_input(
                 "Merge tolerance (minutes)",
                 min_value=15,
                 max_value=360,
                 value=90,
-                step=15)
+                step=15,
+                key="sw_kp_merge_tolerance_min",
+            )
             cedula = st.text_input(
                 "Cedula (identification number)",
                 value="",
-                placeholder="e.g., 12345678")
+                placeholder="e.g., 12345678",
+                key="sw_kp_cedula",
+            )
             use_weather = st.checkbox(
                 "Include weather covariates (Bogotá) for partial correlations",
                 value=False,
-                help="Fetches weather data from Open-Meteo API. Uncheck for faster loading.")
+                help="Fetches weather data from Open-Meteo API. Uncheck for faster loading.",
+                key="sw_kp_include_weather_covariates",
+            )
 
             lags = list(range(int(lag_min), int(lag_max) + 1, int(lag_step)))
             if not lags:
                 lags = [0]
+
+            # Use cached HRV windowed results if a rerun cleared the in-memory frame.
+            corr_windowed_df = (
+                windowed_df
+                if not windowed_df.empty
+                else st.session_state.get("_hrv_cached_windowed_df", pd.DataFrame())
+            )
+            corr_metric_list: List[str] = _select_hrv_metric_columns(
+                corr_windowed_df, exclude=("kp_index",)
+            )
 
             # Ensure Kp data is available (cache-only; never auto-fetch network on tab render)
             if (kp_df.empty or "kp_index" not in kp_df.columns) and not kp_error:
@@ -13570,19 +13976,88 @@ that predicts cognitive performance based on:
 
             # Check prerequisites before showing compute button
             can_compute_corr = (
-                not windowed_df.empty
-                and "start" in windowed_df.columns
-                and metric_list
+                not corr_windowed_df.empty
+                and "start" in corr_windowed_df.columns
+                and bool(corr_metric_list)
                 and not kp_error
                 and not kp_df.empty
                 and "kp_index" in kp_df.columns
             )
-        
-            if windowed_df.empty:
-                st.info("Windowed HRV metrics are not available. Run an analysis first.")
-            elif "start" not in windowed_df.columns:
+
+            # Show cached results (persist across tab switches/reruns).
+            _stored_kp_corr = st.session_state.get("space_weather_kp_corr_cache")
+            try:
+                _stored_sig = tuple((_stored_kp_corr or {}).get("scope_upload_signature", []))
+            except Exception:
+                _stored_sig = tuple()
+            _stored_user = str((_stored_kp_corr or {}).get("scope_user_id", "") or "")
+            _current_user = str(active_user_id or "")
+            _has_stored = (
+                isinstance(_stored_kp_corr, dict)
+                and _stored_user == _current_user
+                and _stored_sig == upload_signature
+                and isinstance(_stored_kp_corr.get("corr_best"), pd.DataFrame)
+                and isinstance(_stored_kp_corr.get("corr_full"), pd.DataFrame)
+            )
+            if _has_stored:
+                with st.expander("✅ Last computed HRV ↔ Kp correlations (saved for this session)", expanded=True):
+                    st.caption(
+                        f"Computed: {_stored_kp_corr.get('computed_at_utc', 'unknown')} | "
+                        f"Merge tolerance: {_stored_kp_corr.get('params', {}).get('merge_tol_minutes', '?')} min | "
+                        f"Weather covariates: {_stored_kp_corr.get('params', {}).get('use_weather', False)}"
+                    )
+                    if _stored_kp_corr["corr_full"].empty:
+                        st.info("Last run produced no lagged correlations for the current configuration.")
+                    else:
+                        st.subheader("Best correlation per metric (by |r|)")
+                        st.dataframe(_stored_kp_corr["corr_best"])
+                        st.download_button(
+                            "⬇️ Download full correlation table (CSV)",
+                            data=_stored_kp_corr["corr_full"].to_csv(index=False).encode("utf-8"),
+                            file_name="hrv_kp_correlations.csv",
+                            mime="text/csv",
+                            key="download_kp_corr_full_cached",
+                        )
+                        st.download_button(
+                            "⬇️ Download top correlations (CSV)",
+                            data=_stored_kp_corr["corr_best"].to_csv(index=False).encode("utf-8"),
+                            file_name="hrv_kp_correlations_top.csv",
+                            mime="text/csv",
+                            key="download_kp_corr_best_cached",
+                        )
+                    if st.button(
+                        "🧹 Clear saved correlation results",
+                        key="clear_kp_corr_cache",
+                        help="Removes saved results so the panel is cleared on the next rerun.",
+                    ):
+                        st.session_state.pop("space_weather_kp_corr_cache", None)
+                        export_store = st.session_state.get("space_weather_export", {})
+                        if isinstance(export_store, dict):
+                            export_store.pop("corr_full", None)
+                            export_store.pop("corr_best", None)
+                            st.session_state["space_weather_export"] = export_store
+                        st.rerun()
+
+            if corr_windowed_df.empty:
+                info_col, action_col = st.columns([0.65, 0.35])
+                with info_col:
+                    st.info("Run the HRV window analysis to enable correlations.")
+                with action_col:
+                    trigger_hrv_corr = st.button(
+                        "Run HRV window analysis",
+                        key="sw_trigger_hrv_kp_corr",
+                        help="Compute HRV windowed metrics to unlock Space Weather correlations.",
+                    )
+                if trigger_hrv_corr:
+                    if not has_hrv_data_uploaded:
+                        st.warning("Upload HRV data first, then run the HRV analysis.")
+                    else:
+                        st.session_state["auto_run_hrv_analysis"] = True
+                        st.session_state.pop("hrv_analysis_complete_signature", None)
+                        st.rerun()
+            elif "start" not in corr_windowed_df.columns:
                 st.info("Windowed HRV data does not include start timestamps.")
-            elif not metric_list:
+            elif not corr_metric_list:
                 st.info("No numeric HRV metrics available for correlation.")
             elif kp_error or kp_df.empty or "kp_index" not in kp_df.columns:
                 st.info("Planetary K-index data not available for correlation. Click 'Fetch space weather data' first.")
@@ -13601,12 +14076,13 @@ that predicts cognitive performance based on:
                     f"Compute context — GPU available: **{gpu_info.available}** ({gpu_info.device_name}); "
                     f"compute runs on CPU; CuPy used only for CUDA-ready array ops."
                 )
+                windowed_for_corr = corr_windowed_df.copy()
                 # optional weather covariates fetched for time span of HRV windows
                 cov_df = pd.DataFrame()
                 covariate_cols: List[str] = []
                 if use_weather:
                     start_dt = pd.to_datetime(
-                        windowed_df["start"], errors="coerce", utc=True
+                        windowed_for_corr["start"], errors="coerce", utc=True
                     ).dropna()
                     if not start_dt.empty:
                         span_min = start_dt.min().date().isoformat()
@@ -13618,7 +14094,7 @@ that predicts cognitive performance based on:
                             st.warning(f"Weather API error: {exc}")
                     if not cov_df.empty:
                         start_index = pd.to_datetime(
-                            windowed_df["start"], errors="coerce", utc=True
+                            windowed_for_corr["start"], errors="coerce", utc=True
                         )
                         cov_df = cov_df.copy()
                         if cov_df["weather_time"].dt.tz is None:
@@ -13652,8 +14128,8 @@ that predicts cognitive performance based on:
                         if not cov_aligned.empty:
                             cov_aligned = cov_aligned.rename_axis("_align_time")
                             covariate_cols = list(cov_aligned.columns)
-                            windowed_df = (
-                                windowed_df.assign(_align_time=start_index)
+                            windowed_for_corr = (
+                                windowed_for_corr.assign(_align_time=start_index)
                                 .set_index("_align_time")
                                 .join(cov_aligned, how="left")
                                 .reset_index(drop=True)
@@ -13662,9 +14138,9 @@ that predicts cognitive performance based on:
                 with st.spinner("Computing correlations..."):
                     corr_start = time.perf_counter()
                     lag_results = _scan_lag_correlations(
-                        windowed_df,
+                        windowed_for_corr,
                         kp_df,
-                        metric_list,
+                        corr_metric_list,
                         lags,
                         merge_tolerance_minutes=int(merge_tol),
                         covariate_cols=covariate_cols or None,
@@ -13678,6 +14154,19 @@ that predicts cognitive performance based on:
                 if lag_results.empty:
                     st.info(
                         "No lagged correlations could be computed with current data.")
+                    st.session_state["space_weather_kp_corr_cache"] = {
+                        "scope_user_id": str(active_user_id or ""),
+                        "scope_upload_signature": list(upload_signature),
+                        "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                        "params": {
+                            "lags": list(lags),
+                            "merge_tol_minutes": int(merge_tol),
+                            "use_weather": bool(use_weather),
+                            "metrics": list(corr_metric_list),
+                        },
+                        "corr_full": lag_results.copy(),
+                        "corr_best": pd.DataFrame(),
+                    }
                 else:
                     st.caption(f"Correlation computation time: {corr_duration:.0f} ms")
                     if (
@@ -13718,6 +14207,19 @@ that predicts cognitive performance based on:
                     export_store["corr_full"] = lag_results.copy()
                     export_store["corr_best"] = best_rows.copy()
                     st.session_state["space_weather_export"] = export_store
+                    st.session_state["space_weather_kp_corr_cache"] = {
+                        "scope_user_id": str(active_user_id or ""),
+                        "scope_upload_signature": list(upload_signature),
+                        "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                        "params": {
+                            "lags": list(lags),
+                            "merge_tol_minutes": int(merge_tol),
+                            "use_weather": bool(use_weather),
+                            "metrics": list(corr_metric_list),
+                        },
+                        "corr_full": lag_results.copy(),
+                        "corr_best": best_rows.copy(),
+                    }
                     # Export correlation tables
                     st.download_button(
                         "⬇️ Download full correlation table (CSV)",
