@@ -1942,6 +1942,34 @@ The **🔬 Space Analytics** tab is the on-demand workspace for **correlations +
 - **Targets supported**: standard HRV metrics (e.g., RMSSD/SDNN/HF) and heart-rate fragmentation (HRF) metrics (e.g., PIP/W3) when present in windowed outputs.
 - **GPT export integration**: when you generate the Export report + **GPT‑5.2 high‑reasoning interpretation**, any Space Analytics results from the current session are included automatically.
 
+### Event-aligned analysis (prototype)
+
+Space Analytics now includes a **🧭 Event-aligned analysis (prototype)** section designed for the research question:
+
+> **During a space-weather event (start → end), do HRV, HRF, or both change? Which specific metrics are affected, and what do those changes mean?**
+
+**What it does (current prototype):**
+- Defines events deterministically using **threshold crossings** on a selected predictor time series (e.g., **Kp** or **Dst**).
+- Extracts explicit **event start/end** windows (with user-configurable max-gap and minimum duration).
+- Computes a **baseline vs event delta table** for selected HRV/HRF metrics using windowed HRV timelines:
+  - Baseline: \([event_start − baseline_hours, event_start)\)
+  - Event: \([event_start, event_end]\)
+- Ranks metrics by effect size and annotates results with short **physiology/operational meanings** for common HRV/HRF metrics.
+
+**How to use it:**
+1. Ensure you have **windowed HRV/HRF metrics** (run HRV window analysis).
+2. In Space Analytics, load/fetch **NOAA Core** feeds (needs Kp and/or Dst available).
+3. Open **Run event-aligned delta analysis**:
+   - Choose **Kp** or **Dst** as the event definition source
+   - Choose the value column, threshold, and condition (≥/≤)
+   - Click **Detect events**
+4. Select the event you care about and set baseline duration (hours).
+5. Select HRV/HRF targets and click **Run baseline vs event delta table**.
+
+**Interpretation guardrails:**
+- This is an **association discovery tool**, not causation.
+- Always validate **data quality** (motion/artifacts/ectopy) and interpret with **sleep, activity, posture, and circadian timing** context.
+
 ### NOAA dashboard (within Space Data)
 
 **Available data feeds:**
