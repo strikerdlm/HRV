@@ -12695,115 +12695,82 @@ that predicts cognitive performance based on:
                 )
 
     with tab_science:
-        st.markdown("## 📚 Scientific Reference Guide")
-        st.markdown("*Comprehensive explanations of HRV metrics and their physiological significance*")
-        
-        # Time-domain metrics
-        with st.expander("🕐 **Time-Domain Metrics** — Beat-to-beat variability measures", expanded=True):
-            st.markdown("""
-| Metric | Definition | Physiology | Clinical Interpretation |
-|--------|------------|------------|------------------------|
-| **SDNN** | Standard deviation of all NN intervals | Reflects **total variability** from all cyclic components | Normal: 50±16 ms (5-min). ↓ with age, stress, disease. Overall autonomic health marker |
-| **RMSSD** | Root mean square of successive differences | **Vagal (parasympathetic) modulation** — rapid beat-to-beat changes | Normal: 42±15 ms. ↑ = good vagal tone. ↓ = stress, fatigue, illness |
-| **pNN50** | % of successive differences >50 ms | High-frequency vagal activity | Normal: 5-25%. ↑ = strong vagal influence. Very sensitive to artifacts |
-| **Mean HR** | Average heart rate (bpm) | Sympathovagal balance at sinoatrial node | 60-100 bpm normal. <60 = bradycardia (may be athletic). >100 = tachycardia |
-| **CVNN** | Coefficient of variation (SDNN/Mean NN) | Normalized variability independent of HR | Unitless. Useful for comparing across different heart rates |
+        st.markdown("## 📚 Science (fast)")
+        st.caption(
+            "This tab is intentionally **lightweight** so switching tabs stays responsive. "
+            "Pick one section to render at a time. Full citations live in **📚 References**."
+        )
 
-**Key insight:** RMSSD is the most reliable short-term vagal marker. Use it for recovery monitoring and stress assessment.
-            """)
-        
-        # Frequency-domain metrics
-        with st.expander("📊 **Frequency-Domain Metrics** — Spectral power analysis", expanded=False):
-            st.markdown("""
-| Metric | Frequency Band | Physiology | Clinical Interpretation |
-|--------|---------------|------------|------------------------|
-| **VLF** | 0.0033–0.04 Hz | Thermoregulation, RAAS, slow metabolic rhythms | Requires long recordings (>5 min). ↓ predicts mortality in some cohorts |
-| **LF Power** | 0.04–0.15 Hz | **Baroreflex activity** + mixed sympathetic/vagal | NOT purely sympathetic! Reflects blood pressure regulation |
-| **HF Power** | 0.15–0.40 Hz | **Respiratory sinus arrhythmia** — pure vagal | ↑ with slow deep breathing. Best parasympathetic marker in frequency domain |
-| **LF/HF Ratio** | LF ÷ HF | Historically "sympathovagal balance" | ⚠️ **Controversial!** Highly breathing-dependent. Use with caution |
-| **LF nu / HF nu** | Normalized units | Relative contributions within LF+HF | Useful for within-subject comparisons; less affected by total power |
+        science_sections: Dict[str, str] = {
+            "Overview": (
+                "**What you’ll find here**\n"
+                "- Concise definitions and interpretation tips for key HRV/HRF metrics\n"
+                "- Practical clinical cautions (e.g., LF/HF limitations)\n"
+                "- A brief space-weather physiology framing\n\n"
+                "**Tip:** Use the tabs **📚 References** (APA 7) and `docs/Manual.md` for the full manual."
+            ),
+            "Time-Domain HRV": (
+                "| Metric | Definition | Physiology | Interpretation |\n"
+                "|---|---|---|---|\n"
+                "| **SDNN** | Std dev of NN intervals | Total variability | ↓ with age/stress/disease |\n"
+                "| **RMSSD** | RMS of successive differences | Vagal modulation | Best short-term vagal marker |\n"
+                "| **pNN50** | % successive diffs > 50 ms | Vagal activity | Artifact-sensitive |\n"
+                "| **Mean HR** | Avg HR (bpm) | Net autonomic balance | Context-dependent |\n"
+                "\n**Key insight:** RMSSD is typically the most reliable short-term recovery metric."
+            ),
+            "Frequency-Domain HRV": (
+                "| Metric | Band | Interpretation |\n"
+                "|---|---:|---|\n"
+                "| **HF** | 0.15–0.40 Hz | Respiratory sinus arrhythmia (vagal) |\n"
+                "| **LF** | 0.04–0.15 Hz | Baroreflex + mixed influences |\n"
+                "| **LF/HF** | — | ⚠️ Breathing-dependent; not a pure stress index |\n"
+                "\n**Caution:** Slow breathing can inflate LF without sympathetic activation."
+            ),
+            "Nonlinear / Complexity": (
+                "| Metric | Meaning | Interpretation |\n"
+                "|---|---|---|\n"
+                "| **SD1/SD2** | Poincaré ratio | Short vs long dynamics |\n"
+                "| **DFA α1** | Short-range fractal scaling | Near ~1.0 often healthy; extremes can reflect dysregulation |\n"
+                "| **SampEn** | Irregularity/complexity | ↓ = more regular/rigid control |\n"
+            ),
+            "Heart Rate Fragmentation (HRF)": (
+                "| Metric | Meaning |\n"
+                "|---|---|\n"
+                "| **PIP** | % inflection points (direction changes) |\n"
+                "| **IALS** | Inverse avg segment length (run interruption) |\n"
+                "| **W0–W3** | 4-beat “word” patterns by inflection count |\n"
+                "\n**Use:** HRF can reflect rhythm fragmentation beyond classic HRV magnitude measures."
+            ),
+            "Autonomic Function Tests": (
+                "| Test | Normal-ish | Notes |\n"
+                "|---|---:|---|\n"
+                "| **Valsalva ratio** | ≥ ~1.2 | Age-dependent |\n"
+                "| **Deep breathing E:I** | Higher in youth | Declines with age |\n"
+                "| **30:15 ratio** | ≥ ~1.04 | Baroreflex screening |\n"
+            ),
+            "Solar Activity & HRV (overview)": (
+                "| Solar metric | Concept | Typical analysis |\n"
+                "|---|---|---|\n"
+                "| **Kp / Dst** | Geomagnetic disturbance | Lagged correlations (hours–days) |\n"
+                "| **F10.7** | Solar-cycle proxy | Long-horizon / confounded |\n"
+                "\n**Caution:** Effects are often small; control for time-of-day, season, and behavior."
+            ),
+            "Reference Values (5-min norms)": (
+                "| Metric | Typical reference |\n"
+                "|---|---|\n"
+                "| **SDNN** | ~50 ± 16 ms |\n"
+                "| **RMSSD** | ~42 ± 15 ms |\n"
+                "\n**Important:** Population norms vary; within-subject baselines are usually more actionable."
+            ),
+        }
 
-**Critical note:** LF/HF ratio is NOT a reliable "stress index." Slow breathing (6/min) dramatically increases LF without sympathetic activation.
-            """)
-        
-        # Nonlinear metrics
-        with st.expander("🔄 **Nonlinear Metrics** — Complexity and fractal dynamics", expanded=False):
-            st.markdown("""
-| Metric | Definition | Physiology | Clinical Interpretation |
-|--------|------------|------------|------------------------|
-| **SD1** | Poincaré plot short-axis | Short-term vagal modulation (≈ RMSSD/√2) | Reflects beat-to-beat parasympathetic control |
-| **SD2** | Poincaré plot long-axis | Long-term variability + sympathetic influences | Combined autonomic and non-autonomic factors |
-| **SD1/SD2** | Ratio of axes | Balance of short vs long-term dynamics | ↓ ratio may indicate reduced vagal relative to overall variability |
-| **DFA α1** | Detrended fluctuation (4-16 beats) | **Fractal correlation** in short-term | 0.75–1.25 = healthy. <0.75 = uncorrelated (exercise). >1.25 = rigid control |
-| **DFA α2** | Detrended fluctuation (16-64 beats) | Long-range fractal correlations | Less studied; reflects longer-term regulatory dynamics |
-| **SampEn** | Sample entropy | **Complexity/irregularity** of RR series | ↓ entropy = more regular (rigid, less adaptive). ↑ = healthy complexity |
-| **ApEn** | Approximate entropy | Similar to SampEn, less bias-corrected | Sensitive to data length and parameters |
-
-**Key insight:** DFA α1 near 1.0 indicates healthy, fractal-like heart rate dynamics. Loss of complexity (↓ entropy, extreme α1) is associated with disease and aging.
-            """)
-        
-        # Heart Rate Fragmentation
-        with st.expander("⚡ **Heart Rate Fragmentation (HRF)** — Arrhythmia risk markers", expanded=False):
-            st.markdown("""
-| Metric | Definition | Physiology | Clinical Interpretation |
-|--------|------------|------------|------------------------|
-| **PIP** | % of inflection points | Frequency of direction changes | ↑ PIP = more fragmented rhythm. PROOF-AF: predicts atrial fibrillation |
-| **PIP_H / PIP_S** | Hard/soft inflection points | Abrupt vs gradual direction changes | Distinguishes sudden vs smooth rhythm alterations |
-| **IALS** | Inverse average length of segments | How often acceleration/deceleration runs are interrupted | ↑ IALS = shorter runs = more fragmentation |
-| **W0–W3** | Word distributions (4-beat patterns) | Count of patterns by inflection count | ↑ W3 = highly fragmented. ↑ W0 = very regular |
-| **PSS / PAS** | Short/alternating segment % | Rhythm pattern classification | Elevated values indicate ANS disorganization |
-
-**Research evidence:** The PROOF-AF study (n=1011, 18-year follow-up) found PIP and reduced DFA α1 independently predicted atrial fibrillation in adults ≥65.
-            """)
-        
-        # Autonomic Function Tests
-        with st.expander("🫀 **Autonomic Function Tests** — Clinical assessment ratios", expanded=False):
-            st.markdown("""
-| Test | Protocol | Normal Values | Clinical Significance |
-|------|----------|---------------|----------------------|
-| **Valsalva Ratio** | Strain for 15s → release | ≥1.2 (age-dependent) | ↓ ratio = impaired parasympathetic response. Sensitive to autonomic neuropathy |
-| **Deep Breathing E:I** | 6 breaths/min, 5s in/5s out | E:I diff ≥15 bpm (young) | ↓ response = reduced vagal modulation. Declines with age |
-| **30:15 Ratio** | Stand from supine | ≥1.04 | ↓ ratio = impaired reflex tachycardia. Tests baroreceptor function |
-
-**Clinical context:** These bedside tests are gold standards for diagnosing autonomic neuropathy (diabetic, Parkinson's, etc.). Requires standardized protocols.
-            """)
-        
-        # Solar-Physiology correlations
-        with st.expander("🌞 **Solar Activity & HRV** — Space weather correlations", expanded=False):
-            st.markdown("""
-| Solar Metric | Definition | Physiological Link | Evidence Level |
-|--------------|------------|-------------------|----------------|
-| **Kp Index** | Global geomagnetic disturbance (0-9) | ↑ Kp → ↓ HRV, ↑ HR | **Moderate** — Multiple cohort studies show reduced vagal tone during storms |
-| **Dst Index** | Ring current intensity (nT) | More negative = stronger storm | **Moderate** — Correlates with Kp; similar HRV associations |
-| **Solar Wind Speed** | km/s from ACE/DSCOVR | Drives magnetospheric coupling | **Emerging** — Higher speeds associated with ↑ HR, stress responses |
-| **IMF Bz** | Interplanetary magnetic field z-component | Southward (<0) enhances coupling | **Emerging** — Precedes geomagnetic activity by hours |
-| **F10.7 Flux** | 10.7 cm solar radio emission (sfu) | Solar cycle proxy | **Weak** — Long-term associations; confounded by seasonality |
-
-**Key studies:**
-- Vieira et al. 2022: Geomagnetic disturbances reduced HRV in older men (Normative Aging Study)
-- Alabdulgader et al. 2018: Long-term HR/HRV changes with solar activity (Sci Rep)
-- Gaisenok et al. 2025: Systematic review — MI/stroke risk ↑ during storms (RR ≈1.3–1.6)
-
-⚠️ **Caution:** Effect sizes are small. Always control for time-of-day, season, temperature, and behavior. Treat as exploratory.
-            """)
-        
-        # Reference values table
-        with st.expander("📋 **Reference Values** — Short-term (5-min) healthy adult norms", expanded=False):
-            st.markdown("""
-| Metric | Mean ± SD | Typical Range | Age Effect | Source |
-|--------|-----------|---------------|------------|--------|
-| SDNN | 50 ± 16 ms | 32–93 ms | ↓ with age | Nunan 2010 |
-| RMSSD | 42 ± 15 ms | 19–75 ms | ↓ with age | Nunan 2010 |
-| pNN50 | 15 ± 12% | 1–50% | ↓ with age | Shaffer 2017 |
-| LF Power | 519 ± 291 ms² | 193–1009 ms² | ↓ with age | Nunan 2010 |
-| HF Power | 657 ± 777 ms² | 83–3630 ms² | ↓ with age | Nunan 2010 |
-| LF/HF | 2.8 ± 2.6 | 0.5–11.6 | Variable | Nunan 2010 |
-| DFA α1 | 1.0 ± 0.15 | 0.75–1.25 | Slight ↓ | Shaffer 2017 |
-| SampEn | 1.5 ± 0.3 | 0.8–2.2 | ↓ with age | Literature |
-
-**Important:** These are population averages. Individual baselines vary widely. **Always prioritize within-subject trends over absolute comparisons.**
-            """)
-        
+        selected_section = st.selectbox(
+            "Section",
+            options=list(science_sections.keys()),
+            index=0,
+            key="science_section_select",
+        )
+        st.markdown(science_sections.get(selected_section, science_sections["Overview"]))
         st.markdown("---")
         st.info("References are consolidated in the **📚 References** tab (APA 7 format).")
 
@@ -15811,27 +15778,87 @@ that predicts cognitive performance based on:
         st.markdown("#### 📊 Current HRV Analysis")
         if has_hrv_data and not windowed_df.empty:
             st.success(f"✅ HRV data loaded: {len(windowed_df)} windows available for export.")
-            col_exp1, col_exp2 = st.columns(2)
-            with col_exp1:
-                csv_hrv = windowed_df.to_csv(index=False).encode("utf-8")
-                st.download_button(
-                    "⬇️ Download HRV Metrics (CSV)",
-                    data=csv_hrv,
-                    file_name=f"hrv_metrics_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
-                    mime="text/csv",
-                    key="export_tab_hrv_csv",
-                    use_container_width=True,
+            # IMPORTANT: Do not build CSV/JSON payloads on every rerun. Streamlit tabs are not lazy;
+            # expensive serialization would slow down *all* tabs. Prepare exports explicitly.
+            export_hrv_state = st.session_state.setdefault(
+                "export_current_hrv_state",
+                {
+                    "signature": "",
+                    "csv_bytes": b"",
+                    "json_bytes": b"",
+                    "generated_at_utc": "",
+                    "rows": 0,
+                },
+            )
+            try:
+                settings_hash = compute_settings_hash(
+                    str(method), float(max_dev), int(median_win), win, step
                 )
-            with col_exp2:
-                json_hrv = windowed_df.to_json(orient="records", indent=2)
-                st.download_button(
-                    "⬇️ Download HRV Metrics (JSON)",
-                    data=json_hrv.encode("utf-8"),
-                    file_name=f"hrv_metrics_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.json",
-                    mime="application/json",
-                    key="export_tab_hrv_json",
-                    use_container_width=True,
+            except Exception:
+                settings_hash = "unknown"
+            export_sig_payload = {
+                "uploads": list(upload_signature) if isinstance(upload_signature, tuple) else [],
+                "settings_hash": str(settings_hash),
+                "rows": int(windowed_df.shape[0]),
+                "cols": int(windowed_df.shape[1]),
+            }
+            export_sig = hashlib.sha256(
+                json.dumps(export_sig_payload, sort_keys=True).encode("utf-8", errors="ignore")
+            ).hexdigest()
+
+            col_prep, col_status = st.columns([1, 3])
+            with col_prep:
+                prepare_exports = st.button(
+                    "🧾 Prepare HRV export files",
+                    key="export_prepare_current_hrv",
+                    type="primary",
+                    help="Generates CSV + JSON payloads once (cached in-session) for download.",
                 )
+            with col_status:
+                if export_hrv_state.get("signature") == export_sig and export_hrv_state.get("csv_bytes"):
+                    st.caption(
+                        f"Prepared: {export_hrv_state.get('rows', 0)} rows "
+                        f"({export_hrv_state.get('generated_at_utc', 'unknown')})."
+                    )
+                else:
+                    st.caption("Not prepared yet (keeps tab switches fast).")
+
+            if prepare_exports:
+                with st.spinner("Preparing CSV/JSON exports…"):
+                    csv_bytes = windowed_df.to_csv(index=False).encode("utf-8")
+                    json_bytes = windowed_df.to_json(
+                        orient="records",
+                        indent=2,
+                    ).encode("utf-8")
+                export_hrv_state["signature"] = export_sig
+                export_hrv_state["csv_bytes"] = csv_bytes
+                export_hrv_state["json_bytes"] = json_bytes
+                export_hrv_state["generated_at_utc"] = pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+                export_hrv_state["rows"] = int(windowed_df.shape[0])
+                st.success("HRV export files prepared.")
+
+            if export_hrv_state.get("signature") == export_sig and export_hrv_state.get("csv_bytes"):
+                col_exp1, col_exp2 = st.columns(2)
+                with col_exp1:
+                    st.download_button(
+                        "⬇️ Download HRV Metrics (CSV)",
+                        data=export_hrv_state["csv_bytes"],
+                        file_name=f"hrv_metrics_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
+                        mime="text/csv",
+                        key="export_tab_hrv_csv",
+                        use_container_width=True,
+                    )
+                with col_exp2:
+                    st.download_button(
+                        "⬇️ Download HRV Metrics (JSON)",
+                        data=export_hrv_state["json_bytes"],
+                        file_name=f"hrv_metrics_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.json",
+                        mime="application/json",
+                        key="export_tab_hrv_json",
+                        use_container_width=True,
+                    )
+            else:
+                st.info("Click **Prepare HRV export files** to enable downloads.")
         else:
             st.info("📤 Upload RR interval data to enable HRV export.")
 
@@ -16894,48 +16921,26 @@ that predicts cognitive performance based on:
                 placeholder="Add protocol notes, observations, or follow-up actions.",
                 height=120,
             )
-            # Compose NOAA notes block for export (explanations + top correlations if available)
-            noaa_notes_lines: List[str] = []
-            try:
-                exp_rows = get_noaa_metric_explanations()
-            except Exception:
-                exp_rows = []
-            if exp_rows:
-                noaa_notes_lines.append("### NOAA metric explanations (concise)")
-                for row in exp_rows:
-                    title = row.get("title") or f"{row.get('dataset')}.{row.get('value_column')}"
-                    noaa_notes_lines.append(
-                        f"- **{title}** — {row.get('what','')}. "
-                        f"Why it matters: {row.get('why','')}. "
-                        f"Physiology: {row.get('physiology','')}. "
-                        f"Likely HRV: {row.get('likely_effect','')} "
-                        f"(Refs: {row.get('references','')})."
-                    )
-            # Add top batch correlations if computed
-            global_corr_df = st.session_state.get("noaa_space_state", {}).get("global_corr", pd.DataFrame())
-            label_lookup: Dict[Tuple[str, str], str] = st.session_state.get("noaa_space_state", {}).get(
-                "global_corr_labels", {}
+            # -----------------------------------------------------------------
+            # Export report (on-demand): building the markdown every rerun can
+            # stall unrelated tabs because Streamlit tabs are not lazy.
+            # -----------------------------------------------------------------
+            export_report_state = st.session_state.setdefault(
+                "export_report_state",
+                {"signature": "", "markdown": "", "generated_at_utc": "", "params": {}},
             )
-            if isinstance(global_corr_df, pd.DataFrame) and not global_corr_df.empty:
-                top = global_corr_df.copy()
-                top["abs_r"] = top["pearson_r"].abs()
-                top = top.sort_values("abs_r", ascending=False).head(10)
-                noaa_notes_lines.append("### Top NOAA↔HRV correlations (session)")
-                for row in top.itertuples():
-                    label = label_lookup.get(
-                        (row.predictor_key, row.value_column),
-                        row.value_column.replace("_", " ").title(),
-                    )
-                    noaa_notes_lines.append(
-                        f"- {row.metric} vs {row.predictor_title} — {label}: "
-                        f"r={row.pearson_r:.3f}, p={row.p_value if np.isfinite(row.p_value) else 'n/a'}, "
-                        f"CI95% [{row.ci_low:.3f}, {row.ci_high:.3f}], lag {int(row.lag_hours)} h (n={int(row.n)})."
-                    )
-            notes_text = notes_input
-            if noaa_notes_lines:
-                notes_text = (notes_text + "\n\n" if notes_text.strip() else "") + "\n".join(noaa_notes_lines)
-            # Space Analytics exports (correlation + ML) are session-persistent; include them in
-            # both the markdown report and the GPT-5.2 interpretation payload when available.
+            try:
+                analysis_settings_hash = compute_settings_hash(
+                    str(method), float(max_dev), int(median_win), win, step
+                )
+            except Exception:
+                analysis_settings_hash = "unknown"
+
+            notes_text_base = str(notes_input or "")
+            notes_hash = hashlib.sha256(
+                notes_text_base.encode("utf-8", errors="ignore")
+            ).hexdigest()[:16]
+
             _space_analytics_corr = st.session_state.get("space_analytics_corr_results")
             _space_analytics_ml = st.session_state.get("space_analytics_ml_results")
             space_analytics_export = None
@@ -16944,33 +16949,147 @@ that predicts cognitive performance based on:
                     "corr": _space_analytics_corr if isinstance(_space_analytics_corr, dict) else None,
                     "ml": _space_analytics_ml if isinstance(_space_analytics_ml, dict) else None,
                 }
+
             export_config = ExportConfiguration(
                 scope=scope_choice,
                 include_windowed=include_windowed_opt,
                 include_ml=include_ml_opt,
             )
-            try:
-                report_markdown = build_markdown_report(
-                    meta_rows=meta_rows,
-                    multi_results_df=multi_results_df,
-                    windowed_df=windowed_df,
-                    episodes_df=episodes_df,
-                    ml_summary_df=ml_summary_df if include_ml_opt else None,
-                    space_weather_export=st.session_state.get("space_weather_export"),
-                    space_analytics_export=space_analytics_export,
-                    config=export_config,
-                    selected_sources=selected_sources,
-                    additional_notes=notes_text,
+
+            export_params = {
+                "upload_signature": list(upload_signature) if isinstance(upload_signature, tuple) else [],
+                "analysis_settings_hash": str(analysis_settings_hash),
+                "scope": str(scope_choice.value),
+                "include_windowed": bool(include_windowed_opt),
+                "include_ml": bool(include_ml_opt),
+                "selected_sources": list(selected_sources),
+                "notes_hash": str(notes_hash),
+                "space_weather_export_present": bool(st.session_state.get("space_weather_export")),
+                "space_analytics_export_present": bool(space_analytics_export),
+            }
+            export_signature = hashlib.sha256(
+                json.dumps(export_params, sort_keys=True).encode("utf-8", errors="ignore")
+            ).hexdigest()
+
+            col_gen, col_clear, col_status = st.columns([1, 1, 2])
+            with col_gen:
+                generate_report = st.button(
+                    "🧾 Generate report",
+                    key="export_report_generate",
+                    type="primary",
+                    help="Builds the markdown report once and caches it in-session.",
                 )
-            except ValueError as exc:
-                logger.warning(
-                    "Report generation failed: %s",
-                    exc,
-                    exc_info=True)
-                st.warning(str(exc))
-            else:
+            with col_clear:
+                clear_report = st.button(
+                    "🧹 Clear report",
+                    key="export_report_clear",
+                    help="Clears the cached markdown report for this session.",
+                )
+            with col_status:
+                if (
+                    export_report_state.get("signature") == export_signature
+                    and export_report_state.get("markdown")
+                ):
+                    st.caption(
+                        f"Report ready ({export_report_state.get('generated_at_utc', 'unknown')})."
+                    )
+                elif export_report_state.get("markdown"):
+                    st.caption(
+                        "A report exists but inputs changed — click **Generate report** to refresh."
+                    )
+                else:
+                    st.caption("No report generated yet.")
+
+            if clear_report:
+                export_report_state["signature"] = ""
+                export_report_state["markdown"] = ""
+                export_report_state["generated_at_utc"] = ""
+                export_report_state["params"] = {}
+                st.session_state.pop("last_export_report_markdown", None)
+                st.success("Cleared cached export report.")
+
+            if generate_report:
+                # Compose NOAA notes only when the user explicitly generates a report.
+                noaa_notes_lines: List[str] = []
+                try:
+                    exp_rows = get_noaa_metric_explanations()
+                except Exception:
+                    exp_rows = []
+                if exp_rows:
+                    noaa_notes_lines.append("### NOAA metric explanations (concise)")
+                    for row in exp_rows:
+                        title = row.get("title") or f"{row.get('dataset')}.{row.get('value_column')}"
+                        noaa_notes_lines.append(
+                            f"- **{title}** — {row.get('what','')}. "
+                            f"Why it matters: {row.get('why','')}. "
+                            f"Physiology: {row.get('physiology','')}. "
+                            f"Likely HRV: {row.get('likely_effect','')} "
+                            f"(Refs: {row.get('references','')})."
+                        )
+                global_corr_df = st.session_state.get("noaa_space_state", {}).get(
+                    "global_corr", pd.DataFrame()
+                )
+                label_lookup: Dict[Tuple[str, str], str] = st.session_state.get(
+                    "noaa_space_state", {}
+                ).get("global_corr_labels", {})
+                if isinstance(global_corr_df, pd.DataFrame) and not global_corr_df.empty:
+                    top = global_corr_df.copy()
+                    top["abs_r"] = top["pearson_r"].abs()
+                    top = top.sort_values("abs_r", ascending=False).head(10)
+                    noaa_notes_lines.append("### Top NOAA↔HRV correlations (session)")
+                    for row in top.itertuples():
+                        label = label_lookup.get(
+                            (row.predictor_key, row.value_column),
+                            row.value_column.replace("_", " ").title(),
+                        )
+                        p_text = (
+                            f"{row.p_value:.4f}"
+                            if np.isfinite(row.p_value)
+                            else "n/a"
+                        )
+                        noaa_notes_lines.append(
+                            f"- {row.metric} vs {row.predictor_title} — {label}: "
+                            f"r={row.pearson_r:.3f}, p={p_text}, "
+                            f"CI95% [{row.ci_low:.3f}, {row.ci_high:.3f}], lag {int(row.lag_hours)} h (n={int(row.n)})."
+                        )
+
+                notes_text = notes_text_base
+                if noaa_notes_lines:
+                    notes_text = (notes_text + "\n\n" if notes_text.strip() else "") + "\n".join(noaa_notes_lines)
+
+                try:
+                    report_markdown = build_markdown_report(
+                        meta_rows=meta_rows,
+                        multi_results_df=multi_results_df,
+                        windowed_df=windowed_df,
+                        episodes_df=episodes_df,
+                        ml_summary_df=ml_summary_df if include_ml_opt else None,
+                        space_weather_export=st.session_state.get("space_weather_export"),
+                        space_analytics_export=space_analytics_export,
+                        config=export_config,
+                        selected_sources=selected_sources,
+                        additional_notes=notes_text,
+                    )
+                except ValueError as exc:
+                    logger.warning("Report generation failed: %s", exc, exc_info=True)
+                    st.warning(str(exc))
+                else:
+                    export_report_state["signature"] = export_signature
+                    export_report_state["markdown"] = report_markdown
+                    export_report_state["generated_at_utc"] = pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+                    export_report_state["params"] = export_params
+                    st.session_state["last_export_report_markdown"] = report_markdown
+                    st.success("Report generated.")
+
+            report_markdown = ""
+            if (
+                export_report_state.get("signature") == export_signature
+                and isinstance(export_report_state.get("markdown"), str)
+            ):
+                report_markdown = export_report_state.get("markdown", "")
+
+            if report_markdown:
                 st.text_area("Report preview", report_markdown, height=360)
-                st.session_state["last_export_report_markdown"] = report_markdown
                 file_suffix = scope_choice.value
                 timestamp_str = pd.Timestamp.utcnow().strftime("%Y%m%dT%H%M%SZ")
                 file_name = f"hrv_report_{file_suffix}_{timestamp_str}.md"
@@ -16980,21 +17099,19 @@ that predicts cognitive performance based on:
                     file_name=file_name,
                     mime="text/markdown",
                 )
-                if (
-                    include_ml_opt
-                    and ml_summary_df.empty
-                    and enable_ml
-                    and ml_error_message
-                ):
-                    st.info(
-                        f"ML section included but no clusters were generated: {ml_error_message}")
-                st.markdown("---")
-                st.subheader("AI analysis (on-demand)")
+                if include_ml_opt and ml_summary_df.empty and enable_ml and ml_error_message:
+                    st.info(f"ML section included but no clusters were generated: {ml_error_message}")
 
-                with st.expander(
-                    "GPT-5.2 high reasoning interpretation (code interpreter)",
-                    expanded=False,
-                ):
+                st.markdown("---")
+                show_ai_tools = st.checkbox(
+                    "Show AI tools (slower)",
+                    value=False,
+                    key="export_show_ai_tools",
+                    help="Keeps Export tab fast by default; enable only when you need GPT/appendix tooling.",
+                )
+                if show_ai_tools:
+                    st.subheader("AI analysis (on-demand)")
+
                     gpt_section = st.container()
                     _render_gpt_high_interpretation(
                         gpt_section,
@@ -17007,10 +17124,8 @@ that predicts cognitive performance based on:
                         report_markdown=report_markdown,
                     )
 
-                with st.expander(
-                    "Metric explanations appendix (Agent SDK, code interpreter)",
-                    expanded=False,
-                ):
+                    st.markdown("---")
+                    st.subheader("Metric explanations appendix (on-demand)")
                     if multi_results_df.empty:
                         st.info("Run an analysis to enable metric explanations.")
                     else:
@@ -17059,9 +17174,7 @@ that predicts cognitive performance based on:
                                 except (TypeError, ValueError):
                                     payload_display = result.agent_payload
                             export_metric_state["signature"] = metrics_signature
-                            export_metric_state["explanations"] = [
-                                asdict(expl) for expl in result.explanations
-                            ]
+                            export_metric_state["explanations"] = [asdict(expl) for expl in result.explanations]
                             export_metric_state["agent_markdown"] = result.agent_markdown or ""
                             export_metric_state["agent_payload"] = payload_display
                             export_metric_state["agent_error"] = result.agent_error or ""
@@ -17108,7 +17221,7 @@ that predicts cognitive performance based on:
                                 height=240,
                                 key="export_metric_explainer_markdown_preview",
                             )
-                            file_name = (
+                            appendix_file_name = (
                                 "metric_explainability_"
                                 + pd.Timestamp.utcnow().strftime("%Y%m%dT%H%M%SZ")
                                 + ".md"
@@ -17116,10 +17229,12 @@ that predicts cognitive performance based on:
                             st.download_button(
                                 "Download metric explanations appendix (Markdown)",
                                 data=appendix_markdown.encode("utf-8"),
-                                file_name=file_name,
+                                file_name=appendix_file_name,
                                 mime="text/markdown",
                                 key="export_metric_explainer_markdown_download",
                             )
+            else:
+                st.info("Click **Generate report** to build the markdown preview and download.")
         gpt_report_md = st.session_state.get("gpt5_export_markdown", "")
         if gpt_report_md:
             st.markdown("---")
