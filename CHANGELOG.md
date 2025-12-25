@@ -5,6 +5,11 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.60] - 2025-12-25
+
+### Fixed
+- **Space Data/Space Weather decommissioned code no longer renders** (`app/app.py`): Removed accidental Streamlit “magic” rendering of a decommissioned HRV↔Kp/ML block by converting the leftover triple-quoted block into a non-rendered assignment. Space Data stays **data-only**; correlations/ML live in **🔬 Space Analytics**.
+
 ## [1.8.59] - 2025-12-25
 
 ### Added
