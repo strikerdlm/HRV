@@ -8916,10 +8916,61 @@ def main() -> None:
                                     pd.to_numeric, errors="coerce"
                                 )
                                 corr_df = corr_input.corr()
+                                # Pairwise HRF↔HRV statistics (Pearson r, two-sided p).
+                                # Keep bounded by user-selected metrics (finite lists).
+                                pair_stats_rows: List[Dict[str, Any]] = []
+                                for hrf_m in selected_hrf:
+                                    for hrv_m in selected_hrv:
+                                        if hrf_m not in corr_input.columns or hrv_m not in corr_input.columns:
+                                            continue
+                                        x_vals = pd.to_numeric(corr_input[hrf_m], errors="coerce").to_numpy(dtype=float)
+                                        y_vals = pd.to_numeric(corr_input[hrv_m], errors="coerce").to_numpy(dtype=float)
+                                        r_val, p_val, n_val = _pearson_r_p(x_vals, y_vals)
+                                        if n_val < 3 or not np.isfinite(r_val):
+                                            continue
+                                        abs_r = float(abs(r_val))
+                                        # Interpret strength + significance (simple, standard thresholds)
+                                        if abs_r < 0.10:
+                                            strength = "negligible"
+                                        elif abs_r < 0.30:
+                                            strength = "weak"
+                                        elif abs_r < 0.50:
+                                            strength = "moderate"
+                                        elif abs_r < 0.70:
+                                            strength = "strong"
+                                        else:
+                                            strength = "very strong"
+                                        if abs(r_val) < 1e-9:
+                                            direction = "neutral"
+                                        else:
+                                            direction = "positive" if r_val > 0 else "negative"
+                                        if np.isfinite(p_val):
+                                            sig = "significant" if float(p_val) < 0.05 else "not significant"
+                                        else:
+                                            sig = "p unavailable"
+                                        meaning = f"{strength} {direction} ({sig})"
+                                        pair_stats_rows.append(
+                                            {
+                                                "hrf_metric": str(hrf_m),
+                                                "hrv_metric": str(hrv_m),
+                                                "test": "Pearson r",
+                                                "result": float(r_val),
+                                                "p_value": float(p_val) if np.isfinite(p_val) else np.nan,
+                                                "n": int(n_val),
+                                                "meaning": meaning,
+                                                "abs_r": abs_r,
+                                            }
+                                        )
+                                pair_stats_df = pd.DataFrame(pair_stats_rows)
+                                if not pair_stats_df.empty:
+                                    pair_stats_df = pair_stats_df.sort_values(
+                                        "abs_r", ascending=False, ignore_index=True
+                                    )
                                 st.session_state[cache_key] = {
                                     "upload_signature": list(upload_signature),
                                     "metrics": list(selected_metrics),
                                     "corr": corr_df,
+                                    "pair_stats": pair_stats_df,
                                 }
                             cached = st.session_state.get(cache_key, {})
                             cached_corr = cached.get("corr")
@@ -8947,70 +8998,79 @@ def main() -> None:
                                         )
                                     )
 
-                                # Top HRF↔HRV pairs (by |r|) with a scatter for the top pair.
-                                pair_rows: List[Dict[str, Any]] = []
-                                corr_input = merged_results[selected_metrics].apply(
-                                    pd.to_numeric, errors="coerce"
-                                )
-                                for hrf_m in selected_hrf:
-                                    for hrv_m in selected_hrv:
-                                        x = pd.to_numeric(corr_input[hrf_m], errors="coerce")
-                                        y = pd.to_numeric(corr_input[hrv_m], errors="coerce")
-                                        mask = x.notna() & y.notna()
-                                        n = int(mask.sum())
-                                        if n < 3:
-                                            continue
-                                        r_val = float(x[mask].corr(y[mask]))
-                                        if np.isfinite(r_val):
-                                            pair_rows.append(
-                                                {
-                                                    "hrf_metric": hrf_m,
-                                                    "hrv_metric": hrv_m,
-                                                    "pearson_r": r_val,
-                                                    "n": n,
-                                                }
-                                            )
-                                if pair_rows:
-                                    pairs_df = pd.DataFrame(pair_rows).sort_values(
-                                        "pearson_r",
-                                        key=lambda s: s.abs(),
-                                        ascending=False,
-                                        ignore_index=True,
+                                # Pairwise stats table requested: test, result, p-value, meaning per HRF↔HRV pair.
+                                pair_stats = cached.get("pair_stats")
+                                if isinstance(pair_stats, pd.DataFrame) and not pair_stats.empty:
+                                    st.markdown("**HRF↔HRV pairwise statistics (per pair)**")
+                                    st.caption("p-values are shown with **4 decimals** (two-sided Pearson test).")
+                                    display_df = pair_stats.copy()
+                                    # Ensure the required columns exist (older cache can be missing fields).
+                                    for col in ("hrf_metric", "hrv_metric", "test", "result", "p_value", "meaning", "n"):
+                                        if col not in display_df.columns:
+                                            display_df[col] = np.nan
+                                    display_df["result"] = display_df["result"].apply(
+                                        lambda v: f"{float(v):.3f}" if np.isfinite(v) else "n/a"
                                     )
-                                    st.markdown("**Top HRF↔HRV pairs (by |r|)**")
-                                    st.dataframe(pairs_df.head(12))
+                                    display_df["p_value"] = display_df["p_value"].apply(
+                                        lambda v: f"{float(v):.4f}" if np.isfinite(v) else "n/a"
+                                    )
+                                    display_df["n"] = display_df["n"].apply(
+                                        lambda v: int(v) if pd.notna(v) else 0
+                                    )
+                                    display_df = display_df[
+                                        ["hrf_metric", "hrv_metric", "test", "result", "p_value", "meaning", "n"]
+                                    ]
+                                    st.dataframe(
+                                        display_df,
+                                        use_container_width=True,
+                                        hide_index=True,
+                                    )
 
-                                    top = pairs_df.iloc[0].to_dict()
-                                    x_name = str(top["hrf_metric"])
-                                    y_name = str(top["hrv_metric"])
-                                    x = pd.to_numeric(merged_results[x_name], errors="coerce")
-                                    y = pd.to_numeric(merged_results[y_name], errors="coerce")
-                                    mask = x.notna() & y.notna()
-                                    if int(mask.sum()) >= 3:
-                                        opt = {
-                                            "title": {"text": f"{x_name} vs {y_name}", "left": "center"},
-                                            "tooltip": {"trigger": "item"},
-                                            "grid": {"left": 48, "right": 18, "containLabel": True},
-                                            "xAxis": {"type": "value", "name": x_name},
-                                            "yAxis": {"type": "value", "name": y_name},
-                                            "series": [
-                                                _echarts_scatter_series(
-                                                    "points",
-                                                    x_vals=x[mask].to_numpy(),
-                                                    y_vals=y[mask].to_numpy(),
-                                                )
-                                            ],
-                                        }
-                                        render_echarts(
-                                            opt, height_px=360, width="100%", config=EChartsConfig()
-                                        )
-                                        st.caption(
-                                            f"Top pair: r = {float(top['pearson_r']):.3f} (n={int(top['n'])}). "
-                                            "Use this as exploratory association; interpret alongside protocol, posture, and breathing context."
-                                        )
+                                    # Top HRF↔HRV pair scatter (by |r|) using the cached stats.
+                                    top_row = pair_stats.iloc[0].to_dict()
+                                    x_name = str(top_row.get("hrf_metric", ""))
+                                    y_name = str(top_row.get("hrv_metric", ""))
+                                    if x_name in merged_results.columns and y_name in merged_results.columns:
+                                        x = pd.to_numeric(merged_results[x_name], errors="coerce")
+                                        y = pd.to_numeric(merged_results[y_name], errors="coerce")
+                                        mask = x.notna() & y.notna()
+                                        if int(mask.sum()) >= 3:
+                                            opt = {
+                                                "title": {"text": f"{x_name} vs {y_name}", "left": "center"},
+                                                "tooltip": {"trigger": "item"},
+                                                "grid": {"left": 48, "right": 18, "containLabel": True},
+                                                "xAxis": {"type": "value", "name": x_name},
+                                                "yAxis": {"type": "value", "name": y_name},
+                                                "series": [
+                                                    _echarts_scatter_series(
+                                                        "points",
+                                                        x_vals=x[mask].to_numpy(),
+                                                        y_vals=y[mask].to_numpy(),
+                                                    )
+                                                ],
+                                            }
+                                            render_echarts(
+                                                opt,
+                                                height_px=360,
+                                                width="100%",
+                                                config=EChartsConfig(),
+                                            )
+                                            r_disp = top_row.get("result", float("nan"))
+                                            p_disp = top_row.get("p_value", float("nan"))
+                                            n_disp = int(top_row.get("n", int(mask.sum())))
+                                            if np.isfinite(r_disp) and np.isfinite(p_disp):
+                                                caption = f"Top pair: r = {float(r_disp):.3f}, p = {float(p_disp):.4f} (n={n_disp})."
+                                            elif np.isfinite(r_disp):
+                                                caption = f"Top pair: r = {float(r_disp):.3f} (n={n_disp})."
+                                            else:
+                                                caption = f"Top pair: n={n_disp}."
+                                            st.caption(
+                                                caption
+                                                + " Use this as exploratory association; interpret alongside protocol, posture, and breathing context."
+                                            )
                                 else:
                                     st.info(
-                                        "Not enough overlapping samples to compute HRF↔HRV pairs (need ≥3 recordings)."
+                                        "Not enough overlapping samples to compute HRF↔HRV pairwise tests (need ≥3 recordings per pair)."
                                     )
     with tab_ans:
         st.markdown("### 🫀 Autonomic Function Tests")
