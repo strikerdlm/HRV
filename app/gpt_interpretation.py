@@ -133,6 +133,8 @@ def build_analysis_payload(
     episodes_df: pd.DataFrame,
     ml_summary_df: pd.DataFrame,
     *,
+    space_analytics_corr: Optional[Mapping[str, Any]] = None,
+    space_analytics_ml: Optional[Mapping[str, Any]] = None,
     report_markdown: Optional[str] = None,
     max_table_rows: int = 12,
     max_table_columns: int = 20,
@@ -145,6 +147,8 @@ def build_analysis_payload(
         windowed_df: Windowed metrics DataFrame.
         episodes_df: Deviation episodes DataFrame.
         ml_summary_df: ML clustering summary DataFrame.
+        space_analytics_corr: Optional Space Analytics correlation results bundle.
+        space_analytics_ml: Optional Space Analytics ML results bundle.
         max_table_rows: Maximum rows per table.
         max_table_columns: Maximum columns per table.
         report_markdown: Optional markdown export preview to include.
@@ -209,6 +213,19 @@ def build_analysis_payload(
             },
         ],
     }
+    if space_analytics_corr or space_analytics_ml:
+        payload["space_analytics"] = {}
+        if space_analytics_corr:
+            payload["space_analytics"]["correlations"] = _clean_space_analytics_corr_payload(
+                space_analytics_corr,
+                max_rows=min(max_table_rows * 2, 30),
+                max_columns=min(max_table_columns, 18),
+            )
+        if space_analytics_ml:
+            payload["space_analytics"]["ml"] = _clean_space_analytics_ml_payload(
+                space_analytics_ml,
+                max_feature_rows=25,
+            )
     if report_markdown:
         payload["export_markdown_excerpt"] = report_markdown[:12000]
     return json.dumps(payload, ensure_ascii=True, separators=(",", ":"))
@@ -217,6 +234,81 @@ def build_analysis_payload(
 def _clean_scalar_dict(row: Mapping[str, Any]) -> dict[str, Any]:
     """Clean a dictionary for JSON serialization."""
     return {str(key): _clean_scalar(value) for key, value in row.items()}
+
+
+def _clean_space_analytics_corr_payload(
+    corr: Mapping[str, Any],
+    *,
+    max_rows: int,
+    max_columns: int,
+) -> dict[str, Any]:
+    """Clean Space Analytics correlation results for GPT payload inclusion."""
+    out: dict[str, Any] = {}
+    computed_at = corr.get("computed_at_utc")
+    if computed_at is not None:
+        out["computed_at_utc"] = _clean_scalar(computed_at)
+    params = corr.get("params")
+    if isinstance(params, Mapping):
+        out["params"] = _clean_scalar_dict(params)
+    df = corr.get("results")
+    if isinstance(df, pd.DataFrame) and not df.empty:
+        view = df.copy()
+        # Prefer sorting by absolute r when available.
+        if "abs_r" not in view.columns and "pearson_r" in view.columns:
+            try:
+                view["abs_r"] = pd.to_numeric(view["pearson_r"], errors="coerce").abs()
+            except Exception:
+                pass
+        sort_col = "abs_r" if "abs_r" in view.columns else ("pearson_r" if "pearson_r" in view.columns else None)
+        if sort_col is not None and sort_col in view.columns:
+            view = view.sort_values(sort_col, ascending=False)
+        out["result_count"] = int(df.shape[0])
+        out["top_results"] = _records_from_dataframe(
+            view,
+            max_rows=max_rows,
+            max_columns=max_columns,
+        )
+    else:
+        out["top_results"] = []
+    return out
+
+
+def _clean_space_analytics_ml_payload(
+    ml: Mapping[str, Any],
+    *,
+    max_feature_rows: int,
+) -> dict[str, Any]:
+    """Clean Space Analytics ML results for GPT payload inclusion."""
+    out: dict[str, Any] = {}
+    computed_at = ml.get("computed_at_utc")
+    if computed_at is not None:
+        out["computed_at_utc"] = _clean_scalar(computed_at)
+    params = ml.get("params")
+    if isinstance(params, Mapping):
+        out["params"] = _clean_scalar_dict(params)
+    raw = ml.get("results")
+    if not isinstance(raw, Mapping):
+        return out
+    cleaned: dict[str, Any] = {}
+    for key, value in raw.items():
+        key_str = str(key)
+        if key_str in ("feature_importances", "shap_importances") and isinstance(value, list):
+            items: list[dict[str, Any]] = []
+            for item in value[:max_feature_rows]:
+                if isinstance(item, Mapping):
+                    items.append(_clean_scalar_dict(item))
+            cleaned[key_str] = items
+            continue
+        if isinstance(value, Mapping):
+            cleaned[key_str] = _clean_scalar_dict(value)
+            continue
+        if isinstance(value, list):
+            # Keep small lists bounded.
+            cleaned[key_str] = [_clean_scalar(v) for v in value[:max_feature_rows]]
+            continue
+        cleaned[key_str] = _clean_scalar(value)
+    out["results"] = cleaned
+    return out
 
 
 def _build_gpt5_messages(analysis_payload: str) -> list[dict[str, Any]]:
@@ -238,6 +330,10 @@ def _build_gpt5_messages(analysis_payload: str) -> list[dict[str, Any]]:
         "4. Identify statistically significant findings and clinical implications\n"
         "5. Discuss autonomic balance and its physiological significance\n"
         "6. Address methodological considerations and data quality\n"
+        "7. If a `space_analytics` section is present, interpret the lagged correlation results and ML model outputs:\n"
+        "   - Report the strongest predictor–metric pairs (effect sizes, CI, q-values when present)\n"
+        "   - Discuss multiple-testing risk, autocorrelation, and confounding\n"
+        "   - Summarize model performance and top features, and state limitations\n"
         "7. Connect findings to operational readiness (aerospace/occupational context)\n"
         "8. Provide evidence-based recommendations\n\n"
         "REFERENCE RANGES (short-term, healthy adults at rest):\n"
