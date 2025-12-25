@@ -15473,7 +15473,9 @@ that predicts cognitive performance based on:
             try:
                 from space_analytics_events import (  # noqa: PLC0415
                     ThresholdEventConfig,
+                    compute_baseline_event_recovery_deltas,
                     compute_baseline_vs_event_deltas,
+                    detect_first_sustained_deviation,
                     extract_threshold_events,
                 )
             except Exception as exc:
@@ -15481,6 +15483,8 @@ that predicts cognitive performance based on:
                 ThresholdEventConfig = None  # type: ignore[assignment]
                 extract_threshold_events = None  # type: ignore[assignment]
                 compute_baseline_vs_event_deltas = None  # type: ignore[assignment]
+                compute_baseline_event_recovery_deltas = None  # type: ignore[assignment]
+                detect_first_sustained_deviation = None  # type: ignore[assignment]
 
             bundles: Dict[str, NOAADataBundle] = dict(noaa_state.get("bundles", {}))
             dataset_options = sorted(bundles.keys())
@@ -15679,6 +15683,23 @@ that predicts cognitive performance based on:
                                             key="space_analytics_event_baseline_pre_h",
                                         )
                                     )
+                                    include_recovery = st.checkbox(
+                                        "Include recovery phase (post-event)",
+                                        value=True,
+                                        help="If enabled, compute baseline vs recovery deltas in addition to baseline vs event.",
+                                        key="space_analytics_event_include_recovery",
+                                    )
+                                    recovery_post_h = int(
+                                        st.number_input(
+                                            "Recovery window after event end (hours)",
+                                            min_value=1,
+                                            max_value=168,
+                                            value=24,
+                                            step=1,
+                                            disabled=not include_recovery,
+                                            key="space_analytics_event_recovery_post_h",
+                                        )
+                                    )
                                     require_hrf_quality = st.checkbox(
                                         "Require HRF quality OK (if available)",
                                         value=True,
@@ -15733,15 +15754,27 @@ that predicts cognitive performance based on:
                                             elif event_start is None or event_end is None:
                                                 st.error("Invalid event selection.")
                                             else:
-                                                delta_df = compute_baseline_vs_event_deltas(
-                                                    w,
-                                                    time_col="start",
-                                                    metric_cols=list(target_metrics),
-                                                    event_start_utc=event_start,
-                                                    event_end_utc=event_end,
-                                                    baseline_pre=pd.Timedelta(hours=int(baseline_pre_h)),
-                                                    min_samples_per_phase=3,
-                                                )
+                                                if include_recovery and compute_baseline_event_recovery_deltas is not None:
+                                                    delta_df = compute_baseline_event_recovery_deltas(
+                                                        w,
+                                                        time_col="start",
+                                                        metric_cols=list(target_metrics),
+                                                        event_start_utc=event_start,
+                                                        event_end_utc=event_end,
+                                                        baseline_pre=pd.Timedelta(hours=int(baseline_pre_h)),
+                                                        recovery_post=pd.Timedelta(hours=int(recovery_post_h)),
+                                                        min_samples_per_phase=3,
+                                                    )
+                                                else:
+                                                    delta_df = compute_baseline_vs_event_deltas(
+                                                        w,
+                                                        time_col="start",
+                                                        metric_cols=list(target_metrics),
+                                                        event_start_utc=event_start,
+                                                        event_end_utc=event_end,
+                                                        baseline_pre=pd.Timedelta(hours=int(baseline_pre_h)),
+                                                        min_samples_per_phase=3,
+                                                    )
                                                 if delta_df.empty:
                                                     st.info(
                                                         "No delta rows computed (likely insufficient baseline/event windows). "
@@ -15759,6 +15792,8 @@ that predicts cognitive performance based on:
                                                             "event_start_utc": str(event_start),
                                                             "event_end_utc": str(event_end),
                                                             "baseline_pre_h": int(baseline_pre_h),
+                                                            "include_recovery": bool(include_recovery),
+                                                            "recovery_post_h": int(recovery_post_h) if include_recovery else 0,
                                                             "require_hrf_quality": bool(require_hrf_quality),
                                                             "metrics": list(target_metrics),
                                                         },
@@ -15798,9 +15833,153 @@ that predicts cognitive performance based on:
                                             if summary_lines:
                                                 st.markdown("**Top changes (ranked by |effect size|):**\n" + "\n".join(summary_lines))
 
+                                    # --------------------------------------------------------
+                                    # Onset / sequencing (button-driven)
+                                    # --------------------------------------------------------
+                                    st.markdown("---")
+                                    st.markdown("##### ⏱️ Sequencing: which changes first? (prototype)")
+                                    st.caption(
+                                        "Detects the first sustained deviation from baseline using a simple z-score rule. "
+                                        "This is a heuristic for lead/lag exploration, not a diagnostic."
+                                    )
+                                    z_thresh = float(
+                                        st.number_input(
+                                            "Deviation threshold (|z|)",
+                                            min_value=0.5,
+                                            max_value=5.0,
+                                            value=1.0,
+                                            step=0.1,
+                                            key="space_analytics_onset_z",
+                                        )
+                                    )
+                                    sustain_w = int(
+                                        st.number_input(
+                                            "Sustained windows required",
+                                            min_value=1,
+                                            max_value=12,
+                                            value=2,
+                                            step=1,
+                                            key="space_analytics_onset_sustain",
+                                        )
+                                    )
+                                    include_recovery_in_search = st.checkbox(
+                                        "Search includes recovery window (if enabled)",
+                                        value=True,
+                                        key="space_analytics_onset_include_recovery",
+                                    )
+
+                                    # Build metric group choices from available columns
+                                    hrv_defaults = [c for c in ("rmssd", "mean_hr", "hf_power") if c in numeric_cols]
+                                    hrf_defaults = [c for c in ("hrf_pip_pct", "hrf_ials", "hrf_w3_pct") if c in numeric_cols]
+                                    hrv_metrics = st.multiselect(
+                                        "HRV metrics to scan for onset",
+                                        options=sorted(numeric_cols),
+                                        default=hrv_defaults,
+                                        key="space_analytics_onset_hrv_metrics",
+                                    )
+                                    hrf_metrics = st.multiselect(
+                                        "HRF metrics to scan for onset",
+                                        options=sorted(numeric_cols),
+                                        default=hrf_defaults,
+                                        key="space_analytics_onset_hrf_metrics",
+                                    )
+
+                                    run_onset = st.button(
+                                        "⏱️ Run onset detection",
+                                        key="space_analytics_run_onset",
+                                        disabled=not bool(hrv_metrics or hrf_metrics) or detect_first_sustained_deviation is None,
+                                        help="Computes first sustained deviation times for selected metrics (cached in-session).",
+                                    )
+                                    if run_onset:
+                                        try:
+                                            w = analytics_windowed_df.copy()
+                                            w["start"] = pd.to_datetime(w["start"], errors="coerce", utc=True)
+                                            w = w.dropna(subset=["start"]).sort_values("start")
+                                            if require_hrf_quality and "hrf_quality_ok" in w.columns:
+                                                q = w["hrf_quality_ok"].astype("boolean").fillna(False)
+                                                w = w.loc[q.to_numpy()]
+                                            if w.empty:
+                                                st.error("No valid HRV/HRF windows available after filtering.")
+                                            elif event_start is None or event_end is None:
+                                                st.error("Invalid event selection.")
+                                            else:
+                                                baseline_start = event_start - pd.Timedelta(hours=int(baseline_pre_h))
+                                                baseline_end = event_start
+                                                search_end = event_end
+                                                if include_recovery and include_recovery_in_search:
+                                                    search_end = event_end + pd.Timedelta(hours=int(recovery_post_h))
+                                                metrics_all = list(dict.fromkeys(list(hrv_metrics) + list(hrf_metrics)))
+                                                onset_df = detect_first_sustained_deviation(
+                                                    w,
+                                                    time_col="start",
+                                                    metric_cols=metrics_all,
+                                                    baseline_start_utc=baseline_start,
+                                                    baseline_end_utc=baseline_end,
+                                                    search_start_utc=event_start,
+                                                    search_end_utc=search_end,
+                                                    z_threshold=float(z_thresh),
+                                                    sustain_windows=int(sustain_w),
+                                                    min_baseline_samples=5,
+                                                )
+                                                if onset_df.empty:
+                                                    st.info("No sustained deviations detected for the selected metrics/threshold.")
+                                                else:
+                                                    onset_df = onset_df.copy()
+                                                    onset_df["meaning"] = [
+                                                        metric_meanings.get(str(m), "") for m in onset_df["metric"].astype(str).tolist()
+                                                    ]
+                                                    onset_df["group"] = [
+                                                        "HRF" if str(m) in set(hrf_metrics) else "HRV" for m in onset_df["metric"].astype(str).tolist()
+                                                    ]
+                                                    st.session_state["space_analytics_event_onset_results"] = {
+                                                        "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                                                        "params": {
+                                                            "event_start_utc": str(event_start),
+                                                            "event_end_utc": str(event_end),
+                                                            "baseline_pre_h": int(baseline_pre_h),
+                                                            "include_recovery_in_search": bool(include_recovery_in_search),
+                                                            "z_threshold": float(z_thresh),
+                                                            "sustain_windows": int(sustain_w),
+                                                            "hrv_metrics": list(hrv_metrics),
+                                                            "hrf_metrics": list(hrf_metrics),
+                                                        },
+                                                        "results": onset_df,
+                                                    }
+                                                    st.success("Onset detection completed.")
+                                        except Exception as exc:
+                                            log_exception(_LOGGER, "Space Analytics onset detection failed", exc)
+                                            st.error(f"Onset detection failed: {exc}")
+
+                                    stored_onset = st.session_state.get("space_analytics_event_onset_results")
+                                    if isinstance(stored_onset, dict) and isinstance(stored_onset.get("results"), pd.DataFrame):
+                                        onset_df = stored_onset["results"]
+                                        with st.expander("✅ Onset detection results (saved for this session)", expanded=True):
+                                            st.caption(f"Computed: {stored_onset.get('computed_at_utc', 'unknown')}")
+                                            st.dataframe(onset_df, use_container_width=True)
+                                            # Group-level summary (earliest onset in HRV vs HRF)
+                                            try:
+                                                hrv_min = onset_df.loc[onset_df["group"] == "HRV", "onset_offset_hours"].min()
+                                                hrf_min = onset_df.loc[onset_df["group"] == "HRF", "onset_offset_hours"].min()
+                                            except Exception:
+                                                hrv_min = float("nan")
+                                                hrf_min = float("nan")
+                                            if pd.notna(hrv_min) or pd.notna(hrf_min):
+                                                st.markdown(
+                                                    f"**Earliest onset (hours from event start)**: "
+                                                    f"HRV = {hrv_min:.2f} h | HRF = {hrf_min:.2f} h"
+                                                )
+                                            st.download_button(
+                                                "⬇️ Download onset results (CSV)",
+                                                data=onset_df.to_csv(index=False).encode("utf-8"),
+                                                file_name="space_analytics_event_onset.csv",
+                                                mime="text/csv",
+                                                key="space_analytics_onset_download",
+                                            )
+
                                             if st.button("🧹 Clear event results", key="space_analytics_clear_event_results"):
                                                 st.session_state.pop("space_analytics_event_catalog", None)
                                                 st.session_state.pop("space_analytics_event_delta_results", None)
+                                                st.session_state.pop("space_analytics_event_onset_results", None)
                                                 st.rerun()
 
         # ------------------------------------------------------------------
