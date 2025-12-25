@@ -834,6 +834,7 @@ def build_markdown_report(
 	episodes_df: pd.DataFrame,
 	ml_summary_df: Optional[pd.DataFrame],
 	space_weather_export: Optional[Mapping[str, Any]] = None,
+	space_analytics_export: Optional[Mapping[str, Any]] = None,
 	config: ExportConfiguration,
 	selected_sources: Sequence[str],
 	additional_notes: str = "",
@@ -846,6 +847,7 @@ def build_markdown_report(
 		windowed_df: DataFrame with windowed metrics.
 		episodes_df: DataFrame with detected deviation episodes.
 		ml_summary_df: DataFrame summarising ML-assisted clustering (may be None).
+		space_analytics_export: Optional mapping containing Space Analytics correlation/ML outputs.
 		config: ExportConfiguration describing scope and optional sections.
 		selected_sources: Subset of dataset names to include (empty means all).
 		additional_notes: Optional free-form notes from the user.
@@ -979,6 +981,126 @@ def build_markdown_report(
 			lines.append("SHapley Additive exPlanations provide model-agnostic interpretability.")
 			lines.append(_dataframe_to_markdown(shap_importances, max_rows=30))
 			lines.append("")
+
+	if space_analytics_export:
+		corr_bundle = space_analytics_export.get("corr")
+		ml_bundle = space_analytics_export.get("ml")
+		corr_df = None
+		ml_results = None
+		corr_params = None
+		ml_params = None
+		if isinstance(corr_bundle, Mapping):
+			corr_df = corr_bundle.get("results")
+			corr_params = corr_bundle.get("params")
+		if isinstance(ml_bundle, Mapping):
+			ml_results = ml_bundle.get("results")
+			ml_params = ml_bundle.get("params")
+		has_corr = isinstance(corr_df, pd.DataFrame) and not corr_df.empty
+		has_ml = isinstance(ml_results, Mapping) and bool(ml_results)
+		if has_corr or has_ml:
+			lines.append("## Space Analytics (NOAA predictors ↔ HRV/HRF)")
+			lines.append("")
+			lines.append(
+				"Space Analytics is button-driven and uses cached NOAA/SWPC datasets plus windowed HRV/HRF metrics."
+			)
+			lines.append("")
+			if isinstance(corr_params, Mapping) and corr_params:
+				lines.append("### Correlation scan parameters")
+				lines.append("")
+				try:
+					lines.append(
+						"- Predictors: "
+						+ ", ".join([str(x) for x in corr_params.get("predictors", [])])
+					)
+				except Exception:
+					pass
+				try:
+					lines.append(
+						"- Targets: "
+						+ ", ".join([str(x) for x in corr_params.get("targets", [])])
+					)
+				except Exception:
+					pass
+				try:
+					lines.append(
+						"- Lags (hours): "
+						+ ", ".join([str(x) for x in corr_params.get("lags", [])][:25])
+						+ ("…" if len(corr_params.get("lags", [])) > 25 else "")
+					)
+				except Exception:
+					pass
+				if "merge_tol_minutes" in corr_params:
+					lines.append(f"- Merge tolerance: {corr_params.get('merge_tol_minutes')} min")
+				lines.append("")
+			if has_corr:
+				lines.append("### Top correlations (by |r|; BH-FDR q included when available)")
+				lines.append("")
+				view = corr_df.copy()
+				if "abs_r" not in view.columns and "pearson_r" in view.columns:
+					view["abs_r"] = view["pearson_r"].abs()
+				if "abs_r" in view.columns:
+					view = view.sort_values("abs_r", ascending=False)
+				lines.append(_dataframe_to_markdown(view.head(30), max_rows=None))
+				lines.append("")
+
+			if isinstance(ml_params, Mapping) and ml_params:
+				lines.append("### ML parameters")
+				lines.append("")
+				try:
+					lines.append(
+						"- Predictors: "
+						+ ", ".join([str(x) for x in ml_params.get("predictors", [])])
+					)
+				except Exception:
+					pass
+				if "target" in ml_params:
+					lines.append(f"- Target: {ml_params.get('target')}")
+				if "gpu_enabled" in ml_params:
+					lines.append(f"- GPU enabled: {ml_params.get('gpu_enabled')}")
+				lines.append("")
+
+			if has_ml:
+				lines.append("### ML results (lagged NOAA predictors → HRV/HRF target)")
+				lines.append("")
+				try:
+					samples = ml_results.get("samples")
+					features = ml_results.get("features")
+					if samples is not None or features is not None:
+						lines.append(f"- Samples: {samples} | Features: {features}")
+				except Exception:
+					pass
+				# Model scores table
+				model_rows: list[dict[str, Any]] = []
+				for model_key in ("elastic_net", "random_forest", "gradient_boosting", "lasso", "xgboost", "lightgbm"):
+					model_val = ml_results.get(model_key)
+					if isinstance(model_val, Mapping):
+						row = {"model": model_key}
+						for k in ("r2", "mae", "cv_r2_mean", "alpha", "l1_ratio"):
+							if k in model_val:
+								row[k] = model_val.get(k)
+						model_rows.append(row)
+				if model_rows:
+					lines.append(_dataframe_to_markdown(pd.DataFrame(model_rows), max_rows=None))
+					lines.append("")
+				# Feature importances (top)
+				feat_imp = ml_results.get("feature_importances")
+				if isinstance(feat_imp, list) and feat_imp:
+					try:
+						lines.append("### Top feature importances (permutation; RandomForest)")
+						lines.append("")
+						lines.append(_dataframe_to_markdown(pd.DataFrame(feat_imp).head(25), max_rows=None))
+						lines.append("")
+					except Exception:
+						pass
+				shap_imp = ml_results.get("shap_importances")
+				if isinstance(shap_imp, list) and shap_imp:
+					try:
+						lines.append("### Top feature importances (SHAP)")
+						lines.append("")
+						lines.append(_dataframe_to_markdown(pd.DataFrame(shap_imp).head(25), max_rows=None))
+						lines.append("")
+					except Exception:
+						pass
 
 	if additional_notes.strip():
 		lines.append("## Analyst Notes")
