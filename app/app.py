@@ -15451,6 +15451,359 @@ that predicts cognitive performance based on:
         st.markdown("---")
 
         # ------------------------------------------------------------------
+        # Event-aligned analysis (prototype; button-driven)
+        # ------------------------------------------------------------------
+        st.markdown("#### 🧭 Event-aligned analysis (prototype)")
+        with st.expander("What Space Analytics is for (event-aligned plan)", expanded=False):
+            st.markdown(
+                "- **Goal**: discover whether **HRV**, **HRF**, or **both** change during a space-weather event, "
+                "and whether one tends to change **before** the other.\n"
+                "- **Event window**: define an event with an explicit **start → end** (e.g., Kp/Dst threshold or DONKI), "
+                "then compare **baseline vs during-event** HRV/HRF windows.\n"
+                "- **Outputs**: (1) which metrics changed, (2) direction/magnitude, (3) what those changes mean physiologically, "
+                "and (4) which space predictors are most associated (lags).\n"
+                "- **Guardrails**: this is an association tool (not causation) and must be interpreted with sleep/activity/circadian context."
+            )
+
+        if not has_windowed:
+            st.info("Event-aligned analysis requires **windowed HRV/HRF metrics** (run HRV window analysis first).")
+        elif not has_noaa:
+            st.info("Event-aligned analysis requires **NOAA datasets** (load cached NOAA or fetch NOAA Core above).")
+        else:
+            try:
+                from space_analytics_events import (  # noqa: PLC0415
+                    ThresholdEventConfig,
+                    compute_baseline_vs_event_deltas,
+                    extract_threshold_events,
+                )
+            except Exception as exc:
+                log_exception(_LOGGER, "Failed to import space_analytics_events", exc)
+                ThresholdEventConfig = None  # type: ignore[assignment]
+                extract_threshold_events = None  # type: ignore[assignment]
+                compute_baseline_vs_event_deltas = None  # type: ignore[assignment]
+
+            bundles: Dict[str, NOAADataBundle] = dict(noaa_state.get("bundles", {}))
+            dataset_options = sorted(bundles.keys())
+
+            # Metric meanings (short operational + physiology hints)
+            metric_meanings: Dict[str, str] = {
+                # HRV (common)
+                "rmssd": "Short-term vagal modulation proxy (ms). Often ↓ with strain/stress/illness; interpret with breathing/posture.",
+                "sdnn": "Total variability within the window (ms). Often ↓ with stress/illness; depends on window length/context.",
+                "mean_hr": "Average HR (bpm). Often ↑ with load/stress/illness; interpret with activity and posture.",
+                "hf_power": "HF power (ms²): RSA/vagal-linked; strongly breathing-dependent.",
+                "lf_power": "LF power (ms²): mixed influences (baroreflex + autonomic); context-dependent.",
+                "lf_hf_ratio": "LF/HF ratio: not a pure sympathovagal balance index; breathing confounds.",
+                "pnn50": "pNN50 (%): vagal-linked but artifact/ectopy sensitive.",
+                "dfa_alpha1": "DFA α1: short-range fractal scaling; extremes may reflect dysregulation/fragmentation.",
+                "stress_index": "Baevsky stress index: autonomic 'centralization'/strain proxy; context-dependent.",
+                # HRF (fragmentation)
+                "hrf_pip": "HRF PIP (%): inflection-point rate; ↑ = more fragmentation (direction changes).",
+                "hrf_pip_pct": "HRF PIP (%): inflection-point rate; ↑ = more fragmentation (direction changes).",
+                "hrf_ials": "HRF IALS: inverse run length; ↑ = shorter monotonic runs = more fragmentation.",
+                "hrf_w3": "HRF W3 (%): maximally fragmented 4-beat word frequency; ↑ = more fragmentation.",
+                "hrf_w3_pct": "HRF W3 (%): maximally fragmented 4-beat word frequency; ↑ = more fragmentation.",
+                "hrf_pss_pct": "HRF PSS (%): short segment prevalence; ↑ = more fragmented dynamics.",
+                "hrf_pas_pct": "HRF PAS (%): alternating segment prevalence; ↑ = more alternation/fragmentation.",
+            }
+
+            with st.expander("Run event-aligned delta analysis", expanded=False):
+                # Event definition source (start with deterministic threshold events)
+                event_source_options: List[Tuple[str, str]] = []
+                if "planetary_k_index_3h" in dataset_options:
+                    event_source_options.append(("Kp threshold (NOAA planetary_k_index_3h)", "planetary_k_index_3h"))
+                if "geospace_dst" in dataset_options:
+                    event_source_options.append(("Dst threshold (NOAA geospace_dst)", "geospace_dst"))
+
+                if not event_source_options:
+                    st.info(
+                        "No suitable event-source datasets are loaded yet. Fetch NOAA Core (or load cached NOAA) "
+                        "so Kp and/or Dst are available."
+                    )
+                elif ThresholdEventConfig is None or extract_threshold_events is None or compute_baseline_vs_event_deltas is None:
+                    st.warning("Event-aligned module unavailable (import failed). Check logs/errors.log.")
+                else:
+                    label_to_key = {label: key for label, key in event_source_options}
+                    source_label = st.selectbox(
+                        "Event definition source",
+                        options=[label for label, _ in event_source_options],
+                        index=0,
+                        key="space_analytics_event_source",
+                    )
+                    source_key = label_to_key.get(source_label, event_source_options[0][1])
+                    bundle = bundles.get(source_key)
+                    if bundle is None or bundle.frame.empty:
+                        st.warning("Selected event source has no data loaded yet.")
+                    else:
+                        value_cols = list(bundle.value_columns or [])
+                        if not value_cols:
+                            st.warning("Selected dataset has no numeric value columns.")
+                        else:
+                            default_val_col = value_cols[0]
+                            val_col = st.selectbox(
+                                "Value column",
+                                options=value_cols,
+                                index=value_cols.index(default_val_col) if default_val_col in value_cols else 0,
+                                key="space_analytics_event_value_col",
+                            )
+
+                            # Sensible defaults by event type
+                            default_threshold = 5.0 if source_key == "planetary_k_index_3h" else -50.0
+                            default_dir = "ge" if source_key == "planetary_k_index_3h" else "le"
+                            threshold = float(
+                                st.number_input(
+                                    "Threshold",
+                                    value=float(default_threshold),
+                                    step=0.1,
+                                    key="space_analytics_event_threshold",
+                                )
+                            )
+                            direction_label = st.selectbox(
+                                "Condition",
+                                options=["≥ threshold", "≤ threshold"],
+                                index=0 if default_dir == "ge" else 1,
+                                key="space_analytics_event_direction",
+                            )
+                            direction = "ge" if direction_label.startswith("≥") else "le"
+
+                            # Gap/duration controls (bounded)
+                            default_gap_h = 6 if source_key == "planetary_k_index_3h" else 3
+                            max_gap_h = int(
+                                st.number_input(
+                                    "Max gap between in-event samples (hours)",
+                                    min_value=1,
+                                    max_value=48,
+                                    value=int(default_gap_h),
+                                    step=1,
+                                    key="space_analytics_event_max_gap_h",
+                                )
+                            )
+                            min_duration_h = int(
+                                st.number_input(
+                                    "Minimum event duration (hours)",
+                                    min_value=0,
+                                    max_value=168,
+                                    value=3 if source_key == "planetary_k_index_3h" else 2,
+                                    step=1,
+                                    key="space_analytics_event_min_dur_h",
+                                )
+                            )
+                            pad_end_h = int(
+                                st.number_input(
+                                    "Pad event end (hours)",
+                                    min_value=0,
+                                    max_value=48,
+                                    value=0,
+                                    step=1,
+                                    key="space_analytics_event_pad_end_h",
+                                )
+                            )
+
+                            detect_events = st.button(
+                                "🔎 Detect events",
+                                key="space_analytics_detect_events",
+                                help="Extracts start/end windows where the selected predictor crosses the threshold.",
+                            )
+
+                            # Store events in session for stability across reruns
+                            if detect_events:
+                                try:
+                                    cfg = ThresholdEventConfig(
+                                        threshold=float(threshold),
+                                        direction=direction,  # type: ignore[arg-type]
+                                        max_gap=pd.Timedelta(hours=int(max_gap_h)),
+                                        min_duration=pd.Timedelta(hours=int(min_duration_h)),
+                                        pad_end=pd.Timedelta(hours=int(pad_end_h)),
+                                    )
+                                    ev_df = extract_threshold_events(
+                                        bundle.frame,
+                                        time_col=str(bundle.time_column),
+                                        value_col=str(val_col),
+                                        cfg=cfg,
+                                    )
+                                    st.session_state["space_analytics_event_catalog"] = {
+                                        "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                                        "params": {
+                                            "source_key": str(source_key),
+                                            "value_col": str(val_col),
+                                            "threshold": float(threshold),
+                                            "direction": str(direction),
+                                            "max_gap_h": int(max_gap_h),
+                                            "min_duration_h": int(min_duration_h),
+                                            "pad_end_h": int(pad_end_h),
+                                        },
+                                        "events": ev_df,
+                                    }
+                                    if ev_df.empty:
+                                        st.info("No events detected for the selected threshold/configuration.")
+                                    else:
+                                        st.success(f"Detected {int(ev_df.shape[0])} event(s).")
+                                except Exception as exc:
+                                    log_exception(_LOGGER, "Space Analytics event detection failed", exc)
+                                    st.error(f"Event detection failed: {exc}")
+
+                            stored_events = st.session_state.get("space_analytics_event_catalog")
+                            if isinstance(stored_events, dict) and isinstance(stored_events.get("events"), pd.DataFrame):
+                                ev_df = stored_events["events"]
+                                if not ev_df.empty:
+                                    with st.expander("✅ Detected events (saved for this session)", expanded=True):
+                                        st.caption(f"Computed: {stored_events.get('computed_at_utc', 'unknown')}")
+                                        st.dataframe(ev_df, use_container_width=True)
+
+                                    # Event selection
+                                    event_labels: List[str] = []
+                                    event_lookup: Dict[str, Tuple[pd.Timestamp, pd.Timestamp]] = {}
+                                    for row in ev_df.itertuples(index=False):
+                                        start = getattr(row, "start_utc")
+                                        end = getattr(row, "end_utc")
+                                        label = f"Event {getattr(row, 'event_id')}: {pd.to_datetime(start).strftime('%Y-%m-%d %H:%M')} → {pd.to_datetime(end).strftime('%Y-%m-%d %H:%M')} UTC"
+                                        event_labels.append(label)
+                                        event_lookup[label] = (pd.to_datetime(start, utc=True), pd.to_datetime(end, utc=True))
+
+                                    selected_event = st.selectbox(
+                                        "Select event to analyze",
+                                        options=event_labels,
+                                        index=0,
+                                        key="space_analytics_selected_event",
+                                    )
+                                    event_start, event_end = event_lookup.get(selected_event, (None, None))
+
+                                    # Baseline config
+                                    baseline_pre_h = int(
+                                        st.number_input(
+                                            "Baseline window before event start (hours)",
+                                            min_value=1,
+                                            max_value=168,
+                                            value=24,
+                                            step=1,
+                                            key="space_analytics_event_baseline_pre_h",
+                                        )
+                                    )
+                                    require_hrf_quality = st.checkbox(
+                                        "Require HRF quality OK (if available)",
+                                        value=True,
+                                        help="If hrf_quality_ok exists, filter to True to reduce artifact/ectopy confounding.",
+                                        key="space_analytics_event_require_hrf_quality",
+                                    )
+
+                                    # Metric selection
+                                    w0 = analytics_windowed_df.copy()
+                                    w0["start"] = pd.to_datetime(w0.get("start"), errors="coerce", utc=True)
+                                    numeric_cols = [
+                                        c
+                                        for c in w0.columns
+                                        if c not in ("start", "end")
+                                        and pd.api.types.is_numeric_dtype(w0[c])
+                                    ]
+                                    hrf_preferred = [
+                                        "hrf_pip_pct",
+                                        "hrf_ials",
+                                        "hrf_w3_pct",
+                                        "hrf_pss_pct",
+                                        "hrf_pas_pct",
+                                    ]
+                                    default_targets = [
+                                        c for c in ("rmssd", "sdnn", "hf_power", "lf_hf_ratio", "mean_hr") if c in numeric_cols
+                                    ] + [c for c in hrf_preferred if c in numeric_cols]
+                                    default_targets = default_targets[: min(12, len(default_targets))]
+                                    target_metrics = st.multiselect(
+                                        "HRV/HRF metrics to compare (baseline vs event)",
+                                        options=sorted(numeric_cols),
+                                        default=default_targets,
+                                        key="space_analytics_event_targets",
+                                    )
+
+                                    run_event_delta = st.button(
+                                        "🧪 Run baseline vs event delta table",
+                                        key="space_analytics_run_event_delta",
+                                        disabled=not bool(target_metrics),
+                                        help="Computes per-metric baseline vs event deltas (mean/SD + Cohen's d).",
+                                    )
+
+                                    if run_event_delta:
+                                        try:
+                                            w = analytics_windowed_df.copy()
+                                            w["start"] = pd.to_datetime(w["start"], errors="coerce", utc=True)
+                                            w = w.dropna(subset=["start"]).sort_values("start")
+                                            if require_hrf_quality and "hrf_quality_ok" in w.columns:
+                                                q = w["hrf_quality_ok"].astype("boolean").fillna(False)
+                                                w = w.loc[q.to_numpy()]
+                                            if w.empty:
+                                                st.error("No valid HRV/HRF windows available after filtering.")
+                                            elif event_start is None or event_end is None:
+                                                st.error("Invalid event selection.")
+                                            else:
+                                                delta_df = compute_baseline_vs_event_deltas(
+                                                    w,
+                                                    time_col="start",
+                                                    metric_cols=list(target_metrics),
+                                                    event_start_utc=event_start,
+                                                    event_end_utc=event_end,
+                                                    baseline_pre=pd.Timedelta(hours=int(baseline_pre_h)),
+                                                    min_samples_per_phase=3,
+                                                )
+                                                if delta_df.empty:
+                                                    st.info(
+                                                        "No delta rows computed (likely insufficient baseline/event windows). "
+                                                        "Try increasing baseline hours or ensure more windows overlap the event."
+                                                    )
+                                                else:
+                                                    # Attach meaning strings
+                                                    delta_df = delta_df.copy()
+                                                    delta_df["meaning"] = [
+                                                        metric_meanings.get(str(m), "") for m in delta_df["metric"].astype(str).tolist()
+                                                    ]
+                                                    st.session_state["space_analytics_event_delta_results"] = {
+                                                        "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                                                        "params": {
+                                                            "event_start_utc": str(event_start),
+                                                            "event_end_utc": str(event_end),
+                                                            "baseline_pre_h": int(baseline_pre_h),
+                                                            "require_hrf_quality": bool(require_hrf_quality),
+                                                            "metrics": list(target_metrics),
+                                                        },
+                                                        "results": delta_df,
+                                                    }
+                                                    st.success("Event-aligned delta table computed.")
+                                        except Exception as exc:
+                                            log_exception(_LOGGER, "Space Analytics delta computation failed", exc)
+                                            st.error(f"Delta computation failed: {exc}")
+
+                                    stored_delta = st.session_state.get("space_analytics_event_delta_results")
+                                    if isinstance(stored_delta, dict) and isinstance(stored_delta.get("results"), pd.DataFrame):
+                                        out_df = stored_delta["results"]
+                                        with st.expander("✅ Baseline vs event deltas (saved for this session)", expanded=True):
+                                            st.caption(f"Computed: {stored_delta.get('computed_at_utc', 'unknown')}")
+                                            st.dataframe(out_df, use_container_width=True)
+                                            st.download_button(
+                                                "⬇️ Download event deltas (CSV)",
+                                                data=out_df.to_csv(index=False).encode("utf-8"),
+                                                file_name="space_analytics_event_deltas.csv",
+                                                mime="text/csv",
+                                                key="space_analytics_event_deltas_download",
+                                            )
+
+                                            # High-signal textual summary (top 5 by |d|)
+                                            top = out_df.head(5)
+                                            summary_lines = []
+                                            for row in top.itertuples(index=False):
+                                                metric = getattr(row, "metric")
+                                                d = getattr(row, "cohen_d")
+                                                delta = getattr(row, "delta")
+                                                n_b = getattr(row, "n_baseline")
+                                                n_e = getattr(row, "n_event")
+                                                summary_lines.append(
+                                                    f"- **{metric}**: Δ={delta:.4g}, d={d:.3g} (baseline n={int(n_b)}, event n={int(n_e)})"
+                                                )
+                                            if summary_lines:
+                                                st.markdown("**Top changes (ranked by |effect size|):**\n" + "\n".join(summary_lines))
+
+                                            if st.button("🧹 Clear event results", key="space_analytics_clear_event_results"):
+                                                st.session_state.pop("space_analytics_event_catalog", None)
+                                                st.session_state.pop("space_analytics_event_delta_results", None)
+                                                st.rerun()
+
+        # ------------------------------------------------------------------
         # Correlation suite (button-driven)
         # ------------------------------------------------------------------
         st.markdown("#### 📈 Correlation Suite (HRV/HRF ↔ NOAA)")
