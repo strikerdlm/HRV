@@ -20,6 +20,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Research app entrypoint loads the full UI reliably** (`app/research_app.py`): Hardened import path setup so `streamlit run app/research_app.py` always launches `app/app.py` (and therefore exposes Space Data/Space Analytics tabs) regardless of Streamlit/sys.path ordering.
 
+## [1.8.55] - 2025-12-25
+
+### Fixed
+- **Space Data tab “fade” rerun loops** (`.streamlit/config.toml`, `app/app.py`): Disabled Streamlit’s file watcher (`server.fileWatcherType = "none"`) to prevent unrequested reruns triggered by runtime cache/log writes (common on Windows/OneDrive). Also removed an unnecessary `st.rerun()` from the Space Data “Clear fetched feed” action to avoid extra flicker.
+- **References tab loads reliably** (`app/app.py`): Removed legacy DONKI/correlation/feature-matrix logic that was incorrectly embedded in the **📚 References** tab and could trigger slow/failed renders. References now remain lightweight and point users to **🌐 Space Data** and **🔬 Space Analytics** for data and analysis.
+
+### Changed
+- **Streamlit config cleanup** (`.streamlit/config.toml`): Removed deprecated/invalid options (Streamlit 1.36.0) to eliminate startup warnings.
+
 ## [1.8.52] - 2025-12-25
 
 ### Added
