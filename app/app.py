@@ -13802,6 +13802,20 @@ that predicts cognitive performance based on:
                         extra_state["error"] = f"Unexpected response: {exc}"
 
                 with st.expander("Latest fetched feed (session)", expanded=False):
+                    clear_extra_clicked = st.button(
+                        "🧹 Clear fetched feed",
+                        key="space_data_swpc_extra_clear",
+                        help="Clears the stored tail slice (does not delete on-disk caches).",
+                    )
+                    if clear_extra_clicked:
+                        extra_state["selected_dataset"] = ""
+                        extra_state["fetched_at_utc"] = ""
+                        extra_state["row_count"] = 0
+                        extra_state["col_count"] = 0
+                        extra_state["df_tail"] = pd.DataFrame()
+                        extra_state["error"] = ""
+                        st.success("Cleared fetched feed from session.")
+
                     if (
                         extra_state.get("selected_dataset") != str(selected_dataset)
                         or (
@@ -13823,18 +13837,6 @@ that predicts cognitive performance based on:
                                 f"Showing last {int(df_tail.shape[0])} rows"
                             )
                             st.dataframe(df_tail, use_container_width=True, hide_index=True)
-                    if st.button(
-                        "🧹 Clear fetched feed",
-                        key="space_data_swpc_extra_clear",
-                        help="Clears the stored tail slice (does not delete on-disk caches).",
-                    ):
-                        extra_state["selected_dataset"] = ""
-                        extra_state["fetched_at_utc"] = ""
-                        extra_state["row_count"] = 0
-                        extra_state["col_count"] = 0
-                        extra_state["df_tail"] = pd.DataFrame()
-                        extra_state["error"] = ""
-                        st.rerun()
 
                 with st.expander("SpaceWeatherLive snapshot (scrape + OpenAI fallback)"):
                     if st.button(
@@ -17419,371 +17421,13 @@ that predicts cognitive performance based on:
 
         st.markdown("---")
         st.caption("Full literature review available in `docs/lit_review.md`.")
-
-        # Optional: NASA DONKI events (only when HRV data is loaded)
-        st.markdown("### NASA DONKI events")
-        if not NASA_API_KEY:
-            st.info("Set NASA_API_KEY in your environment to enable DONKI events.")
-        elif windowed_df.empty or "start" not in windowed_df.columns:
-            st.info("Load HRV data to define the date range for DONKI queries.")
-        else:
-            span = pd.to_datetime(
-                windowed_df["start"], errors="coerce", utc=True
-            ).dropna()
-            if span.empty:
-                st.info("Load HRV data to define the date range for DONKI queries.")
-            else:
-                start_date = span.min().date().isoformat()
-                end_date = span.max().date().isoformat()
-                st.caption(f"DONKI query window: {start_date} to {end_date}")
-                choices = [
-                    "FLR (Solar Flares)",
-                    "CME",
-                    "GST (Geomagnetic Storm)",
-                    "IPS",
-                    "HSS",
-                    "RBE",
-                    "SEP",
-                ]
-                selected = st.multiselect(
-                    "DONKI predictors", choices, default=[
-                        "FLR (Solar Flares)", "CME", "GST (Geomagnetic Storm)"], )
-                predictor_series: List[Tuple[str, pd.DataFrame, str, str]] = []
-                if not donki_state.get("loaded"):
-                    st.info("Fetch NASA DONKI events to enable DONKI correlations.")
-                else:
-                    window_times = pd.to_datetime(
-                        windowed_df["start"], errors="coerce", utc=True
-                    ).dropna()
-                    window_min = window_times.min() if not window_times.empty else None
-                    window_max = window_times.max() if not window_times.empty else None
-                    donki_datasets = donki_state.get("datasets", {})
-                    donki_errors = donki_state.get("errors", {})
-                    for label in selected:
-                        code = DONKI_LABEL_TO_CODE.get(label)
-                        if not code:
-                            continue
-                        df_code = donki_datasets.get(code, pd.DataFrame())
-                        if df_code.empty:
-                            if code in donki_errors:
-                                title = DONKI_ENDPOINTS.get(
-                                    code, {}).get("title", code)
-                                st.warning(f"{title}: {donki_errors[code]}")
-                            else:
-                                st.info(f"No records available for {label}.")
-                            continue
-                        time_columns = _get_donki_time_columns(code)
-                        series_df = donki_event_series(df_code, time_columns)
-                        if series_df.empty:
-                            st.info(
-                                f"No time-stamped entries found for {label}.")
-                            continue
-                        if window_min is not None and window_max is not None:
-                            margin = pd.Timedelta(days=2)
-                            series_df = series_df[
-                                (series_df["time_tag"] >= window_min - margin)
-                                & (series_df["time_tag"] <= window_max + margin)
-                            ]
-                        if series_df.empty:
-                            st.info(
-                                f"{label}: no events overlapping the HRV window.")
-                            continue
-                        title = DONKI_ENDPOINTS.get(
-                            code, {}).get("title", label)
-                        value_col = f"donki_{code.lower()}_count"
-                        predictor_series.append(
-                            (title,
-                             series_df.rename(
-                                 columns={
-                                     "event_count": value_col}),
-                                "time_tag",
-                                value_col,
-                             ))
-
-                if predictor_series:
-                    if not metric_list:
-                        st.info(
-                            "Run the HRV window analysis to expose metrics before scanning DONKI correlations."
-                        )
-                    else:
-                        st.markdown("#### DONKI correlations (lag scan)")
-                        for title, s_df, tcol, vcol in predictor_series:
-                            res = _scan_lag_correlations_generic(
-                                windowed_df,
-                                s_df.rename(columns={tcol: "time_tag"}),
-                                "time_tag",
-                                vcol,
-                                metric_list,
-                                lags,
-                                merge_tolerance_minutes=int(merge_tol),
-                            )
-                            _render_lag_scan_summary(title, res, lags=lags)
-
-                cme_predictors: List[Tuple[str, pd.DataFrame, str, str]] = []
-                cme_df_state = space_state.get("swl_cme_df", pd.DataFrame())
-                if cme_df_state.empty:
-                    st.info(
-                        "Fetch SpaceWeatherLive data to enable CME correlations.")
-                else:
-                    if not metric_list:
-                        st.info(
-                            "Run the HRV window analysis to expose metrics before scanning CME correlations."
-                        )
-                    else:
-                        cme_predictors = _build_cme_predictor_series(
-                            cme_df_state)
-                        if not cme_predictors:
-                            st.info(
-                                "No numeric CME predictors available for correlation (insufficient data)."
-                            )
-                        else:
-                            st.markdown(
-                                "#### SpaceWeatherLive CME correlations (lag scan)"
-                            )
-                            for title, s_df, tcol, vcol in cme_predictors:
-                                res = _scan_lag_correlations_generic(
-                                    windowed_df,
-                                    s_df.rename(columns={tcol: "time_tag"}),
-                                    "time_tag",
-                                    vcol,
-                                    metric_list,
-                                    lags,
-                                    merge_tolerance_minutes=int(merge_tol),
-                                )
-                                _render_lag_scan_summary(title, res, lags=lags)
-
-                all_predictors = predictor_series + cme_predictors
-                with st.expander("Build HRV ↔ space-weather feature matrix (beta)"):
-                    if windowed_df.empty or "start" not in windowed_df.columns:
-                        st.caption(
-                            "Load HRV data with window timestamps to build the feature matrix."
-                        )
-                    elif not metric_list:
-                        st.caption(
-                            "Run the HRV metrics analysis to expose numeric metrics used as targets."
-                        )
-                    elif not all_predictors:
-                        st.caption(
-                            "Fetch DONKI or SpaceWeatherLive datasets first to provide predictor series."
-                        )
-                    else:
-                        feature_lags = sorted({int(lag) for lag in lags}) or [0]
-                        st.caption(
-                            f"Lags applied to each predictor: {', '.join(str(lag) for lag in feature_lags)} hour(s); "
-                            f"merge tolerance {int(merge_tol)} minutes."
-                        )
-                        if st.button(
-                            "Generate feature matrix",
-                            key="btn_build_spaceweather_matrix",
-                        ):
-                            try:
-                                feature_df = _build_space_weather_feature_matrix(
-                                    windowed_df,
-                                    all_predictors,
-                                    lags_hours=feature_lags,
-                                    tolerance_minutes=int(merge_tol),
-                                    metric_columns=metric_list,
-                                )
-                            except ValueError as exc:
-                                st.warning(str(exc))
-                            else:
-                                space_state["swl_feature_matrix"] = feature_df
-                                st.dataframe(feature_df.head(120))
-                                st.caption(
-                                    f"Feature matrix shape: {feature_df.shape[0]} rows × {feature_df.shape[1]} columns. "
-                                    "Rows correspond to HRV windows; predictor columns include lagged DONKI and CME metrics."
-                                )
-                                csv_bytes = feature_df.to_csv(
-                                    index=False).encode("utf-8")
-                                st.download_button(
-                                    "Download feature matrix (CSV)",
-                                    data=csv_bytes,
-                                    file_name=f"hrv_spaceweather_features_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
-                                    mime="text/csv",
-                                    key="btn_download_spaceweather_matrix",
-                                )
-                    feature_matrix_cached = space_state.get(
-                        "swl_feature_matrix", pd.DataFrame()
-                    )
-                    if not feature_matrix_cached.empty:
-                        preview_cols = min(12, feature_matrix_cached.shape[1])
-                        st.markdown("##### Current feature matrix preview")
-                        st.dataframe(feature_matrix_cached.head(
-                            80).iloc[:, :preview_cols])
-                        current_metrics = [
-                            col
-                            for col in metric_list
-                            if col in feature_matrix_cached.columns
-                        ]
-                        available_features = [
-                            col
-                            for col in feature_matrix_cached.columns
-                            if col not in {"window_start", *current_metrics}
-                        ]
-                        if current_metrics and available_features:
-                            default_features = available_features[
-                                : min(12, len(available_features))
-                            ]
-                            selected_corr_features = st.multiselect(
-                                "Predictor columns for correlation scan",
-                                options=available_features,
-                                default=default_features,
-                                key="corr_feature_selector",
-                            )
-                            if st.button(
-                                "Compute feature ↔ metric correlations",
-                                key="btn_compute_feature_corr",
-                            ):
-                                try:
-                                    corr_df = _compute_feature_correlations(
-                                        feature_matrix_cached,
-                                        current_metrics,
-                                        (
-                                            selected_corr_features
-                                            if selected_corr_features
-                                            else available_features
-                                        ),
-                                    )
-                                except ValueError as exc:
-                                    st.warning(str(exc))
-                                else:
-                                    st.dataframe(corr_df.head(150))
-                                    corr_csv = corr_df.to_csv(
-                                        index=False).encode("utf-8")
-                                    st.download_button(
-                                        "Download correlations (CSV)",
-                                        data=corr_csv,
-                                        file_name=f"hrv_spaceweather_correlations_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
-                                        mime="text/csv",
-                                        key="btn_download_feature_corr",
-                                    )
-                            rank_tab, model_tab = st.tabs(
-                                [
-                                    "Auto-rank top predictors",
-                                    "Train linear response model (experimental)",
-                                ]
-                            )
-                            with rank_tab:
-                                top_k = st.slider(
-                                    "Top predictors per metric",
-                                    min_value=1,
-                                    max_value=10,
-                                    value=5,
-                                    step=1,
-                                    key="rank_top_k",
-                                )
-                                min_samples = st.slider(
-                                    "Minimum overlapping samples",
-                                    min_value=6,
-                                    max_value=60,
-                                    value=18,
-                                    step=2,
-                                    key="rank_min_samples",
-                                )
-                                if st.button(
-                                    "Rank predictors",
-                                    key="btn_rank_predictors",
-                                ):
-                                    try:
-                                        rank_df = _rank_top_predictors(
-                                            feature_matrix_cached,
-                                            current_metrics,
-                                            (
-                                                selected_corr_features
-                                                if selected_corr_features
-                                                else available_features
-                                            ),
-                                            min_samples=int(min_samples),
-                                            top_n=int(top_k),
-                                        )
-                                    except ValueError as exc:
-                                        st.warning(str(exc))
-                                    else:
-                                        st.dataframe(rank_df)
-                                        rank_csv = rank_df.to_csv(
-                                            index=False).encode("utf-8")
-                                        st.download_button(
-                                            "Download predictor rankings (CSV)",
-                                            data=rank_csv,
-                                            file_name=f"hrv_spaceweather_rankings_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
-                                            mime="text/csv",
-                                            key="btn_download_rankings",
-                                        )
-                            with model_tab:
-                                target_metric = st.selectbox(
-                                    "Target HRV metric",
-                                    options=current_metrics,
-                                    index=0,
-                                    key="model_target_metric",
-                                )
-                                default_model_features = available_features[
-                                    : min(10, len(available_features))
-                                ]
-                                selected_model_features = st.multiselect(
-                                    "Predictor features",
-                                    options=available_features,
-                                    default=default_model_features,
-                                    key="model_feature_selector",
-                                )
-                                train_fraction = st.slider(
-                                    "Training fraction",
-                                    min_value=0.6,
-                                    max_value=0.9,
-                                    value=0.75,
-                                    step=0.05,
-                                    key="model_train_fraction",
-                                )
-                                if st.button(
-                                    "Fit linear model",
-                                    key="btn_fit_linear_model",
-                                ):
-                                    try:
-                                        model_out = _fit_linear_response_model(
-                                            feature_matrix_cached,
-                                            target_metric,
-                                            (
-                                                selected_model_features
-                                                if selected_model_features
-                                                else available_features
-                                            ),
-                                            train_fraction=float(train_fraction),
-                                        )
-                                    except ValueError as exc:
-                                        st.warning(str(exc))
-                                    else:
-                                        metrics_view = model_out["metrics"]
-                                        col_metrics = st.columns(3)
-                                        col_metrics[0].metric(
-                                            "Train R²",
-                                            f"{metrics_view['train_r2']:.3f}",
-                                        )
-                                        col_metrics[1].metric(
-                                            "Test R²", f"{metrics_view['test_r2']:.3f}"
-                                        )
-                                        col_metrics[2].metric(
-                                            "Test RMSE",
-                                            f"{metrics_view['test_rmse']:.3f}",
-                                        )
-                                        st.caption(
-                                            f"Train samples: {metrics_view['train_samples']} • "
-                                            f"Test samples: {metrics_view['test_samples']} • "
-                                            f"Test MAE: {metrics_view['test_mae']:.3f}"
-                                        )
-                                        coef_df = model_out["coefficients"]
-                                        st.dataframe(coef_df)
-                                        coef_csv = coef_df.to_csv(
-                                            index=False).encode("utf-8")
-                                        st.download_button(
-                                            "Download coefficients (CSV)",
-                                            data=coef_csv,
-                                            file_name=f"hrv_linear_model_coefficients_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.csv",
-                                            mime="text/csv",
-                                            key="btn_download_model_coeffs",
-                                        )
-                        else:
-                            st.caption(
-                                "Add HRV metrics and predictor columns to compute correlations and train models."
-                            )
+        st.markdown("---")
+        st.markdown("#### 🧭 Where to run Space Data + Analytics")
+        st.info(
+            "This tab is **references-only** and should load instantly.\n\n"
+            "- Use **🌐 Space Data** for SWPC/NOAA/DONKI fetching and dashboards (data-only).\n"
+            "- Use **🔬 Space Analytics** for correlations and ML (button-driven)."
+        )
 
 
 def _fisher_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
