@@ -15,10 +15,10 @@ This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when
 conda activate hrv-py312
 
 # Run the application
-# Operational (fast UI: profile + simple space-weather context)
+# Operational (crew-facing intake + mission ops; keep fast/stable)
 streamlit run app/operational_app.py
 
-# Research (full dashboards: correlations/ML + NOAA/Space Weather analysis)
+# Research (core statistics/analytics: HRV/HRF + Space Data/Analytics + exports/AI)
 streamlit run app/research_app.py
 # Legacy research entrypoint:
 # streamlit run app/app.py
@@ -373,10 +373,10 @@ ALTER TABLE lab_chemistry ADD COLUMN timepoint_id TEXT;
 conda activate hrv-py312
 
 # Start the Streamlit app
-# Operational (fast UI)
+# Operational (crew-facing intake + mission ops; keep fast/stable)
 streamlit run app/operational_app.py
 
-# Research (full dashboards)
+# Research (core statistics/analytics: HRV/HRF + Space Data/Analytics + exports/AI)
 streamlit run app/research_app.py
 # Legacy research entrypoint:
 # streamlit run app/app.py
@@ -447,8 +447,8 @@ The application follows a modular architecture with strict separation of concern
    - All timestamps normalized to UTC timezone-aware format
 
 3. **Streamlit entrypoints** (`app/operational_app.py`, `app/research_app.py`, legacy `app/app.py`)
-   - Operational app: User Profile + lightweight space-weather context for clinical logs
-   - Research app: full HRV/HRF computation + NOAA/Space Weather correlation dashboards
+   - Operational app: crew-facing intake + mission operations view (collect/review crucial crew information); keep lightweight and stable
+   - Research app: core statistics/analytics (HRV/HRF computation, Space Data/Analytics correlations+ML, exports, GPT‑5.2 interpretation)
 
 4. **`app/app.py`** — Research UI implementation (legacy entrypoint)
    - Multi-tab interface: Overview, Time Series, Frequency, Nonlinear, Spectrogram, Windowed, Metrics, ANS Function Tests, Readiness, Gauges, Science, Space Weather, NOAA Space, Export, References, About
