@@ -31,7 +31,7 @@ This manual provides step-by-step instructions for all features of Mission Contr
 9. [Circadian Physiology Module](#circadian-physiology-module)
 10. [Autonomic Function Tests](#autonomic-function-tests)
 11. [Space Data: Impact Predictions](#space-data-impact-predictions)
-12. [Space Data: Correlations (Decommissioned)](#space-data-correlations-decommissioned)
+12. [Space Analytics (Correlations + ML)](#space-analytics-correlations--ml)
 13. [Fatigue Prediction (SAFTE Model)](#fatigue-prediction-safte-model)
 14. [Biofeedback and Real-Time HRV](#biofeedback-and-real-time-hrv)
 15. [Garmin Integration](#garmin-integration)
@@ -930,8 +930,8 @@ Based on the Sleep, Activity, Fatigue, and Task Effectiveness model.
 - 24-hour performance curve
 
 **Space-data correlations (status):**
-- In-app space-weather/NOAA **correlations + ML are decommissioned**. The **🌐 Space Data** tab is intentionally **data-only**.
-- If you need correlations, export HRV windowed metrics + Space Data time series and analyze externally (Python/R) with your preferred lag/covariate model.
+- The **🌐 Space Data** tab is intentionally **data-only** (fetch + visualize).
+- Correlation + ML workflows now live in the **🔬 Space Analytics** tab (button-driven; no auto-runs).
 - Scientific context (useful for study design):
   - Ramishvili et al. 2023, Atmosphere 14(12):1707 — adaptation to geomagnetic storms (https://doi.org/10.3390/atmos14121707)
   - Mattoni et al. 2019, bioRxiv — highlights autocorrelation and small effect sizes (https://doi.org/10.1101/684035)
@@ -1933,12 +1933,13 @@ Continue for 3 hours post-arrival for storm response capture.
 
 ---
 
-## Space Data: Correlations (Decommissioned)
+## Space Analytics (Correlations + ML)
 
-External space-weather/NOAA **correlation + ML workflows** have been intentionally removed from the UI. The unified **🌐 Space Data** tab is now a **data-only** dashboard so external fetch/render stays stable and independent from HRV processing.
+The **🔬 Space Analytics** tab is the on-demand workspace for **correlations + machine learning** between **space-data predictors** and **HRV/HRF metrics**.
 
-- **If you need HRF↔HRV correlations**: use the **🧩 HRF ↔ HRV** tab (offline).
-- **If you need HRV↔space-data correlations**: export HRV windowed metrics and Space Data time series, then compute correlations externally (Python/R) with your preferred lags and covariates.
+- **Space Data remains data-only**: use **🌐 Space Data** to fetch and inspect SWPC/NOAA/DONKI datasets.
+- **Analytics is button-driven**: nothing auto-runs; you must click the relevant **Run** buttons for correlation scans and ML training.
+- **Targets supported**: standard HRV metrics (e.g., RMSSD/SDNN/HF) and heart-rate fragmentation (HRF) metrics (e.g., PIP/W3) when present in windowed outputs.
 
 ### NOAA dashboard (within Space Data)
 
