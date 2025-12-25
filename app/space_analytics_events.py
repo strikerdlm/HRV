@@ -338,3 +338,266 @@ def compute_baseline_vs_event_deltas(
     return out
 
 
+def compute_baseline_event_recovery_deltas(
+    windowed_df: pd.DataFrame,
+    *,
+    time_col: str,
+    metric_cols: Sequence[str],
+    event_start_utc: pd.Timestamp,
+    event_end_utc: pd.Timestamp,
+    baseline_pre: pd.Timedelta,
+    recovery_post: pd.Timedelta,
+    min_samples_per_phase: int = 3,
+) -> pd.DataFrame:
+    """Compute baseline vs event and baseline vs recovery deltas for selected metrics.
+
+    Phases:
+        - Baseline: [event_start - baseline_pre, event_start)
+        - Event:    [event_start, event_end]
+        - Recovery: (event_end, event_end + recovery_post]
+
+    Args:
+        windowed_df: HRV/HRF windowed metrics (must include time_col).
+        time_col: Timestamp column name (e.g., "start").
+        metric_cols: Metric column names to analyze (must be numeric coercible).
+        event_start_utc: Event start (UTC).
+        event_end_utc: Event end (UTC).
+        baseline_pre: Duration before event start to use as baseline.
+        recovery_post: Duration after event end to use as recovery window.
+        min_samples_per_phase: Minimum rows required in baseline, event, and recovery phases.
+
+    Returns:
+        DataFrame with one row per metric, including baseline/event/recovery means and deltas.
+    """
+    if recovery_post < pd.Timedelta(0):
+        raise ValueError("recovery_post must be non-negative.")
+
+    event_start = pd.to_datetime(event_start_utc, utc=True)
+    event_end = pd.to_datetime(event_end_utc, utc=True)
+    recovery_end = event_end + recovery_post
+
+    df = windowed_df.copy()
+    df[time_col] = pd.to_datetime(df[time_col], errors="coerce", utc=True)
+    df = df.dropna(subset=[time_col]).sort_values(time_col)
+    if df.empty:
+        return pd.DataFrame()
+
+    use_metrics: list[str] = [c for c in metric_cols if c in df.columns]
+    if not use_metrics:
+        return pd.DataFrame()
+
+    baseline_start = event_start - baseline_pre
+    baseline_mask = (df[time_col] >= baseline_start) & (df[time_col] < event_start)
+    event_mask = (df[time_col] >= event_start) & (df[time_col] <= event_end)
+    recovery_mask = (df[time_col] > event_end) & (df[time_col] <= recovery_end)
+
+    rows: list[dict[str, object]] = []
+    for metric in use_metrics:
+        base_vals = pd.to_numeric(df.loc[baseline_mask, metric], errors="coerce").dropna()
+        evt_vals = pd.to_numeric(df.loc[event_mask, metric], errors="coerce").dropna()
+        rec_vals = pd.to_numeric(df.loc[recovery_mask, metric], errors="coerce").dropna()
+        n_base = int(base_vals.size)
+        n_evt = int(evt_vals.size)
+        n_rec = int(rec_vals.size)
+        if (
+            n_base < min_samples_per_phase
+            or n_evt < min_samples_per_phase
+            or n_rec < min_samples_per_phase
+        ):
+            continue
+
+        base_mean = float(base_vals.mean())
+        evt_mean = float(evt_vals.mean())
+        rec_mean = float(rec_vals.mean())
+
+        base_std = float(base_vals.std(ddof=1)) if n_base >= 2 else float("nan")
+        evt_std = float(evt_vals.std(ddof=1)) if n_evt >= 2 else float("nan")
+        rec_std = float(rec_vals.std(ddof=1)) if n_rec >= 2 else float("nan")
+
+        delta_evt = float(evt_mean - base_mean)
+        delta_rec = float(rec_mean - base_mean)
+        delta_rec_vs_evt = float(rec_mean - evt_mean)
+
+        def _pct_change(delta: float, denom: float) -> float:
+            if np.isfinite(denom) and abs(denom) > 1e-12:
+                return float(delta / denom * 100.0)
+            return float("nan")
+
+        pct_evt = _pct_change(delta_evt, base_mean)
+        pct_rec = _pct_change(delta_rec, base_mean)
+
+        def _cohen_d(delta: float, s1: float, s2: float) -> float:
+            if not (np.isfinite(s1) and np.isfinite(s2)):
+                return float("nan")
+            pooled = float(np.sqrt((s1 * s1 + s2 * s2) / 2.0))
+            if not (np.isfinite(pooled) and pooled > 0):
+                return float("nan")
+            return float(delta / pooled)
+
+        d_evt = _cohen_d(delta_evt, base_std, evt_std)
+        d_rec = _cohen_d(delta_rec, base_std, rec_std)
+
+        rows.append(
+            {
+                "metric": metric,
+                "n_baseline": n_base,
+                "baseline_mean": base_mean,
+                "baseline_std": base_std,
+                "n_event": n_evt,
+                "event_mean": evt_mean,
+                "event_std": evt_std,
+                "n_recovery": n_rec,
+                "recovery_mean": rec_mean,
+                "recovery_std": rec_std,
+                # Event vs baseline (keep legacy names for UI compatibility)
+                "delta": delta_evt,
+                "pct_change": pct_evt,
+                "cohen_d": d_evt,
+                # Recovery vs baseline
+                "delta_recovery": delta_rec,
+                "pct_change_recovery": pct_rec,
+                "cohen_d_recovery": d_rec,
+                # Recovery vs event
+                "delta_recovery_vs_event": delta_rec_vs_evt,
+            }
+        )
+
+    if not rows:
+        return pd.DataFrame()
+
+    out = pd.DataFrame(rows)
+    out["abs_d"] = pd.to_numeric(out["cohen_d"], errors="coerce").abs()
+    out["abs_delta"] = out["delta"].abs()
+    out = out.sort_values(["abs_d", "abs_delta"], ascending=[False, False], ignore_index=True)
+    return out
+
+
+def detect_first_sustained_deviation(
+    windowed_df: pd.DataFrame,
+    *,
+    time_col: str,
+    metric_cols: Sequence[str],
+    baseline_start_utc: pd.Timestamp,
+    baseline_end_utc: pd.Timestamp,
+    search_start_utc: pd.Timestamp,
+    search_end_utc: pd.Timestamp,
+    z_threshold: float,
+    sustain_windows: int,
+    min_baseline_samples: int = 5,
+) -> pd.DataFrame:
+    """Detect first sustained deviation from baseline for each metric.
+
+    Method (simple, deterministic):
+        - Compute baseline mean/std over [baseline_start, baseline_end)
+        - Search over [search_start, search_end] for the first time where
+          |z| >= z_threshold for `sustain_windows` consecutive windows.
+
+    Args:
+        windowed_df: HRV/HRF windowed metrics.
+        time_col: Timestamp column name.
+        metric_cols: Metrics to evaluate.
+        baseline_start_utc: Baseline start (UTC).
+        baseline_end_utc: Baseline end (UTC, exclusive).
+        search_start_utc: Search start (UTC, inclusive).
+        search_end_utc: Search end (UTC, inclusive).
+        z_threshold: Absolute z-score threshold to call a deviation.
+        sustain_windows: Number of consecutive windows required.
+        min_baseline_samples: Minimum baseline samples to estimate mean/std.
+
+    Returns:
+        DataFrame with onset detection per metric:
+            metric, onset_utc, onset_offset_hours, direction, z_at_onset,
+            baseline_mean, baseline_std, n_baseline
+    """
+    if sustain_windows < 1:
+        raise ValueError("sustain_windows must be >= 1.")
+    if min_baseline_samples < 2:
+        raise ValueError("min_baseline_samples must be >= 2.")
+    if not np.isfinite(z_threshold) or z_threshold <= 0:
+        raise ValueError("z_threshold must be a positive finite number.")
+
+    df = windowed_df.copy()
+    if time_col not in df.columns:
+        raise ValueError(f"windowed_df is missing required time column: {time_col}")
+    df[time_col] = pd.to_datetime(df[time_col], errors="coerce", utc=True)
+    df = df.dropna(subset=[time_col]).sort_values(time_col)
+    if df.empty:
+        return pd.DataFrame()
+
+    baseline_start = pd.to_datetime(baseline_start_utc, utc=True)
+    baseline_end = pd.to_datetime(baseline_end_utc, utc=True)
+    search_start = pd.to_datetime(search_start_utc, utc=True)
+    search_end = pd.to_datetime(search_end_utc, utc=True)
+    if baseline_end < baseline_start:
+        raise ValueError("baseline_end_utc must be >= baseline_start_utc.")
+    if search_end < search_start:
+        raise ValueError("search_end_utc must be >= search_start_utc.")
+
+    use_metrics = [c for c in metric_cols if c in df.columns]
+    if not use_metrics:
+        return pd.DataFrame()
+
+    base_mask = (df[time_col] >= baseline_start) & (df[time_col] < baseline_end)
+    search_mask = (df[time_col] >= search_start) & (df[time_col] <= search_end)
+
+    rows: list[dict[str, object]] = []
+    for metric in use_metrics:
+        base_vals = pd.to_numeric(df.loc[base_mask, metric], errors="coerce").dropna()
+        n_base = int(base_vals.size)
+        if n_base < min_baseline_samples:
+            continue
+        mean = float(base_vals.mean())
+        std = float(base_vals.std(ddof=1)) if n_base >= 2 else float("nan")
+        if not (np.isfinite(std) and std > 0):
+            continue
+
+        sub = df.loc[search_mask, [time_col, metric]].copy()
+        sub[metric] = pd.to_numeric(sub[metric], errors="coerce")
+        sub = sub.dropna(subset=[metric])
+        if sub.empty:
+            continue
+
+        times = pd.DatetimeIndex(sub[time_col].to_list())
+        vals = sub[metric].to_numpy(dtype=float)
+        z = (vals - mean) / std
+
+        run = 0
+        onset_idx: int | None = None
+        for i in range(z.size):
+            if np.isfinite(z[i]) and abs(z[i]) >= float(z_threshold):
+                run += 1
+            else:
+                run = 0
+            if run >= sustain_windows:
+                onset_idx = int(i - sustain_windows + 1)
+                break
+
+        if onset_idx is None:
+            continue
+
+        onset_time = times[onset_idx]
+        z_onset = float(z[onset_idx])
+        direction = "increase" if z_onset > 0 else "decrease"
+        offset_hours = float((onset_time - search_start).total_seconds() / 3600.0)
+
+        rows.append(
+            {
+                "metric": metric,
+                "onset_utc": onset_time,
+                "onset_offset_hours": offset_hours,
+                "direction": direction,
+                "z_at_onset": z_onset,
+                "baseline_mean": mean,
+                "baseline_std": std,
+                "n_baseline": n_base,
+            }
+        )
+
+    if not rows:
+        return pd.DataFrame()
+
+    out = pd.DataFrame(rows)
+    out = out.sort_values(["onset_offset_hours"], ascending=[True], ignore_index=True)
+    return out
+
+
