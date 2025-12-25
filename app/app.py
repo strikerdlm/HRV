@@ -12976,11 +12976,8 @@ that predicts cognitive performance based on:
             }
             data_age = "manual (click Fetch)"
 
-            # Auto-load cache-only snapshot once per session so the tab shows
-            # content immediately without any network calls.
-            if not space_state.get("loaded") and not space_state.get("auto_attempted", False):
-                _load_space_weather_cache_only(space_state)
-                space_state["auto_attempted"] = True
+            # NOTE: Do not auto-load or auto-fetch any space-weather data on tab open.
+            # This tab must remain fully on-demand (click Load cached / Fetch).
 
             col_load_cache, col_fetch_sw, col_fetch_donki, col_bg_info = st.columns([1, 1, 1, 2])
             with col_load_cache:
@@ -13002,10 +12999,10 @@ that predicts cognitive performance based on:
                     help="Requires NASA_API_KEY in your .env file.",
                 )
             with col_bg_info:
-                cache_hint = "cached" if space_state.get("loaded") else "no cache"
+                cache_hint = "loaded" if space_state.get("loaded") else "not loaded"
                 st.caption(
                     "⏸️ Background prefetch disabled | "
-                    f"SWPC cache: {cache_hint} | Load cache or click Fetch"
+                    f"SWPC data: {cache_hint} | Click Load cached / Fetch"
                 )
             donki_window_days = st.slider(
                 "DONKI window (days)",
@@ -13682,29 +13679,102 @@ that predicts cognitive performance based on:
                 )
 
             if space_state.get("loaded"):
-                st.markdown("#### Inspect an additional NOAA dataset")
+                st.markdown("#### Inspect an additional SWPC feed (on-demand)")
                 selected_dataset = st.selectbox(
-                    "NOAA endpoint", list(SWPC_EXTRA_DATASETS.keys())
+                    "SWPC endpoint",
+                    list(SWPC_EXTRA_DATASETS.keys()),
+                    key="space_data_swpc_extra_select",
+                    help="This does not fetch automatically. Click Fetch to load the selected feed.",
                 )
-                if selected_dataset:
-                    with st.expander(f"{selected_dataset} (latest rows)"):
-                        try:
+                extra_state = st.session_state.setdefault(
+                    "space_data_swpc_extra_state",
+                    {
+                        "selected_dataset": "",
+                        "fetched_at_utc": "",
+                        "row_count": 0,
+                        "col_count": 0,
+                        "df_tail": pd.DataFrame(),
+                        "error": "",
+                    },
+                )
+                col_fetch_extra, col_meta_extra = st.columns([1, 3])
+                with col_fetch_extra:
+                    fetch_extra_clicked = st.button(
+                        "📥 Fetch selected feed",
+                        key="space_data_swpc_extra_fetch",
+                        help="Fetches only when clicked (cached for 5 min).",
+                    )
+                with col_meta_extra:
+                    st.caption("No auto-fetch on tab switch. Fetch is on-demand.")
+
+                if fetch_extra_clicked and selected_dataset:
+                    try:
+                        with st.spinner(f"Fetching {selected_dataset}…"):
                             extra_df = _fetch_swpc_dataset(
                                 SWPC_EXTRA_DATASETS[selected_dataset]
                             )
-                        except requests.RequestException as exc:
-                            st.error(
-                                f"Failed to retrieve {selected_dataset.lower()}: {exc}"
-                            )
-                        except ValueError as exc:
-                            st.error(
-                                f"Unexpected response for {selected_dataset.lower()}: {exc}"
-                            )
+                        extra_state["selected_dataset"] = str(selected_dataset)
+                        extra_state["fetched_at_utc"] = pd.Timestamp.utcnow().strftime(
+                            "%Y-%m-%d %H:%M UTC"
+                        )
+                        extra_state["row_count"] = int(extra_df.shape[0])
+                        extra_state["col_count"] = int(extra_df.shape[1])
+                        # Keep session state bounded: store only a tail slice.
+                        extra_state["df_tail"] = extra_df.tail(200).copy()
+                        extra_state["error"] = ""
+                    except requests.RequestException as exc:
+                        extra_state["selected_dataset"] = str(selected_dataset)
+                        extra_state["fetched_at_utc"] = pd.Timestamp.utcnow().strftime(
+                            "%Y-%m-%d %H:%M UTC"
+                        )
+                        extra_state["row_count"] = 0
+                        extra_state["col_count"] = 0
+                        extra_state["df_tail"] = pd.DataFrame()
+                        extra_state["error"] = f"Failed to retrieve feed: {exc}"
+                    except ValueError as exc:
+                        extra_state["selected_dataset"] = str(selected_dataset)
+                        extra_state["fetched_at_utc"] = pd.Timestamp.utcnow().strftime(
+                            "%Y-%m-%d %H:%M UTC"
+                        )
+                        extra_state["row_count"] = 0
+                        extra_state["col_count"] = 0
+                        extra_state["df_tail"] = pd.DataFrame()
+                        extra_state["error"] = f"Unexpected response: {exc}"
+
+                with st.expander("Latest fetched feed (session)", expanded=False):
+                    if (
+                        extra_state.get("selected_dataset") != str(selected_dataset)
+                        or (
+                            isinstance(extra_state.get("df_tail"), pd.DataFrame)
+                            and extra_state.get("df_tail", pd.DataFrame()).empty
+                            and not str(extra_state.get("error") or "").strip()
+                        )
+                    ):
+                        st.info("Click **Fetch selected feed** to load the selected SWPC dataset.")
+                    else:
+                        if str(extra_state.get("error") or "").strip():
+                            st.error(str(extra_state.get("error")))
                         else:
-                            if extra_df.empty:
-                                st.info("No data returned for this feed.")
-                            else:
-                                st.dataframe(extra_df.tail(100))
+                            df_tail = extra_state.get("df_tail", pd.DataFrame())
+                            st.caption(
+                                f"Fetched: {extra_state.get('fetched_at_utc','')} | "
+                                f"Rows: {int(extra_state.get('row_count', 0))} | "
+                                f"Cols: {int(extra_state.get('col_count', 0))} | "
+                                f"Showing last {int(df_tail.shape[0])} rows"
+                            )
+                            st.dataframe(df_tail, use_container_width=True, hide_index=True)
+                    if st.button(
+                        "🧹 Clear fetched feed",
+                        key="space_data_swpc_extra_clear",
+                        help="Clears the stored tail slice (does not delete on-disk caches).",
+                    ):
+                        extra_state["selected_dataset"] = ""
+                        extra_state["fetched_at_utc"] = ""
+                        extra_state["row_count"] = 0
+                        extra_state["col_count"] = 0
+                        extra_state["df_tail"] = pd.DataFrame()
+                        extra_state["error"] = ""
+                        st.rerun()
 
                 with st.expander("SpaceWeatherLive snapshot (scrape + OpenAI fallback)"):
                     if st.button(
@@ -14644,11 +14714,8 @@ that predicts cognitive performance based on:
         bg_status = {"noaa": {"done": True, "error": None, "stale": False}}
         data_age = "manual (click Fetch)"
 
-        # Auto-load a small cache-only snapshot once per session so the NOAA tab
-        # shows content immediately without any network calls.
-        if not bool(noaa_state.get("bundles")) and not bool(noaa_state.get("auto_attempted", False)):
-            _load_noaa_space_cache_only(noaa_state, keys=NOAA_FAST_KEYS)
-            noaa_state["auto_attempted"] = True
+        # NOTE: Do not auto-load or auto-fetch NOAA datasets on tab open.
+        # This tab must remain fully on-demand (click Load cached / Fetch / Force refresh).
 
         col_load_cache, col_scope, col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns([1, 1, 1, 1, 2])
         with col_load_cache:
@@ -14687,10 +14754,10 @@ that predicts cognitive performance based on:
                 help="Bypass cache and fetch fresh data from NOAA servers for the selected scope.",
             )
         with col_bg_status:
-            cache_hint = "cached" if bool(noaa_state.get("bundles")) else "no cache"
+            cache_hint = "loaded" if bool(noaa_state.get("bundles")) else "not loaded"
             st.caption(
                 "⏸️ Background prefetch disabled | "
-                f"NOAA cache: {cache_hint} | Load cache or click Fetch"
+                f"NOAA data: {cache_hint} | Click Load cached / Fetch"
             )
 
         with st.expander("🧹 Cache maintenance", expanded=False):
