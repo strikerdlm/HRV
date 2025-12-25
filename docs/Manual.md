@@ -2717,6 +2717,21 @@ RMSSD (ms) & 41.2 & 12.1 & [36.3, 46.1] \\
 | PSS | % | Percentage of short segments | 30-50 | Short run frequency |
 | W3 | % | 3-variation word frequency | 10-25 | Maximum fragmentation pattern |
 
+**What is Heart Rate Fragmentation (HRF)?**  
+Heart Rate Fragmentation (HRF) describes frequent beat-to-beat **direction changes** in RR interval dynamics (acceleration ↔ deceleration). It can appear even when the ECG looks like sinus rhythm and is often framed as **sinoatrial instability** or a breakdown of smooth beat-to-beat regulation (Costa et al., 2017; Hayano et al., 2020).
+
+**Why it matters (medical / physiology framing)**  
+- HRF can contribute “erratic” short-term variability that is **not purely vagal modulation**, so elevated fragmentation can **confound** interpretation of HF power / RMSSD as “more parasympathetic tone” in some cases (Costa et al., 2017; Hayano et al., 2020).  
+- In older cohorts, HRF markers (e.g., PIP) have been studied for **long-term incident atrial fibrillation** prediction (Guichard et al., 2025; PROOF-AF).
+
+**Operational interpretation (how to use it)**  
+- Treat HRF as a **rhythm stability flag**, not a diagnosis: first verify data quality (motion, sensor contact, ectopy/artifacts).  
+- If quality is good and HRF is persistently elevated versus baseline, interpret alongside mean HR, RMSSD/HF, sleep, symptoms, and workload context.
+
+**How to decrease / increase HRF (practical levers)**  
+- To decrease *measured* HRF: record at true rest (quiet breathing, no talking/movement), ensure good sensor contact, and prefer cleaned RR series when available.  
+- Factors that can increase HRF (or the appearance of HRF) include irregular breathing, acute stress, sleep loss, alcohol, illness/inflammation, stimulants, and ectopic beats/arrhythmia. Focus on trends and context rather than single-session spikes.
+
 **HRF ↔ HRV workspace:** Use the **🧩 HRF ↔ HRV** tab (Research app) to view HRF gauges (PIP/IALS/W3) and compute **HRF↔HRV correlation matrices and scatter plots**. This tab is offline and does not depend on Space Weather / NOAA / DONKI fetches.
 
 ---
@@ -2834,67 +2849,71 @@ Solutions:
 
 ### Fragmentation and Arrhythmia
 
-10. Costa, M. D., Davis, R. B., & Goldberger, A. L. (2017). Heart rate fragmentation: A new approach to the analysis of cardiac interbeat interval dynamics. *Frontiers in Physiology, 8*, 255.
+10. Costa, M. D., Davis, R. B., & Goldberger, A. L. (2017). Heart rate fragmentation: A new approach to the analysis of cardiac interbeat interval dynamics. *Frontiers in Physiology, 8*, 255. https://doi.org/10.3389/fphys.2017.00255
 
-11. Guichard, J. B., et al. (2025). Assessing heart rate fragmentation to predict atrial fibrillation in the general population aged 65: the PROOF-AF study. *European Heart Journal Open*. https://doi.org/10.1093/ehjopen/oeaf030
+11. Costa, M. D., Davis, R. B., & Goldberger, A. L. (2017). Heart rate fragmentation: A symbolic dynamical approach. *Frontiers in Physiology, 8*, 827. https://doi.org/10.3389/fphys.2017.00827
+
+12. Hayano, J., Kisohara, M., Ueda, N., & Yuda, E. (2020). Impact of heart rate fragmentation on the assessment of heart rate variability. *Applied Sciences, 10*(9), 3314. https://doi.org/10.3390/app10093314
+
+13. Guichard, J.-B., et al. (2025). Assessing heart rate fragmentation to predict atrial fibrillation in the general population aged 65: the PROOF-AF study. *European Heart Journal Open, 5*(3), oeaf030. https://doi.org/10.1093/ehjopen/oeaf030
 
 ### Fatigue Modeling
 
-12. Hursh, S. R., Redmond, D. P., Johnson, M. L., et al. (2004). Fatigue models for applied research in warfighting. *Aviation, Space, and Environmental Medicine, 75*(3 Suppl), A44-A53.
+14. Hursh, S. R., Redmond, D. P., Johnson, M. L., et al. (2004). Fatigue models for applied research in warfighting. *Aviation, Space, and Environmental Medicine, 75*(3 Suppl), A44-A53.
 
-13. Van Dongen, H. P., Maislin, G., Mullington, J. M., & Dinges, D. F. (2003). The cumulative cost of additional wakefulness: Dose-response effects on neurobehavioral functions and sleep physiology. *Sleep, 26*(2), 117-126.
+15. Van Dongen, H. P., Maislin, G., Mullington, J. M., & Dinges, D. F. (2003). The cumulative cost of additional wakefulness: Dose-response effects on neurobehavioral functions and sleep physiology. *Sleep, 26*(2), 117-126.
 
 ### Basal Metabolic Rate & Nutrition
 
-14. Mifflin, M. D., St Jeor, S. T., Hill, L. A., Scott, B. J., Daugherty, S. A., & Koh, Y. O. (1990). A new predictive equation for resting energy expenditure in healthy individuals. *American Journal of Clinical Nutrition, 51*(2), 241-247. https://doi.org/10.1093/ajcn/51.2.241
+16. Mifflin, M. D., St Jeor, S. T., Hill, L. A., Scott, B. J., Daugherty, S. A., & Koh, Y. O. (1990). A new predictive equation for resting energy expenditure in healthy individuals. *American Journal of Clinical Nutrition, 51*(2), 241-247. https://doi.org/10.1093/ajcn/51.2.241
 
-15. Harris, J. A., & Benedict, F. G. (1918). A biometric study of human basal metabolism. *Proceedings of the National Academy of Sciences, 4*(12), 370-373.
+17. Harris, J. A., & Benedict, F. G. (1918). A biometric study of human basal metabolism. *Proceedings of the National Academy of Sciences, 4*(12), 370-373.
 
-16. NASA Johnson Space Center. (2020). *Nutritional Requirements for Exploration Missions up to 365 days* (JSC67378). Houston, TX: NASA.
+18. NASA Johnson Space Center. (2020). *Nutritional Requirements for Exploration Missions up to 365 days* (JSC67378). Houston, TX: NASA.
 
-17. Scott, J. P. R., Green, D. A., Weerts, G., & Cheuvront, S. N. (2020). Body size and its implications upon resource utilization during human space exploration missions. *Scientific Reports, 10*, 13836. https://doi.org/10.1038/s41598-020-70054-6
+19. Scott, J. P. R., Green, D. A., Weerts, G., & Cheuvront, S. N. (2020). Body size and its implications upon resource utilization during human space exploration missions. *Scientific Reports, 10*, 13836. https://doi.org/10.1038/s41598-020-70054-6
 
 ### Clinical Scales (Validated Translations)
 
-18. Chica-Urzola, H. L., Escobar-Córdoba, F., & Eslava-Schmalbach, J. (2007). Validación de la Escala de Somnolencia de Epworth. *Revista de Salud Pública, 9*(4), 558-567. https://doi.org/10.1590/S0124-00642007000400008
+20. Chica-Urzola, H. L., Escobar-Córdoba, F., & Eslava-Schmalbach, J. (2007). Validación de la Escala de Somnolencia de Epworth. *Revista de Salud Pública, 9*(4), 558-567. https://doi.org/10.1590/S0124-00642007000400008
 
-19. Velásquez-Paz, J. A., Torres, J. C., Valencia-Flores, M., et al. (2022). Validation of the Colombian version of the Karolinska sleepiness scale. *Sleep Science, 15*(Spec 1), 190-196. https://doi.org/10.5935/1984-0063.20220006
+21. Velásquez-Paz, J. A., Torres, J. C., Valencia-Flores, M., et al. (2022). Validation of the Colombian version of the Karolinska sleepiness scale. *Sleep Science, 15*(Spec 1), 190-196. https://doi.org/10.5935/1984-0063.20220006
 
-20. Samn, S. W., & Perelli, L. P. (1982). *Estimating aircrew fatigue: A technique with implications to airlift operations* (USAF-SAM-TR-82-21). Brooks Air Force Base, TX: USAF School of Aerospace Medicine.
+22. Samn, S. W., & Perelli, L. P. (1982). *Estimating aircrew fatigue: A technique with implications to airlift operations* (USAF-SAM-TR-82-21). Brooks Air Force Base, TX: USAF School of Aerospace Medicine.
 
 ### Kidney Function (eGFR)
 
-21. Inker, L. A., Eneanya, N. D., Coresh, J., et al. (2021). New creatinine- and cystatin C-based equations to estimate GFR without race. *New England Journal of Medicine, 385*(19), 1737-1749. https://doi.org/10.1056/NEJMoa2102953
+23. Inker, L. A., Eneanya, N. D., Coresh, J., et al. (2021). New creatinine- and cystatin C-based equations to estimate GFR without race. *New England Journal of Medicine, 385*(19), 1737-1749. https://doi.org/10.1056/NEJMoa2102953
 
 ### Body Composition
 
-22. Hodgdon, J. A., & Beckett, M. B. (1984). *Prediction of percent body fat for U.S. Navy men from body circumferences and height* (NHRC-84-11). San Diego, CA: Naval Health Research Center.
+24. Hodgdon, J. A., & Beckett, M. B. (1984). *Prediction of percent body fat for U.S. Navy men from body circumferences and height* (NHRC-84-11). San Diego, CA: Naval Health Research Center.
 
 ### Exploration Medical Records
 
-23. NASA. (2023). *Medical Information Systems and Tools (MIST).* https://www.nasa.gov/general/medical-information-systems-and-tools-mist/
+25. NASA. (2023). *Medical Information Systems and Tools (MIST).* https://www.nasa.gov/general/medical-information-systems-and-tools-mist/
 
-24. NASA Ames Research Center. (2024). *A Clinical Decision Support System for Earth-independent Medical Operations.* https://www.nasa.gov/centers-and-facilities/ames/ames-science/ames-space-biosciences/a-clinical-decision-support-system-for-earth-independent-medical-operations/
+26. NASA Ames Research Center. (2024). *A Clinical Decision Support System for Earth-independent Medical Operations.* https://www.nasa.gov/centers-and-facilities/ames/ames-science/ames-space-biosciences/a-clinical-decision-support-system-for-earth-independent-medical-operations/
 
-25. NASA Human Research Program. (2023). *Exploration Medical Capability - Advancing Medical System Design and Risk-Informed Decision Making for Deep Space Exploration.* NASA Technical Reports Server. https://ntrs.nasa.gov/citations/20230015831
+27. NASA Human Research Program. (2023). *Exploration Medical Capability - Advancing Medical System Design and Risk-Informed Decision Making for Deep Space Exploration.* NASA Technical Reports Server. https://ntrs.nasa.gov/citations/20230015831
 
-26. NASA Glenn Research Center. (2024). *Exploration Medical Technologies.* https://www.nasa.gov/glenn/glenn-expertise-space-exploration/human-health-performance/exploration-medical-technologies/
+28. NASA Glenn Research Center. (2024). *Exploration Medical Technologies.* https://www.nasa.gov/glenn/glenn-expertise-space-exploration/human-health-performance/exploration-medical-technologies/
 
 ### Space Radiation & Space-Weather Scales
 
-27. National Aeronautics and Space Administration. (2022). *NASA Space Flight Human-System Standard, Volume 1: Crew Health* (NASA-STD-3001, Rev. B). NASA. https://www.nasa.gov/wp-content/uploads/2020/10/2022-01-05_nasa-std-3001_vol.1_rev._b_final_draft_with_signature_010522.pdf
+29. National Aeronautics and Space Administration. (2022). *NASA Space Flight Human-System Standard, Volume 1: Crew Health* (NASA-STD-3001, Rev. B). NASA. https://www.nasa.gov/wp-content/uploads/2020/10/2022-01-05_nasa-std-3001_vol.1_rev._b_final_draft_with_signature_010522.pdf
 
-28. Zhang, S., Berger, T., Matthiä, D., Hellweg, C. E., et al. (2020). First measurements of the radiation dose on the lunar surface. *Science Advances, 6*(39), eaaz1334. https://doi.org/10.1126/sciadv.aaz1334
+30. Zhang, S., Berger, T., Matthiä, D., Hellweg, C. E., et al. (2020). First measurements of the radiation dose on the lunar surface. *Science Advances, 6*(39), eaaz1334. https://doi.org/10.1126/sciadv.aaz1334
 
-29. Hassler, D. M., Zeitlin, C., Wimmer-Schweingruber, R. F., Ehresmann, B., et al. (2014). Mars' surface radiation environment measured with the Mars Science Laboratory's Curiosity rover. *Science, 343*(6169), 1244797. https://doi.org/10.1126/science.1244797
+31. Hassler, D. M., Zeitlin, C., Wimmer-Schweingruber, R. F., Ehresmann, B., et al. (2014). Mars' surface radiation environment measured with the Mars Science Laboratory's Curiosity rover. *Science, 343*(6169), 1244797. https://doi.org/10.1126/science.1244797
 
-30. NOAA Space Weather Prediction Center. (n.d.). *Solar radiation storms (S-scale).* https://www.swpc.noaa.gov/phenomena/solar-radiation-storm
+32. NOAA Space Weather Prediction Center. (n.d.). *Solar radiation storms (S-scale).* https://www.swpc.noaa.gov/phenomena/solar-radiation-storm
 
 ### API Integrations
 
-31. Polar Electro. (2024). *Polar AccessLink API Documentation.* https://www.polar.com/accesslink-api/
+33. Polar Electro. (2024). *Polar AccessLink API Documentation.* https://www.polar.com/accesslink-api/
 
-32. Developer Tech News. (2014). *Polar opens its API for developers to access health data.* https://www.developer-tech.com/news/polar-opens-its-api-developers-access-user-health-data/
+34. Developer Tech News. (2014). *Polar opens its API for developers to access health data.* https://www.developer-tech.com/news/polar-opens-its-api-developers-access-user-health-data/
 
 ---
 
