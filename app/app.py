@@ -15525,6 +15525,23 @@ that predicts cognitive performance based on:
             "On-demand statistical analysis and machine learning linking **space-data predictors** "
             "to **HRV + HRF metrics**. Nothing runs automatically — use the buttons below."
         )
+        # UX: Streamlit dims ("stale" fades) existing elements during reruns, which
+        # can make long computations feel like the page lost state. Space Analytics
+        # provides explicit progress consoles, so we disable the stale opacity.
+        st.markdown(
+            """
+            <style>
+            .stApp .stale,
+            .stApp [data-stale="true"],
+            div[data-testid="stAppViewContainer"] .stale,
+            div[data-testid="stAppViewContainer"] [data-stale="true"] {
+                opacity: 1 !important;
+                filter: none !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
 
         # ------------------------------------------------------------------
         # Computation Console (no page fading / no spinners)
@@ -15902,76 +15919,92 @@ that predicts cognitive performance based on:
                 "If **HRV windows** above show '—', correlations/ML will be disabled. "
                 "Build windows here (no network; bounded)."
             )
-            col_wcfg, col_wrun = st.columns([0.72, 0.28])
-            with col_wcfg:
-                sa_win = st.text_input(
-                    "Window (Space Analytics override)",
-                    value=str(win),
-                    key="space_analytics_window_override",
-                    help="Examples: 5min, 2min, 60s. Must be shorter than your recording.",
+            sa_ui_locked = str(_space_analytics_console_state().get("phase", "")) == "running"
+            if sa_ui_locked:
+                st.info(
+                    "Space Analytics computation is running. Controls are temporarily locked to prevent rerun interruptions."
                 )
-                sa_step = st.text_input(
-                    "Step (Space Analytics override)",
-                    value=str(step),
-                    key="space_analytics_step_override",
-                    help="Examples: 1min, 30s. Smaller step → more windows.",
-                )
-                sa_min_rr = st.number_input(
-                    "Min RR per window (override)",
-                    min_value=10,
-                    max_value=2000,
-                    value=int(min_rr),
-                    step=10,
-                    key="space_analytics_min_rr_override",
-                )
-                sa_fast = st.checkbox(
-                    "Fast time-domain only (override)",
-                    value=bool(fast_windowing),
-                    help="Recommended for short windows; skips spectral/nonlinear per-window computations.",
-                    key="space_analytics_fast_window_override",
-                )
-            with col_wrun:
-                compute_windows_clicked = st.button(
-                    "🪟 Compute windows",
-                    key="space_analytics_compute_windows",
-                    type="primary",
-                    disabled=not bool(has_hrv_data_uploaded),
-                    help="Builds windowed HRV/HRF metrics from uploaded RR data for Space Analytics.",
-                )
-                if compute_windows_clicked:
-                    _sa_console_reset("Compute HRV/HRF windows (Space Analytics override)")
-                    try:
-                        _sa_console_log(f"window={str(sa_win)} step={str(sa_step)} min_rr={int(sa_min_rr)}")
-                        _sa_console_log(f"max_windows_cap={int(max_windows)} fast_time_domain_only={bool(sa_fast)}")
-                        new_windowed = _space_analytics_build_windows(
-                            window=str(sa_win),
-                            step=str(sa_step),
-                            min_rr_count=int(sa_min_rr),
-                            max_windows_cap=int(max_windows),
-                            fast_time_domain_only=bool(sa_fast),
-                        )
-                        st.session_state["_hrv_cached_windowed_df"] = new_windowed
-                        _sa_console_log(
-                            f"Windows built: rows={int(new_windowed.shape[0]) if isinstance(new_windowed, pd.DataFrame) else 0}"
-                        )
-                        _sa_console_done("Compute windows completed")
-                        st.session_state["space_analytics_last_window_build"] = {
-                            "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                            "rows": int(new_windowed.shape[0]) if isinstance(new_windowed, pd.DataFrame) else 0,
-                            "window": str(sa_win),
-                            "step": str(sa_step),
-                            "min_rr": int(sa_min_rr),
-                            "fast": bool(sa_fast),
-                        }
-                    except Exception as exc:
-                        log_exception(_LOGGER, "Space Analytics window build failed", exc)
-                        _sa_console_error("Compute windows failed", exc)
-                        st.session_state["space_analytics_last_window_build"] = {
-                            "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                            "rows": 0,
-                            "error": str(exc),
-                        }
-                    st.rerun()
+
+            with st.form("space_analytics_window_form", clear_on_submit=False):
+                col_wcfg, col_wrun = st.columns([0.72, 0.28])
+                with col_wcfg:
+                    sa_win = st.text_input(
+                        "Window (Space Analytics override)",
+                        value=str(win),
+                        key="space_analytics_window_override",
+                        help="Examples: 5min, 2min, 60s. Must be shorter than your recording.",
+                        disabled=bool(sa_ui_locked),
+                    )
+                    sa_step = st.text_input(
+                        "Step (Space Analytics override)",
+                        value=str(step),
+                        key="space_analytics_step_override",
+                        help="Examples: 1min, 30s. Smaller step → more windows.",
+                        disabled=bool(sa_ui_locked),
+                    )
+                    sa_min_rr = st.number_input(
+                        "Min RR per window (override)",
+                        min_value=10,
+                        max_value=2000,
+                        value=int(min_rr),
+                        step=10,
+                        key="space_analytics_min_rr_override",
+                        disabled=bool(sa_ui_locked),
+                    )
+                    sa_fast = st.checkbox(
+                        "Fast time-domain only (override)",
+                        value=bool(fast_windowing),
+                        help="Recommended for short windows; skips spectral/nonlinear per-window computations.",
+                        key="space_analytics_fast_window_override",
+                        disabled=bool(sa_ui_locked),
+                    )
+                with col_wrun:
+                    compute_windows_clicked = st.form_submit_button(
+                        "🪟 Compute windows",
+                        disabled=(not bool(has_hrv_data_uploaded)) or bool(sa_ui_locked),
+                    )
+
+            if compute_windows_clicked:
+                _sa_console_reset("Compute HRV/HRF windows (Space Analytics override)")
+                try:
+                    _sa_console_log(
+                        f"window={str(sa_win)} step={str(sa_step)} min_rr={int(sa_min_rr)}"
+                    )
+                    _sa_console_log(
+                        f"max_windows_cap={int(max_windows)} fast_time_domain_only={bool(sa_fast)}"
+                    )
+                    new_windowed = _space_analytics_build_windows(
+                        window=str(sa_win),
+                        step=str(sa_step),
+                        min_rr_count=int(sa_min_rr),
+                        max_windows_cap=int(max_windows),
+                        fast_time_domain_only=bool(sa_fast),
+                    )
+                    st.session_state["_hrv_cached_windowed_df"] = new_windowed
+                    # Update local state so the rest of this tab can use the new windows
+                    analytics_windowed_df = new_windowed
+                    has_windowed = bool(isinstance(new_windowed, pd.DataFrame) and not new_windowed.empty)
+
+                    _sa_console_log(
+                        f"Windows built: rows={int(new_windowed.shape[0]) if isinstance(new_windowed, pd.DataFrame) else 0}"
+                    )
+                    _sa_console_done("Compute windows completed")
+                    st.session_state["space_analytics_last_window_build"] = {
+                        "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                        "rows": int(new_windowed.shape[0]) if isinstance(new_windowed, pd.DataFrame) else 0,
+                        "window": str(sa_win),
+                        "step": str(sa_step),
+                        "min_rr": int(sa_min_rr),
+                        "fast": bool(sa_fast),
+                    }
+                except Exception as exc:
+                    log_exception(_LOGGER, "Space Analytics window build failed", exc)
+                    _sa_console_error("Compute windows failed", exc)
+                    st.session_state["space_analytics_last_window_build"] = {
+                        "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                        "rows": 0,
+                        "error": str(exc),
+                    }
 
             last_build = st.session_state.get("space_analytics_last_window_build")
             if isinstance(last_build, dict):
@@ -16499,33 +16532,42 @@ that predicts cognitive performance based on:
                                     if isinstance(stored_onset, dict) and isinstance(stored_onset.get("results"), pd.DataFrame):
                                         onset_df = stored_onset["results"]
                                         with st.expander("✅ Onset detection results (saved for this session)", expanded=True):
-                                            st.caption(f"Computed: {stored_onset.get('computed_at_utc', 'unknown')}")
-                                            st.dataframe(onset_df, use_container_width=True)
-                                            # Group-level summary (earliest onset in HRV vs HRF)
-                                            try:
-                                                hrv_min = onset_df.loc[onset_df["group"] == "HRV", "onset_offset_hours"].min()
-                                                hrf_min = onset_df.loc[onset_df["group"] == "HRF", "onset_offset_hours"].min()
-                                            except Exception:
-                                                hrv_min = float("nan")
-                                                hrf_min = float("nan")
-                                            if pd.notna(hrv_min) or pd.notna(hrf_min):
-                                                st.markdown(
-                                                    f"**Earliest onset (hours from event start)**: "
-                                                    f"HRV = {hrv_min:.2f} h | HRF = {hrf_min:.2f} h"
-                                                )
-                                            st.download_button(
-                                                "⬇️ Download onset results (CSV)",
-                                                data=onset_df.to_csv(index=False).encode("utf-8"),
-                                                file_name="space_analytics_event_onset.csv",
-                                                mime="text/csv",
-                                                key="space_analytics_onset_download",
+                                            clear_event_clicked = st.button(
+                                                "🧹 Clear event results",
+                                                key="space_analytics_clear_event_results",
+                                                help="Clears the detected events, delta table, and onset results saved for this session.",
                                             )
-
-                                            if st.button("🧹 Clear event results", key="space_analytics_clear_event_results"):
+                                            if clear_event_clicked:
                                                 st.session_state.pop("space_analytics_event_catalog", None)
                                                 st.session_state.pop("space_analytics_event_delta_results", None)
                                                 st.session_state.pop("space_analytics_event_onset_results", None)
-                                                st.rerun()
+                                                st.success("Event-aligned results cleared.")
+                                            else:
+                                                st.caption(f"Computed: {stored_onset.get('computed_at_utc', 'unknown')}")
+                                                st.dataframe(onset_df, use_container_width=True)
+                                                # Group-level summary (earliest onset in HRV vs HRF)
+                                                try:
+                                                    hrv_min = onset_df.loc[
+                                                        onset_df["group"] == "HRV", "onset_offset_hours"
+                                                    ].min()
+                                                    hrf_min = onset_df.loc[
+                                                        onset_df["group"] == "HRF", "onset_offset_hours"
+                                                    ].min()
+                                                except Exception:
+                                                    hrv_min = float("nan")
+                                                    hrf_min = float("nan")
+                                                if pd.notna(hrv_min) or pd.notna(hrf_min):
+                                                    st.markdown(
+                                                        f"**Earliest onset (hours from event start)**: "
+                                                        f"HRV = {hrv_min:.2f} h | HRF = {hrf_min:.2f} h"
+                                                    )
+                                                st.download_button(
+                                                    "⬇️ Download onset results (CSV)",
+                                                    data=onset_df.to_csv(index=False).encode("utf-8"),
+                                                    file_name="space_analytics_event_onset.csv",
+                                                    mime="text/csv",
+                                                    key="space_analytics_onset_download",
+                                                )
 
         # ------------------------------------------------------------------
         # Correlation suite (button-driven)
@@ -16574,74 +16616,92 @@ that predicts cognitive performance based on:
             ] + [c for c in hrf_preferred if c in numeric_cols]
             default_targets = default_targets[: min(10, len(default_targets))]
 
-            col_sel1, col_sel2 = st.columns(2)
-            with col_sel1:
-                predictors_selected = st.multiselect(
-                    "NOAA predictors (datasets)",
-                    options=dataset_options,
-                    default=[k for k in ("planetary_k_index_3h", "geospace_dst", "f107_flux") if k in dataset_options],
-                    key="space_analytics_predictors",
+            sa_ui_locked = str(_space_analytics_console_state().get("phase", "")) == "running"
+            with st.form("space_analytics_corr_form", clear_on_submit=False):
+                col_sel1, col_sel2 = st.columns(2)
+                with col_sel1:
+                    predictors_selected = st.multiselect(
+                        "NOAA predictors (datasets)",
+                        options=dataset_options,
+                        default=[
+                            k
+                            for k in ("planetary_k_index_3h", "geospace_dst", "f107_flux")
+                            if k in dataset_options
+                        ],
+                        key="space_analytics_predictors",
+                        disabled=bool(sa_ui_locked),
+                    )
+                with col_sel2:
+                    target_metrics = st.multiselect(
+                        "HRV/HRF target metrics",
+                        options=sorted(numeric_cols),
+                        default=default_targets,
+                        key="space_analytics_targets",
+                        disabled=bool(sa_ui_locked),
+                    )
+
+                lag_min, lag_max = st.slider(
+                    "Lag window (hours, applied to predictor timestamps)",
+                    min_value=-72,
+                    max_value=72,
+                    value=(-24, 24),
+                    step=1,
+                    key="space_analytics_lag_range",
+                    disabled=bool(sa_ui_locked),
                 )
-            with col_sel2:
-                target_metrics = st.multiselect(
-                    "HRV/HRF target metrics",
-                    options=sorted(numeric_cols),
-                    default=default_targets,
-                    key="space_analytics_targets",
+                lag_step = st.number_input(
+                    "Lag step (hours)",
+                    min_value=1,
+                    max_value=24,
+                    value=3,
+                    step=1,
+                    key="space_analytics_lag_step",
+                    disabled=bool(sa_ui_locked),
+                )
+                merge_tolerance = st.number_input(
+                    "Merge tolerance (minutes)",
+                    min_value=15,
+                    max_value=240,
+                    value=90,
+                    step=15,
+                    key="space_analytics_merge_tol",
+                    disabled=bool(sa_ui_locked),
+                )
+                use_all_value_cols = st.checkbox(
+                    "Use all value columns per dataset (slower)",
+                    value=False,
+                    help="Some datasets expose multiple numeric columns; enable to scan all.",
+                    key="space_analytics_all_value_cols",
+                    disabled=bool(sa_ui_locked),
                 )
 
-            lag_min, lag_max = st.slider(
-                "Lag window (hours, applied to predictor timestamps)",
-                min_value=-72,
-                max_value=72,
-                value=(-24, 24),
-                step=1,
-                key="space_analytics_lag_range",
-            )
-            lag_step = st.number_input(
-                "Lag step (hours)",
-                min_value=1,
-                max_value=24,
-                value=3,
-                step=1,
-                key="space_analytics_lag_step",
-            )
-            merge_tolerance = st.number_input(
-                "Merge tolerance (minutes)",
-                min_value=15,
-                max_value=240,
-                value=90,
-                step=15,
-                key="space_analytics_merge_tol",
-            )
-            use_all_value_cols = st.checkbox(
-                "Use all value columns per dataset (slower)",
-                value=False,
-                help="Some datasets expose multiple numeric columns; enable to scan all.",
-                key="space_analytics_all_value_cols",
-            )
+                # Bounds / complexity guardrails (computed on submit)
+                lags = list(
+                    range(int(lag_min), int(lag_max) + 1, int(max(int(lag_step), 1)))
+                )
+                if len(lags) > 97:
+                    st.warning(
+                        "Lag configuration is too large; reduce the lag window or increase the step."
+                    )
+                    lags = lags[:97]
 
-            # Bounds / complexity guardrails
-            lags = list(range(int(lag_min), int(lag_max) + 1, int(max(int(lag_step), 1))))
-            if len(lags) > 97:
-                st.warning("Lag configuration is too large; reduce the lag window or increase the step.")
-                lags = lags[:97]
+                est_value_cols = 0
+                for k in predictors_selected:
+                    b = bundles.get(k)
+                    if not b:
+                        continue
+                    est_value_cols += (
+                        len(b.value_columns)
+                        if bool(use_all_value_cols)
+                        else min(1, len(b.value_columns))
+                    )
+                est_tests = int(len(lags) * est_value_cols * max(len(target_metrics), 1))
+                st.caption(f"Estimated tests: **{est_tests}** (lags × value cols × targets).")
 
-            est_value_cols = 0
-            for k in predictors_selected:
-                b = bundles.get(k)
-                if not b:
-                    continue
-                est_value_cols += len(b.value_columns) if use_all_value_cols else min(1, len(b.value_columns))
-            est_tests = int(len(lags) * est_value_cols * max(len(target_metrics), 1))
-            st.caption(f"Estimated tests: **{est_tests}** (lags × value cols × targets).")
-
-            run_corr = st.button(
-                "🔬 Run correlation scan",
-                key="space_analytics_run_corr",
-                disabled=not predictors_selected or not target_metrics,
-                help="Computes Pearson r (+ Spearman + HAC p) and BH-FDR across all tests.",
-            )
+                run_corr = st.form_submit_button(
+                    "🔬 Run correlation scan",
+                    disabled=(not predictors_selected) or (not target_metrics) or bool(sa_ui_locked),
+                )
 
             if run_corr:
                 if "start" not in analytics_windowed_df.columns:
@@ -16809,18 +16869,24 @@ that predicts cognitive performance based on:
             if isinstance(stored, dict) and isinstance(stored.get("results"), pd.DataFrame):
                 out_df = stored["results"]
                 with st.expander("✅ Correlation results (saved for this session)", expanded=True):
-                    st.caption(f"Computed: {stored.get('computed_at_utc', 'unknown')}")
-                    st.dataframe(out_df.head(250), use_container_width=True)
-                    st.download_button(
-                        "⬇️ Download correlations (CSV)",
-                        data=out_df.to_csv(index=False).encode("utf-8"),
-                        file_name="space_analytics_correlations.csv",
-                        mime="text/csv",
-                        key="space_analytics_corr_download",
+                    clear_corr_clicked = st.button(
+                        "🧹 Clear correlation results",
+                        key="space_analytics_clear_corr",
+                        help="Removes the currently saved correlation table for this session.",
                     )
-                    if st.button("🧹 Clear correlation results", key="space_analytics_clear_corr"):
+                    if clear_corr_clicked:
                         st.session_state.pop("space_analytics_corr_results", None)
-                        st.rerun()
+                        st.success("Correlation results cleared.")
+                    else:
+                        st.caption(f"Computed: {stored.get('computed_at_utc', 'unknown')}")
+                        st.dataframe(out_df.head(250), use_container_width=True)
+                        st.download_button(
+                            "⬇️ Download correlations (CSV)",
+                            data=out_df.to_csv(index=False).encode("utf-8"),
+                            file_name="space_analytics_correlations.csv",
+                            mime="text/csv",
+                            key="space_analytics_corr_download",
+                        )
 
         st.markdown("---")
 
@@ -16836,53 +16902,70 @@ that predicts cognitive performance based on:
             default_ml_predictors = [
                 k for k in ("planetary_k_index_3h", "geospace_dst", "f107_flux", "solar_wind_wind", "solar_wind_mag") if k in dataset_options
             ]
-            ml_predictors = st.multiselect(
-                "Predictors (NOAA datasets)",
-                options=dataset_options,
-                default=default_ml_predictors,
-                key="space_analytics_ml_predictors",
-            )
+            sa_ui_locked = str(_space_analytics_console_state().get("phase", "")) == "running"
+
             # ML target choices: numeric columns only
             ml_numeric_cols = [
                 c
                 for c in analytics_windowed_df.columns
-                if c not in ("start", "end") and pd.api.types.is_numeric_dtype(analytics_windowed_df[c])
+                if c not in ("start", "end")
+                and pd.api.types.is_numeric_dtype(analytics_windowed_df[c])
             ]
-            ml_target = st.selectbox(
-                "Target metric (HRV or HRF)",
-                options=sorted(ml_numeric_cols),
-                index=0,
-                key="space_analytics_ml_target",
-            )
-            ml_lag_min, ml_lag_max = st.slider(
-                "Lag window (hours) — ML features",
-                min_value=-72,
-                max_value=72,
-                value=(-24, 24),
-                step=1,
-                key="space_analytics_ml_lag_range",
-            )
-            ml_lag_step = st.number_input(
-                "Lag step (hours) — ML",
-                min_value=1,
-                max_value=24,
-                value=6,
-                step=1,
-                key="space_analytics_ml_lag_step",
-            )
-            ml_merge_tol = st.number_input(
-                "Merge tolerance (minutes) — ML",
-                min_value=15,
-                max_value=240,
-                value=90,
-                step=15,
-                key="space_analytics_ml_merge_tol",
-            )
-            run_ml = st.button(
-                "🚀 Train models (ElasticNet + RF + Boosting if available)",
-                key="space_analytics_run_ml",
-                disabled=not bool(ml_predictors) or not bool(ml_target),
-            )
+            if not ml_numeric_cols:
+                st.info("No numeric HRV/HRF metrics are available for ML on the current windows.")
+                run_ml = False
+                ml_predictors = []
+                ml_target = ""
+                ml_lag_min, ml_lag_max = -24, 24
+                ml_lag_step = 6
+                ml_merge_tol = 90
+            else:
+                with st.form("space_analytics_ml_form", clear_on_submit=False):
+                    ml_predictors = st.multiselect(
+                        "Predictors (NOAA datasets)",
+                        options=dataset_options,
+                        default=default_ml_predictors,
+                        key="space_analytics_ml_predictors",
+                        disabled=bool(sa_ui_locked),
+                    )
+                    ml_target = st.selectbox(
+                        "Target metric (HRV or HRF)",
+                        options=sorted(ml_numeric_cols),
+                        index=0,
+                        key="space_analytics_ml_target",
+                        disabled=bool(sa_ui_locked),
+                    )
+                    ml_lag_min, ml_lag_max = st.slider(
+                        "Lag window (hours) — ML features",
+                        min_value=-72,
+                        max_value=72,
+                        value=(-24, 24),
+                        step=1,
+                        key="space_analytics_ml_lag_range",
+                        disabled=bool(sa_ui_locked),
+                    )
+                    ml_lag_step = st.number_input(
+                        "Lag step (hours) — ML",
+                        min_value=1,
+                        max_value=24,
+                        value=6,
+                        step=1,
+                        key="space_analytics_ml_lag_step",
+                        disabled=bool(sa_ui_locked),
+                    )
+                    ml_merge_tol = st.number_input(
+                        "Merge tolerance (minutes) — ML",
+                        min_value=15,
+                        max_value=240,
+                        value=90,
+                        step=15,
+                        key="space_analytics_ml_merge_tol",
+                        disabled=bool(sa_ui_locked),
+                    )
+                    run_ml = st.form_submit_button(
+                        "🚀 Train models (ElasticNet + RF + Boosting if available)",
+                        disabled=(not bool(ml_predictors)) or (not bool(ml_target)) or bool(sa_ui_locked),
+                    )
 
             if run_ml:
                 if "start" not in analytics_windowed_df.columns:
@@ -16980,11 +17063,17 @@ that predicts cognitive performance based on:
             stored_ml = st.session_state.get("space_analytics_ml_results")
             if isinstance(stored_ml, dict) and isinstance(stored_ml.get("results"), dict):
                 with st.expander("✅ ML results (saved for this session)", expanded=True):
-                    st.caption(f"Computed: {stored_ml.get('computed_at_utc', 'unknown')}")
-                    st.json(stored_ml.get("results", {}))
-                    if st.button("🧹 Clear ML results", key="space_analytics_clear_ml"):
+                    clear_ml_clicked = st.button(
+                        "🧹 Clear ML results",
+                        key="space_analytics_clear_ml",
+                        help="Removes the currently saved ML training outputs for this session.",
+                    )
+                    if clear_ml_clicked:
                         st.session_state.pop("space_analytics_ml_results", None)
-                        st.rerun()
+                        st.success("ML results cleared.")
+                    else:
+                        st.caption(f"Computed: {stored_ml.get('computed_at_utc', 'unknown')}")
+                        st.json(stored_ml.get("results", {}))
 
     with tab_export:
         # ---------------------------------------------------------------------
