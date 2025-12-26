@@ -124,6 +124,7 @@ from noaa_space import (
     NOAADataBundle,
     load_noaa_space_data,
     load_noaa_space_cache,
+    slice_noaa_bundle_time_range,
     get_noaa_metric_explanations,
     explain_noaa_metric,
 )
@@ -3470,6 +3471,36 @@ class UploadedRR:
     rr_ms_clean: Optional[np.ndarray] = None
     artifact_valid_mask: Optional[np.ndarray] = None
     qc_summary: Optional[Dict] = None
+
+
+def _get_uploaded_rr_time_bounds() -> Tuple[Optional[pd.Timestamp], Optional[pd.Timestamp]]:
+    """Return the (min_utc, max_utc) timestamps across currently uploaded RR files.
+
+    This is used to "sync" space-weather views/queries to the RR timeline. It is
+    intentionally defensive: any malformed/missing timestamps are ignored.
+    """
+    cache = st.session_state.get("uploaded_rr_cache", {})
+    if not isinstance(cache, dict) or not cache:
+        return None, None
+
+    mins: list[pd.Timestamp] = []
+    maxs: list[pd.Timestamp] = []
+    for item in cache.values():
+        if not isinstance(item, UploadedRR):
+            continue
+        df = item.df
+        if not isinstance(df, pd.DataFrame) or df.empty or "timestamp" not in df.columns:
+            continue
+        ts = pd.to_datetime(df["timestamp"], errors="coerce", utc=True)
+        ts = ts.dropna()
+        if ts.empty:
+            continue
+        mins.append(ts.min())
+        maxs.append(ts.max())
+
+    if not mins or not maxs:
+        return None, None
+    return min(mins), max(maxs)
 
 
 def _to_dataframe(
@@ -13084,6 +13115,33 @@ that predicts cognitive performance based on:
                 step=1,
                 key="donki_window_days",
             )
+            rr_min_utc, rr_max_utc = _get_uploaded_rr_time_bounds()
+            donki_sync_rr = False
+            donki_pad_days = 0
+            if rr_min_utc is not None and rr_max_utc is not None:
+                st.caption(
+                    f"Uploaded RR timeline (UTC): {rr_min_utc.strftime('%Y-%m-%d %H:%M')} → {rr_max_utc.strftime('%Y-%m-%d %H:%M')}"
+                )
+                donki_sync_rr = st.checkbox(
+                    "Sync DONKI query to uploaded RR timeline",
+                    value=True,
+                    key="donki_sync_rr_window",
+                    help=(
+                        "Uses your RR recording date range for DONKI queries (plus optional padding). "
+                        "This avoids downloading unrelated events and keeps queries fast."
+                    ),
+                )
+                donki_pad_days = int(
+                    st.number_input(
+                        "DONKI padding (days)",
+                        min_value=0,
+                        max_value=30,
+                        value=3,
+                        step=1,
+                        key="donki_sync_rr_pad_days",
+                        help="Extra days before/after the RR range when querying DONKI (helps capture CME/SEP arrivals around the recording).",
+                    )
+                )
 
             # Cache maintenance (explicit user action; never automatic deletion)
             with st.expander("🧹 Cache maintenance", expanded=False):
@@ -13184,8 +13242,21 @@ that predicts cognitive performance based on:
                     )
                 else:
                     _donki_fetch_success = False
-                    start_donki, end_donki = _donki_default_range(
-                        int(donki_window_days))
+                    if donki_sync_rr and rr_min_utc is not None and rr_max_utc is not None:
+                        start_dt = (rr_min_utc - pd.Timedelta(days=int(donki_pad_days))).date()
+                        end_dt = (rr_max_utc + pd.Timedelta(days=int(donki_pad_days))).date()
+                        # Hard bound: prevent accidentally huge DONKI payloads (JSON normalization can be slow).
+                        max_days = 30
+                        if (pd.Timestamp(end_dt) - pd.Timestamp(start_dt)) > pd.Timedelta(days=max_days):
+                            st.warning(
+                                f"RR-aligned DONKI window exceeds {max_days} days; limiting to the most recent {max_days} days for performance."
+                            )
+                            start_dt = (pd.Timestamp(end_dt) - pd.Timedelta(days=max_days)).date()
+                        start_donki, end_donki = start_dt.isoformat(), end_dt.isoformat()
+                    else:
+                        start_donki, end_donki = _donki_default_range(
+                            int(donki_window_days)
+                        )
                     with st.status(
                         "Fetching NASA DONKI datasets…", state="running", expanded=True
                     ) as status:
@@ -13239,6 +13310,28 @@ that predicts cognitive performance based on:
                 flux_df_full = space_state.get("flux_df", pd.DataFrame())
                 flux_error_msg = space_state.get("flux_error", "")
                 kp_error = bool(kp_error_msg)
+                swpc_sync_rr = False
+                swpc_pad_hours = 0
+                if rr_min_utc is not None and rr_max_utc is not None:
+                    swpc_sync_rr = st.checkbox(
+                        "Sync SWPC plots to uploaded RR timeline",
+                        value=True,
+                        key="swpc_sync_rr_window",
+                        help=(
+                            "Filters SWPC time-series plots (Kp/F10.7) to your RR recording window "
+                            "(plus optional padding) to keep renders fast and aligned."
+                        ),
+                    )
+                    swpc_pad_hours = int(
+                        st.number_input(
+                            "SWPC plot padding (hours)",
+                            min_value=0,
+                            max_value=24 * 14,
+                            value=6,
+                            step=1,
+                            key="swpc_sync_rr_pad_hours",
+                        )
+                    )
 
                 with st.container():
                     st.markdown("#### Solar Radio Flux (F10.7 cm)")
@@ -13258,10 +13351,15 @@ that predicts cognitive performance based on:
                             time_series = pd.to_datetime(
                                 flux_df["time_tag"], utc=True, errors="coerce"
                             )
-                            cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(
-                                days=int(flux_history_days)
-                            )
-                            mask = time_series >= cutoff
+                            if swpc_sync_rr and rr_min_utc is not None and rr_max_utc is not None:
+                                window_start = rr_min_utc - pd.Timedelta(hours=int(swpc_pad_hours))
+                                window_end = rr_max_utc + pd.Timedelta(hours=int(swpc_pad_hours))
+                                mask = (time_series >= window_start) & (time_series <= window_end)
+                            else:
+                                cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(
+                                    days=int(flux_history_days)
+                                )
+                                mask = time_series >= cutoff
                             flux_df = flux_df.loc[mask].copy()
                             flux_df["time_tag"] = time_series[mask]
                         if not flux_df.empty:
@@ -13505,10 +13603,15 @@ that predicts cognitive performance based on:
                             time_series = pd.to_datetime(
                                 kp_df["time_tag"], errors="coerce", utc=True
                             )
-                            cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(
-                                days=int(kp_history_days)
-                            )
-                            mask = time_series >= cutoff
+                            if swpc_sync_rr and rr_min_utc is not None and rr_max_utc is not None:
+                                window_start = rr_min_utc - pd.Timedelta(hours=int(swpc_pad_hours))
+                                window_end = rr_max_utc + pd.Timedelta(hours=int(swpc_pad_hours))
+                                mask = (time_series >= window_start) & (time_series <= window_end)
+                            else:
+                                cutoff = pd.Timestamp.now(tz="UTC") - pd.Timedelta(
+                                    days=int(kp_history_days)
+                                )
+                                mask = time_series >= cutoff
                             kp_df = kp_df.loc[mask].copy()
                             kp_df["time_tag"] = time_series[mask]
                         if not kp_df.empty and "kp_index" in kp_df.columns:
@@ -14973,6 +15076,35 @@ that predicts cognitive performance based on:
                 step_hours = 24 * 30
                 default_hours = 24 * 30 * 12
             default_hours = int(np.clip(default_hours, min_hours, max_hours))
+            rr_min_utc, rr_max_utc = _get_uploaded_rr_time_bounds()
+            sync_rr_available = rr_min_utc is not None and rr_max_utc is not None
+            sync_to_rr = False
+            rr_pad_hours = 0
+            if sync_rr_available:
+                st.caption(
+                    f"Uploaded RR timeline (UTC): {rr_min_utc.strftime('%Y-%m-%d %H:%M')} → {rr_max_utc.strftime('%Y-%m-%d %H:%M')}"
+                )
+                sync_to_rr = st.checkbox(
+                    "Sync NOAA history to uploaded RR timeline",
+                    value=True,
+                    key="noaa_sync_rr_window",
+                    help=(
+                        "Filters NOAA datasets to the RR timestamp range (plus optional padding). "
+                        "This keeps charts responsive and makes the NOAA tab consistent with your recording window."
+                    ),
+                )
+                rr_pad_hours = int(
+                    st.number_input(
+                        "RR window padding (hours)",
+                        min_value=0,
+                        max_value=24 * 14,
+                        value=6,
+                        step=1,
+                        key="noaa_sync_rr_pad_hours",
+                        help="Extra hours to include before/after the RR timeline when slicing NOAA data.",
+                    )
+                )
+
             history_hours = st.slider(
                 "History window (hours)",
                 min_value=int(min_hours),
@@ -14980,8 +15112,30 @@ that predicts cognitive performance based on:
                 value=int(default_hours),
                 step=int(step_hours),
                 key=f"noaa_history_{selected_dataset}",
+                disabled=bool(sync_to_rr),
             )
-            history_df = _prepare_noaa_history(bundle, int(history_hours))
+
+            if sync_to_rr and rr_min_utc is not None and rr_max_utc is not None:
+                window_start = rr_min_utc - pd.Timedelta(hours=int(rr_pad_hours))
+                window_end = rr_max_utc + pd.Timedelta(hours=int(rr_pad_hours))
+                # Hard bound to keep UI work deterministic even for long multi-day uploads.
+                max_span_days = 90
+                if (window_end - window_start) > pd.Timedelta(days=max_span_days):
+                    st.warning(
+                        f"RR window spans >{max_span_days} days; limiting NOAA view to the most recent {max_span_days} days to keep the UI fast."
+                    )
+                    window_start = window_end - pd.Timedelta(days=max_span_days)
+                sliced_bundle = slice_noaa_bundle_time_range(
+                    bundle, start_utc=window_start, end_utc=window_end
+                )
+                history_df = sliced_bundle.frame
+                if history_df.empty:
+                    st.info(
+                        "This NOAA dataset has no samples inside the RR window. "
+                        "Try a different dataset (e.g., **Planetary K index (3 h)**) or disable RR syncing."
+                    )
+            else:
+                history_df = _prepare_noaa_history(bundle, int(history_hours))
             selected_value_column: Optional[str] = None
             current_label_map: Dict[str, str] = {}
             if bundle.spec.key == "solar_radio_multifrequency":
