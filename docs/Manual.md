@@ -1950,12 +1950,14 @@ Space Analytics now includes a **🧭 Event-aligned analysis (prototype)** secti
 
 **What it does (current prototype):**
 - Defines events deterministically using **threshold crossings** on a selected predictor time series (e.g., **Kp** or **Dst**).
+- Optionally defines events using **NASA DONKI CMEAnalysis** by estimating **Sun→Earth arrival** from CME speed (drag-based transit model) and building an **Earth influence window** (arrival uncertainty + post-arrival duration).
 - Extracts explicit **event start/end** windows (with user-configurable max-gap and minimum duration).
 - Computes a **baseline vs event delta table** (and optional **recovery** deltas) for selected HRV/HRF metrics using windowed HRV timelines:
   - Baseline: \([event_start − baseline_hours, event_start)\)
   - Event: \([event_start, event_end]\)
   - Recovery (optional): \((event_end, event_end + recovery_hours]\)
 - Ranks metrics by effect size and annotates results with short **physiology/operational meanings** for common HRV/HRF metrics.
+- Computes **phase correlations** (baseline/event/recovery) between a selected **Earth-side space-weather index** (e.g., **Kp**, **Dst**) and your chosen HRV/HRF metrics.
 
 **How to use it:**
 1. Ensure you have **windowed HRV/HRF metrics** (run HRV window analysis).
@@ -1963,12 +1965,16 @@ Space Analytics now includes a **🧭 Event-aligned analysis (prototype)** secti
    - In **📦 Data status** (Space Analytics), you can now click **🪟 Compute windows** (button-driven) to generate windowed HRV/HRF metrics needed for correlations/ML.
 2. In Space Analytics, load/fetch **NOAA Core** feeds (needs Kp and/or Dst available).
 3. Open **Run event-aligned delta analysis**:
-   - Choose **Kp** or **Dst** as the event definition source
+   - Choose **Kp**, **Dst**, or **DONKI CME (DBM arrival window)** as the event definition source
    - Choose the value column, threshold, and condition (≥/≤)
    - Click **Detect events**
 4. Select the event you care about and set baseline duration (hours).
 5. (Optional) Enable **Include recovery phase** and set recovery duration (hours).
 6. Select HRV/HRF targets and click **Run baseline vs event delta table**.
+7. (Optional) Use **Correlations within timeframes** to compute per-phase associations against **Kp/Dst**.
+
+**Reference for CME transit modeling:**
+- Dumbović, M., Čalogović, J., Martinić, K., et al. (2021). Drag-Based Model (DBM) Tools for Forecast of Coronal Mass Ejection Arrival Time and Speed. *Frontiers in Astronomy and Space Sciences, 8*, 58. https://doi.org/10.3389/fspas.2021.639986
 
 **Sequencing (prototype): which changes first?**
 - The tab also supports an **onset detection** heuristic: it finds the first time a metric shows a **sustained deviation** from baseline using a simple **z-score threshold** for N consecutive windows.
@@ -1995,6 +2001,10 @@ Space Analytics now includes a **🧭 Event-aligned analysis (prototype)** secti
 | Proton flux | Radiation storm levels | 5-min |
 
 Use **⚡ Load cached NOAA** to view the last snapshot without network calls, then **📥 Fetch NOAA feeds** / **🔄 Force refresh** to update. If NOAA is unreachable, the dashboard shows the last cached snapshot and posts a warning.
+
+**HRV-timeline alignment (recommended):**
+- If you have uploaded RR/HRV data, enable the **RR timeline sync** toggles for SWPC/NOAA/DONKI.
+- The app will auto-seed a conservative default **DONKI padding (days)** (to capture Sun→Earth travel time) and a larger default **RR padding (hours)** (to capture impact + recovery around your recording). You can override these if you want narrower windows.
 
 ---
 
