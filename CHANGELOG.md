@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Space Data/Space Weather decommissioned code no longer renders** (`app/app.py`): Removed accidental Streamlit “magic” rendering of a decommissioned HRV↔Kp/ML block by converting the leftover triple-quoted block into a non-rendered assignment. Space Data stays **data-only**; correlations/ML live in **🔬 Space Analytics**.
 - **Impact Predictions fetch no longer hangs indefinitely** (`app/space_weather_impact.py`): Added a hard overall timeout and non-blocking shutdown so “Fetch Impact Predictions” returns promptly even if one source stalls at DNS/TLS level; surfaces per-source timeout errors instead of freezing the UI.
 
+## [1.8.61] - 2025-12-26
+
+### Fixed
+- **Space Analytics no longer feels “dead” when prerequisites are missing** (`app/app.py`, `docs/Manual.md`): Added explicit prerequisite diagnostics (recording duration vs window size, NOAA errors), fixed misleading success messages on NOAA cache/fetch buttons, added a button-driven **Compute windows** tool (with overrides) to generate windowed HRV/HRF metrics, and improved ML preflight messaging (requires ≥30 usable windows).
+
 ## [1.8.59] - 2025-12-25
 
 ### Added
