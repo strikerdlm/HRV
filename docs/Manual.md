@@ -1959,6 +1959,8 @@ Space Analytics now includes a **🧭 Event-aligned analysis (prototype)** secti
 
 **How to use it:**
 1. Ensure you have **windowed HRV/HRF metrics** (run HRV window analysis).
+   - If **HRV windows = 0**, your recording is often **shorter than the selected window** (e.g., 3 minutes of data with a 5‑minute window). Reduce **Window/Step** or upload a longer recording.
+   - In **📦 Data status** (Space Analytics), you can now click **🪟 Compute windows** (button-driven) to generate windowed HRV/HRF metrics needed for correlations/ML.
 2. In Space Analytics, load/fetch **NOAA Core** feeds (needs Kp and/or Dst available).
 3. Open **Run event-aligned delta analysis**:
    - Choose **Kp** or **Dst** as the event definition source
@@ -1975,6 +1977,10 @@ Space Analytics now includes a **🧭 Event-aligned analysis (prototype)** secti
 **Interpretation guardrails:**
 - This is an **association discovery tool**, not causation.
 - Always validate **data quality** (motion/artifacts/ectopy) and interpret with **sleep, activity, posture, and circadian timing** context.
+
+### ML Suite note (minimum data)
+
+- The Space Analytics **ML Suite** requires **≥30 usable windowed rows** after merging lagged predictors. If you have fewer windows, the app will show the usable sample count and skip training.
 
 ### NOAA dashboard (within Space Data)
 
