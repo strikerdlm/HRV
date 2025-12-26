@@ -599,6 +599,64 @@ def _prepare_frame(spec: NOAASourceSpec, raw_df: pd.DataFrame) -> NOAADataBundle
     )
 
 
+def slice_noaa_bundle_time_range(
+    bundle: NOAADataBundle,
+    *,
+    start_utc: pd.Timestamp | None = None,
+    end_utc: pd.Timestamp | None = None,
+) -> NOAADataBundle:
+    """Return a copy of a NOAA bundle filtered to a UTC time range.
+
+    This is a lightweight helper used by Streamlit dashboards to keep UI work bounded
+    (plotting/rendering large tables is often slower than the network request).
+
+    Args:
+        bundle: Existing NOAADataBundle (frame must contain bundle.time_column).
+        start_utc: Inclusive UTC start timestamp. When None, no lower bound is applied.
+        end_utc: Inclusive UTC end timestamp. When None, no upper bound is applied.
+
+    Returns:
+        A new NOAADataBundle with `frame` filtered to the requested time range.
+
+    Raises:
+        ValueError: If start_utc > end_utc after coercion to UTC.
+    """
+    if start_utc is None and end_utc is None:
+        return bundle
+
+    df = bundle.frame
+    if df.empty:
+        return bundle
+    time_col = bundle.time_column
+    if time_col not in df.columns:
+        return bundle
+
+    start = pd.to_datetime(start_utc, utc=True) if start_utc is not None else None
+    end = pd.to_datetime(end_utc, utc=True) if end_utc is not None else None
+    if start is not None and end is not None and start > end:
+        raise ValueError("start_utc must be <= end_utc")
+
+    times = pd.to_datetime(df[time_col], errors="coerce", utc=True)
+    mask = pd.Series(True, index=df.index)
+    if start is not None:
+        mask &= times >= start
+    if end is not None:
+        mask &= times <= end
+
+    sliced = df.loc[mask].copy()
+    if not sliced.empty:
+        sliced[time_col] = times.loc[mask]
+
+    return NOAADataBundle(
+        spec=bundle.spec,
+        frame=sliced.reset_index(drop=True),
+        time_column=bundle.time_column,
+        value_columns=tuple(bundle.value_columns),
+        units=bundle.units,
+        split_labels=bundle.split_labels,
+    )
+
+
 def fetch_noaa_source(
     spec: NOAASourceSpec,
     *,

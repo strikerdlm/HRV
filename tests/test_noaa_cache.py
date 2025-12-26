@@ -82,3 +82,36 @@ def test_legacy_processed_cache_is_ignored(monkeypatch: pytest.MonkeyPatch, tmp_
 
     assert noaa_space._read_cache(spec) is None
 
+
+def test_slice_noaa_bundle_time_range_filters_rows() -> None:
+    spec = noaa_space.NOAASourceSpec(
+        key="test_slice",
+        path="dummy.json",
+        title="Test slice",
+        description="Synthetic dataset for time slicing",
+        value_columns=("x",),
+        preferred_time_columns=("time_tag",),
+    )
+    raw_df = pd.DataFrame(
+        {
+            "time_tag": pd.to_datetime(
+                [
+                    "2024-01-01T00:00:00Z",
+                    "2024-01-01T01:00:00Z",
+                    "2024-01-01T02:00:00Z",
+                ],
+                utc=True,
+            ),
+            "x": [1.0, 2.0, 3.0],
+        }
+    )
+    bundle = noaa_space._prepare_frame(spec, raw_df)
+    sliced = noaa_space.slice_noaa_bundle_time_range(
+        bundle,
+        start_utc=pd.Timestamp("2024-01-01T00:30:00Z"),
+        end_utc=pd.Timestamp("2024-01-01T01:30:00Z"),
+    )
+    assert list(sliced.frame["x"]) == [2.0]
+    assert sliced.frame[sliced.time_column].min() == pd.Timestamp("2024-01-01T01:00:00Z")
+
+
