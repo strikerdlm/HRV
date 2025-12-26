@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Space Data/Space Weather decommissioned code no longer renders** (`app/app.py`): Removed accidental Streamlit “magic” rendering of a decommissioned HRV↔Kp/ML block by converting the leftover triple-quoted block into a non-rendered assignment. Space Data stays **data-only**; correlations/ML live in **🔬 Space Analytics**.
 - **Impact Predictions fetch no longer hangs indefinitely** (`app/space_weather_impact.py`): Added a hard overall timeout and non-blocking shutdown so “Fetch Impact Predictions” returns promptly even if one source stalls at DNS/TLS level; surfaces per-source timeout errors instead of freezing the UI.
 
+## [1.8.65] - 2025-12-26
+
+### Fixed
+- **Space Data no longer feels like it “restarts” while exploring** (`app/app.py`): Wrapped Space Data fetch/scope/view controls in `st.form()` blocks (SWPC, DONKI, NOAA dashboard) and disabled stale-element dimming to reduce rerun flicker on Windows/OneDrive.
+
+### Added
+- **HRV-informed influence horizons for Space Data** (`app/app.py`, `app/space_weather_influence.py`): When an RR timeline is available, the app auto-seeds conservative default padding for DONKI (days) and SWPC/NOAA RR-sync padding (hours) using a drag-based CME transit-time estimate.
+- **DONKI CME influence windows + phase correlations in Space Analytics** (`app/app.py`, `app/space_weather_influence.py`, `tests/test_space_weather_influence.py`): Space Analytics event-aligned analysis can now build CME arrival/influence windows from DONKI CMEAnalysis speeds and compute baseline/event/recovery correlations vs Kp/Dst within those windows.
+
 ## [1.8.64] - 2025-12-26
 
 ### Fixed
