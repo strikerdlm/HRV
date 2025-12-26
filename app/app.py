@@ -15527,6 +15527,136 @@ that predicts cognitive performance based on:
         )
 
         # ------------------------------------------------------------------
+        # Computation Console (no page fading / no spinners)
+        # ------------------------------------------------------------------
+        # Streamlit spinners can make the UI feel "dimmed/faded" on long runs.
+        # This console keeps the page fully visible and provides a detailed,
+        # continuously-updated execution trace inside a framed code box.
+        def _space_analytics_console_state() -> Dict[str, object]:
+            state = st.session_state.setdefault(
+                "space_analytics_console",
+                {
+                    "phase": "idle",
+                    "label": "Idle",
+                    "progress": 0.0,
+                    "started_at_utc": "",
+                    "ended_at_utc": "",
+                    "lines": [],
+                },
+            )
+            if not isinstance(state, dict):
+                st.session_state["space_analytics_console"] = {
+                    "phase": "idle",
+                    "label": "Idle",
+                    "progress": 0.0,
+                    "started_at_utc": "",
+                    "ended_at_utc": "",
+                    "lines": [],
+                }
+                state = st.session_state["space_analytics_console"]
+            # Enforce bounded memory (keep last N lines).
+            lines = state.get("lines")
+            if not isinstance(lines, list):
+                state["lines"] = []
+            else:
+                max_lines = 500
+                if len(lines) > max_lines:
+                    state["lines"] = lines[-max_lines:]
+            return state
+
+        _sa_console_state = _space_analytics_console_state()
+        _sa_console_progress_ph = st.empty()
+        _sa_console_status_ph = st.empty()
+        _sa_console_code_ph = st.empty()
+
+        def _sa_console_render() -> None:
+            state = _space_analytics_console_state()
+            try:
+                progress = float(state.get("progress", 0.0))
+            except (TypeError, ValueError):
+                progress = 0.0
+            progress = float(np.clip(progress, 0.0, 1.0))
+            label = str(state.get("label", ""))
+            phase = str(state.get("phase", ""))
+            started = str(state.get("started_at_utc", "")).strip()
+            ended = str(state.get("ended_at_utc", "")).strip()
+            header_bits: List[str] = []
+            if label:
+                header_bits.append(f"**{label}**")
+            if phase:
+                header_bits.append(f"`{phase}`")
+            if started:
+                header_bits.append(f"started: {started}")
+            if ended and phase in ("done", "error", "cancelled"):
+                header_bits.append(f"ended: {ended}")
+            header = " | ".join(header_bits) if header_bits else "**Computation Console**"
+            _sa_console_progress_ph.progress(progress)
+            _sa_console_status_ph.markdown(header)
+            lines = _space_analytics_console_state().get("lines", [])
+            if isinstance(lines, list) and lines:
+                _sa_console_code_ph.code("\n".join([str(x) for x in lines]), language="text")
+            else:
+                _sa_console_code_ph.code(
+                    "Console is ready.\n"
+                    "- Click any Space Analytics action button to stream detailed compute logs here.\n"
+                    "- This avoids UI fading/dimming during long computations.\n",
+                    language="text",
+                )
+
+        def _sa_console_reset(label: str) -> None:
+            state = _space_analytics_console_state()
+            state["phase"] = "running"
+            state["label"] = str(label)
+            state["progress"] = 0.0
+            state["started_at_utc"] = pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+            state["ended_at_utc"] = ""
+            state["lines"] = []
+            _sa_console_render()
+
+        def _sa_console_set_progress(progress: float) -> None:
+            state = _space_analytics_console_state()
+            try:
+                p = float(progress)
+            except (TypeError, ValueError):
+                p = 0.0
+            state["progress"] = float(np.clip(p, 0.0, 1.0))
+            _sa_console_render()
+
+        def _sa_console_log(message: str) -> None:
+            state = _space_analytics_console_state()
+            lines = state.get("lines")
+            if not isinstance(lines, list):
+                lines = []
+                state["lines"] = lines
+            ts = pd.Timestamp.utcnow().strftime("%H:%M:%S")
+            lines.append(f"[{ts}Z] {str(message)}")
+            # Bound memory.
+            max_lines = 500
+            if len(lines) > max_lines:
+                state["lines"] = lines[-max_lines:]
+            _sa_console_render()
+
+        def _sa_console_done(label: str) -> None:
+            state = _space_analytics_console_state()
+            state["phase"] = "done"
+            state["label"] = str(label)
+            state["progress"] = 1.0
+            state["ended_at_utc"] = pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+            _sa_console_render()
+
+        def _sa_console_error(label: str, exc: Exception) -> None:
+            state = _space_analytics_console_state()
+            state["phase"] = "error"
+            state["label"] = str(label)
+            state["ended_at_utc"] = pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M:%S UTC")
+            _sa_console_log(f"ERROR: {type(exc).__name__}: {exc}")
+            _sa_console_render()
+
+        st.markdown("#### 🧾 Computation Console")
+        st.caption("Live, detailed compute trace (no dimming/overlay).")
+        _sa_console_render()
+
+        # ------------------------------------------------------------------
         # Data prerequisites (no network calls on render)
         # ------------------------------------------------------------------
         space_state = _space_weather_state()
@@ -15715,8 +15845,16 @@ that predicts cognitive performance based on:
                         st.info(f"NOAA cache already loaded ({after_n} dataset(s)).")
             with c3:
                 if st.button("📥 Fetch NOAA (Core)", key="space_analytics_fetch_noaa_core"):
-                    with st.spinner("Fetching NOAA feeds…"):
+                    _sa_console_reset("Fetch NOAA (Core)")
+                    try:
+                        _sa_console_log(f"Keys: {list(NOAA_CORE_KEYS)}")
+                        _sa_console_log("Starting NOAA fetch (network)…")
                         _load_noaa_space_datasets(noaa_state, keys=NOAA_CORE_KEYS)
+                        _sa_console_log("NOAA fetch completed.")
+                        _sa_console_done("Fetch NOAA (Core)")
+                    except Exception as exc:
+                        log_exception(_LOGGER, "Space Analytics NOAA fetch failed", exc)
+                        _sa_console_error("Fetch NOAA (Core) failed", exc)
                     after_n = len(noaa_state.get("bundles", {}) or {})
                     errs = noaa_state.get("errors", {}) if isinstance(noaa_state.get("errors"), dict) else {}
                     if after_n == 0:
@@ -15729,8 +15867,16 @@ that predicts cognitive performance based on:
                         st.success(f"Fetched {after_n} NOAA Core dataset(s).")
             with c4:
                 if st.button("🔄 Force refresh NOAA (Core)", key="space_analytics_refresh_noaa_core"):
-                    with st.spinner("Refreshing NOAA feeds…"):
+                    _sa_console_reset("Force refresh NOAA (Core)")
+                    try:
+                        _sa_console_log(f"Keys: {list(NOAA_CORE_KEYS)}")
+                        _sa_console_log("Starting NOAA refresh (network, bypass cache)…")
                         _load_noaa_space_datasets(noaa_state, keys=NOAA_CORE_KEYS, use_cache=False)
+                        _sa_console_log("NOAA refresh completed.")
+                        _sa_console_done("Force refresh NOAA (Core)")
+                    except Exception as exc:
+                        log_exception(_LOGGER, "Space Analytics NOAA refresh failed", exc)
+                        _sa_console_error("Force refresh NOAA (Core) failed", exc)
                     after_n = len(noaa_state.get("bundles", {}) or {})
                     errs = noaa_state.get("errors", {}) if isinstance(noaa_state.get("errors"), dict) else {}
                     if after_n == 0:
@@ -15793,7 +15939,10 @@ that predicts cognitive performance based on:
                     help="Builds windowed HRV/HRF metrics from uploaded RR data for Space Analytics.",
                 )
                 if compute_windows_clicked:
+                    _sa_console_reset("Compute HRV/HRF windows (Space Analytics override)")
                     try:
+                        _sa_console_log(f"window={str(sa_win)} step={str(sa_step)} min_rr={int(sa_min_rr)}")
+                        _sa_console_log(f"max_windows_cap={int(max_windows)} fast_time_domain_only={bool(sa_fast)}")
                         new_windowed = _space_analytics_build_windows(
                             window=str(sa_win),
                             step=str(sa_step),
@@ -15802,6 +15951,10 @@ that predicts cognitive performance based on:
                             fast_time_domain_only=bool(sa_fast),
                         )
                         st.session_state["_hrv_cached_windowed_df"] = new_windowed
+                        _sa_console_log(
+                            f"Windows built: rows={int(new_windowed.shape[0]) if isinstance(new_windowed, pd.DataFrame) else 0}"
+                        )
+                        _sa_console_done("Compute windows completed")
                         st.session_state["space_analytics_last_window_build"] = {
                             "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
                             "rows": int(new_windowed.shape[0]) if isinstance(new_windowed, pd.DataFrame) else 0,
@@ -15812,6 +15965,7 @@ that predicts cognitive performance based on:
                         }
                     except Exception as exc:
                         log_exception(_LOGGER, "Space Analytics window build failed", exc)
+                        _sa_console_error("Compute windows failed", exc)
                         st.session_state["space_analytics_last_window_build"] = {
                             "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
                             "rows": 0,
@@ -16508,28 +16662,65 @@ that predicts cognitive performance based on:
                             )
                         else:
                             rows: List[pd.DataFrame] = []
-                            with st.spinner("Computing correlations…"):
+                            _sa_console_reset("Correlation scan")
+                            try:
+                                t0 = time.monotonic()
+                                _sa_console_log(f"predictors={list(predictors_selected)}")
+                                _sa_console_log(f"targets={list(target_metrics)}")
+                                _sa_console_log(f"lags={list(lags)} merge_tol_minutes={int(merge_tolerance)}")
+                                _sa_console_log(f"use_all_value_cols={bool(use_all_value_cols)} est_tests={int(est_tests)}")
+
+                                # Progress is based on alignment attempts (predictor/value_col/lag).
+                                total_align_steps = 0
+                                for pred_key in predictors_selected:
+                                    b = bundles.get(pred_key)
+                                    if not b or not b.value_columns:
+                                        continue
+                                    total_align_steps += (
+                                        len(b.value_columns) if bool(use_all_value_cols) else 1
+                                    ) * len(lags)
+                                total_align_steps = max(int(total_align_steps), 1)
+                                align_step = 0
+                                rows_built = 0
+
                                 for pred_key in predictors_selected:
                                     bundle = bundles.get(pred_key)
                                     if not bundle or bundle.frame.empty:
+                                        _sa_console_log(f"SKIP predictor={pred_key}: empty/unavailable frame")
                                         continue
                                     df = bundle.frame.copy()
                                     tcol = bundle.time_column
                                     df[tcol] = pd.to_datetime(df[tcol], errors="coerce", utc=True)
                                     if not bundle.value_columns:
+                                        _sa_console_log(f"SKIP predictor={pred_key}: no value_columns")
                                         continue
                                     value_cols = (
                                         list(bundle.value_columns)
-                                        if use_all_value_cols
+                                        if bool(use_all_value_cols)
                                         else [bundle.value_columns[0]]
                                     )
+                                    _sa_console_log(
+                                        f"Predictor={pred_key} title='{bundle.spec.title}' "
+                                        f"time_col='{tcol}' value_cols={value_cols}"
+                                    )
+
                                     for value_col in value_cols:
                                         if value_col not in df.columns:
+                                            _sa_console_log(f"SKIP value_col='{value_col}': missing in frame")
                                             continue
                                         pred = df[[tcol, value_col]].dropna().sort_values(tcol)
                                         if pred.empty:
+                                            _sa_console_log(f"SKIP value_col='{value_col}': empty after dropna")
                                             continue
+                                        _sa_console_log(
+                                            f"Value column='{value_col}' rows={int(pred.shape[0])} "
+                                            f"range=[{pred[tcol].min()} → {pred[tcol].max()}]"
+                                        )
+
                                         for lag in lags:
+                                            align_step += 1
+                                            if align_step % 5 == 0 or align_step == 1:
+                                                _sa_console_set_progress(float(align_step) / float(total_align_steps))
                                             aligned = align_space_weather_series(
                                                 reference_times=w["start"],
                                                 predictor_df=pred,
@@ -16539,13 +16730,18 @@ that predicts cognitive performance based on:
                                                 max_gap_minutes=int(merge_tolerance),
                                             )
                                             if aligned.empty:
+                                                if align_step % 25 == 0:
+                                                    _sa_console_log(
+                                                        f"lag={int(lag)}h: alignment empty (no overlap within tolerance)"
+                                                    )
                                                 continue
                                             merged = (
                                                 w.set_index("start")
                                                 .join(aligned.rename("predictor"), how="inner")
                                                 .dropna(subset=["predictor"])
                                             )
-                                            if merged.empty:
+                                            n = int(merged.shape[0])
+                                            if n == 0:
                                                 continue
                                             corr_df = _corr_table(
                                                 merged.reset_index(drop=True),
@@ -16562,6 +16758,24 @@ that predicts cognitive performance based on:
                                             )
                                             corr_df["lag_hours"] = int(lag)
                                             rows.append(corr_df)
+                                            rows_built += int(corr_df.shape[0])
+                                            if rows_built % 100 == 0:
+                                                _sa_console_log(
+                                                    f"progress: align_steps={align_step}/{total_align_steps} "
+                                                    f"result_rows={rows_built} (last merge n={n}, lag={int(lag)}h)"
+                                                )
+
+                                dt_ms = (time.monotonic() - t0) * 1000.0
+                                _sa_console_log(
+                                    f"Correlation scan loop finished in {dt_ms:.0f} ms. "
+                                    f"Built result rows={rows_built} (pre-FDR)."
+                                )
+                                _sa_console_done("Correlation scan completed")
+                            except Exception as exc:
+                                log_exception(_LOGGER, "Space Analytics correlation scan failed", exc)
+                                _sa_console_error("Correlation scan failed", exc)
+                                st.error(f"Correlation scan failed: {exc}")
+                                rows = []
 
                             result_df = pd.concat(rows, ignore_index=True) if rows else pd.DataFrame()
                             if result_df.empty:
@@ -16684,7 +16898,13 @@ that predicts cognitive performance based on:
                     if len(lags_ml) > 97:
                         st.warning("Lag configuration is too large; reducing to the first 97 lags.")
                         lags_ml = lags_ml[:97]
-                    with st.spinner("Building feature matrix…"):
+                    _sa_console_reset("ML: build feature matrix + train models")
+                    try:
+                        t0 = time.monotonic()
+                        _sa_console_log(f"predictors={list(ml_predictors)} target={str(ml_target)}")
+                        _sa_console_log(f"lags={list(lags_ml)} merge_tol_minutes={int(ml_merge_tol)}")
+                        _sa_console_set_progress(0.05)
+                        _sa_console_log("Building feature matrix…")
                         full_matrix = _build_space_weather_feature_matrix(
                             analytics_windowed_df,
                             bundles,
@@ -16692,6 +16912,15 @@ that predicts cognitive performance based on:
                             lags_ml,
                             merge_tolerance_minutes=int(ml_merge_tol),
                         )
+                        _sa_console_set_progress(0.45)
+                        _sa_console_log(
+                            f"Feature matrix built: rows={int(full_matrix.shape[0])} cols={int(full_matrix.shape[1])}"
+                        )
+                    except Exception as exc:
+                        log_exception(_LOGGER, "Space Analytics feature matrix build failed", exc)
+                        _sa_console_error("ML feature matrix build failed", exc)
+                        st.error(f"Feature matrix build failed: {exc}")
+                        full_matrix = pd.DataFrame()
                     if full_matrix.empty:
                         st.error("No feature matrix could be built (insufficient overlap with predictors).")
                     else:
@@ -16711,33 +16940,42 @@ that predicts cognitive performance based on:
                                 f"ML usable samples: **{usable_rows}** / {int(ml_df.shape[0])} windows | "
                                 f"Features: **{len(feature_cols)}**"
                             )
+                            _sa_console_log(f"Lagged features: {len(feature_cols)}")
+                            _sa_console_log(f"Usable complete windows (dropna): {usable_rows}")
                             if usable_rows < 30:
                                 st.error(
                                     "Not enough samples for ML. This ML suite requires **≥30** complete windows after "
                                     "merging predictors. Reduce window/step to create more windows, or upload a longer recording."
                                 )
+                                _sa_console_done("ML stopped (insufficient samples)")
                             else:
-                                with st.spinner("Training ML models…"):
-                                    try:
-                                        ml_results = _run_ml_models_space_weather(
-                                            ml_df,
-                                            target_metric=str(ml_target),
-                                        )
-                                        st.session_state["space_analytics_ml_results"] = {
-                                            "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                                            "params": {
-                                                "predictors": list(ml_predictors),
-                                                "target": str(ml_target),
-                                                "lags": list(lags_ml),
-                                                "merge_tol_minutes": int(ml_merge_tol),
-                                                "gpu_enabled": bool(gpu_enabled),
-                                            },
-                                            "results": ml_results,
-                                        }
-                                        st.success("ML training completed.")
-                                    except Exception as exc:
-                                        log_exception(_LOGGER, "Space Analytics ML training failed", exc)
-                                        st.error(f"ML training failed: {exc}")
+                                _sa_console_set_progress(0.55)
+                                _sa_console_log("Training ML models (ElasticNet + RF + Boosting if available)…")
+                                try:
+                                    ml_results = _run_ml_models_space_weather(
+                                        ml_df,
+                                        target_metric=str(ml_target),
+                                    )
+                                    dt_ms = (time.monotonic() - t0) * 1000.0
+                                    _sa_console_set_progress(0.98)
+                                    _sa_console_log(f"Training completed in {dt_ms:.0f} ms.")
+                                    st.session_state["space_analytics_ml_results"] = {
+                                        "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                                        "params": {
+                                            "predictors": list(ml_predictors),
+                                            "target": str(ml_target),
+                                            "lags": list(lags_ml),
+                                            "merge_tol_minutes": int(ml_merge_tol),
+                                            "gpu_enabled": bool(gpu_enabled),
+                                        },
+                                        "results": ml_results,
+                                    }
+                                    _sa_console_done("ML training completed")
+                                    st.success("ML training completed.")
+                                except Exception as exc:
+                                    log_exception(_LOGGER, "Space Analytics ML training failed", exc)
+                                    _sa_console_error("ML training failed", exc)
+                                    st.error(f"ML training failed: {exc}")
 
             stored_ml = st.session_state.get("space_analytics_ml_results")
             if isinstance(stored_ml, dict) and isinstance(stored_ml.get("results"), dict):

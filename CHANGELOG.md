@@ -21,6 +21,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Space Weather / NOAA dashboards can be RR-synced and stay responsive** (`app/app.py`, `app/noaa_space.py`): Added optional **RR timeline syncing** for SWPC plots (Kp/F10.7), NOAA feed history windows, and DONKI date queries (with bounded padding + hard max window) to prevent accidental “download/plot everything” behavior that can make the Space Weather tab feel like it’s hanging.
 
+## [1.8.63] - 2025-12-26
+
+### Changed
+- **Space Analytics runs without page fading** (`app/app.py`): Replaced long-running `st.spinner(...)` blocks in Space Analytics actions (NOAA fetch/refresh, window build, correlation scan, ML feature-matrix + training) with an always-visible **🧾 Computation Console** that streams detailed step-by-step logs inside a framed code box while the page remains fully visible.
+
 ## [1.8.59] - 2025-12-25
 
 ### Added
