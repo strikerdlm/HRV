@@ -6743,6 +6743,64 @@ def main() -> None:
 				border-radius: 999px;
 			}
 		}
+
+		/* -----------------------------------------------------------------
+		   HRV custom palette (applies ONLY to our custom HTML boxes)
+		   Palette:
+		     - #F2F1EF  (paper)
+		     - #D8CFD0  (mist)
+		     - #B1A6A4  (stone)
+		     - #697184  (slate)
+		     - #413F3D  (ink)
+		----------------------------------------------------------------- */
+		.hrv-palette-banner {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			padding: 10px 14px;
+			border-radius: 14px;
+			background: linear-gradient(135deg, #F2F1EF 0%, #D8CFD0 100%);
+			border: 1px solid #B1A6A4;
+			border-left: 6px solid #697184;
+			box-shadow: 0 8px 18px rgba(65, 63, 61, 0.08);
+			color: #413F3D;
+		}
+		.hrv-palette-banner__dot {
+			width: 10px;
+			height: 10px;
+			border-radius: 999px;
+			background: #697184;
+			box-shadow: 0 0 10px rgba(105, 113, 132, 0.55);
+			flex: 0 0 auto;
+		}
+		.hrv-palette-banner__title {
+			font-weight: 800;
+			line-height: 1.2;
+			color: #413F3D;
+		}
+		.hrv-palette-banner__subtitle {
+			color: rgba(65, 63, 61, 0.82);
+			font-size: 0.9rem;
+		}
+		.hrv-palette-card {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			padding: 12px 16px;
+			border-radius: 14px;
+			background: linear-gradient(135deg, #F2F1EF 0%, #D8CFD0 100%);
+			border: 1px solid #B1A6A4;
+			box-shadow: 0 8px 18px rgba(65, 63, 61, 0.08);
+			color: #413F3D;
+		}
+		.hrv-palette-card__title {
+			font-weight: 700;
+			color: #413F3D;
+		}
+		.hrv-palette-card__value {
+			font-size: 16px;
+			color: #413F3D;
+		}
 		</style>
 		<script>
 		// ================================================================
@@ -6833,28 +6891,14 @@ def main() -> None:
         # Red warning box directly below the mode badge (user-requested placement).
         st.markdown(
             """
-            <div style="
-                display:flex;
-                align-items:center;
-                gap:12px;
-                padding:10px 14px;
-                border-radius:14px;
-                background:#450a0a;
-                border:1px solid #dc2626;
-                margin:0 0 14px 0;
-            ">
-                <div style="display:flex;align-items:center;gap:10px;">
-                    <div style="
-                        width:10px;height:10px;border-radius:999px;background:#ef4444;
-                        box-shadow:0 0 12px #ef4444;
-                    "></div>
-                    <div>
-                        <div style="font-weight:800;color:#fca5a5;line-height:1.2;">
-                            ⚠️ Heavy Computations
-                        </div>
-                        <div style="color:rgba(255,255,255,0.82);font-size:0.9rem;">
-                            Space Weather/NOAA correlations and ML take time. Let fetches complete—results appear when ready.
-                        </div>
+            <div class="hrv-palette-banner" style="margin:0 0 14px 0;">
+                <div class="hrv-palette-banner__dot"></div>
+                <div>
+                    <div class="hrv-palette-banner__title">
+                        ⚠️ Heavy Computations
+                    </div>
+                    <div class="hrv-palette-banner__subtitle">
+                        Space Weather/NOAA correlations and ML take time. Let fetches complete—results appear when ready.
                     </div>
                 </div>
             </div>
@@ -6879,21 +6923,11 @@ def main() -> None:
     active_user_id, active_display_name = _get_user_identity(active_profile)
     st.markdown(
         f"""
-        <div style="
-            display:flex;
-            align-items:center;
-            gap:12px;
-            padding:12px 16px;
-            border-radius:14px;
-            background:linear-gradient(135deg, rgba(255, 245, 157, 0.22), rgba(255, 235, 59, 0.28));
-            border:1px solid rgba(255, 193, 7, 0.35);
-            box-shadow:0 8px 18px rgba(255, 193, 7, 0.18);
-            margin-bottom:12px;
-        ">
-            <span style="font-size:32px;">💡</span>
+        <div class="hrv-palette-card" style="margin-bottom:12px;">
+            <span style="font-size:32px;color:#697184;">💡</span>
             <div>
-                <div style="font-weight:700;color:#7c5b00;">Active Profile for Analysis</div>
-                <div style="font-size:16px;color:#2d2a24;">{active_display_name}</div>
+                <div class="hrv-palette-card__title">Active Profile for Analysis</div>
+                <div class="hrv-palette-card__value">{active_display_name}</div>
             </div>
         </div>
         """,
