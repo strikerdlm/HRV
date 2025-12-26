@@ -37,6 +37,7 @@ import os
 import sys
 import time
 import traceback
+import warnings
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -61,6 +62,12 @@ _MAX_BYTES: Final[int] = 10 * 1024 * 1024  # 10 MB per file
 _BACKUP_COUNT: Final[int] = 5  # Keep 5 rotated files
 _LOG_LEVEL_FILE: Final[int] = logging.DEBUG  # Capture everything to file
 _LOG_LEVEL_CONSOLE: Final[int] = logging.INFO  # Less verbose on console
+_ENV_LOG_CONSOLE_LEVEL: Final[str] = "HRV_LOG_CONSOLE_LEVEL"
+_ENV_LOG_FILE_LEVEL: Final[str] = "HRV_LOG_FILE_LEVEL"
+_ENV_LOG_RICH: Final[str] = "HRV_LOG_RICH"
+_ENV_LOG_RICH_PATH: Final[str] = "HRV_LOG_RICH_SHOW_PATH"
+_ENV_LOG_WARNINGS: Final[str] = "HRV_LOG_WARNINGS"
+_ENV_LOG_FAULTHANDLER: Final[str] = "HRV_FAULTHANDLER"
 
 # Track if logging has been set up
 _logging_initialized: bool = False
@@ -151,6 +158,10 @@ def setup_logging(
     if _logging_initialized:
         return _LOG_DIR if log_dir is None else log_dir
 
+    # Allow env vars to override levels without code changes.
+    log_level_console = _parse_log_level_env(_ENV_LOG_CONSOLE_LEVEL, default=log_level_console)
+    log_level_file = _parse_log_level_env(_ENV_LOG_FILE_LEVEL, default=log_level_file)
+
     target_dir = log_dir if log_dir is not None else _LOG_DIR
 
     # Create logs directory
@@ -208,11 +219,30 @@ def setup_logging(
     root_logger.addHandler(error_handler)
 
     # 3. Console handler
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setLevel(log_level_console)
-    console_handler.setFormatter(formatter)
-    console_handler.addFilter(suppress_ws_closed)
+    console_handler = _create_console_handler(
+        log_level_console=log_level_console,
+        fallback_formatter=formatter,
+        suppress_ws_closed=suppress_ws_closed,
+    )
     root_logger.addHandler(console_handler)
+
+    # Route warnings to logging (helps console + app.log visibility).
+    if _env_truthy(_ENV_LOG_WARNINGS, default=True):
+        logging.captureWarnings(True)
+        logging.getLogger("py.warnings").setLevel(logging.WARNING)
+
+    # Ensure unhandled exceptions are logged (useful in containers/Streamlit).
+    _install_unhandled_exception_hook()
+
+    # Optional: emit tracebacks on fatal interpreter signals (segfaults, etc.)
+    if _env_truthy(_ENV_LOG_FAULTHANDLER, default=False):
+        try:
+            import faulthandler
+
+            faulthandler.enable(all_threads=True)
+        except Exception:
+            # Never fail logging setup due to faulthandler availability.
+            pass
 
     # Log startup
     startup_msg = (
@@ -621,11 +651,127 @@ def _setup_console_only(level: int) -> None:
     root_logger.setLevel(level)
     root_logger.handlers.clear()
 
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setLevel(level)
-    handler.setFormatter(logging.Formatter(_LOG_FORMAT, datefmt=_DATE_FORMAT))
-    handler.addFilter(_SuppressAsyncioWebSocketClosed())
+    suppress_ws_closed = _SuppressAsyncioWebSocketClosed()
+    handler = _create_console_handler(
+        log_level_console=level,
+        fallback_formatter=logging.Formatter(_LOG_FORMAT, datefmt=_DATE_FORMAT),
+        suppress_ws_closed=suppress_ws_closed,
+    )
     root_logger.addHandler(handler)
+
+    if _env_truthy(_ENV_LOG_WARNINGS, default=True):
+        logging.captureWarnings(True)
+        logging.getLogger("py.warnings").setLevel(logging.WARNING)
+    _install_unhandled_exception_hook()
+
+
+def _env_truthy(name: str, *, default: bool) -> bool:
+    """Return True/False from env var values like 1/0, true/false, yes/no."""
+    raw = os.environ.get(name)
+    if raw is None:
+        return default
+    value = raw.strip().lower()
+    if value in {"1", "true", "yes", "y", "on"}:
+        return True
+    if value in {"0", "false", "no", "n", "off"}:
+        return False
+    return default
+
+
+def _parse_log_level_env(env_var: str, *, default: int) -> int:
+    """Parse a logging level from env (e.g., DEBUG, INFO, 10)."""
+    raw = os.environ.get(env_var)
+    if raw is None:
+        return default
+    value = raw.strip()
+    if not value:
+        return default
+    upper = value.upper()
+    named = logging.getLevelName(upper)
+    if isinstance(named, int):
+        return named
+    try:
+        numeric = int(value)
+    except ValueError:
+        return default
+    if numeric < 0 or numeric > 100:
+        return default
+    return numeric
+
+
+def _create_console_handler(
+    *,
+    log_level_console: int,
+    fallback_formatter: logging.Formatter,
+    suppress_ws_closed: logging.Filter,
+) -> logging.Handler:
+    """Create the best available console handler (Rich if available/enabled)."""
+    use_rich = _env_truthy(_ENV_LOG_RICH, default=False)
+    if os.environ.get(_ENV_LOG_RICH) is None:
+        # Auto-enable Rich only when stdout is an interactive terminal.
+        use_rich = bool(sys.stdout.isatty())
+
+    if use_rich:
+        try:
+            from rich.console import Console
+            from rich.logging import RichHandler
+
+            console = Console(
+                file=sys.stdout,
+                force_terminal=bool(sys.stdout.isatty()),
+                color_system="auto",
+                markup=False,
+            )
+            show_path = _env_truthy(_ENV_LOG_RICH_PATH, default=False)
+            handler: logging.Handler = RichHandler(
+                console=console,
+                show_time=True,
+                show_level=True,
+                show_path=show_path,
+                rich_tracebacks=True,
+                tracebacks_show_locals=False,
+            )
+            handler.setLevel(log_level_console)
+            # RichHandler renders its own fields; keep formatter message-focused.
+            handler.setFormatter(logging.Formatter("%(name)s:%(lineno)d | %(message)s"))
+            handler.addFilter(suppress_ws_closed)
+            return handler
+        except Exception:
+            # Fall back to plain handler on any Rich import/config errors.
+            pass
+
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setLevel(log_level_console)
+    handler.setFormatter(fallback_formatter)
+    handler.addFilter(suppress_ws_closed)
+    return handler
+
+
+def _install_unhandled_exception_hook() -> None:
+    """Ensure unhandled exceptions are logged (idempotent)."""
+    existing = getattr(sys, "_hrv_prev_excepthook", None)
+    if existing is not None:
+        return
+    sys._hrv_prev_excepthook = sys.excepthook  # type: ignore[attr-defined]
+
+    def _hook(exc_type: type[BaseException], exc: BaseException, tb: Any) -> None:
+        logger = logging.getLogger("hrv.unhandled")
+        try:
+            logger.critical("Unhandled exception", exc_info=(exc_type, exc, tb))
+        except Exception:
+            # As a last resort, write something to stderr.
+            try:
+                sys.stderr.write("Unhandled exception (logging failed)\n")
+            except Exception:
+                pass
+        prev = getattr(sys, "_hrv_prev_excepthook", None)
+        if callable(prev):
+            try:
+                prev(exc_type, exc, tb)
+            except Exception:
+                pass
+
+    sys.excepthook = _hook
 
 
 # ---------------------------------------------------------------------------
