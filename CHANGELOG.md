@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Space Data/Space Weather decommissioned code no longer renders** (`app/app.py`): Removed accidental Streamlit “magic” rendering of a decommissioned HRV↔Kp/ML block by converting the leftover triple-quoted block into a non-rendered assignment. Space Data stays **data-only**; correlations/ML live in **🔬 Space Analytics**.
+- **Impact Predictions fetch no longer hangs indefinitely** (`app/space_weather_impact.py`): Added a hard overall timeout and non-blocking shutdown so “Fetch Impact Predictions” returns promptly even if one source stalls at DNS/TLS level; surfaces per-source timeout errors instead of freezing the UI.
 
 ## [1.8.59] - 2025-12-25
 
