@@ -27,7 +27,13 @@ import numpy as np
 import pandas as pd
 import requests
 
-_LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
+try:
+    # When running as a package (tests)
+    from app.logging_config import get_logger, log_exception
+except ImportError:  # pragma: no cover - fallback for script execution
+    from logging_config import get_logger, log_exception
+
+_LOGGER: Final[logging.Logger] = get_logger(__name__)
 
 _HTTP_SESSION_LOCAL = threading.local()
 
@@ -854,7 +860,7 @@ def _get_polar_recommendation_geomag(severity: ImpactSeverity, kp: float) -> str
 # ---------------------------------------------------------------------------
 
 
-def fetch_space_weather_snapshot() -> SpaceWeatherSnapshot:
+def fetch_space_weather_snapshot(*, overall_timeout_s: float = 15.0) -> SpaceWeatherSnapshot:
     """
     Fetch all space weather data and build comprehensive impact snapshot.
     
@@ -862,9 +868,19 @@ def fetch_space_weather_snapshot() -> SpaceWeatherSnapshot:
     All times are exact and expressed in UTC and Bogotá timezone.
     
     Uses parallel fetching for faster data retrieval.
+
+    Notes
+    -----
+    Even with `requests` timeouts, DNS resolution can occasionally stall inside a worker
+    thread (especially on some Windows/OneDrive/network setups). To prevent the Streamlit
+    UI from appearing to hang indefinitely, this function enforces an overall timeout and
+    stops waiting when exceeded (best-effort cancellation; threads may still finish later).
     """
     import concurrent.futures
     
+    if overall_timeout_s <= 0:
+        raise ValueError("overall_timeout_s must be > 0")
+
     now_utc = datetime.datetime.now(datetime.timezone.utc)
     now_bogota = utc_to_bogota(now_utc)
     
@@ -881,28 +897,45 @@ def fetch_space_weather_snapshot() -> SpaceWeatherSnapshot:
         "geomagnetic": fetch_geomagnetic_impact,
     }
     
-    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
-        futures = {
-            executor.submit(func): name for name, func in fetch_functions.items()
-        }
-        
-        for future in concurrent.futures.as_completed(futures):
-            name = futures[future]
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(fetch_functions))
+    futures: Dict[concurrent.futures.Future[Tuple[Optional[ImpactEvent], Optional[str]]], str] = {
+        executor.submit(func): name for name, func in fetch_functions.items()
+    }
+    try:
+        done, not_done = concurrent.futures.wait(
+            set(futures.keys()),
+            timeout=float(overall_timeout_s),
+            return_when=concurrent.futures.ALL_COMPLETED,
+        )
+
+        for future in done:
+            name = futures.get(future, "__unknown__")
             try:
                 event, error = future.result()
-                if event:
-                    if name == "photon":
-                        snapshot.photon_event = event
-                    elif name == "sep":
-                        snapshot.sep_event = event
-                    elif name == "plasma":
-                        snapshot.plasma_event = event
-                    elif name == "geomagnetic":
-                        snapshot.geomagnetic_event = event
-                if error:
-                    snapshot.errors[name] = error
             except Exception as exc:
                 snapshot.errors[name] = str(exc)
+                log_exception(_LOGGER, f"Impact snapshot fetch failed ({name})", exc)
+                continue
+            if event:
+                if name == "photon":
+                    snapshot.photon_event = event
+                elif name == "sep":
+                    snapshot.sep_event = event
+                elif name == "plasma":
+                    snapshot.plasma_event = event
+                elif name == "geomagnetic":
+                    snapshot.geomagnetic_event = event
+            if error:
+                snapshot.errors[name] = error
+
+        if not_done:
+            for pending in not_done:
+                name = futures.get(pending, "__unknown__")
+                snapshot.errors[name] = f"Timed out fetching {name} (>{overall_timeout_s:.0f}s)."
+                _ = pending.cancel()  # best-effort; threads may still be running
+    finally:
+        # Do not wait for potentially-stuck worker threads; return control to the UI.
+        executor.shutdown(wait=False, cancel_futures=True)
     
     return snapshot
 
