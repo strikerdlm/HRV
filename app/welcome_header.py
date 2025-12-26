@@ -27,18 +27,19 @@ def render_welcome_header() -> None:
     st.markdown("""
     <style>
     .welcome-header-container {
-        background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+        /* Custom palette (Flight Surgeon / Overview boxes only) */
+        background: linear-gradient(135deg, #F2F1EF 0%, #D8CFD0 100%);
         border-radius: 20px;
         padding: 2rem;
         margin-bottom: 1.5rem;
-        border: 1px solid rgba(102, 126, 234, 0.3);
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+        border: 1px solid rgba(177, 166, 164, 0.7);
+        box-shadow: 0 10px 40px rgba(65, 63, 61, 0.14);
     }
     .welcome-title {
         text-align: center;
         font-size: 2.4rem;
         font-weight: 800;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 40%, #f093fb 100%);
+        background: linear-gradient(135deg, #697184 0%, #413F3D 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
@@ -46,7 +47,7 @@ def render_welcome_header() -> None:
     }
     .welcome-subtitle {
         text-align: center;
-        color: #a0aec0;
+        color: rgba(65, 63, 61, 0.88);
         font-size: 1.1rem;
         margin-bottom: 0.5rem;
     }
@@ -54,8 +55,8 @@ def render_welcome_header() -> None:
         display: inline-flex;
         gap: 4px;
         align-items: center;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: #697184;
+        color: #F2F1EF;
         padding: 6px 16px;
         border-radius: 20px;
         font-size: 0.85rem;
@@ -69,43 +70,43 @@ def render_welcome_header() -> None:
         font-weight: 500;
     }
     .welcome-chip-muted {
-        background: rgba(255,255,255,0.08);
-        color: #d1d5db;
+        background: rgba(216, 207, 208, 0.65);
+        color: #413F3D;
     }
     .welcome-chip-outline {
-        border: 1px solid rgba(255,255,255,0.2);
-        color: #f3f4f6;
+        border: 1px solid rgba(177, 166, 164, 0.85);
+        color: #413F3D;
     }
     .welcome-github {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        background: rgba(255,255,255,0.1);
-        color: #fff !important;
+        background: rgba(216, 207, 208, 0.65);
+        color: #413F3D !important;
         padding: 6px 14px;
         border-radius: 8px;
         text-decoration: none;
         font-size: 0.85rem;
-        border: 1px solid rgba(255,255,255,0.2);
+        border: 1px solid rgba(177, 166, 164, 0.85);
         margin-left: 10px;
     }
     .welcome-github:hover {
-        background: rgba(255,255,255,0.2);
+        background: rgba(216, 207, 208, 0.85);
     }
     .contrib-card {
-        background: rgba(102, 126, 234, 0.1);
-        border: 1px solid rgba(102, 126, 234, 0.2);
+        background: rgba(242, 241, 239, 0.85);
+        border: 1px solid rgba(177, 166, 164, 0.7);
         padding: 8px 12px;
         border-radius: 12px;
         text-align: center;
     }
     .contrib-title {
-        color: #667eea;
+        color: #413F3D;
         font-weight: 600;
         font-size: 0.85rem;
     }
     .contrib-author {
-        color: #888;
+        color: rgba(105, 113, 132, 0.92);
         font-size: 0.75rem;
     }
     </style>
@@ -121,8 +122,8 @@ def render_welcome_header() -> None:
         <div class="welcome-subtitle">
             <strong>Dr. Diego L. Malpica, MD</strong> — Aerospace Medicine Specialist
         </div>
-        <div style="text-align: center; color: #888; font-size: 0.95rem; margin-bottom: 1rem;">
-            Contributing to <span style="color: #667eea; font-weight: 600;">AsterPhysiology</span> Research Initiative
+        <div style="text-align: center; color: rgba(65, 63, 61, 0.78); font-size: 0.95rem; margin-bottom: 1rem;">
+            Contributing to <span style="color: #697184; font-weight: 700;">AsterPhysiology</span> Research Initiative
         </div>
         <div style="text-align: center; margin: 1rem 0;">
             <span class="welcome-version">v{APP_VERSION}</span>
@@ -139,8 +140,8 @@ def render_welcome_header() -> None:
                 GitHub
             </a>
         </div>
-        <hr style="margin: 1rem 0; border-color: rgba(102, 126, 234, 0.2);">
-        <div style="text-align: center; color: #888; font-size: 0.85rem; margin-bottom: 0.75rem;">
+        <hr style="margin: 1rem 0; border-color: rgba(177, 166, 164, 0.65);">
+        <div style="text-align: center; color: rgba(65, 63, 61, 0.78); font-size: 0.85rem; margin-bottom: 0.75rem;">
             <strong>🔬 Contributing Modules</strong>
         </div>
         <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.5rem;">
@@ -176,16 +177,16 @@ def render_device_import_header() -> None:
     """Render device import section header in sidebar."""
     st.sidebar.markdown("""
     <div style="
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        background: linear-gradient(135deg, #F2F1EF 0%, #D8CFD0 100%);
         border-radius: 12px;
         padding: 1rem;
         margin-bottom: 1rem;
-        border: 1px solid rgba(102, 126, 234, 0.2);
+        border: 1px solid rgba(177, 166, 164, 0.75);
     ">
-        <h3 style="margin: 0 0 0.5rem 0; color: #667eea; font-size: 1rem;">
+        <h3 style="margin: 0 0 0.5rem 0; color: #413F3D; font-size: 1rem;">
             📱 Device Data Import
         </h3>
-        <p style="margin: 0; color: #888; font-size: 0.8rem;">
+        <p style="margin: 0; color: #697184; font-size: 0.8rem;">
             Import RR intervals and physiological data from your devices
         </p>
     </div>
@@ -200,15 +201,15 @@ def render_sidebar_branding() -> None:
             text-align: center;
             padding: 0.75rem;
             margin-bottom: 1rem;
-            border-bottom: 1px solid rgba(102, 126, 234, 0.2);
+            border-bottom: 1px solid rgba(177, 166, 164, 0.65);
         ">
             <div style="font-size: 1.5rem; margin-bottom: 0.25rem;">🧬</div>
             <div style="
                 font-size: 0.9rem;
                 font-weight: 700;
-                color: #667eea;
+                color: #413F3D;
             ">Mission Control Lab</div>
-            <div style="font-size: 0.7rem; color: #888;">v{APP_VERSION}</div>
+            <div style="font-size: 0.7rem; color: #697184;">v{APP_VERSION}</div>
         </div>
         """,
         unsafe_allow_html=True
@@ -270,21 +271,28 @@ def render_quick_access_grid(has_data: bool = False) -> None:
             available: Whether the module is accessible
             glow: Whether to apply glow effect (for highlighting explorable modules)
         """
-        opacity = "1" if available else "0.35"
-        r, g, b = int(color[1:3], 16), int(color[3:5], 16), int(color[5:7], 16)
-        bg_color = f"rgba({r}, {g}, {b}, 0.12)" if available else "rgba(50, 50, 70, 0.3)"
-        border_color = color if available else "rgba(100, 100, 120, 0.3)"
+        # Use the app's neutral palette for these cards (custom HTML only).
+        # This does not affect Streamlit's default theme.
+        opacity = "1" if available else "0.55"
+        accent = "#697184"
+        base_border = "rgba(177, 166, 164, 0.75)"
+        bg_color = (
+            "linear-gradient(135deg, #F2F1EF 0%, #D8CFD0 100%)"
+            if available
+            else "linear-gradient(135deg, rgba(216, 207, 208, 0.75) 0%, rgba(177, 166, 164, 0.55) 100%)"
+        )
+        border_color = base_border
         status_text = "✓ Ready" if available else "Needs Data"
-        status_color = "#2ecc71" if available else "#888"
+        status_color = accent if available else "rgba(105, 113, 132, 0.9)"
         
         # Apply glow effect for highlighted modules (draws attention when no data loaded)
         if glow:
-            box_shadow = f"0 0 20px rgba({r}, {g}, {b}, 0.5), 0 0 40px rgba({r}, {g}, {b}, 0.3)"
+            box_shadow = "0 0 18px rgba(105, 113, 132, 0.45), 0 0 36px rgba(105, 113, 132, 0.25)"
             border_width = "2px"
             status_text = "★ Explore Now"
-            status_color = color
+            status_color = "#413F3D"
         else:
-            box_shadow = "none"
+            box_shadow = "0 8px 18px rgba(65, 63, 61, 0.08)"
             border_width = "1px"
         
         return (
@@ -298,15 +306,16 @@ def render_quick_access_grid(has_data: bool = False) -> None:
             f'color: {status_color}; font-weight: 600;">{status_text}</div>'
             # Icon
             f'<div style="font-size: 1.8rem; margin-bottom: 0.4rem;">{icon}</div>'
-            # Name with gradient
-            f'<div style="color: {color}; font-weight: 700; font-size: 0.85rem; '
+            # Name
+            f'<div style="color: #413F3D; font-weight: 800; font-size: 0.85rem; '
             f'margin-bottom: 0.25rem;">{name}</div>'
             # Description
-            f'<div style="color: #9ca3af; font-size: 0.7rem; line-height: 1.3; '
+            f'<div style="color: rgba(65, 63, 61, 0.72); font-size: 0.7rem; line-height: 1.3; '
             f'margin-bottom: 0.4rem;">{desc}</div>'
             # Tab indicator
-            f'<div style="background: rgba(102, 126, 234, 0.15); border-radius: 8px; '
-            f'padding: 0.3rem 0.5rem; font-size: 0.6rem; color: #a0aec0; '
+            f'<div style="background: rgba(105, 113, 132, 0.14); border-radius: 8px; '
+            f'border: 1px solid rgba(177, 166, 164, 0.55); '
+            f'padding: 0.3rem 0.5rem; font-size: 0.6rem; color: rgba(65, 63, 61, 0.85); '
             f'display: inline-block;">↑ Tab: <b>{tab}</b></div>'
             f'</div>'
         )
@@ -328,52 +337,52 @@ def render_quick_access_grid(has_data: bool = False) -> None:
     )
     
     # Status indicator for data section
-    data_dot_color = "#2ecc71" if has_data else "#666"
+    data_dot_color = "#697184" if has_data else "#B1A6A4"
     data_dot_char = "●" if has_data else "○"
     data_label = "HRV Data Loaded — All Features Active" if has_data else "Requires HRV Data — Import via Sidebar"
     
     # Build HTML without leading whitespace (prevents Markdown code block interpretation)
     html_parts = [
-        '<div style="background: linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%); ',
+        '<div style="background: linear-gradient(135deg, #F2F1EF 0%, #D8CFD0 100%); ',
         'border-radius: 20px; padding: 1.5rem; margin-bottom: 1.5rem; ',
-        'border: 1px solid rgba(102, 126, 234, 0.3); box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);">',
+        'border: 1px solid rgba(177, 166, 164, 0.75); box-shadow: 0 10px 40px rgba(65, 63, 61, 0.14);">',
         # Header
         '<div style="text-align: center; margin-bottom: 0.8rem;">',
         '<span style="font-size: 1.8rem;">🔬</span>',
         '<div style="font-size: 1.3rem; font-weight: 800; ',
-        'background: linear-gradient(135deg, #667eea 0%, #764ba2 40%, #f093fb 100%); ',
+        'background: linear-gradient(135deg, #697184 0%, #413F3D 100%); ',
         '-webkit-background-clip: text; -webkit-text-fill-color: transparent; ',
         'background-clip: text; margin-top: 0.3rem;">Analysis Modules</div>',
-        '<div style="color: #666; font-size: 0.75rem; margin-top: 0.4rem;">',
-        '↑ Click the <b style="color: #a0aec0;">tab bar above</b> to navigate to each module</div>',
+        '<div style="color: rgba(65, 63, 61, 0.72); font-size: 0.75rem; margin-top: 0.4rem;">',
+        '↑ Click the <b style="color: #413F3D;">tab bar above</b> to navigate to each module</div>',
         '</div>',
         # Ready to Explore section
         '<div style="margin-bottom: 1rem;">',
         '<div style="display: flex; align-items: center; gap: 0.5rem; ',
         'margin-bottom: 0.6rem; padding-left: 0.3rem;">',
-        '<span style="color: #2ecc71; font-size: 0.8rem;">●</span>',
-        '<span style="color: #a0aec0; font-size: 0.85rem; font-weight: 600;">Ready to Explore</span>',
-        '<span style="color: #666; font-size: 0.7rem; margin-left: auto;">No data required</span>',
+        '<span style="color: #697184; font-size: 0.8rem;">●</span>',
+        '<span style="color: #413F3D; font-size: 0.85rem; font-weight: 700;">Ready to Explore</span>',
+        '<span style="color: rgba(65, 63, 61, 0.72); font-size: 0.7rem; margin-left: auto;">No data required</span>',
         '</div>',
         '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7rem;">',
         available_cards,
         '</div></div>',
         # Divider
-        '<hr style="margin: 1.2rem 0; border: none; border-top: 1px solid rgba(102, 126, 234, 0.2);">',
+        '<hr style="margin: 1.2rem 0; border: none; border-top: 1px solid rgba(177, 166, 164, 0.65);">',
         # Requires HRV Data section
         '<div>',
         '<div style="display: flex; align-items: center; gap: 0.5rem; ',
         'margin-bottom: 0.6rem; padding-left: 0.3rem;">',
         f'<span style="color: {data_dot_color}; font-size: 0.8rem;">{data_dot_char}</span>',
-        f'<span style="color: #a0aec0; font-size: 0.85rem; font-weight: 600;">{data_label}</span>',
+        f'<span style="color: #413F3D; font-size: 0.85rem; font-weight: 700;">{data_label}</span>',
         '</div>',
         '<div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.7rem;">',
         data_cards,
         '</div></div>',
         # Footer
         '<div style="text-align: center; margin-top: 1.2rem; padding-top: 0.8rem; ',
-        'border-top: 1px solid rgba(102, 126, 234, 0.15);">',
-        '<div style="color: #888; font-size: 0.75rem;">',
+        'border-top: 1px solid rgba(177, 166, 164, 0.5);">',
+        '<div style="color: rgba(65, 63, 61, 0.76); font-size: 0.75rem;">',
         '📱 <b>Import Data:</b> Sidebar → Polar H10 / Garmin / Text file</div>',
         '</div>',
         '</div>',
@@ -410,16 +419,17 @@ def render_data_status_panel(
         st.markdown(
             f"""
             <div style="
-                background: linear-gradient(135deg, #1a472a 0%, #2d5a3f 100%);
-                border: 1px solid rgba(46, 204, 113, 0.3);
+                background: linear-gradient(135deg, #F2F1EF 0%, #D8CFD0 100%);
+                border: 1px solid rgba(177, 166, 164, 0.75);
+                border-left: 6px solid #697184;
                 border-radius: 12px;
                 padding: 1rem;
                 margin: 1rem 0;
             ">
-                <div style="color: #2ecc71; font-weight: 600; margin-bottom: 0.5rem;">
-                    ✓ Data Loaded
+                <div style="color: #413F3D; font-weight: 800; margin-bottom: 0.5rem;">
+                    ✓ Data Loaded (Flight Surgeon workspace)
                 </div>
-                <div style="color: #90EE90; font-size: 0.9rem;">
+                <div style="color: #697184; font-size: 0.9rem; font-weight: 600;">
                     {' | '.join(items)}
                 </div>
             </div>
@@ -431,16 +441,17 @@ def render_data_status_panel(
         st.markdown(
             """
             <div style="
-                background: linear-gradient(135deg, #4a3728 0%, #5a4838 100%);
-                border: 1px solid rgba(243, 156, 18, 0.3);
+                background: linear-gradient(135deg, #F2F1EF 0%, #D8CFD0 100%);
+                border: 1px solid rgba(177, 166, 164, 0.75);
+                border-left: 6px solid #B1A6A4;
                 border-radius: 12px;
                 padding: 1rem;
                 margin: 1rem 0;
             ">
-                <div style="color: #f39c12; font-weight: 600; margin-bottom: 0.5rem;">
+                <div style="color: #413F3D; font-weight: 800; margin-bottom: 0.5rem;">
                     ⚠️ No Mission Control Data Loaded
                 </div>
-                <div style="color: #FFB347; font-size: 0.9rem;">
+                <div style="color: #697184; font-size: 0.9rem;">
                     Use the sidebar to import RR interval data from your device (Polar, Garmin, ActiGraph) 
                     or upload a text file. Some modules like Circadian and Space Weather work without data.
                 </div>
