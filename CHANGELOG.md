@@ -15,10 +15,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Space Data no longer feels like it “restarts” while exploring** (`app/app.py`): Wrapped Space Data fetch/scope/view controls in `st.form()` blocks (SWPC, DONKI, NOAA dashboard) and disabled stale-element dimming to reduce rerun flicker on Windows/OneDrive.
+- **Impact Predictions SEP accuracy** (`app/space_weather_impact.py`): SEP classification now explicitly uses the **GOES integral proton flux ≥10 MeV** channel (NOAA S-scale) instead of accidentally grabbing another energy bin (e.g., ≥50/≥100 MeV).
+- **Impact Predictions geomagnetic severity mapping** (`app/space_weather_impact.py`): Corrected NOAA G-scale mapping (**Kp 5–9 → G1–G5**) so storm severity labels match official thresholds.
 
 ### Added
 - **HRV-informed influence horizons for Space Data** (`app/app.py`, `app/space_weather_influence.py`): When an RR timeline is available, the app auto-seeds conservative default padding for DONKI (days) and SWPC/NOAA RR-sync padding (hours) using a drag-based CME transit-time estimate.
 - **DONKI CME influence windows + phase correlations in Space Analytics** (`app/app.py`, `app/space_weather_influence.py`, `tests/test_space_weather_influence.py`): Space Analytics event-aligned analysis can now build CME arrival/influence windows from DONKI CMEAnalysis speeds and compute baseline/event/recovery correlations vs Kp/Dst within those windows.
+- **CME/shock arrival forecasts in Impact Predictions** (`app/space_weather_impact.py`, `app/app.py`): Added NASA DONKI **WSA+ENLIL** `estimatedShockArrivalTime` forecasts (with Kp scenario range + DBM cross-check using the correct **21.5 R☉ → 1 AU** propagation distance when `time21_5` is provided) and surfaced **confidence** in the summary table and event cards; added an in-app “Method & Accuracy” explainer.
 - **Custom UI palette applied to Flight Surgeon + Overview boxes** (`app/welcome_header.py`, `app/app.py`): Applied the neutral palette (`#F2F1EF/#D8CFD0/#B1A6A4/#697184/#413F3D`) to custom HTML banners/cards on the Flight Surgeon header and the Overview page (without changing Streamlit’s default theme).
 - **Entrypoint compatibility wrappers** (`app/app-Starflight.py`, `app/researcher_app.py`): Running older/alternate filenames now delegates to the canonical Research UI (`app/app.py` via `app/research_app.py`) so behavior stays consistent across machines.
 
