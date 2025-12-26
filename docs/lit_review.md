@@ -1428,6 +1428,8 @@ de Zambotti, M., Cellini, N., Goldstone, A., Colrain, I. M., & Baker, F. C. (201
 
 Devine, J. K., Garcia, C. R., Simoes, A. S., Guelere, M. R., de Godoy, B., Silva, D. S., Pacheco, P. C., Choynowski, J., & Hursh, S. R. (2022). Predictive biomathematical modeling compared to objective sleep during COVID-19 humanitarian flights. Aerospace Medicine and Human Performance, 93(1), 4–12. https://doi.org/10.3357/amhp.5909.2022
 
+Dumbović, M., Čalogović, J., Martinić, K., et al. (2021). Drag-Based Model (DBM) Tools for Forecast of Coronal Mass Ejection Arrival Time and Speed. Frontiers in Astronomy and Space Sciences, 8, 58. https://doi.org/10.3389/fspas.2021.639986
+
 European Space Agency. (n.d.). ESA Programme Documents - Space Weather. Retrieved December 21, 2025, from https://swe.ssa.esa.int/documents
 
 European Union Aviation Safety Agency. (2023). Easy Access Rules for Air Operations (online publication). Retrieved December 21, 2025, from https://www.easa.europa.eu/en/document-library/easy-access-rules/online-publications/easy-access-rules-air-operations
