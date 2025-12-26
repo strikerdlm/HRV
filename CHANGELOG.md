@@ -16,6 +16,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - **Space Analytics no longer feels “dead” when prerequisites are missing** (`app/app.py`, `docs/Manual.md`): Added explicit prerequisite diagnostics (recording duration vs window size, NOAA errors), fixed misleading success messages on NOAA cache/fetch buttons, added a button-driven **Compute windows** tool (with overrides) to generate windowed HRV/HRF metrics, and improved ML preflight messaging (requires ≥30 usable windows).
 
+## [1.8.62] - 2025-12-26
+
+### Fixed
+- **Space Weather / NOAA dashboards can be RR-synced and stay responsive** (`app/app.py`, `app/noaa_space.py`): Added optional **RR timeline syncing** for SWPC plots (Kp/F10.7), NOAA feed history windows, and DONKI date queries (with bounded padding + hard max window) to prevent accidental “download/plot everything” behavior that can make the Space Weather tab feel like it’s hanging.
+
 ## [1.8.59] - 2025-12-25
 
 ### Added
