@@ -19,6 +19,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **HRV-informed influence horizons for Space Data** (`app/app.py`, `app/space_weather_influence.py`): When an RR timeline is available, the app auto-seeds conservative default padding for DONKI (days) and SWPC/NOAA RR-sync padding (hours) using a drag-based CME transit-time estimate.
 - **DONKI CME influence windows + phase correlations in Space Analytics** (`app/app.py`, `app/space_weather_influence.py`, `tests/test_space_weather_influence.py`): Space Analytics event-aligned analysis can now build CME arrival/influence windows from DONKI CMEAnalysis speeds and compute baseline/event/recovery correlations vs Kp/Dst within those windows.
+- **Custom UI palette applied to Flight Surgeon + Overview boxes** (`app/welcome_header.py`, `app/app.py`): Applied the neutral palette (`#F2F1EF/#D8CFD0/#B1A6A4/#697184/#413F3D`) to custom HTML banners/cards on the Flight Surgeon header and the Overview page (without changing Streamlit’s default theme).
 
 ## [1.8.64] - 2025-12-26
 
