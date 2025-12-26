@@ -13067,6 +13067,31 @@ that predicts cognitive performance based on:
                 st.markdown("---")
                 st.markdown("### 🎯 Space Weather Impact Predictions")
                 st.markdown(f"*All times in Bogotá, Colombia ({BOGOTA_TZ_NAME})*")
+                with st.expander("🔎 Method & Accuracy (astrophysics-first)", expanded=False):
+                    st.markdown(
+                        """
+**What this panel reports (arrival at Earth):**
+
+- **☀️ Photons / X-rays (GOES)**: Observed at Earth (arrival ≈ observation time). Flare class uses the 0.1–0.8 nm band.
+- **⚡ SEPs / Protons (GOES)**: Uses the **integral proton flux ≥10 MeV (pfu)**, which defines NOAA’s **S-scale** (radiation storms).
+- **🌊 Solar wind plasma (DSCOVR/ACE at L1)**: Uses the current L1 solar-wind speed and a ballistic time-of-flight over ~1.5 million km (typical **30–60 min** lead time).
+- **💥 CME / Shock (NASA DONKI WSA+ENLIL)**: Uses DONKI’s **WSA+ENLIL** simulation output `estimatedShockArrivalTime` when available.
+  - The row includes the model’s **Kp scenario range** (multiple Kp values are provided because **CME magnetic field orientation (IMF Bz)** is not deterministically predicted from coronagraph data).
+  - A **DBM (drag-based model) range** is shown as an independent physics cross-check (when CME speed + `time21_5` are available).
+
+**Critical limitations (accuracy honesty):**
+
+- **CME/shock timing is forecast, not a measurement**; typical errors can be many hours. Always validate near arrival with **real-time solar wind**, **Kp**, and **Dst**.
+- **Geomagnetic intensity depends on IMF Bz** (southward Bz couples strongly to Earth). ENLIL timing can be good, but storm strength remains uncertain without Bz.
+
+**References / official definitions:**
+
+- NOAA Space Weather Scales (R/S/G): [NOAA SWPC](https://www.swpc.noaa.gov/noaa-scales-explanation)
+- NASA DONKI (WSA+ENLIL simulation catalog): [NASA DONKI](https://api.nasa.gov/)
+- ENLIL model: Odstrčil, D. (2003). *Advances in Space Research, 32*(4), 497–506. ([doi:10.1016/S0273-1177(03)00332-6](https://doi.org/10.1016/S0273-1177(03)00332-6))
+- Drag-based CME propagation (DBM): Dumbović, M., et al. (2021). *Frontiers in Astronomy and Space Sciences, 8*, 58. ([doi:10.3389/fspas.2021.639986](https://doi.org/10.3389/fspas.2021.639986))
+                        """
+                    )
 
                 # Session state for impact snapshot
                 if "impact_snapshot" not in st.session_state:
@@ -13169,6 +13194,7 @@ that predicts cognitive performance based on:
                                             {icon} {event.category.value.upper()} - {event.severity.value.upper()}
                                         </h5>
                                         <p style="margin: 0.25rem 0;"><strong>Arrival:</strong> {format_datetime_bogota(event.arrival_time_utc)}</p>
+                                        <p style="margin: 0.25rem 0;"><strong>Confidence:</strong> {event.confidence * 100:.0f}%</p>
                                         <p style="margin: 0.25rem 0;"><strong>Source:</strong> {event.source_description}</p>
                                         <p style="margin: 0.25rem 0;"><strong>Biological Effect:</strong> {event.biological_effect}</p>
                                         <hr style="margin: 0.5rem 0; border-color: {severity_color}30;">
