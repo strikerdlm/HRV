@@ -120,6 +120,11 @@ from space_weather_alignment import (
     align_space_weather_series,
     align_space_weather_columns,
 )
+from space_weather_influence import (
+    InfluenceHorizonRecommendation,
+    build_donki_cme_influence_windows,
+    recommend_influence_horizons_from_hrv,
+)
 from noaa_space import (
     NOAADataBundle,
     load_noaa_space_data,
@@ -5831,6 +5836,93 @@ def _scan_lag_correlations(
         corr_df["lag_hours"] = int(lag)
         results.append(corr_df)
     return pd.concat(results, ignore_index=True) if results else pd.DataFrame()
+
+
+def _phase_correlation_table(
+    windowed_df: pd.DataFrame,
+    predictor_df: pd.DataFrame,
+    *,
+    time_col: str,
+    predictor_time_col: str,
+    predictor_value_col: str,
+    metric_cols: Sequence[str],
+    phase_label: str,
+    phase_start_utc: pd.Timestamp,
+    phase_end_utc: pd.Timestamp,
+    merge_tolerance_minutes: int = 90,
+) -> pd.DataFrame:
+    """Compute a per-metric correlation table for a specific phase window.
+
+    This aligns the predictor series to `windowed_df[time_col]` using
+    `align_space_weather_series` (lag=0) and computes Pearson correlations
+    (and additional stats provided by `_corr_table`) within the phase window.
+    """
+    if not isinstance(windowed_df, pd.DataFrame) or windowed_df.empty:
+        return pd.DataFrame()
+    if not isinstance(predictor_df, pd.DataFrame) or predictor_df.empty:
+        return pd.DataFrame()
+    if not time_col or time_col not in windowed_df.columns:
+        return pd.DataFrame()
+    if not predictor_time_col or predictor_time_col not in predictor_df.columns:
+        return pd.DataFrame()
+    if not predictor_value_col or predictor_value_col not in predictor_df.columns:
+        return pd.DataFrame()
+    if not metric_cols:
+        return pd.DataFrame()
+
+    w = windowed_df.copy()
+    w[time_col] = pd.to_datetime(w[time_col], errors="coerce", utc=True)
+    w = w.dropna(subset=[time_col]).sort_values(time_col)
+    if w.empty:
+        return pd.DataFrame()
+
+    start_utc = pd.to_datetime(phase_start_utc, utc=True, errors="coerce")
+    end_utc = pd.to_datetime(phase_end_utc, utc=True, errors="coerce")
+    if pd.isna(start_utc) or pd.isna(end_utc) or end_utc < start_utc:
+        return pd.DataFrame()
+
+    w_phase = w.loc[(w[time_col] >= start_utc) & (w[time_col] <= end_utc)].copy()
+    if w_phase.empty:
+        return pd.DataFrame()
+
+    aligned = align_space_weather_series(
+        reference_times=w_phase[time_col],
+        predictor_df=predictor_df,
+        predictor_time_col=str(predictor_time_col),
+        predictor_value_col=str(predictor_value_col),
+        lag_hours=0,
+        max_gap_minutes=int(merge_tolerance_minutes),
+    )
+    if aligned.empty:
+        return pd.DataFrame()
+
+    merged = (
+        w_phase.set_index(time_col)
+        .join(aligned.rename("predictor"), how="inner")
+        .dropna(subset=["predictor"])
+    )
+    if merged.empty:
+        return pd.DataFrame()
+
+    usable_metrics = [
+        m
+        for m in metric_cols
+        if m in merged.columns and pd.api.types.is_numeric_dtype(merged[m])
+    ]
+    if not usable_metrics:
+        return pd.DataFrame()
+
+    corr_df = _corr_table(
+        merged.reset_index(drop=True),
+        "predictor",
+        list(usable_metrics),
+        covariate_cols=None,
+    )
+    if corr_df.empty:
+        return pd.DataFrame()
+    corr_df.insert(0, "phase", str(phase_label))
+    corr_df.insert(1, "predictor", str(predictor_value_col))
+    return corr_df
 
 
 def _block_bootstrap_corr(
@@ -12902,6 +12994,22 @@ that predicts cognitive performance based on:
 
     with tab_space_data:
         st.subheader("🌐 Space Data Dashboard (SWPC + NOAA + DONKI)")
+        # UX: Streamlit can visually "restart" (stale-element fade/dim) during reruns and
+        # long fetches. Space Data is a data dashboard; keep the page visually stable.
+        st.markdown(
+            """
+            <style>
+            .stApp .stale,
+            .stApp [data-stale="true"],
+            div[data-testid="stAppViewContainer"] .stale,
+            div[data-testid="stAppViewContainer"] [data-stale="true"] {
+                opacity: 1 !important;
+                filter: none !important;
+            }
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
         
         # Dashboard renders immediately - no blocking background fetch
         _sw_loading_msg = st.empty()
@@ -13082,66 +13190,99 @@ that predicts cognitive performance based on:
             # NOTE: Do not auto-load or auto-fetch any space-weather data on tab open.
             # This tab must remain fully on-demand (click Load cached / Fetch).
 
-            col_load_cache, col_fetch_sw, col_fetch_donki, col_bg_info = st.columns([1, 1, 1, 2])
-            with col_load_cache:
-                load_cache_clicked = st.button(
-                    "⚡ Load cached copy",
-                    key="load_space_weather_cache",
-                    help="Load last saved SWPC data from disk (no network).",
-                )
-            with col_fetch_sw:
-                fetch_sw_clicked = st.button(
-                    "📥 Fetch space weather", key="fetch_space_weather",
-                    help="Fetch Kp index and solar radio flux from NOAA SWPC"
-                )
-            with col_fetch_donki:
-                fetch_donki_clicked = st.button(
-                    "🌐 Fetch NASA DONKI",
-                    key="fetch_donki",
-                    disabled=not NASA_API_KEY,
-                    help="Requires NASA_API_KEY in your .env file.",
-                )
-            with col_bg_info:
-                cache_hint = "loaded" if space_state.get("loaded") else "not loaded"
-                st.caption(
-                    "⏸️ Background prefetch disabled | "
-                    f"SWPC data: {cache_hint} | Click Load cached / Fetch"
-                )
-            donki_window_days = st.slider(
-                "DONKI window (days)",
-                min_value=7,
-                max_value=30,
-                value=14,  # smaller default for faster queries
-                step=1,
-                key="donki_window_days",
-            )
             rr_min_utc, rr_max_utc = _get_uploaded_rr_time_bounds()
-            donki_sync_rr = False
-            donki_pad_days = 0
-            if rr_min_utc is not None and rr_max_utc is not None:
-                st.caption(
-                    f"Uploaded RR timeline (UTC): {rr_min_utc.strftime('%Y-%m-%d %H:%M')} → {rr_max_utc.strftime('%Y-%m-%d %H:%M')}"
+            # -----------------------------------------------------------------
+            # Fetch controls (use a form to avoid reruns while editing settings)
+            # -----------------------------------------------------------------
+            with st.form("space_data_fetch_controls", clear_on_submit=False):
+                col_load_cache, col_fetch_sw, col_fetch_donki, col_bg_info = st.columns(
+                    [1, 1, 1, 2]
                 )
-                donki_sync_rr = st.checkbox(
-                    "Sync DONKI query to uploaded RR timeline",
-                    value=True,
-                    key="donki_sync_rr_window",
-                    help=(
-                        "Uses your RR recording date range for DONKI queries (plus optional padding). "
-                        "This avoids downloading unrelated events and keeps queries fast."
-                    ),
-                )
-                donki_pad_days = int(
-                    st.number_input(
-                        "DONKI padding (days)",
-                        min_value=0,
-                        max_value=30,
-                        value=3,
-                        step=1,
-                        key="donki_sync_rr_pad_days",
-                        help="Extra days before/after the RR range when querying DONKI (helps capture CME/SEP arrivals around the recording).",
+                with col_load_cache:
+                    load_cache_clicked = st.form_submit_button(
+                        "⚡ Load cached copy",
                     )
+                with col_fetch_sw:
+                    fetch_sw_clicked = st.form_submit_button(
+                        "📥 Fetch space weather",
+                    )
+                with col_fetch_donki:
+                    fetch_donki_clicked = st.form_submit_button(
+                        "🌐 Fetch NASA DONKI",
+                        disabled=not NASA_API_KEY,
+                    )
+                with col_bg_info:
+                    cache_hint = "loaded" if space_state.get("loaded") else "not loaded"
+                    st.caption(
+                        "⏸️ Background prefetch disabled | "
+                        f"SWPC data: {cache_hint} | Click Load cached / Fetch"
+                    )
+
+                st.caption(
+                    "Tip: adjust the settings below, then click a fetch button (prevents rerun flicker)."
                 )
+                donki_window_days = st.slider(
+                    "DONKI window (days)",
+                    min_value=7,
+                    max_value=30,
+                    value=14,  # smaller default for faster queries
+                    step=1,
+                    key="donki_window_days",
+                )
+                donki_sync_rr = False
+                donki_pad_days = 0
+                if rr_min_utc is not None and rr_max_utc is not None:
+                    # Auto-default influence horizons once per session (do not override user edits).
+                    if "donki_sync_rr_pad_days" not in st.session_state:
+                        try:
+                            rec: InfluenceHorizonRecommendation = recommend_influence_horizons_from_hrv(
+                                rr_min_utc,
+                                rr_max_utc,
+                                assumed_earth_influence_hours=72,
+                            )
+                            st.session_state["donki_sync_rr_pad_days"] = int(rec.recommended_donki_pad_days)
+                            st.session_state.setdefault(
+                                "swpc_sync_rr_pad_hours", int(rec.recommended_rr_pad_hours)
+                            )
+                            st.session_state.setdefault(
+                                "noaa_sync_rr_pad_hours", int(rec.recommended_rr_pad_hours)
+                            )
+                            st.session_state["space_influence_horizon_rec"] = {
+                                "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                                "solar_to_earth_max_hours": float(rec.solar_to_earth_max_hours),
+                                "donki_pad_days": int(rec.recommended_donki_pad_days),
+                                "rr_pad_hours": int(rec.recommended_rr_pad_hours),
+                            }
+                        except Exception as exc:
+                            # Defensive: never crash Space Data for a recommendation helper.
+                            log_exception(_LOGGER, "Influence horizon recommendation failed", exc)
+
+                    st.caption(
+                        f"Uploaded RR timeline (UTC): {rr_min_utc.strftime('%Y-%m-%d %H:%M')} → {rr_max_utc.strftime('%Y-%m-%d %H:%M')}"
+                    )
+                    donki_sync_rr = st.checkbox(
+                        "Sync DONKI query to uploaded RR timeline",
+                        value=True,
+                        key="donki_sync_rr_window",
+                        help=(
+                            "Uses your RR recording date range for DONKI queries (plus optional padding). "
+                            "This avoids downloading unrelated events and keeps queries fast."
+                        ),
+                    )
+                    donki_pad_days = int(
+                        st.number_input(
+                            "DONKI padding (days)",
+                            min_value=0,
+                            max_value=30,
+                            value=3,
+                            step=1,
+                            key="donki_sync_rr_pad_days",
+                            help=(
+                                "Extra days before/after the RR range when querying DONKI "
+                                "(helps capture CME/SEP arrivals around the recording)."
+                            ),
+                        )
+                    )
 
             # Cache maintenance (explicit user action; never automatic deletion)
             with st.expander("🧹 Cache maintenance", expanded=False):
@@ -13310,39 +13451,51 @@ that predicts cognitive performance based on:
                 flux_df_full = space_state.get("flux_df", pd.DataFrame())
                 flux_error_msg = space_state.get("flux_error", "")
                 kp_error = bool(kp_error_msg)
-                swpc_sync_rr = False
-                swpc_pad_hours = 0
-                if rr_min_utc is not None and rr_max_utc is not None:
-                    swpc_sync_rr = st.checkbox(
-                        "Sync SWPC plots to uploaded RR timeline",
-                        value=True,
-                        key="swpc_sync_rr_window",
-                        help=(
-                            "Filters SWPC time-series plots (Kp/F10.7) to your RR recording window "
-                            "(plus optional padding) to keep renders fast and aligned."
-                        ),
-                    )
-                    swpc_pad_hours = int(
-                        st.number_input(
-                            "SWPC plot padding (hours)",
-                            min_value=0,
-                            max_value=24 * 14,
-                            value=6,
-                            step=1,
-                            key="swpc_sync_rr_pad_hours",
+                # View controls: wrap in a form to avoid reruns while adjusting sliders.
+                # This reduces the "app restart" feel when exploring Space Data.
+                with st.form("space_data_swpc_view_controls", clear_on_submit=False):
+                    swpc_sync_rr = False
+                    swpc_pad_hours = 0
+                    if rr_min_utc is not None and rr_max_utc is not None:
+                        swpc_sync_rr = st.checkbox(
+                            "Sync SWPC plots to uploaded RR timeline",
+                            value=True,
+                            key="swpc_sync_rr_window",
+                            help=(
+                                "Filters SWPC time-series plots (Kp/F10.7) to your RR recording window "
+                                "(plus optional padding) to keep renders fast and aligned."
+                            ),
                         )
-                    )
-
-                with st.container():
-                    st.markdown("#### Solar Radio Flux (F10.7 cm)")
+                        swpc_pad_hours = int(
+                            st.number_input(
+                                "SWPC plot padding (hours)",
+                                min_value=0,
+                                max_value=24 * 14,
+                                value=6,
+                                step=1,
+                                key="swpc_sync_rr_pad_hours",
+                            )
+                        )
                     flux_history_days = st.slider(
                         "F10.7 history (days)",
                         min_value=7,
                         max_value=90,
-                        value=14,  # smaller default to trim data processing
+                        value=14,
                         step=1,
                         key="flux_days",
                     )
+                    kp_history_days = st.slider(
+                        "Kp history (days)",
+                        min_value=3,
+                        max_value=30,
+                        value=14,
+                        step=1,
+                        key="kp_days",
+                    )
+                    _ = st.form_submit_button("Apply SWPC view settings")
+
+                with st.container():
+                    st.markdown("#### Solar Radio Flux (F10.7 cm)")
                     if flux_error_msg:
                         st.error(flux_error_msg)
                     else:
@@ -13587,14 +13740,6 @@ that predicts cognitive performance based on:
 
                 with st.container():
                     st.markdown("#### Planetary K-index (3-hour cadence)")
-                    kp_history_days = st.slider(
-                        "Kp history (days)",
-                        min_value=3,
-                        max_value=30,
-                        value=14,
-                        step=1,
-                        key="kp_days",
-                    )
                     if kp_error_msg:
                         st.error(kp_error_msg)
                     else:
@@ -14894,48 +15039,49 @@ that predicts cognitive performance based on:
         # NOTE: Do not auto-load or auto-fetch NOAA datasets on tab open.
         # This tab must remain fully on-demand (click Load cached / Fetch / Force refresh).
 
-        col_load_cache, col_scope, col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns([1, 1, 1, 1, 2])
-        with col_load_cache:
-            load_noaa_cache_clicked = st.button(
-                "⚡ Load cached NOAA",
-                key="load_noaa_cache",
-                help="Load last saved NOAA feeds from disk (no network).",
+        # Wrap controls in a form so tweaking scope doesn't constantly rerun/flicker.
+        with st.form("space_data_noaa_fetch_controls", clear_on_submit=False):
+            col_load_cache, col_scope, col_fetch_noaa, col_refresh_noaa, col_bg_status = st.columns(
+                [1, 1, 1, 1, 2]
             )
-        with col_scope:
-            fetch_scope = st.selectbox(
-                "Scope",
-                options=["Today (fast)", "Core", "Full"],
-                index=0,
-                key="noaa_fetch_scope",
-                help=(
-                    "Today (fast) loads only Kp + F10.7 (very fast). "
-                    "Core loads the most useful geomagnetic/solar-wind feeds (fast). "
-                    "Full loads the entire NOAA feed library (slowest)."
-                ),
+            with col_scope:
+                fetch_scope = st.selectbox(
+                    "Scope",
+                    options=["Today (fast)", "Core", "Full"],
+                    index=0,
+                    key="noaa_fetch_scope",
+                    help=(
+                        "Today (fast) loads only Kp + F10.7 (very fast). "
+                        "Core loads the most useful geomagnetic/solar-wind feeds (fast). "
+                        "Full loads the entire NOAA feed library (slowest)."
+                    ),
+                )
+            keys_to_fetch: Optional[Sequence[str]] = (
+                NOAA_FAST_KEYS
+                if fetch_scope == "Today (fast)"
+                else (NOAA_CORE_KEYS if fetch_scope == "Core" else None)
             )
-        keys_to_fetch: Optional[Sequence[str]] = (
-            NOAA_FAST_KEYS
-            if fetch_scope == "Today (fast)"
-            else (NOAA_CORE_KEYS if fetch_scope == "Core" else None)
-        )
-        with col_fetch_noaa:
-            fetch_noaa_clicked = st.button(
-                "📥 Fetch NOAA feeds",
-                key="fetch_noaa_space_data",
-                help="Load NOAA feeds for the selected scope (uses cache if available).",
-            )
-        with col_refresh_noaa:
-            refresh_noaa_clicked = st.button(
-                "🔄 Force refresh",
-                key="refresh_noaa_space_data",
-                help="Bypass cache and fetch fresh data from NOAA servers for the selected scope.",
-            )
-        with col_bg_status:
-            cache_hint = "loaded" if bool(noaa_state.get("bundles")) else "not loaded"
-            st.caption(
-                "⏸️ Background prefetch disabled | "
-                f"NOAA data: {cache_hint} | Click Load cached / Fetch"
-            )
+            with col_load_cache:
+                load_noaa_cache_clicked = st.form_submit_button(
+                    "⚡ Load cached NOAA",
+                    help="Load last saved NOAA feeds from disk (no network).",
+                )
+            with col_fetch_noaa:
+                fetch_noaa_clicked = st.form_submit_button(
+                    "📥 Fetch NOAA feeds",
+                    help="Load NOAA feeds for the selected scope (uses cache if available).",
+                )
+            with col_refresh_noaa:
+                refresh_noaa_clicked = st.form_submit_button(
+                    "🔄 Force refresh",
+                    help="Bypass cache and fetch fresh data from NOAA servers for the selected scope.",
+                )
+            with col_bg_status:
+                cache_hint = "loaded" if bool(noaa_state.get("bundles")) else "not loaded"
+                st.caption(
+                    "⏸️ Background prefetch disabled | "
+                    f"NOAA data: {cache_hint} | Click Load cached / Fetch"
+                )
 
         with st.expander("🧹 Cache maintenance", expanded=False):
             confirm_clear_noaa = st.checkbox(
@@ -15078,42 +15224,48 @@ that predicts cognitive performance based on:
             default_hours = int(np.clip(default_hours, min_hours, max_hours))
             rr_min_utc, rr_max_utc = _get_uploaded_rr_time_bounds()
             sync_rr_available = rr_min_utc is not None and rr_max_utc is not None
-            sync_to_rr = False
-            rr_pad_hours = 0
-            if sync_rr_available:
-                st.caption(
-                    f"Uploaded RR timeline (UTC): {rr_min_utc.strftime('%Y-%m-%d %H:%M')} → {rr_max_utc.strftime('%Y-%m-%d %H:%M')}"
-                )
-                sync_to_rr = st.checkbox(
-                    "Sync NOAA history to uploaded RR timeline",
-                    value=True,
-                    key="noaa_sync_rr_window",
-                    help=(
-                        "Filters NOAA datasets to the RR timestamp range (plus optional padding). "
-                        "This keeps charts responsive and makes the NOAA tab consistent with your recording window."
-                    ),
-                )
-                rr_pad_hours = int(
-                    st.number_input(
-                        "RR window padding (hours)",
-                        min_value=0,
-                        max_value=24 * 14,
-                        value=6,
-                        step=1,
-                        key="noaa_sync_rr_pad_hours",
-                        help="Extra hours to include before/after the RR timeline when slicing NOAA data.",
+            # View controls: wrap RR sync + history slicer in a form so exploring doesn't
+            # constantly rerun (which can feel like an app restart).
+            with st.form("space_data_noaa_view_controls", clear_on_submit=False):
+                sync_to_rr = False
+                rr_pad_hours = 0
+                if sync_rr_available:
+                    st.caption(
+                        f"Uploaded RR timeline (UTC): {rr_min_utc.strftime('%Y-%m-%d %H:%M')} → {rr_max_utc.strftime('%Y-%m-%d %H:%M')}"
                     )
-                )
+                    sync_to_rr = st.checkbox(
+                        "Sync NOAA history to uploaded RR timeline",
+                        value=True,
+                        key="noaa_sync_rr_window",
+                        help=(
+                            "Filters NOAA datasets to the RR timestamp range (plus optional padding). "
+                            "This keeps charts responsive and makes the NOAA tab consistent with your recording window."
+                        ),
+                    )
+                    rr_pad_hours = int(
+                        st.number_input(
+                            "RR window padding (hours)",
+                            min_value=0,
+                            max_value=24 * 14,
+                            value=6,
+                            step=1,
+                            key="noaa_sync_rr_pad_hours",
+                            help="Extra hours to include before/after the RR timeline when slicing NOAA data.",
+                        )
+                    )
 
-            history_hours = st.slider(
-                "History window (hours)",
-                min_value=int(min_hours),
-                max_value=int(max_hours),
-                value=int(default_hours),
-                step=int(step_hours),
-                key=f"noaa_history_{selected_dataset}",
-                disabled=bool(sync_to_rr),
-            )
+                # Note: we don't dynamically disable this slider inside the form because
+                # forms don't rerun on widget edits. If RR sync is enabled, the history
+                # slider is ignored.
+                history_hours = st.slider(
+                    "History window (hours) (ignored when RR sync is enabled)",
+                    min_value=int(min_hours),
+                    max_value=int(max_hours),
+                    value=int(default_hours),
+                    step=int(step_hours),
+                    key=f"noaa_history_{selected_dataset}",
+                )
+                _ = st.form_submit_button("Apply NOAA view settings")
 
             if sync_to_rr and rr_min_utc is not None and rr_max_utc is not None:
                 window_start = rr_min_utc - pd.Timedelta(hours=int(rr_pad_hours))
@@ -16096,6 +16248,16 @@ that predicts cognitive performance based on:
                     event_source_options.append(("Kp threshold (NOAA planetary_k_index_3h)", "planetary_k_index_3h"))
                 if "geospace_dst" in dataset_options:
                     event_source_options.append(("Dst threshold (NOAA geospace_dst)", "geospace_dst"))
+                # Optional: DONKI event windows (solar-origin events → predicted Earth-arrival windows).
+                donki_datasets: Dict[str, pd.DataFrame] = {}
+                if has_donki:
+                    raw_donki = donki_state.get("datasets", {})
+                    if isinstance(raw_donki, dict):
+                        for k, v in raw_donki.items():
+                            if isinstance(k, str) and isinstance(v, pd.DataFrame):
+                                donki_datasets[k] = v
+                if "CMEAnalysis" in donki_datasets and not donki_datasets["CMEAnalysis"].empty:
+                    event_source_options.append(("DONKI CME (DBM arrival window; CMEAnalysis speed)", "__donki_cme__"))
 
                 if not event_source_options:
                     st.info(
@@ -16113,116 +16275,189 @@ that predicts cognitive performance based on:
                         key="space_analytics_event_source",
                     )
                     source_key = label_to_key.get(source_label, event_source_options[0][1])
-                    bundle = bundles.get(source_key)
-                    if bundle is None or bundle.frame.empty:
-                        st.warning("Selected event source has no data loaded yet.")
-                    else:
-                        value_cols = list(bundle.value_columns or [])
-                        if not value_cols:
-                            st.warning("Selected dataset has no numeric value columns.")
+                    if source_key == "__donki_cme__":
+                        cme_df = donki_datasets.get("CMEAnalysis", pd.DataFrame())
+                        if cme_df.empty:
+                            st.warning("DONKI CMEAnalysis is not loaded (or contains no rows). Fetch DONKI in Space Data first.")
                         else:
-                            default_val_col = value_cols[0]
-                            val_col = st.selectbox(
-                                "Value column",
-                                options=value_cols,
-                                index=value_cols.index(default_val_col) if default_val_col in value_cols else 0,
-                                key="space_analytics_event_value_col",
-                            )
-
-                            # Sensible defaults by event type
-                            default_threshold = 5.0 if source_key == "planetary_k_index_3h" else -50.0
-                            default_dir = "ge" if source_key == "planetary_k_index_3h" else "le"
-                            threshold = float(
+                            influence_h = int(
                                 st.number_input(
-                                    "Threshold",
-                                    value=float(default_threshold),
-                                    step=0.1,
-                                    key="space_analytics_event_threshold",
+                                    "Assumed post-arrival influence duration (hours)",
+                                    min_value=6,
+                                    max_value=24 * 14,
+                                    value=72,
+                                    step=6,
+                                    key="space_analytics_donki_cme_influence_h",
+                                    help=(
+                                        "This extends the predicted Earth-arrival window to capture storm + recovery. "
+                                        "Use a larger value (e.g., 72–120h) when you want longer recovery coverage."
+                                    ),
                                 )
                             )
-                            direction_label = st.selectbox(
-                                "Condition",
-                                options=["≥ threshold", "≤ threshold"],
-                                index=0 if default_dir == "ge" else 1,
-                                key="space_analytics_event_direction",
-                            )
-                            direction = "ge" if direction_label.startswith("≥") else "le"
-
-                            # Gap/duration controls (bounded)
-                            default_gap_h = 6 if source_key == "planetary_k_index_3h" else 3
-                            max_gap_h = int(
+                            max_events = int(
                                 st.number_input(
-                                    "Max gap between in-event samples (hours)",
+                                    "Max DONKI CME events to include",
                                     min_value=1,
-                                    max_value=48,
-                                    value=int(default_gap_h),
-                                    step=1,
-                                    key="space_analytics_event_max_gap_h",
+                                    max_value=500,
+                                    value=200,
+                                    step=10,
+                                    key="space_analytics_donki_cme_max_events",
+                                    help="Hard bound for deterministic runtime.",
                                 )
                             )
-                            min_duration_h = int(
-                                st.number_input(
-                                    "Minimum event duration (hours)",
-                                    min_value=0,
-                                    max_value=168,
-                                    value=3 if source_key == "planetary_k_index_3h" else 2,
-                                    step=1,
-                                    key="space_analytics_event_min_dur_h",
-                                )
+                            filter_to_hrv = st.checkbox(
+                                "Filter to events overlapping the HRV windowed timeline",
+                                value=True,
+                                key="space_analytics_donki_cme_filter_hrv",
+                                help="Keeps the catalog focused on your recording window.",
                             )
-                            pad_end_h = int(
-                                st.number_input(
-                                    "Pad event end (hours)",
-                                    min_value=0,
-                                    max_value=48,
-                                    value=0,
-                                    step=1,
-                                    key="space_analytics_event_pad_end_h",
-                                )
-                            )
-
                             detect_events = st.button(
-                                "🔎 Detect events",
-                                key="space_analytics_detect_events",
-                                help="Extracts start/end windows where the selected predictor crosses the threshold.",
+                                "🔎 Build DONKI CME influence windows",
+                                key="space_analytics_detect_donki_cme_events",
+                                help="Uses CMEAnalysis speed + a DBM transit-time estimate to build Earth-arrival influence windows.",
                             )
-
-                            # Store events in session for stability across reruns
                             if detect_events:
                                 try:
-                                    cfg = ThresholdEventConfig(
-                                        threshold=float(threshold),
-                                        direction=direction,  # type: ignore[arg-type]
-                                        max_gap=pd.Timedelta(hours=int(max_gap_h)),
-                                        min_duration=pd.Timedelta(hours=int(min_duration_h)),
-                                        pad_end=pd.Timedelta(hours=int(pad_end_h)),
+                                    ev_df = build_donki_cme_influence_windows(
+                                        cme_df,
+                                        influence_hours=int(influence_h),
+                                        max_events=int(max_events),
                                     )
-                                    ev_df = extract_threshold_events(
-                                        bundle.frame,
-                                        time_col=str(bundle.time_column),
-                                        value_col=str(val_col),
-                                        cfg=cfg,
-                                    )
+                                    if filter_to_hrv and not ev_df.empty and has_windowed:
+                                        w_min = pd.to_datetime(analytics_windowed_df.get("start"), utc=True, errors="coerce").min()
+                                        w_max = pd.to_datetime(analytics_windowed_df.get("start"), utc=True, errors="coerce").max()
+                                        if pd.notna(w_min) and pd.notna(w_max):
+                                            ev_df = ev_df.loc[
+                                                (ev_df["end_utc"] >= w_min) & (ev_df["start_utc"] <= w_max)
+                                            ].copy()
                                     st.session_state["space_analytics_event_catalog"] = {
                                         "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
                                         "params": {
                                             "source_key": str(source_key),
-                                            "value_col": str(val_col),
-                                            "threshold": float(threshold),
-                                            "direction": str(direction),
-                                            "max_gap_h": int(max_gap_h),
-                                            "min_duration_h": int(min_duration_h),
-                                            "pad_end_h": int(pad_end_h),
+                                            "influence_h": int(influence_h),
+                                            "max_events": int(max_events),
+                                            "filtered_to_hrv": bool(filter_to_hrv),
                                         },
                                         "events": ev_df,
                                     }
                                     if ev_df.empty:
-                                        st.info("No events detected for the selected threshold/configuration.")
+                                        st.info("No DONKI CME influence windows found for the current configuration.")
                                     else:
-                                        st.success(f"Detected {int(ev_df.shape[0])} event(s).")
+                                        st.success(f"Built {int(ev_df.shape[0])} DONKI CME influence window(s).")
                                 except Exception as exc:
-                                    log_exception(_LOGGER, "Space Analytics event detection failed", exc)
-                                    st.error(f"Event detection failed: {exc}")
+                                    log_exception(_LOGGER, "Space Analytics DONKI CME window build failed", exc)
+                                    st.error(f"DONKI CME window build failed: {exc}")
+                    else:
+                        bundle = bundles.get(source_key)
+                        if bundle is None or bundle.frame.empty:
+                            st.warning("Selected event source has no data loaded yet.")
+                        else:
+                            value_cols = list(bundle.value_columns or [])
+                            if not value_cols:
+                                st.warning("Selected dataset has no numeric value columns.")
+                            else:
+                                default_val_col = value_cols[0]
+                                val_col = st.selectbox(
+                                    "Value column",
+                                    options=value_cols,
+                                    index=value_cols.index(default_val_col) if default_val_col in value_cols else 0,
+                                    key="space_analytics_event_value_col",
+                                )
+
+                                # Sensible defaults by event type
+                                default_threshold = 5.0 if source_key == "planetary_k_index_3h" else -50.0
+                                default_dir = "ge" if source_key == "planetary_k_index_3h" else "le"
+                                threshold = float(
+                                    st.number_input(
+                                        "Threshold",
+                                        value=float(default_threshold),
+                                        step=0.1,
+                                        key="space_analytics_event_threshold",
+                                    )
+                                )
+                                direction_label = st.selectbox(
+                                    "Condition",
+                                    options=["≥ threshold", "≤ threshold"],
+                                    index=0 if default_dir == "ge" else 1,
+                                    key="space_analytics_event_direction",
+                                )
+                                direction = "ge" if direction_label.startswith("≥") else "le"
+
+                                # Gap/duration controls (bounded)
+                                default_gap_h = 6 if source_key == "planetary_k_index_3h" else 3
+                                max_gap_h = int(
+                                    st.number_input(
+                                        "Max gap between in-event samples (hours)",
+                                        min_value=1,
+                                        max_value=48,
+                                        value=int(default_gap_h),
+                                        step=1,
+                                        key="space_analytics_event_max_gap_h",
+                                    )
+                                )
+                                min_duration_h = int(
+                                    st.number_input(
+                                        "Minimum event duration (hours)",
+                                        min_value=0,
+                                        max_value=168,
+                                        value=3 if source_key == "planetary_k_index_3h" else 2,
+                                        step=1,
+                                        key="space_analytics_event_min_dur_h",
+                                    )
+                                )
+                                pad_end_h = int(
+                                    st.number_input(
+                                        "Pad event end (hours)",
+                                        min_value=0,
+                                        max_value=48,
+                                        value=0,
+                                        step=1,
+                                        key="space_analytics_event_pad_end_h",
+                                    )
+                                )
+
+                                detect_events = st.button(
+                                    "🔎 Detect events",
+                                    key="space_analytics_detect_events",
+                                    help="Extracts start/end windows where the selected predictor crosses the threshold.",
+                                )
+
+                                # Store events in session for stability across reruns
+                                if detect_events:
+                                    try:
+                                        cfg = ThresholdEventConfig(
+                                            threshold=float(threshold),
+                                            direction=direction,  # type: ignore[arg-type]
+                                            max_gap=pd.Timedelta(hours=int(max_gap_h)),
+                                            min_duration=pd.Timedelta(hours=int(min_duration_h)),
+                                            pad_end=pd.Timedelta(hours=int(pad_end_h)),
+                                        )
+                                        ev_df = extract_threshold_events(
+                                            bundle.frame,
+                                            time_col=str(bundle.time_column),
+                                            value_col=str(val_col),
+                                            cfg=cfg,
+                                        )
+                                        st.session_state["space_analytics_event_catalog"] = {
+                                            "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                                            "params": {
+                                                "source_key": str(source_key),
+                                                "value_col": str(val_col),
+                                                "threshold": float(threshold),
+                                                "direction": str(direction),
+                                                "max_gap_h": int(max_gap_h),
+                                                "min_duration_h": int(min_duration_h),
+                                                "pad_end_h": int(pad_end_h),
+                                            },
+                                            "events": ev_df,
+                                        }
+                                        if ev_df.empty:
+                                            st.info("No events detected for the selected threshold/configuration.")
+                                        else:
+                                            st.success(f"Detected {int(ev_df.shape[0])} event(s).")
+                                    except Exception as exc:
+                                        log_exception(_LOGGER, "Space Analytics event detection failed", exc)
+                                        st.error(f"Event detection failed: {exc}")
 
                             stored_events = st.session_state.get("space_analytics_event_catalog")
                             if isinstance(stored_events, dict) and isinstance(stored_events.get("events"), pd.DataFrame):
@@ -16311,6 +16546,146 @@ that predicts cognitive performance based on:
                                         default=default_targets,
                                         key="space_analytics_event_targets",
                                     )
+
+                                    st.markdown("---")
+                                    st.markdown("##### 📈 Correlations within timeframes (baseline/event/recovery)")
+                                    st.caption(
+                                        "Computes Pearson correlations between a selected space-weather predictor and your chosen HRV/HRF metrics "
+                                        "inside each timeframe. This helps quantify *association* during baseline vs impact vs recovery."
+                                    )
+                                    predictor_candidates: List[str] = []
+                                    for candidate in ("planetary_k_index_3h", "geospace_dst"):
+                                        if candidate in dataset_options:
+                                            predictor_candidates.append(candidate)
+                                    predictor_candidates = predictor_candidates or dataset_options[:1]
+                                    predictor_key = st.selectbox(
+                                        "Predictor dataset (Earth-side index)",
+                                        options=predictor_candidates,
+                                        index=0,
+                                        format_func=lambda k: bundles.get(k).spec.title if k in bundles else k,
+                                        key="space_analytics_phase_corr_predictor_key",
+                                    )
+                                    pred_bundle = bundles.get(str(predictor_key))
+                                    pred_value_cols = (
+                                        list(pred_bundle.value_columns or [])
+                                        if pred_bundle is not None
+                                        else []
+                                    )
+                                    if pred_bundle is None or pred_bundle.frame.empty or not pred_value_cols:
+                                        st.info("Selected predictor dataset is not available for correlations.")
+                                    else:
+                                        pred_val_col = st.selectbox(
+                                            "Predictor value column",
+                                            options=pred_value_cols,
+                                            index=0,
+                                            key="space_analytics_phase_corr_predictor_val_col",
+                                        )
+                                        merge_tol_min = int(
+                                            st.number_input(
+                                                "Time alignment tolerance (minutes)",
+                                                min_value=15,
+                                                max_value=360,
+                                                value=90,
+                                                step=15,
+                                                key="space_analytics_phase_corr_merge_tol_min",
+                                                help="Max allowed gap when aligning predictor samples to HRV windows.",
+                                            )
+                                        )
+                                        compute_phase_corr = st.button(
+                                            "📈 Compute correlations for baseline / event / recovery",
+                                            key="space_analytics_compute_phase_corr",
+                                            disabled=(not bool(target_metrics)) or (event_start is None) or (event_end is None),
+                                        )
+                                        if compute_phase_corr:
+                                            try:
+                                                w = analytics_windowed_df.copy()
+                                                w["start"] = pd.to_datetime(w["start"], errors="coerce", utc=True)
+                                                w = w.dropna(subset=["start"]).sort_values("start")
+                                                if require_hrf_quality and "hrf_quality_ok" in w.columns:
+                                                    q = w["hrf_quality_ok"].astype("boolean").fillna(False)
+                                                    w = w.loc[q.to_numpy()]
+                                                if w.empty:
+                                                    st.error("No valid HRV/HRF windows available after filtering.")
+                                                else:
+                                                    assert event_start is not None and event_end is not None  # invariant
+                                                    baseline_start = event_start - pd.Timedelta(hours=int(baseline_pre_h))
+                                                    baseline_end = event_start
+                                                    phases: List[Tuple[str, pd.Timestamp, pd.Timestamp]] = [
+                                                        ("baseline", baseline_start, baseline_end),
+                                                        ("event", event_start, event_end),
+                                                    ]
+                                                    if include_recovery:
+                                                        phases.append(
+                                                            (
+                                                                "recovery",
+                                                                event_end,
+                                                                event_end + pd.Timedelta(hours=int(recovery_post_h)),
+                                                            )
+                                                        )
+
+                                                    corr_parts: List[pd.DataFrame] = []
+                                                    for phase_label, p_start, p_end in phases:
+                                                        part = _phase_correlation_table(
+                                                            w,
+                                                            pred_bundle.frame,
+                                                            time_col="start",
+                                                            predictor_time_col=str(pred_bundle.time_column),
+                                                            predictor_value_col=str(pred_val_col),
+                                                            metric_cols=list(target_metrics),
+                                                            phase_label=str(phase_label),
+                                                            phase_start_utc=p_start,
+                                                            phase_end_utc=p_end,
+                                                            merge_tolerance_minutes=int(merge_tol_min),
+                                                        )
+                                                        if not part.empty:
+                                                            corr_parts.append(part)
+                                                    corr_df = (
+                                                        pd.concat(corr_parts, ignore_index=True)
+                                                        if corr_parts
+                                                        else pd.DataFrame()
+                                                    )
+                                                    st.session_state["space_analytics_phase_corr_results"] = {
+                                                        "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                                                        "params": {
+                                                            "predictor_key": str(predictor_key),
+                                                            "predictor_value_col": str(pred_val_col),
+                                                            "merge_tol_min": int(merge_tol_min),
+                                                            "baseline_pre_h": int(baseline_pre_h),
+                                                            "include_recovery": bool(include_recovery),
+                                                            "recovery_post_h": int(recovery_post_h) if include_recovery else 0,
+                                                            "metrics": list(target_metrics),
+                                                        },
+                                                        "results": corr_df,
+                                                    }
+                                                    if corr_df.empty:
+                                                        st.info("No correlations could be computed in the selected phase windows.")
+                                                    else:
+                                                        st.success("Phase correlation tables computed.")
+                                            except Exception as exc:
+                                                log_exception(_LOGGER, "Space Analytics phase correlations failed", exc)
+                                                st.error(f"Phase correlations failed: {exc}")
+
+                                        stored_corr = st.session_state.get("space_analytics_phase_corr_results")
+                                        if isinstance(stored_corr, dict) and isinstance(stored_corr.get("results"), pd.DataFrame):
+                                            corr_df = stored_corr["results"]
+                                            if not corr_df.empty:
+                                                with st.expander("✅ Phase correlations (saved for this session)", expanded=True):
+                                                    st.caption(f"Computed: {stored_corr.get('computed_at_utc', 'unknown')}")
+                                                    st.dataframe(corr_df, use_container_width=True)
+                                                    # Highlight top correlations per phase
+                                                    if "pearson_r" in corr_df.columns and "phase" in corr_df.columns:
+                                                        try:
+                                                            top_rows = (
+                                                                corr_df.assign(_abs_r=corr_df["pearson_r"].abs())
+                                                                .sort_values(["phase", "_abs_r"], ascending=[True, False])
+                                                                .groupby("phase", as_index=False)
+                                                                .head(5)
+                                                                .drop(columns=["_abs_r"], errors="ignore")
+                                                            )
+                                                            st.markdown("**Top |r| rows per phase:**")
+                                                            st.dataframe(top_rows, use_container_width=True)
+                                                        except Exception:
+                                                            pass
 
                                     run_event_delta = st.button(
                                         "🧪 Run baseline vs event delta table",
