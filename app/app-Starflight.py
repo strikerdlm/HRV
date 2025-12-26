@@ -1,6 +1,64 @@
 # flake8: noqa
 from __future__ import annotations
 
+"""
+Compatibility Streamlit entrypoint.
+
+This repository has been edited from multiple machines, and some setups have
+used historical filenames (e.g., `app/app-Starflight.py`) as the launch target.
+To ensure the Research UI behaves identically regardless of which entrypoint
+file you run, this script delegates to the canonical module: `app/app.py`.
+
+Important:
+- Do NOT add Streamlit commands above the delegation. `app/app.py` must own
+  `st.set_page_config()` ordering to keep Streamlit stable.
+"""
+
+import os
+import sys
+from pathlib import Path
+
+import streamlit as st
+
+_ENV_SKIP_PAGE_CONFIG = "HRV_SKIP_STREAMLIT_PAGE_CONFIG"
+_ENV_APP_MODE = "HRV_APP_MODE"
+
+
+def _ensure_import_paths() -> None:
+    """Ensure repo-root + app/ are on sys.path in a deterministic order."""
+    app_dir = Path(__file__).resolve().parent
+    repo_root = app_dir.parent
+
+    app_str = str(app_dir)
+    root_str = str(repo_root)
+
+    # Remove existing occurrences so we can reinsert in a stable order.
+    sys.path[:] = [p for p in sys.path if p not in (root_str, app_str)]
+    # Prefer repo root so `app` resolves as a package, then keep app/ so
+    # intra-app absolute imports (e.g., `import hrv_core`) continue to work.
+    sys.path.insert(0, root_str)
+    sys.path.insert(1, app_str)
+
+
+def _delegate() -> None:
+    """Delegate to the canonical Research UI entrypoint."""
+    _ensure_import_paths()
+    os.environ[_ENV_SKIP_PAGE_CONFIG] = "0"
+    os.environ[_ENV_APP_MODE] = "research"
+
+    from app import app as research_app  # noqa: PLC0415
+
+    research_app.main()
+
+
+_delegate()
+st.stop()
+
+# -------------------------------------------------------------------------
+# Legacy implementation below (kept for history). Not executed because we
+# delegate + stop above.
+# -------------------------------------------------------------------------
+
 # NOTE:
 # This file is both a Streamlit entrypoint (`streamlit run app/app.py`) and is
 # imported by the unit tests as a module (`import app.app`). Streamlit execution
