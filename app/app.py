@@ -15397,6 +15397,76 @@ that predicts cognitive performance based on:
         )
         has_donki = bool(donki_state.get("loaded"))
 
+        def _space_analytics_build_windows(
+            *,
+            window: str,
+            step: str,
+            min_rr_count: int,
+            max_windows_cap: int,
+            fast_time_domain_only: bool,
+        ) -> pd.DataFrame:
+            """
+            Build windowed HRV/HRF metrics for Space Analytics without forcing a full HRV recomputation.
+
+            This is intentionally button-driven and bounded:
+            - Iterates over uploaded datasets only
+            - Uses existing `_cached_windowed()` for stable caching
+            """
+            if not isinstance(window, str) or not window.strip():
+                raise ValueError("window must be a non-empty string (e.g., '5min').")
+            if not isinstance(step, str) or not step.strip():
+                raise ValueError("step must be a non-empty string (e.g., '1min').")
+            if int(min_rr_count) <= 0:
+                raise ValueError("min_rr_count must be > 0.")
+            if int(max_windows_cap) <= 0:
+                raise ValueError("max_windows_cap must be > 0.")
+
+            # Validate parseability early (helps users catch typos like '5 mins')
+            _ = pd.to_timedelta(window)
+            _ = pd.to_timedelta(step)
+
+            rr_sources: Dict[str, UploadedRR] = {}
+            if isinstance(uploads, dict) and uploads:
+                rr_sources = uploads
+            elif isinstance(datasets, dict) and datasets:
+                rr_sources = datasets
+            else:
+                cached = st.session_state.get("_hrv_cached_datasets", {})
+                if isinstance(cached, dict):
+                    rr_sources = cached  # type: ignore[assignment]
+
+            windowed_all: List[pd.DataFrame] = []
+            for name, up in rr_sources.items():
+                if not isinstance(up, UploadedRR):
+                    continue
+                if not isinstance(up.df, pd.DataFrame) or up.df.empty:
+                    continue
+                rr_col = "rr_intervals_ms"
+                if bool(apply_clean) and "rr_intervals_ms_clean" in up.df.columns:
+                    rr_col = "rr_intervals_ms_clean"
+                wdf = _cached_windowed(
+                    up.df,
+                    rr_col=rr_col,
+                    window=str(window),
+                    step=str(step),
+                    min_rr_count=int(min_rr_count),
+                    max_windows=int(max_windows_cap),
+                    include_advanced=not bool(fast_time_domain_only),
+                )
+                if not wdf.empty:
+                    windowed_all.append(wdf.assign(source=str(name)))
+
+            if not windowed_all:
+                return pd.DataFrame()
+
+            out = pd.concat(windowed_all, ignore_index=True)
+            if "start" in out.columns:
+                out["start"] = pd.to_datetime(out["start"], errors="coerce", utc=True)
+                out = out.dropna(subset=["start"]).sort_values("start").reset_index(drop=True)
+            if "end" in out.columns:
+                out["end"] = pd.to_datetime(out["end"], errors="coerce", utc=True)
+            return out
+
         with st.expander("📦 Data status", expanded=True):
             cols = st.columns(4)
             with cols[0]:
@@ -15418,26 +15488,193 @@ that predicts cognitive performance based on:
                 if last_dk is not None:
                     st.caption(f"Updated: {last_dk}")
 
+            # ------------------------------------------------------------------
+            # Make prerequisites explicit (users often confuse "no results" with "broken")
+            # ------------------------------------------------------------------
+            rr_sources_diag = uploads if isinstance(uploads, dict) and uploads else datasets
+            dur_min_list: List[float] = []
+            beats_list: List[int] = []
+            if isinstance(rr_sources_diag, dict):
+                for up in rr_sources_diag.values():
+                    if not isinstance(up, UploadedRR):
+                        continue
+                    if up.rr_ms is None or int(up.rr_ms.size) <= 0:
+                        continue
+                    beats_list.append(int(up.rr_ms.size))
+                    dur_min_list.append(float(up.rr_ms.sum() / 60000.0))
+            window_td_min = float("nan")
+            try:
+                window_td_min = float(pd.to_timedelta(str(win)).total_seconds() / 60.0)
+            except Exception:
+                window_td_min = float("nan")
+            if dur_min_list:
+                dur_min = float(np.nanmin(dur_min_list))
+                dur_max = float(np.nanmax(dur_min_list))
+                st.caption(
+                    f"HRV uploads: {len(dur_min_list)} file(s) | "
+                    f"Duration: {dur_min:.2f}–{dur_max:.2f} min | "
+                    f"Beats: {int(np.sum(beats_list))}"
+                )
+            st.caption(
+                f"Window settings: window=`{str(win)}` step=`{str(step)}` min_rr={int(min_rr)} "
+                f"(fast windows={bool(fast_windowing)})."
+            )
+            if not has_windowed and dur_min_list and np.isfinite(window_td_min):
+                if float(np.nanmax(dur_min_list)) < window_td_min:
+                    st.warning(
+                        "No HRV windows were generated because your recording(s) are **shorter than the selected window**. "
+                        f"Max duration ≈ {float(np.nanmax(dur_min_list)):.2f} min, but window = {window_td_min:.2f} min. "
+                        "Reduce the window/step or upload a longer recording."
+                    )
+
             st.markdown("---")
             c1, c2, c3, c4 = st.columns(4)
             with c1:
                 if st.button("⚡ Load cached SWPC", key="space_analytics_load_swpc_cache"):
+                    before = bool(space_state.get("loaded"))
                     _load_space_weather_cache_only(space_state)
-                    st.success("Loaded cached SWPC datasets (no network).")
+                    after = bool(space_state.get("loaded"))
+                    if after and not before:
+                        st.success("Loaded cached SWPC datasets (no network).")
+                    elif after:
+                        st.info("SWPC cache is already loaded for this session.")
+                    else:
+                        st.warning("No cached SWPC datasets found on disk (nothing loaded).")
             with c2:
                 if st.button("⚡ Load cached NOAA", key="space_analytics_load_noaa_cache"):
+                    before_n = len(noaa_state.get("bundles", {}) or {})
                     _load_noaa_space_cache_only(noaa_state, keys=NOAA_FAST_KEYS)
-                    st.success("Loaded cached NOAA datasets (no network).")
+                    after_n = len(noaa_state.get("bundles", {}) or {})
+                    errs = noaa_state.get("errors", {}) if isinstance(noaa_state.get("errors"), dict) else {}
+                    if after_n == 0:
+                        st.warning(
+                            "No cached NOAA datasets were loaded. "
+                            "If this is your first run on this machine, click **Fetch NOAA (Core)**."
+                        )
+                        if errs:
+                            st.caption("NOAA cache errors: " + " | ".join(list(errs.values())[:3]))
+                    elif errs:
+                        st.warning(f"Loaded {after_n} cached NOAA dataset(s), with {len(errs)} warning(s).")
+                    elif after_n > before_n:
+                        st.success(f"Loaded {after_n} cached NOAA dataset(s) (no network).")
+                    else:
+                        st.info(f"NOAA cache already loaded ({after_n} dataset(s)).")
             with c3:
                 if st.button("📥 Fetch NOAA (Core)", key="space_analytics_fetch_noaa_core"):
                     with st.spinner("Fetching NOAA feeds…"):
                         _load_noaa_space_datasets(noaa_state, keys=NOAA_CORE_KEYS)
-                    st.success("Fetched NOAA Core feeds.")
+                    after_n = len(noaa_state.get("bundles", {}) or {})
+                    errs = noaa_state.get("errors", {}) if isinstance(noaa_state.get("errors"), dict) else {}
+                    if after_n == 0:
+                        st.error("No NOAA datasets loaded. Check network access and try **Force refresh NOAA (Core)**.")
+                        if errs:
+                            st.caption("NOAA errors: " + " | ".join(list(errs.values())[:3]))
+                    elif errs:
+                        st.warning(f"Fetched {after_n} NOAA Core dataset(s), with {len(errs)} warning(s).")
+                    else:
+                        st.success(f"Fetched {after_n} NOAA Core dataset(s).")
             with c4:
                 if st.button("🔄 Force refresh NOAA (Core)", key="space_analytics_refresh_noaa_core"):
                     with st.spinner("Refreshing NOAA feeds…"):
                         _load_noaa_space_datasets(noaa_state, keys=NOAA_CORE_KEYS, use_cache=False)
-                    st.success("Refreshed NOAA Core feeds.")
+                    after_n = len(noaa_state.get("bundles", {}) or {})
+                    errs = noaa_state.get("errors", {}) if isinstance(noaa_state.get("errors"), dict) else {}
+                    if after_n == 0:
+                        st.error("No NOAA datasets loaded after refresh. Check network/DNS/firewall and try again.")
+                        if errs:
+                            st.caption("NOAA errors: " + " | ".join(list(errs.values())[:3]))
+                    elif errs:
+                        st.warning(f"Refreshed {after_n} NOAA Core dataset(s), with {len(errs)} warning(s).")
+                    else:
+                        st.success(f"Refreshed {after_n} NOAA Core dataset(s).")
+
+            # Show any NOAA load/fetch errors explicitly (no nested expanders).
+            noaa_errs = noaa_state.get("errors", {}) if isinstance(noaa_state.get("errors"), dict) else {}
+            if noaa_errs:
+                st.warning(
+                    "NOAA feed warnings/errors (first few):\n"
+                    + "\n".join([f"- {k}: {v}" for k, v in list(noaa_errs.items())[:6]])
+                )
+
+            st.markdown("---")
+            st.markdown("##### 🪟 Windowed HRV/HRF (required for correlations + ML)")
+            st.caption(
+                "If **HRV windows** above show '—', correlations/ML will be disabled. "
+                "Build windows here (no network; bounded)."
+            )
+            col_wcfg, col_wrun = st.columns([0.72, 0.28])
+            with col_wcfg:
+                sa_win = st.text_input(
+                    "Window (Space Analytics override)",
+                    value=str(win),
+                    key="space_analytics_window_override",
+                    help="Examples: 5min, 2min, 60s. Must be shorter than your recording.",
+                )
+                sa_step = st.text_input(
+                    "Step (Space Analytics override)",
+                    value=str(step),
+                    key="space_analytics_step_override",
+                    help="Examples: 1min, 30s. Smaller step → more windows.",
+                )
+                sa_min_rr = st.number_input(
+                    "Min RR per window (override)",
+                    min_value=10,
+                    max_value=2000,
+                    value=int(min_rr),
+                    step=10,
+                    key="space_analytics_min_rr_override",
+                )
+                sa_fast = st.checkbox(
+                    "Fast time-domain only (override)",
+                    value=bool(fast_windowing),
+                    help="Recommended for short windows; skips spectral/nonlinear per-window computations.",
+                    key="space_analytics_fast_window_override",
+                )
+            with col_wrun:
+                compute_windows_clicked = st.button(
+                    "🪟 Compute windows",
+                    key="space_analytics_compute_windows",
+                    type="primary",
+                    disabled=not bool(has_hrv_data_uploaded),
+                    help="Builds windowed HRV/HRF metrics from uploaded RR data for Space Analytics.",
+                )
+                if compute_windows_clicked:
+                    try:
+                        new_windowed = _space_analytics_build_windows(
+                            window=str(sa_win),
+                            step=str(sa_step),
+                            min_rr_count=int(sa_min_rr),
+                            max_windows_cap=int(max_windows),
+                            fast_time_domain_only=bool(sa_fast),
+                        )
+                        st.session_state["_hrv_cached_windowed_df"] = new_windowed
+                        st.session_state["space_analytics_last_window_build"] = {
+                            "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                            "rows": int(new_windowed.shape[0]) if isinstance(new_windowed, pd.DataFrame) else 0,
+                            "window": str(sa_win),
+                            "step": str(sa_step),
+                            "min_rr": int(sa_min_rr),
+                            "fast": bool(sa_fast),
+                        }
+                    except Exception as exc:
+                        log_exception(_LOGGER, "Space Analytics window build failed", exc)
+                        st.session_state["space_analytics_last_window_build"] = {
+                            "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                            "rows": 0,
+                            "error": str(exc),
+                        }
+                    st.rerun()
+
+            last_build = st.session_state.get("space_analytics_last_window_build")
+            if isinstance(last_build, dict):
+                if str(last_build.get("error") or "").strip():
+                    st.error(f"Last window build failed: {last_build.get('error')}")
+                else:
+                    st.caption(
+                        f"Last window build: {last_build.get('computed_at_utc','unknown')} | "
+                        f"rows={int(last_build.get('rows', 0))} | "
+                        f"window={last_build.get('window','?')} step={last_build.get('step','?')}"
+                    )
 
         # GPU context (display only; actual acceleration depends on backend)
         gpu_info = get_gpu_info() if GPU_PROCESSING_AVAILABLE else None
@@ -16311,28 +16548,42 @@ that predicts cognitive performance based on:
                             if c not in ("start", ml_target)
                             and c.startswith(tuple(f"{k}_" for k in ml_predictors))
                         ]
-                        ml_df = full_matrix[["start", ml_target] + feature_cols].copy()
-                        with st.spinner("Training ML models…"):
-                            try:
-                                ml_results = _run_ml_models_space_weather(
-                                    ml_df,
-                                    target_metric=str(ml_target),
+                        if not feature_cols:
+                            st.error("No lagged predictor features were built. Try fewer predictors, smaller lag range, or larger merge tolerance.")
+                        else:
+                            ml_df = full_matrix[["start", ml_target] + feature_cols].copy()
+                            usable_rows = int(ml_df.dropna().shape[0])
+                            st.caption(
+                                f"ML usable samples: **{usable_rows}** / {int(ml_df.shape[0])} windows | "
+                                f"Features: **{len(feature_cols)}**"
+                            )
+                            if usable_rows < 30:
+                                st.error(
+                                    "Not enough samples for ML. This ML suite requires **≥30** complete windows after "
+                                    "merging predictors. Reduce window/step to create more windows, or upload a longer recording."
                                 )
-                                st.session_state["space_analytics_ml_results"] = {
-                                    "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
-                                    "params": {
-                                        "predictors": list(ml_predictors),
-                                        "target": str(ml_target),
-                                        "lags": list(lags_ml),
-                                        "merge_tol_minutes": int(ml_merge_tol),
-                                        "gpu_enabled": bool(gpu_enabled),
-                                    },
-                                    "results": ml_results,
-                                }
-                                st.success("ML training completed.")
-                            except Exception as exc:
-                                log_exception(_LOGGER, "Space Analytics ML training failed", exc)
-                                st.error(f"ML training failed: {exc}")
+                            else:
+                                with st.spinner("Training ML models…"):
+                                    try:
+                                        ml_results = _run_ml_models_space_weather(
+                                            ml_df,
+                                            target_metric=str(ml_target),
+                                        )
+                                        st.session_state["space_analytics_ml_results"] = {
+                                            "computed_at_utc": pd.Timestamp.utcnow().strftime("%Y-%m-%d %H:%M UTC"),
+                                            "params": {
+                                                "predictors": list(ml_predictors),
+                                                "target": str(ml_target),
+                                                "lags": list(lags_ml),
+                                                "merge_tol_minutes": int(ml_merge_tol),
+                                                "gpu_enabled": bool(gpu_enabled),
+                                            },
+                                            "results": ml_results,
+                                        }
+                                        st.success("ML training completed.")
+                                    except Exception as exc:
+                                        log_exception(_LOGGER, "Space Analytics ML training failed", exc)
+                                        st.error(f"ML training failed: {exc}")
 
             stored_ml = st.session_state.get("space_analytics_ml_results")
             if isinstance(stored_ml, dict) and isinstance(stored_ml.get("results"), dict):
