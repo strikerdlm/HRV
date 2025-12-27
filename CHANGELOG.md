@@ -93,7 +93,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **DONKI CME influence windows + phase correlations in Space Analytics** (`app/app.py`, `app/space_weather_influence.py`, `tests/test_space_weather_influence.py`): Space Analytics event-aligned analysis can now build CME arrival/influence windows from DONKI CMEAnalysis speeds and compute baseline/event/recovery correlations vs Kp/Dst within those windows.
 - **CME/shock arrival forecasts in Impact Predictions** (`app/space_weather_impact.py`, `app/app.py`): Added NASA DONKI **WSA+ENLIL** `estimatedShockArrivalTime` forecasts (with Kp scenario range + DBM cross-check using the correct **21.5 R☉ → 1 AU** propagation distance when `time21_5` is provided) and surfaced **confidence** in the summary table and event cards; added an in-app “Method & Accuracy” explainer.
 - **Custom UI palette applied to Flight Surgeon + Overview boxes** (`app/welcome_header.py`, `app/app.py`): Applied the neutral palette (`#F2F1EF/#D8CFD0/#B1A6A4/#697184/#413F3D`) to custom HTML banners/cards on the Flight Surgeon header and the Overview page (without changing Streamlit’s default theme).
-- **Entrypoint compatibility wrappers** (`app/app-Starflight.py`, `app/researcher_app.py`): Running older/alternate filenames now delegates to the canonical Research UI (`app/app.py` via `app/research_app.py`) so behavior stays consistent across machines.
+- **Entrypoint compatibility wrapper** (`app/app-Starflight.py`): Running older/alternate filenames now delegates to the canonical Research UI (`app/app.py` via `app/research_app.py`) so behavior stays consistent across machines.
 
 ## [1.8.64] - 2025-12-26
 
