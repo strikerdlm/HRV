@@ -127,6 +127,8 @@ from space_weather_influence import (
 )
 from noaa_space import (
     NOAADataBundle,
+    NOAA_SOURCES,
+    fetch_noaa_source,
     load_noaa_space_data,
     load_noaa_space_cache,
     slice_noaa_bundle_time_range,
@@ -266,6 +268,7 @@ try:
         ImpactSeverity,
         EnergyCategory,
         fetch_space_weather_snapshot,
+        fetch_space_weather_snapshot_with_progress,
         fetch_xray_impact,
         fetch_sep_impact,
         fetch_plasma_impact,
@@ -282,6 +285,23 @@ try:
     SPACE_WEATHER_IMPACT_AVAILABLE = True
 except ImportError:
     SPACE_WEATHER_IMPACT_AVAILABLE = False
+
+# Space weather progress tracking module
+try:
+    from space_weather_progress import (
+        ProgressTracker,
+        ProgressStep,
+        StepStatus,
+        create_impact_prediction_tracker,
+        create_donki_tracker,
+        create_noaa_tracker,
+        render_progress,
+        run_with_progress,
+        run_parallel_with_progress,
+    )
+    SPACE_WEATHER_PROGRESS_AVAILABLE = True
+except ImportError:
+    SPACE_WEATHER_PROGRESS_AVAILABLE = False
 
 # Population norms for comparison
 try:
@@ -1903,6 +1923,95 @@ def _load_noaa_space_datasets(
         state["loading"] = False
 
 
+def _load_noaa_space_datasets_with_progress(
+    state: Dict[str, Any],
+    *,
+    keys: Optional[Sequence[str]] = None,
+    use_cache: bool = True,
+    allow_stale_cache: bool = False,
+    on_step_start: Optional[Callable[[str], None]] = None,
+    on_step_complete: Optional[Callable[[str, int, Optional[str]], None]] = None,
+    on_step_error: Optional[Callable[[str, str], None]] = None,
+) -> None:
+    """
+    Populate the NOAA space datasets with progress callbacks for UI updates.
+    
+    This version fetches each dataset sequentially to provide real-time
+    progress feedback.
+    """
+    from noaa_space import NOAA_SOURCES, fetch_noaa_source
+    
+    state["loading"] = True
+    selected_keys = list(keys) if keys is not None else list(NOAA_SOURCES.keys())
+    bundles: Dict[str, Any] = {}
+    errors: Dict[str, str] = {}
+    
+    try:
+        for key in selected_keys:
+            # Notify step start
+            if on_step_start:
+                try:
+                    on_step_start(key)
+                except Exception:
+                    pass
+            
+            spec = NOAA_SOURCES.get(key)
+            if spec is None:
+                error_msg = f"Unknown NOAA dataset key: {key}"
+                errors[key] = error_msg
+                if on_step_error:
+                    try:
+                        on_step_error(key, error_msg)
+                    except Exception:
+                        pass
+                continue
+            
+            try:
+                bundle = fetch_noaa_source(
+                    spec,
+                    use_cache=use_cache,
+                    allow_stale_cache=allow_stale_cache,
+                )
+                bundles[key] = bundle
+                row_count = len(bundle.frame) if bundle.frame is not None else 0
+                
+                # Notify completion
+                if on_step_complete:
+                    try:
+                        on_step_complete(key, row_count, None)
+                    except Exception:
+                        pass
+                        
+            except Exception as exc:
+                error_msg = str(exc)
+                errors[key] = error_msg
+                if on_step_error:
+                    try:
+                        on_step_error(key, error_msg)
+                    except Exception:
+                        pass
+        
+        state["bundles"] = bundles
+        state["errors"] = errors
+        state["last_updated"] = pd.Timestamp.utcnow()
+        state["correlations"] = {}
+        state["corr_params"] = {}
+        state["global_corr"] = pd.DataFrame()
+        state["global_corr_labels"] = {}
+        
+    except Exception as exc:
+        state["bundles"] = {}
+        state["errors"] = {"__global__": str(exc)}
+        state["last_updated"] = pd.Timestamp.utcnow()
+        state["correlations"] = {}
+        state["corr_params"] = {}
+        state["global_corr"] = pd.DataFrame()
+        state["global_corr_labels"] = {}
+        
+    finally:
+        state["loading"] = False
+
+
 def _load_noaa_space_cache_only(
     state: Dict[str, Any],
     *,
@@ -3282,6 +3391,112 @@ def _fetch_donki_datasets(
             )
         except Exception as exc:
             errors[code] = str(exc)
+    state["datasets"] = datasets
+    state["errors"] = errors
+    state["start_date"] = start_date
+    state["end_date"] = end_date
+    state["last_updated"] = pd.Timestamp.utcnow()
+    state["summary"] = _build_donki_summary(datasets)
+    state["daily_counts"] = _donki_daily_counts(datasets)
+    state["loaded"] = True if datasets else False
+
+
+def _fetch_donki_datasets_with_progress(
+    state: Dict[str, Any],
+    start_date: str,
+    end_date: str,
+    endpoints: Optional[List[str]] = None,
+    *,
+    on_step_start: Optional[Callable[[str], None]] = None,
+    on_step_complete: Optional[Callable[[str, int, Optional[str]], None]] = None,
+    on_step_error: Optional[Callable[[str, str], None]] = None,
+) -> None:
+    """Fetch DONKI datasets with progress callbacks for UI updates.
+    
+    Args:
+        state: DONKI state dict to populate.
+        start_date: Start date (ISO format).
+        end_date: End date (ISO format).
+        endpoints: Optional list of endpoint codes to fetch.
+        on_step_start: Callback when a fetch starts. Called with endpoint code.
+        on_step_complete: Callback when a fetch completes. Called with (code, row_count, error).
+        on_step_error: Callback when a fetch fails. Called with (code, error_message).
+    """
+    if not NASA_API_KEY:
+        state["loaded"] = False
+        state["errors"] = {"auth": "NASA_API_KEY is not set."}
+        if on_step_error:
+            try:
+                on_step_error("auth", "NASA_API_KEY is not set.")
+            except Exception:
+                pass
+        return
+    
+    targets = endpoints or list(DONKI_ENDPOINTS.keys())
+    datasets: Dict[str, pd.DataFrame] = {}
+    errors: Dict[str, str] = {}
+    
+    for code in targets:
+        # Notify step start
+        if on_step_start:
+            try:
+                on_step_start(code)
+            except Exception:
+                pass
+        
+        try:
+            config = DONKI_ENDPOINTS.get(code, {})
+            default_days = int(config.get("default_days", 30))
+            start_to_use = start_date
+            end_to_use = end_date
+            if default_days == 7:
+                adjust_start, adjust_end = _donki_default_range(7)
+                start_to_use = max(adjust_start, start_date)
+                end_to_use = end_date if end_date else adjust_end
+            cache_file = (
+                DONKI_CACHE_DIR
+                / f"{code}_{start_to_use}_{end_to_use or 'auto'}.json"
+            )
+            cached_df = _read_dataframe_cache(
+                cache_file, max_age=DONKI_CACHE_TTL)
+            if cached_df is not None:
+                datasets[code] = cached_df
+                # Notify completion (from cache)
+                if on_step_complete:
+                    try:
+                        on_step_complete(code, len(cached_df), None)
+                    except Exception:
+                        pass
+                continue
+            
+            df = fetch_donki(code, start_to_use, end_to_use)
+            _write_dataframe_cache(cache_file, df)
+            datasets[code] = df
+            
+            # Notify completion
+            if on_step_complete:
+                try:
+                    on_step_complete(code, len(df), None)
+                except Exception:
+                    pass
+                    
+        except requests.HTTPError as exc:
+            error_msg = f"{exc.response.status_code if exc.response else 'HTTP'} error"
+            errors[code] = error_msg
+            if on_step_error:
+                try:
+                    on_step_error(code, error_msg)
+                except Exception:
+                    pass
+        except Exception as exc:
+            error_msg = str(exc)
+            errors[code] = error_msg
+            if on_step_error:
+                try:
+                    on_step_error(code, error_msg)
+                except Exception:
+                    pass
+    
     state["datasets"] = datasets
     state["errors"] = errors
     state["start_date"] = start_date
@@ -13270,29 +13485,57 @@ that predicts cognitive performance based on:
                 help="Fetch SWPC Kp+F10.7 and NOAA feeds (scope is controlled by the NOAA dashboard settings below).",
             )
 
-        # 1) Predictions (button)
+        # 1) Predictions (button) - Now with detailed progress tracking
         if fetch_prediction_clicked:
             st.session_state["impact_snapshot_loading"] = True
             started_utc = pd.Timestamp.utcnow()
-            try:
-                with st.status(
-                    "Fetching Impact Predictions…", state="running", expanded=True
-                ) as status:
-                    snapshot_holder: Dict[str, Any] = {"snapshot": None}
-                    ok = _run_space_data_step(
-                        _space_data_step_runner_state(),
-                        step_id="impact_run_all",
-                        label="Impact Predictions: Fetch Prediction (parallel)",
-                        fn=lambda: snapshot_holder.__setitem__(
-                            "snapshot", fetch_space_weather_snapshot()
-                        ),
+            
+            # Use new progress tracking if available
+            if SPACE_WEATHER_PROGRESS_AVAILABLE:
+                progress_container = st.empty()
+                tracker = create_impact_prediction_tracker()
+                tracker.start_operation()
+                
+                try:
+                    # Define callbacks for real-time progress updates
+                    def on_step_start(step_name: str) -> None:
+                        tracker.start_step(step_name)
+                        render_progress(tracker, progress_container, is_running=True)
+                    
+                    def on_step_complete(
+                        step_name: str,
+                        event: Optional[ImpactEvent],
+                        error: Optional[str]
+                    ) -> None:
+                        if error:
+                            tracker.fail_step(step_name, error)
+                        else:
+                            tracker.complete_step(step_name, event)
+                        render_progress(tracker, progress_container, is_running=True)
+                    
+                    def on_step_error(step_name: str, error: str) -> None:
+                        tracker.fail_step(step_name, error)
+                        render_progress(tracker, progress_container, is_running=True)
+                    
+                    # Render initial state
+                    render_progress(tracker, progress_container, is_running=True)
+                    
+                    # Fetch with progress callbacks
+                    snapshot = fetch_space_weather_snapshot_with_progress(
+                        overall_timeout_s=30.0,
+                        on_step_start=on_step_start,
+                        on_step_complete=on_step_complete,
+                        on_step_error=on_step_error,
                     )
-                    snapshot = snapshot_holder.get("snapshot")
-                    if not ok or snapshot is None:
-                        raise RuntimeError("Impact prediction fetch failed (see step log).")
-
+                    
+                    tracker.end_operation()
+                    render_progress(tracker, progress_container, is_running=False)
+                    
+                    # Store snapshot in session state
                     st.session_state["impact_snapshot"] = snapshot
                     st.session_state["impact_snapshot_error"] = ""
+                    
+                    # Update impact_steps for backward compatibility
                     impact_steps["photon"] = {
                         "ok": snapshot.photon_event is not None and "photon" not in snapshot.errors,
                         "error": str(snapshot.errors.get("photon", "")),
@@ -13327,17 +13570,87 @@ that predicts cognitive performance based on:
                     impact_steps["last_built_utc"] = started_utc.strftime(
                         "%Y-%m-%d %H:%M:%S UTC"
                     )
-                    status.update(
-                        label="Impact Predictions updated.", state="complete", expanded=False
-                    )
-            except Exception as exc:
-                log_exception(_LOGGER, "Quick action failed: Impact Predictions", exc)
-                st.session_state["impact_snapshot_error"] = str(exc)
-                st.error(f"Impact Predictions failed: {exc}")
-            finally:
-                st.session_state["impact_snapshot_loading"] = False
+                    
+                    # Show completion message
+                    if tracker.has_errors:
+                        st.warning("⚠️ Some impact predictions had errors. Check the progress tracker above for details.")
+                    else:
+                        st.success("✅ Impact Predictions updated successfully!")
+                        
+                except Exception as exc:
+                    tracker.end_operation()
+                    render_progress(tracker, progress_container, is_running=False)
+                    log_exception(_LOGGER, "Quick action failed: Impact Predictions", exc)
+                    st.session_state["impact_snapshot_error"] = str(exc)
+                    st.error(f"Impact Predictions failed: {exc}")
+                finally:
+                    st.session_state["impact_snapshot_loading"] = False
+            else:
+                # Fallback to old behavior if progress module not available
+                try:
+                    with st.status(
+                        "Fetching Impact Predictions…", state="running", expanded=True
+                    ) as status:
+                        snapshot_holder: Dict[str, Any] = {"snapshot": None}
+                        ok = _run_space_data_step(
+                            _space_data_step_runner_state(),
+                            step_id="impact_run_all",
+                            label="Impact Predictions: Fetch Prediction (parallel)",
+                            fn=lambda: snapshot_holder.__setitem__(
+                                "snapshot", fetch_space_weather_snapshot()
+                            ),
+                        )
+                        snapshot = snapshot_holder.get("snapshot")
+                        if not ok or snapshot is None:
+                            raise RuntimeError("Impact prediction fetch failed (see step log).")
 
-        # 2) DONKI (button)
+                        st.session_state["impact_snapshot"] = snapshot
+                        st.session_state["impact_snapshot_error"] = ""
+                        impact_steps["photon"] = {
+                            "ok": snapshot.photon_event is not None and "photon" not in snapshot.errors,
+                            "error": str(snapshot.errors.get("photon", "")),
+                            "duration_ms": None,
+                            "event": snapshot.photon_event,
+                        }
+                        impact_steps["sep"] = {
+                            "ok": snapshot.sep_event is not None and "sep" not in snapshot.errors,
+                            "error": str(snapshot.errors.get("sep", "")),
+                            "duration_ms": None,
+                            "event": snapshot.sep_event,
+                        }
+                        impact_steps["plasma"] = {
+                            "ok": snapshot.plasma_event is not None and "plasma" not in snapshot.errors,
+                            "error": str(snapshot.errors.get("plasma", "")),
+                            "duration_ms": None,
+                            "event": snapshot.plasma_event,
+                        }
+                        impact_steps["cme"] = {
+                            "ok": snapshot.cme_event is not None and "cme" not in snapshot.errors,
+                            "error": str(snapshot.errors.get("cme", "")),
+                            "duration_ms": None,
+                            "event": snapshot.cme_event,
+                        }
+                        impact_steps["geomagnetic"] = {
+                            "ok": snapshot.geomagnetic_event is not None
+                            and "geomagnetic" not in snapshot.errors,
+                            "error": str(snapshot.errors.get("geomagnetic", "")),
+                            "duration_ms": None,
+                            "event": snapshot.geomagnetic_event,
+                        }
+                        impact_steps["last_built_utc"] = started_utc.strftime(
+                            "%Y-%m-%d %H:%M:%S UTC"
+                        )
+                        status.update(
+                            label="Impact Predictions updated.", state="complete", expanded=False
+                        )
+                except Exception as exc:
+                    log_exception(_LOGGER, "Quick action failed: Impact Predictions", exc)
+                    st.session_state["impact_snapshot_error"] = str(exc)
+                    st.error(f"Impact Predictions failed: {exc}")
+                finally:
+                    st.session_state["impact_snapshot_loading"] = False
+
+        # 2) DONKI (button) - Now with detailed progress tracking
         if fetch_donki_quick_clicked:
             try:
                 donki_window_days = int(st.session_state.get("donki_window_days", 14))
@@ -13358,65 +13671,184 @@ that predicts cognitive performance based on:
             else:
                 start_donki, end_donki = _donki_default_range(int(donki_window_days))
 
-            with st.status(
-                "Fetching NASA DONKI datasets…", state="running", expanded=True
-            ) as status:
-                ok = _run_space_data_step(
-                    _space_data_step_runner_state(),
-                    step_id="donki_fetch",
-                    label="DONKI: Fetch datasets",
-                    fn=lambda: _fetch_donki_datasets(donki_state, start_donki, end_donki),
-                    meta={"start_date": str(start_donki), "end_date": str(end_donki)},
-                )
-                if ok:
-                    status.update(
-                        label="DONKI datasets updated.", state="complete", expanded=False
+            # Use new progress tracking if available
+            if SPACE_WEATHER_PROGRESS_AVAILABLE:
+                donki_progress_container = st.empty()
+                donki_endpoints = list(DONKI_ENDPOINTS.keys())
+                donki_tracker = create_donki_tracker(donki_endpoints)
+                donki_tracker.start_operation()
+                
+                try:
+                    def on_donki_start(code: str) -> None:
+                        donki_tracker.start_step(code)
+                        render_progress(donki_tracker, donki_progress_container, is_running=True)
+                    
+                    def on_donki_complete(code: str, row_count: int, error: Optional[str]) -> None:
+                        if error:
+                            donki_tracker.fail_step(code, error)
+                        else:
+                            donki_tracker.complete_step(code, f"{row_count} events")
+                        render_progress(donki_tracker, donki_progress_container, is_running=True)
+                    
+                    def on_donki_error(code: str, error: str) -> None:
+                        donki_tracker.fail_step(code, error)
+                        render_progress(donki_tracker, donki_progress_container, is_running=True)
+                    
+                    # Render initial state
+                    render_progress(donki_tracker, donki_progress_container, is_running=True)
+                    
+                    # Fetch with progress callbacks
+                    _fetch_donki_datasets_with_progress(
+                        donki_state,
+                        start_donki,
+                        end_donki,
+                        on_step_start=on_donki_start,
+                        on_step_complete=on_donki_complete,
+                        on_step_error=on_donki_error,
                     )
-                else:
-                    status.update(
-                        label="DONKI fetch failed (see step log).",
-                        state="error",
-                        expanded=True,
+                    
+                    donki_tracker.end_operation()
+                    render_progress(donki_tracker, donki_progress_container, is_running=False)
+                    
+                    if donki_tracker.has_errors:
+                        st.warning("⚠️ Some DONKI datasets had errors. Check the progress tracker above.")
+                    else:
+                        st.success(f"✅ DONKI datasets updated! ({start_donki} → {end_donki})")
+                        
+                except Exception as exc:
+                    donki_tracker.end_operation()
+                    render_progress(donki_tracker, donki_progress_container, is_running=False)
+                    log_exception(_LOGGER, "DONKI fetch failed", exc)
+                    st.error(f"DONKI fetch failed: {exc}")
+            else:
+                # Fallback to old behavior
+                with st.status(
+                    "Fetching NASA DONKI datasets…", state="running", expanded=True
+                ) as status:
+                    ok = _run_space_data_step(
+                        _space_data_step_runner_state(),
+                        step_id="donki_fetch",
+                        label="DONKI: Fetch datasets",
+                        fn=lambda: _fetch_donki_datasets(donki_state, start_donki, end_donki),
+                        meta={"start_date": str(start_donki), "end_date": str(end_donki)},
                     )
+                    if ok:
+                        status.update(
+                            label="DONKI datasets updated.", state="complete", expanded=False
+                        )
+                    else:
+                        status.update(
+                            label="DONKI fetch failed (see step log).",
+                            state="error",
+                            expanded=True,
+                        )
 
-        # 3) NOAA Space Weather (button): SWPC + NOAA feeds
+        # 3) NOAA Space Weather (button) - Now with detailed progress tracking
         if fetch_noaa_space_weather_clicked:
             scope = str(st.session_state.get("noaa_fetch_scope", "Core"))
-            keys_to_fetch: Optional[Sequence[str]] = (
-                NOAA_FAST_KEYS
+            keys_to_fetch_list: List[str] = (
+                list(NOAA_FAST_KEYS)
                 if scope == "Today (fast)"
-                else (NOAA_CORE_KEYS if scope == "Core" else None)
+                else (list(NOAA_CORE_KEYS) if scope == "Core" else [])
             )
-            with st.status(
-                "Fetching NOAA Space Weather (SWPC + NOAA feeds)…",
-                state="running",
-                expanded=True,
-            ) as status:
-                ok_swpc = _run_space_data_step(
-                    _space_data_step_runner_state(),
-                    step_id="swpc_fetch",
-                    label="SWPC: Fetch Kp + F10.7",
-                    fn=lambda: _fetch_space_weather_datasets(space_state),
-                )
-                ok_noaa = _run_space_data_step(
-                    _space_data_step_runner_state(),
-                    step_id="noaa_fetch",
-                    label="NOAA: Fetch feeds (cache-first)",
-                    fn=lambda: _load_noaa_space_datasets(
-                        noaa_state, keys=keys_to_fetch, use_cache=True
-                    ),
-                    meta={"scope": scope, "keys": list(keys_to_fetch) if keys_to_fetch is not None else None},
-                )
-                if ok_swpc and ok_noaa:
-                    status.update(
-                        label="NOAA Space Weather updated.", state="complete", expanded=False
+            
+            # Use new progress tracking if available
+            if SPACE_WEATHER_PROGRESS_AVAILABLE:
+                noaa_progress_container = st.empty()
+                
+                # Create tracker with SWPC + selected NOAA keys
+                noaa_tracker = create_noaa_tracker(keys_to_fetch_list)
+                noaa_tracker.start_operation()
+                
+                try:
+                    def on_noaa_start(key: str) -> None:
+                        noaa_tracker.start_step(key)
+                        render_progress(noaa_tracker, noaa_progress_container, is_running=True)
+                    
+                    def on_noaa_complete(key: str, row_count: int, error: Optional[str]) -> None:
+                        if error:
+                            noaa_tracker.fail_step(key, error)
+                        else:
+                            noaa_tracker.complete_step(key, f"{row_count} records")
+                        render_progress(noaa_tracker, noaa_progress_container, is_running=True)
+                    
+                    def on_noaa_error(key: str, error: str) -> None:
+                        noaa_tracker.fail_step(key, error)
+                        render_progress(noaa_tracker, noaa_progress_container, is_running=True)
+                    
+                    # Render initial state
+                    render_progress(noaa_tracker, noaa_progress_container, is_running=True)
+                    
+                    # First fetch SWPC Kp + F10.7
+                    on_noaa_start("swpc_kp_flux")
+                    try:
+                        _fetch_space_weather_datasets(space_state)
+                        kp_rows = len(space_state.get("kp_df", [])) if isinstance(space_state.get("kp_df"), pd.DataFrame) else 0
+                        flux_rows = len(space_state.get("flux_df", [])) if isinstance(space_state.get("flux_df"), pd.DataFrame) else 0
+                        on_noaa_complete("swpc_kp_flux", kp_rows + flux_rows, None)
+                    except Exception as exc:
+                        on_noaa_error("swpc_kp_flux", str(exc))
+                    
+                    # Then fetch NOAA feeds with progress
+                    _load_noaa_space_datasets_with_progress(
+                        noaa_state,
+                        keys=keys_to_fetch_list if keys_to_fetch_list else None,
+                        use_cache=True,
+                        on_step_start=on_noaa_start,
+                        on_step_complete=on_noaa_complete,
+                        on_step_error=on_noaa_error,
                     )
-                else:
-                    status.update(
-                        label="NOAA Space Weather fetch had errors (see step log).",
-                        state="error",
-                        expanded=True,
+                    
+                    noaa_tracker.end_operation()
+                    render_progress(noaa_tracker, noaa_progress_container, is_running=False)
+                    
+                    if noaa_tracker.has_errors:
+                        st.warning("⚠️ Some NOAA datasets had errors. Check the progress tracker above.")
+                    else:
+                        st.success(f"✅ NOAA Space Weather updated! (scope: {scope})")
+                        
+                except Exception as exc:
+                    noaa_tracker.end_operation()
+                    render_progress(noaa_tracker, noaa_progress_container, is_running=False)
+                    log_exception(_LOGGER, "NOAA Space Weather fetch failed", exc)
+                    st.error(f"NOAA Space Weather fetch failed: {exc}")
+            else:
+                # Fallback to old behavior
+                keys_to_fetch: Optional[Sequence[str]] = (
+                    NOAA_FAST_KEYS
+                    if scope == "Today (fast)"
+                    else (NOAA_CORE_KEYS if scope == "Core" else None)
+                )
+                with st.status(
+                    "Fetching NOAA Space Weather (SWPC + NOAA feeds)…",
+                    state="running",
+                    expanded=True,
+                ) as status:
+                    ok_swpc = _run_space_data_step(
+                        _space_data_step_runner_state(),
+                        step_id="swpc_fetch",
+                        label="SWPC: Fetch Kp + F10.7",
+                        fn=lambda: _fetch_space_weather_datasets(space_state),
                     )
+                    ok_noaa = _run_space_data_step(
+                        _space_data_step_runner_state(),
+                        step_id="noaa_fetch",
+                        label="NOAA: Fetch feeds (cache-first)",
+                        fn=lambda: _load_noaa_space_datasets(
+                            noaa_state, keys=keys_to_fetch, use_cache=True
+                        ),
+                        meta={"scope": scope, "keys": list(keys_to_fetch) if keys_to_fetch is not None else None},
+                    )
+                    if ok_swpc and ok_noaa:
+                        status.update(
+                            label="NOAA Space Weather updated.", state="complete", expanded=False
+                        )
+                    else:
+                        status.update(
+                            label="NOAA Space Weather fetch had errors (see step log).",
+                            state="error",
+                            expanded=True,
+                        )
 
         st.markdown("---")
         st.markdown("### 4) 📊 Gauges, plots & analysis (dashboard)")
