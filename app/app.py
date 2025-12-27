@@ -413,6 +413,7 @@ from dataclasses import asdict, dataclass
 from datetime import timezone, timedelta, datetime, date, time as dt_time
 from typing import (
     Any,
+    Callable,
     Dict,
     Iterable,
     List,
@@ -9070,26 +9071,24 @@ def main() -> None:
         unsafe_allow_html=True,
     )
     _sw_loading_msg: Optional[st.delta_generator.DeltaGenerator] = None
-    # Debug breadcrumbs: when the UI appears "blank", it's often because a rerun
-    # was triggered mid-render or execution stopped before later tabs were
-    # populated. Gate logs behind the explicit Developer Tools toggle to avoid
-    # log spam during normal use.
-    if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
-        try:
-            _LOGGER.info(
-                "UI: main_result_tabs_created | has_hrv_data=%s | uploads=%d | profile=%s",
-                has_hrv_data,
-                len(uploads),
-                active_display_name,
-            )
-        except Exception:
-            pass
+    # ---------------------------------------------------------------------------
+    # RENDER TIMING TRACKER - Always log tab boundaries to identify hangs
+    # ---------------------------------------------------------------------------
+    _render_start_time = time.perf_counter()
+    
+    def _log_tab(name: str, phase: str = "start") -> None:
+        """Unconditionally log tab render progress with elapsed time."""
+        elapsed = (time.perf_counter() - _render_start_time) * 1000
+        _LOGGER.info("UI: render_%s:%s | elapsed=%.0fms", name, phase, elapsed)
+    
+    _LOGGER.info(
+        "UI: main_tabs_created | has_hrv_data=%s | uploads=%d | profile=%s",
+        has_hrv_data,
+        len(uploads),
+        active_display_name,
+    )
     with tab_overview:
-        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
-            try:
-                _LOGGER.info("UI: render_tab_overview:start")
-            except Exception:
-                pass
+        _log_tab("overview", "start")
         st.markdown("### 📊 Analysis Overview")
         st.markdown("*Summary of uploaded datasets and computed metrics*")
 
@@ -9188,21 +9187,13 @@ def main() -> None:
         ):
             st.dataframe(multi_results_df[["source", "respiratory_rate_bpm"]].rename(
                 columns={"respiratory_rate_bpm": "respiratory_rate [breaths/min]"}))
-        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
-            try:
-                _LOGGER.info("UI: render_tab_overview:end")
-            except Exception:
-                pass
+        _log_tab("overview", "end")
     
     # =========================================================================
     # USER PROFILE TAB - Centralized user data and clinical assessments
     # =========================================================================
     with tab_user_profile:
-        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
-            try:
-                _LOGGER.info("UI: render_tab_user_profile:start")
-            except Exception:
-                pass
+        _log_tab("user_profile", "start")
         if USER_PROFILE_TAB_AVAILABLE:
             try:
                 render_user_profile_tab()
@@ -9225,18 +9216,10 @@ def main() -> None:
                 "- **HRV measurement tracking**\n\n"
                 "Please ensure `user_profile_tab.py` is in the app directory."
             )
-        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
-            try:
-                _LOGGER.info("UI: render_tab_user_profile:end")
-            except Exception:
-                pass
+        _log_tab("user_profile", "end")
     
     with tab_ts:
-        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
-            try:
-                _LOGGER.info("UI: render_tab_time_series:start")
-            except Exception:
-                pass
+        _log_tab("time_series", "start")
         if not has_hrv_data:
             st.info(
                 "📈 **Time Series Analysis**\n\n"
@@ -9430,12 +9413,9 @@ def main() -> None:
             "Short-term norms and physiological context summarized by "
             "[Task Force 1996](https://www.escardio.org/static-file/Escardio/Guidelines/Scientific-Statements/guidelines-Heart-Rate-Variability-FT-1996.pdf) "
             "and updated in [Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full).")
-        if st.session_state.get("_debug_mode_checkbox", False) or st.session_state.get("_debug_mode_enabled", False):
-            try:
-                _LOGGER.info("UI: render_tab_time_series:end")
-            except Exception:
-                pass
+        _log_tab("time_series", "end")
     with tab_freq:
+        _log_tab("frequency", "start")
         if not has_hrv_data:
             st.info(
                 "🌊 **Frequency Domain Analysis**\n\n"
@@ -10012,7 +9992,9 @@ If your HF power is below age-matched norms or you have elevated sympathetic mar
 - Wong, A., et al. (2017). *Altern Ther Health Med, 23*(2), 28-33. [PMID: 28323625](https://pubmed.ncbi.nlm.nih.gov/28323625/)
 - Hepburn, H., et al. (2005). *Eur J Appl Physiol, 94*(5-6), 681-689. [PMID: 15906077](https://pubmed.ncbi.nlm.nih.gov/15906077/)
             """)
+        _log_tab("frequency", "end")
     with tab_nl:
+        _log_tab("nonlinear", "start")
         if not has_hrv_data:
             st.info(
                 "🔀 **Nonlinear Analysis**\n\n"
@@ -10285,7 +10267,9 @@ Quick protocol to try now (safe for healthy users):
 - Prioritize 7–9 h sleep; regular schedule.
                 """
             )
+        _log_tab("nonlinear", "end")
     with tab_tfr:
+        _log_tab("tfr", "start")
         if not has_hrv_data:
             st.info(
                 "📉 **Time-Frequency Analysis (Spectrogram)**\n\n"
@@ -10317,7 +10301,9 @@ Quick protocol to try now (safe for healthy users):
             "**Scientific notes (time–frequency)**  \n"
             "- Spectrogram visualizes how spectral power evolves; HF tracks respiration; LF reflects slower autonomic rhythms.  \n"
             "- Stationarity assumptions matter; windowed PSD improves interpretability for long, varying recordings.")
+        _log_tab("tfr", "end")
     with tab_window:
+        _log_tab("windowed", "start")
         if not has_hrv_data:
             st.info(
                 "🪟 **Windowed Analysis**\n\n"
@@ -10368,7 +10354,9 @@ Quick protocol to try now (safe for healthy users):
                     st.dataframe(ml_summary_df)
         else:
             st.info("No windowed metrics to display.")
+        _log_tab("windowed", "end")
     with tab_metrics:
+        _log_tab("metrics", "start")
         st.markdown("### 📋 Comprehensive Metrics Table")
         st.markdown("*All computed HRV metrics across time, frequency, nonlinear, and advanced domains*")
         
@@ -10448,7 +10436,9 @@ Quick protocol to try now (safe for healthy users):
                 st.dataframe(multi_results_df[cols_to_show])
         else:
             st.info("No metrics to display.")
+        _log_tab("metrics", "end")
     with tab_hrf_hrv:
+        _log_tab("hrf_hrv", "start")
         st.markdown("### 🧩 HRF ↔ HRV (Fragmentation + Correlations)")
         st.markdown(
             "*Offline analysis of **Heart Rate Fragmentation (HRF)** metrics and their relationships to HRV metrics.*"
@@ -11111,7 +11101,9 @@ Quick protocol to try now (safe for healthy users):
                                     st.info(
                                         "Not enough overlapping samples to compute HRF↔HRV pairwise tests (need ≥3 recordings per pair)."
                                     )
+        _log_tab("hrf_hrv", "end")
     with tab_ans:
+        _log_tab("ans", "start")
         st.markdown("### 🫀 Autonomic Function Tests")
         st.markdown("*Clinical-grade autonomic reflex assessments*")
         
@@ -11313,7 +11305,9 @@ Quick protocol to try now (safe for healthy users):
                             "30th-beat max RR (ms)",
                             f"{ratio_30_15_result['rr_30_max_ms']:.1f}",
                         )
+        _log_tab("ans", "end")
     with tab_readiness:
+        _log_tab("readiness", "start")
         st.markdown("### 🏃 Readiness & Recovery Assessment")
         st.markdown("*Parasympathetic index compared to your personal baseline*")
         
@@ -11708,7 +11702,9 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
                             st.caption(
                                 "Baseline uses the selected historical sessions (last-in-first-out capped at the chosen window). "
                                 "Consistent daily morning recordings (1–5 minutes, relaxed breathing) improve reliability.")
+        _log_tab("readiness", "end")
     with tab_gauges:
+        _log_tab("gauges", "start")
         st.markdown("### 🎯 HRV Metric Gauges")
         st.markdown("*Visual comparison against population reference ranges*")
         
@@ -11749,11 +11745,13 @@ Readiness reflects your autonomic nervous system's recovery state, primarily dri
         st.caption(
             "References: [Nunan et al., 2010](https://pubmed.ncbi.nlm.nih.gov/20663071/); "
             "[Sammito & Böckelmann, 2016](https://pubmed.ncbi.nlm.nih.gov/27986557/).")
+        _log_tab("gauges", "end")
 
     # =========================================================================
     # UNIFIED TIMELINE TAB - Multi-metric synchronized visualization
     # =========================================================================
     with tab_unified:
+        _log_tab("unified", "start")
         st.markdown("### 📈 Unified Physiological Timeline")
         st.markdown("*Time-synchronized view of all physiological metrics with ML pattern detection*")
         
@@ -12109,11 +12107,13 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
             "single-metric analysis may miss. Cross-domain correlations can reveal compensatory mechanisms "
             "and early warning signs of physiological stress."
         )
+        _log_tab("unified", "end")
 
     # =========================================================================
     # POPULATION NORMS TAB - Compare against reference values
     # =========================================================================
     with tab_pop_norms:
+        _log_tab("pop_norms", "start")
         st.markdown("### 📊 Population Norms Comparison")
         st.markdown("*Compare your HRV metrics against scientifically validated reference values*")
         
@@ -12457,11 +12457,13 @@ Context (posture, time of day, medications) strongly affects interpretation.*
 5. **Shaffer F, Ginsberg JP** (2017). An Overview of Heart Rate Variability Metrics and Norms. 
    *Front Public Health*, 5:258. [PMID: 29034226](https://pubmed.ncbi.nlm.nih.gov/29034226/)
                 """)
+        _log_tab("pop_norms", "end")
 
     # =========================================================================
     # BIOFEEDBACK TAB - Real-time HRV and Coherence Training
     # =========================================================================
     with tab_biofeedback:
+        _log_tab("biofeedback", "start")
         st.markdown("### 🫀 HRV Biofeedback & Coherence Training")
         st.markdown("*Real-time heart rate variability monitoring with paced breathing guidance*")
         
@@ -12919,11 +12921,13 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
             "**Scientific references:** Lehrer & Gevirtz (2014). Heart rate variability biofeedback. "
             "Front Public Health; Applied Psychophysiology & Biofeedback 2024."
         )
+        _log_tab("biofeedback", "end")
 
     # =========================================================================
     # FATIGUE TAB - SAFTE Model Integration
     # =========================================================================
     with tab_fatigue:
+        _log_tab("fatigue", "start")
         st.markdown("### 🧠 SAFTE Fatigue & Performance Prediction")
         st.markdown("*Biomathematical model for cognitive performance and fatigue risk assessment*")
         st.markdown(
@@ -14759,8 +14763,10 @@ that predicts cognitive performance based on:
                     f"Model: {result.model_used.upper()} SAFTE | "
                     f"Generated: {result.timestamp.strftime('%Y-%m-%d %H:%M:%S')}"
                 )
+        _log_tab("fatigue", "end")
 
     with tab_science:
+        _log_tab("science", "start")
         st.markdown("## 📚 Science (fast)")
         st.caption(
             "This tab is intentionally **lightweight** so switching tabs stays responsive. "
@@ -14850,9 +14856,11 @@ that predicts cognitive performance based on:
         st.markdown(science_sections.get(selected_section, science_sections["Overview"]))
         st.markdown("---")
         st.info("References are consolidated in the **📚 References** tab (APA 7 format).")
+        _log_tab("science", "end")
 
     # ==================== CIRCADIAN PHYSIOLOGY TAB ====================
     with tab_circadian:
+        _log_tab("circadian", "start")
         if CIRCADIAN_TAB_AVAILABLE:
             # Pass user profile if available for personalized simulations
             user_profile_data = None
@@ -14900,8 +14908,10 @@ that predicts cognitive performance based on:
                 
                 **Original Package:** [Arcascope/circadian](https://github.com/Arcascope/circadian)
                 """)
+        _log_tab("circadian", "end")
 
     with tab_space_data:
+        _log_tab("space_data", "start")
         st.subheader("🌐 Space Data Dashboard (SWPC + NOAA + DONKI)")
         # UX: Streamlit can visually "restart" (stale-element fade/dim) during reruns and
         # long fetches. Space Data is a data dashboard; keep the page visually stable.
@@ -17571,6 +17581,7 @@ that predicts cognitive performance based on:
                 _sw_loading_msg.empty()
 
     with tab_space_data:
+        _log_tab("space_data_noaa_section", "start")
         st.markdown("---")
         st.markdown("### 🛰️ NOAA Space Weather Dashboard")
         
@@ -18287,8 +18298,10 @@ that predicts cognitive performance based on:
                         st.markdown("\n".join(summary_lines))
             '''
             _noaa_loading_msg.empty()
+        _log_tab("space_data_noaa_section", "end")
 
     with tab_space_analytics:
+        _log_tab("space_analytics", "start")
         st.markdown("### 🔬 Space Analytics (Correlations + ML)")
         st.caption(
             "On-demand statistical analysis and machine learning linking **space-data predictors** "
@@ -20066,8 +20079,10 @@ that predicts cognitive performance based on:
                     else:
                         st.caption(f"Computed: {stored_ml.get('computed_at_utc', 'unknown')}")
                         st.json(stored_ml.get("results", {}))
+        _log_tab("space_analytics", "end")
 
     with tab_export:
+        _log_tab("export", "start")
         # ---------------------------------------------------------------------
         # EXPORT TAB — Always loads with basic options regardless of data state
         # ---------------------------------------------------------------------
@@ -21604,7 +21619,9 @@ that predicts cognitive performance based on:
             audio_payload = st.session_state.get("gpt5_tts_audio")
             if isinstance(audio_payload, (bytes, bytearray)) and audio_payload:
                 st.audio(audio_payload, format="audio/mp3")
+        _log_tab("export", "end")
     with tab_about:
+        _log_tab("about", "start")
         # -------------------------------------------------------------------
         # ABOUT TAB — Prefer dedicated renderer; fallback to lightweight preview
         # -------------------------------------------------------------------
@@ -21695,7 +21712,9 @@ that predicts cognitive performance based on:
                 st.caption("Full manual available via download; preview truncated for fast loading.")
             else:
                 st.warning("Unable to load docs/Manual.md — check that the file exists in the docs folder.")
+        _log_tab("about", "end")
     with tab_refs:
+        _log_tab("refs", "start")
         # ---------------------------------------------------------------------
         # REFERENCES TAB — Always loads immediately regardless of HRV data state
         # ---------------------------------------------------------------------
@@ -21874,6 +21893,8 @@ that predicts cognitive performance based on:
             "- Use **🌐 Space Data** for SWPC/NOAA/DONKI fetching and dashboards (data-only).\n"
             "- Use **🔬 Space Analytics** for correlations and ML (button-driven)."
         )
+        _log_tab("refs", "end")
+    _LOGGER.info("UI: main_render_complete | total_elapsed=%.0fms", (time.perf_counter() - _render_start_time) * 1000)
 
 
 def _fisher_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
