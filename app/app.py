@@ -7011,6 +7011,76 @@ def _inject_sessioninfo_suppressor() -> None:
     )
 
 
+def _select_hrv_metric_columns(
+    windowed_df: pd.DataFrame,
+    *,
+    exclude: Iterable[str] = (),
+    limit: int = 8,
+    preferred: Optional[Sequence[str]] = None,
+) -> List[str]:
+    """
+    Select HRV metric columns appropriate for correlation analyses.
+
+    Parameters
+    ----------
+    windowed_df : pd.DataFrame
+            DataFrame containing windowed HRV metrics. May be empty.
+    exclude : Iterable[str], optional
+            Exact column names to omit from the result.
+    limit : int, optional
+            Maximum number of fallback numeric columns to return when the
+            preferred metrics are absent.
+    preferred : Optional[Sequence[str]], optional
+            Ordered collection of preferred metric names to use when present.
+
+    Returns
+    -------
+    List[str]
+            Ordered list of metric column names suitable for correlation work.
+
+    Raises
+    ------
+    ValueError
+            If 'limit' is less than 1.
+    TypeError
+            If 'exclude' contains a non-string element.
+    """
+    if limit < 1:
+        raise ValueError("limit must be at least 1.")
+    exclude_set: Set[str] = set()
+    for col in exclude:
+        if not isinstance(col, str):
+            raise TypeError("exclude entries must be strings.")
+        exclude_set.add(col)
+    if windowed_df.empty:
+        return []
+    baseline_preferred: Sequence[str] = preferred or (
+        "rmssd",
+        "sdnn",
+        "hf_power",
+        "lf_hf_ratio",
+        "mean_hr",
+        "pnn50",
+        "pnn20",
+    )
+    selected: List[str] = []
+    for column in baseline_preferred:
+        if (
+            column in windowed_df.columns
+            and column not in exclude_set
+            and pd.api.types.is_numeric_dtype(windowed_df[column])
+        ):
+            selected.append(column)
+    if selected:
+        return selected
+    numeric_candidates = [
+        column
+        for column in windowed_df.select_dtypes(include=[np.number]).columns
+        if column not in exclude_set
+    ]
+    return numeric_candidates[:limit]
+
+
 def main() -> None:
     logger: logging.Logger = setup_console_logging(logging.INFO)
     
@@ -7115,6 +7185,18 @@ def main() -> None:
                 st.success(f"Debug report saved: `{report_path}`")
             except Exception as exc:
                 st.error(f"Failed to generate report: {exc}")
+        
+        st.markdown("---")
+        st.markdown("**🛠️ Tab Troubleshooting**")
+        skip_circadian = st.checkbox(
+            "Skip Circadian tab",
+            value=st.session_state.get("_skip_circadian_tab", False),
+            key="_skip_circadian_checkbox",
+            help="Temporarily disable Circadian tab to diagnose render hangs.",
+        )
+        st.session_state["_skip_circadian_tab"] = skip_circadian
+        if skip_circadian:
+            st.warning("⚠️ Circadian tab is disabled. Uncheck to re-enable.")
         
         st.caption("Debug logs: `logs/app.log`, `logs/errors.log`, `logs/streamlit.log`")
 
@@ -14861,15 +14943,29 @@ that predicts cognitive performance based on:
     # ==================== CIRCADIAN PHYSIOLOGY TAB ====================
     with tab_circadian:
         _log_tab("circadian", "start")
-        if CIRCADIAN_TAB_AVAILABLE:
-            # Pass user profile if available for personalized simulations
-            user_profile_data = None
-            if "current_user_id" in st.session_state:
-                user_profile_data = {"user_id": st.session_state.get("current_user_id")}
-            render_circadian_tab(
-                user_profile=user_profile_data,
-                user_context=active_user_context,
+        # WORKAROUND: Allow skipping circadian tab to diagnose hangs
+        _skip_circadian = st.session_state.get("_skip_circadian_tab", False)
+        if _skip_circadian:
+            st.warning(
+                "🌙 **Circadian tab is temporarily disabled** for troubleshooting.\n\n"
+                "To re-enable, uncheck *'Skip Circadian tab'* in **Developer Tools** (sidebar)."
             )
+        elif CIRCADIAN_TAB_AVAILABLE:
+            # Pass user profile if available for personalized simulations
+            try:
+                _LOGGER.info("CIRCADIAN: preparing to call render_circadian_tab")
+                user_profile_data = None
+                if "current_user_id" in st.session_state:
+                    user_profile_data = {"user_id": st.session_state.get("current_user_id")}
+                _LOGGER.info("CIRCADIAN: calling render_circadian_tab (user_profile=%s)", user_profile_data)
+                render_circadian_tab(
+                    user_profile=user_profile_data,
+                    user_context=active_user_context,
+                )
+                _LOGGER.info("CIRCADIAN: render_circadian_tab completed successfully")
+            except Exception as circadian_exc:
+                log_exception(_LOGGER, "CIRCADIAN TAB CRASH", circadian_exc)
+                st.error(f"Circadian tab encountered an error: {circadian_exc}")
         else:
             st.markdown("""
             <div style="
@@ -23239,76 +23335,6 @@ def _echarts_gauge(
         height_px=height_px,
         width="100%",
         config=EChartsConfig())
-
-
-def _select_hrv_metric_columns(
-    windowed_df: pd.DataFrame,
-    *,
-    exclude: Iterable[str] = (),
-    limit: int = 8,
-    preferred: Optional[Sequence[str]] = None,
-) -> List[str]:
-    """
-    Select HRV metric columns appropriate for correlation analyses.
-
-    Parameters
-    ----------
-    windowed_df : pd.DataFrame
-            DataFrame containing windowed HRV metrics. May be empty.
-    exclude : Iterable[str], optional
-            Exact column names to omit from the result.
-    limit : int, optional
-            Maximum number of fallback numeric columns to return when the
-            preferred metrics are absent.
-    preferred : Optional[Sequence[str]], optional
-            Ordered collection of preferred metric names to use when present.
-
-    Returns
-    -------
-    List[str]
-            Ordered list of metric column names suitable for correlation work.
-
-    Raises
-    ------
-    ValueError
-            If 'limit' is less than 1.
-    TypeError
-            If 'exclude' contains a non-string element.
-    """
-    if limit < 1:
-        raise ValueError("limit must be at least 1.")
-    exclude_set: Set[str] = set()
-    for col in exclude:
-        if not isinstance(col, str):
-            raise TypeError("exclude entries must be strings.")
-        exclude_set.add(col)
-    if windowed_df.empty:
-        return []
-    baseline_preferred: Sequence[str] = preferred or (
-        "rmssd",
-        "sdnn",
-        "hf_power",
-        "lf_hf_ratio",
-        "mean_hr",
-        "pnn50",
-        "pnn20",
-    )
-    selected: List[str] = []
-    for column in baseline_preferred:
-        if (
-            column in windowed_df.columns
-            and column not in exclude_set
-            and pd.api.types.is_numeric_dtype(windowed_df[column])
-        ):
-            selected.append(column)
-    if selected:
-        return selected
-    numeric_candidates = [
-        column
-        for column in windowed_df.select_dtypes(include=[np.number]).columns
-        if column not in exclude_set
-    ]
-    return numeric_candidates[:limit]
 
 
 def _scan_lag_correlations_generic(
