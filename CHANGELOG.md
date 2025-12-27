@@ -5,6 +5,69 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.73] - 2025-12-27
+
+### Added
+- **Enhanced Nonlinear Analysis Tab Gauges** (`app/app.py`): Added professional gauges matching Time Series tab style for all Poincaré and nonlinear metrics:
+  - **SD1 Gauge**: Short-term variability (vagal modulation) with color zones: <20ms red, 20-30ms orange, 30-70ms green, >70ms orange
+  - **SD2 Gauge**: Long-term variability with zones: <40ms red, 40-60ms orange, 60-140ms green, >140ms orange
+  - **SD1/SD2 Balance Gauge**: Autonomic balance ratio with zones: <0.35 red (sympathetic), 0.35-0.5 orange, 0.5-0.8 green (balanced), >0.8 orange (vagal)
+  - **Ellipse Area Gauge**: Complexity index (π×SD1×SD2) with zones: <2000ms² red, 2000-4000ms² orange, >4000ms² green
+  - **DFA α1 Gauge**: Fractal scaling exponent with zones: <0.5 red, 0.5-0.75 orange, 0.75-1.25 green (optimal), 1.25-1.4 orange, >1.4 red
+  - **Sample Entropy Gauge**: Signal complexity with zones: <0.5 red, 0.5-1.0 orange, 1.0-2.0 green, 2.0-2.5 orange, >2.5 red
+  - Each gauge includes instant interpretation feedback (✅/⚠️/🔴) explaining the physiological significance
+  - Summary metrics cards row at bottom showing SD1, SD2, SD1/SD2, and Ellipse Area
+
+## [1.8.72] - 2025-12-27
+
+### Changed
+- **SAFTE Sleep Efficiency Metric** (`app/app.py`, `app/fatigue_integration.py`): `sleep_score` is now used as the primary "efficiency" metric for SAFTE fatigue calculations instead of raw `sleep_efficiency`:
+  - `sleep_score` (0-100) is a composite Garmin metric that incorporates sleep stages, disturbances, and overall restorative quality — better proxy for SAFTE sleep effectiveness than simple TST/TIB ratio
+  - Falls back to `sleep_efficiency` only if `sleep_score` is unavailable
+  - Wrist monitoring summary now displays `sleep_score (efficiency)` with explanatory caption
+  - Both `app.py` and `fatigue_integration.py` now use consistent priority ordering
+
+## [1.8.71] - 2025-12-27
+
+### Added
+- **Enhanced Spectrogram (Time-Frequency) Tab** (`app/app.py`): Comprehensive scientific explanations with peer-reviewed citations:
+  - **Physiological Interpretation Guide**: Detailed explanation of what the spectrogram shows — axes meaning, color intensity, frequency bands (VLF/LF/HF)
+  - **Key Patterns to Recognize**: Respiratory ridge in HF band, LF bursts (baroreflex/sympathetic), power dropouts, frequency drift
+  - **Wavelet vs. STFT Comparison**: Strengths and limitations of each method for time-frequency analysis
+  - **Clinical & Research Applications**: Exercise onset/offset studies, sleep stage analysis, mental stress detection, orthostatic challenge, arrhythmia localization
+  - **References**: de Boer & Karemaker (2019), Oliver et al. (2023), Pichot et al. (2016), Hayano & Yuda (2019), Botek et al. (2014)
+
+- **Enhanced Windowed Metrics Tab** (`app/app.py`): Scientific explanations for sliding window HRV analysis:
+  - **Why Use Sliding Windows**: Explanation of how windowed analysis reveals trends, episodes, and anomalies invisible in whole-recording averages
+  - **Window Parameters Explained**: Window length, step size, overlap with typical values and effects
+  - **The 5-Minute Standard**: Task Force (1996) guidelines and the science behind minimum recording duration
+  - **Ultra-Short-Term HRV Validity**: Evidence summary from Schroeder et al. (2004), Munoz et al. (2015), Chen et al. (2020), Chapman et al. (2025)
+  - **Deviation Detection & Episode Identification**: Statistical thresholds (Normal/Warning/Alert), episode grouping, clinical applications
+  - **References**: Task Force (1996), Schroeder et al. (2004), Chen et al. (2020), Chapman et al. (2025), Plews et al. (2013)
+
+- **Enhanced Readiness Tab** (`app/app.py`): Comprehensive HRV-based readiness assessment science:
+  - **Physiological Basis**: Why HRV reflects readiness — vagal withdrawal as stress response, recovery requiring vagal restoration, morning HRV capturing overnight recovery
+  - **The "Vagal Rebound" Phenomenon**: Recovery patterns (full, partial, incomplete, supercompensation) with training implications
+  - **HRV-Guided Training Evidence**: Studies from Kiviniemi et al. (2007), Plews et al. (2013), Botek et al. (2014), Alfonso et al. (2025)
+  - **Practical Training Rules**: When HRV is HIGH/NORMAL/LOW/VERY LOW with specific action recommendations
+  - **Limitations & Pitfalls**: Single-day interpretation, breathing rate effects, hydration/alcohol, illness prodrome, measurement conditions
+  - **References**: Plews et al. (2013), Botek et al. (2014), Alfonso et al. (2025), Thayer et al. (2012), Kiviniemi et al. (2007)
+
+- **Enhanced Gauges Tab** (`app/app.py`): Comprehensive normative data and reference range explanations:
+  - **Where Reference Ranges Come From**: Factors affecting HRV (age, sex, fitness, recording conditions), key normative studies
+  - **Reference Ranges Table**: Poor/Borderline/Normal/Good/Excellent cutoffs for SDNN, RMSSD, pNN50, LF/HF power
+  - **Age-Adjusted Interpretation**: Age-specific RMSSD percentiles (20-70+ years) from Nunan et al. (2010) and Ortega et al. (2024)
+  - **Common Misinterpretations**: "Higher is always better" myth, LF/HF ratio limitations, single-reading pitfalls
+  - **References**: Nunan et al. (2010), Sammito & Böckelmann (2016), Ziegler et al. (1999), Ortega et al. (2024), Billman (2013), Koenig & Thayer (2016)
+
+- **Enhanced Unified Timeline Tab** (`app/app.py`): Multi-metric physiological integration science:
+  - **Why Integrate Multiple Metrics**: Limitation of single-metric analysis, autonomic system integration across domains
+  - **Physiological Coupling Principles**: RMSSD↔HR relationships, HRV↔SpO2 coupling, circadian patterns
+  - **Circadian Patterns Table**: Expected HR/RMSSD/LF-HF patterns by time of day with physiological explanations
+  - **Pattern Recognition & Anomaly Detection**: Statistical methods (Z-score, MAD, IQR, rolling window), interpreting flagged anomalies
+  - **Practical Applications**: Overtraining detection, sleep quality assessment, stress load monitoring, recovery tracking, pre-competition tapering
+  - **References**: Buitrago-Ricaurte et al. (2025), Rasouli et al. (2025), Weinschenk et al. (2025), Lee et al. (2025), To et al. (2025), Shaffer & Ginsberg (2017)
+
 ## [1.8.70] - 2025-12-27
 
 ### Added
