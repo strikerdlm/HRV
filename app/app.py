@@ -9277,47 +9277,177 @@ def main() -> None:
                         _freq_metrics_list.append(_fm)
                 
                 if _freq_metrics_list:
-                    # Create stacked bar chart showing VLF/LF/HF absolute power
+                    # Create visually attractive grouped bar chart with percentage annotations
                     _freq_sources = [str(m.get("source", "Unknown")) for m in _freq_metrics_list]
                     _vlf_vals = [float(m.get("vlf_power_ms2", 0)) for m in _freq_metrics_list]
                     _lf_vals = [float(m.get("lf_power_ms2", 0)) for m in _freq_metrics_list]
                     _hf_vals = [float(m.get("hf_power_ms2", 0)) for m in _freq_metrics_list]
+                    _total_vals = [v + l + h for v, l, h in zip(_vlf_vals, _lf_vals, _hf_vals)]
                     
+                    # Calculate percentages for annotations
+                    _vlf_pct = [round((v / t * 100) if t > 0 else 0, 1) for v, t in zip(_vlf_vals, _total_vals)]
+                    _lf_pct = [round((l / t * 100) if t > 0 else 0, 1) for l, t in zip(_lf_vals, _total_vals)]
+                    _hf_pct = [round((h / t * 100) if t > 0 else 0, 1) for h, t in zip(_hf_vals, _total_vals)]
+                    
+                    # Create grouped bar chart (side-by-side) with gradient colors and annotations
                     _freq_bar_opt = {
                         "title": {
-                            "text": "Frequency Band Power Comparison",
-                            "subtext": "Absolute power (ms²) per band — higher values indicate greater autonomic modulation",
+                            "text": "Frequency Band Power Analysis",
+                            "subtext": "Absolute power (ms²) per band with percentage contribution — Compare across recordings",
                             "left": "center",
+                            "textStyle": {"fontSize": 18, "fontWeight": "bold"},
+                            "subtextStyle": {"fontSize": 12, "color": "#666"},
                         },
                         "tooltip": {
                             "trigger": "axis",
                             "axisPointer": {"type": "shadow"},
                             "formatter": """function(params) {
-                                var result = params[0].axisValue + '<br/>';
+                                var result = '<b>' + params[0].axisValue + '</b><br/>';
                                 var total = 0;
                                 params.forEach(function(p) {
                                     total += p.value;
-                                    result += p.marker + ' ' + p.seriesName + ': ' + p.value.toFixed(1) + ' ms²<br/>';
+                                    var pct = total > 0 ? ((p.value / total) * 100).toFixed(1) : 0;
+                                    result += p.marker + ' <b>' + p.seriesName + '</b><br/>';
+                                    result += '&nbsp;&nbsp;Power: ' + p.value.toFixed(1) + ' ms²<br/>';
+                                    result += '&nbsp;&nbsp;Contribution: ' + pct + '%<br/>';
                                 });
+                                result += '<hr style="margin: 5px 0;"/>';
                                 result += '<b>Total Power: ' + total.toFixed(1) + ' ms²</b>';
                                 return result;
                             }""",
                         },
-                        "legend": {"top": 50, "data": ["VLF (0.003-0.04 Hz)", "LF (0.04-0.15 Hz)", "HF (0.15-0.40 Hz)"]},
-                        "grid": {"left": 60, "right": 30, "top": 100, "bottom": 60, "containLabel": True},
+                        "legend": {
+                            "top": 50,
+                            "data": ["VLF (Thermoregulation)", "LF (Baroreflex)", "HF (Vagal/RSA)"],
+                            "textStyle": {"fontSize": 12},
+                        },
+                        "grid": {"left": 80, "right": 40, "top": 120, "bottom": 80, "containLabel": True},
                         "xAxis": {
                             "type": "category",
                             "data": _freq_sources,
-                            "axisLabel": {"rotate": 30, "interval": 0},
+                            "axisLabel": {"rotate": 30, "interval": 0, "fontSize": 11},
+                            "axisLine": {"lineStyle": {"color": "#333"}},
                         },
-                        "yAxis": {"type": "value", "name": "Power (ms²)", "nameLocation": "middle", "nameGap": 50},
-                        "series": [
-                            {"name": "VLF (0.003-0.04 Hz)", "type": "bar", "stack": "power", "data": _vlf_vals, "itemStyle": {"color": "#8B4513"}},
-                            {"name": "LF (0.04-0.15 Hz)", "type": "bar", "stack": "power", "data": _lf_vals, "itemStyle": {"color": "#2196F3"}},
-                            {"name": "HF (0.15-0.40 Hz)", "type": "bar", "stack": "power", "data": _hf_vals, "itemStyle": {"color": "#4CAF50"}},
-                        ],
+                        "yAxis": {
+                            "type": "value",
+                            "name": "Power (ms²)",
+                            "nameLocation": "middle",
+                            "nameGap": 60,
+                            "nameTextStyle": {"fontSize": 12, "fontWeight": "bold"},
+                            "axisLine": {"show": True, "lineStyle": {"color": "#333"}},
+                            "splitLine": {"show": True, "lineStyle": {"type": "dashed", "opacity": 0.3}},
+                        },
                     }
-                    render_echarts(_freq_bar_opt, height_px=400, width="100%", config=EChartsConfig())
+
+                    # Build series data with pre-calculated percentage labels (outside dictionary)
+                    _vlf_series_data = []
+                    _lf_series_data = []
+                    _hf_series_data = []
+                    
+                    for idx in range(len(_freq_sources)):
+                        _vlf_series_data.append({
+                            "value": _vlf_vals[idx],
+                            "label": {"show": True, "formatter": f"{_vlf_pct[idx]:.1f}%", "position": "top", "fontSize": 10, "fontWeight": "bold", "color": "#8B4513"},
+                            "itemStyle": {"color": {"type": "linear", "x": 0, "y": 0, "x2": 0, "y2": 1, "colorStops": [{"offset": 0, "color": "#D2691E"}, {"offset": 1, "color": "#8B4513"}]}},
+                        })
+                        _lf_series_data.append({
+                            "value": _lf_vals[idx],
+                            "label": {"show": True, "formatter": f"{_lf_pct[idx]:.1f}%", "position": "top", "fontSize": 10, "fontWeight": "bold", "color": "#1976D2"},
+                            "itemStyle": {"color": {"type": "linear", "x": 0, "y": 0, "x2": 0, "y2": 1, "colorStops": [{"offset": 0, "color": "#64B5F6"}, {"offset": 1, "color": "#1976D2"}]}},
+                        })
+                        _hf_series_data.append({
+                            "value": _hf_vals[idx],
+                            "label": {"show": True, "formatter": f"{_hf_pct[idx]:.1f}%", "position": "top", "fontSize": 10, "fontWeight": "bold", "color": "#388E3C"},
+                            "itemStyle": {"color": {"type": "linear", "x": 0, "y": 0, "x2": 0, "y2": 1, "colorStops": [{"offset": 0, "color": "#81C784"}, {"offset": 1, "color": "#388E3C"}]}},
+                        })
+                    
+                    # Add series to the chart configuration
+                    _freq_bar_opt["series"] = [
+                        {
+                            "name": "VLF (Thermoregulation)",
+                            "type": "bar",
+                            "data": _vlf_series_data,
+                            "barWidth": "25%",
+                            "emphasis": {"focus": "series", "itemStyle": {"shadowBlur": 10, "shadowColor": "rgba(139, 69, 19, 0.5)"}},
+                        },
+                        {
+                            "name": "LF (Baroreflex)",
+                            "type": "bar",
+                            "data": _lf_series_data,
+                            "barWidth": "25%",
+                            "emphasis": {"focus": "series", "itemStyle": {"shadowBlur": 10, "shadowColor": "rgba(25, 118, 210, 0.5)"}},
+                        },
+                        {
+                            "name": "HF (Vagal/RSA)",
+                            "type": "bar",
+                            "data": _hf_series_data,
+                            "barWidth": "25%",
+                            "emphasis": {"focus": "series", "itemStyle": {"shadowBlur": 10, "shadowColor": "rgba(56, 142, 60, 0.5)"}},
+                        },
+                    ]
+                    render_echarts(_freq_bar_opt, height_px=450, width="100%", config=EChartsConfig())
+                    
+                    # Add a radar chart for relative distribution comparison (more visually appealing)
+                    if len(_freq_metrics_list) > 1:
+                        st.markdown("---")
+                        st.markdown("#### 📊 Relative Power Distribution (Radar Chart)")
+                        st.caption("Compare the relative contribution of each frequency band across recordings. The closer to the edge, the higher the percentage contribution.")
+                        
+                        # Prepare radar data (normalized percentages)
+                        _radar_indicator = [
+                            {"name": "VLF\n(0.003-0.04 Hz)", "max": 100},
+                            {"name": "LF\n(0.04-0.15 Hz)", "max": 100},
+                            {"name": "HF\n(0.15-0.40 Hz)", "max": 100},
+                        ]
+                        
+                        _radar_series_data = []
+                        for idx, _fm in enumerate(_freq_metrics_list):
+                            _vlf_p = _vlf_pct[idx]
+                            _lf_p = _lf_pct[idx]
+                            _hf_p = _hf_pct[idx]
+                            _radar_series_data.append({
+                                "value": [_vlf_p, _lf_p, _hf_p],
+                                "name": str(_fm.get("source", f"Recording {idx+1}")),
+                                "areaStyle": {"opacity": 0.3},
+                                "lineStyle": {"width": 2},
+                            })
+                        
+                        _radar_opt = {
+                            "title": {
+                                "text": "Frequency Band Distribution Comparison",
+                                "subtext": "Percentage contribution of each band to total power",
+                                "left": "center",
+                            },
+                            "tooltip": {
+                                "trigger": "item",
+                                "formatter": """function(params) {
+                                    var names = ['VLF', 'LF', 'HF'];
+                                    var result = '<b>' + params.name + '</b><br/>';
+                                    params.value.forEach(function(v, i) {
+                                        result += names[i] + ': ' + v.toFixed(1) + '%<br/>';
+                                    });
+                                    return result;
+                                }""",
+                            },
+                            "legend": {
+                                "top": 50,
+                                "data": [str(m.get("source", "Unknown")) for m in _freq_metrics_list],
+                            },
+                            "radar": {
+                                "indicator": _radar_indicator,
+                                "center": ["50%", "60%"],
+                                "radius": "65%",
+                                "axisName": {"fontSize": 12, "fontWeight": "bold"},
+                                "splitArea": {"show": True, "areaStyle": {"color": ["rgba(250, 250, 250, 0.3)", "rgba(200, 200, 200, 0.3)"]}},
+                                "splitLine": {"lineStyle": {"color": "#999", "type": "dashed"}},
+                            },
+                            "series": [{
+                                "type": "radar",
+                                "data": _radar_series_data,
+                                "emphasis": {"areaStyle": {"opacity": 0.5}},
+                            }],
+                        }
+                        render_echarts(_radar_opt, height_px=500, width="100%", config=EChartsConfig())
                     
                     # Create pie chart showing normalized power distribution for first dataset
                     if len(_freq_metrics_list) > 0:
