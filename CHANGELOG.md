@@ -29,7 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Validated References Section**: 8 peer-reviewed citations with DOIs and PMIDs for verification
 
 ### Fixed
-- **HRV Progress Tracker Rendering**: Fixed issue where progress tracker HTML was displaying as raw text instead of styled visual elements by moving the container creation inside the `st.status()` context
+- **HRV Progress Tracker Rendering**: Fixed issue where progress tracker HTML was displaying as raw text instead of styled visual elements. The fix ensures:
+  - `_hrv_progress_container` is created inside `with _status_container:` context
+  - All 15 `render_hrv_progress()` calls are wrapped in `with _status_container:` to ensure proper rendering within the status container context
+  - This follows Streamlit's container context management pattern where containers created inside a context manager should be updated within that same context
 
 ## [1.8.69] - 2025-12-27
 
