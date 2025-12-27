@@ -12,7 +12,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Impact Predictions are now debuggable step-by-step** (`app/app.py`): Added a **🧪 Step-by-step (debug hangs)** expander with one button per Impact Predictions sub-step (X-rays, protons, solar wind, CME/ENLIL, Kp/Dst), persists per-step status + duration, and rebuilds the snapshot from the latest step results.
-- **SpaceWeatherLive OpenAI fallback no longer appears to hang** (`app/spaceweather_openai_fallback.py`, `app/app.py`): Added explicit OpenAI request timeouts + non-blocking shutdown and parallelized SpaceWeatherLive HTML page downloads; failures now surface in the Space Data step log.
+- **Impact step buttons no longer freeze/reset the session** (`app/app.py`): Step-by-step sub-steps now run with a hard per-step timeout so a stalled network/DNS call can’t block the Streamlit UI long enough to disconnect and “jump back” to the Overview tab.
+- **Space Data no longer uses OpenAI for SpaceWeatherLive** (`app/app.py`): Removed the OpenAI-based SpaceWeatherLive fallback path so Space Data fetch is scrape-only (plus NOAA SWPC/NOAA/DONKI), per user preference.
 
 ## [1.8.60] - 2025-12-25
 
