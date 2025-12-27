@@ -5,6 +5,26 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.78] - 2025-12-27
+
+### Added
+- **Graduate-Level Space Analytics Explanations** (`app/app.py`): Added comprehensive scientific explanations with peer-reviewed citations throughout the Space Analytics tab:
+  - **Scientific Foundation**: HRV-space weather hypothesis, evidence from Alabdulgader et al. (2018), Vencloviene et al. (2022), Papailiou et al. (2024), and methodological caveats from Mattoni et al. (2019)
+  - **Windowed HRV Analysis**: Task Force 1996 guidelines, sliding window mathematics, Smith et al. (2013) 30-beat validation, window duration recommendations
+  - **Event-Aligned Analysis**: Threshold-based event detection, baseline-event-recovery paradigm, Cohen's d effect sizes, statistical comparison methods
+  - **Correlation Analysis**: Pearson r formula, Fisher Z-transformation for confidence intervals, temporal lag analysis theory, Olden & Neff (2001) cross-correlation bias, interpretation guidelines
+  - **ML Suite**: ElasticNet (Zou & Hastie 2005), Random Forest (Breiman 2001, Qi 2012), Gradient Boosting (Friedman 2001, Chen & Guestrin 2016), feature importance methods, evaluation metrics, caveats for biological data
+
+## [1.8.77] - 2025-12-27
+
+### Added
+- **Graduate-Level Space Data Explanations** (`app/app.py`): Added expandable scientific explanations below each major visualization in the Space Data tab:
+  - **Kp Index**: Quasi-logarithmic geomagnetic disturbance scale, physiological relevance (HRV depression at Kp≥5), magnetoreceptor/melatonin mechanisms
+  - **F10.7 Solar Radio Flux**: 10.7cm wavelength proxy for solar activity, EUV irradiance correlation, 11-year cycle context
+  - **NASA DONKI**: Event catalog overview (FLR, CME, GST, SEP, IPS, RBE, HSS), WSA-ENLIL model predictions
+  - **Impact Predictions**: Energy category travel times, NOAA G-Scale severity interpretation, Polar H10 monitoring strategy
+  - **NOAA Space Weather Dashboard**: Data product descriptions (Kp, Dst, GOES flux, solar wind), scope options, HRV correlation guidance
+
 ## [1.8.76] - 2025-12-27
 
 ### Fixed
