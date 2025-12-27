@@ -5,6 +5,27 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.69] - 2025-12-27
+
+### Added
+- **Enhanced Frequency Domain Analysis Education** (`app/app.py`): Comprehensive physiological explanations for postgraduate students in the Frequency tab:
+  - **PSD Plot Interpretation Guide**: Detailed explanation of axes, frequency bands (VLF/LF/HF), and what the plot shape tells you physiologically
+  - **Age-Stratified Normative Values**: Reference tables showing LF/HF power by age group (20-70+ years) with citations (Nunan et al., 2010; Shaffer & Ginsberg, 2017)
+  - **Clinical Significance Section**: When values are abnormal and associated conditions (heart failure, diabetes, depression, chronic stress)
+  - **Evidence-Based Improvement Strategies**: Science-backed interventions to improve HRV metrics with peer-reviewed citations:
+    - Slow-paced breathing (resonance frequency breathing) with protocol
+    - Aerobic exercise training
+    - Mindfulness meditation & yoga
+    - Sleep optimization
+    - Cold water face immersion (dive reflex)
+  - **Common Misconceptions**: Clarification that LF/HF ratio is NOT a simple sympathetic/parasympathetic balance index
+
+- **New ECharts Visualizations for Frequency Metrics** (`app/app.py`):
+  - **Stacked Bar Chart**: Compares VLF/LF/HF absolute power across recordings with tooltips showing total power
+  - **Pie Chart**: Normalized power distribution (LFnu vs HFnu) with donut style
+  - **LF/HF Ratio Gauge**: Color-coded gauge (green→red) indicating autonomic balance state
+  - **Automated Interpretation**: Personalized feedback on HF power, LF/HF ratio, and total power with actionable recommendations
+
 ## [1.8.68] - 2025-12-27
 
 ### Added
