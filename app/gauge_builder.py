@@ -217,12 +217,23 @@ class GaugeThresholds:
 # ---------------------------------------------------------------------------
 
 _GAUGE_THRESHOLDS: dict[str, GaugeThresholds] = {
-    # Time-domain
+    # Time-domain (standard)
     "sdnn": GaugeThresholds(_SDNN_LOW, _SDNN_NORMAL, _SDNN_HIGH, _SDNN_MAX, "ms"),
     "rmssd": GaugeThresholds(_RMSSD_LOW, _RMSSD_NORMAL, _RMSSD_HIGH, _RMSSD_MAX, "ms"),
     "pnn50": GaugeThresholds(_PNN50_LOW, _PNN50_NORMAL, _PNN50_HIGH, _PNN50_MAX, "%"),
     "mean_hr": GaugeThresholds(_MEAN_HR_LOW, _MEAN_HR_NORMAL, _MEAN_HR_HIGH, _MEAN_HR_MAX, "bpm", invert_colors=True),
     "mean_nni": GaugeThresholds(600, 857, 1000, 1200, "ms"),  # ~70 bpm center
+    
+    # Time-domain (extended)
+    "ln_rmssd": GaugeThresholds(2.5, 3.5, 4.2, 5.0, ""),  # Natural log scale
+    "pnn20": GaugeThresholds(10, 25, 45, 70, "%"),
+    "pnn10": GaugeThresholds(25, 45, 65, 85, "%"),
+    "pnn30": GaugeThresholds(5, 15, 30, 50, "%"),
+    "hr_range": GaugeThresholds(10, 25, 45, 80, "bpm"),
+    
+    # Long-term HRV (24h recordings)
+    "sdann": GaugeThresholds(80, 120, 160, 200, "ms"),
+    "sdnni": GaugeThresholds(30, 50, 80, 120, "ms"),
 
     # Frequency-domain
     "lf_hf_ratio": GaugeThresholds(_LF_HF_LOW, _LF_HF_NORMAL, _LF_HF_HIGH, _LF_HF_MAX, ""),
@@ -232,9 +243,14 @@ _GAUGE_THRESHOLDS: dict[str, GaugeThresholds] = {
     "hf_nu": GaugeThresholds(20, 40, 60, 100, "%"),
     "lf_nu": GaugeThresholds(20, 50, 70, 100, "%"),
 
-    # Nonlinear
+    # Nonlinear (Poincaré)
     "sd1": GaugeThresholds(_SD1_LOW, _SD1_NORMAL, _SD1_HIGH, _SD1_MAX, "ms"),
     "sd2": GaugeThresholds(_SD2_LOW, _SD2_NORMAL, _SD2_HIGH, _SD2_MAX, "ms"),
+    "sd1_sd2_ratio": GaugeThresholds(0.15, 0.35, 0.55, 1.0, ""),
+    "cvi": GaugeThresholds(2.5, 3.5, 4.5, 6.0, ""),  # Cardiac Vagal Index (log scale)
+    "csi": GaugeThresholds(1.0, 2.5, 4.0, 8.0, "", invert_colors=True),  # Cardiac Sympathetic Index
+    
+    # Nonlinear (DFA)
     "dfa_alpha1": GaugeThresholds(_DFA_ALPHA1_LOW, _DFA_ALPHA1_NORMAL, _DFA_ALPHA1_HIGH, _DFA_ALPHA1_MAX, ""),
     "dfa_alpha2": GaugeThresholds(0.5, 0.9, 1.2, 1.5, ""),
 
