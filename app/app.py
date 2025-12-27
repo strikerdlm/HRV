@@ -10453,7 +10453,13 @@ If your HF power is below age-matched norms or you have elevated sympathetic mar
                     
                     with _nl_col1:
                         st.markdown("#### 💚 SD1 (Short-Term Variability)")
-                        _sd1_color = "#4CAF50" if _sd1 >= 30.0 else "#FF9800" if _sd1 >= 20.0 else "#F44336"
+                        # Color zones: <20 red, 20-30 orange, 30-70 green (optimal), >70 orange
+                        _sd1_color = (
+                            "#F44336" if _sd1 < 20.0 else
+                            "#FF9800" if _sd1 < 30.0 else
+                            "#4CAF50" if _sd1 <= 70.0 else
+                            "#FF9800"  # >70 very high
+                        )
                         _sd1_gauge = {
                             "title": {
                                 "text": f"{_primary['source'][:30]}...",
@@ -10498,17 +10504,25 @@ If your HF power is below age-matched norms or you have elevated sympathetic mar
                         }
                         render_echarts(_sd1_gauge, height_px=280, width="100%", config=EChartsConfig())
                         
-                        # SD1 interpretation
-                        if _sd1 >= 30.0:
-                            st.success("✅ **Good vagal tone** — healthy parasympathetic modulation")
-                        elif _sd1 >= 20.0:
-                            st.warning("⚠️ **Reduced SD1** — consider stress reduction, sleep quality")
-                        else:
+                        # SD1 interpretation (matches gauge zones)
+                        if _sd1 < 20.0:
                             st.error("🔴 **Low SD1** — may indicate vagal dysfunction or chronic stress")
+                        elif _sd1 < 30.0:
+                            st.warning("⚠️ **Reduced SD1** — consider stress reduction, sleep quality")
+                        elif _sd1 <= 70.0:
+                            st.success("✅ **Good vagal tone** — healthy parasympathetic modulation")
+                        else:
+                            st.info("💙 **Very high SD1** — excellent vagal tone; verify measurement conditions")
                     
                     with _nl_col2:
                         st.markdown("#### 💙 SD2 (Long-Term Variability)")
-                        _sd2_color = "#4CAF50" if _sd2 >= 60.0 else "#FF9800" if _sd2 >= 40.0 else "#F44336"
+                        # Color zones: <40 red, 40-60 orange, 60-140 green (optimal), >140 orange
+                        _sd2_color = (
+                            "#F44336" if _sd2 < 40.0 else
+                            "#FF9800" if _sd2 < 60.0 else
+                            "#4CAF50" if _sd2 <= 140.0 else
+                            "#FF9800"  # >140 very high
+                        )
                         _sd2_gauge = {
                             "title": {
                                 "text": "Overall Variability",
@@ -10553,13 +10567,15 @@ If your HF power is below age-matched norms or you have elevated sympathetic mar
                         }
                         render_echarts(_sd2_gauge, height_px=280, width="100%", config=EChartsConfig())
                         
-                        # SD2 interpretation
-                        if _sd2 >= 60.0:
-                            st.success("✅ **Good overall variability** — healthy autonomic range")
-                        elif _sd2 >= 40.0:
-                            st.warning("⚠️ **Reduced SD2** — overall variability below optimal")
-                        else:
+                        # SD2 interpretation (matches gauge zones)
+                        if _sd2 < 40.0:
                             st.error("🔴 **Low SD2** — significantly reduced HRV range")
+                        elif _sd2 < 60.0:
+                            st.warning("⚠️ **Reduced SD2** — overall variability below optimal")
+                        elif _sd2 <= 140.0:
+                            st.success("✅ **Good overall variability** — healthy autonomic range")
+                        else:
+                            st.info("💙 **Very high SD2** — excellent variability; verify measurement conditions")
                     
                     # Row 2: SD1/SD2 Ratio and Ellipse Area
                     st.markdown("---")
