@@ -1663,114 +1663,489 @@ Recent research highlights important connections:
 
 ## Autonomic Function Tests
 
-### Valsalva Maneuver
+*Clinical-grade autonomic reflex assessments with comprehensive step-by-step protocols*
 
-**Protocol:**
-1. Record continuous RR intervals (≥60 seconds)
-2. Patient performs 15-second forced expiration against closed glottis
-3. Note exact timing of strain start/end
+### Introduction: The Ewing Battery and Beyond
 
-**Step-by-step in app:**
+The cardiovascular autonomic reflex tests described in this section derive from the seminal work of **Ewing and colleagues** at the University of Edinburgh, who in 1976 demonstrated that a battery of simple bedside tests could detect diabetic autonomic neuropathy and predict survival disadvantage (Lefrandt et al., 2010). These tests remain the **gold standard** for non-invasive assessment of cardiovascular autonomic function (Task Force, 1996; Baker et al., 2024).
 
-1. Go to **ANS Function Tests** tab
-2. Expand "Valsalva Ratio" section
-3. Enter Phase II window (strain period):
-   - Start: seconds from recording start when strain began
-   - End: seconds when strain ended (typically +15s)
-4. Enter Phase IV window (recovery period):
-   - Start: seconds when strain was released
-   - End: typically +15-20s after release
-5. Click "Compute Valsalva Ratio"
+#### Physiological Basis
 
-**Example:**
-```
-Recording starts at 0s
-Patient begins strain at 10s
-Strain ends at 25s
-Recovery monitored until 45s
+The autonomic nervous system (ANS) maintains cardiovascular homeostasis through two complementary divisions:
 
-Phase II window: 10-25s
-Phase IV window: 25-45s
+| Division | Primary Neurotransmitter | Cardiac Effects | Primary Receptors |
+|----------|-------------------------|-----------------|-------------------|
+| **Parasympathetic** | Acetylcholine | ↓ Heart rate, ↓ AV conduction | Muscarinic (M₂) |
+| **Sympathetic** | Norepinephrine | ↑ Heart rate, ↑ Contractility, ↑ Conduction | β₁-adrenergic |
 
-Result:
-Phase II min RR: 650 ms
-Phase IV max RR: 950 ms
-Valsalva ratio: 1.46
+Cardiovascular autonomic testing exploits specific physiological reflexes to selectively assess:
+- **Cardiovagal function** (parasympathetic → heart)
+- **Adrenergic function** (sympathetic → heart and vasculature)
+- **Baroreflex sensitivity** (integrated feedback control)
 
-Interpretation: Normal (>1.2 in middle-aged adults)
-```
+#### Pre-Test Requirements
 
-### Deep Breathing Test
+Before performing any autonomic function test, ensure standardized conditions:
 
-**Protocol:**
-1. Patient breathes at controlled rate (typically 6 breaths/min = 10s cycles)
-2. Record 6 complete cycles
-3. E:I ratio reflects vagal reactivity
+| Requirement | Rationale |
+|-------------|-----------|
+| **Fasting ≥2 hours** | Postprandial blood flow redistribution affects responses |
+| **No caffeine ≥12 hours** | Adenosine receptor blockade alters vagal tone |
+| **No alcohol ≥24 hours** | Acute alcohol suppresses HRV |
+| **No tobacco ≥2 hours** | Nicotine stimulates sympathetic activity |
+| **Quiet, temperature-controlled room (22-24°C)** | Environmental stress confounds results |
+| **Supine rest ≥10 minutes** | Achieve stable baseline autonomic state |
+| **Empty bladder** | Bladder distension triggers sympathetic activation |
 
-**Step-by-step in app:**
+---
 
-1. Go to **ANS Function Tests** tab
-2. Expand "Deep Breathing" section
-3. Enter:
-   - Start time: when paced breathing began
-   - Cycle length: 10s for 6 breaths/min
-   - Number of cycles: 6
-4. Click "Compute Deep Breathing"
+### Test 1: Deep Breathing Test (E:I Ratio)
 
-**Example:**
-```
-Paced breathing starts at 30s
-6 breaths/min = 10s per cycle
-6 cycles measured
+**Primary Assessment:** Cardiovagal (parasympathetic) function
 
-Settings:
-Start time: 30s
-Cycle length: 10s
-Cycles: 6
+#### Physiological Mechanism
 
-Result:
-Mean E:I difference: 180 ms
-Mean E:I ratio: 1.24
-Mean HR difference: 12 bpm
+The deep breathing test exploits **respiratory sinus arrhythmia (RSA)**, the physiological variation in heart rate linked to the respiratory cycle. During inspiration, vagal efferent activity to the heart is inhibited ("vagal gating"), producing relative tachycardia. During expiration, vagal tone is restored, producing relative bradycardia (Quispe & Novak, 2021).
 
-Interpretation: Normal vagal reactivity
-```
+This reflex is mediated by:
+1. **Pulmonary stretch receptors** → nucleus tractus solitarius (NTS)
+2. **Central respiratory oscillator** (pre-Bötzinger complex) → nucleus ambiguus
+3. **Cardiac vagal preganglionic neurons** → sinoatrial node
 
-### 30:15 Standing Ratio
+The magnitude of RSA is directly proportional to **cardiovagal tone** and declines with age (~2-3 bpm per decade after age 30) (Kowalewski & Urban, 2004).
 
-**Protocol:**
-1. Patient supine for baseline
-2. Patient stands at specified time
-3. Record HR response: initial tachycardia (beat 15), relative bradycardia (beat 30)
+#### Step-by-Step Protocol
 
-**Step-by-step in app:**
+**Equipment Required:**
+- Continuous ECG or heart rate monitor (≥250 Hz sampling recommended)
+- Metronome or visual pacer (for 6 breaths/minute = 5s in, 5s out)
+- Stopwatch
 
-1. Go to **ANS Function Tests** tab
-2. Expand "30:15 Ratio" section
-3. Enter:
-   - Stand time: exact second when patient stood
-   - Window 15: time range around 15th beat post-stand
-   - Window 30: time range around 30th beat post-stand
-4. Click "Compute 30:15 Ratio"
+**Procedure:**
 
-**Example:**
-```
-Patient stood at 60s
-Estimate beat 15 at ~70s (±2s)
-Estimate beat 30 at ~85s (±2s)
+1. **Preparation (5 minutes)**
+   - Subject supine in quiet room
+   - Attach ECG leads or HR monitor
+   - Explain procedure: "Breathe deeply and slowly following the pacer"
+   - Practice 2-3 breaths to ensure understanding
 
-Settings:
-Stand time: 60s
-Window 15: 68-72s
-Window 30: 83-87s
+2. **Baseline Recording (1 minute)**
+   - Record spontaneous breathing as baseline
+   - Note resting heart rate
 
-Result:
-RR at beat 15 (min): 620 ms
-RR at beat 30 (max): 780 ms
-30:15 ratio: 1.26
+3. **Deep Breathing Protocol (1 minute)**
+   - Start metronome/pacer at **6 breaths per minute** (10-second cycles)
+   - Instruct: "Breathe IN for 5 seconds... breathe OUT for 5 seconds"
+   - Record exactly **6 complete respiratory cycles**
+   - Ensure maximal but comfortable tidal volume
 
-Interpretation: Normal (>1.04 in healthy adults)
-```
+4. **Post-Test Recovery (1 minute)**
+   - Return to spontaneous breathing
+   - Continue recording for normalization
+
+**In-App Implementation:**
+
+1. Navigate to **ANS Function Tests** tab
+2. Expand **"Deep Breathing"** section
+3. Enter parameters:
+   - **Start time:** Second when paced breathing began (e.g., 60s)
+   - **Cycle length:** 10 seconds (for 6 breaths/min)
+   - **Number of cycles:** 6
+4. Click **"Compute Deep Breathing"**
+
+#### Calculated Metrics
+
+| Metric | Formula | Interpretation |
+|--------|---------|----------------|
+| **E:I Ratio** | Mean(max RR during expiration) / Mean(min RR during inspiration) | Primary outcome |
+| **E-I Difference** | Mean(max RR) - Mean(min RR) in ms | Absolute magnitude |
+| **HR Difference** | Mean HR change (bpm) across cycles | Clinical convention |
+
+#### Interpretation & Normal Values
+
+| Age Group | E:I Ratio (Normal) | HR Difference (Normal) |
+|-----------|--------------------|------------------------|
+| 20-29 years | ≥1.22 | ≥15 bpm |
+| 30-39 years | ≥1.18 | ≥13 bpm |
+| 40-49 years | ≥1.14 | ≥11 bpm |
+| 50-59 years | ≥1.10 | ≥9 bpm |
+| 60-69 years | ≥1.07 | ≥7 bpm |
+| ≥70 years | ≥1.04 | ≥5 bpm |
+
+*Source: Adapted from Ziegler et al., 2001; Alauddin et al., 2024*
+
+**Abnormal Result Interpretation:**
+- **E:I ratio <1.10** (age-adjusted): Suggests **cardiovagal dysfunction**
+- **Absent respiratory variation**: Severe vagal impairment or complete autonomic failure
+
+**Clinical Conditions with Reduced E:I Ratio:**
+- Diabetic autonomic neuropathy
+- Parkinson's disease / MSA
+- Heart failure
+- Post-cardiac transplant
+- Aging (physiological decline)
+
+---
+
+### Test 2: Valsalva Maneuver
+
+**Primary Assessment:** Integrated cardiovagal and adrenergic function
+
+#### Physiological Mechanism
+
+The Valsalva maneuver produces a characteristic **four-phase cardiovascular response** that tests both parasympathetic and sympathetic pathways (Randall et al., 2019; Baker et al., 2024):
+
+| Phase | Hemodynamic Event | ANS Response |
+|-------|-------------------|--------------|
+| **I** (Onset) | ↑ Intrathoracic pressure → transient ↑ BP | None (mechanical) |
+| **II Early** | ↓ Venous return → ↓ Cardiac output → ↓ BP | Baroreceptor-mediated ↑ HR |
+| **II Late** | Sympathetic vasoconstriction → partial BP recovery | Adrenergic compensation |
+| **III** (Release) | Sudden ↓ Intrathoracic pressure → brief ↓ BP | None (mechanical) |
+| **IV** (Overshoot) | ↑ Venous return + persistent vasoconstriction → ↑ BP | Vagal bradycardia reflex |
+
+The **Valsalva ratio** (VR) reflects the magnitude of vagal recovery in Phase IV relative to the sympathetic tachycardia in Phase II.
+
+#### Step-by-Step Protocol
+
+**Equipment Required:**
+- Continuous ECG monitor
+- Manometer or pressure gauge (target: 40 mmHg)
+- Stopwatch
+- Optional: continuous beat-to-beat blood pressure (Finapres/CNAP)
+
+**Procedure:**
+
+1. **Setup (2 minutes)**
+   - Subject seated or semi-recumbent (45°)
+   - Attach ECG and (if available) beat-to-beat BP monitor
+   - Connect mouthpiece to manometer
+   - Explain: "Blow into the tube and maintain the pressure at 40 for 15 seconds"
+
+2. **Practice Trial**
+   - Have subject practice maintaining 40 mmHg expiratory pressure
+   - Verify no air leak (nose clip may be needed)
+
+3. **Baseline (30 seconds)**
+   - Record resting ECG for stable baseline
+
+4. **Valsalva Strain (15 seconds)**
+   - Mark exact START time
+   - Subject exhales against closed glottis maintaining **40 mmHg** for **15 seconds**
+   - Monitor pressure gauge for compliance
+   - Mark exact END time
+
+5. **Recovery (45 seconds)**
+   - Release strain; resume normal breathing
+   - Continue recording for **≥45 seconds** post-strain
+   - Phase IV overshoot typically occurs at 20-30 seconds post-release
+
+**In-App Implementation:**
+
+1. Navigate to **ANS Function Tests** tab
+2. Expand **"Valsalva Ratio"** section
+3. Enter parameters:
+   - **Phase II Start:** Second when strain began (e.g., 30s)
+   - **Phase II End:** Second when strain ended (e.g., 45s = 30+15)
+   - **Phase IV Start:** Second when strain released (= Phase II End)
+   - **Phase IV End:** 20-30 seconds after release (e.g., 75s)
+4. Click **"Compute Valsalva Ratio"**
+
+#### Calculated Metrics
+
+| Metric | Formula | What It Assesses |
+|--------|---------|------------------|
+| **Valsalva Ratio** | RR_max(Phase IV) / RR_min(Phase II) | Cardiovagal function |
+| **Phase II BP late** | Slope of BP recovery during late Phase II | Adrenergic function |
+| **Phase IV Overshoot** | Peak BP above baseline | Sympathetic vasoconstriction |
+| **Pressure Recovery Time (PRT)** | Time from Phase III nadir to baseline BP | Adrenergic function |
+
+#### Interpretation & Normal Values
+
+| Age Group | Valsalva Ratio (Normal) | Borderline | Abnormal |
+|-----------|-------------------------|------------|----------|
+| 10-29 years | ≥1.50 | 1.20-1.49 | <1.20 |
+| 30-39 years | ≥1.45 | 1.15-1.44 | <1.15 |
+| 40-49 years | ≥1.35 | 1.10-1.34 | <1.10 |
+| 50-59 years | ≥1.25 | 1.05-1.24 | <1.05 |
+| ≥60 years | ≥1.15 | 1.00-1.14 | <1.00 |
+
+*Source: Ewing criteria; Phurpa & Ferdousi, 2021*
+
+**Abnormal Response Patterns:**
+
+| Pattern | Phase II | Phase IV | Indicates |
+|---------|----------|----------|-----------|
+| **Square-wave** | Flat (no HR increase) | Absent overshoot | Severe autonomic failure |
+| **Absent Phase IV overshoot** | Present | Absent | Adrenergic dysfunction |
+| **Prolonged Phase II recovery** | Slow | Delayed | Early sympathetic impairment |
+
+---
+
+### Test 3: Lying-to-Standing Test (30:15 Ratio)
+
+**Primary Assessment:** Cardiovagal and early adrenergic response to orthostatic challenge
+
+#### Physiological Mechanism
+
+Upon standing, approximately **500-700 mL of blood** pools in the lower extremities due to gravity. This triggers a coordinated autonomic response (Baker et al., 2024):
+
+1. **Immediate Phase (0-15 seconds):**
+   - ↓ Venous return → ↓ Stroke volume → ↓ BP
+   - Baroreceptor unloading → **vagal withdrawal** → Tachycardia
+   - **Beat 15** captures maximum HR (shortest RR interval)
+
+2. **Secondary Phase (15-30 seconds):**
+   - Sympathetic vasoconstriction restores BP
+   - **Vagal rebound** (baroreflex-mediated) → Relative bradycardia
+   - **Beat 30** captures recovery HR (longest RR interval)
+
+The **30:15 ratio** quantifies the integrity of this biphasic vagal response.
+
+#### Step-by-Step Protocol
+
+**Equipment Required:**
+- Continuous ECG monitor
+- Sphygmomanometer (for orthostatic BP measurement)
+- Stopwatch
+
+**Procedure:**
+
+1. **Supine Baseline (5 minutes)**
+   - Subject supine, completely relaxed
+   - Record stable baseline HR and BP
+   - Note baseline RR interval
+
+2. **Standing Command**
+   - Instruct: "When I say 'stand,' rise as quickly as you can and remain still"
+   - Mark exact STAND time on recording
+
+3. **Standing Phase (3 minutes)**
+   - Subject stands motionless
+   - **Do not allow leg crossing, fidgeting, or leaning**
+   - Measure BP at 1 minute and 3 minutes standing
+
+4. **Data Analysis**
+   - Identify **RR interval at beat 15** after standing (typically shortest)
+   - Identify **RR interval at beat 30** after standing (typically longest)
+   - Calculate ratio
+
+**In-App Implementation:**
+
+1. Navigate to **ANS Function Tests** tab
+2. Expand **"30:15 Ratio"** section
+3. Enter parameters:
+   - **Stand time:** Exact second when subject stood (e.g., 300s)
+   - **Window 15:** Time range containing beat 15 (e.g., 308-312s ≈ 10s after standing)
+   - **Window 30:** Time range containing beat 30 (e.g., 318-325s ≈ 20s after standing)
+4. Click **"Compute 30:15 Ratio"**
+
+#### Interpretation & Normal Values
+
+| Age Group | 30:15 Ratio (Normal) | Borderline | Abnormal |
+|-----------|----------------------|------------|----------|
+| 20-39 years | ≥1.15 | 1.04-1.14 | <1.04 |
+| 40-59 years | ≥1.10 | 1.01-1.09 | <1.01 |
+| ≥60 years | ≥1.04 | 0.98-1.03 | <0.98 |
+
+*Source: Kowalewski & Urban, 2004; Sharma et al., 2023*
+
+**Orthostatic Blood Pressure Criteria:**
+
+| Condition | Systolic BP Change | Diastolic BP Change |
+|-----------|-------------------|---------------------|
+| **Normal** | ↓ <20 mmHg | ↓ <10 mmHg |
+| **Orthostatic Hypotension** | ↓ ≥20 mmHg | ↓ ≥10 mmHg |
+| **Severe OH** | ↓ ≥30 mmHg | ↓ ≥15 mmHg |
+| **Delayed OH** | ↓ ≥20/10 mmHg after 3 minutes | (Calió et al., 2025) |
+
+---
+
+### Test 4: Isometric Handgrip Test
+
+**Primary Assessment:** Sympathetic adrenergic function (blood pressure response)
+
+#### Physiological Mechanism
+
+Sustained isometric muscle contraction activates the **exercise pressor reflex** through:
+
+1. **Mechanoreceptor activation** (Group III afferents) → Immediate response
+2. **Metaboreceptor activation** (Group IV afferents) → Sustained response from metabolite accumulation
+
+These afferents synapse in the **rostral ventrolateral medulla (RVLM)**, the primary sympathetic premotor nucleus, producing:
+- ↑ Sympathetic outflow to resistance vessels
+- ↑ Cardiac sympathetic drive (↑ HR, ↑ contractility)
+- ↓ Vagal tone
+
+The net effect is a **sustained increase in blood pressure** proportional to sympathetic efferent integrity (Quispe & Novak, 2021).
+
+#### Step-by-Step Protocol
+
+**Equipment Required:**
+- Handgrip dynamometer with maximal voluntary contraction (MVC) measurement
+- Sphygmomanometer
+- Stopwatch
+
+**Procedure:**
+
+1. **Determine Maximum Voluntary Contraction (MVC)**
+   - Subject squeezes dynamometer with maximum effort × 3 attempts
+   - Record highest value as MVC (e.g., 40 kg)
+
+2. **Calculate Target Force**
+   - Target = **30% of MVC** (e.g., 12 kg for 40 kg MVC)
+   - This intensity produces metabolite accumulation without fatigue
+
+3. **Baseline Measurement**
+   - Record resting BP (both arms)
+   - Record resting HR
+
+4. **Sustained Handgrip (3-5 minutes)**
+   - Subject maintains **30% MVC** grip with dominant hand
+   - Monitor force output for compliance
+   - Measure BP at **1, 2, and 3 minutes** of sustained grip
+   - Continue to 5 minutes if tolerated
+
+5. **Recovery (2 minutes)**
+   - Release grip; measure BP at 1 and 2 minutes post-grip
+
+**In-App Implementation:**
+
+The handgrip test requires manual BP measurements; the app assists with:
+1. **MVC Calculator:** Enter 3 attempts → calculates 30% target
+2. **Timer:** Guides measurement intervals
+3. **Data Entry:** Record BP values for automatic calculation
+
+#### Interpretation & Normal Values
+
+| Outcome | Normal Response | Abnormal Response |
+|---------|-----------------|-------------------|
+| **Diastolic BP Rise** | ↑ ≥16 mmHg by minute 3 | ↑ <10 mmHg |
+| **Systolic BP Rise** | ↑ ≥20 mmHg | Variable (less specific) |
+| **Heart Rate Rise** | ↑ 10-20 bpm | Blunted (<10 bpm) |
+
+*Source: Quispe & Novak, 2021; Alauddin et al., 2024*
+
+**Abnormal Response Interpretation:**
+- **Blunted BP response (<10 mmHg DBP rise):** Suggests sympathetic efferent dysfunction
+- **Exaggerated BP response (>40 mmHg):** May indicate hyper-adrenergic state
+
+---
+
+### Test 5: Orthostatic Blood Pressure Response
+
+**Primary Assessment:** Integrated sympathetic vasoconstrictor function
+
+#### Physiological Mechanism
+
+The sustained orthostatic challenge (3+ minutes) tests the ability of sympathetic vasoconstriction to maintain blood pressure against gravitational pooling. Unlike the 30:15 ratio (which assesses early vagal responses), sustained standing reveals **adrenergic insufficiency** (Baker et al., 2024).
+
+Orthostatic hypotension (OH) results from failure of:
+1. **Baroreflex-mediated sympathetic activation**
+2. **Peripheral vasoconstriction** (α₁-adrenergic)
+3. **Renin-angiotensin-aldosterone system** (delayed)
+4. **Venous compliance** (postural reflexes)
+
+#### Step-by-Step Protocol
+
+**Equipment Required:**
+- Sphygmomanometer (preferably automated)
+- Optional: Beat-to-beat BP monitor, tilt table
+
+**Procedure:**
+
+1. **Supine Baseline (5-10 minutes)**
+   - Subject supine for full equilibration
+   - Measure BP × 2 (1 minute apart); average for baseline
+
+2. **Active Standing Test**
+   - Subject stands unassisted
+   - Measure BP immediately (within 30 seconds)
+   - Measure BP at **1, 2, and 3 minutes** standing
+   - For delayed OH: continue to 5-10 minutes
+
+3. **Tilt Table Alternative (70° head-up)**
+   - Passive tilting eliminates muscle pump contribution
+   - More sensitive for detecting autonomic failure
+   - Standard duration: 10 minutes minimum, 45 minutes for vasovagal syncope provocation
+
+#### Interpretation & Normal Values
+
+| Classification | Criteria | Clinical Significance |
+|----------------|----------|----------------------|
+| **Normal** | ↓SBP <20, ↓DBP <10 mmHg | Intact autonomic function |
+| **Classical OH** | ↓SBP ≥20 or ↓DBP ≥10 mmHg within 3 min | Autonomic failure |
+| **Initial OH** | ↓SBP >40 or ↓DBP >20 mmHg within 15 sec | Transient mismatch |
+| **Delayed OH** | ↓SBP ≥20/↓DBP ≥10 mmHg after 3 min | Progressive failure |
+| **POTS** | HR ↑≥30 bpm (or ≥120 bpm) without OH | Hyperadrenergic/neuropathic |
+
+*Source: Freeman et al., 2011; Calió et al., 2025; Durstenfeld et al., 2025*
+
+---
+
+### Composite Scoring: The Ewing Score
+
+The original **Ewing battery** combines multiple tests into a composite autonomic dysfunction score:
+
+| Score | Criteria |
+|-------|----------|
+| **0** | All tests normal |
+| **1** | 1 abnormal cardiovagal test |
+| **2** | 2 abnormal cardiovagal tests |
+| **3** | 2 abnormal cardiovagal + 1 abnormal adrenergic test |
+| **4** | 2 abnormal cardiovagal + 2 abnormal adrenergic tests |
+| **5** | All tests abnormal |
+
+**Interpretation:**
+- **Score 0-1:** Normal or early involvement
+- **Score 2-3:** Definite autonomic neuropathy
+- **Score 4-5:** Severe/advanced autonomic failure
+
+*Source: Lefrandt et al., 2010; Shobhawat et al., 2025*
+
+---
+
+### Clinical Applications
+
+| Condition | Key Findings |
+|-----------|--------------|
+| **Diabetic Autonomic Neuropathy** | ↓E:I ratio, ↓Valsalva ratio, OH |
+| **Parkinson's Disease** | OH, ↓Phase IV overshoot, ↓30:15 ratio |
+| **Multiple System Atrophy** | Severe OH, absent Phase IV, pan-autonomic failure |
+| **POTS** | ↑HR ≥30 bpm standing, normal BP, ↑Valsalva HR response |
+| **Pure Autonomic Failure** | Severe OH, absent all responses |
+| **Long COVID** | Variable dysautonomia, often ↓30:15 ratio, POTS features |
+
+---
+
+### References for Autonomic Function Tests
+
+1. **Task Force of ESC and NASPE** (1996). Heart rate variability: Standards of measurement, physiological interpretation and clinical use. *Circulation*, 93(5), 1043-1065. [DOI: 10.1161/01.CIR.93.5.1043](https://doi.org/10.1161/01.CIR.93.5.1043)
+
+2. **Baker, J.R., Hira, R., Uppal, J., & Raj, S.R.** (2024). Clinical assessment of the autonomic nervous system. *Cardiac Electrophysiology Clinics*. [DOI: 10.1016/j.ccep.2024.02.001](https://doi.org/10.1016/j.ccep.2024.02.001) | [PMID: 39084717](https://pubmed.ncbi.nlm.nih.gov/39084717/)
+
+3. **Quispe, R.C., & Novak, P.** (2021). Auxiliary tests of autonomic functions. *Journal of Clinical Neurophysiology*, 38(5). [DOI: 10.1097/WNP.0000000000000626](https://doi.org/10.1097/WNP.0000000000000626) | [PMID: 34009848](https://pubmed.ncbi.nlm.nih.gov/34009848/)
+
+4. **Żyliński, M., Niewiadomski, W., Cybulski, G., & Gąsiorowska, A.** (2021). Device for controlling stimulus self-application during autonomic nervous system tests. *Medical Devices: Evidence and Research*, 14, 177-187. [DOI: 10.2147/MDER.S300384](https://doi.org/10.2147/MDER.S300384) | [PMID: 34104008](https://pubmed.ncbi.nlm.nih.gov/34104008/)
+
+5. **Randall, E.B., Billeschou, A., Brinth, L.S., Mehlsen, J., & Olufsen, M.S.** (2019). A model-based analysis of autonomic nervous function in response to the Valsalva maneuver. *Journal of Applied Physiology*, 127(5), 1382-1402. [DOI: 10.1152/japplphysiol.00015.2019](https://doi.org/10.1152/japplphysiol.00015.2019) | [PMID: 31369335](https://pubmed.ncbi.nlm.nih.gov/31369335/)
+
+6. **Kowalewski, M.A., & Urban, M.** (2004). Short- and long-term reproducibility of autonomic measures in supine and standing positions. *Clinical Autonomic Research*, 14(4), 249-257. [PMID: 12889989](https://pubmed.ncbi.nlm.nih.gov/12889989/)
+
+7. **Lefrandt, J.D., Smit, A.J., Zeebregts, C.J., Gans, R.O., & Hoogenberg, K.H.** (2010). Autonomic dysfunction in diabetes: A consequence of cardiovascular damage. *Hormone and Metabolic Research*, 42 Suppl 1, S50-S55. [PMID: 20879972](https://pubmed.ncbi.nlm.nih.gov/20879972/)
+
+8. **Ziegler, D., Laude, D., Akila, F., & Elghozi, J.L.** (2001). Time- and frequency-domain estimation of early diabetic cardiovascular autonomic neuropathy. *Diabetes Care*, 24(10), 1793-1798. [PMID: 11794718](https://pubmed.ncbi.nlm.nih.gov/11794718/)
+
+9. **Phurpa, M., & Ferdousi, S.** (2021). Short-term heart rate variability: A technique to detect subclinical cardiac autonomic neuropathy in type 2 diabetes mellitus. *Journal of Bangladesh Society of Physiologists*, 16(1). [PMID: 33830127](https://pubmed.ncbi.nlm.nih.gov/33830127/)
+
+10. **Sharma, V., Pattnaik, S., Ahluwalia, H., & Kaur, M.** (2023). Pre-pandemic autonomic function as a predictor of the COVID clinical course in young adults. *Clinical and Experimental Pharmacology and Physiology*, 50(8). [DOI: 10.1111/1440-1681.13776](https://doi.org/10.1111/1440-1681.13776) | [PMID: 37122115](https://pubmed.ncbi.nlm.nih.gov/37122115/)
+
+11. **Alauddin, W., Chaswal, M., Bashir, M., & Isser, H.S.** (2024). Cardiovascular autonomic modulation in chronic coronary syndrome following percutaneous coronary intervention. *Cureus*, 16(7), e65092. [DOI: 10.7759/cureus.65092](https://doi.org/10.7759/cureus.65092) | [PMID: 39171068](https://pubmed.ncbi.nlm.nih.gov/39171068/)
+
+12. **Durstenfeld, M.S., et al.** (2025). Case-control study of autonomic symptoms in the setting of Long COVID with tilt table testing. *PLoS ONE*. [DOI: 10.1371/journal.pone.0335218](https://doi.org/10.1371/journal.pone.0335218) | [PMID: 41134786](https://pubmed.ncbi.nlm.nih.gov/41134786/)
+
+13. **Calió, B., et al.** (2025). Delayed orthostatic hypotension in Parkinson's disease and in the general ageing population. *Age and Ageing*. [DOI: 10.1093/ageing/afaf187](https://doi.org/10.1093/ageing/afaf187) | [PMID: 40622385](https://pubmed.ncbi.nlm.nih.gov/40622385/)
+
+14. **Shobhawat, M., et al.** (2025). Assessing the impact of BMI and glycaemic control on cardiac autonomic neuropathy in patients with early and long-standing diabetes mellitus. *Annals of Indian Academy of Neurology*. [DOI: 10.1177/09727531251384548](https://doi.org/10.1177/09727531251384548) | [PMID: 41280749](https://pubmed.ncbi.nlm.nih.gov/41280749/)
 
 ---
 
