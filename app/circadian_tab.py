@@ -909,6 +909,9 @@ def render_circadian_tab(
     user_context: Optional[Dict[str, Any]] = None,
 ) -> None:
     """Render the complete Circadian Physiology tab."""
+    import logging
+    _ct_logger = logging.getLogger(__name__)
+    _ct_logger.info("CIRCADIAN_TAB: function entered")
     
     if not CIRCADIAN_AVAILABLE:
         st.error("⚠️ **Circadian Module Not Available**")
@@ -920,6 +923,7 @@ def render_circadian_tab(
             st.code(CIRCADIAN_IMPORT_ERROR, language="text")
         return
     
+    _ct_logger.info("CIRCADIAN_TAB: rendering header")
     # Header
     st.markdown("""
     <div style="
@@ -936,22 +940,31 @@ def render_circadian_tab(
         </p>
     </div>
     """, unsafe_allow_html=True)
+    _ct_logger.info("CIRCADIAN_TAB: header done, getting managers")
     
     tab_settings_manager = get_tab_settings_manager()
+    _ct_logger.info("CIRCADIAN_TAB: got tab_settings_manager")
     cross_tab_broker = get_cross_tab_broker()
+    _ct_logger.info("CIRCADIAN_TAB: got cross_tab_broker")
     active_user_id = (
         user_context.get("user_id") if user_context and user_context.get("has_user") else None
     )
+    _ct_logger.info("CIRCADIAN_TAB: active_user_id=%s", active_user_id)
 
     _sync_settings_with_context(user_context)
+    _ct_logger.info("CIRCADIAN_TAB: settings synced")
     settings = _get_circadian_settings()
+    _ct_logger.info("CIRCADIAN_TAB: got settings")
     stored_settings = tab_settings_manager.get_settings("circadian", active_user_id)
+    _ct_logger.info("CIRCADIAN_TAB: stored_settings retrieved")
     if stored_settings:
         merged_settings = {**settings, **stored_settings}
         _update_circadian_settings(merged_settings)
         settings = merged_settings
+    _ct_logger.info("CIRCADIAN_TAB: about to render scenario config header")
 
     st.markdown("### ⚙️ Scenario Configuration")
+    _ct_logger.info("CIRCADIAN_TAB: scenario config header done")
     if user_context and user_context.get("has_user"):
         if st.button(
             "Align with active profile",
@@ -963,14 +976,18 @@ def render_circadian_tab(
             st.success(
                 f"Scenario synced with {user_context.get('full_name') or user_context.get('username') or 'active user'}."
             )
+    _ct_logger.info("CIRCADIAN_TAB: about to render preset controls")
     settings = _render_preset_controls(settings)
+    _ct_logger.info("CIRCADIAN_TAB: preset controls done, rendering settings form")
     settings = _render_settings_form(settings)
+    _ct_logger.info("CIRCADIAN_TAB: settings form done, saving settings")
     tab_settings_manager.save_settings(
         "circadian",
         active_user_id,
         settings,
         allowed_keys=_CIRCADIAN_SETTING_KEYS,
     )
+    _ct_logger.info("CIRCADIAN_TAB: settings saved")
     
     st.markdown("---")
     st.caption(
