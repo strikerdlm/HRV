@@ -8895,48 +8895,84 @@ def main() -> None:
     
     # Preserve active tab across reruns using JavaScript
     # This prevents automatic return to Overview when clicking compute/analyze buttons
+    # Uses event delegation and singleton pattern to prevent listener accumulation
     st.markdown(
         """
         <script>
         (function() {
-            // Track the active tab and restore it after reruns
+            'use strict';
             const tabKey = '_streamlit_active_tab';
+            const initKey = '_streamlit_tab_persistence_init';
             
-            // Get all tab buttons
-            const tabButtons = document.querySelectorAll('[data-baseweb="tab"]');
+            // Singleton: only initialize once per page session to prevent listener accumulation
+            if (window[initKey]) {
+                // Already initialized - just restore tab if needed (no new listeners)
+                const savedIndex = sessionStorage.getItem(tabKey);
+                if (savedIndex !== null) {
+                    setTimeout(function() {
+                        const buttons = document.querySelectorAll('[data-baseweb="tab"]');
+                        const index = parseInt(savedIndex, 10);
+                        if (buttons[index] && buttons[index].getAttribute('aria-selected') !== 'true') {
+                            buttons[index].click();
+                        }
+                    }, 50);
+                }
+                return;
+            }
             
-            // Function to get active tab index
-            function getActiveTabIndex() {
-                for (let i = 0; i < tabButtons.length; i++) {
-                    if (tabButtons[i].getAttribute('aria-selected') === 'true') {
-                        return i;
+            // Mark as initialized (prevents duplicate listeners on reruns)
+            window[initKey] = true;
+            
+            // Use event delegation on document to avoid stale references
+            // This approach doesn't require removing/re-adding listeners
+            document.addEventListener('click', function(event) {
+                const target = event.target.closest('[data-baseweb="tab"]');
+                if (target) {
+                    const buttons = document.querySelectorAll('[data-baseweb="tab"]');
+                    const index = Array.from(buttons).indexOf(target);
+                    if (index >= 0) {
+                        sessionStorage.setItem(tabKey, index.toString());
                     }
                 }
-                return 0; // Default to first tab
-            }
+            }, true); // Use capture phase for reliable detection
             
-            // Function to set active tab by index
-            function setActiveTab(index) {
-                if (tabButtons[index]) {
-                    tabButtons[index].click();
+            // Restore active tab after DOM updates
+            function restoreTab() {
+                const savedIndex = sessionStorage.getItem(tabKey);
+                if (savedIndex !== null) {
+                    const buttons = document.querySelectorAll('[data-baseweb="tab"]');
+                    if (buttons.length > 0) {
+                        const index = parseInt(savedIndex, 10);
+                        if (index >= 0 && index < buttons.length) {
+                            const targetBtn = buttons[index];
+                            if (targetBtn && targetBtn.getAttribute('aria-selected') !== 'true') {
+                                targetBtn.click();
+                            }
+                        }
+                    }
                 }
             }
             
-            // Save active tab when it changes
-            tabButtons.forEach((btn, index) => {
-                btn.addEventListener('click', function() {
-                    sessionStorage.setItem(tabKey, index.toString());
+            // Try restoration with multiple attempts (DOM may not be ready immediately)
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    setTimeout(restoreTab, 100);
                 });
+            } else {
+                setTimeout(restoreTab, 100);
+            }
+            
+            // Also restore after Streamlit reruns (observe for tab container changes)
+            const observer = new MutationObserver(function() {
+                setTimeout(restoreTab, 50);
             });
             
-            // Restore active tab after page load/rerun
-            const savedIndex = sessionStorage.getItem(tabKey);
-            if (savedIndex !== null) {
-                const index = parseInt(savedIndex, 10);
-                // Small delay to ensure tabs are fully rendered
-                setTimeout(function() {
-                    setActiveTab(index);
-                }, 100);
+            if (document.body) {
+                observer.observe(document.body, { 
+                    childList: true, 
+                    subtree: true,
+                    attributes: false // Only watch for new elements, not attribute changes
+                });
             }
         })();
         </script>
@@ -9734,7 +9770,7 @@ def main() -> None:
                                     pd.to_numeric, errors="coerce"
                                 )
                                 corr_df = corr_input.corr()
-                                # Pairwise HRF↔HRV statistics (Pearson r, two-sided p).
+                                # Pairwise HRF↔HRV statistics (Pearson r, t-statistic, two-sided p).
                                 # Keep bounded by user-selected metrics (finite lists).
                                 pair_stats_rows: List[Dict[str, Any]] = []
                                 for hrf_m in selected_hrf:
@@ -9746,7 +9782,14 @@ def main() -> None:
                                         r_val, p_val, n_val = _pearson_r_p(x_vals, y_vals)
                                         if n_val < 3 or not np.isfinite(r_val):
                                             continue
+                                        
+                                        # Calculate t-statistic: t = r * sqrt((n-2)/(1-r²))
                                         abs_r = float(abs(r_val))
+                                        if abs_r < 1.0 - 1e-9 and n_val > 2:
+                                            t_stat = float(r_val * np.sqrt((n_val - 2) / (1 - r_val * r_val)))
+                                        else:
+                                            t_stat = float("nan")
+                                        
                                         # Interpret strength + significance (simple, standard thresholds)
                                         if abs_r < 0.10:
                                             strength = "negligible"
@@ -9773,6 +9816,7 @@ def main() -> None:
                                                 "hrv_metric": str(hrv_m),
                                                 "test": "Pearson r",
                                                 "result": float(r_val),
+                                                "t_statistic": t_stat,
                                                 "p_value": float(p_val) if np.isfinite(p_val) else np.nan,
                                                 "n": int(n_val),
                                                 "meaning": meaning,
@@ -9799,52 +9843,200 @@ def main() -> None:
                                 and isinstance(cached_corr, pd.DataFrame)
                                 and not cached_corr.empty
                             ):
-                                if SCIENTIFIC_CHARTS_AVAILABLE:
-                                    corr_chart = build_physiology_correlation_matrix(
-                                        correlation_df=cached_corr,
-                                        title="HRF ↔ HRV Correlation Matrix (Pearson r)",
-                                    )
-                                    render_echarts(
-                                        corr_chart,
-                                        height_px=420,
-                                        config=EChartsConfig(),
-                                    )
-                                else:
-                                    st.dataframe(
-                                        cached_corr.style.background_gradient(
-                                            cmap="RdYlGn", vmin=-1, vmax=1
-                                        )
-                                    )
-
-                                # Pairwise stats table requested: test, result, p-value, meaning per HRF↔HRV pair.
+                                # Enhanced ECharts correlation visualization
                                 pair_stats = cached.get("pair_stats")
                                 if isinstance(pair_stats, pd.DataFrame) and not pair_stats.empty:
-                                    st.markdown("**HRF↔HRV pairwise statistics (per pair)**")
-                                    st.caption("p-values are shown with **4 decimals** (two-sided Pearson test).")
+                                    # Build enhanced correlation heatmap with ECharts
+                                    hrf_metrics = sorted(pair_stats["hrf_metric"].unique())
+                                    hrv_metrics = sorted(pair_stats["hrv_metric"].unique())
+                                    
+                                    # Create correlation matrix data for heatmap
+                                    heatmap_data = []
+                                    max_abs_r = 0.0
+                                    for hrf_m in hrf_metrics:
+                                        for hrv_m in hrv_metrics:
+                                            row = pair_stats[
+                                                (pair_stats["hrf_metric"] == hrf_m) & 
+                                                (pair_stats["hrv_metric"] == hrv_m)
+                                            ]
+                                            if not row.empty:
+                                                r_val = float(row.iloc[0]["result"])
+                                                heatmap_data.append([hrf_metrics.index(hrf_m), hrv_metrics.index(hrv_m), r_val])
+                                                max_abs_r = max(max_abs_r, abs(r_val))
+                                    
+                                    # Build lookup dictionary for t and p values
+                                    stats_lookup = {}
+                                    for _, row in pair_stats.iterrows():
+                                        key = (str(row["hrf_metric"]), str(row["hrv_metric"]))
+                                        stats_lookup[key] = {
+                                            "t": float(row.get("t_statistic", np.nan)) if "t_statistic" in row and np.isfinite(row.get("t_statistic", np.nan)) else np.nan,
+                                            "p": float(row["p_value"]) if np.isfinite(row["p_value"]) else np.nan,
+                                        }
+                                    
+                                    # Build ECharts heatmap configuration
+                                    # Escape metric names for JavaScript
+                                    hrf_metrics_escaped = [m.replace("'", "\\'") for m in hrf_metrics]
+                                    hrv_metrics_escaped = [m.replace("'", "\\'") for m in hrv_metrics]
+                                    hrf_metrics_js = "['" + "','".join(hrf_metrics_escaped) + "']"
+                                    hrv_metrics_js = "['" + "','".join(hrv_metrics_escaped) + "']"
+                                    
+                                    # Build stats lookup as JavaScript object
+                                    stats_js_entries = []
+                                    for (hrf, hrv), stats in stats_lookup.items():
+                                        hrf_esc = hrf.replace("'", "\\'").replace('"', '\\"')
+                                        hrv_esc = hrv.replace("'", "\\'").replace('"', '\\"')
+                                        t_val = stats["t"]
+                                        p_val = stats["p"]
+                                        if np.isfinite(t_val):
+                                            t_str = f"{t_val:.4f}"
+                                        else:
+                                            t_str = "'n/a'"
+                                        if np.isfinite(p_val):
+                                            p_str = f"{p_val:.4f}"
+                                        else:
+                                            p_str = "'n/a'"
+                                        stats_js_entries.append(f"'{hrf_esc},{hrv_esc}': {{t: {t_str}, p: {p_str}}}")
+                                    stats_js = "{" + ",".join(stats_js_entries) + "}" if stats_js_entries else "{}"
+                                    
+                                    corr_heatmap = {
+                                        "title": {
+                                            "text": "HRF ↔ HRV Correlation Heatmap",
+                                            "subtext": "Pearson correlation coefficients (r) between Heart Rate Fragmentation and HRV metrics",
+                                            "left": "center",
+                                            "textStyle": {"fontSize": 18, "fontWeight": "bold"},
+                                            "subtextStyle": {"fontSize": 12, "color": "#666"},
+                                        },
+                                        "tooltip": {
+                                            "trigger": "item",
+                                            "formatter": f"""function(params) {{
+                                                var hrfIdx = params.data[0];
+                                                var hrvIdx = params.data[1];
+                                                var r = params.data[2];
+                                                var hrf = {hrf_metrics_js}[hrfIdx];
+                                                var hrv = {hrv_metrics_js}[hrvIdx];
+                                                var rStr = r.toFixed(4);
+                                                var key = hrf + ',' + hrv;
+                                                var stats = {stats_js}[key] || {{t: 'n/a', p: 'n/a'}};
+                                                var tStr = typeof stats.t === 'number' ? stats.t.toFixed(4) : stats.t;
+                                                var pStr = typeof stats.p === 'number' ? stats.p.toFixed(4) : stats.p;
+                                                return hrf + '<br/>' + hrv + '<br/>r = ' + rStr + '<br/>t = ' + tStr + '<br/>p = ' + pStr;
+                                            }}""",
+                                        },
+                                        "grid": {"height": "60%", "top": "15%", "left": "20%", "right": "10%"},
+                                        "xAxis": {
+                                            "type": "category",
+                                            "data": hrv_metrics,
+                                            "splitArea": {"show": True},
+                                            "axisLabel": {"rotate": 45, "interval": 0},
+                                        },
+                                        "yAxis": {
+                                            "type": "category",
+                                            "data": hrf_metrics,
+                                            "splitArea": {"show": True},
+                                        },
+                                        "visualMap": {
+                                            "min": float(-max_abs_r) if max_abs_r > 0 else -1.0,
+                                            "max": float(max_abs_r) if max_abs_r > 0 else 1.0,
+                                            "calculable": True,
+                                            "orient": "vertical",
+                                            "left": "right",
+                                            "top": "center",
+                                            "inRange": {
+                                                "color": ["#313695", "#4575b4", "#74add1", "#abd9e9", "#e0f3f8", "#ffffcc", "#fee090", "#fdae61", "#f46d43", "#d73027", "#a50026"]
+                                            },
+                                            "text": ["Strong +", "Strong -"],
+                                            "textStyle": {"color": "#333"},
+                                        },
+                                        "series": [{
+                                            "name": "Correlation",
+                                            "type": "heatmap",
+                                            "data": heatmap_data,
+                                            "label": {
+                                                "show": True,
+                                                "formatter": """function(params) {
+                                                    return params.data[2].toFixed(3);
+                                                }""",
+                                                "color": "#000",
+                                                "fontSize": 10,
+                                            },
+                                            "emphasis": {
+                                                "itemStyle": {
+                                                    "shadowBlur": 10,
+                                                    "shadowColor": "rgba(0, 0, 0, 0.5)"
+                                                }
+                                            }
+                                        }]
+                                    }
+                                    
+                                    # Render the heatmap
+                                    render_echarts(
+                                        corr_heatmap,
+                                        height_px=500,
+                                        width="100%",
+                                        config=EChartsConfig(),
+                                    )
+                                    
+                                    # Add scientific context
+                                    st.markdown("""
+                                    **📊 Understanding HRF ↔ HRV Correlations:**
+                                    
+                                    Heart Rate Fragmentation (HRF) and Heart Rate Variability (HRV) measure different aspects of cardiac dynamics:
+                                    
+                                    - **HRF** captures beat-to-beat "jerkiness" — frequent direction changes in RR intervals, even in sinus rhythm
+                                    - **HRV** measures overall variability in RR intervals, reflecting autonomic modulation
+                                    
+                                    **Research Context:**
+                                    - Studies show HRF can be elevated even when HRV appears normal (Costa et al. 2017)
+                                    - HRF may reflect non-autonomic contributors to cardiac dynamics (Cathey et al. 2024)
+                                    - In type 2 diabetes, HRF is impaired and shows distinct relationships with HRV (Galdino et al. 2023)
+                                    
+                                    **Interpreting Correlations:**
+                                    - **Positive correlations**: Higher HRF associated with higher HRV (may indicate complex dynamics)
+                                    - **Negative correlations**: Higher HRF associated with lower HRV (may indicate pathological fragmentation)
+                                    - **Weak correlations (|r| < 0.3)**: HRF and HRV are largely independent measures
+                                    - **Moderate-strong correlations (|r| > 0.5)**: Shared underlying mechanisms
+                                    """)
+                                    
+                                    # Enhanced statistics table with t-statistic
+                                    st.markdown("**📋 Detailed Pairwise Statistics**")
+                                    st.caption("All values shown with **4 decimals**. t-statistic tests H₀: r = 0 (two-sided Pearson test).")
                                     display_df = pair_stats.copy()
-                                    # Ensure the required columns exist (older cache can be missing fields).
-                                    for col in ("hrf_metric", "hrv_metric", "test", "result", "p_value", "meaning", "n"):
+                                    # Ensure the required columns exist
+                                    for col in ("hrf_metric", "hrv_metric", "test", "result", "t_statistic", "p_value", "meaning", "n"):
                                         if col not in display_df.columns:
                                             display_df[col] = np.nan
+                                    
+                                    # Format with 4 decimals
                                     display_df["result"] = display_df["result"].apply(
-                                        lambda v: f"{float(v):.3f}" if np.isfinite(v) else "n/a"
+                                        lambda v: f"{float(v):.4f}" if np.isfinite(v) else "n/a"
                                     )
+                                    if "t_statistic" in display_df.columns:
+                                        display_df["t_statistic"] = display_df["t_statistic"].apply(
+                                            lambda v: f"{float(v):.4f}" if np.isfinite(v) else "n/a"
+                                        )
+                                    else:
+                                        display_df["t_statistic"] = "n/a"
                                     display_df["p_value"] = display_df["p_value"].apply(
                                         lambda v: f"{float(v):.4f}" if np.isfinite(v) else "n/a"
                                     )
                                     display_df["n"] = display_df["n"].apply(
                                         lambda v: int(v) if pd.notna(v) else 0
                                     )
-                                    display_df = display_df[
-                                        ["hrf_metric", "hrv_metric", "test", "result", "p_value", "meaning", "n"]
-                                    ]
+                                    
+                                    # Reorder columns
+                                    col_order = ["hrf_metric", "hrv_metric", "result", "t_statistic", "p_value", "n", "meaning"]
+                                    display_df = display_df[[c for c in col_order if c in display_df.columns]]
+                                    display_df.columns = [c.replace("_", " ").title() for c in display_df.columns]
+                                    
                                     st.dataframe(
                                         display_df,
                                         use_container_width=True,
                                         hide_index=True,
                                     )
-
-                                    # Top HRF↔HRV pair scatter (by |r|) using the cached stats.
+                                    
+                                    # Top HRF↔HRV pair scatter plot (by |r|) using the cached stats
+                                    st.markdown("---")
+                                    st.markdown("**📈 Top Correlation Scatter Plot**")
                                     top_row = pair_stats.iloc[0].to_dict()
                                     x_name = str(top_row.get("hrf_metric", ""))
                                     y_name = str(top_row.get("hrv_metric", ""))
@@ -9853,9 +10045,18 @@ def main() -> None:
                                         y = pd.to_numeric(merged_results[y_name], errors="coerce")
                                         mask = x.notna() & y.notna()
                                         if int(mask.sum()) >= 3:
+                                            r_disp = top_row.get("result", float("nan"))
+                                            t_disp = top_row.get("t_statistic", float("nan"))
+                                            p_disp = top_row.get("p_value", float("nan"))
+                                            n_disp = int(top_row.get("n", int(mask.sum())))
+                                            
                                             opt = {
-                                                "title": {"text": f"{x_name} vs {y_name}", "left": "center"},
-                                                "tooltip": {"trigger": "item"},
+                                                "title": {
+                                                    "text": f"{x_name} ↔ {y_name}",
+                                                    "subtext": f"Strongest correlation pair (|r| = {abs(float(r_disp)):.4f})",
+                                                    "left": "center",
+                                                },
+                                                "tooltip": {"trigger": "item", "formatter": "{b}: ({c})"},
                                                 "grid": {"left": 48, "right": 18, "containLabel": True},
                                                 "xAxis": {"type": "value", "name": x_name},
                                                 "yAxis": {"type": "value", "name": y_name},
@@ -9869,24 +10070,46 @@ def main() -> None:
                                             }
                                             render_echarts(
                                                 opt,
-                                                height_px=360,
+                                                height_px=400,
                                                 width="100%",
                                                 config=EChartsConfig(),
                                             )
-                                            r_disp = top_row.get("result", float("nan"))
-                                            p_disp = top_row.get("p_value", float("nan"))
-                                            n_disp = int(top_row.get("n", int(mask.sum())))
-                                            if np.isfinite(r_disp) and np.isfinite(p_disp):
-                                                caption = f"Top pair: r = {float(r_disp):.3f}, p = {float(p_disp):.4f} (n={n_disp})."
-                                            elif np.isfinite(r_disp):
-                                                caption = f"Top pair: r = {float(r_disp):.3f} (n={n_disp})."
-                                            else:
-                                                caption = f"Top pair: n={n_disp}."
-                                            st.caption(
-                                                caption
-                                                + " Use this as exploratory association; interpret alongside protocol, posture, and breathing context."
-                                            )
+                                            
+                                            # Enhanced caption with all statistics
+                                            stats_parts = []
+                                            if np.isfinite(r_disp):
+                                                stats_parts.append(f"r = {float(r_disp):.4f}")
+                                            if np.isfinite(t_disp):
+                                                stats_parts.append(f"t = {float(t_disp):.4f}")
+                                            if np.isfinite(p_disp):
+                                                stats_parts.append(f"p = {float(p_disp):.4f}")
+                                            stats_parts.append(f"n = {n_disp}")
+                                            
+                                            caption = "**Statistics:** " + " | ".join(stats_parts) + ". "
+                                            caption += "Use this as exploratory association; interpret alongside protocol, posture, and breathing context."
+                                            st.caption(caption)
+                                        else:
+                                            st.info(f"Insufficient data points (n={int(mask.sum())}) for scatter plot.")
+                                    else:
+                                        st.info("Selected metrics not found in results.")
                                 else:
+                                    # Fallback to simple matrix if no pair stats
+                                    if SCIENTIFIC_CHARTS_AVAILABLE:
+                                        corr_chart = build_physiology_correlation_matrix(
+                                            correlation_df=cached_corr,
+                                            title="HRF ↔ HRV Correlation Matrix (Pearson r)",
+                                        )
+                                        render_echarts(
+                                            corr_chart,
+                                            height_px=420,
+                                            config=EChartsConfig(),
+                                        )
+                                    else:
+                                        st.dataframe(
+                                            cached_corr.style.background_gradient(
+                                                cmap="RdYlGn", vmin=-1, vmax=1
+                                            )
+                                        )
                                     st.info(
                                         "Not enough overlapping samples to compute HRF↔HRV pairwise tests (need ≥3 recordings per pair)."
                                     )
