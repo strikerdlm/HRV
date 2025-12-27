@@ -21071,9 +21071,10 @@ For each HRV metric, we compute:
                             if isinstance(stored_events, dict) and isinstance(stored_events.get("events"), pd.DataFrame):
                                 ev_df = stored_events["events"]
                                 if not ev_df.empty:
-                                    with st.expander("✅ Detected events (saved for this session)", expanded=True):
-                                        st.caption(f"Computed: {stored_events.get('computed_at_utc', 'unknown')}")
-                                        st.dataframe(ev_df, use_container_width=True)
+                                    # Display events inline (not expander, to avoid nesting)
+                                    st.markdown("##### ✅ Detected events (saved for this session)")
+                                    st.caption(f"Computed: {stored_events.get('computed_at_utc', 'unknown')}")
+                                    st.dataframe(ev_df, use_container_width=True)
 
                                     # Event selection
                                     event_labels: List[str] = []
