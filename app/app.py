@@ -95,6 +95,7 @@ from hrv_core import (
     compute_comprehensive_hrv,
     compute_deep_breathing_response,
     compute_frequency_domain_metrics,
+    compute_poincare_metrics,
     compute_valsalva_ratio,
     compute_windowed_hrv,
     load_rr_intervals_from_text,
@@ -9839,11 +9840,132 @@ If your HF power is below age-matched norms or you have elevated sympathetic mar
                         "- **Performance note**: The plot may downsample points for rendering; summary metrics use the full series."
                     )
                 _plot_poincare(nl_datasets)
+                
+                # Additional ECharts visualization for nonlinear metrics (SD1/SD2/ratio)
+                _pc_metrics: List[Dict[str, Any]] = []
+                for _fname, _up in nl_datasets.items():
+                    _rr = _up.rr_ms_clean if (_up.rr_ms_clean is not None) else _up.rr_ms
+                    _pc = compute_poincare_metrics(_rr)
+                    if _pc:
+                        _pc_metrics.append(
+                            {
+                                "source": str(_fname),
+                                "sd1": float(_pc.get("sd1", 0.0)),
+                                "sd2": float(_pc.get("sd2", 0.0)),
+                                "sd_ratio": float(_pc.get("sd_ratio", 0.0)),
+                                "ellipse_area": float(_pc.get("ellipse_area", 0.0)),
+                            }
+                        )
+                if _pc_metrics:
+                    _pc_sources = [m["source"] for m in _pc_metrics]
+                    _sd1_vals = [m["sd1"] for m in _pc_metrics]
+                    _sd2_vals = [m["sd2"] for m in _pc_metrics]
+                    _ratio_vals = [m["sd_ratio"] for m in _pc_metrics]
+                    _pc_opt = {
+                        "title": {
+                            "text": "Poincaré Metrics",
+                            "subtext": "SD1 (short-term), SD2 (long-term), SD1/SD2 ratio",
+                            "left": "center",
+                        },
+                        "tooltip": {"trigger": "axis"},
+                        "legend": {"top": 40, "data": ["SD1", "SD2", "SD1/SD2 ratio"]},
+                        "grid": {"left": 70, "right": 30, "top": 100, "bottom": 60, "containLabel": True},
+                        "xAxis": {"type": "category", "data": _pc_sources, "axisLabel": {"rotate": 30, "interval": 0}},
+                        "yAxis": {"type": "value", "name": "Milliseconds / Ratio", "nameGap": 45},
+                        "series": [
+                            {"name": "SD1", "type": "bar", "data": _sd1_vals, "itemStyle": {"color": "#4CAF50"}},
+                            {"name": "SD2", "type": "bar", "data": _sd2_vals, "itemStyle": {"color": "#2196F3"}},
+                            {"name": "SD1/SD2 ratio", "type": "line", "yAxisIndex": 0, "data": _ratio_vals, "itemStyle": {"color": "#FF9800"}},
+                        ],
+                    }
+                    render_echarts(_pc_opt, height_px=420, width="100%", config=EChartsConfig())
         st.markdown(
-            "**Scientific notes (nonlinear)**  \n"
-            "- Poincaré SD1 ≈ RMSSD (short-term vagal modulation); SD2 relates to longer-term variability.  \n"
-            "- DFA α1 ≈ 0.75–1.25 at rest reflects healthy fractal-like regulation; lower values can indicate exercise intensity near the aerobic threshold in exertional contexts.  \n"
-            "References: [Shaffer & Ginsberg, 2017](https://www.frontiersin.org/journals/public-health/articles/10.3389/fpubh.2017.00258/full).")
+            "---\n"
+            "## 📚 Scientific Notes: Understanding Nonlinear HRV\n"
+        )
+        with st.expander("🔬 What the Nonlinear Plots Mean (Poincaré, DFA, Entropy)", expanded=True):
+            st.markdown(
+                """
+### Poincaré Plot (SD1 / SD2)
+- **SD1**: Short-term variability (ms). Closely related to RMSSD; reflects **vagal (parasympathetic) modulation**.  
+- **SD2**: Longer-term variability (ms). Captures slower oscillations and overall spread.  
+- **SD1/SD2 ratio**: Shape metric; lower values (<0.5) often indicate reduced vagal modulation or sympathetic predominance.  
+- **Ellipse area (π·SD1·SD2)**: Overall complexity/variability of the RR series.
+
+### Detrended Fluctuation Analysis (DFA)
+- **α1 (short-term, typically 4–16 beats)**:  
+  - Healthy rest: **~0.75–1.25** (fractal-like, adaptive).  
+  - **<0.75**: More randomness/uncorrelated beats (e.g., heavy exercise, sympathetic drive).  
+  - **>1.4**: Excess correlation/rigidity (may be seen in pathology or over-control).  
+- **α2 (long-term)**: Often **>1**, reflects longer correlations; less commonly used for short segments.
+
+### Entropy (Sample/Approximate Entropy)
+- Higher entropy → **more complex, adaptable** dynamics.  
+- Very low entropy → overly regular/rigid; very high entropy → could be noisy/random rather than healthy complexity.
+
+**Key physiological takeaway:**  
+Healthy autonomic control shows **high SD1**, **balanced SD1/SD2**, **α1 near 1.0**, and **moderate-to-high entropy**—indicating adaptable, fractal-like regulation.
+
+**References:**  
+- Shaffer & Ginsberg (2017) Front Public Health 5:258. [PMID: 29034226](https://pubmed.ncbi.nlm.nih.gov/29034226/)  
+- Tulppo et al. (1996) Clin Sci 91(2):163–170. [PMID: 8784193](https://pubmed.ncbi.nlm.nih.gov/8784193/)  
+- Peng et al. (1995) Phys Rev Lett 70(9):1343–1346. [PMID: 1005820](https://pubmed.ncbi.nlm.nih.gov/1005820/)  
+- Brennan et al. (2001) Chaos 11(1):82–92. [PMID: 12779434](https://pubmed.ncbi.nlm.nih.gov/12779434/)
+                """
+            )
+        with st.expander("📊 Age/Reference Ranges (short-term recordings)", expanded=False):
+            st.markdown(
+                """
+| Metric | Healthy Young Adults | Middle Age | Older Adults | Notes |
+| --- | --- | --- | --- | --- |
+| **SD1 (ms)** | 30–60 | 20–45 | 15–35 | Higher = more vagal tone (similar to RMSSD) |
+| **SD2 (ms)** | 60–120 | 45–90 | 30–70 | Overall variability; falls with age |
+| **SD1/SD2** | 0.4–0.8 | 0.35–0.75 | 0.30–0.70 | Lower suggests sympathetic tilt or low vagal tone |
+| **DFA α1** | 0.9–1.2 | 0.85–1.15 | 0.8–1.1 | ~1.0 = healthy fractal regulation |
+| **Sample Entropy** (m=2, r=0.2) | ~1.0–1.8 | ~0.8–1.6 | ~0.7–1.4 | Depends strongly on r, data length |
+
+*Ranges are approximate for 5-min, supine, healthy individuals; interpret with protocol context (posture, breathing rate, artifacts).*
+                """
+            )
+        with st.expander("🏥 Clinical Significance (when abnormal)", expanded=False):
+            st.markdown(
+                """
+- **Low SD1 / Low SD1/SD2**: Reduced vagal modulation; seen with chronic stress, diabetes, heart failure.  
+- **Very low SD2 / small ellipse area**: Severely reduced overall variability; seen in advanced cardiac disease or autonomic neuropathy.  
+- **DFA α1 < 0.75**: Loss of fractal structure (random-like); common during heavy exercise or high sympathetic drive.  
+- **DFA α1 > 1.4**: Overly correlated/rigid dynamics; reported in some pathologies and over-controlled rhythms.  
+- **Very low entropy**: Over-regularity/rigidity (reduced adaptability).
+
+**Key references:** Shaffer & Ginsberg 2017 (PMID: 29034226); Tulppo 1996 (PMID: 8784193); Peng 1995 (PMID: 1005820); Brennan 2001 (PMID: 12779434).
+                """
+            )
+        with st.expander("💪 Evidence-Based Ways to Improve Nonlinear HRV Metrics", expanded=False):
+            st.markdown(
+                """
+1) **Slow/Resonance Breathing (~6 breaths/min)**  
+   - Increases SD1 (vagal/RSA) and can normalize DFA α1 toward ~1.0.  
+   - RCT: 30-day paced breathing raised HF/SD1 (Laborde et al., 2019, PMID: 30736268).
+
+2) **Aerobic Exercise Training (150 min/week moderate)**  
+   - Improves SD1 and entropy; enhances vagal tone over 8–12 weeks.  
+   - Stretch/flexibility program improved HF and LF/HF (Wong et al., 2017, PMID: 28323625).
+
+3) **Mindfulness/Yoga**  
+   - Reduces sympathetic drive, increases vagal modulation (higher SD1, entropy).  
+   - Meta-analyses show HF/SD1 gains after 8+ weeks.
+
+4) **Sleep Optimization**  
+   - Poor sleep reduces vagal indices (SD1, entropy); fixing sleep increases them (Tobaldini et al., 2013, PMID: 24235903).
+
+5) **Avoid acute overtraining**  
+   - DFA α1 collapses (<0.75) with heavy load; using α1 to stay >0.75 helps manage intensity (Sports physiology reports, e.g., Gronwald & Hoos 2020).
+
+Quick protocol to try now (safe for healthy users):  
+- 10–20 minutes/day of 5–6s inhale, 5–6s exhale breathing, seated, for 4–6 weeks.  
+- Add 3×/week moderate cardio (30–40 min).  
+- Prioritize 7–9 h sleep; regular schedule.
+                """
+            )
     with tab_tfr:
         if not has_hrv_data:
             st.info(
