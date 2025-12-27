@@ -9491,7 +9491,7 @@ def main() -> None:
                                     "pointer": {"show": True, "length": "55%", "width": 5, "itemStyle": {"color": "#333"}},
                                     "anchor": {"show": True, "size": 12, "showAbove": True, "itemStyle": {"color": "#333"}},
                                     "detail": {"show": False},
-                                    "data": [{"value": round(_rr_span, 0)}],
+                                    "data": [{"value": int(round(_rr_span, 0))}],
                                 }
                             ],
                         }
