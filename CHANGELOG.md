@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Space Data step log (debug)** (`app/app.py`): Added a **📋 Space Data step log** expander that records Space Data fetch steps with duration + error text so freezes/hangs can be attributed to a specific source.
 
+### Changed
+- **Metrics tab UI cleanup** (`app/app.py`, `app/app-Starflight.py`): Removed the “🔍 AI metric explanations” banner from the Metrics page.
+
 ### Fixed
 - **Impact Predictions are now debuggable step-by-step** (`app/app.py`): Added a **🧪 Step-by-step (debug hangs)** expander with one button per Impact Predictions sub-step (X-rays, protons, solar wind, CME/ENLIL, Kp/Dst), persists per-step status + duration, and rebuilds the snapshot from the latest step results.
 - **Impact step buttons no longer freeze/reset the session** (`app/app.py`): Step-by-step sub-steps now run with a hard per-step timeout so a stalled network/DNS call can’t block the Streamlit UI long enough to disconnect and “jump back” to the Overview tab.
