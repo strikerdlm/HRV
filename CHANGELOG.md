@@ -5,6 +5,14 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.76] - 2025-12-27
+
+### Fixed
+- **Space Weather Progress Display** (`app/app.py`): Fixed HTML rendering issue where progress tracker was displaying raw HTML tags instead of styled visual elements in Space Data tab. All three fetch operations (Impact Predictions, NASA DONKI, NOAA Space Weather) now use proper `st.status()` containers for HTML rendering:
+  - Wrapped progress containers inside `st.status()` contexts (same pattern as HRV progress)
+  - Added status container updates on completion/error states
+  - Progress HTML now renders correctly with styled CSS elements
+
 ## [1.8.75] - 2025-12-27
 
 ### Added
