@@ -94,6 +94,7 @@ from hrv_core import (
     compute_30_15_ratio,
     compute_comprehensive_hrv,
     compute_deep_breathing_response,
+    compute_frequency_domain_metrics,
     compute_valsalva_ratio,
     compute_windowed_hrv,
     load_rr_intervals_from_text,
