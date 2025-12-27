@@ -3,7 +3,9 @@ from __future__ import annotations
 from dataclasses import asdict
 from typing import Dict, Mapping, Optional
 
+import concurrent.futures
 import json
+import logging
 import os
 
 from agent_logging import log_agent_output
@@ -25,6 +27,13 @@ except ImportError:
 		SpaceWeatherSnapshot,
 	)
 from datetime import datetime, timezone
+
+try:
+	from app.logging_config import get_logger, log_exception
+except ImportError:  # pragma: no cover - fallback for script execution
+	from logging_config import get_logger, log_exception
+
+_LOGGER: logging.Logger = get_logger(__name__)
 
 
 def _build_instruction() -> str:
@@ -83,6 +92,8 @@ def _parse_iso_datetime(value: object) -> Optional[datetime]:
 def extract_spaceweather_with_openai(
 	html_sections: Mapping[str, str],
 	model: str = "gpt-5.2",
+	*,
+	timeout_s: float = 30.0,
 ) -> Optional[SpaceWeatherSnapshot]:
 	"""
 	Fallback extraction: ask OpenAI Responses API to parse SpaceWeatherLive HTML into a JSON payload,
@@ -100,6 +111,9 @@ def extract_spaceweather_with_openai(
 	Optional[SpaceWeatherSnapshot]
 		Parsed snapshot if the model returns valid JSON; None on failure.
 	"""
+	if float(timeout_s) <= 0:
+		raise ValueError("timeout_s must be > 0")
+
 	# Ensure API key is configured via environment (never commit secrets)
 	if not os.getenv("OPENAI_API_KEY"):
 		return None
@@ -110,13 +124,13 @@ def extract_spaceweather_with_openai(
 	except ImportError:
 		return None
 
-	client = OpenAI()
+	client = OpenAI(timeout=float(timeout_s))
 
 	# Combine all HTML segments into one user content block
 	joined_html = "\n\n".join([f"[{k}]\n{v}" for k, v in html_sections.items()])
 
-	try:
-		resp = client.responses.create(
+	def _request_openai_payload() -> object:
+		return client.responses.create(
 			model=model,
 			input=[
 				{
@@ -133,8 +147,25 @@ def extract_spaceweather_with_openai(
 			store=False,
 			include=[],
 		)
-	except Exception:
+
+	executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+	future = executor.submit(_request_openai_payload)
+	try:
+		done, not_done = concurrent.futures.wait(
+			{future},
+			timeout=float(timeout_s),
+			return_when=concurrent.futures.ALL_COMPLETED,
+		)
+		if not_done:
+			_ = future.cancel()
+			return None
+		resp = future.result()
+	except Exception as exc:
+		log_exception(_LOGGER, "OpenAI fallback extraction failed", exc)
 		return None
+	finally:
+		# Do not block on potentially stuck network threads.
+		executor.shutdown(wait=False, cancel_futures=True)
 
 	# Extract text content (robust to minor client variations)
 	json_text: Optional[str] = None

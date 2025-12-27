@@ -5,6 +5,15 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.66] - 2025-12-27
+
+### Added
+- **Space Data step log (debug)** (`app/app.py`): Added a **📋 Space Data step log** expander that records Space Data fetch steps with duration + error text so freezes/hangs can be attributed to a specific source.
+
+### Fixed
+- **Impact Predictions are now debuggable step-by-step** (`app/app.py`): Added a **🧪 Step-by-step (debug hangs)** expander with one button per Impact Predictions sub-step (X-rays, protons, solar wind, CME/ENLIL, Kp/Dst), persists per-step status + duration, and rebuilds the snapshot from the latest step results.
+- **SpaceWeatherLive OpenAI fallback no longer appears to hang** (`app/spaceweather_openai_fallback.py`, `app/app.py`): Added explicit OpenAI request timeouts + non-blocking shutdown and parallelized SpaceWeatherLive HTML page downloads; failures now surface in the Space Data step log.
+
 ## [1.8.60] - 2025-12-25
 
 ### Fixed
