@@ -5,6 +5,39 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.68] - 2025-12-27
+
+### Added
+- **Modern HRV Progress Tracker** (`app/hrv_progress.py`): New module providing detailed, real-time progress tracking for all HRV computations. Features include:
+  - **Visual step-by-step progress** with animated status indicators (pending, running, complete, error)
+  - **Live elapsed time tracking** per step and per sub-step
+  - **Progress bar** showing overall completion percentage
+  - **Detailed sub-step messages** for each computation phase
+  - **Modern dark-themed UI** with CSS animations matching Space Weather progress style
+  - **Pre-configured 9-step workflow**: Validate RR → Artifact Detection → Artifact Correction → Windowed Metrics → Full-Recording Metrics → DFA Analysis → Frequency Analysis → ML Clustering → Episode Detection
+
+- **Enhanced HRV Interpretation Module** (`app/hrv_interpretation.py`): New module providing context-aware, informed interpretations for HRV metrics with clinical and physiological context.
+
+- **New HRV Metrics** (`app/hrv_core.py`): Added scientifically-validated metrics based on literature review:
+  - **LnRMSSD**: Natural logarithm of RMSSD for better statistical properties (Buchheit 2014)
+  - **CVI (Cardiac Vagal Index)**: ln(SD1²) for parasympathetic assessment (Toichi 1997)
+  - **CSI (Cardiac Sympathetic Index)**: SD2/SD1 ratio for sympathovagal balance (Toichi 1997)
+  - **Mean HRmax-HRmin**: Heart rate range metric for autonomic reactivity
+  - **Generalized pNNx**: Configurable threshold (10ms, 30ms, 50ms) for pNN calculations
+  - **SDANN**: Standard deviation of 5-min mean NNI for long-term variability (24h recordings)
+  - **SDNNi**: Mean of 5-min SDNN values for short-term variability within segments
+  - **Enhanced TINN**: More robust triangular interpolation algorithm
+
+- **New Gauge Configurations** (`app/gauge_builder.py`): Added informed thresholds for all new metrics with clinical reference ranges and interpretations.
+
+### Changed
+- **HRV Processing now shows real-time progress** (`app/app.py`): All HRV computations (cleaning, windowed, full-recording, ML, episode detection) now display a detailed progress panel showing which step is active, elapsed time, and completion percentage.
+- **Time-Series tab now shows computation progress** (`app/app.py`): Individual metric computations display their status during processing.
+- **Frequency tab now shows analysis progress** (`app/app.py`): PSD and spectral analysis steps show real-time progress.
+
+### Fixed
+- **HRV computations no longer appear to hang** (`app/app.py`): The new progress indicators provide continuous feedback during computations, preventing the "blank page" experience during long analyses.
+
 ## [1.8.67] - 2025-12-27
 
 ### Added
