@@ -9888,6 +9888,78 @@ If your HF power is below age-matched norms or you have elevated sympathetic mar
                             f"SD2 {sd2_chip} {sd2:.1f} ms · SD1/SD2 {ratio_chip} {r:.2f}"
                         )
 
+                    # Friendly gauges for the first recording to highlight balance at a glance
+                    _primary = _pc_metrics[0]
+                    _ratio = _primary["sd_ratio"]
+                    _ratio_color = (
+                        "#F44336" if _ratio < 0.35 else "#FF9800" if _ratio < 0.5 else "#4CAF50"
+                    )
+
+                    st.markdown("#### 🎯 SD1/SD2 Balance (first recording)")
+                    _gauge_opt = {
+                        "title": {"text": f"SD1/SD2 = {_ratio:.2f}", "left": "center"},
+                        "series": [
+                            {
+                                "type": "gauge",
+                                "startAngle": 200,
+                                "endAngle": -20,
+                                "min": 0,
+                                "max": 1.2,
+                                "splitNumber": 6,
+                                "itemStyle": {"color": _ratio_color},
+                                "progress": {"show": True, "width": 18},
+                                "axisLine": {
+                                    "lineStyle": {
+                                        "width": 18,
+                                        "color": [
+                                            [0.35 / 1.2, "#F44336"],
+                                            [0.5 / 1.2, "#FF9800"],
+                                            [1, "#4CAF50"],
+                                        ],
+                                    }
+                                },
+                                "axisLabel": {"distance": 0, "fontSize": 10},
+                                "pointer": {"show": True, "length": "60%", "width": 6},
+                                "anchor": {"show": True, "size": 10},
+                                "detail": {
+                                    "valueAnimation": True,
+                                    "formatter": "{value}",
+                                    "fontSize": 16,
+                                    "color": "#333",
+                                },
+                                "data": [{"value": round(_ratio, 2)}],
+                            }
+                        ],
+                    }
+                    render_echarts(_gauge_opt, height_px=260, width="100%", config=EChartsConfig())
+
+                    # Side-by-side bars for SD1 vs SD2 (first recording)
+                    st.markdown("#### 📊 SD1 vs SD2 (first recording)")
+                    _sd_bars_opt = {
+                        "title": {"text": _primary["source"], "left": "center"},
+                        "tooltip": {"trigger": "axis"},
+                        "xAxis": {"type": "category", "data": ["SD1 (short)", "SD2 (long)"]},
+                        "yAxis": {"type": "value", "name": "ms"},
+                        "series": [
+                            {
+                                "type": "bar",
+                                "data": [
+                                    {
+                                        "value": _primary["sd1"],
+                                        "itemStyle": {"color": "#4CAF50" if _primary["sd1"] >= 30 else "#FF9800" if _primary["sd1"] >= 20 else "#F44336"},
+                                    },
+                                    {
+                                        "value": _primary["sd2"],
+                                        "itemStyle": {"color": "#2196F3" if _primary["sd2"] >= 60 else "#FF9800" if _primary["sd2"] >= 40 else "#F44336"},
+                                    },
+                                ],
+                                "barWidth": "45%",
+                                "label": {"show": True, "position": "top", "formatter": "{c} ms"},
+                            }
+                        ],
+                    }
+                    render_echarts(_sd_bars_opt, height_px=320, width="100%", config=EChartsConfig())
+
                     _pc_opt = {
                         "title": {
                             "text": "Poincaré Metrics",
