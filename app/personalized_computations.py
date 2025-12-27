@@ -25,25 +25,10 @@ from __future__ import annotations
 
 import logging
 import math
-import sys
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from enum import Enum
 from typing import Any, Dict, Final, List, Optional, Tuple
-
-# Ensure module is properly registered in sys.modules before dataclass decorators run
-# This fixes AttributeError: 'NoneType' object has no attribute '__dict__'
-# when using from __future__ import annotations with dataclasses in Python 3.12
-# The dataclass decorator needs the module to be in sys.modules to resolve annotations
-# Workaround: Ensure the module reference exists before dataclass decorators are processed
-if __name__ not in sys.modules or sys.modules[__name__] is None:
-    import types
-    # Only create if it doesn't exist or is None
-    # This ensures dataclass decorator can find the module
-    if __name__ not in sys.modules:
-        sys.modules[__name__] = types.ModuleType(__name__)
-    elif sys.modules[__name__] is None:
-        sys.modules[__name__] = types.ModuleType(__name__)
 
 try:
     from logging_config import get_logger
