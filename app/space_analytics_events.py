@@ -17,7 +17,10 @@ from typing import Final, Literal, Sequence
 import numpy as np
 import pandas as pd
 
-from app.logging_config import get_logger
+try:
+    from app.logging_config import get_logger
+except (ImportError, KeyError):
+    from logging_config import get_logger
 
 _LOGGER: Final = get_logger(__name__)
 
