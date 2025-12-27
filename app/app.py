@@ -16654,7 +16654,15 @@ that predicts cognitive performance based on:
             
             # Use new progress tracking if available
             if SPACE_WEATHER_PROGRESS_AVAILABLE:
-                progress_container = st.empty()
+                # Create status container for proper HTML rendering
+                impact_status_container = st.status(
+                    "☀️ Fetching Space Weather Impact Predictions...",
+                    expanded=True,
+                    state="running",
+                )
+                with impact_status_container:
+                    progress_container = st.empty()
+                
                 tracker = create_impact_prediction_tracker()
                 tracker.start_operation()
                 
@@ -16663,7 +16671,8 @@ that predicts cognitive performance based on:
                     def on_step_start(step_name: str) -> None:
                         _LOGGER.info("Space Weather: Impact step start -> %s", step_name)
                         tracker.start_step(step_name)
-                        render_progress(tracker, progress_container, is_running=True)
+                        with impact_status_container:
+                            render_progress(tracker, progress_container, is_running=True)
                     
                     def on_step_complete(
                         step_name: str,
@@ -16676,15 +16685,18 @@ that predicts cognitive performance based on:
                         else:
                             _LOGGER.info("Space Weather: Impact step complete -> %s", step_name)
                             tracker.complete_step(step_name, event)
-                        render_progress(tracker, progress_container, is_running=True)
+                        with impact_status_container:
+                            render_progress(tracker, progress_container, is_running=True)
                     
                     def on_step_error(step_name: str, error: str) -> None:
                         _LOGGER.info("Space Weather: Impact step error -> %s | error=%s", step_name, error)
                         tracker.fail_step(step_name, error)
-                        render_progress(tracker, progress_container, is_running=True)
+                        with impact_status_container:
+                            render_progress(tracker, progress_container, is_running=True)
                     
                     # Render initial state
-                    render_progress(tracker, progress_container, is_running=True)
+                    with impact_status_container:
+                        render_progress(tracker, progress_container, is_running=True)
                     
                     # Fetch with progress callbacks
                     snapshot = fetch_space_weather_snapshot_with_progress(
@@ -16695,7 +16707,9 @@ that predicts cognitive performance based on:
                     )
                     
                     tracker.end_operation()
-                    render_progress(tracker, progress_container, is_running=False)
+                    with impact_status_container:
+                        render_progress(tracker, progress_container, is_running=False)
+                    impact_status_container.update(label="✅ Impact Predictions complete", state="complete", expanded=False)
                     
                     # Store snapshot in session state
                     st.session_state["impact_snapshot"] = snapshot
@@ -16745,7 +16759,9 @@ that predicts cognitive performance based on:
                         
                 except Exception as exc:
                     tracker.end_operation()
-                    render_progress(tracker, progress_container, is_running=False)
+                    with impact_status_container:
+                        render_progress(tracker, progress_container, is_running=False)
+                    impact_status_container.update(label="❌ Impact Predictions failed", state="error", expanded=True)
                     log_exception(_LOGGER, "Quick action failed: Impact Predictions", exc)
                     st.session_state["impact_snapshot_error"] = str(exc)
                     st.error(f"Impact Predictions failed: {exc}")
@@ -16845,7 +16861,15 @@ that predicts cognitive performance based on:
 
             # Use new progress tracking if available
             if SPACE_WEATHER_PROGRESS_AVAILABLE:
-                donki_progress_container = st.empty()
+                # Create status container for proper HTML rendering (see HRV pattern at line 8179)
+                donki_status_container = st.status(
+                    "🛰️ Fetching NASA DONKI Event Catalogs...",
+                    expanded=True,
+                    state="running",
+                )
+                with donki_status_container:
+                    donki_progress_container = st.empty()
+                
                 donki_endpoints = list(DONKI_ENDPOINTS.keys())
                 donki_tracker = create_donki_tracker(donki_endpoints)
                 donki_tracker.start_operation()
@@ -16854,7 +16878,8 @@ that predicts cognitive performance based on:
                     def on_donki_start(code: str) -> None:
                         _LOGGER.info("Space Weather: DONKI step start -> %s (%s→%s)", code, start_donki, end_donki)
                         donki_tracker.start_step(code)
-                        render_progress(donki_tracker, donki_progress_container, is_running=True)
+                        with donki_status_container:
+                            render_progress(donki_tracker, donki_progress_container, is_running=True)
                     
                     def on_donki_complete(code: str, row_count: int, error: Optional[str]) -> None:
                         if error:
@@ -16863,15 +16888,18 @@ that predicts cognitive performance based on:
                         else:
                             _LOGGER.info("Space Weather: DONKI step complete -> %s | rows=%d", code, row_count)
                             donki_tracker.complete_step(code, f"{row_count} events")
-                        render_progress(donki_tracker, donki_progress_container, is_running=True)
+                        with donki_status_container:
+                            render_progress(donki_tracker, donki_progress_container, is_running=True)
                     
                     def on_donki_error(code: str, error: str) -> None:
                         _LOGGER.info("Space Weather: DONKI step error -> %s | error=%s", code, error)
                         donki_tracker.fail_step(code, error)
-                        render_progress(donki_tracker, donki_progress_container, is_running=True)
+                        with donki_status_container:
+                            render_progress(donki_tracker, donki_progress_container, is_running=True)
                     
                     # Render initial state
-                    render_progress(donki_tracker, donki_progress_container, is_running=True)
+                    with donki_status_container:
+                        render_progress(donki_tracker, donki_progress_container, is_running=True)
                     
                     # Fetch with progress callbacks
                     _fetch_donki_datasets_with_progress(
@@ -16884,7 +16912,9 @@ that predicts cognitive performance based on:
                     )
                     
                     donki_tracker.end_operation()
-                    render_progress(donki_tracker, donki_progress_container, is_running=False)
+                    with donki_status_container:
+                        render_progress(donki_tracker, donki_progress_container, is_running=False)
+                    donki_status_container.update(label="✅ NASA DONKI fetch complete", state="complete", expanded=False)
                     
                     if donki_tracker.has_errors:
                         st.warning("⚠️ Some DONKI datasets had errors. Check the progress tracker above.")
@@ -16893,7 +16923,9 @@ that predicts cognitive performance based on:
                         
                 except Exception as exc:
                     donki_tracker.end_operation()
-                    render_progress(donki_tracker, donki_progress_container, is_running=False)
+                    with donki_status_container:
+                        render_progress(donki_tracker, donki_progress_container, is_running=False)
+                    donki_status_container.update(label="❌ NASA DONKI fetch failed", state="error", expanded=True)
                     log_exception(_LOGGER, "DONKI fetch failed", exc)
                     st.error(f"DONKI fetch failed: {exc}")
             else:
@@ -16939,7 +16971,14 @@ that predicts cognitive performance based on:
             
             # Use new progress tracking if available
             if SPACE_WEATHER_PROGRESS_AVAILABLE:
-                noaa_progress_container = st.empty()
+                # Create status container for proper HTML rendering
+                noaa_status_container = st.status(
+                    "🌐 Fetching NOAA Space Weather Data...",
+                    expanded=True,
+                    state="running",
+                )
+                with noaa_status_container:
+                    noaa_progress_container = st.empty()
                 
                 # Create tracker with SWPC + selected NOAA keys
                 noaa_tracker = create_noaa_tracker(keys_to_fetch_list)
@@ -16949,7 +16988,8 @@ that predicts cognitive performance based on:
                     def on_noaa_start(key: str) -> None:
                         _LOGGER.info("Space Weather: NOAA step start -> %s", key)
                         noaa_tracker.start_step(key)
-                        render_progress(noaa_tracker, noaa_progress_container, is_running=True)
+                        with noaa_status_container:
+                            render_progress(noaa_tracker, noaa_progress_container, is_running=True)
                     
                     def on_noaa_complete(key: str, row_count: int, error: Optional[str]) -> None:
                         if error:
@@ -16958,15 +16998,18 @@ that predicts cognitive performance based on:
                         else:
                             _LOGGER.info("Space Weather: NOAA step complete -> %s | rows=%d", key, row_count)
                             noaa_tracker.complete_step(key, f"{row_count} records")
-                        render_progress(noaa_tracker, noaa_progress_container, is_running=True)
+                        with noaa_status_container:
+                            render_progress(noaa_tracker, noaa_progress_container, is_running=True)
                     
                     def on_noaa_error(key: str, error: str) -> None:
                         _LOGGER.info("Space Weather: NOAA step error -> %s | error=%s", key, error)
                         noaa_tracker.fail_step(key, error)
-                        render_progress(noaa_tracker, noaa_progress_container, is_running=True)
+                        with noaa_status_container:
+                            render_progress(noaa_tracker, noaa_progress_container, is_running=True)
                     
                     # Render initial state
-                    render_progress(noaa_tracker, noaa_progress_container, is_running=True)
+                    with noaa_status_container:
+                        render_progress(noaa_tracker, noaa_progress_container, is_running=True)
                     
                     # First fetch SWPC Kp + F10.7
                     on_noaa_start("swpc_kp_flux")
@@ -16989,7 +17032,9 @@ that predicts cognitive performance based on:
                     )
                     
                     noaa_tracker.end_operation()
-                    render_progress(noaa_tracker, noaa_progress_container, is_running=False)
+                    with noaa_status_container:
+                        render_progress(noaa_tracker, noaa_progress_container, is_running=False)
+                    noaa_status_container.update(label="✅ NOAA Space Weather complete", state="complete", expanded=False)
                     
                     if noaa_tracker.has_errors:
                         st.warning("⚠️ Some NOAA datasets had errors. Check the progress tracker above.")
@@ -16998,7 +17043,9 @@ that predicts cognitive performance based on:
                         
                 except Exception as exc:
                     noaa_tracker.end_operation()
-                    render_progress(noaa_tracker, noaa_progress_container, is_running=False)
+                    with noaa_status_container:
+                        render_progress(noaa_tracker, noaa_progress_container, is_running=False)
+                    noaa_status_container.update(label="❌ NOAA Space Weather failed", state="error", expanded=True)
                     log_exception(_LOGGER, "NOAA Space Weather fetch failed", exc)
                     st.error(f"NOAA Space Weather fetch failed: {exc}")
             else:
@@ -17829,6 +17876,25 @@ that predicts cognitive performance based on:
                                         st.caption(
                                             "Three-hour cadence view of F10.7 solar radio flux over the selected history window."
                                         )
+                                    # Graduate-level explanation for F10.7 Flux
+                                    with st.expander("📖 What is F10.7 Solar Radio Flux?", expanded=False):
+                                        st.markdown("""
+**F10.7 Solar Radio Flux** measures electromagnetic radiation from the Sun at 10.7 cm wavelength 
+(2800 MHz), expressed in **solar flux units (sfu)**; 1 sfu = 10⁻²² W·m⁻²·Hz⁻¹.
+
+**Why It Matters:**
+- **Solar Activity Proxy:** F10.7 correlates strongly with sunspot number, EUV irradiance, and 
+  overall solar activity. Unlike sunspots, it can be measured consistently regardless of weather.
+- **Range:** Quiet Sun ~65–70 sfu; active Sun may exceed 200 sfu during solar maximum.
+- **11-Year Cycle:** Tracks the solar cycle, currently in Cycle 25 (rising phase as of 2023–2025).
+
+**Physiological Relevance:**
+- Elevated F10.7 indicates increased probability of solar flares and CMEs.
+- Higher EUV during active periods affects ionospheric conductivity, potentially modulating 
+  the Schumann resonance spectrum (7.83 Hz fundamental) that some researchers link to biological 
+  rhythms.
+- Use F10.7 trends to contextualize long-term HRV studies across different solar cycle phases.
+                                        """)
                                     flux_numeric = flux_numeric.sort_values(
                                         "time_tag")
                                     stats_cols = st.columns(3)
@@ -18051,6 +18117,24 @@ that predicts cognitive performance based on:
                                     st.caption(
                                         "Recent 3-hour cadence progression of Kp highlighting short-term geomagnetic swings."
                                     )
+                                # Graduate-level explanation for Kp Index
+                                with st.expander("📖 What is the Kp Index?", expanded=False):
+                                    st.markdown("""
+**The Kp Index** is a quasi-logarithmic scale (0–9) quantifying **global geomagnetic disturbance** 
+averaged over 3-hour intervals. Derived from magnetometer networks worldwide, Kp reflects the 
+intensity of ionospheric electric currents driven by solar wind-magnetosphere coupling.
+
+**Physiological Relevance:**
+- **Kp ≥ 5 (G1 storm):** Associated with measurable HRV depression in population studies 
+  (Alabdulgader et al., 2018; Stoupel, 2006).
+- **Kp ≥ 7 (G3+ storm):** Increased hospital admissions for cardiovascular events reported 
+  in multiple epidemiological studies.
+- **Mechanism:** Geomagnetic disturbances may affect autonomic regulation via Schumann resonance 
+  modulation, magnetoreceptor activation, or melatonin synthesis pathways.
+
+**For HRV Research:** Record baseline HRV during Kp < 3 (quiet) conditions; elevated Kp provides 
+natural experimental conditions for studying geomagnetic effects on cardiac autonomic function.
+                                    """)
                                 stats_cols = st.columns(3)
                                 now_utc = pd.Timestamp.now(tz="UTC")
                                 last_24_mask = kp_numeric[
@@ -18149,6 +18233,29 @@ that predicts cognitive performance based on:
                 st.markdown("#### NASA DONKI event summary")
                 if start_cov and end_cov:
                     st.caption(f"DONKI coverage: {start_cov} → {end_cov} (UTC)")
+                # Graduate-level explanation for DONKI
+                with st.expander("📖 What is NASA DONKI?", expanded=False):
+                    st.markdown("""
+**DONKI (Database Of Notifications, Knowledge, Information)** is NASA's comprehensive catalog of 
+space weather events, maintained by the Community Coordinated Modeling Center (CCMC).
+
+**Event Types Tracked:**
+| Event | Abbreviation | Description |
+|-------|--------------|-------------|
+| **Solar Flares** | FLR | X-ray bursts classified A→B→C→M→X (logarithmic intensity) |
+| **Coronal Mass Ejections** | CME | Plasma/magnetic field eruptions; can cause geomagnetic storms |
+| **CME Analysis** | CMEAnalysis | Speed, direction, and arrival predictions (WSA-ENLIL model) |
+| **Geomagnetic Storms** | GST | Kp-based storm classification (G1–G5) |
+| **Solar Energetic Particles** | SEP | High-energy proton events (radiation hazard) |
+| **Interplanetary Shocks** | IPS | In-situ detections at L1 (ACE/DSCOVR) |
+| **Radiation Belt Enhancement** | RBE | Increased trapped electron flux |
+| **High-Speed Streams** | HSS | Corotating interaction regions from coronal holes |
+
+**For HRV Research:**
+- **CMEs arriving at Earth** often trigger geomagnetic storms 1–4 days after eruption.
+- **WSA-ENLIL** models predict shock arrival times useful for scheduling measurements.
+- Cross-reference DONKI events with HRV recordings to identify space weather correlates.
+                    """)
                 errors = donki_state.get("errors", {})
                 for code, msg in errors.items():
                     title = DONKI_ENDPOINTS.get(code, {}).get("title", code)
