@@ -5,6 +5,24 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.74] - 2025-12-27
+
+### Added
+- **Modern Readiness Dashboard** (`app/app.py`): Complete redesign of the Readiness tab inspired by Whoop, Oura, and Garmin recovery dashboards:
+  - **Hero Recovery Gauge**: Large circular gauge (0-100%) with color-coded recovery status showing current readiness percentile
+  - **Recovery Status Card**: Color-coded status card with category (VERY LOW/LOW/NORMAL/HIGH), contextual emoji, and personalized recommendation text
+  - **Mini Metrics Cards**: PNS Index, Z-Score, and Baseline sample count in compact card format
+  - **Recovery Trend Chart**: 14-session sparkline with gradient fill, showing PNS history with baseline thresholds (Very Low, Mean, High) as reference lines, plus min/max markers
+  - **Recovery Breakdown Section**:
+    - Radar chart showing baseline statistics (Mean PNS, Consistency, Sample Size, Current vs Mean)
+    - Donut chart showing historical distribution across VERY LOW/LOW/NORMAL/HIGH categories
+  - **Training Recommendation Cards**: 4-column cards showing Intensity, Volume, Suggested Activities, and What to Avoid based on current recovery category
+  - **Detailed Baseline Statistics**: Expandable table with full baseline metrics (mean, std, cuts, z-score)
+  - Color theming: Red (#F44336) for VERY LOW, Orange (#FF9800) for LOW, Green (#4CAF50) for NORMAL, Blue (#2196F3) for HIGH
+
+### Fixed
+- **Python 3.12 Dataclass Compatibility** (`app/app.py`): Removed `slots=True` from `UploadedRR` dataclass to fix `AttributeError: 'NoneType' object has no attribute '__dict__'` when using `from __future__ import annotations` with `@dataclass(slots=True)` in Python 3.12
+
 ## [1.8.73] - 2025-12-27
 
 ### Added
