@@ -732,8 +732,17 @@ def _build_sleep_from_wrist_row(
         row: Latest wrist monitoring row (Garmin daily metrics).
         bedtime_hour: Default bedtime hour (0..23) used when wrist data lacks a time window.
         waketime_hour: Default waketime hour (0..23) used when wrist data lacks a time window.
+
+    Note:
+        sleep_score is used as the primary "efficiency" metric for SAFTE calculations.
+        This composite score (0-100) better reflects overall sleep quality and restorative
+        value than raw TST/TIB efficiency. Falls back to sleep_efficiency if unavailable.
     """
     duration = float(row.get("sleep_duration_hours", 0.0) or 0.0)
+    
+    # Priority: sleep_score (composite quality) > sleep_efficiency (TST/TIB ratio)
+    # sleep_score is the preferred metric as it incorporates sleep stages, disturbances,
+    # and overall restorative quality - better proxy for SAFTE sleep effectiveness
     quality_candidates: list[float] = []
     if pd.notna(row.get("sleep_score")):
         quality_candidates.append(float(row["sleep_score"]) / 100.0)
