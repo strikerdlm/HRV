@@ -17338,6 +17338,32 @@ that predicts cognitive performance based on:
 
                     # Impact arrival times table
                     st.markdown("#### ⏰ Expected Impact Times (Bogotá)")
+                    # Graduate-level explanation for Impact Predictions
+                    with st.expander("📖 Understanding Impact Predictions", expanded=False):
+                        st.markdown("""
+**Space Weather Impact Predictions** estimate when different types of solar energy will reach Earth, 
+enabling optimized timing for physiological measurements.
+
+**Energy Categories & Travel Times:**
+
+| Category | Source | Travel Time | Detection |
+|----------|--------|-------------|-----------|
+| **X-ray/Photon** ☀️ | Solar flares | ~8.3 minutes | GOES X-ray flux |
+| **SEP/Protons** ⚡ | Flare/CME shock | Minutes–hours | GOES >10 MeV flux |
+| **Solar Wind Plasma** 🌊 | L1 measurements | 30–60 min from L1 | DSCOVR/ACE |
+| **CME Shock** 💥 | Coronal ejection | 1–4 days | WSA-ENLIL model |
+| **Geomagnetic** 🧲 | Magnetosphere | Immediate | Kp/Dst indices |
+
+**Severity Scale (NOAA G-Scale):**
+- **QUIET:** Kp < 4 — Ideal baseline recording conditions
+- **MINOR (G1):** Kp = 5 — Subtle autonomic effects possible
+- **MODERATE (G2):** Kp = 6 — Measurable HRV changes in sensitive individuals
+- **STRONG (G3):** Kp = 7 — Consistent HRV effects reported
+- **SEVERE/EXTREME (G4–G5):** Kp ≥ 8 — Major physiological perturbation expected
+
+**Polar H10 Strategy:** Start continuous ECG monitoring 30 minutes before predicted arrivals 
+to capture the acute autonomic response window.
+                        """)
                     impact_df = build_impact_summary_df(snapshot)
 
                     if not impact_df.empty:
@@ -19330,6 +19356,33 @@ space weather events, maintained by the Community Coordinated Modeling Center (C
         # User clicks "Fetch NOAA feeds" button to load data
         _noaa_loading_msg = st.empty()
         st.markdown("*Real-time solar and geomagnetic data (data-only; correlations removed)*")
+        
+        # Graduate-level explanation for NOAA Dashboard
+        with st.expander("📖 Understanding NOAA Space Weather Data", expanded=False):
+            st.markdown("""
+**NOAA Space Weather Prediction Center (SWPC)** provides operational space weather monitoring 
+and forecasting for the United States. This dashboard aggregates multiple NOAA data products:
+
+**Key Data Products:**
+
+| Product | Description | Update Frequency |
+|---------|-------------|------------------|
+| **Planetary K-index (Kp)** | Global geomagnetic disturbance (0–9) | 3-hour cadence |
+| **Dst Index** | Ring current intensity; negative = storm | Hourly |
+| **GOES X-ray Flux** | Solar flare intensity (A→X classification) | 1-minute |
+| **GOES Proton Flux** | SEP events (>10 MeV threshold) | 5-minute |
+| **Solar Wind (ACE/DSCOVR)** | L1 plasma density, speed, IMF | 1-minute |
+| **Geospace Conditions** | Magnetospheric state indices | Variable |
+
+**Scope Options:**
+- **Today (fast):** Most recent 24–48h data for quick overview
+- **Core:** Essential indices (Kp, Dst, X-ray, protons) for ~7 days
+- **Full:** All available NOAA products (may be slower to load)
+
+**For HRV Correlation Studies:** Use windowed HRV metrics aligned with NOAA timestamps to 
+investigate associations between space weather parameters and cardiac autonomic modulation. 
+The Space Analytics tab provides statistical correlation tools for hypothesis testing.
+            """)
 
         # Live visibility into background/async space-data work so "Running..." is explained
         fetch_state = _poll_background_fetch()
@@ -20048,6 +20101,70 @@ space weather events, maintained by the Community Coordinated Modeling Center (C
             "On-demand statistical analysis and machine learning linking **space-data predictors** "
             "to **HRV + HRF metrics**. Nothing runs automatically — use the buttons below."
         )
+        
+        # Graduate-level scientific introduction
+        with st.expander("📖 Scientific Foundation: Space Weather & HRV", expanded=False):
+            st.markdown("""
+## Why Study Space Weather Effects on HRV?
+
+The hypothesis that geomagnetic and solar activity influence human physiology has been investigated 
+for decades, with heart rate variability (HRV) as a primary biomarker due to its sensitivity to 
+autonomic nervous system (ANS) modulation.
+
+### Evidence from Longitudinal Studies
+
+**Alabdulgader et al. (2018)** conducted a landmark 5-month study recording 72-hour HRV sessions 
+weekly from 16 participants. Key findings:
+
+- **Solar wind intensity** correlated with **increased heart rate** (interpreted as biological stress)
+- **Cosmic ray intensity** and **Schumann resonance power** associated with **increased HRV** and 
+  **parasympathetic activity**
+- Effects persisted over varying time periods, suggesting delayed physiological responses
+
+> *"The findings support the hypothesis that energetic environmental phenomena affect 
+> psychophysical processes that can affect people in different ways depending on their sensitivity, 
+> health status and capacity for self-regulation."*
+> — Alabdulgader et al., Scientific Reports, 2018
+
+### Geomagnetic Storms and Cardiac Function
+
+**Vencloviene et al. (2022)** analyzed post-cardiac surgery patients and found:
+- Lower VLF power associated with **low Ap index** (quiet conditions)
+- Effects observed up to **2 days after** geomagnetic disturbances
+- Suggests geomagnetic conditions during surgery may affect long-term SDNN
+
+**Papailiou et al. (2024)** examined heart rate across Solar Cycle 24:
+- Used superposed epoch analysis around geomagnetic storms
+- Found significant associations during both ascending and descending solar cycle phases
+
+### Critical Methodological Considerations
+
+**Mattoni et al. (2019)** raised important caveats:
+- Many significant correlations **disappeared after correcting for autocorrelation**
+- Time series data require specialized statistical handling
+- Effect sizes may be **smaller than previously reported**
+
+This tab implements these methodological safeguards including lag-corrected correlations 
+and proper confidence interval estimation.
+
+---
+
+**References:**
+1. Alabdulgader, A., et al. (2018). Long-Term Study of Heart Rate Variability Responses to 
+   Changes in the Solar and Geomagnetic Environment. *Scientific Reports, 8*, 2722. 
+   [doi:10.1038/s41598-018-20932-x](https://doi.org/10.1038/s41598-018-20932-x)
+2. Vencloviene, J., et al. (2022). Statistical Associations between Geomagnetic Activity, 
+   Solar Wind, Cosmic Ray Intensity, and Heart Rate Variability. *Atmosphere, 13*(8), 1330. 
+   [doi:10.3390/atmos13081330](https://doi.org/10.3390/atmos13081330)
+3. Papailiou, M.-C., et al. (2024). Geomagnetic and Cosmic Ray Activity Effect on Heart Rate 
+   during the Solar Cycle 24. *Atmosphere, 15*(2), 158. 
+   [doi:10.3390/atmos15020158](https://doi.org/10.3390/atmos15020158)
+4. Mattoni, M., et al. (2019). Exploring the Relationship between Geomagnetic Activity and 
+   Human Heart Rate Variability. *bioRxiv*, 684035. 
+   [doi:10.1101/684035](https://doi.org/10.1101/684035)
+5. Dimitrova, S., et al. (2013). Solar and geomagnetic activity effects on heart rate variability. 
+   *Natural Hazards, 69*(1), 25–37. [doi:10.1007/s11069-013-0686-y](https://doi.org/10.1007/s11069-013-0686-y)
+            """)
         # UX: Streamlit dims ("stale" fades) existing elements during reruns, which
         # can make long computations feel like the page lost state. Space Analytics
         # provides explicit progress consoles, so we disable the stale opacity.
@@ -20442,6 +20559,65 @@ space weather events, maintained by the Community Coordinated Modeling Center (C
                 "If **HRV windows** above show '—', correlations/ML will be disabled. "
                 "Build windows here (no network; bounded)."
             )
+            
+            # Scientific explanation for windowed analysis
+            with st.expander("📖 Understanding Windowed HRV Analysis", expanded=False):
+                st.markdown("""
+## Sliding Window Analysis for Time-Varying HRV
+
+Traditional HRV analysis computes metrics over the entire recording, but autonomic tone fluctuates 
+continuously. **Windowed (sliding window) analysis** segments recordings into overlapping epochs 
+to capture temporal dynamics.
+
+### Mathematical Framework
+
+For a recording of duration *T* with window size *W* and step size *S*:
+
+- **Number of windows**: `n = floor((T - W) / S) + 1`
+- **Temporal resolution**: determined by step size *S*
+- **Statistical stability**: requires minimum RR intervals per window (typically ≥30–60)
+
+### Window Duration Guidelines
+
+| Window Size | Use Case | Metrics |
+|-------------|----------|---------|
+| **30 seconds** | Ultra-short-term; dynamic events | Time-domain only (RMSSD, pNN50) |
+| **2–5 minutes** | Standard short-term; autonomic monitoring | Time + frequency domain |
+| **≥5 minutes** | Research-grade; spectral analysis | Full HRV suite incl. VLF |
+
+**Smith et al. (2013)** validated 30-beat (≈30 sec) windows:
+
+> *"Thirty-one indices could differentiate between resting and at least one physiological state 
+> using 30 beat windows... Spectral indices using the Lomb-Scargle algorithm were able to correctly 
+> identify paradoxical shifts in power."*
+
+### Task Force Recommendations
+
+The 1996 Task Force guidelines specify:
+- **Short-term (5 min)**: Standard for clinical and research use
+- **Ultra-short-term (<5 min)**: Requires validation; some metrics unreliable
+- **Step size**: Typically 50% overlap (e.g., 5-min window, 2.5-min step) for smooth tracking
+
+### This Implementation
+
+- **Time-domain metrics** (RMSSD, SDNN, pNN50, Mean RR) computed per window
+- **Frequency-domain** (VLF, LF, HF, LF/HF) when window ≥ 2 min and not in "fast" mode
+- **Nonlinear metrics** (SD1, SD2, ApEn, SampEn) optionally included
+- **UTC timestamps** preserved for alignment with space weather data
+
+---
+
+**References:**
+1. Task Force of ESC/NASPE. (1996). Heart rate variability: Standards of measurement, 
+   physiological interpretation, and clinical use. *Circulation, 93*(5), 1043–1065. 
+   [doi:10.1161/01.CIR.93.5.1043](https://doi.org/10.1161/01.CIR.93.5.1043)
+2. Smith, A. L., Owen, H., & Reynolds, K. J. (2013). Heart rate variability indices for 
+   very short-term (30 beat) analysis. Part 2: validation. *Journal of Clinical Monitoring 
+   and Computing, 27*(5), 577–585. [doi:10.1007/s10877-013-9473-2](https://doi.org/10.1007/s10877-013-9473-2)
+3. Shaffer, F., & Ginsberg, J. P. (2017). An Overview of Heart Rate Variability Metrics and 
+   Norms. *Frontiers in Public Health, 5*, 258. 
+   [doi:10.3389/fpubh.2017.00258](https://doi.org/10.3389/fpubh.2017.00258)
+                """)
             sa_ui_locked = str(_space_analytics_console_state().get("phase", "")) == "running"
             if sa_ui_locked:
                 st.info(
@@ -20565,6 +20741,62 @@ space weather events, maintained by the Community Coordinated Modeling Center (C
                 "and (4) which space predictors are most associated (lags).\n"
                 "- **Guardrails**: this is an association tool (not causation) and must be interpreted with sleep/activity/circadian context."
             )
+        
+        # Scientific explanation for event-aligned analysis
+        with st.expander("📖 Event-Aligned Analysis: Theory & Methods", expanded=False):
+            st.markdown("""
+## Threshold-Based Event Detection
+
+Event-aligned analysis segments continuous time series into **baseline**, **event**, and 
+**recovery** periods based on threshold crossings of geomagnetic/solar indices.
+
+### Event Definition
+
+An event is defined when:
+- A space weather parameter (e.g., Kp, Dst, X-ray flux) **exceeds a threshold**
+- The exceedance **persists for a minimum duration** (prevents noise triggers)
+- Adjacent events may be **merged** if separated by short gaps
+
+### Baseline-Event-Recovery Paradigm
+
+| Phase | Definition | HRV Interpretation |
+|-------|------------|-------------------|
+| **Baseline** | Pre-event period (e.g., 24–48h before) | Normal autonomic state |
+| **Event** | Period above threshold | Potential perturbation |
+| **Recovery** | Post-event return to baseline | Autonomic restoration |
+
+### Statistical Comparison
+
+For each HRV metric, we compute:
+
+1. **Δ (Delta)**: `mean(event) - mean(baseline)`
+2. **Effect size (Cohen's d)**: `Δ / pooled_SD`
+3. **Statistical significance**: Welch's t-test (unequal variances)
+
+### Interpretation Guidelines
+
+| Effect Size (|d|) | Interpretation |
+|-------------------|----------------|
+| < 0.2 | Negligible |
+| 0.2–0.5 | Small |
+| 0.5–0.8 | Medium |
+| > 0.8 | Large |
+
+### Caveats
+
+- **Confounders**: Sleep, activity, time of day, medications may drive observed changes
+- **Temporal lag**: Biological effects may be delayed hours to days
+- **Individual variability**: Some individuals more sensitive than others
+
+---
+
+**References:**
+1. Cohen, J. (1988). *Statistical Power Analysis for the Behavioral Sciences* (2nd ed.). 
+   Lawrence Erlbaum Associates.
+2. Alabdulgader, A., et al. (2018). Long-Term Study of Heart Rate Variability Responses to 
+   Changes in the Solar and Geomagnetic Environment. *Scientific Reports, 8*, 2722. 
+   [doi:10.1038/s41598-018-20932-x](https://doi.org/10.1038/s41598-018-20932-x)
+            """)
 
         if not has_windowed:
             st.info("Event-aligned analysis requires **windowed HRV/HRF metrics** (run HRV window analysis first).")
@@ -21319,6 +21551,87 @@ space weather events, maintained by the Community Coordinated Modeling Center (C
         # Correlation suite (button-driven)
         # ------------------------------------------------------------------
         st.markdown("#### 📈 Correlation Suite (HRV/HRF ↔ NOAA)")
+        
+        # Scientific explanation for correlation analysis
+        with st.expander("📖 Correlation Analysis: Statistical Methods", expanded=False):
+            st.markdown("""
+## Pearson Correlation with Lagged Predictors
+
+This module computes **Pearson product-moment correlations** between HRV metrics and 
+space weather parameters, with optional temporal lags to account for delayed biological responses.
+
+### Mathematical Definition
+
+For paired observations *(x₁, y₁), ..., (xₙ, yₙ)*:
+
+```
+r = Σ[(xᵢ - x̄)(yᵢ - ȳ)] / √[Σ(xᵢ - x̄)² × Σ(yᵢ - ȳ)²]
+```
+
+Where *r* ∈ [−1, +1]:
+- **r = +1**: Perfect positive linear relationship
+- **r = 0**: No linear relationship
+- **r = −1**: Perfect negative linear relationship
+
+### Fisher's Z Transformation for Confidence Intervals
+
+Since *r* is bounded and its distribution is non-normal for |r| > 0, we apply 
+**Fisher's Z-transformation** to compute 95% confidence intervals:
+
+```
+Z = 0.5 × ln[(1 + r)/(1 − r)]
+SE(Z) = 1 / √(n − 3)
+CI(Z) = Z ± 1.96 × SE(Z)
+```
+
+Then back-transform to correlation scale: `r = tanh(Z)`
+
+### Temporal Lag Analysis
+
+Space weather effects on physiology may be **delayed** (hours to days). Lag analysis 
+shifts the predictor time series backward in time:
+
+| Lag | Interpretation |
+|-----|----------------|
+| **0 h** | Simultaneous effect (immediate response) |
+| **6–12 h** | Short-delay effect (e.g., ionospheric propagation) |
+| **24–72 h** | Delayed effect (e.g., cumulative stress, CME arrival) |
+
+**Peak correlation lag** suggests the characteristic delay for that predictor-response pair.
+
+### Cross-Correlation Bias
+
+**Olden & Neff (2001)** documented critical biases in lag analysis:
+
+> *"Autocorrelation in time series can inflate cross-correlation estimates, leading to 
+> spurious significant correlations at multiple lags."*
+
+**Mitigation strategies implemented:**
+- Effective degrees of freedom adjustment
+- Bonferroni correction for multiple comparisons
+- Reporting of raw vs. adjusted p-values
+
+### Interpretation Guidelines
+
+| |r| Value | Strength | Physiological Interpretation |
+|-----------|----------|---------------------------|
+| 0.0–0.19 | Negligible | No meaningful association |
+| 0.2–0.39 | Weak | Small effect, may be confounded |
+| 0.4–0.59 | Moderate | Noteworthy association |
+| 0.6–0.79 | Strong | Robust association (verify causality) |
+| ≥ 0.80 | Very strong | Rare in biological data; check for artifacts |
+
+---
+
+**References:**
+1. Fisher, R. A. (1921). On the probable error of a coefficient of correlation deduced 
+   from a small sample. *Metron, 1*, 3–32.
+2. Olden, J. D., & Neff, B. D. (2001). Cross-correlation bias in lag analysis of 
+   aquatic time series. *Marine Biology, 138*(5), 1063–1070. 
+   [doi:10.1007/s002270000517](https://doi.org/10.1007/s002270000517)
+3. Bonett, D. G., & Wright, T. A. (2000). Sample size requirements for estimating 
+   Pearson, Kendall and Spearman correlations. *Psychometrika, 65*(1), 23–28.
+            """)
         if not has_windowed:
             st.warning(
                 "Windowed HRV/HRF metrics are not available. Run HRV window analysis first, "
@@ -21640,6 +21953,115 @@ space weather events, maintained by the Community Coordinated Modeling Center (C
         # ML suite (button-driven; GPU boosting when available)
         # ------------------------------------------------------------------
         st.markdown("#### 🤖 ML Suite (Predict HRV/HRF from lagged space-data features)")
+        
+        # Scientific explanation for ML methods
+        with st.expander("📖 Machine Learning Methods: Ensemble & Regularized Models", expanded=False):
+            st.markdown("""
+## Predictive Modeling: Space Weather → HRV
+
+This module trains regression models to predict HRV/HRF metrics from space weather features, 
+using both linear (regularized) and nonlinear (ensemble) approaches.
+
+### Models Implemented
+
+#### 1. ElasticNet Regression (Linear Baseline)
+
+Combines L1 (Lasso) and L2 (Ridge) penalties for robust linear regression:
+
+```
+Loss = ||y - Xβ||² + α × [ρ||β||₁ + (1-ρ)||β||²]
+```
+
+- **Sparsity**: L1 component drives uninformative features to zero
+- **Stability**: L2 component handles correlated features
+- **Interpretability**: Coefficients directly show predictor importance
+
+#### 2. Random Forest Regressor (Ensemble)
+
+An ensemble of decision trees using **bootstrap aggregation (bagging)**:
+
+```
+ŷ = (1/B) × Σ fᵦ(x)  for b = 1, ..., B trees
+```
+
+**Qi (2012)** describes key advantages for biomedical data:
+
+> *"Random Forest handles nonlinear relationships and interactions automatically, 
+> provides reliable feature importance rankings, and is relatively robust to overfitting."*
+
+**Hyperparameters:**
+- `n_estimators`: Number of trees (default: 200)
+- `max_depth`: Maximum tree depth (default: 8)
+- `min_samples_leaf`: Minimum samples per leaf (prevents overfitting)
+
+#### 3. Gradient Boosting (Sequential Ensemble)
+
+Builds trees sequentially, each correcting errors of the previous:
+
+```
+F_m(x) = F_{m-1}(x) + γ_m × h_m(x)
+```
+
+Where *h_m(x)* is fitted to the negative gradient (residuals) of the loss function.
+
+**Variants available:**
+- **GradientBoostingRegressor** (scikit-learn): Classic implementation
+- **XGBoost**: Regularized boosting with parallel training
+- **LightGBM**: Histogram-based, faster on large datasets
+
+### Feature Engineering: Lagged Predictors
+
+Each space weather variable is expanded into multiple features representing different 
+temporal lags:
+
+| Original Feature | Lagged Features |
+|------------------|-----------------|
+| `Kp(t)` | `Kp(t-24h)`, `Kp(t-18h)`, ..., `Kp(t+24h)` |
+| `Dst(t)` | `Dst(t-24h)`, `Dst(t-18h)`, ..., `Dst(t+24h)` |
+
+This allows models to capture delayed biological responses to space weather changes.
+
+### Model Evaluation Metrics
+
+| Metric | Formula | Interpretation |
+|--------|---------|----------------|
+| **R²** | `1 - SS_res/SS_tot` | Variance explained (1.0 = perfect) |
+| **MAE** | `mean(|y - ŷ|)` | Average absolute error (same units as target) |
+| **RMSE** | `√mean((y - ŷ)²)` | Root mean squared error (penalizes large errors) |
+
+### Feature Importance
+
+**Random Forest** computes importance via Mean Decrease in Impurity (MDI):
+- Higher importance = greater reduction in prediction variance when splitting on that feature
+
+**Gradient Boosting** uses gain-based importance:
+- Sum of improvements in loss when a feature is used for splitting
+
+### Caveats for Biological Data
+
+1. **Overfitting risk**: Cross-validation essential; test R² < train R² expected
+2. **Temporal autocorrelation**: Time series data violates i.i.d. assumption
+3. **Causal interpretation**: High importance ≠ causality
+4. **Sample size**: Rule of thumb: ≥10 samples per feature for stable estimates
+
+---
+
+**References:**
+1. Breiman, L. (2001). Random Forests. *Machine Learning, 45*(1), 5–32. 
+   [doi:10.1023/A:1010933404324](https://doi.org/10.1023/A:1010933404324)
+2. Qi, Y. (2012). Random Forest for Bioinformatics. In *Ensemble Machine Learning* (pp. 307–323). 
+   Springer New York. [doi:10.1007/978-1-4419-9326-7_11](https://doi.org/10.1007/978-1-4419-9326-7_11)
+3. Chen, T., & Guestrin, C. (2016). XGBoost: A Scalable Tree Boosting System. 
+   *Proceedings of the 22nd ACM SIGKDD*, 785–794. 
+   [doi:10.1145/2939672.2939785](https://doi.org/10.1145/2939672.2939785)
+4. Friedman, J. H. (2001). Greedy function approximation: A gradient boosting machine. 
+   *Annals of Statistics, 29*(5), 1189–1232. 
+   [doi:10.1214/aos/1013203451](https://doi.org/10.1214/aos/1013203451)
+5. Zou, H., & Hastie, T. (2005). Regularization and variable selection via the elastic net. 
+   *Journal of the Royal Statistical Society: Series B, 67*(2), 301–320. 
+   [doi:10.1111/j.1467-9868.2005.00503.x](https://doi.org/10.1111/j.1467-9868.2005.00503.x)
+            """)
+        
         if not has_windowed or not has_noaa:
             st.info("Load windowed HRV/HRF metrics and NOAA datasets to enable ML.")
         else:
