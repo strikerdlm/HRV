@@ -624,13 +624,6 @@ try:
 except ImportError:
     from .spaceweatherlive_client import fetch_spaceweatherlive_snapshot  # type: ignore
 
-try:
-    from spaceweather_openai_fallback import extract_spaceweather_with_openai
-except ImportError:
-    from .spaceweather_openai_fallback import (
-        extract_spaceweather_with_openai,
-    )  # type: ignore
-
 # Fatigue Calculator Integration (SAFTE model)
 try:
     from fatigue_integration import (
@@ -1785,6 +1778,14 @@ def _run_space_data_step(
     if max_history <= 0:
         raise ValueError("max_history must be > 0")
 
+    meta_payload: Dict[str, Any] = dict(meta) if isinstance(meta, Mapping) and meta else {}
+    _LOGGER.info(
+        "SpaceDataStep:start | id=%s | label=%s | meta=%s",
+        str(step_id),
+        str(label),
+        meta_payload if meta_payload else None,
+    )
+
     started_at = pd.Timestamp.utcnow()
     start_perf = time.perf_counter()
     ok = False
@@ -1797,6 +1798,22 @@ def _run_space_data_step(
         log_exception(_LOGGER, f"Space Data step failed: {label}", exc)
         ok = False
     duration_ms = (time.perf_counter() - start_perf) * 1000.0
+
+    if ok:
+        _LOGGER.info(
+            "SpaceDataStep:end | id=%s | ok=%s | duration_ms=%.1f",
+            str(step_id),
+            bool(ok),
+            float(duration_ms),
+        )
+    else:
+        _LOGGER.warning(
+            "SpaceDataStep:end | id=%s | ok=%s | duration_ms=%.1f | error=%s",
+            str(step_id),
+            bool(ok),
+            float(duration_ms),
+            (err or ""),
+        )
 
     record: Dict[str, Any] = {
         "step_id": step_id,
@@ -13200,8 +13217,6 @@ that predicts cognitive performance based on:
                 st.caption(
                     "Keys: NASA DONKI="
                     + ("✅" if bool(NASA_API_KEY) else "❌")
-                    + " | OpenAI fallback="
-                    + ("✅" if bool(os.getenv("OPENAI_API_KEY")) else "❌")
                 )
 
             history = _space_steps.get("history", [])
@@ -13302,7 +13317,7 @@ that predicts cognitive performance based on:
 
                 col_run_all, col_last, col_clear = st.columns([1, 2, 1])
                 with col_run_all:
-                    if st.button("🔄 Run all steps (parallel)", key="fetch_impact_predictions"):
+                    if st.button("🔄 Fetch Impact Predictions", key="fetch_impact_predictions"):
                         st.session_state["impact_snapshot_loading"] = True
                         started_utc = pd.Timestamp.utcnow()
                         try:
@@ -13311,7 +13326,7 @@ that predicts cognitive performance based on:
                                 ok = _run_space_data_step(
                                     _space_data_step_runner_state(),
                                     step_id="impact_run_all",
-                                    label="Impact Predictions: Run all steps (parallel)",
+                                    label="Impact Predictions: Fetch Impact Predictions (parallel)",
                                     fn=lambda: snapshot_holder.__setitem__(
                                         "snapshot", fetch_space_weather_snapshot()
                                     ),
@@ -13381,6 +13396,21 @@ that predicts cognitive performance based on:
                         "After any step, the snapshot display is rebuilt from the latest step results."
                     )
 
+                    step_timeout_s = float(
+                        st.number_input(
+                            "Step timeout (seconds)",
+                            min_value=3,
+                            max_value=60,
+                            value=12,
+                            step=1,
+                            key="impact_step_timeout_s",
+                            help=(
+                                "Hard wall-clock bound per sub-step so the UI never freezes due to DNS/TLS stalls. "
+                                "If a step times out, try again later or click 'Fetch Impact Predictions' to get partial results."
+                            ),
+                        )
+                    )
+
                     step_cols = st.columns(5)
 
                     def _run_impact_step(step_key: str, step_label: str, fetch_fn: Any) -> None:
@@ -13388,12 +13418,43 @@ that predicts cognitive performance based on:
                             start = time.perf_counter()
                             event: Any = None
                             error_msg: str = ""
+                            timed_out = False
+                            executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+                            future = executor.submit(fetch_fn)
                             try:
-                                event, error = fetch_fn()
-                                error_msg = str(error or "")
-                            except Exception as exc:
-                                error_msg = str(exc)
-                                log_exception(_LOGGER, f"Impact step failed: {step_key}", exc)
+                                done, not_done = concurrent.futures.wait(
+                                    {future},
+                                    timeout=float(step_timeout_s),
+                                    return_when=concurrent.futures.ALL_COMPLETED,
+                                )
+                                if not_done:
+                                    timed_out = True
+                                    _ = future.cancel()
+                                    error_msg = (
+                                        f"Timed out fetching {step_label} (>{step_timeout_s:.0f}s)."
+                                    )
+                                else:
+                                    try:
+                                        event, error = future.result()
+                                        error_msg = str(error or "")
+                                    except Exception as exc:
+                                        error_msg = str(exc)
+                                        log_exception(
+                                            _LOGGER,
+                                            f"Impact step failed: {step_key}",
+                                            exc,
+                                        )
+                            finally:
+                                # Do not block UI waiting for potentially-stuck worker threads.
+                                executor.shutdown(wait=False, cancel_futures=True)
+
+                            if timed_out:
+                                _LOGGER.warning(
+                                    "Impact step timed out | step=%s | label=%s | timeout_s=%.0f",
+                                    step_key,
+                                    step_label,
+                                    float(step_timeout_s),
+                                )
                             duration_ms = (time.perf_counter() - start) * 1000.0
                             impact_steps[step_key] = {
                                 "ok": bool(event is not None and not error_msg.strip()),
@@ -13403,12 +13464,16 @@ that predicts cognitive performance based on:
                             }
                             _rebuild_impact_snapshot_from_steps()
 
-                        _ = _run_space_data_step(
-                            _space_data_step_runner_state(),
-                            step_id=f"impact_{step_key}",
-                            label=f"Impact Predictions: {step_label}",
-                            fn=_do_fetch,
-                        )
+                        with st.spinner(
+                            f"Running {step_label} (timeout {step_timeout_s:.0f}s)…"
+                        ):
+                            _ = _run_space_data_step(
+                                _space_data_step_runner_state(),
+                                step_id=f"impact_{step_key}",
+                                label=f"Impact Predictions: {step_label}",
+                                fn=_do_fetch,
+                                meta={"timeout_s": float(step_timeout_s)},
+                            )
 
                     with step_cols[0]:
                         if st.button("1) X-rays", key="impact_step_photon"):
@@ -14506,7 +14571,7 @@ that predicts cognitive performance based on:
                             )
                             st.dataframe(df_tail, use_container_width=True, hide_index=True)
 
-                with st.expander("SpaceWeatherLive snapshot (scrape + OpenAI fallback)"):
+                with st.expander("SpaceWeatherLive snapshot (scrape only)"):
                     if st.button(
                         "Fetch SpaceWeatherLive data",
                             key="btn_fetch_swl"):
@@ -14529,83 +14594,10 @@ that predicts cognitive performance based on:
                             )
                             err_txt = str(last.get("error") or "Unknown error")
                             st.warning(
-                                f"Direct scrape failed ({err_txt}). Attempting OpenAI fallback (bounded)…"
+                                f"Direct scrape failed ({err_txt}). "
+                                "OpenAI fallback is disabled in Space Data by design. "
+                                "Try again later or rely on NOAA SWPC/NOAA feeds above."
                             )
-
-                            if not os.getenv("OPENAI_API_KEY"):
-                                st.info("OpenAI fallback requires OPENAI_API_KEY (not set).")
-                            else:
-                                openai_holder: Dict[str, Any] = {"snap": None}
-
-                                def _do_openai_fallback() -> None:
-                                    urls = {
-                                        "home": "https://www.spaceweatherlive.com/",
-                                        "solar_activity": "https://www.spaceweatherlive.com/en/solar-activity.html",
-                                        "latest_cmes": "https://www.spaceweatherlive.com/en/solar-activity/latest-cmes.html",
-                                        "sidc_ursigram": "https://www.spaceweatherlive.com/en/reports/sidc-ursigram.html",
-                                    }
-
-                                    def _fetch_html(url: str) -> str:
-                                        resp = requests.get(url, timeout=12)
-                                        resp.raise_for_status()
-                                        return resp.text
-
-                                    executor = concurrent.futures.ThreadPoolExecutor(max_workers=4)
-                                    futures = {
-                                        executor.submit(_fetch_html, url): key
-                                        for key, url in urls.items()
-                                    }
-                                    html_sections: Dict[str, str] = {}
-                                    errors_local: Dict[str, str] = {}
-                                    try:
-                                        for fut in concurrent.futures.as_completed(
-                                            futures, timeout=15.0
-                                        ):
-                                            key = futures.get(fut, "__unknown__")
-                                            try:
-                                                html_sections[str(key)] = fut.result()
-                                            except Exception as exc:
-                                                errors_local[str(key)] = str(exc)
-                                    except concurrent.futures.TimeoutError as exc:
-                                        raise ValueError(
-                                            "Timed out fetching SpaceWeatherLive HTML pages for OpenAI fallback."
-                                        ) from exc
-                                    finally:
-                                        executor.shutdown(wait=False, cancel_futures=True)
-
-                                    # Require at least the two core pages so the extractor has enough context.
-                                    if "home" not in html_sections or "solar_activity" not in html_sections:
-                                        raise ValueError(
-                                            "Missing required SpaceWeatherLive pages for OpenAI fallback. "
-                                            f"Errors: {errors_local}"
-                                        )
-                                    snap_local = extract_spaceweather_with_openai(
-                                        html_sections,
-                                        timeout_s=25.0,
-                                    )
-                                    if snap_local is None:
-                                        raise ValueError(
-                                            "OpenAI fallback returned no snapshot (check OPENAI_API_KEY and network)."
-                                        )
-                                    openai_holder["snap"] = snap_local
-
-                                ok_openai = _run_space_data_step(
-                                    _space_data_step_runner_state(),
-                                    step_id="swl_openai_fallback",
-                                    label="SpaceWeatherLive: OpenAI fallback extract",
-                                    fn=_do_openai_fallback,
-                                    meta={"timeout_s": 25.0},
-                                )
-                                if ok_openai:
-                                    snap = openai_holder.get("snap")
-                                else:
-                                    last = _space_data_step_runner_state().get("last", {}).get(
-                                        "swl_openai_fallback", {}
-                                    )
-                                    st.error(
-                                        "OpenAI fallback failed: "
-                                        + str(last.get("error") or "Unknown error")
-                                    )
                         if snap:
                             _update_spaceweatherlive_state(space_state, snap)
                             st.caption(
