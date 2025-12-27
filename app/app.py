@@ -9203,6 +9203,138 @@ def main() -> None:
                     max_points=max_pts,
                 )
                 _plot_hr_timeseries(ts_datasets)
+
+                # ------------------------------------------------------------------
+                # Friendly snapshot with chips + gauges (first recording highlighted)
+                # ------------------------------------------------------------------
+                st.markdown("---")
+                st.markdown("#### 🫀 Time-Series Snapshot (per recording)")
+
+                _ts_summary: List[Dict[str, float]] = []
+                for _name, _up in ts_datasets.items():
+                    _rr = _up.rr_ms_clean if (_up.rr_ms_clean is not None) else _up.rr_ms
+                    if _rr is None or _rr.size == 0:
+                        continue
+                    _hr = 60000.0 / _rr
+                    _hr_med = float(np.median(_hr))
+                    _hr_iqr = float(np.percentile(_hr, 75) - np.percentile(_hr, 25))
+                    _rr_span = float(np.percentile(_rr, 95) - np.percentile(_rr, 5))
+                    _rr_p25 = float(np.percentile(_rr, 25))
+                    _rr_p50 = float(np.percentile(_rr, 50))
+                    _rr_p75 = float(np.percentile(_rr, 75))
+                    _ts_summary.append(
+                        {
+                            "source": str(_name),
+                            "hr_med": _hr_med,
+                            "hr_iqr": _hr_iqr,
+                            "rr_span": _rr_span,
+                            "rr_p25": _rr_p25,
+                            "rr_p50": _rr_p50,
+                            "rr_p75": _rr_p75,
+                        }
+                    )
+
+                def _chip(color: str, label: str) -> str:
+                    if color == "green":
+                        return "🟢"
+                    if color == "orange":
+                        return "🟠"
+                    return "🔴"
+
+                for _item in _ts_summary:
+                    _hr_med = _item["hr_med"]
+                    _hr_iqr = _item["hr_iqr"]
+                    _rr_span = _item["rr_span"]
+
+                    _hr_chip = (
+                        "green"
+                        if 50.0 <= _hr_med <= 80.0
+                        else "orange"
+                        if 80.0 < _hr_med <= 95.0 or _hr_med < 50.0
+                        else "red"
+                    )
+                    _var_chip = "green" if _rr_span >= 250.0 else "orange" if _rr_span >= 150.0 else "red"
+                    _iqr_chip = "green" if _hr_iqr <= 8.0 else "orange" if _hr_iqr <= 15.0 else "red"
+
+                    st.markdown(
+                        f"- **{_item['source']}** · HR median {_chip(_hr_chip, '')} {_hr_med:.0f} bpm · "
+                        f"RR spread (p5–p95) {_chip(_var_chip, '')} {_rr_span:.0f} ms · "
+                        f"HR IQR {_chip(_iqr_chip, '')} {_hr_iqr:.1f} bpm"
+                    )
+
+                if _ts_summary:
+                    _primary_ts = _ts_summary[0]
+                    _hr_med = _primary_ts["hr_med"]
+                    _rr_p25 = _primary_ts["rr_p25"]
+                    _rr_p50 = _primary_ts["rr_p50"]
+                    _rr_p75 = _primary_ts["rr_p75"]
+
+                    st.markdown("#### 🎯 Median Heart Rate (first recording)")
+                    _hr_color = (
+                        "#4CAF50"
+                        if 50.0 <= _hr_med <= 80.0
+                        else "#FF9800"
+                        if 80.0 < _hr_med <= 95.0 or _hr_med < 50.0
+                        else "#F44336"
+                    )
+                    _hr_gauge_opt = {
+                        "title": {"text": f"{_primary_ts['source']} · {_hr_med:.0f} bpm", "left": "center"},
+                        "series": [
+                            {
+                                "type": "gauge",
+                                "startAngle": 200,
+                                "endAngle": -20,
+                                "min": 40,
+                                "max": 140,
+                                "splitNumber": 5,
+                                "itemStyle": {"color": _hr_color},
+                                "progress": {"show": True, "width": 18},
+                                "axisLine": {
+                                    "lineStyle": {
+                                        "width": 18,
+                                        "color": [
+                                            [50 / 140, "#F44336"],
+                                            [80 / 140, "#4CAF50"],
+                                            [95 / 140, "#FF9800"],
+                                            [1, "#F44336"],
+                                        ],
+                                    }
+                                },
+                                "axisLabel": {"distance": 0, "fontSize": 10},
+                                "pointer": {"show": True, "length": "60%", "width": 6},
+                                "anchor": {"show": True, "size": 10},
+                                "detail": {
+                                    "valueAnimation": True,
+                                    "formatter": "{value} bpm",
+                                    "fontSize": 16,
+                                    "color": "#333",
+                                },
+                                "data": [{"value": round(_hr_med, 1)}],
+                            }
+                        ],
+                    }
+                    render_echarts(_hr_gauge_opt, height_px=260, width="100%", config=EChartsConfig())
+
+                    st.markdown("#### 📊 RR Interval Distribution (first recording)")
+                    _rr_bar_opt = {
+                        "title": {"text": _primary_ts["source"], "left": "center"},
+                        "tooltip": {"trigger": "axis"},
+                        "xAxis": {"type": "category", "data": ["p25", "p50", "p75"]},
+                        "yAxis": {"type": "value", "name": "RR (ms)"},
+                        "series": [
+                            {
+                                "type": "bar",
+                                "data": [
+                                    {"value": _rr_p25, "itemStyle": {"color": "#4CAF50"}},
+                                    {"value": _rr_p50, "itemStyle": {"color": "#2196F3"}},
+                                    {"value": _rr_p75, "itemStyle": {"color": "#9C27B0"}},
+                                ],
+                                "barWidth": "45%",
+                                "label": {"show": True, "position": "top", "formatter": "{c} ms"},
+                            }
+                        ],
+                    }
+                    render_echarts(_rr_bar_opt, height_px=320, width="100%", config=EChartsConfig())
         st.markdown(
             "**Scientific notes (time series)**  \n"
             "- RR intervals (ms) are beat-to-beat times; healthy resting dynamics are irregular and complex.  \n"
@@ -10779,6 +10911,38 @@ Quick protocol to try now (safe for healthy users):
                                         use_container_width=True,
                                         hide_index=True,
                                     )
+
+                                    # Physiology-friendly summary table (top 12 pairs)
+                                    st.markdown("**🧠 Physiology-friendly summary (easy read)**")
+                                    _friendly_rows: List[Dict[str, Any]] = []
+                                    _max_rows = min(12, len(pair_stats))
+                                    for _, _row in pair_stats.head(_max_rows).iterrows():
+                                        _hrf = str(_row.get("hrf_metric", ""))
+                                        _hrv = str(_row.get("hrv_metric", ""))
+                                        _r = float(_row.get("result", np.nan))
+                                        _p = float(_row.get("p_value", np.nan)) if pd.notna(_row.get("p_value", np.nan)) else np.nan
+                                        _n = int(_row.get("n", 0)) if pd.notna(_row.get("n", np.nan)) else 0
+                                        _strength = _row.get("meaning", "")
+                                        _dir = "Higher HRF ↔ higher HRV" if _r > 0 else "Higher HRF ↔ lower HRV"
+                                        _chip = "🟢" if abs(_r) >= 0.5 else "🟠" if abs(_r) >= 0.3 else "⚪️"
+                                        _sig = "✅ p < 0.05" if np.isfinite(_p) and _p < 0.05 else "• n.s."
+                                        _friendly_rows.append(
+                                            {
+                                                "Pair": f"{_hrf} → {_hrv}",
+                                                "r (strength)": f"{_chip} {float(_r):.4f} ({_strength})",
+                                                "t": f"{float(_row.get('t_statistic', np.nan)):.4f}" if pd.notna(_row.get("t_statistic", np.nan)) else "n/a",
+                                                "p": f"{_p:.4f}" if np.isfinite(_p) else "n/a",
+                                                "n": _n,
+                                                "Physiology takeaway": f"{_dir}. Interpret in context (posture, respiration, protocol). {_sig}",
+                                            }
+                                        )
+                                    if _friendly_rows:
+                                        friendly_df = pd.DataFrame(_friendly_rows)
+                                        st.dataframe(
+                                            friendly_df,
+                                            use_container_width=True,
+                                            hide_index=True,
+                                        )
                                     
                                     # Top HRF↔HRV pair scatter plot (by |r|) using the cached stats
                                     st.markdown("---")
@@ -14752,6 +14916,7 @@ that predicts cognitive performance based on:
 
         # 1) Predictions (button) - Now with detailed progress tracking
         if fetch_prediction_clicked:
+            _LOGGER.info("Space Weather: Impact Predictions fetch requested (progress=%s)", SPACE_WEATHER_PROGRESS_AVAILABLE)
             st.session_state["impact_snapshot_loading"] = True
             started_utc = pd.Timestamp.utcnow()
             
@@ -14764,6 +14929,7 @@ that predicts cognitive performance based on:
                 try:
                     # Define callbacks for real-time progress updates
                     def on_step_start(step_name: str) -> None:
+                        _LOGGER.info("Space Weather: Impact step start -> %s", step_name)
                         tracker.start_step(step_name)
                         render_progress(tracker, progress_container, is_running=True)
                     
@@ -14773,12 +14939,15 @@ that predicts cognitive performance based on:
                         error: Optional[str]
                     ) -> None:
                         if error:
+                            _LOGGER.info("Space Weather: Impact step failed -> %s | error=%s", step_name, error)
                             tracker.fail_step(step_name, error)
                         else:
+                            _LOGGER.info("Space Weather: Impact step complete -> %s", step_name)
                             tracker.complete_step(step_name, event)
                         render_progress(tracker, progress_container, is_running=True)
                     
                     def on_step_error(step_name: str, error: str) -> None:
+                        _LOGGER.info("Space Weather: Impact step error -> %s | error=%s", step_name, error)
                         tracker.fail_step(step_name, error)
                         render_progress(tracker, progress_container, is_running=True)
                     
@@ -14853,6 +15022,7 @@ that predicts cognitive performance based on:
             else:
                 # Fallback to old behavior if progress module not available
                 try:
+                    _LOGGER.info("Space Weather: Impact Predictions fetch (fallback status) starting")
                     with st.status(
                         "Fetching Impact Predictions…", state="running", expanded=True
                     ) as status:
@@ -14908,15 +15078,20 @@ that predicts cognitive performance based on:
                         status.update(
                             label="Impact Predictions updated.", state="complete", expanded=False
                         )
+                        _LOGGER.info("Space Weather: Impact Predictions fetch complete (fallback status)")
                 except Exception as exc:
                     log_exception(_LOGGER, "Quick action failed: Impact Predictions", exc)
                     st.session_state["impact_snapshot_error"] = str(exc)
                     st.error(f"Impact Predictions failed: {exc}")
+                    _LOGGER.info("Space Weather: Impact Predictions fetch failed (fallback status) -> %s", exc)
                 finally:
                     st.session_state["impact_snapshot_loading"] = False
 
         # 2) DONKI (button) - Now with detailed progress tracking
         if fetch_donki_quick_clicked:
+            _LOGGER.info(
+                "Space Weather: DONKI fetch requested (progress=%s)", SPACE_WEATHER_PROGRESS_AVAILABLE
+            )
             try:
                 donki_window_days = int(st.session_state.get("donki_window_days", 14))
                 donki_sync_rr = bool(st.session_state.get("donki_sync_rr_window", True))
@@ -14945,17 +15120,21 @@ that predicts cognitive performance based on:
                 
                 try:
                     def on_donki_start(code: str) -> None:
+                        _LOGGER.info("Space Weather: DONKI step start -> %s (%s→%s)", code, start_donki, end_donki)
                         donki_tracker.start_step(code)
                         render_progress(donki_tracker, donki_progress_container, is_running=True)
                     
                     def on_donki_complete(code: str, row_count: int, error: Optional[str]) -> None:
                         if error:
+                            _LOGGER.info("Space Weather: DONKI step failed -> %s | error=%s", code, error)
                             donki_tracker.fail_step(code, error)
                         else:
+                            _LOGGER.info("Space Weather: DONKI step complete -> %s | rows=%d", code, row_count)
                             donki_tracker.complete_step(code, f"{row_count} events")
                         render_progress(donki_tracker, donki_progress_container, is_running=True)
                     
                     def on_donki_error(code: str, error: str) -> None:
+                        _LOGGER.info("Space Weather: DONKI step error -> %s | error=%s", code, error)
                         donki_tracker.fail_step(code, error)
                         render_progress(donki_tracker, donki_progress_container, is_running=True)
                     
@@ -14987,6 +15166,7 @@ that predicts cognitive performance based on:
                     st.error(f"DONKI fetch failed: {exc}")
             else:
                 # Fallback to old behavior
+                _LOGGER.info("Space Weather: DONKI fetch (fallback status) starting (%s→%s)", start_donki, end_donki)
                 with st.status(
                     "Fetching NASA DONKI datasets…", state="running", expanded=True
                 ) as status:
@@ -15001,12 +15181,14 @@ that predicts cognitive performance based on:
                         status.update(
                             label="DONKI datasets updated.", state="complete", expanded=False
                         )
+                        _LOGGER.info("Space Weather: DONKI fetch complete (fallback status)")
                     else:
                         status.update(
                             label="DONKI fetch failed (see step log).",
                             state="error",
                             expanded=True,
                         )
+                        _LOGGER.info("Space Weather: DONKI fetch failed (fallback status)")
 
         # 3) NOAA Space Weather (button) - Now with detailed progress tracking
         if fetch_noaa_space_weather_clicked:
@@ -15015,6 +15197,12 @@ that predicts cognitive performance based on:
                 list(NOAA_FAST_KEYS)
                 if scope == "Today (fast)"
                 else (list(NOAA_CORE_KEYS) if scope == "Core" else [])
+            )
+            _LOGGER.info(
+                "Space Weather: NOAA fetch requested (progress=%s, scope=%s, keys=%s)",
+                SPACE_WEATHER_PROGRESS_AVAILABLE,
+                scope,
+                keys_to_fetch_list,
             )
             
             # Use new progress tracking if available
@@ -15027,17 +15215,21 @@ that predicts cognitive performance based on:
                 
                 try:
                     def on_noaa_start(key: str) -> None:
+                        _LOGGER.info("Space Weather: NOAA step start -> %s", key)
                         noaa_tracker.start_step(key)
                         render_progress(noaa_tracker, noaa_progress_container, is_running=True)
                     
                     def on_noaa_complete(key: str, row_count: int, error: Optional[str]) -> None:
                         if error:
+                            _LOGGER.info("Space Weather: NOAA step failed -> %s | error=%s", key, error)
                             noaa_tracker.fail_step(key, error)
                         else:
+                            _LOGGER.info("Space Weather: NOAA step complete -> %s | rows=%d", key, row_count)
                             noaa_tracker.complete_step(key, f"{row_count} records")
                         render_progress(noaa_tracker, noaa_progress_container, is_running=True)
                     
                     def on_noaa_error(key: str, error: str) -> None:
+                        _LOGGER.info("Space Weather: NOAA step error -> %s | error=%s", key, error)
                         noaa_tracker.fail_step(key, error)
                         render_progress(noaa_tracker, noaa_progress_container, is_running=True)
                     
@@ -15084,6 +15276,7 @@ that predicts cognitive performance based on:
                     if scope == "Today (fast)"
                     else (NOAA_CORE_KEYS if scope == "Core" else None)
                 )
+                _LOGGER.info("Space Weather: NOAA fetch (fallback status) starting scope=%s keys=%s", scope, keys_to_fetch)
                 with st.status(
                     "Fetching NOAA Space Weather (SWPC + NOAA feeds)…",
                     state="running",
@@ -15108,12 +15301,14 @@ that predicts cognitive performance based on:
                         status.update(
                             label="NOAA Space Weather updated.", state="complete", expanded=False
                         )
+                        _LOGGER.info("Space Weather: NOAA fetch complete (fallback status)")
                     else:
                         status.update(
                             label="NOAA Space Weather fetch had errors (see step log).",
                             state="error",
                             expanded=True,
                         )
+                        _LOGGER.info("Space Weather: NOAA fetch failed (fallback status)")
 
         st.markdown("---")
         st.markdown("### 📊 Gauges, plots & analysis (dashboard)")
