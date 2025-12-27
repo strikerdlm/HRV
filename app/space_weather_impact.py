@@ -28,7 +28,7 @@ import re
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, Final, List, Mapping, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, Final, List, Mapping, Optional, Sequence, Tuple
 
 import numpy as np
 import pandas as pd
@@ -1242,6 +1242,158 @@ def fetch_space_weather_snapshot(*, overall_timeout_s: float = 15.0) -> SpaceWea
                 _ = pending.cancel()  # best-effort; threads may still be running
     finally:
         # Do not wait for potentially-stuck worker threads; return control to the UI.
+        executor.shutdown(wait=False, cancel_futures=True)
+    
+    return snapshot
+
+
+def fetch_space_weather_snapshot_with_progress(
+    *,
+    overall_timeout_s: float = 30.0,
+    on_step_start: Optional[Callable[[str], None]] = None,
+    on_step_complete: Optional[Callable[[str, Optional[ImpactEvent], Optional[str]], None]] = None,
+    on_step_error: Optional[Callable[[str, str], None]] = None,
+) -> SpaceWeatherSnapshot:
+    """
+    Fetch all space weather data with progress callbacks for UI updates.
+    
+    This version provides real-time feedback on each step of the fetch process,
+    making it ideal for detailed progress indicators.
+    
+    Args:
+        overall_timeout_s: Maximum total time to wait for all fetches.
+        on_step_start: Callback when a step starts. Called with step name.
+        on_step_complete: Callback when a step completes. Called with (name, event, error).
+        on_step_error: Callback when a step fails. Called with (name, error_message).
+    
+    Returns:
+        SpaceWeatherSnapshot with all available events.
+    """
+    import concurrent.futures
+    import time
+    
+    if overall_timeout_s <= 0:
+        raise ValueError("overall_timeout_s must be > 0")
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    now_bogota = utc_to_bogota(now_utc)
+    
+    snapshot = SpaceWeatherSnapshot(
+        timestamp_utc=now_utc,
+        timestamp_bogota=now_bogota,
+    )
+    
+    # Fetch functions with descriptive metadata
+    fetch_functions: Dict[str, Callable[[], Tuple[Optional[ImpactEvent], Optional[str]]]] = {
+        "photon": fetch_xray_impact,
+        "sep": fetch_sep_impact,
+        "plasma": fetch_plasma_impact,
+        "cme": fetch_cme_enlil_impact,
+        "geomagnetic": fetch_geomagnetic_impact,
+    }
+    
+    # Track step results with timing
+    step_results: Dict[str, Dict[str, Any]] = {}
+    
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=len(fetch_functions))
+    futures: Dict[concurrent.futures.Future[Tuple[Optional[ImpactEvent], Optional[str]]], str] = {}
+    
+    # Submit all tasks and notify step start
+    for name, func in fetch_functions.items():
+        if on_step_start:
+            try:
+                on_step_start(name)
+            except Exception:
+                pass  # Never let callback errors break the fetch
+        future = executor.submit(func)
+        futures[future] = name
+        step_results[name] = {"start_time": time.perf_counter(), "completed": False}
+    
+    try:
+        start_time = time.perf_counter()
+        
+        # Process results as they complete (better UX than waiting for all)
+        while futures:
+            elapsed = time.perf_counter() - start_time
+            remaining = max(0.1, overall_timeout_s - elapsed)
+            
+            if elapsed >= overall_timeout_s:
+                # Timeout remaining tasks
+                for future, name in list(futures.items()):
+                    if not future.done():
+                        error_msg = f"Timed out after {overall_timeout_s:.0f}s"
+                        snapshot.errors[name] = error_msg
+                        step_results[name]["completed"] = True
+                        step_results[name]["error"] = error_msg
+                        if on_step_error:
+                            try:
+                                on_step_error(name, error_msg)
+                            except Exception:
+                                pass
+                        future.cancel()
+                break
+            
+            # Wait for any future to complete
+            done, _ = concurrent.futures.wait(
+                set(futures.keys()),
+                timeout=min(0.5, remaining),
+                return_when=concurrent.futures.FIRST_COMPLETED,
+            )
+            
+            for future in done:
+                name = futures.pop(future)
+                step_results[name]["end_time"] = time.perf_counter()
+                step_results[name]["completed"] = True
+                
+                try:
+                    event, error = future.result(timeout=0.1)
+                    
+                    if event:
+                        if name == "photon":
+                            snapshot.photon_event = event
+                        elif name == "sep":
+                            snapshot.sep_event = event
+                        elif name == "plasma":
+                            snapshot.plasma_event = event
+                        elif name == "cme":
+                            snapshot.cme_event = event
+                        elif name == "geomagnetic":
+                            snapshot.geomagnetic_event = event
+                    
+                    if error:
+                        snapshot.errors[name] = error
+                    
+                    # Notify completion
+                    if on_step_complete:
+                        try:
+                            on_step_complete(name, event, error)
+                        except Exception:
+                            pass
+                            
+                except concurrent.futures.TimeoutError:
+                    error_msg = f"Timed out fetching {name}"
+                    snapshot.errors[name] = error_msg
+                    step_results[name]["error"] = error_msg
+                    if on_step_error:
+                        try:
+                            on_step_error(name, error_msg)
+                        except Exception:
+                            pass
+                            
+                except Exception as exc:
+                    error_msg = str(exc)
+                    snapshot.errors[name] = error_msg
+                    step_results[name]["error"] = error_msg
+                    log_exception(_LOGGER, f"Impact snapshot fetch failed ({name})", exc)
+                    if on_step_error:
+                        try:
+                            on_step_error(name, error_msg)
+                        except Exception:
+                            pass
+    
+    finally:
+        for future in futures:
+            future.cancel()
         executor.shutdown(wait=False, cancel_futures=True)
     
     return snapshot
