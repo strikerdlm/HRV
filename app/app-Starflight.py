@@ -8610,13 +8610,6 @@ def main() -> None:
                     if c in multi_results_df.columns:
                         cols_to_show.append(c)
                 st.dataframe(multi_results_df[cols_to_show])
-            st.divider()
-            st.markdown("### 🔍 AI metric explanations")
-            st.info(
-                "OpenAI/Agents-based explanations are generated **on-demand** from the "
-                "**Export & Download** tab to keep analysis tabs responsive. "
-                "Go to **Export & Download → AI analysis** when you want the AI appendix."
-            )
         else:
             st.info("No metrics to display.")
     with tab_ans:
