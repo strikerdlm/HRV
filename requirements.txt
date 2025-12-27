@@ -12,6 +12,11 @@
 # - 1.40.2: Has cosmetic error popups but functionally works
 # Using 1.36.0 as the most stable version for this complex app.
 streamlit==1.36.0
+
+# Pin Tornado to prevent WebSocket ping/timeout issues that cause automatic reruns
+# See: https://github.com/streamlit/streamlit/issues/12108
+# Tornado 6.4.2 has better WebSocket ping handling than later versions
+tornado==6.4.2
 requests>=2.31,<3
 pandas>=2.2,<2.3
 numpy>=1.26,<2.2
