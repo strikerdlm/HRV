@@ -1922,8 +1922,13 @@ Continue for 3 hours post-arrival for storm response capture.
 | Kp index | `planetary_k_index_1m.json` | 1 minute |
 | Dst index | `geospace_dst_1_hour.json` | 1 hour |
 
+**CME/Shock forecasts (model-based):**
+- NASA DONKI **WSA+ENLIL** simulations (shock arrival): `WSAEnlilSimulations` (event-driven; updated when new simulations run)
+
 ### Scientific References
 
+- NOAA Space Weather Prediction Center. (n.d.). *Space Weather Scales* (R, S, G). Retrieved 2025-12-26, from [https://www.swpc.noaa.gov/noaa-scales-explanation](https://www.swpc.noaa.gov/noaa-scales-explanation)
+- Odstrčil, D. (2003). Modeling 3-D solar wind structure. *Advances in Space Research, 32*(4), 497–506. [https://doi.org/10.1016/S0273-1177(03)00332-6](https://doi.org/10.1016/S0273-1177(03)00332-6)
 - Vieira CLZ, et al. (2022). Geomagnetic disturbances are associated with reduced heart rate variability. *Sci Total Environ, 839*, 156312.
 - Alabdulgader A, et al. (2018). Long-term study of HRV responses to changes in the solar and geomagnetic environment. *Sci Rep, 8*(1), 2663.
 - McCraty R, et al. (2017). Synchronization of human autonomic nervous system rhythms with geomagnetic activity. *Int J Environ Res Public Health, 14*(7), 770.

@@ -1,14 +1,19 @@
 """
 Space Weather Impact Prediction Module
 
-Calculates exact arrival times for different space weather events at Earth
-and provides Polar H10 EKG monitoring recommendations.
+Computes arrival times for different space-weather energy carriers at Earth and
+provides Polar H10 monitoring recommendations.
+
+Accuracy note:
+- Photon/SEP/geomagnetic values are *observations at/near Earth* (arrival is effectively "now").
+- Solar wind plasma is measured at L1 (DSCOVR/ACE) and propagated ballistically to Earth (~30–60 min).
+- CME/shock arrivals are *model-based forecasts* (NASA DONKI WSA+ENLIL) and carry uncertainty.
 
 Energy categories tracked:
 1. Photons/X-rays (instantaneous ~8.3 min from Sun)
 2. Solar Energetic Particles (SEPs) - minutes to hours
 3. Solar Wind plasma from L1 - ~30-60 min
-4. CME/Shock arrivals - hours to days (via models)
+4. CME/Shock arrivals - hours to days (via physics-based models)
 
 All times computed for Bogotá, Colombia (UTC-5).
 """
@@ -18,6 +23,8 @@ from __future__ import annotations
 import datetime
 import logging
 import math
+import os
+import re
 import threading
 from dataclasses import dataclass, field
 from enum import Enum
@@ -32,6 +39,12 @@ try:
     from app.logging_config import get_logger, log_exception
 except ImportError:  # pragma: no cover - fallback for script execution
     from logging_config import get_logger, log_exception
+
+try:
+    # Streamlit-free CME propagation helpers (DBM)
+    from app.space_weather_influence import estimate_cme_arrival_range_utc
+except ImportError:  # pragma: no cover - fallback for script execution
+    from space_weather_influence import estimate_cme_arrival_range_utc  # type: ignore[no-redef]
 
 _LOGGER: Final[logging.Logger] = get_logger(__name__)
 
@@ -75,6 +88,9 @@ AU_KM: Final[float] = 149_597_870.7
 LIGHT_SPEED_KM_S: Final[float] = 299_792.458
 SUN_EARTH_LIGHT_MINUTES: Final[float] = AU_KM / LIGHT_SPEED_KM_S / 60.0  # ~8.3 min
 
+# IAU nominal solar radius (km) (used to adjust propagation distance when using DONKI `time21_5`)
+SOLAR_RADIUS_KM: Final[float] = 695_700.0
+
 # NOAA SWPC endpoints
 SWPC_BASE_URL: Final[str] = "https://services.swpc.noaa.gov"
 REQUEST_TIMEOUT: Final[float] = 5.0  # Reduced from 15.0 for faster failure
@@ -89,6 +105,11 @@ ENDPOINTS: Final[Dict[str, str]] = {
     "dst_1hour": f"{SWPC_BASE_URL}/json/geospace/geospace_dst_1_hour.json",
     "ace_epam": f"{SWPC_BASE_URL}/products/solar-wind/epam-1-day.json",
 }
+
+# NASA DONKI (WSA+ENLIL) endpoint for CME/shock arrival forecasts
+DONKI_API_BASE: Final[str] = "https://api.nasa.gov/DONKI"
+DONKI_TIMEOUT: Final[float] = 10.0
+DONKI_ENLIL_ENDPOINT: Final[str] = f"{DONKI_API_BASE}/WSAEnlilSimulations"
 
 
 # ---------------------------------------------------------------------------
@@ -225,6 +246,19 @@ def _parse_iso_utc(ts: Any) -> Optional[datetime.datetime]:
         return dt.astimezone(datetime.timezone.utc)
     except ValueError:
         return None
+
+
+_P10_ENERGY_LABEL_RE: Final[re.Pattern[str]] = re.compile(
+    r"^\s*(?:>=|>)\s*10(?:\.0)?\s*mev\s*$",
+    flags=re.IGNORECASE,
+)
+
+
+def _is_p10_energy_label(energy: Any) -> bool:
+    """Return True if DONKI/SWPC label represents the NOAA S-scale >10 MeV channel."""
+    if not isinstance(energy, str):
+        return False
+    return bool(_P10_ENERGY_LABEL_RE.match(energy.strip()))
 
 
 def utc_to_bogota(dt_utc: datetime.datetime) -> datetime.datetime:
@@ -447,45 +481,36 @@ def fetch_sep_impact() -> Tuple[Optional[ImpactEvent], Optional[str]]:
     
     if not isinstance(data, list) or len(data) == 0:
         return None, "No proton data available"
-    
-    # Find most recent valid record
+
+    # NOAA S-scale is defined on integral proton flux >10 MeV (pfu).
+    # The SWPC "integral-protons-1-day.json" contains multiple energy channels
+    # (>=10, >=30, >=50, >=60, >=100, etc.). For accuracy, we MUST select the
+    # >=10 MeV channel specifically (not simply the most recent record).
     ref: Optional[Dict[str, Any]] = None
-    for rec in reversed(data):
-        if isinstance(rec, dict) and "time_tag" in rec:
-            ref = rec
-            break
-    
-    if ref is None:
-        return None, "No valid proton record found"
-    
-    obs_time = _parse_iso_utc(ref.get("time_tag"))
-    if obs_time is None:
-        return None, "Invalid proton timestamp"
-    
-    # Extract >10 MeV flux (various possible key names)
+    obs_time: Optional[datetime.datetime] = None
     p10_flux = float("nan")
-    for key, value in ref.items():
-        key_lower = key.lower()
-        if ">=10" in key_lower or "10 mev" in key_lower or "p10" in key_lower:
-            p10_flux = _safe_float(value)
-            if math.isfinite(p10_flux):
-                break
-    
-    # Fallback: use largest numeric value
-    if not math.isfinite(p10_flux):
-        candidates = []
-        for key, value in ref.items():
-            if key in ("time_tag", "satellite", "energy", "id"):
-                continue
-            val = _safe_float(value)
-            if math.isfinite(val) and val > 0:
-                candidates.append(val)
-        if candidates:
-            p10_flux = max(candidates)
+    sat: Optional[Any] = None
+    for rec in reversed(data):
+        if not isinstance(rec, dict):
+            continue
+        if not _is_p10_energy_label(rec.get("energy")):
+            continue
+        parsed = _parse_iso_utc(rec.get("time_tag"))
+        flux = _safe_float(rec.get("flux"))
+        if parsed is None or not math.isfinite(flux):
+            continue
+        ref = rec
+        obs_time = parsed
+        p10_flux = flux
+        sat = rec.get("satellite")
+        break
+
+    if ref is None or obs_time is None or not math.isfinite(p10_flux):
+        return None, "No >=10 MeV proton channel record found (cannot classify SEP reliably)."
     
     cls, severity, bio_effect = _classify_sep_flux(p10_flux)
     
-    # SEPs at GOES (geostationary) are concurrent with Earth magnetosphere exposure
+    # SEPs at GOES geostationary orbit are concurrent with Earth exposure.
     arrival_utc = obs_time
     arrival_bogota = utc_to_bogota(arrival_utc)
     
@@ -498,7 +523,10 @@ def fetch_sep_impact() -> Tuple[Optional[ImpactEvent], Optional[str]]:
         arrival_time_utc=arrival_utc,
         arrival_time_bogota=arrival_bogota,
         travel_time_minutes=0.0,  # Measured at geostationary = at Earth
-        source_description=f"SEP Event: {cls}",
+        source_description=(
+            f"GOES integral protons (>10 MeV): {cls} | flux={p10_flux:.1f} pfu"
+            + (f" | satellite={sat}" if sat is not None else "")
+        ),
         biological_effect=bio_effect,
         polar_h10_recommendation=recommendation,
         raw_value=p10_flux,
@@ -708,6 +736,276 @@ def _get_polar_recommendation_plasma(severity: ImpactSeverity, minutes_to_arriva
 
 
 # ---------------------------------------------------------------------------
+# CME / Shock Forecasts (NASA DONKI WSA+ENLIL)
+# ---------------------------------------------------------------------------
+
+
+def _get_nasa_api_key() -> str:
+    """Return the NASA API key from environment (empty if missing)."""
+    return str(os.getenv("NASA_API_KEY", "") or "").strip()
+
+
+def _enlil_kp_values(sim: Mapping[str, Any]) -> List[float]:
+    """Extract any available Kp scenario values from a DONKI ENLIL record."""
+    values: List[float] = []
+    for key in ("kp_18", "kp_90", "kp_135", "kp_180"):
+        val = _safe_float(sim.get(key))
+        if math.isfinite(val):
+            # Kp is bounded to [0, 9]
+            values.append(float(max(0.0, min(9.0, val))))
+    return values
+
+
+def _severity_from_kp(kp: float) -> ImpactSeverity:
+    """Map a Kp value to the app's severity scale (aligned to NOAA G-scale semantics)."""
+    if not math.isfinite(kp):
+        return ImpactSeverity.QUIET
+    if kp >= 9:
+        return ImpactSeverity.EXTREME
+    if kp >= 8:
+        return ImpactSeverity.SEVERE
+    if kp >= 7:
+        return ImpactSeverity.STRONG
+    if kp >= 6:
+        return ImpactSeverity.MODERATE
+    if kp >= 5:
+        return ImpactSeverity.MINOR
+    return ImpactSeverity.QUIET
+
+
+def _select_most_accurate_cme_input(cme_inputs: Any) -> Optional[Mapping[str, Any]]:
+    """Select the CME input flagged as 'isMostAccurate' if present, else the first."""
+    if not isinstance(cme_inputs, list) or not cme_inputs:
+        return None
+    best: Optional[Mapping[str, Any]] = None
+    for item in cme_inputs:
+        if not isinstance(item, dict):
+            continue
+        if bool(item.get("isMostAccurate")):
+            best = item
+            break
+        if best is None:
+            best = item
+    return best
+
+
+def _select_best_enlil_record(
+    records: Sequence[Any],
+    *,
+    now_utc: datetime.datetime,
+) -> Optional[Mapping[str, Any]]:
+    """Select the most relevant ENLIL record for Earth (next arrival if available)."""
+    if now_utc.tzinfo is None:
+        raise ValueError("now_utc must be timezone-aware (UTC).")
+
+    candidates: List[Tuple[datetime.datetime, datetime.datetime, Mapping[str, Any]]] = []
+    for rec in records:
+        if not isinstance(rec, dict):
+            continue
+        arrival = _parse_iso_utc(rec.get("estimatedShockArrivalTime"))
+        if arrival is None:
+            continue
+        completion = _parse_iso_utc(rec.get("modelCompletionTime"))
+        if completion is None:
+            completion = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+        candidates.append((arrival, completion, rec))
+
+    if not candidates:
+        return None
+
+    # Prefer the next upcoming arrival; if none, use the most recent arrival in the last 24h.
+    future = [c for c in candidates if c[0] >= now_utc]
+    if future:
+        next_arrival = min(future, key=lambda x: x[0])[0]
+        same = [c for c in future if c[0] == next_arrival]
+        chosen = max(same, key=lambda x: x[1])
+        return chosen[2]
+
+    cutoff = now_utc - datetime.timedelta(hours=24)
+    recent = [c for c in candidates if cutoff <= c[0] < now_utc]
+    if not recent:
+        return None
+    last_arrival = max(recent, key=lambda x: x[0])[0]
+    same = [c for c in recent if c[0] == last_arrival]
+    chosen = max(same, key=lambda x: x[1])
+    return chosen[2]
+
+
+def _get_polar_recommendation_cme(severity: ImpactSeverity, minutes_to_arrival: float) -> str:
+    """Get Polar H10 recommendation for a forecast CME/shock arrival."""
+    if minutes_to_arrival < -60:
+        time_note = "Shock likely already arrived (check Kp/Dst and solar wind)."
+    elif minutes_to_arrival < 0:
+        time_note = "Shock arrival window is now/just passed."
+    elif minutes_to_arrival < 120:
+        time_note = f"Arrival expected in ~{minutes_to_arrival:.0f} minutes"
+    elif minutes_to_arrival < 24 * 60:
+        time_note = f"Arrival expected in ~{minutes_to_arrival/60.0:.1f} hours"
+    else:
+        time_note = f"Arrival expected in ~{minutes_to_arrival/1440.0:.1f} days"
+
+    if severity in (ImpactSeverity.EXTREME, ImpactSeverity.SEVERE, ImpactSeverity.STRONG):
+        return (
+            f"🟠 CME FORECAST: {time_note}. "
+            "Plan a Polar H10 session spanning **3h before → 12h after** the predicted shock arrival. "
+            "Add a quiet-day baseline recording for comparison."
+        )
+    if severity == ImpactSeverity.MODERATE:
+        return (
+            f"🟡 CME FORECAST: {time_note}. "
+            "Record a 10-min baseline now, then a **2–4h** session around the predicted arrival."
+        )
+    return (
+        f"🟢 CME FORECAST: {time_note}. "
+        "Optional: brief baseline recording for context."
+    )
+
+
+def _build_cme_event_from_enlil_record(
+    rec: Mapping[str, Any],
+    *,
+    now_utc: datetime.datetime,
+) -> Optional[ImpactEvent]:
+    """Build a CME/shock ImpactEvent from one DONKI WSA+ENLIL simulation record."""
+    arrival = _parse_iso_utc(rec.get("estimatedShockArrivalTime"))
+    if arrival is None:
+        return None
+    completion = _parse_iso_utc(rec.get("modelCompletionTime")) or now_utc
+
+    cme_input = _select_most_accurate_cme_input(rec.get("cmeInputs"))
+    speed = _safe_float(cme_input.get("speed") if isinstance(cme_input, dict) else None)
+    time21_5 = _parse_iso_utc(cme_input.get("time21_5") if isinstance(cme_input, dict) else None)
+    cme_start = _parse_iso_utc(cme_input.get("cmeStartTime") if isinstance(cme_input, dict) else None)
+
+    # Transit time (best-effort): prefer time21_5 (start of IP propagation), else CME start time.
+    transit_ref = time21_5 or cme_start
+    travel_minutes = float("nan")
+    if transit_ref is not None:
+        travel_minutes = float((arrival - transit_ref).total_seconds() / 60.0)
+
+    # DBM cross-check range (helps communicate uncertainty)
+    dbm_range_text = ""
+    try:
+        if time21_5 is not None and math.isfinite(speed) and speed > 0:
+            a_min, a_max = estimate_cme_arrival_range_utc(
+                pd.Timestamp(time21_5),
+                v0_km_s=float(speed),
+                distance_km=float(AU_KM - (21.5 * SOLAR_RADIUS_KM)),
+            )
+            dbm_range_text = f" | DBM range: {a_min:%Y-%m-%d %H:%M}–{a_max:%Y-%m-%d %H:%M} UTC"
+    except Exception:
+        dbm_range_text = ""
+
+    kp_values = _enlil_kp_values(rec)
+    kp_min: Optional[float] = min(kp_values) if kp_values else None
+    kp_max: Optional[float] = max(kp_values) if kp_values else None
+    severity = _severity_from_kp(float(kp_max)) if kp_max is not None else ImpactSeverity.MODERATE
+
+    impact_flag = "direct/nominal"
+    if bool(rec.get("isEarthGB")):
+        impact_flag = "glancing blow"
+    if bool(rec.get("isEarthMinorImpact")):
+        impact_flag = "minor impact"
+
+    rmin_re = _safe_float(rec.get("rmin_re"))
+    rmin_text = f"{rmin_re:.1f} Re" if math.isfinite(rmin_re) else "n/a"
+
+    kp_text = (
+        f"Kp scenarios: {kp_min:.0f}–{kp_max:.0f}"
+        if (kp_min is not None and kp_max is not None)
+        else "Kp scenarios: n/a"
+    )
+
+    minutes_to_arrival = float((arrival - now_utc).total_seconds() / 60.0)
+    recommendation = _get_polar_recommendation_cme(severity, minutes_to_arrival)
+
+    sim_id = str(rec.get("simulationID", "") or "").strip()
+    link = str(rec.get("link", "") or "").strip()
+
+    source_loc = ""
+    if isinstance(cme_input, dict):
+        lat = _safe_float(cme_input.get("latitude"))
+        lon = _safe_float(cme_input.get("longitude"))
+        if math.isfinite(lat) and math.isfinite(lon):
+            source_loc = f" | source lat/lon={lat:.0f}/{lon:.0f}°"
+
+    speed_text = f"{speed:.0f} km/s" if math.isfinite(speed) else "n/a"
+
+    desc = (
+        f"DONKI WSA+ENLIL ({sim_id}) | shock arrival forecast | {impact_flag}"
+        f" | CME v={speed_text}{source_loc}"
+        f" | rmin={rmin_text} | {kp_text}{dbm_range_text}"
+        + (f" | {link}" if link else "")
+    )
+
+    bio_effect = (
+        "Forecast CME/shock arrival at Earth. Geomagnetic storm intensity depends strongly on the "
+        "interplanetary magnetic field orientation (Bz), which is not deterministically forecast from coronagraph data. "
+        "Use the Kp scenario range as an uncertainty bracket; validate with real-time solar wind + Kp/Dst on arrival."
+    )
+
+    # Confidence is moderate for model-based forecasts; higher if Kp scenarios are provided.
+    confidence = 0.60 + (0.10 if kp_values else 0.0)
+    confidence = float(max(0.0, min(0.85, confidence)))
+
+    event = ImpactEvent(
+        category=EnergyCategory.CME_SHOCK,
+        severity=severity,
+        observation_time_utc=completion,
+        arrival_time_utc=arrival,
+        arrival_time_bogota=utc_to_bogota(arrival),
+        travel_time_minutes=travel_minutes if math.isfinite(travel_minutes) else 0.0,
+        source_description=desc,
+        biological_effect=bio_effect,
+        polar_h10_recommendation=recommendation,
+        raw_value=float(kp_max) if kp_max is not None else speed,
+        unit="Kp (scenario max)" if kp_max is not None else "km/s",
+        confidence=confidence,
+    )
+    return event
+
+
+def fetch_cme_enlil_impact(*, lookback_days: int = 45) -> Tuple[Optional[ImpactEvent], Optional[str]]:
+    """Fetch WSA+ENLIL CME/shock forecasts (DONKI) and return the most relevant Earth arrival."""
+    if int(lookback_days) <= 0 or int(lookback_days) > 365:
+        raise ValueError("lookback_days must be in [1, 365].")
+
+    api_key = _get_nasa_api_key()
+    if not api_key:
+        return None, "NASA_API_KEY not set (CME forecasts require NASA DONKI WSA+ENLIL)."
+
+    end = datetime.date.today()
+    start = end - datetime.timedelta(days=int(lookback_days))
+    params = {
+        "startDate": start.isoformat(),
+        "endDate": end.isoformat(),
+        "api_key": api_key,
+    }
+
+    try:
+        resp = _get_http_session().get(DONKI_ENLIL_ENDPOINT, params=params, timeout=DONKI_TIMEOUT)
+        resp.raise_for_status()
+        payload = resp.json()
+    except requests.RequestException as exc:
+        return None, f"DONKI WSA+ENLIL fetch failed: {exc}"
+    except ValueError as exc:
+        return None, f"DONKI WSA+ENLIL JSON parse failed: {exc}"
+
+    if not isinstance(payload, list) or not payload:
+        return None, "No WSA+ENLIL simulations returned for the requested window."
+
+    now_utc = datetime.datetime.now(datetime.timezone.utc)
+    best = _select_best_enlil_record(payload, now_utc=now_utc)
+    if best is None:
+        return None, "No ENLIL record with an estimated shock arrival time was found."
+
+    event = _build_cme_event_from_enlil_record(best, now_utc=now_utc)
+    if event is None:
+        return None, "Failed to build CME forecast event from ENLIL record."
+    return event, None
+
+
+# ---------------------------------------------------------------------------
 # Geomagnetic Activity (Kp, Dst)
 # ---------------------------------------------------------------------------
 
@@ -716,21 +1014,27 @@ def _classify_geomagnetic(kp: float, dst: float) -> Tuple[str, ImpactSeverity, s
     """Classify geomagnetic conditions from Kp and Dst indices."""
     # Use Kp if available (0-9 scale)
     if math.isfinite(kp):
-        if kp >= 8:
-            return "G5 Extreme storm", ImpactSeverity.EXTREME, (
+        # NOAA G-scale mapping (Kp → G1..G5): 5,6,7,8,9
+        # Source: NOAA SWPC Space Weather Scales.
+        if kp >= 9:
+            return "G5 Extreme storm (Kp ≥ 9)", ImpactSeverity.EXTREME, (
                 "Extreme geomagnetic storm. Strong HRV reductions documented. "
                 "Elevated cardiovascular risk in susceptible populations."
             )
-        if kp >= 7:
-            return "G4 Severe storm", ImpactSeverity.SEVERE, (
+        if kp >= 8:
+            return "G4 Severe storm (Kp = 8)", ImpactSeverity.SEVERE, (
                 "Severe storm. Consistent HRV depression (↓SDNN, ↓RMSSD) in studies."
             )
-        if kp >= 6:
-            return "G3 Strong storm", ImpactSeverity.STRONG, (
+        if kp >= 7:
+            return "G3 Strong storm (Kp = 7)", ImpactSeverity.STRONG, (
                 "Strong storm. Moderate HRV changes and autonomic stress signatures."
             )
+        if kp >= 6:
+            return "G2 Moderate storm (Kp = 6)", ImpactSeverity.MODERATE, (
+                "Moderate storm. Measurable autonomic effects possible in sensitive individuals."
+            )
         if kp >= 5:
-            return "G1-G2 Minor/Moderate storm", ImpactSeverity.MODERATE, (
+            return "G1 Minor storm (Kp = 5)", ImpactSeverity.MINOR, (
                 "Minor to moderate storm. Small but detectable HRV effects possible."
             )
         if kp >= 4:
@@ -894,6 +1198,7 @@ def fetch_space_weather_snapshot(*, overall_timeout_s: float = 15.0) -> SpaceWea
         "photon": fetch_xray_impact,
         "sep": fetch_sep_impact,
         "plasma": fetch_plasma_impact,
+        "cme": fetch_cme_enlil_impact,
         "geomagnetic": fetch_geomagnetic_impact,
     }
     
@@ -923,6 +1228,8 @@ def fetch_space_weather_snapshot(*, overall_timeout_s: float = 15.0) -> SpaceWea
                     snapshot.sep_event = event
                 elif name == "plasma":
                     snapshot.plasma_event = event
+                elif name == "cme":
+                    snapshot.cme_event = event
                 elif name == "geomagnetic":
                     snapshot.geomagnetic_event = event
             if error:
@@ -958,6 +1265,7 @@ def build_impact_summary_df(snapshot: SpaceWeatherSnapshot) -> pd.DataFrame:
         rows.append({
             "Category": event.category.value.upper(),
             "Severity": event.severity.value.upper(),
+            "Confidence": f"{float(max(0.0, min(1.0, event.confidence))) * 100.0:.0f}%",
             "Arrival (Bogotá)": format_datetime_bogota(event.arrival_time_utc),
             "Countdown": countdown,
             "Description": event.source_description,

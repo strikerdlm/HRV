@@ -24,6 +24,12 @@ _LOGGER: Final = get_logger(__name__)
 # Sun → Earth distance (1 AU)
 AU_KM: Final[float] = 149_597_870.7
 
+# IAU 2015 nominal solar radius (km) (approx; sufficient for travel-time horizons)
+SOLAR_RADIUS_KM: Final[float] = 695_700.0
+
+# Distance from solar surface (1 R☉) to Earth's orbit (≈1 AU).
+SUN_SURFACE_TO_EARTH_KM: Final[float] = AU_KM - SOLAR_RADIUS_KM
+
 
 @dataclass(frozen=True, slots=True)
 class InfluenceHorizonRecommendation:
@@ -135,11 +141,22 @@ def estimate_cme_arrival_range_utc(
     w_km_s: float = 400.0,
     gamma_min_km_inv: float = 0.5e-8,
     gamma_max_km_inv: float = 2.0e-8,
+    distance_km: float = SUN_SURFACE_TO_EARTH_KM,
 ) -> tuple[pd.Timestamp, pd.Timestamp]:
     """Estimate CME arrival time range at Earth (UTC) using DBM.
 
     Returns a conservative (min_arrival_utc, max_arrival_utc) range obtained by
     evaluating the DBM at two plausible drag parameters.
+
+    Args:
+        eruption_time_utc: Start time at the chosen start radius (UTC).
+        v0_km_s: Initial CME/shock speed (km/s) at the chosen start radius.
+        w_km_s: Background solar wind speed (km/s).
+        gamma_min_km_inv: Lower-bound drag parameter (km⁻¹).
+        gamma_max_km_inv: Upper-bound drag parameter (km⁻¹).
+        distance_km: Propagation distance from the chosen start radius to Earth (km).
+            Default uses solar-surface → 1 AU (≈ AU − 1 R☉). If using DONKI `time21_5`,
+            pass `AU_KM - 21.5 * SOLAR_RADIUS_KM` for better accuracy.
     """
     if not isinstance(eruption_time_utc, pd.Timestamp):
         raise TypeError("eruption_time_utc must be a pandas.Timestamp.")
@@ -156,12 +173,14 @@ def estimate_cme_arrival_range_utc(
         raise ValueError("gamma_min_km_inv must be finite and > 0.")
     if not math.isfinite(gamma_max_km_inv) or float(gamma_max_km_inv) <= 0:
         raise ValueError("gamma_max_km_inv must be finite and > 0.")
+    if not math.isfinite(distance_km) or float(distance_km) <= 0:
+        raise ValueError("distance_km must be finite and > 0.")
 
     gamma_lo = float(min(gamma_min_km_inv, gamma_max_km_inv))
     gamma_hi = float(max(gamma_min_km_inv, gamma_max_km_inv))
 
-    t1 = dbm_transit_time_seconds(AU_KM, v0_km_s=float(v0_km_s), w_km_s=float(w_km_s), gamma_km_inv=gamma_lo)
-    t2 = dbm_transit_time_seconds(AU_KM, v0_km_s=float(v0_km_s), w_km_s=float(w_km_s), gamma_km_inv=gamma_hi)
+    t1 = dbm_transit_time_seconds(float(distance_km), v0_km_s=float(v0_km_s), w_km_s=float(w_km_s), gamma_km_inv=gamma_lo)
+    t2 = dbm_transit_time_seconds(float(distance_km), v0_km_s=float(v0_km_s), w_km_s=float(w_km_s), gamma_km_inv=gamma_hi)
     min_s = float(min(t1, t2))
     max_s = float(max(t1, t2))
 
@@ -215,13 +234,13 @@ def recommend_influence_horizons_from_hrv(
     # Conservative max transit time from Sun to Earth (slow CME + weak drag)
     # Evaluate both gamma endpoints and take the maximum.
     t_lo = dbm_transit_time_seconds(
-        AU_KM,
+        SUN_SURFACE_TO_EARTH_KM,
         v0_km_s=float(v_min_km_s),
         w_km_s=float(w_km_s),
         gamma_km_inv=float(min(gamma_min_km_inv, gamma_max_km_inv)),
     )
     t_hi = dbm_transit_time_seconds(
-        AU_KM,
+        SUN_SURFACE_TO_EARTH_KM,
         v0_km_s=float(v_min_km_s),
         w_km_s=float(w_km_s),
         gamma_km_inv=float(max(gamma_min_km_inv, gamma_max_km_inv)),
@@ -275,12 +294,16 @@ def build_donki_cme_influence_windows(
     df = cme_analysis_df.copy()
     # Prefer an explicit associated CME start time; fall back to time21_5.
     time_series: Optional[pd.Series] = None
+    source_time_column: Optional[str] = None
     if "associatedCMEstartTime" in df.columns:
         time_series = pd.to_datetime(df["associatedCMEstartTime"], errors="coerce", utc=True)
+        source_time_column = "associatedCMEstartTime"
     elif "time21_5" in df.columns:
         time_series = pd.to_datetime(df["time21_5"], errors="coerce", utc=True)
+        source_time_column = "time21_5"
     elif "startTime" in df.columns:
         time_series = pd.to_datetime(df["startTime"], errors="coerce", utc=True)
+        source_time_column = "startTime"
     if time_series is None:
         _LOGGER.warning("DONKI CMEAnalysis frame missing start-time columns.")
         return pd.DataFrame(columns=cols)
@@ -311,9 +334,15 @@ def build_donki_cme_influence_windows(
             continue
 
         try:
+            # If the DONKI time is `time21_5`, it represents the CME front at ~21.5 R☉.
+            # Use the remaining distance to 1 AU for more accurate DBM propagation.
+            distance_km = SUN_SURFACE_TO_EARTH_KM
+            if source_time_column == "time21_5":
+                distance_km = AU_KM - (21.5 * SOLAR_RADIUS_KM)
             a_min, a_max = estimate_cme_arrival_range_utc(
                 pd.to_datetime(source_time, utc=True),
                 v0_km_s=speed_f,
+                distance_km=float(distance_km),
             )
         except Exception as exc:
             _LOGGER.debug("Skipping CMEAnalysis row due to arrival estimate error: %s", exc)
