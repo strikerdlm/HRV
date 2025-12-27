@@ -12,6 +12,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - **Metrics tab UI cleanup** (`app/app.py`, `app/app-Starflight.py`): Removed the “🔍 AI metric explanations” banner from the Metrics page.
+- **Space Data copy cleanup** (`app/app.py`, `app/app-Starflight.py`): Removed “click fetch” guidance text and the disabled correlations notice from the Space Weather section to keep the dashboard visually clean.
+- **Space Data top-of-page organization** (`app/app.py`): Added a **🚀 Quick actions** bar in the requested order (**Fetch Prediction → Fetch NASA DONKI → Fetch NOAA Space Weather**) and introduced a **Dashboard** section header directly below for the gauges/plots/explanations.
+- **Space Data NOAA UI cleanup** (`app/app.py`): Removed the “Correlations (decommissioned)” notice from the NOAA section of Space Data.
 
 ### Fixed
 - **Impact Predictions are now debuggable step-by-step** (`app/app.py`): Added a **🧪 Step-by-step (debug hangs)** expander with one button per Impact Predictions sub-step (X-rays, protons, solar wind, CME/ENLIL, Kp/Dst), persists per-step status + duration, and rebuilds the snapshot from the latest step results.

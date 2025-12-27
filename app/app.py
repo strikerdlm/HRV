@@ -13222,6 +13222,207 @@ that predicts cognitive performance based on:
                 )
             else:
                 st.info("No step runs recorded yet. Use the buttons below to run individual steps.")
+
+        # -----------------------------------------------------------------
+        # TOP-OF-PAGE ORGANIZATION (Controls first, then dashboard)
+        # -----------------------------------------------------------------
+        # Shared state objects (used by the quick-action buttons and all dashboards below)
+        space_state = _space_weather_state()
+        donki_state = _donki_state()
+        noaa_state = _noaa_space_state()
+        rr_min_utc, rr_max_utc = _get_uploaded_rr_time_bounds()
+
+        # Ensure Impact Predictions state exists (used by the dashboard below)
+        st.session_state.setdefault("impact_snapshot", None)
+        st.session_state.setdefault("impact_snapshot_error", "")
+        st.session_state.setdefault("impact_snapshot_loading", False)
+        impact_steps = st.session_state.setdefault(
+            "impact_step_runner",
+            {
+                "photon": {"ok": False, "error": "", "duration_ms": None, "event": None},
+                "sep": {"ok": False, "error": "", "duration_ms": None, "event": None},
+                "plasma": {"ok": False, "error": "", "duration_ms": None, "event": None},
+                "cme": {"ok": False, "error": "", "duration_ms": None, "event": None},
+                "geomagnetic": {"ok": False, "error": "", "duration_ms": None, "event": None},
+                "last_built_utc": "",
+            },
+        )
+
+        st.markdown("### 🚀 Quick actions (top of page)")
+        col_pred, col_donki, col_noaa = st.columns(3)
+        with col_pred:
+            fetch_prediction_clicked = st.button(
+                "1) 🔄 Fetch Prediction",
+                key="space_data_quick_fetch_prediction",
+                help="Fetch GOES/SWPC/DONKI snapshot used for arrival-time predictions and Polar H10 guidance.",
+            )
+        with col_donki:
+            fetch_donki_quick_clicked = st.button(
+                "2) 🌐 Fetch NASA DONKI",
+                key="space_data_quick_fetch_donki",
+                disabled=not NASA_API_KEY,
+                help="Fetch DONKI event catalogs for the configured time window.",
+            )
+        with col_noaa:
+            fetch_noaa_space_weather_clicked = st.button(
+                "3) 🛰️ Fetch NOAA Space Weather",
+                key="space_data_quick_fetch_noaa_space_weather",
+                help="Fetch SWPC Kp+F10.7 and NOAA feeds (scope is controlled by the NOAA dashboard settings below).",
+            )
+
+        # 1) Predictions (button)
+        if fetch_prediction_clicked:
+            st.session_state["impact_snapshot_loading"] = True
+            started_utc = pd.Timestamp.utcnow()
+            try:
+                with st.status(
+                    "Fetching Impact Predictions…", state="running", expanded=True
+                ) as status:
+                    snapshot_holder: Dict[str, Any] = {"snapshot": None}
+                    ok = _run_space_data_step(
+                        _space_data_step_runner_state(),
+                        step_id="impact_run_all",
+                        label="Impact Predictions: Fetch Prediction (parallel)",
+                        fn=lambda: snapshot_holder.__setitem__(
+                            "snapshot", fetch_space_weather_snapshot()
+                        ),
+                    )
+                    snapshot = snapshot_holder.get("snapshot")
+                    if not ok or snapshot is None:
+                        raise RuntimeError("Impact prediction fetch failed (see step log).")
+
+                    st.session_state["impact_snapshot"] = snapshot
+                    st.session_state["impact_snapshot_error"] = ""
+                    impact_steps["photon"] = {
+                        "ok": snapshot.photon_event is not None and "photon" not in snapshot.errors,
+                        "error": str(snapshot.errors.get("photon", "")),
+                        "duration_ms": None,
+                        "event": snapshot.photon_event,
+                    }
+                    impact_steps["sep"] = {
+                        "ok": snapshot.sep_event is not None and "sep" not in snapshot.errors,
+                        "error": str(snapshot.errors.get("sep", "")),
+                        "duration_ms": None,
+                        "event": snapshot.sep_event,
+                    }
+                    impact_steps["plasma"] = {
+                        "ok": snapshot.plasma_event is not None and "plasma" not in snapshot.errors,
+                        "error": str(snapshot.errors.get("plasma", "")),
+                        "duration_ms": None,
+                        "event": snapshot.plasma_event,
+                    }
+                    impact_steps["cme"] = {
+                        "ok": snapshot.cme_event is not None and "cme" not in snapshot.errors,
+                        "error": str(snapshot.errors.get("cme", "")),
+                        "duration_ms": None,
+                        "event": snapshot.cme_event,
+                    }
+                    impact_steps["geomagnetic"] = {
+                        "ok": snapshot.geomagnetic_event is not None
+                        and "geomagnetic" not in snapshot.errors,
+                        "error": str(snapshot.errors.get("geomagnetic", "")),
+                        "duration_ms": None,
+                        "event": snapshot.geomagnetic_event,
+                    }
+                    impact_steps["last_built_utc"] = started_utc.strftime(
+                        "%Y-%m-%d %H:%M:%S UTC"
+                    )
+                    status.update(
+                        label="Impact Predictions updated.", state="complete", expanded=False
+                    )
+            except Exception as exc:
+                log_exception(_LOGGER, "Quick action failed: Impact Predictions", exc)
+                st.session_state["impact_snapshot_error"] = str(exc)
+                st.error(f"Impact Predictions failed: {exc}")
+            finally:
+                st.session_state["impact_snapshot_loading"] = False
+
+        # 2) DONKI (button)
+        if fetch_donki_quick_clicked:
+            try:
+                donki_window_days = int(st.session_state.get("donki_window_days", 14))
+                donki_sync_rr = bool(st.session_state.get("donki_sync_rr_window", True))
+                donki_pad_days = int(st.session_state.get("donki_sync_rr_pad_days", 3))
+            except Exception:
+                donki_window_days = 14
+                donki_sync_rr = True
+                donki_pad_days = 3
+
+            if donki_sync_rr and rr_min_utc is not None and rr_max_utc is not None:
+                start_dt = (rr_min_utc - pd.Timedelta(days=int(donki_pad_days))).date()
+                end_dt = (rr_max_utc + pd.Timedelta(days=int(donki_pad_days))).date()
+                max_days = 30
+                if (pd.Timestamp(end_dt) - pd.Timestamp(start_dt)) > pd.Timedelta(days=max_days):
+                    start_dt = (pd.Timestamp(end_dt) - pd.Timedelta(days=max_days)).date()
+                start_donki, end_donki = start_dt.isoformat(), end_dt.isoformat()
+            else:
+                start_donki, end_donki = _donki_default_range(int(donki_window_days))
+
+            with st.status(
+                "Fetching NASA DONKI datasets…", state="running", expanded=True
+            ) as status:
+                ok = _run_space_data_step(
+                    _space_data_step_runner_state(),
+                    step_id="donki_fetch",
+                    label="DONKI: Fetch datasets",
+                    fn=lambda: _fetch_donki_datasets(donki_state, start_donki, end_donki),
+                    meta={"start_date": str(start_donki), "end_date": str(end_donki)},
+                )
+                if ok:
+                    status.update(
+                        label="DONKI datasets updated.", state="complete", expanded=False
+                    )
+                else:
+                    status.update(
+                        label="DONKI fetch failed (see step log).",
+                        state="error",
+                        expanded=True,
+                    )
+
+        # 3) NOAA Space Weather (button): SWPC + NOAA feeds
+        if fetch_noaa_space_weather_clicked:
+            scope = str(st.session_state.get("noaa_fetch_scope", "Core"))
+            keys_to_fetch: Optional[Sequence[str]] = (
+                NOAA_FAST_KEYS
+                if scope == "Today (fast)"
+                else (NOAA_CORE_KEYS if scope == "Core" else None)
+            )
+            with st.status(
+                "Fetching NOAA Space Weather (SWPC + NOAA feeds)…",
+                state="running",
+                expanded=True,
+            ) as status:
+                ok_swpc = _run_space_data_step(
+                    _space_data_step_runner_state(),
+                    step_id="swpc_fetch",
+                    label="SWPC: Fetch Kp + F10.7",
+                    fn=lambda: _fetch_space_weather_datasets(space_state),
+                )
+                ok_noaa = _run_space_data_step(
+                    _space_data_step_runner_state(),
+                    step_id="noaa_fetch",
+                    label="NOAA: Fetch feeds (cache-first)",
+                    fn=lambda: _load_noaa_space_datasets(
+                        noaa_state, keys=keys_to_fetch, use_cache=True
+                    ),
+                    meta={"scope": scope, "keys": list(keys_to_fetch) if keys_to_fetch is not None else None},
+                )
+                if ok_swpc and ok_noaa:
+                    status.update(
+                        label="NOAA Space Weather updated.", state="complete", expanded=False
+                    )
+                else:
+                    status.update(
+                        label="NOAA Space Weather fetch had errors (see step log).",
+                        state="error",
+                        expanded=True,
+                    )
+
+        st.markdown("---")
+        st.markdown("### 4) 📊 Gauges, plots & analysis (dashboard)")
+        st.caption(
+            "Below: dashboards for **Predictions**, **NASA DONKI**, and **NOAA Space Weather** with concise explanations for each metric."
+        )
         
         # =====================================================================
         # IMPACT PREDICTION SECTION - Expected hit times for Bogotá, Colombia
@@ -13308,66 +13509,7 @@ that predicts cognitive performance based on:
                     impact_steps["last_built_utc"] = now_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
                     st.session_state["impact_snapshot_error"] = ""
 
-                col_run_all, col_last, col_clear = st.columns([1, 2, 1])
-                with col_run_all:
-                    if st.button("🔄 Fetch Impact Predictions", key="fetch_impact_predictions"):
-                        st.session_state["impact_snapshot_loading"] = True
-                        started_utc = pd.Timestamp.utcnow()
-                        try:
-                            with st.spinner("Calculating arrival times (parallel fetch)…"):
-                                snapshot_holder: Dict[str, Any] = {"snapshot": None}
-                                ok = _run_space_data_step(
-                                    _space_data_step_runner_state(),
-                                    step_id="impact_run_all",
-                                    label="Impact Predictions: Fetch Impact Predictions (parallel)",
-                                    fn=lambda: snapshot_holder.__setitem__(
-                                        "snapshot", fetch_space_weather_snapshot()
-                                    ),
-                                )
-                                snapshot = snapshot_holder.get("snapshot")
-                                if not ok or snapshot is None:
-                                    raise RuntimeError("Impact prediction fetch failed (see step log).")
-                            st.session_state["impact_snapshot"] = snapshot
-                            st.session_state["impact_snapshot_error"] = ""
-
-                            # Populate step state from the snapshot so users can see which sub-step failed.
-                            impact_steps["photon"] = {
-                                "ok": snapshot.photon_event is not None and "photon" not in snapshot.errors,
-                                "error": str(snapshot.errors.get("photon", "")),
-                                "duration_ms": None,
-                                "event": snapshot.photon_event,
-                            }
-                            impact_steps["sep"] = {
-                                "ok": snapshot.sep_event is not None and "sep" not in snapshot.errors,
-                                "error": str(snapshot.errors.get("sep", "")),
-                                "duration_ms": None,
-                                "event": snapshot.sep_event,
-                            }
-                            impact_steps["plasma"] = {
-                                "ok": snapshot.plasma_event is not None and "plasma" not in snapshot.errors,
-                                "error": str(snapshot.errors.get("plasma", "")),
-                                "duration_ms": None,
-                                "event": snapshot.plasma_event,
-                            }
-                            impact_steps["cme"] = {
-                                "ok": snapshot.cme_event is not None and "cme" not in snapshot.errors,
-                                "error": str(snapshot.errors.get("cme", "")),
-                                "duration_ms": None,
-                                "event": snapshot.cme_event,
-                            }
-                            impact_steps["geomagnetic"] = {
-                                "ok": snapshot.geomagnetic_event is not None and "geomagnetic" not in snapshot.errors,
-                                "error": str(snapshot.errors.get("geomagnetic", "")),
-                                "duration_ms": None,
-                                "event": snapshot.geomagnetic_event,
-                            }
-                            impact_steps["last_built_utc"] = started_utc.strftime("%Y-%m-%d %H:%M:%S UTC")
-                        except Exception as exc:
-                            log_exception(_LOGGER, "Manual impact prediction fetch failed", exc)
-                            st.session_state["impact_snapshot_error"] = str(exc)
-                            st.error(f"Failed to fetch impact predictions: {exc}")
-                        finally:
-                            st.session_state["impact_snapshot_loading"] = False
+                col_last, col_clear = st.columns([3, 1])
                 with col_last:
                     snap = st.session_state.get("impact_snapshot")
                     if snap is not None:
@@ -13596,8 +13738,7 @@ that predicts cognitive performance based on:
                         )
                     else:
                         st.info(
-                            "Click **'Fetch Impact Predictions'** to calculate expected arrival times "
-                            "for space weather events and get Polar H10 monitoring recommendations."
+                            "No predictions fetched yet. Use **1) Fetch Prediction** (top of page) to populate arrivals and Polar H10 guidance."
                         )
 
                 st.markdown("---")
@@ -13903,10 +14044,8 @@ that predicts cognitive performance based on:
             flux_df = pd.DataFrame()
             kp_error = False
             if not space_state.get("loaded"):
-                if not bg_status.get("space_weather", {}).get("done", False):
-                    st.info("Fetching space weather in the background… (you can also click **Fetch space weather**).")
-                else:
-                    st.info("Click **Fetch space weather** to populate NOAA SWPC metrics.")
+                # User preference: do not show "click fetch" guidance text here.
+                pass
             else:
                 last_fetch = space_state.get("last_updated")
                 if isinstance(last_fetch, pd.Timestamp):
@@ -14456,9 +14595,8 @@ that predicts cognitive performance based on:
                             st.caption(
                                 "No timestamped entries available for plotting.")
             elif NASA_API_KEY:
-                st.info(
-                    "Click 'Fetch NASA DONKI events' to populate NASA space weather datasets."
-                )
+                # User preference: do not show "click fetch" guidance text here.
+                pass
             else:
                 st.info(
                     "Set NASA_API_KEY in your environment to enable NASA DONKI analytics."
@@ -14779,16 +14917,11 @@ that predicts cognitive performance based on:
                                 kp_df_view = pd.DataFrame(kp_rows)
                                 st.dataframe(kp_df_view)
                             st.caption(
-                                "Source: SpaceWeatherLive — scraped UI snapshot; if scraping failed, values were extracted by OpenAI from the page HTML."
+                                "Source: SpaceWeatherLive — scraped UI snapshot."
                             )
                         else:
                             st.info("No SpaceWeatherLive data available.")
 
-            st.markdown("### Correlations (disabled in Space Data)")
-            st.info(
-                "This Space Data dashboard is intentionally **data-only**. "
-                "HRV↔space-weather correlations/ML have been decommissioned to keep this tab stable and independent."
-            )
             _DECOMMISSIONED_SPACE_WEATHER_CORR_BLOCK = '''
             st.markdown("### HRV window metrics vs. planetary K-index")
             st.caption(
@@ -15858,12 +15991,6 @@ that predicts cognitive performance based on:
                             )
             except Exception:
                 pass
-            st.divider()
-            st.markdown("##### Correlations (decommissioned)")
-            st.info(
-                "Correlation workflows were intentionally removed from this unified Space Data dashboard. "
-                "This keeps external data fetch/render stable and independent from HRV processing."
-            )
             _DECOMMISSIONED_NOAA_CORR_BLOCK = '''
             st.markdown("##### HRV correlation analysis")
             if noaa_windowed_df.empty:
