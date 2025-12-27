@@ -146,33 +146,78 @@ def rr_from_hr(hr_series: pd.Series, min_rr: float = 300, max_rr: float = 2000) 
 
 
 def compute_time_domain_metrics(rr_intervals: np.ndarray) -> Dict[str, float]:
+	"""Compute comprehensive time-domain HRV metrics.
+
+	Metrics computed (Task Force 1996, Shaffer & Ginsberg 2017):
+	- Statistical: mean_nni, sdnn, median_nni, mad_nni, cvnn
+	- Heart rate: mean_hr, std_hr, min_hr, max_hr, hr_range
+	- Successive differences: rmssd, sdsd, cvsd
+	- Threshold crossings: nn50, pnn50, nn20, pnn20, nn10, pnn10
+	- Derived: ln_rmssd (natural log), rmssd_cv
+
+	References:
+	- Task Force ESC/NASPE (1996). Eur Heart J 17:354-381.
+	- Shaffer F, Ginsberg JP (2017). Front Public Health 5:258.
+	"""
 	if rr_intervals.size == 0:
 		return {}
 	metrics: Dict[str, float] = {}
+	
+	# Basic statistical measures
 	metrics["mean_nni"] = float(np.mean(rr_intervals))
 	metrics["sdnn"] = float(np.std(rr_intervals, ddof=1))
 	metrics["median_nni"] = float(np.median(rr_intervals))
 	metrics["mad_nni"] = float(np.median(np.abs(rr_intervals - metrics["median_nni"])))
 	metrics["cvnn"] = float((metrics["sdnn"] / metrics["mean_nni"]) * 100) if metrics["mean_nni"] > 0 else 0.0
+	metrics["range_nni"] = float(np.max(rr_intervals) - np.min(rr_intervals))
+	
+	# Heart rate derived measures
 	hr_values = 60000.0 / rr_intervals
 	metrics["mean_hr"] = float(np.mean(hr_values))
 	metrics["std_hr"] = float(np.std(hr_values, ddof=1))
 	metrics["min_hr"] = float(np.min(hr_values))
 	metrics["max_hr"] = float(np.max(hr_values))
+	metrics["hr_range"] = float(np.max(hr_values) - np.min(hr_values))
+	
 	if rr_intervals.size > 1:
 		rr_diff = np.diff(rr_intervals)
-		metrics["rmssd"] = float(np.sqrt(np.mean(rr_diff ** 2)))
+		rmssd_val = float(np.sqrt(np.mean(rr_diff ** 2)))
+		metrics["rmssd"] = rmssd_val
 		metrics["sdsd"] = float(np.std(rr_diff, ddof=1))
 		mean_abs = float(np.mean(np.abs(rr_diff)))
 		metrics["cvsd"] = float((metrics["sdsd"] / mean_abs) * 100) if mean_abs > 0 else 0.0
+		
+		# Natural log of RMSSD - commonly used in research for normalization
+		# Reference: Plews DJ et al. (2013). Int J Sports Physiol Perform.
+		metrics["ln_rmssd"] = float(np.log(rmssd_val)) if rmssd_val > 0 else 0.0
+		
+		# RMSSD coefficient of variation (normalized RMSSD)
+		metrics["rmssd_cv"] = float((rmssd_val / metrics["mean_nni"]) * 100) if metrics["mean_nni"] > 0 else 0.0
+		
+		# Standard threshold crossings
 		nn50 = int(np.sum(np.abs(rr_diff) > 50.0))
 		metrics["nn50"] = float(nn50)
 		metrics["pnn50"] = float((nn50 / rr_diff.size) * 100.0)
+		
 		nn20 = int(np.sum(np.abs(rr_diff) > 20.0))
 		metrics["nn20"] = float(nn20)
 		metrics["pnn20"] = float((nn20 / rr_diff.size) * 100.0)
+		
+		# Additional thresholds (pNN10, pNN30) for finer granularity
+		# Reference: Mietus JE et al. (2002). Heart rhythm.
+		nn10 = int(np.sum(np.abs(rr_diff) > 10.0))
+		metrics["nn10"] = float(nn10)
+		metrics["pnn10"] = float((nn10 / rr_diff.size) * 100.0)
+		
+		nn30 = int(np.sum(np.abs(rr_diff) > 30.0))
+		metrics["nn30"] = float(nn30)
+		metrics["pnn30"] = float((nn30 / rr_diff.size) * 100.0)
 	else:
-		metrics.update(dict(rmssd=0.0, sdsd=0.0, cvsd=0.0, nn50=0.0, pnn50=0.0, nn20=0.0, pnn20=0.0))
+		metrics.update(dict(
+			rmssd=0.0, sdsd=0.0, cvsd=0.0, ln_rmssd=0.0, rmssd_cv=0.0,
+			nn50=0.0, pnn50=0.0, nn20=0.0, pnn20=0.0, nn10=0.0, pnn10=0.0,
+			nn30=0.0, pnn30=0.0
+		))
 	return metrics
 
 
@@ -274,17 +319,72 @@ def compute_frequency_domain_metrics(
 
 
 def compute_poincare_metrics(rr_intervals: np.ndarray) -> Dict[str, float]:
+	"""Compute Poincaré plot-derived HRV metrics.
+
+	The Poincaré plot (return map) plots RR(n+1) vs RR(n), providing
+	a geometric visualization of heart rate dynamics.
+
+	Metrics computed:
+	- SD1: Standard deviation perpendicular to identity line (short-term variability)
+		   Mathematically equivalent to RMSSD/√2
+	- SD2: Standard deviation along identity line (long-term variability)
+		   Related to SDNN and reflects both short and long-term changes
+	- SD1/SD2 ratio: Short-to-long-term variability ratio
+	- SD2/SD1 ratio: Cardiac Sympathetic Index (CSI) - reflects sympathovagal balance
+	- Ellipse area: S = π × SD1 × SD2 (dispersion measure)
+	- CVI (Cardiac Vagal Index): log10(SD1 × SD2) - vagal modulation
+	- CSI (Cardiac Sympathetic Index): SD2/SD1 - sympathetic modulation
+
+	References:
+	- Tulppo MP et al. (1996). Am J Physiol. 271:H244-H252.
+	- Toichi M et al. (1997). J Auton Nerv Syst. 62:79-84.
+	- Brennan M et al. (2001). IEEE Trans Biomed Eng. 48:1342-1347.
+	"""
 	if rr_intervals.size < 2:
 		return {}
 	rr1 = rr_intervals[:-1]
 	rr2 = rr_intervals[1:]
 	diff = rr2 - rr1
 	sum_rr = rr2 + rr1
-	sd1 = float(np.std(diff) / np.sqrt(2.0))
-	sd2 = float(np.std(sum_rr) / np.sqrt(2.0))
-	sd1_sd2_ratio = float(sd2 / sd1) if sd1 > 0 else 0.0
+	
+	# Standard Poincaré metrics
+	sd1 = float(np.std(diff, ddof=1) / np.sqrt(2.0))
+	sd2 = float(np.std(sum_rr, ddof=1) / np.sqrt(2.0))
+	
+	# Ratios
+	sd1_sd2_ratio = float(sd1 / sd2) if sd2 > 0 else 0.0
+	sd2_sd1_ratio = float(sd2 / sd1) if sd1 > 0 else 0.0
+	
+	# Ellipse area
 	ellipse_area = float(np.pi * sd1 * sd2) if sd1 > 0 and sd2 > 0 else 0.0
-	return {"sd1": sd1, "sd2": sd2, "sd1_sd2_ratio": sd1_sd2_ratio, "ellipse_area": ellipse_area}
+	
+	# Cardiac Vagal Index (CVI) - Toichi et al. (1997)
+	# CVI = log10(SD1 × SD2) - reflects overall vagal modulation
+	cvi = float(np.log10(sd1 * sd2)) if sd1 > 0 and sd2 > 0 else 0.0
+	
+	# Cardiac Sympathetic Index (CSI) - Toichi et al. (1997)
+	# CSI = SD2/SD1 - higher values indicate sympathetic dominance
+	csi = sd2_sd1_ratio
+	
+	# Modified CSI (normalized, bounded 0-10 for practical use)
+	csi_modified = float(min(10.0, csi))
+	
+	# Sample statistics for the plot
+	mean_rr1 = float(np.mean(rr1))
+	mean_rr2 = float(np.mean(rr2))
+	correlation = float(np.corrcoef(rr1, rr2)[0, 1]) if rr1.size > 2 else 0.0
+	
+	return {
+		"sd1": sd1,
+		"sd2": sd2,
+		"sd1_sd2_ratio": sd1_sd2_ratio,
+		"sd2_sd1_ratio": sd2_sd1_ratio,
+		"ellipse_area": ellipse_area,
+		"cvi": cvi,  # Cardiac Vagal Index
+		"csi": csi,  # Cardiac Sympathetic Index
+		"csi_modified": csi_modified,
+		"poincare_correlation": correlation,
+	}
 
 
 def compute_dfa_metrics(rr_intervals: np.ndarray) -> Dict[str, float]:
@@ -406,6 +506,165 @@ def compute_comprehensive_hrv(
 			)
 			results.update(norm_metrics)
 	return results
+
+
+def compute_long_term_metrics(
+	rr_intervals: np.ndarray,
+	*,
+	segment_duration_ms: float = 300000.0,  # 5 minutes default
+) -> Dict[str, float]:
+	"""Compute long-term HRV metrics for extended recordings (≥1 hour).
+
+	These metrics are designed for 24-hour Holter recordings but can be
+	applied to any recording longer than ~1 hour that can be segmented
+	into 5-minute epochs.
+
+	Metrics computed:
+	- SDANN: Standard deviation of average NN intervals in each 5-min segment
+			 Reflects circadian/ultradian rhythms and long-term variability
+	- SDNNi: Mean of the standard deviations of NN intervals in all segments
+			 Reflects short-term variability averaged over long recording
+	- SDANN/SDNNi ratio: Long-term vs short-term variability ratio
+
+	Reference: Task Force ESC/NASPE (1996). Eur Heart J 17:354-381.
+
+	Args:
+		rr_intervals: RR intervals in milliseconds (continuous series).
+		segment_duration_ms: Duration of each segment in ms (default 5 min).
+
+	Returns:
+		Dictionary with SDANN, SDNNi, and related metrics.
+	"""
+	total_duration_ms = float(np.sum(rr_intervals))
+	
+	# Need at least 2 segments to compute SDANN
+	if total_duration_ms < 2 * segment_duration_ms:
+		return {
+			"sdann": 0.0,
+			"sdnni": 0.0,
+			"sdann_sdnni_ratio": 0.0,
+			"n_segments": 0.0,
+			"total_duration_hours": total_duration_ms / 3600000.0,
+		}
+	
+	# Segment the recording into epochs
+	segment_means: List[float] = []
+	segment_stds: List[float] = []
+	
+	cumsum_ms = np.cumsum(rr_intervals)
+	segment_start_idx = 0
+	segment_start_ms = 0.0
+	
+	for idx in range(len(cumsum_ms)):
+		segment_end_ms = cumsum_ms[idx]
+		if segment_end_ms - segment_start_ms >= segment_duration_ms:
+			# Complete segment found
+			segment_rr = rr_intervals[segment_start_idx : idx + 1]
+			if segment_rr.size >= 30:  # Minimum beats per segment
+				segment_means.append(float(np.mean(segment_rr)))
+				if segment_rr.size > 1:
+					segment_stds.append(float(np.std(segment_rr, ddof=1)))
+			# Start new segment
+			segment_start_idx = idx + 1
+			segment_start_ms = segment_end_ms
+	
+	n_segments = len(segment_means)
+	if n_segments < 2:
+		return {
+			"sdann": 0.0,
+			"sdnni": 0.0,
+			"sdann_sdnni_ratio": 0.0,
+			"n_segments": float(n_segments),
+			"total_duration_hours": total_duration_ms / 3600000.0,
+		}
+	
+	# SDANN: SD of segment means
+	sdann = float(np.std(segment_means, ddof=1))
+	
+	# SDNNi: Mean of segment SDs
+	sdnni = float(np.mean(segment_stds)) if segment_stds else 0.0
+	
+	# Ratio
+	ratio = float(sdann / sdnni) if sdnni > 0 else 0.0
+	
+	return {
+		"sdann": sdann,
+		"sdnni": sdnni,
+		"sdann_sdnni_ratio": ratio,
+		"n_segments": float(n_segments),
+		"total_duration_hours": total_duration_ms / 3600000.0,
+	}
+
+
+def compute_ultra_short_metrics(
+	rr_intervals: np.ndarray,
+	*,
+	duration_seconds: int = 60,
+) -> Dict[str, float]:
+	"""Compute HRV metrics validated for ultra-short recordings (<5 min).
+
+	Ultra-short HRV analysis (1-3 minutes) uses specific metrics that have
+	been validated against standard 5-minute recordings.
+
+	Validated ultra-short metrics (Shaffer & Ginsberg 2017; Munoz et al. 2015):
+	- RMSSD: Remains valid down to 10-second windows
+	- ln(RMSSD): Log-transformed RMSSD for normalization
+	- pNN50: Valid for ≥1 minute recordings
+	- SD1: Equivalent to RMSSD/√2, valid for ultra-short
+
+	NOT recommended for ultra-short:
+	- SDNN: Requires ≥5 minutes for stability
+	- Frequency domain: Requires ≥2 minutes for LF, ≥1 min for HF
+
+	Args:
+		rr_intervals: RR intervals in milliseconds.
+		duration_seconds: Actual recording duration in seconds.
+
+	Returns:
+		Dictionary with ultra-short-validated metrics and quality flags.
+	"""
+	if rr_intervals.size < 10:
+		return {
+			"uss_rmssd": 0.0,
+			"uss_ln_rmssd": 0.0,
+			"uss_pnn50": 0.0,
+			"uss_sd1": 0.0,
+			"uss_mean_hr": 0.0,
+			"uss_quality": "insufficient_data",
+		}
+	
+	# Compute validated ultra-short metrics
+	rr_diff = np.diff(rr_intervals)
+	rmssd = float(np.sqrt(np.mean(rr_diff ** 2))) if rr_diff.size > 0 else 0.0
+	ln_rmssd = float(np.log(rmssd)) if rmssd > 0 else 0.0
+	
+	nn50 = int(np.sum(np.abs(rr_diff) > 50.0))
+	pnn50 = float((nn50 / rr_diff.size) * 100.0) if rr_diff.size > 0 else 0.0
+	
+	# SD1 from Poincaré (equivalent to RMSSD/√2)
+	sd1 = float(np.std(rr_diff, ddof=1) / np.sqrt(2.0)) if rr_diff.size > 1 else 0.0
+	
+	# Mean HR
+	mean_hr = float(60000.0 / np.mean(rr_intervals)) if np.mean(rr_intervals) > 0 else 0.0
+	
+	# Quality assessment
+	if duration_seconds < 30:
+		quality = "very_short"
+	elif duration_seconds < 60:
+		quality = "short"
+	elif duration_seconds < 180:
+		quality = "moderate"
+	else:
+		quality = "good"
+	
+	return {
+		"uss_rmssd": rmssd,
+		"uss_ln_rmssd": ln_rmssd,
+		"uss_pnn50": pnn50,
+		"uss_sd1": sd1,
+		"uss_mean_hr": mean_hr,
+		"uss_quality": quality,
+	}
 
 
 def compute_windowed_hrv(
