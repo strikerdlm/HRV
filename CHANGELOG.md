@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.8.68] - 2025-12-27
 
 ### Added
+- **Tab Persistence Across Reruns** (`app/app.py`): Active tab is now preserved when clicking compute/analyze buttons or triggering other reruns. The app stays on the current tab instead of automatically returning to Overview, improving workflow continuity during analysis.
+
 - **Modern HRV Progress Tracker** (`app/hrv_progress.py`): New module providing detailed, real-time progress tracking for all HRV computations. Features include:
   - **Visual step-by-step progress** with animated status indicators (pending, running, complete, error)
   - **Live elapsed time tracking** per step and per sub-step
