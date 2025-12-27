@@ -7596,12 +7596,6 @@ def main() -> None:
             gpu_config = None
 
         st.sidebar.markdown("---")
-        st.sidebar.subheader("AI interpretation")
-        st.sidebar.caption(
-            "OpenAI/Agents analysis is **on-demand** and only runs from the **Export & Download** tab."
-        )
-
-        st.sidebar.markdown("---")
         st.sidebar.subheader("Patient profile (covariate adjustment)")
         # Default to active user profile context when available.
         try:
@@ -14019,7 +14013,7 @@ that predicts cognitive performance based on:
                         )
 
         st.markdown("---")
-        st.markdown("### 4) 📊 Gauges, plots & analysis (dashboard)")
+        st.markdown("### 📊 Gauges, plots & analysis (dashboard)")
         st.caption(
             "Below: dashboards for **Predictions**, **NASA DONKI**, and **NOAA Space Weather** with concise explanations for each metric."
         )
