@@ -11,6 +11,12 @@
 # This is especially important on Windows/OneDrive where filesystem events can be noisy.
 fileWatcherType = "none"
 
+# WebSocket ping/timeout settings to prevent automatic reconnection/rerun loops.
+# Increase ping interval to prevent frequent disconnects (default is 20s in older Streamlit).
+# This addresses the ~7 second rerun issue caused by WebSocket reconnections.
+websocketPingTimeout = 300
+websocketPingInterval = 60
+
 # Prevent Streamlit from treating data/cache/log writes as source changes.
 # These paths are resolved relative to the working directory. For the documented
 # launch commands (run from repo root), these entries correctly target folders
