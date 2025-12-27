@@ -5,6 +5,25 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.67] - 2025-12-27
+
+### Added
+- **Modern Space Weather Progress Indicators** (`app/space_weather_progress.py`): New module providing detailed, real-time progress tracking for all space weather fetch operations. Features include:
+  - **Visual step-by-step progress** with animated status indicators (pending, running, complete, error, timeout)
+  - **Live elapsed time tracking** per operation and per step
+  - **Progress bar** showing overall completion percentage
+  - **Error details** displayed inline with each step
+  - **Modern dark-themed UI** with CSS animations for a professional appearance
+  - **Pre-configured trackers** for Impact Predictions, NASA DONKI, and NOAA Space Weather operations
+
+### Changed
+- **Impact Predictions fetch now shows real-time progress** (`app/app.py`, `app/space_weather_impact.py`): Clicking "Fetch Prediction" now displays a detailed progress panel showing the status of each data source (X-ray, SEP, Plasma, CME, Geomagnetic) as they complete in parallel.
+- **NASA DONKI fetch now shows step-by-step progress** (`app/app.py`): Each DONKI endpoint (CME, Flares, GST, etc.) displays its fetch status, timing, and any errors in real-time.
+- **NOAA Space Weather fetch now shows granular progress** (`app/app.py`): The SWPC Kp/F10.7 fetch and each NOAA dataset fetch are tracked individually with live status updates.
+
+### Fixed
+- **Space weather operations no longer appear to hang** (`app/app.py`): The new progress indicators provide continuous feedback during network operations, preventing the "blank page" experience when fetching data takes longer than expected. Users can now see exactly which data source is being fetched and how long each operation takes.
+
 ## [1.8.66] - 2025-12-27
 
 ### Added
