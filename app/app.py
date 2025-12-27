@@ -7094,6 +7094,12 @@ def main() -> None:
     if "_app_session_ready" not in st.session_state:
         st.session_state["_app_session_ready"] = True
     
+    # WORKAROUND: Skip circadian tab by default to prevent infinite rerun loop
+    # The circadian tab has an issue where it triggers app restarts after saving settings
+    # Users can re-enable via Developer Tools if needed
+    if "_skip_circadian_tab" not in st.session_state:
+        st.session_state["_skip_circadian_tab"] = True
+    
     _inject_sessioninfo_suppressor()
 
     # Show error details in UI
@@ -7188,15 +7194,16 @@ def main() -> None:
         
         st.markdown("---")
         st.markdown("**🛠️ Tab Troubleshooting**")
+        # Default to True to skip problematic circadian tab until fixed
         skip_circadian = st.checkbox(
             "Skip Circadian tab",
-            value=st.session_state.get("_skip_circadian_tab", False),
+            value=st.session_state.get("_skip_circadian_tab", True),
             key="_skip_circadian_checkbox",
             help="Temporarily disable Circadian tab to diagnose render hangs.",
         )
         st.session_state["_skip_circadian_tab"] = skip_circadian
         if skip_circadian:
-            st.warning("⚠️ Circadian tab is disabled. Uncheck to re-enable.")
+            st.info("ℹ️ Circadian tab skipped (prevents rerun loop). Uncheck to re-enable.")
         
         st.caption("Debug logs: `logs/app.log`, `logs/errors.log`, `logs/streamlit.log`")
 
@@ -7365,61 +7372,17 @@ def main() -> None:
 			font-size: 16px;
 			color: #413F3D;
 		}
+		/* CSS-only toast hiding (no JavaScript to avoid DOM manipulation loops) */
+		div[data-testid="stToast"],
+		div[data-testid="stToastContainer"],
+		div[data-baseweb="toast"],
+		div[data-baseweb="toaster"] {
+			display: none !important;
+			visibility: hidden !important;
+			opacity: 0 !important;
+			pointer-events: none !important;
+		}
 		</style>
-		<script>
-		// ================================================================
-		// JavaScript: Actively hide toast notifications as they appear
-		// This catches toasts that CSS might miss due to timing
-		// ================================================================
-		(function() {
-			'use strict';
-			
-			function hideToasts() {
-				// Target all possible toast selectors
-				var selectors = [
-					'div[data-testid="stToast"]',
-					'div[data-testid="stToastContainer"]',
-					'div[data-baseweb="toast"]',
-					'div[data-baseweb="toaster"]',
-					'div[role="alert"]'
-				];
-				
-				selectors.forEach(function(selector) {
-					var elements = document.querySelectorAll(selector);
-					elements.forEach(function(el) {
-						// Check if it contains "Bad message" or "SessionInfo"
-						var text = el.textContent || el.innerText || '';
-						if (text.includes('Bad message') || text.includes('SessionInfo')) {
-							el.style.display = 'none';
-							el.style.visibility = 'hidden';
-							el.style.opacity = '0';
-							el.remove();
-						}
-					});
-				});
-			}
-			
-			// Run immediately
-			hideToasts();
-			
-			// Set up MutationObserver to catch new toasts
-			var observer = new MutationObserver(function(mutations) {
-				hideToasts();
-			});
-			
-			// Start observing when DOM is ready
-			if (document.body) {
-				observer.observe(document.body, { childList: true, subtree: true });
-			} else {
-				document.addEventListener('DOMContentLoaded', function() {
-					observer.observe(document.body, { childList: true, subtree: true });
-				});
-			}
-			
-			// Also run periodically as a fallback
-			setInterval(hideToasts, 500);
-		})();
-		</script>
 		""",
         unsafe_allow_html=True,
     )
@@ -8413,8 +8376,10 @@ def main() -> None:
                 files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
             except TypeError:
                 files_hash = cache_mgr.compute_all_uploads_hash(datasets)
+            _max_dev_safe = float(max_dev.iloc[0]) if hasattr(max_dev, 'iloc') else float(max_dev)
+            _median_win_safe = int(median_win.iloc[0]) if hasattr(median_win, 'iloc') else int(median_win)
             settings_hash = compute_settings_hash(
-                str(method), float(max_dev), int(median_win), win, step
+                str(method), _max_dev_safe, _median_win_safe, win, step
             )
             state.mark_complete(files_hash, settings_hash, cleaning=True)
             cache_mgr.update_computation_state(state)
@@ -8582,8 +8547,10 @@ def main() -> None:
                     files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
                 except TypeError:
                     files_hash = cache_mgr.compute_all_uploads_hash(datasets)
+                _max_dev_safe3 = float(max_dev.iloc[0]) if hasattr(max_dev, 'iloc') else float(max_dev)
+                _median_win_safe3 = int(median_win.iloc[0]) if hasattr(median_win, 'iloc') else int(median_win)
                 settings_hash = compute_settings_hash(
-                    str(method), float(max_dev), int(median_win), win, step
+                    str(method), _max_dev_safe3, _median_win_safe3, win, step
                 )
                 state.mark_complete(files_hash, settings_hash, windowed=True)
                 cache_mgr.update_computation_state(state)
@@ -8973,8 +8940,10 @@ def main() -> None:
                 files_hash = cache_mgr.compute_all_uploads_hash(datasets, profile_id=profile_id)
             except TypeError:
                 files_hash = cache_mgr.compute_all_uploads_hash(datasets)
+            _max_dev_safe4 = float(max_dev.iloc[0]) if hasattr(max_dev, 'iloc') else float(max_dev)
+            _median_win_safe4 = int(median_win.iloc[0]) if hasattr(median_win, 'iloc') else int(median_win)
             settings_hash = compute_settings_hash(
-                str(method), float(max_dev), int(median_win), win, step
+                str(method), _max_dev_safe4, _median_win_safe4, win, step
             )
             state.mark_complete(files_hash, settings_hash, comprehensive=True, windowed=True, cleaning=True)
             cache_mgr.update_computation_state(state)
@@ -9109,7 +9078,7 @@ def main() -> None:
                 }
             }, true); // Use capture phase for reliable detection
             
-            // Restore active tab after DOM updates
+            // Restore active tab ONCE on initial load only (no MutationObserver to prevent loops)
             function restoreTab() {
                 const savedIndex = sessionStorage.getItem(tabKey);
                 if (savedIndex !== null) {
@@ -9126,27 +9095,15 @@ def main() -> None:
                 }
             }
             
-            // Try restoration with multiple attempts (DOM may not be ready immediately)
+            // Try restoration ONCE after initial page load (no continuous observation)
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', function() {
-                    setTimeout(restoreTab, 100);
+                    setTimeout(restoreTab, 200);
                 });
             } else {
-                setTimeout(restoreTab, 100);
+                setTimeout(restoreTab, 200);
             }
-            
-            // Also restore after Streamlit reruns (observe for tab container changes)
-            const observer = new MutationObserver(function() {
-                setTimeout(restoreTab, 50);
-            });
-            
-            if (document.body) {
-                observer.observe(document.body, { 
-                    childList: true, 
-                    subtree: true,
-                    attributes: false // Only watch for new elements, not attribute changes
-                });
-            }
+            // NOTE: Removed MutationObserver to prevent potential rerun loops
         })();
         </script>
         """,
@@ -20203,8 +20160,11 @@ that predicts cognitive performance based on:
                 },
             )
             try:
+                # Handle both scalar and Series inputs safely (FutureWarning fix)
+                _max_dev_val = float(max_dev.iloc[0]) if hasattr(max_dev, 'iloc') else float(max_dev)
+                _median_win_val = int(median_win.iloc[0]) if hasattr(median_win, 'iloc') else int(median_win)
                 settings_hash = compute_settings_hash(
-                    str(method), float(max_dev), int(median_win), win, step
+                    str(method), _max_dev_val, _median_win_val, win, step
                 )
             except Exception:
                 settings_hash = "unknown"
@@ -21342,8 +21302,11 @@ that predicts cognitive performance based on:
                 {"signature": "", "markdown": "", "generated_at_utc": "", "params": {}},
             )
             try:
+                # Handle both scalar and Series inputs safely (FutureWarning fix)
+                _max_dev_val2 = float(max_dev.iloc[0]) if hasattr(max_dev, 'iloc') else float(max_dev)
+                _median_win_val2 = int(median_win.iloc[0]) if hasattr(median_win, 'iloc') else int(median_win)
                 analysis_settings_hash = compute_settings_hash(
-                    str(method), float(max_dev), int(median_win), win, step
+                    str(method), _max_dev_val2, _median_win_val2, win, step
                 )
             except Exception:
                 analysis_settings_hash = "unknown"
@@ -21991,6 +21954,15 @@ that predicts cognitive performance based on:
         )
         _log_tab("refs", "end")
     _LOGGER.info("UI: main_render_complete | total_elapsed=%.0fms", (time.perf_counter() - _render_start_time) * 1000)
+    
+    # Mark render as complete and show user-visible indicator
+    # This helps users know the app has finished processing
+    st.session_state["_last_render_complete"] = time.time()
+    
+    # Show completion indicator in sidebar only if we have HRV data
+    if len(datasets) > 0:
+        with st.sidebar:
+            st.success("✅ Analysis Ready")
 
 
 def _fisher_ci(r: float, n: int, alpha: float = 0.05) -> Tuple[float, float]:
