@@ -17579,6 +17579,26 @@ that predicts cognitive performance based on:
         _noaa_loading_msg = st.empty()
         st.markdown("*Real-time solar and geomagnetic data (data-only; correlations removed)*")
 
+        # Live visibility into background/async space-data work so "Running..." is explained
+        fetch_state = _poll_background_fetch()
+        any_running = any(not info.get("done", False) for info in fetch_state.values())
+        if any_running:
+            with st.status("Background space-data fetch is running…", state="running", expanded=True) as status:
+                for key, info in fetch_state.items():
+                    label = {
+                        "space_weather": "SWPC Kp + F10.7",
+                        "noaa": "NOAA feeds",
+                        "donki": "NASA DONKI",
+                    }.get(key, key)
+                    if info.get("done"):
+                        status.write(f"✅ {label}: done")
+                    elif info.get("error"):
+                        status.write(f"⚠️ {label}: error — {info.get('error')}")
+                    else:
+                        status.write(f"⏳ {label}: fetching…")
+        else:
+            st.caption(f"Background space-data fetch status: idle | Age: {_get_bg_fetch_age_str()}")
+
         with st.expander("🌞 **Understanding Space Weather Metrics**", expanded=False):
             st.markdown("""
 **Solar Activity Indices:**
