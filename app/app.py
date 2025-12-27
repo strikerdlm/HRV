@@ -3693,7 +3693,7 @@ def _render_gpt_high_interpretation(
         return
     title_container = container.container()
     body_container = container.container()
-    title_container.markdown("### GPT-5 High Interpretation")
+    title_container.markdown("### 🤖 GPT-5.2 High Reasoning Analysis")
     if not meta_rows and multi_results_df.empty and windowed_df.empty:
         body_container.info(
             "Run the analysis to enable the GPT-5 interpretation.")
@@ -3763,15 +3763,15 @@ def _render_gpt_high_interpretation(
         )
 
     run_label = (
-        "Generate GPT-5.2 interpretation (code interpreter)"
+        "🚀 Generate Complete Report with GPT-5.2 High Reasoning"
         if not state.get("markdown")
-        else "Regenerate GPT-5.2 interpretation"
+        else "🔄 Regenerate Complete Report with GPT-5.2 High Reasoning"
     )
     run_now = body_container.button(
         run_label,
         key="gpt5_high_generate",
         type="primary",
-        help="Runs OpenAI GPT-5.2 high reasoning with code interpreter. Only runs when you click this button.",
+        help="Sends all HRV analysis results to OpenAI GPT-5.2 with high reasoning effort and code interpreter capabilities. Generates a comprehensive, doctoral-level interpretation report with physiological context, clinical insights, and actionable recommendations.",
     )
     if run_now:
         try:
@@ -20005,7 +20005,25 @@ that predicts cognitive performance based on:
                     help="Keeps Export tab fast by default; enable only when you need GPT/appendix tooling.",
                 )
                 if show_ai_tools:
-                    st.subheader("AI analysis (on-demand)")
+                    st.subheader("🤖 AI Analysis with GPT-5.2 High Reasoning")
+                    
+                    st.markdown("""
+                    **OpenAI Agent Capabilities:**
+                    
+                    The GPT-5.2 high reasoning agent provides comprehensive, doctoral-level analysis of your HRV data including:
+                    
+                    - **Physiological Interpretation**: Deep analysis of HRV metrics in context of autonomic nervous system function
+                    - **Clinical Relevance**: Assessment of cardiovascular health, stress levels, and recovery status
+                    - **Temporal Patterns**: Identification of trends, anomalies, and deviation episodes across time windows
+                    - **Comparative Analysis**: Evaluation against age/sex-adjusted population norms and clinical thresholds
+                    - **Space Weather Correlations**: Integration of space weather data when available (Kp index, solar activity, geomagnetic storms)
+                    - **Machine Learning Insights**: Interpretation of clustering results and pattern recognition
+                    - **Actionable Recommendations**: Evidence-based suggestions for improving HRV and cardiovascular health
+                    - **Scientific Citations**: References to peer-reviewed literature (Task Force 1996, Shaffer & Ginsberg 2017, etc.)
+                    
+                    **How it works**: The agent receives all your HRV analysis results (metrics, windowed data, episodes, ML clusters) 
+                    and generates a comprehensive markdown report with detailed interpretations, context, and recommendations.
+                    """)
 
                     gpt_section = st.container()
                     _render_gpt_high_interpretation(
