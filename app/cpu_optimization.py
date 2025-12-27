@@ -457,7 +457,8 @@ def compute_poincare_fast(rr_intervals: np.ndarray) -> Dict[str, float]:
     sd1 = float(np.std(diff, ddof=1) / sqrt2)
     sd2 = float(np.std(sum_rr, ddof=1) / sqrt2)
     
-    sd1_sd2_ratio = float(sd2 / sd1) if sd1 > 0 else 0.0
+    # sd1_sd2_ratio = SD1/SD2 (consistent with hrv_core.py and gauge thresholds)
+    sd1_sd2_ratio = float(sd1 / sd2) if sd2 > 0 else 0.0
     ellipse_area = float(np.pi * sd1 * sd2)
     
     return {
