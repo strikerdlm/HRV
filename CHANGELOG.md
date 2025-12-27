@@ -22,6 +22,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Python 3.12 Dataclass Compatibility** (`app/app.py`): Removed `slots=True` from `UploadedRR` dataclass to fix `AttributeError: 'NoneType' object has no attribute '__dict__'` when using `from __future__ import annotations` with `@dataclass(slots=True)` in Python 3.12
+- **SD1/SD2 Color Zone Logic** (`app/app.py`): Fixed missing upper bound checks in `_sd1_color` and `_sd2_color` variables that caused incorrect color assignments:
+  - **SD1**: Values >70 ms now correctly show orange (previously incorrectly showed green for any value ≥30)
+  - **SD2**: Values >140 ms now correctly show orange (previously incorrectly showed green for any value ≥60)
+  - Updated interpretation messages to match the 4-zone color scheme (low/reduced/optimal/very high)
+- **JSON Serialization Safety** (`app/app.py`): Added explicit `float()` conversions for Poincaré metrics and `int(round(..., 0))` wrappers to prevent "Object of type function is not JSON serializable" errors
 
 ## [1.8.73] - 2025-12-27
 
