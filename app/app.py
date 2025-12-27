@@ -9861,6 +9861,33 @@ If your HF power is below age-matched norms or you have elevated sympathetic mar
                     _sd1_vals = [m["sd1"] for m in _pc_metrics]
                     _sd2_vals = [m["sd2"] for m in _pc_metrics]
                     _ratio_vals = [m["sd_ratio"] for m in _pc_metrics]
+
+                    # Friendly status chips with emojis + colors
+                    st.markdown("#### 😊 Nonlinear Snapshot (color = status)")
+                    st.markdown(
+                        "- 🟢 Normal   · 🟠 Borderline   · 🔴 Low (consider recovery/supportive actions)"
+                    )
+                    for rec in _pc_metrics:
+                        sd1 = rec["sd1"]
+                        sd2 = rec["sd2"]
+                        r = rec["sd_ratio"]
+
+                        def _chip(val: float, low: float, mid: float) -> str:
+                            if val < low:
+                                return "🔴"
+                            if val < mid:
+                                return "🟠"
+                            return "🟢"
+
+                        sd1_chip = _chip(sd1, 20.0, 30.0)
+                        sd2_chip = _chip(sd2, 40.0, 60.0)
+                        ratio_chip = _chip(r, 0.35, 0.5)
+
+                        st.markdown(
+                            f"- **{rec['source']}** · SD1 {sd1_chip} {sd1:.1f} ms · "
+                            f"SD2 {sd2_chip} {sd2:.1f} ms · SD1/SD2 {ratio_chip} {r:.2f}"
+                        )
+
                     _pc_opt = {
                         "title": {
                             "text": "Poincaré Metrics",
