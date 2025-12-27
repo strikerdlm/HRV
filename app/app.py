@@ -6937,6 +6937,32 @@ def main() -> None:
 
     # Show error details in UI
     st.set_option("client.showErrorDetails", True)
+    
+    # Disable Streamlit stale element dimming globally
+    # This prevents the "faded" appearance during long computations
+    # The page should remain fully visible even during HRV processing
+    st.markdown(
+        """
+        <style>
+        /* Disable stale element dimming globally - keep page fully visible during computations */
+        .stApp .stale,
+        .stApp [data-stale="true"],
+        div[data-testid="stAppViewContainer"] .stale,
+        div[data-testid="stAppViewContainer"] [data-stale="true"],
+        [data-stale="true"],
+        .stale {
+            opacity: 1 !important;
+            filter: none !important;
+            pointer-events: auto !important;
+        }
+        /* Ensure status containers and progress indicators remain visible */
+        [data-testid="stStatusWidget"] {
+            opacity: 1 !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
 
     # ----------------------------------------------------------------------
     # Crew / Mission workspace selection (affects DB + per-subject file storage)
