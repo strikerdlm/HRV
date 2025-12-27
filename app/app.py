@@ -8344,6 +8344,45 @@ def main() -> None:
                 pass
         st.markdown("### 📊 Analysis Overview")
         st.markdown("*Summary of uploaded datasets and computed metrics*")
+
+        # -----------------------------------------------------------------
+        # Build / Version Control (visible on Overview)
+        # -----------------------------------------------------------------
+        try:
+            from version_info import (  # noqa: PLC0415
+                get_app_release_date,
+                get_app_version,
+                get_git_metadata,
+            )
+
+            app_version = get_app_version()
+            release_date = get_app_release_date()
+            git_meta = get_git_metadata()
+            git_dirty = " • dirty" if getattr(git_meta, "is_dirty", False) else ""
+            git_commit_time = getattr(git_meta, "commit_time", "")
+
+            st.markdown(
+                f"""
+                <div class="hrv-palette-card" style="margin: 0 0 12px 0;">
+                    <div style="font-size: 28px; color:#697184;">🧾</div>
+                    <div style="flex: 1;">
+                        <div class="hrv-palette-card__title">Build / Version Control</div>
+                        <div class="hrv-palette-card__value" style="font-size: 14px;">
+                            <b>Version</b>: v{app_version} (release date: {release_date})<br/>
+                            <b>Git</b>: {git_meta.branch} @ {git_meta.short_hash}{git_dirty}<br/>
+                            <b>Last commit time</b>: {git_commit_time}
+                        </div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            with st.expander("📌 Latest CHANGELOG headline", expanded=False):
+                st.code(f"## [{app_version}] - {release_date}")
+        except Exception:
+            # Never block Overview rendering if git/changelog metadata is unavailable.
+            pass
         
         # Data status panel
         if WELCOME_HEADER_AVAILABLE:
