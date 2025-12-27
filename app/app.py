@@ -8160,7 +8160,6 @@ def main() -> None:
         # ==========================================================================
         # Create the modern progress display if available
         total = max(1, len(datasets))
-        _hrv_progress_container = st.empty()
         _hrv_tracker = None
         _metrics_computed = 0
         
@@ -8177,6 +8176,10 @@ def main() -> None:
             state="running" if not _skip_compute else "complete",
         )
         
+        # Create the progress container INSIDE the status container so HTML renders correctly
+        with _status_container:
+            _hrv_progress_container = st.empty()
+        
         if HRV_PROGRESS_AVAILABLE and not _skip_compute:
             # Create comprehensive progress tracker
             _hrv_tracker = create_hrv_analysis_tracker(
@@ -8190,8 +8193,8 @@ def main() -> None:
             )
             _hrv_tracker.start_operation()
             logger.info("HRV Progress tracker created with %d steps", len(_hrv_tracker.step_order))
-            with _status_container:
-                render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True, metrics_computed=0)
+            # Render initial progress state (container is already inside status)
+            render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True, metrics_computed=0)
         elif _skip_compute:
             with _status_container:
                 st.success(f"✅ Using cached results for {total} dataset(s) — no recomputation needed.")
@@ -8243,8 +8246,7 @@ def main() -> None:
             logger.info("🫀 HRV Step: VALIDATE - Checking RR interval bounds...")
             _hrv_tracker.start_step("validate")
             _hrv_tracker.update_substep("validate", "Checking RR interval bounds...")
-            with _status_container:
-                render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+            render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
         
         completed = 0
         for name, up in datasets.items():
@@ -8262,8 +8264,7 @@ def main() -> None:
             if _hrv_tracker:
                 _hrv_tracker.update_substep("validate", f"Validating {name}...")
                 _hrv_tracker.update_progress("validate", completed)
-                with _status_container:
-                    render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+                render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
             
             if apply_clean:
                 # Use cached cleaning when available for performance
@@ -8321,8 +8322,7 @@ def main() -> None:
             # Update progress (modern or legacy)
             if _hrv_tracker:
                 _hrv_tracker.update_progress("validate", completed)
-                with _status_container:
-                    render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+                render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
             elif not _skip_compute:
                 percent = min(100, int(completed * 100 / total))
                 txt_clean.markdown(
@@ -8334,8 +8334,7 @@ def main() -> None:
         if _hrv_tracker:
             logger.info("🫀 HRV Step: VALIDATE - Complete (%d datasets)", completed)
             _hrv_tracker.complete_step("validate")
-            with _status_container:
-                render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+            render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
         
         # Artifact detection/correction steps (only when cleaning is enabled)
         if _hrv_tracker and apply_clean:
@@ -8348,8 +8347,7 @@ def main() -> None:
             _hrv_tracker.update_substep("artifact_correct", "Interpolation complete")
             _hrv_tracker.complete_step("artifact_correct")
             logger.info("🫀 HRV Step: ARTIFACT CORRECTION - Complete")
-            with _status_container:
-                render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+            render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
         
         if not _skip_compute:
             logger.info(
@@ -8395,8 +8393,7 @@ def main() -> None:
             logger.info("🫀 HRV Step: WINDOWED METRICS - Starting (%d datasets)...", total_win)
             _hrv_tracker.start_step("windowed")
             _hrv_tracker.update_substep("windowed", "Creating sliding windows...")
-            with _status_container:
-                render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+            render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
             txt_win.empty()  # Hide legacy
             prog_win.empty()
         else:
@@ -8455,8 +8452,7 @@ def main() -> None:
                     if _hrv_tracker:
                         _hrv_tracker.update_substep("windowed", f"Processing {name}...")
                         _hrv_tracker.update_progress("windowed", done_win)
-                        with _status_container:
-                            render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+                        render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
                     else:
                         txt_win.markdown(f"### Computing windowed metrics... {percent}%")
                         prog_win.progress(percent)
@@ -8483,8 +8479,7 @@ def main() -> None:
                     if _hrv_tracker:
                         _hrv_tracker.update_substep("windowed", f"Loaded cached {name}")
                         _hrv_tracker.update_progress("windowed", done_win)
-                        with _status_container:
-                            render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+                        render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
                     else:
                         txt_win.markdown(f"### Computing windowed metrics... {percent}%")
                         prog_win.progress(percent)
@@ -8493,8 +8488,7 @@ def main() -> None:
                 # Update progress before computation
                 if _hrv_tracker:
                     _hrv_tracker.update_substep("windowed", f"Computing {name} ({win} windows)...")
-                    with _status_container:
-                        render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+                    render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
 
                 wdf = _cached_windowed(
                     up.df,
@@ -8515,8 +8509,7 @@ def main() -> None:
                 percent = min(100, int(done_win * 100 / total_win))
                 if _hrv_tracker:
                     _hrv_tracker.update_progress("windowed", done_win)
-                    with _status_container:
-                        render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+                    render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
                 else:
                     txt_win.markdown(f"### Computing windowed metrics... {percent}%")
                     prog_win.progress(percent)
@@ -8558,8 +8551,7 @@ def main() -> None:
         if _hrv_tracker:
             logger.info("🫀 HRV Step: WINDOWED METRICS - Complete")
             _hrv_tracker.complete_step("windowed")
-            with _status_container:
-                render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+            render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
         else:
             txt_win.markdown("### Computing windowed metrics... 100%")
             prog_win.progress(100)
@@ -8681,8 +8673,7 @@ def main() -> None:
             logger.info("🫀 HRV Step: TIME-DOMAIN METRICS - Starting (%d datasets)...", total_full)
             _hrv_tracker.start_step("time_domain")
             _hrv_tracker.update_substep("time_domain", "Computing SDNN, RMSSD, pNN50...")
-            with _status_container:
-                render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+            render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
             txt_full.empty()
             prog_full.empty()
         else:
@@ -8773,8 +8764,7 @@ def main() -> None:
                 if _hrv_tracker:
                     _hrv_tracker.update_substep("time_domain", f"Computed {name}: {_metrics_computed} metrics")
                     _hrv_tracker.update_progress("time_domain", done_full)
-                    with _status_container:
-                        render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True, metrics_computed=_metrics_computed)
+                    render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True, metrics_computed=_metrics_computed)
                 else:
                     txt_full.markdown(f"### Computing full-recording metrics... {percent}%")
                     prog_full.progress(percent)
@@ -8821,8 +8811,7 @@ def main() -> None:
             logger.info("🫀 HRV Step: FINALIZE - Complete (%d metrics computed)", _metrics_computed)
             _hrv_tracker.complete_step("finalize")
             _hrv_tracker.end_operation()
-            with _status_container:
-                render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=False, metrics_computed=_metrics_computed)
+            render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=False, metrics_computed=_metrics_computed)
             # Update status container to complete state
             logger.info("✅ HRV Processing Complete - Total metrics: %d", _metrics_computed)
             _status_container.update(label="✅ **HRV Processing Complete**", state="complete", expanded=False)
