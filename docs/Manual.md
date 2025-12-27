@@ -1778,7 +1778,9 @@ Interpretation: Normal (>1.04 in healthy adults)
 
 The Space Weather Impact Predictions feature calculates exact arrival times for different categories of solar energy hitting Earth, providing Polar H10 EKG monitoring recommendations optimized for your research on biological effects.
 
-Impact predictions live in the **🌐 Space Data** tab. The dashboard is **manual/on-demand**: click **🔄 Fetch Impact Predictions** to compute updated arrival times. If the network is unavailable, the app will keep showing the last available cached context and surface any fetch errors.
+Impact predictions live in the **🌐 Space Data** tab. The dashboard is **manual/on-demand**: click **🔄 Run all steps (parallel)** to compute updated arrival times. If the network is unavailable, the app will keep showing the last available cached context and surface any fetch errors.
+
+**Debugging note (hangs/freezes):** The Space Data tab now includes a **📋 Space Data step log (debug)** panel that records each fetch step with **duration + error**. If a “run all” action is slow, use the **🧪 Step-by-step (debug hangs)** expander to run each sub-step independently and pinpoint the culprit source.
 
 ### Energy Categories Tracked
 
@@ -1864,8 +1866,10 @@ Ideal time for baseline Polar H10 recording (control data).
 **Step 1: Fetch Predictions**
 
 1. Navigate to **🌐 Space Data** tab
-2. Click **"🔄 Fetch Impact Predictions"** to compute/update arrivals
+2. Click **"🔄 Run all steps (parallel)"** to compute/update arrivals
 3. Wait for data retrieval (~5-10 seconds)
+
+If the fetch is slow or returns partial data, open **🧪 Step-by-step (debug hangs)** and run the specific sub-step (X-rays / protons / solar wind / CME-ENLIL / Kp-Dst). Check **📋 Space Data step log (debug)** for timings and error strings.
 
 **Step 2: Review Arrival Times Table**
 
