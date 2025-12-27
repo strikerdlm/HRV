@@ -1933,6 +1933,12 @@ def _load_noaa_space_datasets(
     Populate the NOAA space datasets in session state.
     """
 
+    _LOGGER.info(
+        "NOAA: fetch start (keys=%s, cache=%s, allow_stale=%s)",
+        list(keys) if keys is not None else "ALL",
+        use_cache,
+        allow_stale_cache,
+    )
     state["loading"] = True
     try:
         # Full scope can be expensive; keep concurrency conservative to
@@ -1962,6 +1968,11 @@ def _load_noaa_space_datasets(
         state["global_corr_labels"] = {}
     finally:
         state["loading"] = False
+    _LOGGER.info(
+        "NOAA: fetch done (bundles=%d, errors=%d)",
+        len(state.get("bundles", {})),
+        len(state.get("errors", {})),
+    )
 
 
 def _load_noaa_space_datasets_with_progress(
@@ -2129,6 +2140,7 @@ def _auto_fetch_space_weather_if_needed(state: Dict[str, Any]) -> None:
     """
     # Check if downloads are enabled in performance settings
     if not is_download_enabled("space_weather_live"):
+        _LOGGER.info("Space Weather: auto-fetch skipped (downloads disabled)")
         state["auto_attempted"] = True
         state["download_disabled"] = True
         return
@@ -2138,15 +2150,29 @@ def _auto_fetch_space_weather_if_needed(state: Dict[str, Any]) -> None:
     state["auto_loading"] = True
     success = False
     try:
+        _LOGGER.info("Space Weather: auto-fetch starting (cache-first bootstrap)")
         _fetch_space_weather_datasets(state)
         success = True
+        _LOGGER.info(
+            "Space Weather: auto-fetch complete (loaded=%s, kp_rows=%d, flux_rows=%d)",
+            state.get("loaded"),
+            len(state.get("kp_df", [])) if isinstance(state.get("kp_df"), pd.DataFrame) else 0,
+            len(state.get("flux_df", [])) if isinstance(state.get("flux_df"), pd.DataFrame) else 0,
+        )
     except Exception as exc:  # pragma: no cover - defensive
         log_exception(_LOGGER, "Automatic space weather bootstrap failed", exc)
         # Bounded single retry with short backoff to tolerate transient network issues
         try:
             time.sleep(0.5)
+            _LOGGER.info("Space Weather: auto-fetch retry after failure")
             _fetch_space_weather_datasets(state)
             success = True
+            _LOGGER.info(
+                "Space Weather: auto-fetch retry complete (loaded=%s, kp_rows=%d, flux_rows=%d)",
+                state.get("loaded"),
+                len(state.get("kp_df", [])) if isinstance(state.get("kp_df"), pd.DataFrame) else 0,
+                len(state.get("flux_df", [])) if isinstance(state.get("flux_df"), pd.DataFrame) else 0,
+            )
         except Exception as retry_exc:  # pragma: no cover - defensive
             log_exception(_LOGGER, "Space weather bootstrap retry failed", retry_exc)
     finally:
@@ -2163,6 +2189,7 @@ def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
     """
     # Check if NOAA downloads are enabled in performance settings
     if not is_download_enabled("noaa_space"):
+        _LOGGER.info("NOAA: auto-preload skipped (downloads disabled)")
         state["auto_attempted"] = True
         state["download_disabled"] = True
         return
@@ -2172,14 +2199,26 @@ def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
     state["auto_loading"] = True
     success = False
     try:
+        _LOGGER.info("NOAA: auto-preload starting (cache-first)")
         _load_noaa_space_datasets(state, use_cache=True)
         success = True
+        _LOGGER.info(
+            "NOAA: auto-preload complete (bundles=%d, errors=%d)",
+            len(state.get("bundles", {})),
+            len(state.get("errors", {})),
+        )
     except Exception as exc:  # pragma: no cover - defensive
         log_exception(_LOGGER, "Automatic NOAA preload failed", exc)
         try:
             time.sleep(0.5)
+            _LOGGER.info("NOAA: auto-preload retry after failure")
             _load_noaa_space_datasets(state, use_cache=True)
             success = True
+            _LOGGER.info(
+                "NOAA: auto-preload retry complete (bundles=%d, errors=%d)",
+                len(state.get("bundles", {})),
+                len(state.get("errors", {})),
+            )
         except Exception as retry_exc:  # pragma: no cover - defensive
             log_exception(_LOGGER, "NOAA preload retry failed", retry_exc)
     finally:
@@ -2214,9 +2253,11 @@ def _bg_fetch_all_space_data() -> None:
     """
     global _bg_fetch_results
     fetch_time = time.time()
+    _LOGGER.info("BG SpaceData: background fetch thread started")
 
     # 1. Space Weather (Kp + Flux)
     try:
+        _LOGGER.info("BG SpaceData: fetching SWPC Kp + F10.7")
         kp_df = get_swpc_kp_index(days=SPACE_WEATHER_MAX_DAYS)
         flux_df = get_swpc_solar_radio_flux()
         with _bg_fetch_lock:
@@ -2229,6 +2270,11 @@ def _bg_fetch_all_space_data() -> None:
             _bg_fetch_results["space_weather"]["error"] = None
             _bg_fetch_results["space_weather"]["fetch_time"] = fetch_time
             _bg_fetch_results["space_weather"]["_applied"] = False
+        _LOGGER.info(
+            "BG SpaceData: SWPC fetched (kp_rows=%d, flux_rows=%d)",
+            len(kp_df) if isinstance(kp_df, pd.DataFrame) else 0,
+            len(flux_df) if isinstance(flux_df, pd.DataFrame) else 0,
+        )
     except Exception as exc:
         log_exception(_LOGGER, "Background fetch failed: space weather", exc)
         with _bg_fetch_lock:
@@ -2238,6 +2284,7 @@ def _bg_fetch_all_space_data() -> None:
 
     # 2. NOAA feeds (Core scope by default to keep UI responsive)
     try:
+        _LOGGER.info("BG SpaceData: fetching NOAA core feeds")
         # Core feeds are sufficient for most HRV correlations and keep the
         # background thread lightweight (prevents UI/WebSocket disconnects).
         bundles, errors = load_noaa_space_data(
@@ -2255,6 +2302,11 @@ def _bg_fetch_all_space_data() -> None:
             _bg_fetch_results["noaa"]["error"] = None
             _bg_fetch_results["noaa"]["fetch_time"] = fetch_time
             _bg_fetch_results["noaa"]["_applied"] = False
+        _LOGGER.info(
+            "BG SpaceData: NOAA fetched (bundles=%d, errors=%d)",
+            len(bundles),
+            len(errors),
+        )
     except Exception as exc:
         log_exception(_LOGGER, "Background fetch failed: NOAA feeds", exc)
         with _bg_fetch_lock:
@@ -2264,6 +2316,7 @@ def _bg_fetch_all_space_data() -> None:
 
     # 3. DONKI (last 14 days by default; users can expand window manually)
     try:
+        _LOGGER.info("BG SpaceData: fetching DONKI (last 14 days)")
         end_dt = pd.Timestamp.utcnow()
         start_dt = end_dt - pd.Timedelta(days=14)
         start_str = start_dt.strftime("%Y-%m-%d")
@@ -2292,6 +2345,13 @@ def _bg_fetch_all_space_data() -> None:
             _bg_fetch_results["donki"]["error"] = None
             _bg_fetch_results["donki"]["fetch_time"] = fetch_time
             _bg_fetch_results["donki"]["_applied"] = False
+        _LOGGER.info(
+            "BG SpaceData: DONKI fetched (datasets=%d, errors=%d, window=%s→%s)",
+            len(donki_tmp_state.get("datasets", {})),
+            len(donki_tmp_state.get("errors", {})),
+            start_str,
+            end_str,
+        )
     except Exception as exc:
         log_exception(_LOGGER, "Background fetch failed: NASA DONKI", exc)
         with _bg_fetch_lock:
@@ -2352,6 +2412,7 @@ def _start_background_fetch(force: bool = False) -> bool:
     with _bg_fetch_lock:
         # Don't start if already running
         if _bg_fetch_thread is not None and _bg_fetch_thread.is_alive():
+            _LOGGER.info("BG SpaceData: fetch already running, skip start")
             return False
 
         # Snapshot current fetch times to evaluate staleness without re-locking
@@ -2368,11 +2429,13 @@ def _start_background_fetch(force: bool = False) -> bool:
             )
             stale = _are_fetch_times_stale(fetch_times_snapshot)
             if all_done and not stale:
+                _LOGGER.info("BG SpaceData: data fresh, no background fetch needed")
                 return False  # Data is fresh, no need to refetch
 
         # Reset state for fresh fetch if forcing or if stale
         if force or _are_fetch_times_stale(fetch_times_snapshot):
             _reset_bg_fetch_for_refresh()
+            _LOGGER.info("BG SpaceData: background fetch state reset (force=%s)", force)
 
         # Start a new daemon thread while holding the lock to avoid races
         _bg_fetch_thread = threading.Thread(
@@ -2381,6 +2444,7 @@ def _start_background_fetch(force: bool = False) -> bool:
             daemon=True,
         )
         _bg_fetch_thread.start()
+        _LOGGER.info("BG SpaceData: background fetch thread launched")
         return True
 
 
@@ -2450,6 +2514,7 @@ def _apply_background_fetch_to_state() -> Tuple[bool, List[str]]:
         # Space Weather
         sw = _bg_fetch_results["space_weather"]
         if sw["done"] and sw["data"] and not sw.get("_applied"):
+            _LOGGER.info("BG SpaceData: applying SWPC results to session state")
             state = _space_weather_state()
             state["kp_df"] = sw["data"].get("kp_df", pd.DataFrame())
             state["flux_df"] = sw["data"].get("flux_df", pd.DataFrame())
@@ -2466,6 +2531,7 @@ def _apply_background_fetch_to_state() -> Tuple[bool, List[str]]:
         # NOAA
         noaa = _bg_fetch_results["noaa"]
         if noaa["done"] and noaa["data"] and not noaa.get("_applied"):
+            _LOGGER.info("BG SpaceData: applying NOAA results to session state")
             state = _noaa_space_state()
             state["bundles"] = noaa["data"].get("bundles", {})
             state["errors"] = noaa["data"].get("errors", {})
@@ -2479,6 +2545,7 @@ def _apply_background_fetch_to_state() -> Tuple[bool, List[str]]:
         # DONKI
         donki = _bg_fetch_results["donki"]
         if donki["done"] and donki["data"] and not donki.get("_applied"):
+            _LOGGER.info("BG SpaceData: applying DONKI results to session state")
             state = _donki_state()
             state["datasets"] = donki["data"].get("datasets", {})
             state["errors"] = donki["data"].get("errors", {})
@@ -3397,9 +3464,16 @@ def _fetch_donki_datasets(
     end_date: str,
     endpoints: Optional[List[str]] = None,
 ) -> None:
+    _LOGGER.info(
+        "DONKI: fetch start (window=%s→%s, endpoints=%s)",
+        start_date,
+        end_date,
+        endpoints or list(DONKI_ENDPOINTS.keys()),
+    )
     if not NASA_API_KEY:
         state["loaded"] = False
         state["errors"] = {"auth": "NASA_API_KEY is not set."}
+        _LOGGER.warning("DONKI: fetch aborted (NASA_API_KEY missing)")
         return
     targets = endpoints or list(DONKI_ENDPOINTS.keys())
     datasets: Dict[str, pd.DataFrame] = {}
@@ -3440,6 +3514,11 @@ def _fetch_donki_datasets(
     state["summary"] = _build_donki_summary(datasets)
     state["daily_counts"] = _donki_daily_counts(datasets)
     state["loaded"] = True if datasets else False
+    _LOGGER.info(
+        "DONKI: fetch complete (datasets=%d, errors=%d)",
+        len(datasets),
+        len(errors),
+    )
 
 
 def _fetch_donki_datasets_with_progress(
@@ -3549,6 +3628,7 @@ def _fetch_donki_datasets_with_progress(
 
 
 def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
+    _LOGGER.info("SWPC: fetch start (Kp + F10.7) with parallel timeout=8s")
     state["loaded"] = False
     state["kp_df"] = pd.DataFrame()
     state["kp_error"] = ""
@@ -3618,6 +3698,14 @@ def _fetch_space_weather_datasets(state: Dict[str, Any]) -> None:
     state["loaded"] = bool(
         (isinstance(state.get("kp_df"), pd.DataFrame) and not state["kp_df"].empty)
         or (isinstance(state.get("flux_df"), pd.DataFrame) and not state["flux_df"].empty)
+    )
+    _LOGGER.info(
+        "SWPC: fetch done (loaded=%s, kp_rows=%d, flux_rows=%d, kp_err=%s, flux_err=%s)",
+        state["loaded"],
+        len(state.get("kp_df", [])) if isinstance(state.get("kp_df"), pd.DataFrame) else 0,
+        len(state.get("flux_df", [])) if isinstance(state.get("flux_df"), pd.DataFrame) else 0,
+        bool(state.get("kp_error")),
+        bool(state.get("flux_error")),
     )
     #region agent log
     _agent_debug_log(
