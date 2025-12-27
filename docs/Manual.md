@@ -2975,6 +2975,58 @@ Solutions:
 
 34. Developer Tech News. (2014). *Polar opens its API for developers to access health data.* https://www.developer-tech.com/news/polar-opens-its-api-developers-access-user-health-data/
 
+### Time-Frequency Analysis & Spectrograms
+
+35. de Boer, R. W., & Karemaker, J. M. (2019). Cross-wavelet time-frequency analysis reveals sympathetic contribution to baroreflex sensitivity as cause of variable phase delay between blood pressure and heart rate. *Frontiers in Neuroscience, 13*, 694. https://doi.org/10.3389/fnins.2019.00694 [PMID: 31338017]
+
+36. Oliver, T. E., Sánchez-Hechavarría, M. E., Carrazana-Escalona, R., et al. (2023). Rapid adjustments to autonomic control of cardiac rhythm at the onset of isometric exercise in healthy young adults. *Physiological Reports, 11*(5), e15616. https://doi.org/10.14814/phy2.15616 [PMID: 36823959]
+
+37. Pichot, V., Roche, F., Celle, S., Barthélémy, J. C., & Chouchou, F. (2016). HRVanalysis: A free software for analyzing cardiac autonomic activity. *Frontiers in Physiology, 7*, 557. [PMID: 27920726]
+
+### Windowed & Ultra-Short-Term HRV
+
+38. Schroeder, E. B., Whitsel, E. A., Evans, G. W., Prineas, R. J., Chambless, L. E., & Heiss, G. (2004). Repeatability of heart rate variability measures. *Annals of Noninvasive Electrocardiology, 9*(3), 257-268. [PMID: 15286929]
+
+39. Chen, Y. S., Lu, W. A., Pagaduan, J. C., & Kuo, C. D. (2020). A novel smartphone app for the measurement of ultra-short-term and short-term heart rate variability: Validity and reliability study. *JMIR mHealth and uHealth, 8*(7), e18761. https://doi.org/10.2196/18761 [PMID: 32735219]
+
+40. Chapman, C. L., Schafer, E. A., Potter, A. W., et al. (2025). Day-to-day reliability of basal heart rate and short-term and ultra short-term heart rate variability assessment by the Equivital eq02+ LifeMonitor in US Army soldiers. *BMJ Military Health*. https://doi.org/10.1136/military-2024-002687 [PMID: 39004444]
+
+### HRV-Guided Training & Readiness
+
+41. Plews, D. J., Laursen, P. B., Stanley, J., Kilding, A. E., & Buchheit, M. (2013). Training adaptation and heart rate variability in elite endurance athletes: Opening the door to effective monitoring. *Sports Medicine, 43*, 773-781. https://doi.org/10.1007/s40279-013-0071-8
+
+42. Botek, M., McKune, A. J., Krejci, J., Stejskal, P., & Gaba, A. (2014). Change in performance in response to training load adjustment based on autonomic activity. *International Journal of Sports Medicine, 35*(6), 482-488. https://doi.org/10.1055/s-0033-1354385 [PMID: 24129989]
+
+43. Alfonso, C., Clarke, D. C., & Capdevila, L. (2025). Individual training prescribed by heart rate variability, heart rate and well-being scores in experienced cyclists. *Scientific Reports, 15*, 13540. https://doi.org/10.1038/s41598-025-13540-z [PMID: 41028151]
+
+44. Kiviniemi, A. M., Hautala, A. J., Kinnunen, H., & Tulppo, M. P. (2007). Endurance training guided individually by daily heart rate variability measurements. *European Journal of Applied Physiology, 101*(6), 743-751. https://doi.org/10.1007/s00421-007-0552-2
+
+45. Thayer, J. F., Åhs, F., Fredrikson, M., Sollers, J. J., & Wager, T. D. (2012). A meta-analysis of heart rate variability and neuroimaging studies: Implications for heart rate variability as a marker of stress and health. *Neuroscience & Biobehavioral Reviews, 36*(2), 747-756. https://doi.org/10.1016/j.neubiorev.2011.11.009
+
+### Normative Values & Reference Ranges
+
+46. Sammito, S., & Böckelmann, I. (2016). Reference values for time- and frequency-domain heart rate variability measures. *Heart Rhythm, 13*(6), 1309-1316. [PMID: 26883166]
+
+47. Ziegler, D., et al. (1999). Normal ranges and reproducibility of statistical, geometric, frequency domain, and non-linear measures of 24-hour heart rate variability. *Annals of Noninvasive Electrocardiology, 4*(4), 415-424. [PMID: 10668921]
+
+48. Ortega, E., Bryan, C. Y. X., & Christine, N. S. C. (2024). The pulse of Singapore: Short-term HRV norms. *Applied Psychophysiology and Biofeedback, 49*, 95-102. [PMID: 37755550]
+
+49. Billman, G. E. (2013). The LF/HF ratio does not accurately measure cardiac sympatho-vagal balance. *Frontiers in Physiology, 4*, 26. https://doi.org/10.3389/fphys.2013.00026
+
+50. Koenig, J., & Thayer, J. F. (2016). Sex differences in healthy human heart rate variability: A meta-analysis. *Neuroscience & Biobehavioral Reviews, 64*, 288-310. https://doi.org/10.1016/j.neubiorev.2016.03.007
+
+### Circadian HRV Patterns
+
+51. Buitrago-Ricaurte, N., Riveros-Rivera, A., & Riveros, A. J. (2025). Age and sex affect circadian patterns of cardiac autonomic function. *Scientific Reports, 15*, 18525. https://doi.org/10.1038/s41598-025-18525-6 [PMID: 41022949]
+
+52. Rasouli, M., Feli, M., Azimi, I., et al. (2025). Circadian rhythm of heart rate and heart rate variability in pregnancy. *NPJ Women's Health, 3*, 107. https://doi.org/10.1038/s44294-025-00107-6 [PMID: 41070097]
+
+53. Weinschenk, S., Topbas-Selcuki, N. F., Benrath, J., et al. (2025). Effects of therapy with local anesthetics on heart rate variability over 24 hours. *Chronobiology International, 42*(1). https://doi.org/10.1080/07420528.2025.2560963 [PMID: 41020483]
+
+54. Lee, J. D., Huang, Y. C., Lee, M., et al. (2025). Circadian patterns of heart rate and heart rate variability in wake-up stroke: Evidence of parasympathetic dysregulation. *Current Neurovascular Research, 22*(1). https://doi.org/10.2174/0115672026418606251007070743 [PMID: 41126417]
+
+55. To, N. M., Vo, V. Q., Ngo, Q. C., et al. (2025). Day and night patterns of heart rate variability in type 2 diabetes: Gender and microvascular complications considerations in normal and micro-albuminuria. *IEEE EMBC, 2025*, 11253277. https://doi.org/10.1109/EMBC58623.2025.11253277 [PMID: 41335990]
+
 ---
 
 ## Appendix: Sample Workflows
