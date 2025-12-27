@@ -34,6 +34,11 @@ if __name__ == "app":
     __path__ = [str(_APP_DIR)]  # type: ignore[name-defined]
     sys.modules.setdefault("app.app", sys.modules[__name__])
 
+# Ensure this module is registered in sys.modules to prevent dataclass decorator
+# failures when Streamlit reloads modules (AttributeError on __dict__).
+if sys.modules.get(__name__) is None:
+    sys.modules[__name__] = sys.modules.get("__main__", type(sys)(__name__))
+
 # -------------------------------------------------------------------------
 # Streamlit page config MUST be the first Streamlit command
 # -------------------------------------------------------------------------
@@ -20557,67 +20562,8 @@ and proper confidence interval estimation.
             st.markdown("##### 🪟 Windowed HRV/HRF (required for correlations + ML)")
             st.caption(
                 "If **HRV windows** above show '—', correlations/ML will be disabled. "
-                "Build windows here (no network; bounded)."
+                "Build windows here (no network; bounded). See 📖 explanation below the Data Status panel."
             )
-            
-            # Scientific explanation for windowed analysis
-            with st.expander("📖 Understanding Windowed HRV Analysis", expanded=False):
-                st.markdown("""
-## Sliding Window Analysis for Time-Varying HRV
-
-Traditional HRV analysis computes metrics over the entire recording, but autonomic tone fluctuates 
-continuously. **Windowed (sliding window) analysis** segments recordings into overlapping epochs 
-to capture temporal dynamics.
-
-### Mathematical Framework
-
-For a recording of duration *T* with window size *W* and step size *S*:
-
-- **Number of windows**: `n = floor((T - W) / S) + 1`
-- **Temporal resolution**: determined by step size *S*
-- **Statistical stability**: requires minimum RR intervals per window (typically ≥30–60)
-
-### Window Duration Guidelines
-
-| Window Size | Use Case | Metrics |
-|-------------|----------|---------|
-| **30 seconds** | Ultra-short-term; dynamic events | Time-domain only (RMSSD, pNN50) |
-| **2–5 minutes** | Standard short-term; autonomic monitoring | Time + frequency domain |
-| **≥5 minutes** | Research-grade; spectral analysis | Full HRV suite incl. VLF |
-
-**Smith et al. (2013)** validated 30-beat (≈30 sec) windows:
-
-> *"Thirty-one indices could differentiate between resting and at least one physiological state 
-> using 30 beat windows... Spectral indices using the Lomb-Scargle algorithm were able to correctly 
-> identify paradoxical shifts in power."*
-
-### Task Force Recommendations
-
-The 1996 Task Force guidelines specify:
-- **Short-term (5 min)**: Standard for clinical and research use
-- **Ultra-short-term (<5 min)**: Requires validation; some metrics unreliable
-- **Step size**: Typically 50% overlap (e.g., 5-min window, 2.5-min step) for smooth tracking
-
-### This Implementation
-
-- **Time-domain metrics** (RMSSD, SDNN, pNN50, Mean RR) computed per window
-- **Frequency-domain** (VLF, LF, HF, LF/HF) when window ≥ 2 min and not in "fast" mode
-- **Nonlinear metrics** (SD1, SD2, ApEn, SampEn) optionally included
-- **UTC timestamps** preserved for alignment with space weather data
-
----
-
-**References:**
-1. Task Force of ESC/NASPE. (1996). Heart rate variability: Standards of measurement, 
-   physiological interpretation, and clinical use. *Circulation, 93*(5), 1043–1065. 
-   [doi:10.1161/01.CIR.93.5.1043](https://doi.org/10.1161/01.CIR.93.5.1043)
-2. Smith, A. L., Owen, H., & Reynolds, K. J. (2013). Heart rate variability indices for 
-   very short-term (30 beat) analysis. Part 2: validation. *Journal of Clinical Monitoring 
-   and Computing, 27*(5), 577–585. [doi:10.1007/s10877-013-9473-2](https://doi.org/10.1007/s10877-013-9473-2)
-3. Shaffer, F., & Ginsberg, J. P. (2017). An Overview of Heart Rate Variability Metrics and 
-   Norms. *Frontiers in Public Health, 5*, 258. 
-   [doi:10.3389/fpubh.2017.00258](https://doi.org/10.3389/fpubh.2017.00258)
-                """)
             sa_ui_locked = str(_space_analytics_console_state().get("phase", "")) == "running"
             if sa_ui_locked:
                 st.info(
@@ -20724,6 +20670,65 @@ The 1996 Task Force guidelines specify:
                 f"GPU: **{gpu_info.available}** ({gpu_info.device_name}) | "
                 f"GPU processing enabled: **{gpu_enabled}**"
             )
+
+        # Scientific explanation for windowed analysis (outside Data Status expander)
+        with st.expander("📖 Understanding Windowed HRV Analysis", expanded=False):
+            st.markdown("""
+## Sliding Window Analysis for Time-Varying HRV
+
+Traditional HRV analysis computes metrics over the entire recording, but autonomic tone fluctuates 
+continuously. **Windowed (sliding window) analysis** segments recordings into overlapping epochs 
+to capture temporal dynamics.
+
+### Mathematical Framework
+
+For a recording of duration *T* with window size *W* and step size *S*:
+
+- **Number of windows**: `n = floor((T - W) / S) + 1`
+- **Temporal resolution**: determined by step size *S*
+- **Statistical stability**: requires minimum RR intervals per window (typically ≥30–60)
+
+### Window Duration Guidelines
+
+| Window Size | Use Case | Metrics |
+|-------------|----------|---------|
+| **30 seconds** | Ultra-short-term; dynamic events | Time-domain only (RMSSD, pNN50) |
+| **2–5 minutes** | Standard short-term; autonomic monitoring | Time + frequency domain |
+| **≥5 minutes** | Research-grade; spectral analysis | Full HRV suite incl. VLF |
+
+**Smith et al. (2013)** validated 30-beat (≈30 sec) windows:
+
+> *"Thirty-one indices could differentiate between resting and at least one physiological state 
+> using 30 beat windows... Spectral indices using the Lomb-Scargle algorithm were able to correctly 
+> identify paradoxical shifts in power."*
+
+### Task Force Recommendations
+
+The 1996 Task Force guidelines specify:
+- **Short-term (5 min)**: Standard for clinical and research use
+- **Ultra-short-term (<5 min)**: Requires validation; some metrics unreliable
+- **Step size**: Typically 50% overlap (e.g., 5-min window, 2.5-min step) for smooth tracking
+
+### This Implementation
+
+- **Time-domain metrics** (RMSSD, SDNN, pNN50, Mean RR) computed per window
+- **Frequency-domain** (VLF, LF, HF, LF/HF) when window ≥ 2 min and not in "fast" mode
+- **Nonlinear metrics** (SD1, SD2, ApEn, SampEn) optionally included
+- **UTC timestamps** preserved for alignment with space weather data
+
+---
+
+**References:**
+1. Task Force of ESC/NASPE. (1996). Heart rate variability: Standards of measurement, 
+   physiological interpretation, and clinical use. *Circulation, 93*(5), 1043–1065. 
+   [doi:10.1161/01.CIR.93.5.1043](https://doi.org/10.1161/01.CIR.93.5.1043)
+2. Smith, A. L., Owen, H., & Reynolds, K. J. (2013). Heart rate variability indices for 
+   very short-term (30 beat) analysis. Part 2: validation. *Journal of Clinical Monitoring 
+   and Computing, 27*(5), 577–585. [doi:10.1007/s10877-013-9473-2](https://doi.org/10.1007/s10877-013-9473-2)
+3. Shaffer, F., & Ginsberg, J. P. (2017). An Overview of Heart Rate Variability Metrics and 
+   Norms. *Frontiers in Public Health, 5*, 258. 
+   [doi:10.3389/fpubh.2017.00258](https://doi.org/10.3389/fpubh.2017.00258)
+            """)
 
         st.markdown("---")
 
