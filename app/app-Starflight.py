@@ -12738,10 +12738,8 @@ that predicts cognitive performance based on:
             flux_df = pd.DataFrame()
             kp_error = False
             if not space_state.get("loaded"):
-                if not bg_status.get("space_weather", {}).get("done", False):
-                    st.info("Fetching space weather in the background… (you can also click **Fetch space weather**).")
-                else:
-                    st.info("Click **Fetch space weather** to populate NOAA SWPC metrics.")
+                # User preference: do not show "click fetch" guidance text here.
+                pass
             else:
                 last_fetch = space_state.get("last_updated")
                 if isinstance(last_fetch, pd.Timestamp):
@@ -13255,9 +13253,8 @@ that predicts cognitive performance based on:
                             st.caption(
                                 "No timestamped entries available for plotting.")
             elif NASA_API_KEY:
-                st.info(
-                    "Click 'Fetch NASA DONKI events' to populate NASA space weather datasets."
-                )
+                # User preference: do not show "click fetch" guidance text here.
+                pass
             else:
                 st.info(
                     "Set NASA_API_KEY in your environment to enable NASA DONKI analytics."
@@ -13511,7 +13508,7 @@ that predicts cognitive performance based on:
                                 kp_df_view = pd.DataFrame(kp_rows)
                                 st.dataframe(kp_df_view)
                             st.caption(
-                                "Source: SpaceWeatherLive — scraped UI snapshot; if scraping failed, values were extracted by OpenAI from the page HTML."
+                                "Source: SpaceWeatherLive — scraped UI snapshot."
                             )
                         else:
                             st.info("No SpaceWeatherLive data available.")
