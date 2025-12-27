@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **Space Analytics Events Import** (`app/space_analytics_events.py`): Fixed import error for `logging_config` module by adding fallback import path. The module now works correctly when imported from both `app.app` and standalone contexts.
+- **Nested Expander Error** (`app/app.py`): Fixed `StreamlitAPIException: Expanders may not be nested inside other expanders` by moving the "Understanding Windowed HRV Analysis" explanation expander outside the "Data status" expander.
 
 ### Added
 - **Graduate-Level Space Analytics Explanations** (`app/app.py`): Added comprehensive scientific explanations with peer-reviewed citations throughout the Space Analytics tab:
