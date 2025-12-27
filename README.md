@@ -9,15 +9,19 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.39-green)](CHANGELOG.md)
-[![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python)](https://python.org)
+[![Version](https://img.shields.io/badge/Version-1.8.68-green)](CHANGELOG.md)
+[![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2025--12--23-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2025--12--27-blue)](CHANGELOG.md)
 
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.8.68**: **Modern HRV Progress Tracking** — Real-time, detailed progress indicators for all HRV computations with step-by-step status, elapsed time tracking, and animated visual feedback. **Tab Persistence** keeps you on the current tab during analysis. **Enhanced HRV Metrics** including LnRMSSD, CVI (Cardiac Vagal Index), CSI (Cardiac Sympathetic Index), SDANN, SDNNi, and generalized pNNx. **HRF ↔ HRV Correlation Visualization** with interactive ECharts heatmaps showing r-values, t-statistics, and p-values (4 decimals) with scientific context.
+
+**NEW in v1.8.67**: **Space Weather Progress Indicators** — Real-time progress tracking for all space weather fetch operations with step-by-step status and error details.
 
 **NEW in v1.8.39**: **Low-End Computer Performance Mode** — Optimized for users with limited CPU/memory. New toggles in Performance Settings let you disable heavy computations (spectrogram, nonlinear metrics, ML clustering) and heavy downloads (NOAA, SpaceWeatherLive, NASA DONKI, GPT) individually. Auto-detection adjusts defaults based on CPU tier.
 
@@ -75,8 +79,7 @@ cd HRV
 conda run -n hrv-py312 pip install -r requirements.txt
 conda run -n hrv-py312 streamlit run app/operational_app.py  # fast UI (profile + simple space-weather context)
 # or (full dashboards: correlations/ML + NOAA/Space Weather analysis)
-# conda run -n hrv-py312 streamlit run app/research_app.py
-# conda run -n hrv-py312 streamlit run app/app.py  # legacy research entrypoint
+conda run -n hrv-py312 streamlit run app/research_app.py
 
 # (Optional interactive shell)
 # conda activate hrv-py312
@@ -102,8 +105,7 @@ pip install -r requirements.txt
 # Run the application
 streamlit run app/operational_app.py
 # or (full dashboards)
-# streamlit run app/research_app.py
-# streamlit run app/app.py
+streamlit run app/research_app.py
 ```
 
 The app will open in your default browser at `http://localhost:8501`.
@@ -128,10 +130,13 @@ The app will open in your default browser at `http://localhost:8501`.
 
    Name it with a timestamp for automatic time alignment: `2025-11-06 00-43-42.txt`
 2. **Upload**: Click "Browse files" in the sidebar and select your RR file(s)
-3. **Explore tabs**: Start with **Overview** for summary statistics, then explore **Gauges** for visual benchmarks
-4. **Export**: Go to **Export** tab to download a comprehensive Markdown report
+3. **Run Analysis**: Click **Run HRV Analysis** at the top of the page. You'll see real-time progress indicators showing each computation step (validation, artifact detection, windowed metrics, full-recording metrics, ML clustering, etc.) with elapsed time and completion percentage.
+4. **Explore tabs**: Start with **Overview** for summary statistics, then explore **Gauges** for visual benchmarks. The active tab persists during analysis, so you can continue working while computations run.
+5. **Export**: Go to **Export** tab to download a comprehensive Markdown report or generate a GPT-5.2 high-reasoning analysis
 
 **Per-user persistence:** RR uploads are saved with the active profile (see the light-bulb banner) and immediately written to `crew/<Mission>/subjects/{user}/rr_intervals`. The app warns when you re-upload a previously analyzed file and can reuse stored HRV results when the file hash and analysis settings match (toggle in the sidebar) or let you recompute. Sidebar uploads target the active profile (Diego by default); uploads from the User Profile tab are scoped to that user and set that profile active. In **User Profile → HRV → HRV Measurement History**, use **Regenerate plots** if charts look stale after a new analysis run. In **User Profile → HRV → Stored RR Library**, you can load previously saved RR recordings back into the analysis workspace (optionally auto-running analysis) without re-uploading.
+
+**Real-time progress tracking:** When you click **Run HRV Analysis**, you'll see a detailed progress panel showing each computation step (validation, artifact detection, windowed metrics, full-recording metrics, ML clustering, etc.) with elapsed time and completion percentage. The active tab persists during analysis, so you can continue working while computations run in the background.
 
 **Per-profile readiness:** **User Profile → Readiness** computes readiness from stored parasympathetic-index history and displays HRV metric gauges using the same ECharts styling as the main Gauges tab.
 
@@ -177,8 +182,9 @@ All other tabs show **example data** and **reference values** to help you unders
 | **Time-Domain Metrics**                | SDNN, RMSSD, pNN50, Mean HR, CVNN, plus per-tab RR file loaders so you can select the exact recordings rendered in each visualization                                                             |
 | **Frequency-Domain Analysis**          | VLF/LF/HF power, normalized units, LF/HF ratio via Welch, Periodogram, or AR methods with on-tab RR file selection                                                                                |
 | **Nonlinear Metrics**                  | Poincaré SD1/SD2, DFA α1/α2, Sample/Approximate Entropy with on-demand RR loaders for publication-grade plots                                                                                    |
-| **Heart Rate Fragmentation**           | PIP, IALS, PSS per PROOF-AF methodology                                                                                                                                                            |
-| **Geometric Metrics**                  | HRV Triangular Index, TINN, Baevsky Stress Index                                                                                                                                                   |
+| **Heart Rate Fragmentation**           | PIP, IALS, PSS per PROOF-AF methodology with **HRF ↔ HRV correlation analysis** (interactive ECharts heatmaps with r, t-statistic, p-value)                                                                                                                      |
+| **Geometric Metrics**                  | HRV Triangular Index, TINN (enhanced), Baevsky Stress Index                                                                                                                                         |
+| **Advanced HRV Metrics** ✨NEW         | LnRMSSD, CVI (Cardiac Vagal Index), CSI (Cardiac Sympathetic Index), Mean HRmax-HRmin, Generalized pNNx (10ms/30ms/50ms), SDANN, SDNNi (long-term variability)                                      |
 | **Population Norms**                   | Age/sex-stratified comparison against Nunan et al., Ortega et al., MESA Study data                                                                                                                 |
 | **Blood Pressure Variability**         | BPV metrics (SD, CV, ARV, SV) with HRV-BPV correlation analysis                                                                                                                                    |
 | **Circadian Physiology**               | Forger99, Jewett99, Hannay19 models with ESRI and light schedule simulation                                                                                                                        |
@@ -208,6 +214,9 @@ All other tabs show **example data** and **reference values** to help you unders
 | **Garmin Vivosmart 5 Clinical Ingest** | Upload FIT/ZIP (batch supported) to auto-fill steps, distance, sleep score/quality/duration, SpO₂, respiration (awake/sleep), stress, calories, and body battery charge/drain with ECharts gauges |
 | **Docker Deployment**                  | Containerized with PostgreSQL/TimescaleDB for production environments                                                                                                                              |
 | **AI Interpretation**                  | GPT-5.2 high-reasoning analysis with enforced `web_search` citations, mission logging, markdown appendix, and optional tts-hd audio playback                                                      |
+| **Modern Progress Tracking** ✨NEW      | Real-time step-by-step progress indicators for HRV computations and space weather fetches with elapsed time, completion percentage, and visual status indicators                                    |
+| **Tab Persistence** ✨NEW              | Active tab persists across Streamlit reruns (compute/analyze buttons), maintaining workflow continuity                                                                                            |
+| **HRF ↔ HRV Correlation Visualization** ✨NEW | Interactive ECharts heatmaps showing Pearson correlations between Heart Rate Fragmentation and HRV metrics with r-values, t-statistics, p-values (4 decimals), scatter plots, and scientific interpretation |
 | **Publication Export**                 | APA 7th edition formatted reports, LaTeX tables, CSV/JSON data                                                                                                                                     |
 
 ---
@@ -500,6 +509,15 @@ project/
 - Two-ring design with color-coded zones (green/yellow/red)
 - Based on published normative data (Nunan 2010, Shaffer 2017, PROOF-AF 2025)
 
+### HRF ↔ HRV Correlations Tab ✨NEW
+
+- **Interactive ECharts Heatmap**: Color-coded correlation matrix between HRF metrics (PIP, IALS, PSS) and HRV metrics
+- **Detailed Statistics Table**: Pearson r, t-statistic, p-value (4 decimals) with strength/direction interpretation
+- **Top Correlation Scatter Plot**: Visualizes the strongest HRF↔HRV relationship with regression line
+- **Scientific Context**: Explains HRF vs HRV differences, research findings (Costa 2017, Cathey 2024, Galdino 2023), and correlation interpretation
+- **Per-Recording Analysis**: Computes correlations across multiple recordings for population-level insights
+- **Button-Driven Computation**: Click "Compute HRF↔HRV correlations" to run analysis (results cached in session)
+
 ### Unified Timeline Tab
 
 - Time-synchronized view of all physiological metrics
@@ -548,7 +566,7 @@ project/
 - Markdown report with all metrics and interpretations
 - CSV/JSON data export
 - LaTeX tables for publications
-- GPT-5.2 AI interpretation (requires API key)
+- **🤖 GPT-5.2 High Reasoning Analysis**: Complete AI-powered report generation with code interpreter, web search citations, and comprehensive physiological interpretation (requires API key)
 - **Plot exports (all ECharts charts)**: Use the inline export toolbar to download **PNG (high-DPI)**, **SVG (vector)**, **HTML**, and **spec JSON**, or **Print/Save PDF** from your browser.
 
 ### Circadian Physiology Tab
@@ -736,7 +754,12 @@ The NOAA Space tab includes an advanced feature matrix builder:
 HRV/
 ├── app/
 │   ├── app.py                      # Main Streamlit application
+│   ├── research_app.py             # Research UI entrypoint (full dashboards)
+│   ├── operational_app.py          # Operational UI entrypoint (fast workflow)
 │   ├── hrv_core.py                 # Core HRV computation functions
+│   ├── hrv_progress.py             # Modern HRV progress tracking (v1.8.68)
+│   ├── hrv_interpretation.py       # Enhanced HRV interpretation module (v1.8.68)
+│   ├── space_weather_progress.py   # Space weather progress tracking (v1.8.67)
 │   ├── circadian/                  # Circadian rhythm simulation module
 │   │   ├── __init__.py             # Module exports
 │   │   ├── models.py               # Forger99, Jewett99, Hannay19 models
