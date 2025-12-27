@@ -996,6 +996,28 @@ def render_circadian_tab(
         f"Duration: {int(settings['total_days'])} days"
     )
     
+    # Gate simulation - only run when user clicks "Run Simulation" or form was submitted
+    # This prevents heavy computation on every rerender which was causing infinite loops
+    _sim_run_key = "_circadian_simulation_run"
+    _run_sim_now = st.session_state.get(_sim_run_key, False)
+    
+    # Check if we should run simulation (form was submitted or explicit button click)
+    col_run, col_status = st.columns([1, 3])
+    with col_run:
+        if st.button("▶️ Run Simulation", key="circadian_run_sim_btn", type="primary", use_container_width=True):
+            st.session_state[_sim_run_key] = True
+            _run_sim_now = True
+    with col_status:
+        if _run_sim_now:
+            st.success("🔄 Simulation running...")
+        else:
+            st.info("💡 Click **Run Simulation** to compute circadian models with current settings.")
+    
+    if not _run_sim_now:
+        _ct_logger.info("CIRCADIAN_TAB: simulation skipped (not triggered)")
+        return
+    
+    _ct_logger.info("CIRCADIAN_TAB: running simulation")
     # Create time array and light schedule from persisted settings
     total_days = int(settings["total_days"])
     step_hours = float(settings["step_hours"])
@@ -1313,6 +1335,11 @@ def render_circadian_tab(
         }
         ```
         """)
+    
+    # Clear the simulation run flag after successful completion
+    # This prevents re-running simulation on every rerender
+    st.session_state[_sim_run_key] = False
+    _ct_logger.info("CIRCADIAN_TAB: simulation completed, flag cleared")
 
 
 if __name__ == "__main__":
