@@ -5,6 +5,21 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.75] - 2025-12-27
+
+### Added
+- **Comprehensive Autonomic Function Tests Guide** (`docs/Manual.md`): Graduate-level step-by-step protocols for clinical autonomic reflex assessments with 14 peer-reviewed references:
+  - **Deep Breathing Test (E:I Ratio)**: Respiratory sinus arrhythmia protocol, cardiovagal assessment, age-adjusted normal values
+  - **Valsalva Maneuver**: Four-phase hemodynamic response, Phase II/IV analysis, ratio interpretation with age stratification
+  - **30:15 Lying-to-Standing Ratio**: Orthostatic challenge protocol, beat identification, cardiovagal/adrenergic interpretation
+  - **Isometric Handgrip Test**: MVC calculation, 30% sustained grip protocol, diastolic BP response criteria
+  - **Orthostatic Blood Pressure Response**: Classical/initial/delayed OH classification, POTS criteria, tilt table protocols
+  - **Ewing Composite Score**: 0-5 scoring system for autonomic dysfunction severity
+  - Pre-test standardization requirements (fasting, caffeine, alcohol, temperature)
+  - Physiological mechanisms with neuroanatomical pathways (NTS, RVLM, nucleus ambiguus)
+  - Clinical application tables for diabetic neuropathy, Parkinson's, MSA, POTS, Long COVID
+  - All references verifiable via PubMed IDs and DOIs
+
 ## [1.8.74] - 2025-12-27
 
 ### Added
