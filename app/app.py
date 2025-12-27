@@ -8892,6 +8892,57 @@ def main() -> None:
             "ℹ️ About",
         ]
     )
+    
+    # Preserve active tab across reruns using JavaScript
+    # This prevents automatic return to Overview when clicking compute/analyze buttons
+    st.markdown(
+        """
+        <script>
+        (function() {
+            // Track the active tab and restore it after reruns
+            const tabKey = '_streamlit_active_tab';
+            
+            // Get all tab buttons
+            const tabButtons = document.querySelectorAll('[data-baseweb="tab"]');
+            
+            // Function to get active tab index
+            function getActiveTabIndex() {
+                for (let i = 0; i < tabButtons.length; i++) {
+                    if (tabButtons[i].getAttribute('aria-selected') === 'true') {
+                        return i;
+                    }
+                }
+                return 0; // Default to first tab
+            }
+            
+            // Function to set active tab by index
+            function setActiveTab(index) {
+                if (tabButtons[index]) {
+                    tabButtons[index].click();
+                }
+            }
+            
+            // Save active tab when it changes
+            tabButtons.forEach((btn, index) => {
+                btn.addEventListener('click', function() {
+                    sessionStorage.setItem(tabKey, index.toString());
+                });
+            });
+            
+            // Restore active tab after page load/rerun
+            const savedIndex = sessionStorage.getItem(tabKey);
+            if (savedIndex !== null) {
+                const index = parseInt(savedIndex, 10);
+                // Small delay to ensure tabs are fully rendered
+                setTimeout(function() {
+                    setActiveTab(index);
+                }, 100);
+            }
+        })();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
     _sw_loading_msg: Optional[st.delta_generator.DeltaGenerator] = None
     # Debug breadcrumbs: when the UI appears "blank", it's often because a rerun
     # was triggered mid-render or execution stopped before later tabs were
