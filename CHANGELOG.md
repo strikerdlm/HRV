@@ -5,6 +5,32 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.70] - 2025-12-27
+
+### Added
+- **Enhanced Time Series Analysis Tab** (`app/app.py`): Comprehensive improvements for graduate-level physiology education:
+  - **Improved Gauge Visualizations**: Two side-by-side gauges for Median Heart Rate and RR Variability Spread with better spacing, clearer tick marks, and color-coded zones
+  - **Instant Interpretation Feedback**: Color-coded success/warning/error messages below each gauge explaining the physiological significance of values
+  - **RR Percentile Bar Chart**: Visual representation of p25/p50/p75 RR interval distribution
+  - **Summary Metrics Row**: Quick-view metrics cards showing Median HR, HR IQR, and RR Spread
+  - **Scientific Explanation Section**: Detailed physiological interpretation of time-domain metrics:
+    - What HRV means and why it matters
+    - RR interval vs Heart Rate relationship
+    - What upward/downward deflections in the time series indicate
+    - Why higher variability is generally healthier
+  - **Age-Stratified Normal Ranges**: Reference tables by age decade for resting HR and HRV metrics (SDNN, RMSSD, RR Spread) based on Umetani et al. (1998) and Choi et al. (2020)
+  - **Clinical Significance Section**: Post-MI mortality risk, overtraining detection, and multi-system implications (diabetes, obesity, depression, sleep apnea)
+  - **Evidence-Based Improvement Strategies**: Five validated interventions with protocols:
+    - Aerobic exercise training (Sandercock et al., 2005)
+    - Slow breathing / resonance frequency training (Lehrer & Gevirtz, 2014)
+    - Sleep optimization (Tobaldini et al., 2013)
+    - Stress management (Thayer et al., 2012)
+    - Nutrition & hydration (Christensen et al., 1999)
+  - **Validated References Section**: 8 peer-reviewed citations with DOIs and PMIDs for verification
+
+### Fixed
+- **HRV Progress Tracker Rendering**: Fixed issue where progress tracker HTML was displaying as raw text instead of styled visual elements by moving the container creation inside the `st.status()` context
+
 ## [1.8.69] - 2025-12-27
 
 ### Added
