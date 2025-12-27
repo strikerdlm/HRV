@@ -8051,8 +8051,8 @@ def main() -> None:
         )
         #endregion
         
-        # Start cleaning/validation step in modern tracker
-        if _hrv_tracker and apply_clean:
+        # Start validation step in modern tracker (always runs, even without cleaning)
+        if _hrv_tracker:
             _hrv_tracker.start_step("validate")
             _hrv_tracker.update_substep("validate", "Checking RR interval bounds...")
             render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
@@ -8069,13 +8069,13 @@ def main() -> None:
                     prog_clean.progress(percent)
                 continue
             
+            # Update validation progress (always runs, even without cleaning)
+            if _hrv_tracker:
+                _hrv_tracker.update_substep("validate", f"Validating {name}...")
+                _hrv_tracker.update_progress("validate", completed)
+                render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+            
             if apply_clean:
-                # Update modern tracker
-                if _hrv_tracker:
-                    _hrv_tracker.update_substep("validate", f"Validating {name}...")
-                    _hrv_tracker.update_progress("validate", completed)
-                    render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
-                
                 # Use cached cleaning when available for performance
                 if HRV_CACHE_AVAILABLE:
                     cleaned, valid_mask, summary = get_cached_clean_rr(
@@ -8139,10 +8139,13 @@ def main() -> None:
                 )
                 prog_clean.progress(percent)
         
-        # Complete validation step
-        if _hrv_tracker and apply_clean:
+        # Complete validation step (always runs, even without cleaning)
+        if _hrv_tracker:
             _hrv_tracker.complete_step("validate")
-            # Start and complete artifact detection/correction steps
+            render_hrv_progress(_hrv_tracker, _hrv_progress_container, is_running=True)
+        
+        # Artifact detection/correction steps (only when cleaning is enabled)
+        if _hrv_tracker and apply_clean:
             _hrv_tracker.start_step("artifact_detect")
             _hrv_tracker.update_substep("artifact_detect", "Artifact detection complete")
             _hrv_tracker.complete_step("artifact_detect")
