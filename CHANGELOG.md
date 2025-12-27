@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.8.78] - 2025-12-27
 
+### Fixed
+- **Space Analytics Events Import** (`app/space_analytics_events.py`): Fixed import error for `logging_config` module by adding fallback import path. The module now works correctly when imported from both `app.app` and standalone contexts.
+
 ### Added
 - **Graduate-Level Space Analytics Explanations** (`app/app.py`): Added comprehensive scientific explanations with peer-reviewed citations throughout the Space Analytics tab:
   - **Scientific Foundation**: HRV-space weather hypothesis, evidence from Alabdulgader et al. (2018), Vencloviene et al. (2022), Papailiou et al. (2024), and methodological caveats from Mattoni et al. (2019)
