@@ -197,6 +197,26 @@ try:
 except ImportError:
     WEARABLE_ANALYTICS_AVAILABLE = False
 
+# Advanced HRV Analytics module (ML, statistical tests, clinical decision support)
+try:
+    from advanced_hrv_analytics import (
+        run_advanced_hrv_analysis,
+        AdvancedHRVAnalysisResult,
+        ClinicalDecisionSupport,
+        MetricAssessment,
+        StatisticalTestResult,
+        TrendAnalysis,
+        AnomalyDetection,
+        PatternRecognition,
+        HRVGarminIntegration,
+        RiskLevel as HRVRiskLevel,
+        TrendDirection as HRVTrendDirection,
+        AutonomicState,
+    )
+    ADVANCED_HRV_ANALYTICS_AVAILABLE = True
+except ImportError:
+    ADVANCED_HRV_ANALYTICS_AVAILABLE = False
+
 # Visualization helpers
 from echarts_component import EChartsConfig, render_echarts
 from gauge_builder import GaugeThresholds, build_two_ring_gauge, get_gauge_thresholds
@@ -3191,6 +3211,15 @@ def _render_body_battery_forecast(
     lower_series = [None] * len(hist_dates) + forecast.confidence_lower
     upper_series = [None] * len(hist_dates) + forecast.confidence_upper
     
+    # For ECharts stacking, we need the difference (upper - lower) for the band width
+    # Lower series provides the base, upper_diff provides the height of the band
+    upper_diff_series = []
+    for i, (lo, up) in enumerate(zip(lower_series, upper_series)):
+        if lo is not None and up is not None:
+            upper_diff_series.append(up - lo)
+        else:
+            upper_diff_series.append(None)
+    
     chart_option = {
         "title": {"text": "Body Battery: Historical + Forecast", "left": "center", "textStyle": {"fontSize": 14}},
         "tooltip": {"trigger": "axis"},
@@ -3222,22 +3251,22 @@ def _render_body_battery_forecast(
                 "symbolSize": 6,
             },
             {
-                "name": "95% CI",
-                "type": "line",
-                "data": upper_series,
-                "lineStyle": {"opacity": 0},
-                "areaStyle": {"color": "rgba(40, 167, 69, 0.2)"},
-                "symbol": "none",
-                "stack": "confidence",
-            },
-            {
                 "name": "CI Lower",
                 "type": "line",
                 "data": lower_series,
                 "lineStyle": {"opacity": 0},
-                "areaStyle": {"color": "rgba(255,255,255,1)"},
+                "areaStyle": {"opacity": 0},  # Transparent base for stacking
                 "symbol": "none",
-                "stack": "confidence-lower",
+                "stack": "confidence",
+            },
+            {
+                "name": "95% CI",
+                "type": "line",
+                "data": upper_diff_series,  # Use difference for proper stacking
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(40, 167, 69, 0.2)"},  # Fill band between lower and upper
+                "symbol": "none",
+                "stack": "confidence",
             },
         ],
     }
@@ -3770,6 +3799,538 @@ def _render_sqlite_corruption_recovery_ui(*, context_label: str, user_id: str, e
             st.rerun()
 
 
+# =============================================================================
+# Advanced HRV Analytics UI
+# =============================================================================
+
+
+def _render_advanced_hrv_analytics(
+    user: UserProfile, hrv_df: pd.DataFrame, garmin_df: Optional[pd.DataFrame] = None
+) -> None:
+    """Render advanced HRV analytics with ML, statistics, and clinical decision support.
+    
+    Provides:
+    - Statistical tests with p-values (Shapiro-Wilk, t-tests, Mann-Whitney)
+    - ML pattern recognition and anomaly detection
+    - Predictive trend analysis with forecasting
+    - HRV + Garmin integration analysis
+    - Semaphored clinical recommendations with gauges
+    """
+    st.markdown("### 🧬 Advanced HRV Analytics Platform")
+    st.caption(
+        "State-of-the-art statistical analysis, ML pattern recognition, and clinical decision support. "
+        "References: Task Force (1996), Shaffer & Ginsberg (2017), Nunan et al. (2010), Thayer et al. (2012)."
+    )
+    
+    if not ADVANCED_HRV_ANALYTICS_AVAILABLE:
+        st.warning(
+            "Advanced HRV Analytics module not available. "
+            "Ensure `advanced_hrv_analytics.py` is in the app directory."
+        )
+        return
+    
+    if hrv_df.empty or len(hrv_df) < 3:
+        st.info(
+            "At least 3 HRV recordings are required for advanced analytics. "
+            "Current recordings: " + str(len(hrv_df) if not hrv_df.empty else 0)
+        )
+        return
+    
+    # Get user age and sex for reference-based analysis
+    user_age = user.age or 40
+    user_sex = user.sex.value if user.sex else "unknown"
+    
+    try:
+        with st.spinner("Running advanced analysis..."):
+            result = run_advanced_hrv_analysis(
+                hrv_df=hrv_df,
+                garmin_df=garmin_df,
+                user_age=user_age,
+                user_sex=user_sex,
+            )
+    except Exception as exc:
+        st.error(f"Analysis failed: {exc}")
+        _LOGGER.error("Advanced HRV analysis failed: %s", exc)
+        return
+    
+    # Create tabs for different analysis sections
+    adv_tab1, adv_tab2, adv_tab3, adv_tab4, adv_tab5 = st.tabs([
+        "🎯 Clinical Decision",
+        "📊 Statistical Tests",
+        "📈 Trends & Forecast",
+        "🔍 Anomalies & Patterns",
+        "🔗 HRV + Garmin",
+    ])
+    
+    with adv_tab1:
+        _render_clinical_decision_tab(result)
+    
+    with adv_tab2:
+        _render_statistical_tests_tab(result)
+    
+    with adv_tab3:
+        _render_trends_forecast_tab(result, hrv_df)
+    
+    with adv_tab4:
+        _render_anomalies_patterns_tab(result)
+    
+    with adv_tab5:
+        _render_hrv_garmin_integration_tab(result, garmin_df is not None)
+
+
+def _risk_level_to_color(risk: "HRVRiskLevel") -> str:
+    """Convert risk level to color for display."""
+    return {
+        HRVRiskLevel.GREEN: "#28a745",
+        HRVRiskLevel.YELLOW: "#ffc107",
+        HRVRiskLevel.ORANGE: "#fd7e14",
+        HRVRiskLevel.RED: "#dc3545",
+    }.get(risk, "#6c757d")
+
+
+def _risk_level_to_emoji(risk: "HRVRiskLevel") -> str:
+    """Convert risk level to emoji."""
+    return {
+        HRVRiskLevel.GREEN: "🟢",
+        HRVRiskLevel.YELLOW: "🟡",
+        HRVRiskLevel.ORANGE: "🟠",
+        HRVRiskLevel.RED: "🔴",
+    }.get(risk, "⚪")
+
+
+def _render_clinical_decision_tab(result: "AdvancedHRVAnalysisResult") -> None:
+    """Render clinical decision support with gauges and semaphored recommendations."""
+    cds = result.clinical_decision
+    
+    # Overall Status Header with colored badge
+    status_color = _risk_level_to_color(cds.overall_status)
+    status_emoji = _risk_level_to_emoji(cds.overall_status)
+    
+    st.markdown(
+        f"""<div style="background: linear-gradient(135deg, {status_color}22, {status_color}11); 
+            border-left: 4px solid {status_color}; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <span style="font-size: 28px; font-weight: bold; color: {status_color};">
+                {status_emoji} {cds.status_label}
+            </span>
+            <br/>
+            <span style="color: #666; font-size: 14px;">{cds.summary.replace(chr(10), '<br/>')}</span>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+    
+    # Autonomic Balance Gauge
+    st.markdown("#### ⚖️ Autonomic Balance Score")
+    balance_score = result.autonomic_balance_score
+    
+    # Build gauge using ECharts
+    gauge_option = {
+        "series": [
+            {
+                "type": "gauge",
+                "startAngle": 180,
+                "endAngle": 0,
+                "min": 0,
+                "max": 100,
+                "splitNumber": 5,
+                "radius": "100%",
+                "center": ["50%", "75%"],
+                "axisLine": {
+                    "lineStyle": {
+                        "width": 20,
+                        "color": [
+                            [0.3, "#dc3545"],  # 0-30: Red (Dysregulated)
+                            [0.5, "#fd7e14"],  # 30-50: Orange (Sympathetic)
+                            [0.7, "#28a745"],  # 50-70: Green (Balanced)
+                            [1.0, "#17a2b8"],  # 70-100: Blue (Parasympathetic)
+                        ],
+                    },
+                },
+                "pointer": {
+                    "length": "60%",
+                    "width": 6,
+                    "itemStyle": {"color": "#333"},
+                },
+                "axisTick": {"show": False},
+                "splitLine": {"show": False},
+                "axisLabel": {"show": False},
+                "detail": {"show": False},
+                "title": {"show": False},
+                "data": [{"value": round(balance_score, 1)}],
+            }
+        ],
+    }
+    render_echarts(gauge_option, height_px=180)
+    
+    # Status text below gauge
+    state_label = cds.autonomic_state.value.replace("_", " ").title()
+    st.markdown(
+        f"""<div style="text-align: center; margin-top: -10px;">
+            <span style="font-size: 24px; font-weight: bold; color: {status_color};">
+                {balance_score:.0f}/100
+            </span><br/>
+            <span style="font-size: 14px; color: #666;">
+                Autonomic State: {state_label}
+            </span>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+    
+    # Metric Assessments Table
+    st.markdown("#### 📋 Metric Assessments")
+    if cds.metric_assessments:
+        assess_rows = []
+        for ma in cds.metric_assessments:
+            emoji = _risk_level_to_emoji(ma.risk_level)
+            assess_rows.append({
+                "Status": emoji,
+                "Metric": ma.metric_name.replace("_", " ").upper(),
+                "Value": f"{ma.value:.2f} {ma.unit}",
+                "Z-Score": f"{ma.z_score:.2f}" if ma.z_score else "—",
+                "Percentile": f"{ma.percentile:.1f}th" if ma.percentile else "—",
+                "Reference": f"{ma.reference_range[0]:.1f}–{ma.reference_range[1]:.1f}" if ma.reference_range else "—",
+                "Interpretation": ma.interpretation,
+            })
+        st.dataframe(pd.DataFrame(assess_rows), use_container_width=True, hide_index=True)
+    else:
+        st.info("No metric assessments available.")
+    
+    # Alerts
+    if cds.alerts:
+        st.markdown("#### ⚠️ Alerts")
+        for alert in cds.alerts:
+            st.warning(alert)
+    
+    # Recommendations with semaphore colors
+    st.markdown("#### 💡 Recommendations")
+    if cds.recommendations:
+        for rec in cds.recommendations:
+            # Color-code based on content
+            if any(w in rec.lower() for w in ["red", "alert", "consult", "immediate"]):
+                st.error(rec)
+            elif any(w in rec.lower() for w in ["orange", "caution", "monitor", "elevated"]):
+                st.warning(rec)
+            elif any(w in rec.lower() for w in ["yellow", "consider", "track"]):
+                st.info(rec)
+            else:
+                st.success(rec)
+    else:
+        st.success("✅ No specific recommendations at this time. Maintain current practices.")
+
+
+def _render_statistical_tests_tab(result: "AdvancedHRVAnalysisResult") -> None:
+    """Render statistical tests results with p-values."""
+    st.markdown("#### 📊 Statistical Analysis Results")
+    st.caption(
+        "Statistical tests comparing your HRV metrics against age-appropriate reference values. "
+        "p-values < 0.05 indicate statistically significant differences."
+    )
+    
+    # Descriptive Statistics
+    st.markdown("##### 📈 Descriptive Statistics")
+    if result.descriptive_stats:
+        desc_rows = []
+        for metric, stats in result.descriptive_stats.items():
+            desc_rows.append({
+                "Metric": metric.replace("_", " ").upper(),
+                "N": int(stats.get("n", 0)),
+                "Mean": f"{stats.get('mean', 0):.2f}",
+                "SD": f"{stats.get('std', 0):.2f}",
+                "Median": f"{stats.get('median', 0):.2f}",
+                "CV%": f"{stats.get('cv_pct', 0):.1f}",
+                "IQR": f"{stats.get('iqr', 0):.2f}",
+                "Skewness": f"{stats.get('skewness', 0):.3f}",
+                "Kurtosis": f"{stats.get('kurtosis', 0):.3f}",
+            })
+        if desc_rows:
+            st.dataframe(pd.DataFrame(desc_rows), use_container_width=True, hide_index=True)
+    
+    # Normality Tests
+    st.markdown("##### 🔔 Normality Tests (Shapiro-Wilk)")
+    if result.normality_tests:
+        norm_rows = []
+        for metric, test in result.normality_tests.items():
+            norm_rows.append({
+                "Metric": metric.replace("_", " ").upper(),
+                "Test": test.test_name,
+                "W-Statistic": f"{test.statistic:.4f}" if not np.isnan(test.statistic) else "—",
+                "p-value": f"{test.p_value:.4f}" if not np.isnan(test.p_value) else "—",
+                "Significant": "Yes ⚠️" if test.is_significant else "No ✓",
+                "Interpretation": test.interpretation,
+            })
+        if norm_rows:
+            st.dataframe(pd.DataFrame(norm_rows), use_container_width=True, hide_index=True)
+    
+    # Comparison Tests
+    st.markdown("##### 🆚 Comparison Tests (vs Reference)")
+    if result.comparison_tests:
+        comp_rows = []
+        for test_name, test in result.comparison_tests.items():
+            if "Shapiro" in test_name:  # Skip normality tests here
+                continue
+            comp_rows.append({
+                "Test": test_name,
+                "Statistic": f"{test.statistic:.4f}" if not np.isnan(test.statistic) else "—",
+                "p-value": f"{test.p_value:.4f}" if not np.isnan(test.p_value) else "—",
+                "Effect Size": f"{test.effect_size:.4f}" if test.effect_size else "—",
+                "Effect Label": test.effect_label or "—",
+                "Significant": "Yes ⚠️" if test.is_significant else "No ✓",
+                "Interpretation": test.interpretation,
+            })
+        if comp_rows:
+            st.dataframe(pd.DataFrame(comp_rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("No comparison tests available. More data may be needed.")
+    
+    # Statistical Interpretation Guide
+    with st.expander("📚 Statistical Test Interpretation Guide", expanded=False):
+        st.markdown("""
+        **Shapiro-Wilk Test (Normality)**
+        - Tests if data follows a normal (Gaussian) distribution
+        - p > 0.05: Data appears normally distributed
+        - p ≤ 0.05: Data significantly deviates from normality
+        
+        **One-Sample t-Test**
+        - Compares your mean to a reference population mean
+        - Uses age-stratified reference values (Nunan et al. 2010)
+        - Effect size (Cohen's d): |d| < 0.2 negligible, 0.2-0.5 small, 0.5-0.8 medium, > 0.8 large
+        
+        **Mann-Whitney U Test**
+        - Non-parametric alternative when normality is violated
+        - Compares median ranks rather than means
+        
+        **Significance Level (α = 0.05)**
+        - p < 0.05: Statistically significant (reject null hypothesis)
+        - p ≥ 0.05: Not statistically significant
+        
+        **References:**
+        - Task Force (1996). Circulation 93(5):1043-65
+        - Nunan et al. (2010). Scand J Med Sci Sports 20(1):e30-44
+        - Cohen (1988). Statistical Power Analysis
+        """)
+
+
+def _render_trends_forecast_tab(result: "AdvancedHRVAnalysisResult", hrv_df: pd.DataFrame) -> None:
+    """Render trend analysis and forecasting."""
+    st.markdown("#### 📈 Trend Analysis & Forecasting")
+    
+    if not result.trend_analyses:
+        st.info("Not enough temporal data for trend analysis. At least 5 recordings with dates required.")
+        return
+    
+    # Trend Summary Table
+    trend_rows = []
+    for metric, trend in result.trend_analyses.items():
+        direction_emoji = {
+            HRVTrendDirection.IMPROVING: "📈",
+            HRVTrendDirection.STABLE: "➡️",
+            HRVTrendDirection.DECLINING: "📉",
+            HRVTrendDirection.UNKNOWN: "❓",
+        }.get(trend.direction, "❓")
+        
+        trend_rows.append({
+            "Metric": metric.replace("_", " ").upper(),
+            "Trend": f"{direction_emoji} {trend.direction.value.title()}",
+            "Slope": f"{trend.slope:.4f}/day",
+            "p-value": f"{trend.slope_p_value:.4f}",
+            "R²": f"{trend.r_squared:.4f}",
+            "% Change": f"{trend.percent_change:+.1f}%",
+            "Days Analyzed": trend.days_analyzed,
+            "Significant": "Yes ⚠️" if trend.is_significant else "No",
+        })
+    
+    st.dataframe(pd.DataFrame(trend_rows), use_container_width=True, hide_index=True)
+    
+    # 7-Day Forecast
+    st.markdown("##### 🔮 7-Day Forecast")
+    if result.forecasts:
+        for metric, forecast in result.forecasts.items():
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric(
+                    f"{metric.replace('_', ' ').upper()} (Forecast)",
+                    f"{forecast['forecast_7d']:.2f}",
+                )
+            with col2:
+                st.metric("Lower 95% CI", f"{forecast['lower_ci']:.2f}")
+            with col3:
+                st.metric("Upper 95% CI", f"{forecast['upper_ci']:.2f}")
+    else:
+        st.info("Forecasts not available.")
+    
+    # Trend Visualization (if RMSSD available)
+    if "rmssd_ms" in hrv_df.columns and "measurement_date" in hrv_df.columns:
+        st.markdown("##### 📊 RMSSD Trend Visualization")
+        trend_df = hrv_df[["measurement_date", "rmssd_ms"]].dropna()
+        if len(trend_df) >= 5:
+            trend_df = trend_df.set_index("measurement_date").sort_index()
+            
+            # Add 7-day rolling average
+            trend_df["7-day MA"] = trend_df["rmssd_ms"].rolling(7, min_periods=1).mean()
+            
+            st.line_chart(trend_df[["rmssd_ms", "7-day MA"]])
+            st.caption("Solid line: Daily RMSSD. Dashed line: 7-day moving average.")
+
+
+def _render_anomalies_patterns_tab(result: "AdvancedHRVAnalysisResult") -> None:
+    """Render anomaly detection and pattern recognition results."""
+    cds = result.clinical_decision
+    
+    # Anomaly Detection
+    st.markdown("#### 🔍 Anomaly Detection")
+    if cds.anomaly_detection:
+        ad = cds.anomaly_detection
+        if ad.n_anomalies > 0:
+            st.warning(f"**{ad.n_anomalies} anomalous recording(s) detected** using {ad.method} method (threshold: {ad.threshold_used})")
+            
+            anomaly_rows = []
+            for i, idx in enumerate(ad.anomaly_indices):
+                anomaly_rows.append({
+                    "Index": idx,
+                    "Date": str(ad.anomaly_dates[i]) if i < len(ad.anomaly_dates) else "—",
+                    "Anomaly Score": f"{ad.anomaly_scores[i]:.2f}" if i < len(ad.anomaly_scores) else "—",
+                })
+            if anomaly_rows:
+                st.dataframe(pd.DataFrame(anomaly_rows), use_container_width=True, hide_index=True)
+            
+            st.info(ad.interpretation)
+        else:
+            st.success("✅ No anomalies detected in your HRV recordings.")
+    else:
+        st.info("Anomaly detection requires at least 5 recordings.")
+    
+    # Pattern Recognition
+    st.markdown("#### 🧩 Pattern Recognition")
+    if cds.pattern_recognition:
+        pr = cds.pattern_recognition
+        
+        if pr.dominant_pattern:
+            confidence_pct = (pr.pattern_confidence or 0.5) * 100
+            st.info(f"**Dominant Pattern:** {pr.dominant_pattern} (Confidence: {confidence_pct:.0f}%)")
+        
+        if pr.detected_patterns:
+            st.markdown("**Detected Patterns:**")
+            for pattern in pr.detected_patterns:
+                if "improving" in pattern.lower() or "excellent" in pattern.lower():
+                    st.success(f"✓ {pattern}")
+                elif "declining" in pattern.lower() or "chronic" in pattern.lower():
+                    st.warning(f"⚠ {pattern}")
+                else:
+                    st.info(f"• {pattern}")
+        
+        if pr.silhouette_score:
+            st.metric("Cluster Quality (Silhouette)", f"{pr.silhouette_score:.3f}")
+    else:
+        st.info("Pattern recognition requires at least 5 recordings.")
+    
+    # Pattern Interpretation Guide
+    with st.expander("📚 Pattern Interpretation Guide", expanded=False):
+        st.markdown("""
+        **RMSSD Variability (CV%)**
+        - CV > 40%: High day-to-day variability - may indicate inconsistent recovery or measurement conditions
+        - CV 15-40%: Normal variability
+        - CV < 15%: Very stable pattern - good for trend detection
+        
+        **Autonomic Balance Patterns**
+        - Parasympathetic dominant (LF/HF < 0.8): Rest & digest mode, good recovery
+        - Balanced (LF/HF 0.8-2.0): Healthy autonomic regulation
+        - Sympathetic dominant (LF/HF > 3.0): Fight-or-flight mode, stress response
+        
+        **Chronic Stress Pattern**
+        - >50% of recordings with Stress Index > 150 suggests sustained physiological stress
+        - Consider lifestyle factors: sleep, exercise, mental stress, diet
+        
+        **References:**
+        - Thayer et al. (2012). Neurosci Biobehav Rev 36(2):747-56
+        - Ernst (2017). J Integr Neurosci 16(1):17-42
+        """)
+
+
+def _render_hrv_garmin_integration_tab(
+    result: "AdvancedHRVAnalysisResult", has_garmin: bool
+) -> None:
+    """Render HRV + Garmin integration analysis."""
+    st.markdown("#### 🔗 HRV + Garmin Wearable Integration")
+    
+    if not has_garmin:
+        st.info(
+            "No Garmin daily metrics available for integration analysis. "
+            "Import Garmin data from the 📦 Data section to enable this feature."
+        )
+        return
+    
+    cds = result.clinical_decision
+    if not cds.garmin_integration:
+        st.info(
+            "Not enough overlapping data between HRV and Garmin metrics. "
+            "Ensure HRV measurements and Garmin data are from the same time period."
+        )
+        return
+    
+    gi = cds.garmin_integration
+    
+    # Concordance Score
+    st.markdown("##### 📐 Data Concordance")
+    concordance_pct = gi.concordance_score * 100
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        if concordance_pct >= 70:
+            st.success(f"**Concordance Score:** {concordance_pct:.0f}%")
+            st.caption("High agreement between HRV measurements and wearable metrics.")
+        elif concordance_pct >= 50:
+            st.warning(f"**Concordance Score:** {concordance_pct:.0f}%")
+            st.caption("Moderate agreement. Some metrics may differ.")
+        else:
+            st.error(f"**Concordance Score:** {concordance_pct:.0f}%")
+            st.caption("Low agreement. Review measurement conditions.")
+    
+    with col2:
+        st.metric("Integrated Recovery Score", f"{gi.integrated_recovery_score:.0f}/100")
+        st.metric("Integrated Stress Score", f"{gi.integrated_stress_score:.0f}/100")
+    
+    # Discordance Flags
+    if gi.discordance_flags:
+        st.markdown("##### ⚠️ Discordance Flags")
+        for flag in gi.discordance_flags:
+            st.warning(flag)
+    
+    # Correlation Matrix
+    st.markdown("##### 📊 Cross-Correlation Analysis")
+    if gi.correlation_matrix:
+        # Flatten to table
+        corr_rows = []
+        for hrv_metric, garmin_corrs in gi.correlation_matrix.items():
+            for garmin_metric, r in garmin_corrs.items():
+                corr_rows.append({
+                    "HRV Metric": hrv_metric.replace("_", " ").upper(),
+                    "Garmin Metric": garmin_metric.replace("_", " ").title(),
+                    "Spearman ρ": f"{r:.3f}",
+                    "Strength": "Strong" if abs(r) > 0.7 else "Moderate" if abs(r) > 0.4 else "Weak",
+                })
+        if corr_rows:
+            st.dataframe(pd.DataFrame(corr_rows), use_container_width=True, hide_index=True)
+    
+    # Significant Correlations
+    if gi.significant_correlations:
+        st.markdown("##### ✨ Statistically Significant Correlations (p < 0.05)")
+        for hrv_m, garmin_m, r, p in gi.significant_correlations:
+            direction = "positive" if r > 0 else "negative"
+            st.info(f"**{hrv_m}** ↔ **{garmin_m}**: ρ = {r:.3f} (p = {p:.4f}) — {direction.title()} correlation")
+    
+    # Integration Recommendations
+    if gi.recommendations:
+        st.markdown("##### 💡 Integration Insights")
+        for rec in gi.recommendations:
+            if "⚠️" in rec or "low agreement" in rec.lower():
+                st.warning(rec)
+            elif "🔴" in rec or "elevated" in rec.lower():
+                st.error(rec)
+            elif "🟡" in rec or "below" in rec.lower():
+                st.info(rec)
+            else:
+                st.success(rec)
+
+
 @_fragment_if_available
 def _render_hrv_history(user: UserProfile) -> None:
     """Render HRV measurement history."""
@@ -4082,6 +4643,26 @@ def _render_hrv_history(user: UserProfile) -> None:
                                     corr = paired[x_col].corr(paired[y_col])
                                     if corr is not None and not pd.isna(corr):
                                         st.caption(f"{title}: Pearson r = {corr:.2f} (n={len(paired)})")
+        
+        # Advanced HRV Analytics Platform
+        with st.expander("🧬 Advanced HRV Analytics (ML, Statistics, Clinical Decision Support)", expanded=False):
+            # Get Garmin data for integration analysis
+            try:
+                garmin_analytics_df = pd.DataFrame()
+                if hasattr(db, "get_garmin_daily_dataframe"):
+                    garmin_analytics_df = db.get_garmin_daily_dataframe(user.user_id, limit=365)
+                elif hasattr(db, "get_garmin_daily_metrics"):
+                    garmin_rows = db.get_garmin_daily_metrics(user.user_id, limit=365)
+                    if garmin_rows:
+                        garmin_analytics_df = pd.DataFrame([r.to_dict() for r in garmin_rows])
+            except Exception:
+                garmin_analytics_df = pd.DataFrame()
+            
+            _render_advanced_hrv_analytics(
+                user=user,
+                hrv_df=df,
+                garmin_df=garmin_analytics_df if not garmin_analytics_df.empty else None,
+            )
         
         # Full data table
         with st.expander("📊 All HRV Measurements"):
