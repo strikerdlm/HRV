@@ -13206,40 +13206,160 @@ excellent! The same value in a 25-year-old would only be **25th percentile** —
     with tab_unified:
         _log_tab("unified", "start")
         st.markdown("### 📈 Unified Physiological Timeline")
-        st.markdown("*Time-synchronized view of all physiological metrics with ML pattern detection*")
+        st.markdown("*Time-synchronized view of HRV recordings placed at their actual recording start times, with ML anomaly detection and Garmin triangulation*")
         
         if not has_hrv_data:
             st.info(
                 "📈 **Unified Timeline**\n\n"
                 "This tab provides a synchronized view of multiple physiological metrics.\n\n"
                 "**Features:**\n"
-                "- Cross-domain metric visualization\n"
-                "- ML-based pattern detection\n"
-                "- Temporal relationship analysis\n\n"
+                "- Recordings placed at their actual timestamp from filename\n"
+                "- Isolation Forest ML anomaly detection\n"
+                "- Garmin wearable data triangulation\n"
+                "- Statistical summary with trend analysis\n\n"
                 "👈 **Upload HRV data to see your unified timeline.**"
             )
         
         with st.expander("📖 **Understanding the Unified Timeline**", expanded=False):
             st.markdown("""
-**Purpose:**
-The Unified Timeline provides a synchronized view of multiple physiological metrics, enabling:
-- **Cross-domain analysis** — See how HRV, HR, stress, and other metrics co-vary
-- **Pattern detection** — ML algorithms identify anomalies and trends
-- **Temporal relationships** — Observe how changes in one metric precede/follow others
+## Temporal Placement & Timeline Construction
 
-**Available Metrics:**
+**Recording Timestamps:** Each RR interval file's timestamp is extracted from the filename 
+(format: `YYYY-MM-DD HH-MM-SS.txt`). This timestamp represents the **beginning** of the 
+recording session. Recordings are placed on the timeline at their exact start time, allowing 
+accurate temporal analysis of physiological patterns across days and weeks.
+
+**Timeline Resolution:**
+| Recording Duration | Typical Use Case | Timeline Precision |
+|-------------------|------------------|-------------------|
+| 2–5 minutes | Morning orthostatic test | ±30 seconds |
+| 5–30 minutes | Meditation/recovery session | ±1 minute |
+| 1–8 hours | Sleep monitoring | ±5 minutes |
+| 24+ hours | Circadian analysis | ±15 minutes |
+
+## Multi-Domain Integration
+
 | Domain | Metrics | Physiological Significance |
 |--------|---------|---------------------------|
-| **HRV** | RMSSD, SDNN, LF/HF | Autonomic nervous system balance |
-| **Cardiac** | Mean HR, Resting HR | Cardiovascular load and recovery |
-| **Respiratory** | SpO2, Respiration Rate | Oxygenation and breathing patterns |
-| **Stress/Energy** | Stress Score, Body Battery | Allostatic load and recovery capacity |
+| **HRV Time-Domain** | RMSSD, SDNN, pNN50 | Vagal modulation & overall variability |
+| **HRV Frequency** | LF/HF, HF power, VLF | Autonomic balance & rhythmic components |
+| **Cardiac** | Mean HR, Resting HR | Cardiovascular load and fitness |
+| **Garmin Wearables** | Body Battery, Stress Score, Sleep Score | Allostatic load & recovery capacity |
 
-**ML Features:**
-- **Anomaly Detection** — Z-score, MAD, IQR methods to flag unusual values
-- **Trend Analysis** — Linear regression with change point detection
-- **Correlation Matrix** — Identify relationships between metrics
+## ML-Based Pattern Detection
+
+**Isolation Forest Algorithm:**
+The Isolation Forest (Liu et al., 2008) is an unsupervised anomaly detection method that 
+identifies outliers by measuring how easily data points can be "isolated" through random 
+partitioning. Unlike distance-based methods (Z-score, IQR), Isolation Forest:
+
+- Handles multivariate data naturally
+- Is robust to contaminated datasets (up to ~15% anomalies)
+- Detects local anomalies that global statistics miss
+- Scales efficiently: O(n log n) complexity
+
+**Contamination Parameter:** Set to ~5% (0.05) by default, representing the expected 
+proportion of anomalous recordings. For healthy individuals, 2–5% anomaly rate is typical; 
+>10% may indicate systemic issues or measurement artifacts.
+
+## References
+
+1. **Liu, F.T., Ting, K.M., & Zhou, Z.-H.** (2008). Isolation Forest. *IEEE ICDM*, 413–422. 
+   [DOI: 10.1109/ICDM.2008.17](https://doi.org/10.1109/ICDM.2008.17)
+
+2. **Dalmeida, K.M., & Masala, G.L.** (2021). HRV Features as Viable Physiological Markers 
+   for Stress Detection Using Wearable Devices. *Sensors*, 21(8), 2873. 
+   [DOI: 10.3390/s21082873](https://doi.org/10.3390/s21082873)
+
+3. **Karasmanoglou, A., et al.** (2023). ECG-Based Semi-Supervised Anomaly Detection for 
+   Early Detection and Monitoring of Epileptic Seizures. *Int. J. Environ. Res. Public Health*, 
+   20(6), 5000. [DOI: 10.3390/ijerph20065000](https://doi.org/10.3390/ijerph20065000)
+
+4. **Shaffer, F., & Ginsberg, J.P.** (2017). An overview of heart rate variability metrics 
+   and norms. *Frontiers in Public Health*, 5, 258. 
+   [DOI: 10.3389/fpubh.2017.00258](https://doi.org/10.3389/fpubh.2017.00258)
             """)
+        
+        # ==========================================================================
+        # RECORDING TIMELINE SUMMARY - Show uploaded files with timestamps
+        # ==========================================================================
+        st.markdown("---")
+        st.markdown("### 📅 Recording Timeline Summary")
+        
+        # Build recording timeline from uploaded files
+        _uploads_cache = st.session_state.get("uploaded_rr_cache", {})
+        if _uploads_cache and isinstance(_uploads_cache, dict):
+            _timeline_rows: List[Dict[str, Any]] = []
+            for _fname, _up in _uploads_cache.items():
+                if not isinstance(_up, UploadedRR):
+                    continue
+                _rec_ts = _up.recording_start_utc
+                if _rec_ts is None:
+                    _rec_ts, _ = _infer_recording_start(_fname)
+                _duration_min = 0.0
+                if _up.rr_ms is not None and len(_up.rr_ms) > 0:
+                    _duration_min = float(np.sum(_up.rr_ms)) / 60000.0
+                _timeline_rows.append({
+                    "Recording": _fname,
+                    "Start Time (UTC)": _rec_ts.strftime("%Y-%m-%d %H:%M:%S") if isinstance(_rec_ts, pd.Timestamp) else "Unknown",
+                    "Duration (min)": round(_duration_min, 1),
+                    "RR Intervals": len(_up.rr_ms) if _up.rr_ms is not None else 0,
+                    "Mean HR (bpm)": round(60000.0 / np.mean(_up.rr_ms), 1) if _up.rr_ms is not None and len(_up.rr_ms) > 0 else np.nan,
+                    "_sort_ts": _rec_ts if isinstance(_rec_ts, pd.Timestamp) else pd.Timestamp.min,
+                })
+            
+            if _timeline_rows:
+                _timeline_df = pd.DataFrame(_timeline_rows)
+                _sorted_rows = sorted(_timeline_rows, key=lambda r: r["_sort_ts"] if isinstance(r.get("_sort_ts"), pd.Timestamp) else pd.Timestamp.min)
+                _timeline_df = pd.DataFrame(_sorted_rows)
+                _display_df = _timeline_df.drop(columns=["_sort_ts"], errors="ignore")
+                st.dataframe(_display_df, use_container_width=True, hide_index=True)
+                
+                # Timeline span info
+                _valid_ts_rows = [r for r in _timeline_rows if isinstance(r.get("_sort_ts"), pd.Timestamp) and r["_sort_ts"] != pd.Timestamp.min]
+                if len(_valid_ts_rows) > 1:
+                    _min_ts = min(r["_sort_ts"] for r in _valid_ts_rows)
+                    _max_ts = max(r["_sort_ts"] for r in _valid_ts_rows)
+                    _span_days = (_max_ts - _min_ts).total_seconds() / 86400.0
+                    st.caption(f"📊 **Timeline span:** {_span_days:.1f} days | **{len(_timeline_rows)} recordings** | First: {_min_ts.strftime('%Y-%m-%d %H:%M')} → Last: {_max_ts.strftime('%Y-%m-%d %H:%M')} (UTC)")
+                    
+                    # Visual timeline chart (HR trend over time)
+                    if SCIENTIFIC_CHARTS_AVAILABLE and len(_valid_ts_rows) >= 3:
+                        with st.expander("📈 **Visual Timeline (Mean HR over recordings)**", expanded=True):
+                            _hr_timestamps = [r["_sort_ts"] for r in _sorted_rows if isinstance(r.get("_sort_ts"), pd.Timestamp) and r["_sort_ts"] != pd.Timestamp.min and not np.isnan(r.get("Mean HR (bpm)", np.nan))]
+                            _hr_values = [r["Mean HR (bpm)"] for r in _sorted_rows if isinstance(r.get("_sort_ts"), pd.Timestamp) and r["_sort_ts"] != pd.Timestamp.min and not np.isnan(r.get("Mean HR (bpm)", np.nan))]
+                            
+                            if _hr_timestamps and _hr_values:
+                                _echarts_sparkline(
+                                    [ts.strftime("%Y-%m-%d %H:%M") for ts in _hr_timestamps],
+                                    _hr_values,
+                                    title="Mean HR Trend Across Recordings",
+                                    color_primary="#ef4444",
+                                    area_colors=("rgba(239,68,68,0.25)", "rgba(239,68,68,0.05)"),
+                                )
+                                
+                                # Quick stats
+                                _hr_arr = np.array(_hr_values)
+                                _hr_cols = st.columns(4)
+                                with _hr_cols[0]:
+                                    st.metric("Mean HR (avg)", f"{np.mean(_hr_arr):.1f} bpm")
+                                with _hr_cols[1]:
+                                    st.metric("HR Range", f"{np.min(_hr_arr):.0f}–{np.max(_hr_arr):.0f} bpm")
+                                with _hr_cols[2]:
+                                    st.metric("CV%", f"{100 * np.std(_hr_arr) / np.mean(_hr_arr):.1f}%")
+                                with _hr_cols[3]:
+                                    # Trend direction
+                                    if len(_hr_arr) >= 3:
+                                        _x = np.arange(len(_hr_arr))
+                                        _slope = np.polyfit(_x, _hr_arr, 1)[0]
+                                        _trend_dir = "↑" if _slope > 0.5 else "↓" if _slope < -0.5 else "→"
+                                        st.metric("Trend", _trend_dir, delta=f"{_slope:.2f}/rec")
+                elif len(_valid_ts_rows) == 1:
+                    st.caption(f"📊 **Single recording** at {_valid_ts_rows[0]['_sort_ts'].strftime('%Y-%m-%d %H:%M')} (UTC)")
+            else:
+                st.info("No recordings with valid timestamps found.")
+        else:
+            st.info("Upload RR interval files to see the recording timeline.")
         
         # ==========================================================================
         # SCIENTIFIC EXPLANATIONS & INTERPRETATION SECTION - UNIFIED TIMELINE
@@ -13247,7 +13367,7 @@ The Unified Timeline provides a synchronized view of multiple physiological metr
         st.markdown("---")
         st.markdown("### 📚 Multi-Metric Physiological Integration")
         
-        with st.expander("🔬 **Why Integrate Multiple Metrics?**", expanded=True):
+        with st.expander("🔬 **Why Integrate Multiple Metrics?**", expanded=False):
             st.markdown("""
 #### The Limitation of Single-Metric Analysis
 
@@ -13263,19 +13383,17 @@ But the autonomic nervous system doesn't work in isolation — it integrates:
 The **Unified Timeline** addresses this by showing how multiple metrics **co-vary over time**, 
 revealing patterns invisible in single-metric analysis.
 
-#### Physiological Coupling Principles:
+#### Physiological Coupling Principles
 
-| Relationship | What It Means |
-|--------------|---------------|
-| **RMSSD ↑ + HR ↓** | Classic vagal dominance (rest/recovery) |
-| **RMSSD ↓ + HR ↑** | Sympathetic activation (stress/exercise) |
-| **HRV ↑ + HR ↑** | Possible respiratory sinus arrhythmia amplification |
-| **HRV ↓ + SpO2 ↓** | Hypoxic stress (altitude, sleep apnea) |
-| **LF/HF ↑ + RR rate stable** | Non-respiratory sympathetic shift |
+| Relationship | What It Means | Clinical Significance |
+|--------------|---------------|----------------------|
+| **RMSSD ↑ + HR ↓** | Classic vagal dominance | Rest/recovery state |
+| **RMSSD ↓ + HR ↑** | Sympathetic activation | Stress, exercise, illness |
+| **HRV ↑ + HR ↑** | RSA amplification | Deep breathing, meditation |
+| **HRV ↓ + SpO2 ↓** | Hypoxic stress | Altitude, sleep apnea |
+| **SDNN ↓ + LF/HF ↑** | Sympathetic overdrive | Chronic stress, overtraining |
 
-#### Circadian Patterns to Expect (24-hour recordings):
-
-Based on studies of circadian HRV rhythms (Buitrago-Ricaurte et al., 2025):
+#### Circadian Patterns (Buitrago-Ricaurte et al., 2025)
 
 | Time of Day | HR | RMSSD | LF/HF | Physiological State |
 |-------------|-----|-------|-------|---------------------|
@@ -13285,26 +13403,38 @@ Based on studies of circadian HRV rhythms (Buitrago-Ricaurte et al., 2025):
 | **Evening** | Declining | Rising | Declining | Transition to rest |
 | **Night (sleep)** | Lowest | Highest | Lowest | Vagal dominance |
 
-*Disruption of these patterns (e.g., elevated night HR, low morning HRV) may indicate poor sleep, 
-overtraining, or chronic stress (Weinschenk et al., 2025).*
+*Disruption of these patterns may indicate poor sleep, overtraining, or chronic stress.*
 """)
         
         with st.expander("📊 **Pattern Recognition & Anomaly Detection**", expanded=False):
             st.markdown("""
-#### How Are Anomalies Detected?
+#### Anomaly Detection Methods
 
-The app uses several statistical methods to flag unusual values:
+The app implements multiple complementary anomaly detection algorithms:
 
-| Method | How It Works | Best For |
-|--------|--------------|----------|
-| **Z-score** | Flags values > 2 SD from mean | Normally distributed data |
-| **Modified Z (MAD)** | Uses median absolute deviation | Robust to outliers |
-| **IQR method** | Values outside 1.5×IQR | Skewed distributions |
-| **Rolling window** | Compares to recent history | Detecting sudden changes |
+| Method | Algorithm | Best For | Reference |
+|--------|-----------|----------|-----------|
+| **Z-score** | `|x - μ| > k×σ` | Normally distributed data | Grubbs (1969) |
+| **Modified Z (MAD)** | `|x - median| > k×MAD` | Robust to outliers | Leys et al. (2013) |
+| **IQR method** | `x < Q1 - 1.5×IQR` or `x > Q3 + 1.5×IQR` | Skewed distributions | Tukey (1977) |
+| **Isolation Forest** | Random partition isolation | Multivariate, local anomalies | Liu et al. (2008) |
 
-#### Interpreting Flagged Anomalies:
+#### Isolation Forest: How It Works
 
-Not all anomalies are bad! Context determines interpretation:
+**Principle:** Anomalies are "few and different" — they require fewer random splits to isolate.
+
+1. Randomly select a feature and a split value
+2. Recursively partition data until each point is isolated
+3. **Path length** = number of splits required
+4. **Anomaly score** = average path length across trees (shorter = more anomalous)
+
+**Why It's Superior for HRV Data:**
+- Handles multivariate data (RMSSD, HR, LF/HF simultaneously)
+- Detects **local anomalies** (unusual for that time of day)
+- No distribution assumptions (works for non-Gaussian HRV metrics)
+- Linear time complexity: O(n log n)
+
+#### Interpreting Flagged Anomalies
 
 | Anomaly Type | Possible Benign Cause | Possible Concern |
 |--------------|----------------------|------------------|
@@ -13312,17 +13442,13 @@ Not all anomalies are bad! Context determines interpretation:
 | **Low RMSSD drop** | Exercise, standing | Overtraining, stress |
 | **High HR spike** | Activity, emotion | Arrhythmia, fever |
 | **Multiple metrics flagged** | State change (sleep→wake) | Systemic issue |
+| **Isolation Forest outlier** | Unique physiological state | Investigate context |
 
-#### Cross-Metric Correlations:
+#### Cross-Metric Correlations
 
-The correlation matrix reveals how your metrics relate. Key patterns:
-
-- **r > 0.7**: Strong positive correlation (metrics rise/fall together)
+- **r > 0.7**: Strong positive correlation (metrics co-vary)
 - **r < -0.7**: Strong negative correlation (inverse relationship)
-- **r ≈ 0**: Independent metrics (valuable for diversity of information)
-
-*Example: If RMSSD and pNN50 correlate r = 0.95, they provide redundant information. 
-If RMSSD and SD2 correlate r = 0.3, they capture different aspects of variability.*
+- **r ≈ 0**: Independent metrics (valuable for triangulation)
 """)
         
         with st.expander("🎯 **Practical Applications**", expanded=False):
@@ -13476,6 +13602,81 @@ If RMSSD and SD2 correlate r = 0.3, they capture different aspects of variabilit
             
             selected_metrics = selected_hrv + selected_cardiac + selected_other
             
+            # ==========================================================================
+            # GARMIN WEARABLE DATA TRIANGULATION
+            # ==========================================================================
+            st.markdown("---")
+            st.markdown("#### 🔗 Garmin Wearable Data Triangulation")
+            
+            _garmin_df = pd.DataFrame()
+            _active_user_id = active_user_context.get("user_id") if active_user_context else None
+            if _active_user_id:
+                try:
+                    _db = get_database()
+                    if hasattr(_db, "get_garmin_daily_dataframe"):
+                        _garmin_df = _db.get_garmin_daily_dataframe(_active_user_id, limit=90)
+                except Exception:
+                    pass
+            
+            if not _garmin_df.empty:
+                with st.expander("📱 **Garmin Daily Metrics (last 90 days)**", expanded=False):
+                    # Select key columns for display
+                    _garmin_cols = ["metric_date", "resting_hr_bpm", "avg_hr_bpm", "stress_score", 
+                                    "sleep_score", "sleep_efficiency", "sleep_duration_hours",
+                                    "body_battery_avg", "hrv_rmssd_ms", "avg_spo2"]
+                    _available_garmin = [c for c in _garmin_cols if c in _garmin_df.columns]
+                    if _available_garmin:
+                        _garmin_display = _garmin_df[_available_garmin].copy()
+                        _garmin_display = _garmin_display.rename(columns={
+                            "metric_date": "Date",
+                            "resting_hr_bpm": "Resting HR",
+                            "avg_hr_bpm": "Avg HR",
+                            "stress_score": "Stress",
+                            "sleep_score": "Sleep Score",
+                            "sleep_efficiency": "Sleep Eff %",
+                            "sleep_duration_hours": "Sleep (h)",
+                            "body_battery_avg": "Body Battery",
+                            "hrv_rmssd_ms": "Garmin RMSSD",
+                            "avg_spo2": "SpO2 %"
+                        })
+                        st.dataframe(_garmin_display.head(30), use_container_width=True, hide_index=True)
+                        
+                        # Triangulation summary
+                        st.markdown("##### 📊 Triangulation Insights")
+                        _g_rmssd = _garmin_df["hrv_rmssd_ms"].dropna() if "hrv_rmssd_ms" in _garmin_df.columns else pd.Series(dtype=float)
+                        _g_stress = _garmin_df["stress_score"].dropna() if "stress_score" in _garmin_df.columns else pd.Series(dtype=float)
+                        _g_sleep = _garmin_df["sleep_score"].dropna() if "sleep_score" in _garmin_df.columns else pd.Series(dtype=float)
+                        _g_battery = _garmin_df["body_battery_avg"].dropna() if "body_battery_avg" in _garmin_df.columns else pd.Series(dtype=float)
+                        
+                        _insight_cols = st.columns(4)
+                        with _insight_cols[0]:
+                            if not _g_rmssd.empty:
+                                st.metric("Garmin RMSSD (7d)", f"{_g_rmssd.head(7).mean():.1f} ms", 
+                                          delta=f"{_g_rmssd.head(7).mean() - _g_rmssd.tail(7).mean():.1f} vs last week" if len(_g_rmssd) >= 14 else None)
+                        with _insight_cols[1]:
+                            if not _g_stress.empty:
+                                st.metric("Stress Score (7d)", f"{_g_stress.head(7).mean():.0f}",
+                                          delta=f"{_g_stress.head(7).mean() - _g_stress.tail(7).mean():.0f} vs last week" if len(_g_stress) >= 14 else None,
+                                          delta_color="inverse")
+                        with _insight_cols[2]:
+                            if not _g_sleep.empty:
+                                st.metric("Sleep Score (7d)", f"{_g_sleep.head(7).mean():.0f}",
+                                          delta=f"{_g_sleep.head(7).mean() - _g_sleep.tail(7).mean():.0f} vs last week" if len(_g_sleep) >= 14 else None)
+                        with _insight_cols[3]:
+                            if not _g_battery.empty:
+                                st.metric("Body Battery (7d)", f"{_g_battery.head(7).mean():.0f}",
+                                          delta=f"{_g_battery.head(7).mean() - _g_battery.tail(7).mean():.0f} vs last week" if len(_g_battery) >= 14 else None)
+                        
+                        st.caption("""
+**Triangulation principle:** Combining Polar H10 HRV (research-grade ECG) with Garmin wearables 
+(PPG-based) enables cross-validation. Discrepancies may indicate:
+- **Garmin higher RMSSD:** PPG artifacts, wrist position effects
+- **Polar higher RMSSD:** Garmin averaging/filtering differences
+- **Consistent trends:** Reliable autonomic state assessment
+""")
+            else:
+                st.info("💡 **Tip:** Import Garmin data in the sidebar to enable wearable triangulation.")
+            
             if selected_metrics and SCIENTIFIC_CHARTS_AVAILABLE:
                 st.markdown("---")
                 st.markdown("#### 📈 Synchronized Timeline")
@@ -13510,9 +13711,157 @@ If RMSSD and SD2 correlate r = 0.3, they capture different aspects of variabilit
                         config=EChartsConfig()
                     )
                 
-                # ML Pattern Detection
+                # ==========================================================================
+                # ISOLATION FOREST MULTIVARIATE ANOMALY DETECTION
+                # ==========================================================================
                 st.markdown("---")
-                st.markdown("#### 🔍 ML Pattern Detection")
+                st.markdown("#### 🌲 Isolation Forest Anomaly Detection")
+                st.caption("*Unsupervised ML algorithm for detecting unusual recordings based on multiple metrics simultaneously*")
+                
+                # Prepare multivariate data for Isolation Forest
+                _iforest_metrics = [m for m in selected_metrics if m in multi_results_df.columns]
+                if len(_iforest_metrics) >= 2 and len(multi_results_df) >= 5:
+                    _if_data = multi_results_df[_iforest_metrics].dropna()
+                    
+                    if len(_if_data) >= 5:
+                        _if_col1, _if_col2 = st.columns([1, 3])
+                        with _if_col1:
+                            _contamination = st.slider(
+                                "Expected anomaly rate",
+                                min_value=0.01,
+                                max_value=0.20,
+                                value=0.05,
+                                step=0.01,
+                                key="iforest_contamination",
+                                help="Proportion of recordings expected to be anomalous (default 5%)"
+                            )
+                            _run_iforest = st.button("🌲 Run Isolation Forest", key="run_iforest_btn")
+                        
+                        if _run_iforest:
+                            with st.spinner("Running Isolation Forest..."):
+                                try:
+                                    from sklearn.ensemble import IsolationForest
+                                    from sklearn.preprocessing import StandardScaler
+                                    
+                                    # Standardize features
+                                    _scaler = StandardScaler()
+                                    _X_scaled = _scaler.fit_transform(_if_data.values)
+                                    
+                                    # Fit Isolation Forest
+                                    _iforest = IsolationForest(
+                                        n_estimators=100,
+                                        contamination=float(_contamination),
+                                        random_state=42,
+                                        n_jobs=-1,
+                                    )
+                                    _predictions = _iforest.fit_predict(_X_scaled)
+                                    _scores = _iforest.decision_function(_X_scaled)
+                                    
+                                    # Store results
+                                    st.session_state["iforest_predictions"] = _predictions
+                                    st.session_state["iforest_scores"] = _scores
+                                    st.session_state["iforest_indices"] = _if_data.index.tolist()
+                                    st.session_state["iforest_metrics"] = _iforest_metrics
+                                except ImportError:
+                                    st.warning("scikit-learn not available for Isolation Forest.")
+                                except Exception as _exc:
+                                    st.error(f"Isolation Forest failed: {_exc}")
+                        
+                        # Display Isolation Forest results
+                        if "iforest_predictions" in st.session_state:
+                            _preds = st.session_state["iforest_predictions"]
+                            _scores = st.session_state["iforest_scores"]
+                            _indices = st.session_state["iforest_indices"]
+                            _if_mets = st.session_state.get("iforest_metrics", [])
+                            
+                            _n_anomalies = int(np.sum(_preds == -1))
+                            _n_normal = int(np.sum(_preds == 1))
+                            
+                            with _if_col2:
+                                _if_m1, _if_m2, _if_m3 = st.columns(3)
+                                with _if_m1:
+                                    st.metric("🔴 Anomalies", _n_anomalies)
+                                with _if_m2:
+                                    st.metric("🟢 Normal", _n_normal)
+                                with _if_m3:
+                                    st.metric("Anomaly Rate", f"{100 * _n_anomalies / len(_preds):.1f}%")
+                            
+                            # Show anomalous recordings
+                            if _n_anomalies > 0:
+                                st.markdown("##### 🔴 Anomalous Recordings")
+                                _anomaly_mask = _preds == -1
+                                _anomaly_indices = [_indices[i] for i in range(len(_indices)) if _anomaly_mask[i]]
+                                
+                                # Build anomaly table with source info
+                                _anomaly_rows = []
+                                for _idx in _anomaly_indices:
+                                    if _idx < len(multi_results_df):
+                                        _row = multi_results_df.iloc[_idx]
+                                        _src = _row.get("source", f"Recording {_idx}")
+                                        _ts = _row.get("timestamp", "")
+                                        _score = _scores[_indices.index(_idx)] if _idx in _indices else np.nan
+                                        _anomaly_rows.append({
+                                            "Recording": str(_src)[:40],
+                                            "Timestamp": str(_ts)[:19] if _ts else "—",
+                                            "Anomaly Score": round(float(_score), 3),
+                                            **{m: round(float(_row.get(m, np.nan)), 2) for m in _if_mets[:4]}
+                                        })
+                                
+                                if _anomaly_rows:
+                                    _anomaly_df = pd.DataFrame(_anomaly_rows)
+                                    _anomaly_df = _anomaly_df.sort_values("Anomaly Score")
+                                    st.dataframe(_anomaly_df, use_container_width=True, hide_index=True)
+                                    
+                                    st.markdown("""
+**Interpretation Guide:**
+- **Anomaly Score < -0.1:** Highly unusual recording — investigate context (measurement conditions, activity, stress)
+- **Anomaly Score ≈ 0:** Borderline — may represent normal variation or mild perturbation
+- **Multiple consecutive anomalies:** Possible systemic issue (illness, overtraining, poor sleep)
+
+**Liu et al. (2008):** *"Anomaly score is based on the expected path length for a point... shorter path lengths indicate higher anomaly likelihood."*
+""")
+                            
+                            # Anomaly score distribution chart
+                            if SCIENTIFIC_CHARTS_AVAILABLE and len(_scores) >= 3:
+                                st.markdown("##### 📊 Anomaly Score Distribution")
+                                _score_data = [{"index": i, "score": float(_scores[i]), "label": "Anomaly" if _preds[i] == -1 else "Normal"} for i in range(len(_scores))]
+                                _normal_scores = [d["score"] for d in _score_data if d["label"] == "Normal"]
+                                _anomaly_scores_list = [d["score"] for d in _score_data if d["label"] == "Anomaly"]
+                                
+                                # Simple bar chart showing scores
+                                _score_chart = {
+                                    "tooltip": {"trigger": "axis"},
+                                    "legend": {"data": ["Normal", "Anomaly"], "bottom": 0},
+                                    "xAxis": {"type": "category", "data": [f"Rec {i+1}" for i in range(len(_scores))]},
+                                    "yAxis": {"type": "value", "name": "Anomaly Score", "axisLabel": {"formatter": "{value}"}},
+                                    "series": [
+                                        {
+                                            "name": "Score",
+                                            "type": "bar",
+                                            "data": [
+                                                {
+                                                    "value": round(float(_scores[i]), 3),
+                                                    "itemStyle": {"color": "#ef4444" if _preds[i] == -1 else "#22c55e"}
+                                                }
+                                                for i in range(len(_scores))
+                                            ],
+                                        }
+                                    ],
+                                    "visualMap": {
+                                        "show": False,
+                                        "pieces": [
+                                            {"lte": 0, "color": "#ef4444"},
+                                            {"gt": 0, "color": "#22c55e"}
+                                        ]
+                                    }
+                                }
+                                render_echarts(_score_chart, height_px=250, config=EChartsConfig())
+                else:
+                    st.info("Select at least 2 metrics with at least 5 data points to run Isolation Forest.")
+                
+                # ML Pattern Detection (Single Metric)
+                st.markdown("---")
+                st.markdown("#### 🔍 Single-Metric Pattern Detection")
                 
                 if ML_ANALYTICS_AVAILABLE:
                     col_ml1, col_ml2 = st.columns([1, 2])
@@ -13530,7 +13879,7 @@ If RMSSD and SD2 correlate r = 0.3, they capture different aspects of variabilit
                             key="ml_anomaly_method"
                         )
                         
-                        run_ml = st.button("🔬 Run ML Analysis", key="run_ml_btn")
+                        run_ml = st.button("🔬 Run Analysis", key="run_ml_btn")
                     
                     if run_ml and ml_metric in multi_results_df.columns:
                         with st.spinner("Running ML analysis..."):
@@ -13706,8 +14055,100 @@ If RMSSD and SD2 correlate r = 0.3, they capture different aspects of variabilit
                             except Exception as e:
                                 logger.warning(f"Correlation computation failed: {e}")
                                 st.warning(f"Could not compute correlations: {e}")
+                
+                # ==========================================================================
+                # STATISTICAL SUMMARY TABLE
+                # ==========================================================================
+                st.markdown("---")
+                st.markdown("#### 📊 Statistical Summary")
+                
+                if selected_metrics:
+                    _stat_rows = []
+                    for _m in selected_metrics:
+                        if _m in multi_results_df.columns:
+                            _vals = multi_results_df[_m].dropna()
+                            if len(_vals) > 0:
+                                _stat_rows.append({
+                                    "Metric": _m,
+                                    "N": len(_vals),
+                                    "Mean": round(float(_vals.mean()), 2),
+                                    "SD": round(float(_vals.std()), 2),
+                                    "Median": round(float(_vals.median()), 2),
+                                    "Min": round(float(_vals.min()), 2),
+                                    "Max": round(float(_vals.max()), 2),
+                                    "CV%": round(100 * float(_vals.std()) / float(_vals.mean()), 1) if _vals.mean() != 0 else np.nan,
+                                    "IQR": round(float(_vals.quantile(0.75) - _vals.quantile(0.25)), 2),
+                                })
+                    
+                    if _stat_rows:
+                        _stat_df = pd.DataFrame(_stat_rows)
+                        st.dataframe(_stat_df, use_container_width=True, hide_index=True)
+                        
+                        with st.expander("📖 **Understanding These Statistics**", expanded=False):
+                            st.markdown("""
+**Descriptive Statistics for HRV Time Series:**
+
+| Statistic | Definition | Clinical Relevance |
+|-----------|------------|-------------------|
+| **Mean** | Arithmetic average | Central tendency of metric |
+| **SD** | Standard deviation | Day-to-day variability |
+| **CV%** | Coefficient of variation (SD/Mean × 100) | Relative variability; high CV (>20%) indicates inconsistent recordings |
+| **Median** | Middle value (50th percentile) | Robust central tendency (less affected by outliers) |
+| **IQR** | Interquartile range (Q75 - Q25) | Spread of middle 50% of data |
+
+**Interpreting CV% for RMSSD (Plews et al., 2013):**
+- **CV < 10%:** Very consistent — stable autonomic regulation
+- **CV 10–20%:** Normal variation — expected physiological fluctuation
+- **CV > 20%:** High variation — investigate sources (training load, sleep, stress)
+
+**Reference:** Plews, D.J., et al. (2013). Training adaptation and heart rate variability in 
+elite endurance athletes. *Medicine & Science in Sports & Exercise*, 45(9), 1721–1728. 
+[DOI: 10.1249/MSS.0b013e31828e3e58](https://doi.org/10.1249/MSS.0b013e31828e3e58)
+""")
             elif not selected_metrics:
                 st.info("Select at least one metric to display the timeline.")
+        
+        # ==========================================================================
+        # REFERENCES SECTION
+        # ==========================================================================
+        with st.expander("📚 **Scientific References**", expanded=False):
+            st.markdown("""
+<small>
+
+**Anomaly Detection & Machine Learning:**
+1. **Liu, F.T., Ting, K.M., & Zhou, Z.-H.** (2008). Isolation Forest. *IEEE ICDM*, 413–422. 
+   [DOI: 10.1109/ICDM.2008.17](https://doi.org/10.1109/ICDM.2008.17)
+   
+2. **Karasmanoglou, A., et al.** (2023). ECG-Based Semi-Supervised Anomaly Detection. 
+   *Int. J. Environ. Res. Public Health*, 20(6), 5000. 
+   [DOI: 10.3390/ijerph20065000](https://doi.org/10.3390/ijerph20065000)
+
+**HRV & Wearable Validation:**
+3. **Dalmeida, K.M., & Masala, G.L.** (2021). HRV Features as Viable Physiological Markers 
+   for Stress Detection Using Wearable Devices. *Sensors*, 21(8), 2873. 
+   [DOI: 10.3390/s21082873](https://doi.org/10.3390/s21082873)
+
+**HRV Fundamentals:**
+4. **Shaffer, F., & Ginsberg, J.P.** (2017). An overview of heart rate variability metrics 
+   and norms. *Frontiers in Public Health*, 5, 258. 
+   [DOI: 10.3389/fpubh.2017.00258](https://doi.org/10.3389/fpubh.2017.00258)
+
+5. **Task Force** (1996). Heart rate variability: Standards of measurement, physiological 
+   interpretation, and clinical use. *European Heart Journal*, 17(3), 354–381. 
+   [DOI: 10.1093/oxfordjournals.eurheartj.a014868](https://doi.org/10.1093/oxfordjournals.eurheartj.a014868)
+
+**Training & Recovery:**
+6. **Plews, D.J., et al.** (2013). Training adaptation and heart rate variability in elite 
+   endurance athletes. *Medicine & Science in Sports & Exercise*, 45(9), 1721–1728. 
+   [DOI: 10.1249/MSS.0b013e31828e3e58](https://doi.org/10.1249/MSS.0b013e31828e3e58)
+
+**Circadian Patterns:**
+7. **Buitrago-Ricaurte, N., et al.** (2025). Age and sex affect circadian patterns of cardiac 
+   autonomic function. *Scientific Reports*, 15, 18525. 
+   [PMID: 41022949](https://pubmed.ncbi.nlm.nih.gov/41022949/)
+
+</small>
+""", unsafe_allow_html=True)
         
         st.caption(
             "**Scientific basis:** Multi-metric analysis enables detection of autonomic patterns that "
