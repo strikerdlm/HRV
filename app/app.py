@@ -285,6 +285,7 @@ try:
         get_current_user_data,
         get_active_user_context,
         get_all_active_users,
+        get_database,
     )
     USER_PROFILE_TAB_AVAILABLE = True
 except ImportError:
@@ -293,6 +294,7 @@ except ImportError:
     get_current_user_data = None  # type: ignore[assignment]
     get_active_user_context = _fallback_get_active_user_context
     get_all_active_users = _fallback_get_all_active_users
+    get_database = None  # type: ignore[assignment]
 
 # Space weather impact prediction module
 try:
@@ -24257,10 +24259,7 @@ This allows models to capture delayed biological responses to space weather chan
                         """)
                         
                         # Check for active user profile
-                        # NOTE: get_current_user_data and get_all_active_users are already imported
-                        # at module level. Only import get_database locally to avoid UnboundLocalError.
-                        from user_profile_tab import get_database
-                        
+                        # NOTE: All functions are imported at module level to avoid UnboundLocalError
                         current_user_data = get_current_user_data()
                         all_users = get_all_active_users()
                         
