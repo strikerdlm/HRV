@@ -6926,8 +6926,8 @@ def _render_radiation_gauge(
     career_limit_msv: float,
     environment_label: str,
 ) -> None:
-    """Render a clean two-ring gauge for radiation exposure with lowered center detail."""
-    career_pct = min((cumulative_msv / career_limit_msv) * 100.0, 120.0)  # Cap at 120%
+    """Render a clean gauge for radiation exposure."""
+    career_pct = min((cumulative_msv / career_limit_msv) * 100.0, 100.0)
     
     # Determine zone
     if career_pct < 30.0:
@@ -6945,138 +6945,51 @@ def _render_radiation_gauge(
     
     gauge_option = {
         "series": [
-            # Outer decorative ring (background track)
             {
                 "type": "gauge",
-                "radius": "95%",
-                "center": ["50%", "55%"],
                 "startAngle": 200,
                 "endAngle": -20,
                 "min": 0,
                 "max": 100,
+                "splitNumber": 4,
                 "axisLine": {
                     "lineStyle": {
-                        "width": 3,
-                        "color": [[1, "rgba(200,200,200,0.3)"]],
-                    }
-                },
-                "axisTick": {"show": False},
-                "splitLine": {"show": False},
-                "axisLabel": {"show": False},
-                "pointer": {"show": False},
-                "detail": {"show": False},
-            },
-            # Main colored gauge ring
-            {
-                "name": "Radiation Exposure",
-                "type": "gauge",
-                "radius": "85%",
-                "center": ["50%", "55%"],
-                "startAngle": 200,
-                "endAngle": -20,
-                "min": 0,
-                "max": 100,
-                "splitNumber": 10,
-                "axisLine": {
-                    "lineStyle": {
-                        "width": 18,
+                        "width": 25,
                         "color": [
-                            [0.30, "#28a745"],  # Green: GO (0-30%)
-                            [0.60, "#ffc107"],  # Yellow: MONITOR (30-60%)
-                            [0.80, "#fd7e14"],  # Orange: CAUTION (60-80%)
-                            [1.00, "#dc3545"],  # Red: NO-GO (80-100%)
+                            [0.30, "#28a745"],
+                            [0.60, "#ffc107"],
+                            [0.80, "#fd7e14"],
+                            [1.00, "#dc3545"],
                         ],
                     }
                 },
                 "pointer": {
-                    "icon": "path://M2090.36389,615.30999 L2## Needle path",
-                    "length": "65%",
+                    "itemStyle": {"color": "#333"},
+                    "length": "55%",
                     "width": 6,
-                    "offsetCenter": [0, "-5%"],
-                    "itemStyle": {"color": "#394867"},
-                },
-                "anchor": {
-                    "show": True,
-                    "size": 12,
-                    "itemStyle": {"borderColor": "#394867", "borderWidth": 2},
-                },
-                "axisTick": {
-                    "show": True,
-                    "length": 6,
-                    "distance": 2,
-                    "lineStyle": {"color": "auto", "width": 1},
-                },
-                "splitLine": {
-                    "show": True,
-                    "length": 10,
-                    "distance": 2,
-                    "lineStyle": {"color": "auto", "width": 2},
-                },
-                "axisLabel": {
-                    "show": True,
-                    "distance": 25,
-                    "color": "#666",
-                    "fontSize": 11,
-                    "formatter": "{value}",
-                },
-                "title": {
-                    "show": True,
-                    "offsetCenter": [0, "75%"],
-                    "fontSize": 11,
-                    "color": "#888",
-                },
-                "detail": {
-                    "show": True,
-                    "valueAnimation": True,
-                    "fontSize": 20,
-                    "fontWeight": "bold",
-                    "color": zone_color,
-                    "offsetCenter": [0, "35%"],
-                    "formatter": f"{{value}}%",
-                },
-                "data": [
-                    {
-                        "value": round(career_pct, 1),
-                        "name": f"{cumulative_msv:.1f} / {career_limit_msv:.0f} mSv",
-                    }
-                ],
-            },
-            # Inner status badge
-            {
-                "type": "gauge",
-                "radius": "45%",
-                "center": ["50%", "55%"],
-                "startAngle": 0,
-                "endAngle": 360,
-                "min": 0,
-                "max": 1,
-                "axisLine": {
-                    "lineStyle": {
-                        "width": 0,
-                        "color": [[1, "transparent"]],
-                    }
                 },
                 "axisTick": {"show": False},
                 "splitLine": {"show": False},
                 "axisLabel": {"show": False},
-                "pointer": {"show": False},
+                "detail": {"show": False},
                 "title": {"show": False},
-                "detail": {
-                    "show": True,
-                    "offsetCenter": [0, "85%"],
-                    "fontSize": 16,
-                    "fontWeight": "bold",
-                    "color": zone_color,
-                    "formatter": zone_label,
-                    "rich": {},
-                },
-                "data": [{"value": 0}],
-            },
+                "data": [{"value": round(career_pct, 1)}],
+            }
         ],
     }
     
-    render_echarts(gauge_option, height_px=260)
-    st.caption(f"**Environment:** {environment_label.replace('_', ' ').title()}")
+    render_echarts(gauge_option, height_px=180)
+    
+    # Status display below gauge
+    st.markdown(
+        f"""<div style="text-align: center;">
+            <span style="font-size: 32px; font-weight: bold; color: {zone_color};">{zone_label}</span><br/>
+            <span style="font-size: 18px; color: #555;">{career_pct:.1f}% of career limit</span><br/>
+            <span style="font-size: 14px; color: #888;">{cumulative_msv:.1f} / {career_limit_msv:.0f} mSv</span>
+        </div>""",
+        unsafe_allow_html=True,
+    )
+    st.caption(f"Environment: {environment_label.replace('_', ' ').title()}")
 
 
 def _render_radiation_timeline(
@@ -7273,8 +7186,8 @@ def _render_radiation_timeline(
         f"**Reference:** {dose_info.get('reference', 'N/A')}"
     )
     
-    # Data table
-    with st.expander("📋 View Timeline Data"):
+    # Data table - using checkbox instead of expander (cannot nest expanders)
+    if st.checkbox("📋 Show Timeline Data Table", value=False, key="rad_timeline_data_toggle"):
         display_df = timeline_df[["date", "mission_day", "daily_dose_msv", "eva_hours", "total_dose_msv", "cumulative_dose_msv", "career_pct_used"]].copy()
         display_df.columns = ["Date", "Mission Day", "Daily Dose (mSv)", "EVA Hours", "Total Daily (mSv)", "Cumulative (mSv)", "Career %"]
         st.dataframe(display_df, use_container_width=True, hide_index=True)
@@ -7544,24 +7457,26 @@ def _render_radiation_eva_matrix(
     
     matrix_option = {
         "tooltip": {"position": "top"},
-        "grid": {"left": 100, "right": 40, "top": 40, "bottom": 80},
+        "grid": {"left": 120, "right": 50, "top": 30, "bottom": 120},
         "xAxis": {
             "type": "category",
             "data": likelihood_order,
             "name": "Likelihood (Space Weather)",
             "nameLocation": "middle",
-            "nameGap": 40,
+            "nameGap": 35,
+            "axisLabel": {"fontSize": 13},
+            "nameTextStyle": {"fontSize": 14, "fontWeight": "bold"},
         },
         "yAxis": {
             "type": "category",
             "data": severity_order,
             "name": "Severity (Career Dose)",
+            "nameTextStyle": {"fontSize": 14, "fontWeight": "bold"},
+            "axisLabel": {"fontSize": 13},
         },
         "visualMap": {
+            "show": False,
             "type": "piecewise",
-            "orient": "horizontal",
-            "left": "center",
-            "bottom": 5,
             "pieces": [
                 {"value": 1, "label": "GO", "color": "#28a745"},
                 {"value": 2, "label": "MONITOR", "color": "#ffc107"},
@@ -7580,7 +7495,7 @@ def _render_radiation_eva_matrix(
                 "name": "Current Assessment",
                 "type": "scatter",
                 "data": [[lik_idx, sev_idx, 5]],
-                "symbolSize": 30,
+                "symbolSize": 35,
                 "itemStyle": {
                     "color": "rgba(0,0,0,0)",
                     "borderColor": "#000",
@@ -7589,15 +7504,34 @@ def _render_radiation_eva_matrix(
             },
         ],
     }
-    render_echarts(matrix_option, height_px=350)
+    render_echarts(matrix_option, height_px=380)
+    
+    # Legend displayed separately below chart to avoid clutter
+    st.markdown(
+        """<div style="text-align: center; margin-top: 5px;">
+            <span style="display: inline-block; margin: 0 15px;">
+                <span style="background: #28a745; padding: 4px 12px; border-radius: 4px; color: white; font-weight: bold;">GO</span>
+            </span>
+            <span style="display: inline-block; margin: 0 15px;">
+                <span style="background: #ffc107; padding: 4px 12px; border-radius: 4px; color: #333; font-weight: bold;">MONITOR</span>
+            </span>
+            <span style="display: inline-block; margin: 0 15px;">
+                <span style="background: #fd7e14; padding: 4px 12px; border-radius: 4px; color: white; font-weight: bold;">CAUTION</span>
+            </span>
+            <span style="display: inline-block; margin: 0 15px;">
+                <span style="background: #dc3545; padding: 4px 12px; border-radius: 4px; color: white; font-weight: bold;">NO-GO</span>
+            </span>
+        </div>""",
+        unsafe_allow_html=True,
+    )
     
     st.caption(
         "**Matrix interpretation:** Likelihood is based on current space weather conditions (S/G scale). "
         "Severity is based on cumulative career dose. The black circle shows your current assessment position."
     )
     
-    # Scientific references
-    with st.expander("📚 **Scientific References**"):
+    # Scientific references - using checkbox instead of expander (cannot nest expanders)
+    if st.checkbox("📚 Show Scientific References", value=False, key="rad_eva_refs_toggle"):
         st.markdown("""
 **Radiation Dose Rates & Limits:**
 - NASA-STD-3001 Vol 1 Rev B (2022). Crew Health Standard. Career limit: 600 mSv.
