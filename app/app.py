@@ -282,6 +282,10 @@ except ImportError:
         """Fallback user context when profile tab is unavailable."""
         return _guest_user_context()
 
+    def get_all_active_users() -> List[Dict[str, Any]]:
+        """Fallback when profile tab is unavailable - returns empty list."""
+        return []
+
 # Space weather impact prediction module
 try:
     from space_weather_impact import (
