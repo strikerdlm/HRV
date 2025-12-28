@@ -13,7 +13,7 @@ References:
 - Nunan D et al. (2010). PACE 33:1407-1417.
 - Bigger JT et al. (1992). Circulation 85:164-171.
 
-Author: HRV Analysis Suite
+Author: Dr Diego Malpica MD
 Version: 1.0.0
 """
 
