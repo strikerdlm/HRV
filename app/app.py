@@ -24257,7 +24257,9 @@ This allows models to capture delayed biological responses to space weather chan
                         """)
                         
                         # Check for active user profile
-                        from user_profile_tab import get_current_user_data, get_all_active_users, get_database
+                        # NOTE: get_current_user_data and get_all_active_users are already imported
+                        # at module level. Only import get_database locally to avoid UnboundLocalError.
+                        from user_profile_tab import get_database
                         
                         current_user_data = get_current_user_data()
                         all_users = get_all_active_users()
