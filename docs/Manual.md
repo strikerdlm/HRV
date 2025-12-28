@@ -985,6 +985,68 @@ Age/sex-adjusted interpretation using Nunan et al. (2010) and Shaffer & Ginsberg
 | High | 1-2 SD above mean |
 | Very High | >2 SD above mean |
 
+#### Advanced HRV Analytics Platform (v1.8.82+)
+
+The **🧬 Advanced HRV Analytics** expander in HRV History provides state-of-the-art statistical analysis, ML pattern recognition, and clinical decision support. Access it via **User Profile → HRV → Advanced HRV Analytics**.
+
+**5-Tab Interface:**
+
+| Tab | Content |
+|-----|---------|
+| 🎯 Clinical Decision | Overall status (Green/Yellow/Orange/Red), autonomic balance gauge, metric assessments, alerts, recommendations |
+| 📊 Statistical Tests | Descriptive stats, Shapiro-Wilk normality tests, t-tests vs reference, effect sizes (Cohen's d) |
+| 📈 Trends & Forecast | Trend direction, slope significance, R², % change, 7-day forecasts with 95% CI |
+| 🔍 Anomalies & Patterns | Z-score/IQR anomaly detection, pattern recognition (autonomic balance, chronic stress) |
+| 🔗 HRV + Garmin | Cross-correlation matrix, concordance score, integrated stress/recovery scores |
+
+**Statistical Tests (p-values in 4 decimals):**
+
+| Test | Purpose | Output |
+|------|---------|--------|
+| Shapiro-Wilk | Normality assessment | W-statistic, p-value, interpretation |
+| One-sample t-test | Comparison vs age-reference | t, p, Cohen's d, effect label |
+| Paired t-test | Pre-post change detection | t, p, effect size, direction |
+| Mann-Whitney U | Non-parametric comparison | U, p, rank-biserial r |
+| Spearman correlation | Cross-metric associations | ρ, p, strength label |
+
+**Age-Stratified Reference Values (RMSSD, ms):**
+
+| Age Range | Mean | SD | 15th %ile | 85th %ile |
+|-----------|------|-----|-----------|-----------|
+| 18-25 | 42.0 | 19.0 | 26.0 | 62.0 |
+| 26-35 | 39.0 | 18.0 | 24.0 | 58.0 |
+| 36-45 | 35.0 | 17.0 | 21.0 | 52.0 |
+| 46-55 | 30.0 | 15.0 | 17.0 | 46.0 |
+| 56-65 | 25.0 | 13.0 | 14.0 | 40.0 |
+| 66+ | 21.0 | 11.0 | 12.0 | 34.0 |
+
+*Source: Nunan et al. (2010). Scand J Med Sci Sports 20(1):e30-44*
+
+**Clinical Decision Support Semaphore:**
+
+| Risk Level | Color | Meaning | Action |
+|------------|-------|---------|--------|
+| GREEN | 🟢 | Normal/Favorable | Maintain current practices |
+| YELLOW | 🟡 | Monitor/Borderline | Track trends, minor adjustments |
+| ORANGE | 🟠 | Caution/Elevated | Active intervention recommended |
+| RED | 🔴 | Alert/High Risk | Consult healthcare provider |
+
+**Autonomic State Classification:**
+
+| State | LF/HF Range | Clinical Meaning |
+|-------|-------------|------------------|
+| Parasympathetic Dominant | < 0.8 | Rest & digest, good recovery |
+| Balanced | 0.8 - 2.0 | Healthy autonomic regulation |
+| Sympathetic Dominant | > 3.0 | Stress response, reduced recovery |
+| Dysregulated | Variable + low RMSSD | Impaired autonomic function |
+
+**Scientific References:**
+- Task Force (1996). Circulation 93(5):1043-65
+- Shaffer & Ginsberg (2017). Front Public Health 5:258
+- Nunan et al. (2010). Scand J Med Sci Sports 20(1):e30-44
+- Thayer et al. (2012). Neurosci Biobehav Rev 36(2):747-56
+- Cohen (1988). Statistical Power Analysis for the Behavioral Sciences
+
 #### Performance Forecast
 
 24-hour cognitive performance prediction:
