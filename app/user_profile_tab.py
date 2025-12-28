@@ -149,6 +149,29 @@ try:
 except ImportError:
     NOAA_SPACE_AVAILABLE = False
 
+# Radiation exposure module (evidence-based dose models)
+try:
+    from radiation_exposure import (
+        RadiationEnvironment,
+        RadiationDoseRate,
+        RadiationLimits,
+        EVARadiationStatus,
+        EVARadiationAssessment,
+        DOSE_RATE_DATABASE,
+        NASA_RADIATION_LIMITS,
+        assess_eva_radiation_risk,
+        build_radiation_timeline,
+        timeline_to_dataframe,
+        compare_environments,
+        get_environment_by_name,
+        get_dose_rate_info,
+        get_radiation_gauge_thresholds,
+        cumulative_to_status,
+    )
+    RADIATION_MODULE_AVAILABLE = True
+except ImportError:
+    RADIATION_MODULE_AVAILABLE = False
+
 # Visualization helpers
 from echarts_component import EChartsConfig, render_echarts
 from gauge_builder import GaugeThresholds, build_two_ring_gauge, get_gauge_thresholds
@@ -6727,6 +6750,791 @@ def _load_garmin_daily_objective(uid: str) -> pd.DataFrame:
     return tmp
 
 
+def _render_radiation_exposure_section(
+    user: UserProfile,
+    history_df: pd.DataFrame,
+    latest_entry: Dict[str, Any],
+) -> None:
+    """Render enhanced radiation exposure section with day-by-day tracking and EVA Go/No-Go matrix.
+    
+    Uses evidence-based dose rate models from radiation_exposure module.
+    """
+    st.markdown("##### ☢️ Radiation Exposure")
+    
+    rad_limit = 600.0  # NASA STD-3001B (career effective dose design limit)
+    rad_limit_legacy = 1000.0  # Legacy planning guideline (kept for comparison)
+    
+    # Get mission profile from latest entry or default
+    # Note: latest_entry is a pandas Series from iloc[-1], so use .get() directly
+    mission_profile = str(latest_entry.get("mission_profile", "") or "")
+    habitat = str(latest_entry.get("habitat", "") or "")
+    try:
+        mission_day = int(latest_entry.get("mission_day", 1) or 1)
+    except (ValueError, TypeError):
+        mission_day = 1
+    
+    # Determine current environment from mission profile
+    current_env = None
+    if RADIATION_MODULE_AVAILABLE:
+        current_env = get_environment_by_name(mission_profile) or get_environment_by_name(habitat)
+        if current_env is None:
+            # Default based on common mission profiles
+            if "lunar" in mission_profile.lower() or "moon" in mission_profile.lower():
+                current_env = RadiationEnvironment.LUNAR_SURFACE_NOMINAL
+            elif "gateway" in mission_profile.lower():
+                current_env = RadiationEnvironment.LUNAR_GATEWAY
+            elif "iss" in mission_profile.lower() or "leo" in mission_profile.lower():
+                current_env = RadiationEnvironment.LEO_ISS
+            elif "mars" in mission_profile.lower():
+                if "surface" in mission_profile.lower():
+                    current_env = RadiationEnvironment.MARS_SURFACE
+                else:
+                    current_env = RadiationEnvironment.MARS_TRANSIT
+            elif "analog" in mission_profile.lower() or "hera" in mission_profile.lower():
+                current_env = RadiationEnvironment.EARTH_SURFACE
+            elif "antarctica" in mission_profile.lower():
+                current_env = RadiationEnvironment.ANTARCTICA
+    
+    # Tabs for different views
+    rad_tab1, rad_tab2, rad_tab3, rad_tab4 = st.tabs([
+        "📊 Current Status",
+        "📈 Day-by-Day Timeline",
+        "🌍 Environment Comparison",
+        "🚀 EVA Go/No-Go Matrix",
+    ])
+    
+    with rad_tab1:
+        _render_radiation_current_status(
+            history_df, rad_limit, rad_limit_legacy, current_env, mission_day
+        )
+    
+    with rad_tab2:
+        _render_radiation_timeline(user, current_env, mission_day, rad_limit)
+    
+    with rad_tab3:
+        _render_radiation_environment_comparison(mission_day)
+    
+    with rad_tab4:
+        _render_radiation_eva_matrix(user, history_df, latest_entry, current_env)
+
+
+def _render_radiation_current_status(
+    history_df: pd.DataFrame,
+    rad_limit: float,
+    rad_limit_legacy: float,
+    current_env: Optional[Any],
+    mission_day: int,
+) -> None:
+    """Render current radiation status with gauges and metrics."""
+    rad_sources: Dict[str, str] = {}
+    if "radiation_dose_msv" in history_df.columns and not history_df["radiation_dose_msv"].dropna().empty:
+        rad_sources["Recorded cumulative dose"] = "radiation_dose_msv"
+    if (
+        "radiation_estimated_cumulative_msv" in history_df.columns
+        and not history_df["radiation_estimated_cumulative_msv"].dropna().empty
+    ):
+        rad_sources["Estimated cumulative dose"] = "radiation_estimated_cumulative_msv"
+
+    if not rad_sources:
+        # If no recorded data, show modeled estimate based on environment
+        if RADIATION_MODULE_AVAILABLE and current_env is not None:
+            dose_info = get_dose_rate_info(current_env)
+            daily_rate = dose_info.get("nominal_msv_per_day", 0.5)
+            estimated_dose = daily_rate * mission_day
+            
+            st.info(f"📡 **Modeled estimate** for {current_env.value.replace('_', ' ').title()}: "
+                    f"~{estimated_dose:.1f} mSv cumulative (Day {mission_day})")
+            
+            col_m1, col_m2, col_m3 = st.columns(3)
+            with col_m1:
+                st.metric("Daily dose rate", f"{daily_rate:.3f} mSv/day", help=dose_info.get("reference", ""))
+            with col_m2:
+                st.metric("Estimated cumulative", f"{estimated_dose:.1f} mSv", 
+                          delta=f"{rad_limit - estimated_dose:.1f} mSv remaining")
+            with col_m3:
+                career_pct = (estimated_dose / rad_limit) * 100.0
+                status, color, label = cumulative_to_status(estimated_dose, rad_limit)
+                st.metric("Career % used", f"{career_pct:.1f}%")
+                st.markdown(f"**Status:** <span style='color:{color};font-weight:bold;'>{label}</span>", 
+                            unsafe_allow_html=True)
+            
+            # Render gauge
+            _render_radiation_gauge(estimated_dose, rad_limit, current_env.value if current_env else "Unknown")
+        else:
+            st.warning("No radiation dose entries recorded yet. Log an exploration medical record to track exposure.")
+        return
+    
+    selected_label = st.radio("Dose source", list(rad_sources.keys()), horizontal=True, key="rad_source_selector")
+    rad_col = rad_sources[selected_label]
+    rad_series = pd.to_numeric(history_df[rad_col], errors="coerce").dropna()
+
+    if rad_series.empty:
+        st.warning("No radiation dose entries recorded yet.")
+        return
+    
+    max_rad = float(rad_series.max())
+    median_rad = float(rad_series.median())
+    rate_df = history_df.copy()
+    rate_df["radiation_dose_msv"] = pd.to_numeric(rate_df[rad_col], errors="coerce")
+    rad_rate = _compute_radiation_rate(rate_df)
+    remaining = max(rad_limit - max_rad, 0.0)
+    
+    col_r1, col_r2, col_r3 = st.columns(3)
+    col_r1.metric(
+        "Max cumulative dose",
+        f"{max_rad:.1f} mSv",
+        delta=f"{remaining:.1f} mSv below NASA limit",
+    )
+    col_r2.metric(
+        "Median logged dose",
+        f"{median_rad:.1f} mSv",
+        delta=None,
+    )
+    col_r3.metric(
+        "Daily accumulation",
+        f"{rad_rate:.2f} mSv/day" if rad_rate is not None else "—",
+        delta=None if rad_rate is None else "Avg change per mission day",
+    )
+    
+    # Render gauge
+    _render_radiation_gauge(max_rad, rad_limit, current_env.value if current_env else "Unknown")
+    
+    progress_value = min(max_rad / rad_limit, 1.0)
+    st.progress(progress_value)
+    legacy_pct = min(max_rad / rad_limit_legacy, 1.0) * 100.0
+    st.caption(
+        f"{progress_value * 100:.1f}% of NASA 600 mSv career effective dose design limit "
+        f"(legacy 1000 mSv: {legacy_pct:.1f}%)."
+    )
+    
+    # Line chart of dose vs mission day
+    if {"mission_day"}.issubset(history_df.columns):
+        chart_df = history_df.dropna(subset=["mission_day", rad_col] if rad_col else ["mission_day"]).copy()
+        if not chart_df.empty:
+            chart_df = chart_df.sort_values("mission_day").set_index("mission_day")
+            chart_df["radiation_dose_msv"] = pd.to_numeric(chart_df[rad_col], errors="coerce")
+            chart_df.rename(columns={"radiation_dose_msv": "Radiation (mSv)"}, inplace=True)
+            _render_profile_line_chart(
+                chart_df[["Radiation (mSv)"]],
+                title="Radiation Dose vs. Mission Day",
+                y_axis_label="mSv",
+            )
+
+
+def _render_radiation_gauge(
+    cumulative_msv: float,
+    career_limit_msv: float,
+    environment_label: str,
+) -> None:
+    """Render a two-ring gauge for radiation exposure similar to SAFTE gauges."""
+    career_pct = (cumulative_msv / career_limit_msv) * 100.0
+    
+    # Determine zone
+    if career_pct < 30.0:
+        zone_color = "#28a745"
+        zone_label = "GO"
+    elif career_pct < 60.0:
+        zone_color = "#ffc107"
+        zone_label = "MONITOR"
+    elif career_pct < 80.0:
+        zone_color = "#fd7e14"
+        zone_label = "CAUTION"
+    else:
+        zone_color = "#dc3545"
+        zone_label = "NO-GO"
+    
+    gauge_option = {
+        "tooltip": {"formatter": "{a} <br/>{b}: {c}%"},
+        "series": [
+            {
+                "name": "Career Dose Limit",
+                "type": "gauge",
+                "radius": "100%",
+                "center": ["50%", "60%"],
+                "startAngle": 200,
+                "endAngle": -20,
+                "min": 0,
+                "max": 100,
+                "splitNumber": 4,
+                "axisLine": {
+                    "lineStyle": {
+                        "width": 20,
+                        "color": [
+                            [0.30, "#28a745"],
+                            [0.60, "#ffc107"],
+                            [0.80, "#fd7e14"],
+                            [1.00, "#dc3545"],
+                        ],
+                    }
+                },
+                "pointer": {
+                    "icon": "path://M2.9,0.7L2.9,0.7c1.4,0,2.6,1.2,2.6,2.6v115c0,1.4-1.2,2.6-2.6,2.6l0,0c-1.4,0-2.6-1.2-2.6-2.6V3.3C0.3,1.9,1.4,0.7,2.9,0.7z",
+                    "width": 8,
+                    "length": "70%",
+                    "offsetCenter": [0, "0%"],
+                    "itemStyle": {"color": "#333"},
+                },
+                "axisTick": {"length": 8, "lineStyle": {"color": "auto", "width": 1}},
+                "splitLine": {"length": 15, "lineStyle": {"color": "auto", "width": 2}},
+                "axisLabel": {
+                    "color": "#666",
+                    "fontSize": 10,
+                    "formatter": "{value}%",
+                },
+                "title": {"offsetCenter": [0, "85%"], "fontSize": 12, "color": "#333"},
+                "detail": {
+                    "valueAnimation": True,
+                    "formatter": f"{{value}}%\n{zone_label}",
+                    "color": zone_color,
+                    "fontSize": 24,
+                    "fontWeight": "bold",
+                    "offsetCenter": [0, "45%"],
+                },
+                "data": [{"value": round(career_pct, 1), "name": f"{cumulative_msv:.1f} / {career_limit_msv:.0f} mSv"}],
+            }
+        ],
+    }
+    
+    render_echarts(gauge_option, height_px=280)
+    st.caption(f"**Environment:** {environment_label.replace('_', ' ').title()}")
+
+
+def _render_radiation_timeline(
+    user: UserProfile,
+    current_env: Optional[Any],
+    current_mission_day: int,
+    career_limit_msv: float,
+) -> None:
+    """Render day-by-day radiation exposure timeline with projections."""
+    st.markdown("**📅 Day-by-Day Radiation Accumulation**")
+    
+    if not RADIATION_MODULE_AVAILABLE:
+        st.warning("Radiation exposure module not available.")
+        return
+    
+    # Environment selector for projection
+    env_options = [
+        ("Earth Surface", RadiationEnvironment.EARTH_SURFACE),
+        ("Antarctica", RadiationEnvironment.ANTARCTICA),
+        ("Low Earth Orbit (ISS)", RadiationEnvironment.LEO_ISS),
+        ("Lunar Gateway", RadiationEnvironment.LUNAR_GATEWAY),
+        ("Lunar Surface", RadiationEnvironment.LUNAR_SURFACE_NOMINAL),
+        ("Mars Transit", RadiationEnvironment.MARS_TRANSIT),
+        ("Mars Surface", RadiationEnvironment.MARS_SURFACE),
+    ]
+    
+    col_env, col_days, col_eva = st.columns(3)
+    with col_env:
+        env_labels = [e[0] for e in env_options]
+        default_idx = 0
+        if current_env:
+            for i, (_, env) in enumerate(env_options):
+                if env == current_env:
+                    default_idx = i
+                    break
+        selected_env_label = st.selectbox(
+            "Environment",
+            env_labels,
+            index=default_idx,
+            key="rad_timeline_env",
+        )
+        selected_env = next((e[1] for e in env_options if e[0] == selected_env_label), RadiationEnvironment.LEO_ISS)
+    
+    with col_days:
+        projection_days = st.number_input(
+            "Projection days",
+            min_value=7,
+            max_value=1000,
+            value=min(max(current_mission_day, 30), 365),
+            step=7,
+            key="rad_timeline_days",
+        )
+    
+    with col_eva:
+        total_eva_hours = st.number_input(
+            "Planned EVA hours (total)",
+            min_value=0.0,
+            max_value=500.0,
+            value=0.0,
+            step=6.0,
+            key="rad_timeline_eva",
+        )
+    
+    # Solar cycle phase
+    solar_phase = st.radio(
+        "Solar cycle phase",
+        ["minimum", "ascending", "maximum", "declining"],
+        index=3,  # Default to declining
+        horizontal=True,
+        key="rad_timeline_solar",
+        help="Solar minimum = higher GCR dose; Solar maximum = lower GCR but more SPE risk",
+    )
+    
+    # Build timeline
+    start_date = date.today() - timedelta(days=current_mission_day - 1)
+    end_date = start_date + timedelta(days=int(projection_days) - 1)
+    
+    # Simple EVA schedule (spread evenly)
+    eva_schedule: Dict[date, float] = {}
+    if total_eva_hours > 0:
+        eva_days = max(1, int(projection_days // 14))  # One EVA every 2 weeks
+        eva_per_day = total_eva_hours / eva_days
+        for i in range(eva_days):
+            eva_date = start_date + timedelta(days=14 * (i + 1))
+            if eva_date <= end_date:
+                eva_schedule[eva_date] = min(eva_per_day, 8.0)  # Max 8h EVA per day
+    
+    timeline = build_radiation_timeline(
+        start_date=start_date,
+        end_date=end_date,
+        environment=selected_env,
+        initial_cumulative_msv=0.0,
+        eva_schedule=eva_schedule,
+        solar_cycle_phase=str(solar_phase),
+        career_limit_msv=career_limit_msv,
+    )
+    
+    if not timeline:
+        st.warning("Unable to build radiation timeline.")
+        return
+    
+    # Convert to DataFrame
+    timeline_df = timeline_to_dataframe(timeline)
+    
+    # Plot cumulative dose over time
+    st.markdown("##### Cumulative Dose Projection")
+    
+    # Add limit line data
+    timeline_df["career_limit"] = career_limit_msv
+    timeline_df["warning_30pct"] = career_limit_msv * 0.30
+    timeline_df["caution_60pct"] = career_limit_msv * 0.60
+    timeline_df["nogo_80pct"] = career_limit_msv * 0.80
+    
+    # ECharts multi-series line chart
+    x_labels = [d.strftime("%Y-%m-%d") for d in timeline_df["date"]]
+    cumulative_values = timeline_df["cumulative_dose_msv"].tolist()
+    
+    chart_option = {
+        "title": {"text": f"Radiation Exposure Projection ({selected_env_label})", "left": "center"},
+        "tooltip": {"trigger": "axis", "axisPointer": {"type": "cross"}},
+        "legend": {"data": ["Cumulative Dose", "Career Limit (600 mSv)", "MONITOR (30%)", "CAUTION (60%)", "NO-GO (80%)"], "top": 30},
+        "grid": {"left": 60, "right": 40, "top": 80, "bottom": 60},
+        "xAxis": {
+            "type": "category",
+            "data": x_labels,
+            "boundaryGap": False,
+            "axisLabel": {"rotate": 45, "interval": max(1, len(x_labels) // 10)},
+        },
+        "yAxis": {"type": "value", "name": "Dose (mSv)", "min": 0},
+        "dataZoom": [{"type": "inside"}, {"type": "slider", "bottom": 10}],
+        "series": [
+            {
+                "name": "Cumulative Dose",
+                "type": "line",
+                "data": cumulative_values,
+                "smooth": True,
+                "lineStyle": {"width": 3, "color": "#dc3545"},
+                "areaStyle": {"color": "rgba(220,53,69,0.1)"},
+                "symbol": "none",
+            },
+            {
+                "name": "Career Limit (600 mSv)",
+                "type": "line",
+                "data": [career_limit_msv] * len(x_labels),
+                "lineStyle": {"type": "dashed", "color": "#6c757d", "width": 2},
+                "symbol": "none",
+            },
+            {
+                "name": "MONITOR (30%)",
+                "type": "line",
+                "data": [career_limit_msv * 0.30] * len(x_labels),
+                "lineStyle": {"type": "dotted", "color": "#ffc107", "width": 1},
+                "symbol": "none",
+            },
+            {
+                "name": "CAUTION (60%)",
+                "type": "line",
+                "data": [career_limit_msv * 0.60] * len(x_labels),
+                "lineStyle": {"type": "dotted", "color": "#fd7e14", "width": 1},
+                "symbol": "none",
+            },
+            {
+                "name": "NO-GO (80%)",
+                "type": "line",
+                "data": [career_limit_msv * 0.80] * len(x_labels),
+                "lineStyle": {"type": "dotted", "color": "#dc3545", "width": 1},
+                "symbol": "none",
+            },
+        ],
+    }
+    render_echarts(chart_option, height_px=400)
+    
+    # Summary metrics
+    final_dose = timeline[-1].cumulative_dose_msv
+    final_pct = timeline[-1].career_pct_used
+    days_to_30pct = next((t.mission_day for t in timeline if t.career_pct_used >= 30.0), None)
+    days_to_limit = next((t.mission_day for t in timeline if t.career_pct_used >= 100.0), None)
+    
+    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+    with col_s1:
+        st.metric("Final dose", f"{final_dose:.1f} mSv")
+    with col_s2:
+        st.metric("Career % used", f"{final_pct:.1f}%")
+    with col_s3:
+        st.metric("Days to 30% (MONITOR)", f"{days_to_30pct or '> projection'}")
+    with col_s4:
+        st.metric("Days to 100% (LIMIT)", f"{days_to_limit or '> projection'}")
+    
+    # Show dose rate info
+    dose_info = get_dose_rate_info(selected_env)
+    st.caption(
+        f"**Dose rate:** {dose_info.get('nominal_msv_per_day', 0):.3f} mSv/day "
+        f"(range: {dose_info.get('range_low_msv_per_day', 0):.3f}–{dose_info.get('range_high_msv_per_day', 0):.3f}) | "
+        f"**Reference:** {dose_info.get('reference', 'N/A')}"
+    )
+    
+    # Data table
+    with st.expander("📋 View Timeline Data"):
+        display_df = timeline_df[["date", "mission_day", "daily_dose_msv", "eva_hours", "total_dose_msv", "cumulative_dose_msv", "career_pct_used"]].copy()
+        display_df.columns = ["Date", "Mission Day", "Daily Dose (mSv)", "EVA Hours", "Total Daily (mSv)", "Cumulative (mSv)", "Career %"]
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+
+def _render_radiation_environment_comparison(mission_days: int) -> None:
+    """Render comparison of dose rates across all environments."""
+    st.markdown("**🌍 Environment Dose Rate Comparison**")
+    
+    if not RADIATION_MODULE_AVAILABLE:
+        st.warning("Radiation exposure module not available.")
+        return
+    
+    # Get comparison data
+    col_dur, col_eva = st.columns(2)
+    with col_dur:
+        duration = st.number_input(
+            "Mission duration (days)",
+            min_value=1,
+            max_value=1000,
+            value=max(30, mission_days),
+            step=30,
+            key="rad_env_duration",
+        )
+    with col_eva:
+        eva_total = st.number_input(
+            "Total EVA hours",
+            min_value=0.0,
+            max_value=500.0,
+            value=0.0,
+            step=10.0,
+            key="rad_env_eva",
+        )
+    
+    comparison_df = compare_environments(
+        mission_duration_days=int(duration),
+        eva_hours_total=float(eva_total),
+        initial_dose_msv=0.0,
+    )
+    
+    # Display as bar chart
+    chart_option = {
+        "title": {"text": f"Projected Dose for {duration}-day Mission", "left": "center"},
+        "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
+        "grid": {"left": 150, "right": 40, "top": 60, "bottom": 40},
+        "xAxis": {"type": "value", "name": "Cumulative Dose (mSv)"},
+        "yAxis": {
+            "type": "category",
+            "data": comparison_df["environment"].tolist(),
+            "axisLabel": {"fontSize": 11},
+        },
+        "series": [
+            {
+                "type": "bar",
+                "data": [
+                    {
+                        "value": round(val, 2),
+                        "itemStyle": {
+                            "color": "#28a745" if pct < 30 else "#ffc107" if pct < 60 else "#fd7e14" if pct < 80 else "#dc3545"
+                        },
+                    }
+                    for val, pct in zip(comparison_df["projected_dose_msv"], comparison_df["career_pct"])
+                ],
+                "label": {"show": True, "position": "right", "formatter": "{c} mSv"},
+            }
+        ],
+        "visualMap": {
+            "show": False,
+            "min": 0,
+            "max": 600,
+            "inRange": {"color": ["#28a745", "#ffc107", "#fd7e14", "#dc3545"]},
+        },
+    }
+    render_echarts(chart_option, height_px=400)
+    
+    # Table with details
+    st.dataframe(
+        comparison_df[["environment", "nominal_rate_msv_day", "projected_dose_msv", "career_pct", "reference"]],
+        use_container_width=True,
+        hide_index=True,
+    )
+    
+    st.caption(
+        "**Career %** is the percentage of NASA's 600 mSv career effective dose limit. "
+        "Colors: Green (<30%), Yellow (30-60%), Orange (60-80%), Red (>80%)."
+    )
+
+
+def _render_radiation_eva_matrix(
+    user: UserProfile,
+    history_df: pd.DataFrame,
+    latest_entry: Dict[str, Any],
+    current_env: Optional[Any],
+) -> None:
+    """Render EVA Go/No-Go decision matrix for radiation exposure."""
+    st.markdown("**🚀 EVA Radiation Risk Assessment (Go/No-Go)**")
+    
+    if not RADIATION_MODULE_AVAILABLE:
+        st.warning("Radiation exposure module not available.")
+        return
+    
+    # Get current cumulative dose
+    cumulative_dose = 0.0
+    if "radiation_dose_msv" in history_df.columns:
+        dose_series = pd.to_numeric(history_df["radiation_dose_msv"], errors="coerce").dropna()
+        if not dose_series.empty:
+            cumulative_dose = float(dose_series.max())
+    
+    # Environment selection
+    env_options = [
+        ("Low Earth Orbit (ISS)", RadiationEnvironment.LEO_ISS),
+        ("Lunar Gateway", RadiationEnvironment.LUNAR_GATEWAY),
+        ("Lunar Surface", RadiationEnvironment.LUNAR_SURFACE_NOMINAL),
+        ("Mars Surface", RadiationEnvironment.MARS_SURFACE),
+    ]
+    
+    col_e1, col_e2, col_e3 = st.columns(3)
+    with col_e1:
+        env_labels = [e[0] for e in env_options]
+        default_idx = 0
+        if current_env:
+            for i, (_, env) in enumerate(env_options):
+                if env == current_env:
+                    default_idx = i
+                    break
+        selected_env_label = st.selectbox(
+            "EVA Environment",
+            env_labels,
+            index=default_idx,
+            key="eva_matrix_env",
+        )
+        selected_env = next((e[1] for e in env_options if e[0] == selected_env_label), RadiationEnvironment.LEO_ISS)
+    
+    with col_e2:
+        eva_duration = st.number_input(
+            "EVA Duration (hours)",
+            min_value=1.0,
+            max_value=12.0,
+            value=6.0,
+            step=0.5,
+            key="eva_matrix_duration",
+        )
+    
+    with col_e3:
+        cumulative_dose = st.number_input(
+            "Current Cumulative Dose (mSv)",
+            min_value=0.0,
+            max_value=1000.0,
+            value=cumulative_dose,
+            step=10.0,
+            key="eva_matrix_cumulative",
+        )
+    
+    # Space weather inputs
+    st.markdown("##### 🌞 Space Weather Conditions")
+    col_sw1, col_sw2 = st.columns(2)
+    with col_sw1:
+        s_scale = st.selectbox(
+            "NOAA S-Scale (Radiation Storm)",
+            options=[0, 1, 2, 3, 4, 5],
+            index=0,
+            format_func=lambda x: f"S{x}" + (" - None" if x == 0 else f" - {'Minor' if x == 1 else 'Moderate' if x == 2 else 'Strong' if x == 3 else 'Severe' if x == 4 else 'Extreme'}"),
+            key="eva_s_scale",
+        )
+    with col_sw2:
+        g_scale = st.selectbox(
+            "NOAA G-Scale (Geomagnetic Storm)",
+            options=[0, 1, 2, 3, 4, 5],
+            index=0,
+            format_func=lambda x: f"G{x}" + (" - None" if x == 0 else f" - {'Minor' if x == 1 else 'Moderate' if x == 2 else 'Strong' if x == 3 else 'Severe' if x == 4 else 'Extreme'}"),
+            key="eva_g_scale",
+        )
+    
+    # Perform assessment
+    assessment = assess_eva_radiation_risk(
+        cumulative_dose_msv=cumulative_dose,
+        environment=selected_env,
+        eva_duration_hours=eva_duration,
+        space_weather_s_scale=s_scale,
+        space_weather_g_scale=g_scale,
+    )
+    
+    # Display result as large status indicator
+    status_colors = {
+        EVARadiationStatus.GO: ("#28a745", "✅"),
+        EVARadiationStatus.GO_WITH_MONITORING: ("#ffc107", "⚠️"),
+        EVARadiationStatus.CAUTION: ("#fd7e14", "⚠️"),
+        EVARadiationStatus.NO_GO: ("#dc3545", "🚫"),
+    }
+    
+    color, icon = status_colors.get(assessment.status, ("#6c757d", "❓"))
+    
+    st.markdown(
+        f"""
+        <div style="background: linear-gradient(135deg, {color}22 0%, {color}11 100%);
+                    padding: 1.5rem; border-radius: 12px; border-left: 6px solid {color};
+                    margin: 1rem 0; text-align: center;">
+            <h2 style="margin: 0; color: {color}; font-size: 2.5rem;">{icon} {assessment.status.value.replace('_', ' ')}</h2>
+            <p style="margin: 0.5rem 0 0 0; font-size: 1.1rem; color: #333;">{assessment.rationale}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    
+    # Detail metrics
+    col_d1, col_d2, col_d3, col_d4 = st.columns(4)
+    with col_d1:
+        st.metric("Post-EVA Cumulative", f"{assessment.cumulative_dose_msv:.1f} mSv")
+    with col_d2:
+        st.metric("Career % Used", f"{assessment.career_pct_used:.1f}%")
+    with col_d3:
+        st.metric("Remaining Career", f"{assessment.remaining_career_msv:.1f} mSv")
+    with col_d4:
+        st.metric("Max EVA Today", f"{assessment.max_eva_hours_today:.1f} h")
+    
+    # Recommendations
+    if assessment.recommendations:
+        st.markdown("##### 📋 Recommendations")
+        for rec in assessment.recommendations:
+            st.markdown(f"- {rec}")
+    
+    # Space weather alert
+    if assessment.space_weather_alert != "None":
+        st.warning(f"🌞 **Space Weather Alert:** {assessment.space_weather_alert}")
+    
+    # Risk matrix visualization
+    st.markdown("##### 🎯 EVA Radiation Risk Matrix")
+    
+    # Build risk matrix similar to SAFTE/FRMS
+    likelihood_order = ["Low", "Moderate", "High", "Very High"]
+    severity_order = ["Negligible", "Minor", "Major", "Severe"]
+    
+    risk_matrix = [
+        ["GO", "GO", "MONITOR", "CAUTION"],
+        ["GO", "MONITOR", "CAUTION", "NO-GO"],
+        ["MONITOR", "CAUTION", "NO-GO", "NO-GO"],
+        ["CAUTION", "NO-GO", "NO-GO", "NO-GO"],
+    ]
+    
+    risk_color_map = {"GO": 1, "MONITOR": 2, "CAUTION": 3, "NO-GO": 4}
+    
+    heatmap_data = []
+    for y_idx, sev in enumerate(severity_order):
+        for x_idx, lik in enumerate(likelihood_order):
+            risk_label = risk_matrix[y_idx][x_idx]
+            heatmap_data.append([x_idx, y_idx, risk_color_map[risk_label]])
+    
+    # Determine current position
+    career_pct = assessment.career_pct_used
+    if career_pct < 30:
+        sev_idx = 0
+    elif career_pct < 60:
+        sev_idx = 1
+    elif career_pct < 80:
+        sev_idx = 2
+    else:
+        sev_idx = 3
+    
+    if s_scale == 0 and g_scale == 0:
+        lik_idx = 0
+    elif s_scale <= 1 and g_scale <= 1:
+        lik_idx = 1
+    elif s_scale <= 2 or g_scale <= 2:
+        lik_idx = 2
+    else:
+        lik_idx = 3
+    
+    matrix_option = {
+        "tooltip": {"position": "top"},
+        "grid": {"left": 100, "right": 40, "top": 40, "bottom": 80},
+        "xAxis": {
+            "type": "category",
+            "data": likelihood_order,
+            "name": "Likelihood (Space Weather)",
+            "nameLocation": "middle",
+            "nameGap": 40,
+        },
+        "yAxis": {
+            "type": "category",
+            "data": severity_order,
+            "name": "Severity (Career Dose)",
+        },
+        "visualMap": {
+            "type": "piecewise",
+            "orient": "horizontal",
+            "left": "center",
+            "bottom": 5,
+            "pieces": [
+                {"value": 1, "label": "GO", "color": "#28a745"},
+                {"value": 2, "label": "MONITOR", "color": "#ffc107"},
+                {"value": 3, "label": "CAUTION", "color": "#fd7e14"},
+                {"value": 4, "label": "NO-GO", "color": "#dc3545"},
+            ],
+        },
+        "series": [
+            {
+                "name": "Risk Matrix",
+                "type": "heatmap",
+                "data": heatmap_data,
+                "label": {"show": False},
+            },
+            {
+                "name": "Current Assessment",
+                "type": "scatter",
+                "data": [[lik_idx, sev_idx, 5]],
+                "symbolSize": 30,
+                "itemStyle": {
+                    "color": "rgba(0,0,0,0)",
+                    "borderColor": "#000",
+                    "borderWidth": 3,
+                },
+            },
+        ],
+    }
+    render_echarts(matrix_option, height_px=350)
+    
+    st.caption(
+        "**Matrix interpretation:** Likelihood is based on current space weather conditions (S/G scale). "
+        "Severity is based on cumulative career dose. The black circle shows your current assessment position."
+    )
+    
+    # Scientific references
+    with st.expander("📚 **Scientific References**"):
+        st.markdown("""
+**Radiation Dose Rates & Limits:**
+- NASA-STD-3001 Vol 1 Rev B (2022). Crew Health Standard. Career limit: 600 mSv.
+- Zhang et al. (2020). First measurements of the radiation dose on the lunar surface. *Science Advances*, 6(39), eaaz1334. [DOI: 10.1126/sciadv.aaz1334](https://doi.org/10.1126/sciadv.aaz1334)
+- Simonsen et al. (2025). Moon to Mars Space Radiation Protection. NASA ASCEND Technical Report.
+- ICRP Publication 123 (2013). Assessment of radiation exposure of astronauts in space.
+
+**ISS Measurements:**
+- Berger et al. (2020). MATROSHKA-R experiment. ~0.3-0.7 mSv/day effective dose.
+- NASA LSAH Newsletter (2023). ISS dose rates: 0.2-0.5 mSv/day.
+
+**Mars Measurements:**
+- Zeitlin et al. (2013). Mars cruise: ~1.84 mSv/day (MSL RAD).
+- Hassler et al. (2014). Mars surface: ~0.64 mSv/day (MSL RAD).
+        """)
+
+
 def _build_frequency_df(values: Sequence[Any], top_n: int = 5) -> pd.DataFrame:
     """Aggregate frequency counts for list-like history fields."""
     counts: Counter[str] = Counter()
@@ -6761,70 +7569,8 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
         return
     latest_entry = history_df.iloc[-1]
 
-    # Radiation exposure
-    st.markdown("##### ☢️ Radiation Exposure")
-    rad_limit = 600.0  # NASA STD-3001B (career effective dose design limit)
-    rad_limit_legacy = 1000.0  # Legacy planning guideline (kept for comparison)
-
-    rad_sources: Dict[str, str] = {}
-    if "radiation_dose_msv" in history_df.columns and not history_df["radiation_dose_msv"].dropna().empty:
-        rad_sources["Recorded cumulative dose"] = "radiation_dose_msv"
-    if (
-        "radiation_estimated_cumulative_msv" in history_df.columns
-        and not history_df["radiation_estimated_cumulative_msv"].dropna().empty
-    ):
-        rad_sources["Estimated cumulative dose"] = "radiation_estimated_cumulative_msv"
-
-    if not rad_sources:
-        st.warning("No radiation dose entries recorded yet (or no modelled dose available).")
-    else:
-        selected_label = st.radio("Dose source", list(rad_sources.keys()), horizontal=True, key="rad_source_selector")
-        rad_col = rad_sources[selected_label]
-        rad_series = pd.to_numeric(history_df[rad_col], errors="coerce").dropna()
-
-        if rad_series.empty:
-            st.warning("No radiation dose entries recorded yet (or no modelled dose available).")
-        else:
-            max_rad = float(rad_series.max())
-            median_rad = float(rad_series.median())
-            rate_df = history_df.copy()
-            rate_df["radiation_dose_msv"] = pd.to_numeric(rate_df[rad_col], errors="coerce")
-            rad_rate = _compute_radiation_rate(rate_df)
-            remaining = max(rad_limit - max_rad, 0.0)
-            col_r1, col_r2, col_r3 = st.columns(3)
-            col_r1.metric(
-                "Max cumulative dose",
-                f"{max_rad:.1f} mSv",
-                delta=f"{remaining:.1f} mSv below NASA limit",
-            )
-            col_r2.metric(
-                "Median logged dose",
-                f"{median_rad:.1f} mSv",
-                delta=None,
-            )
-            col_r3.metric(
-                "Daily accumulation",
-                f"{rad_rate:.2f} mSv/day" if rad_rate is not None else "—",
-                delta=None if rad_rate is None else "Avg change per mission day",
-            )
-            progress_value = min(max_rad / rad_limit, 1.0)
-            st.progress(progress_value)
-            legacy_pct = min(max_rad / rad_limit_legacy, 1.0) * 100.0
-            st.caption(
-                f"{progress_value * 100:.1f}% of NASA 600 mSv career effective dose design limit "
-                f"(legacy 1000 mSv: {legacy_pct:.1f}%)."
-            )
-            if {"mission_day"}.issubset(history_df.columns):
-                chart_df = history_df.dropna(subset=["mission_day", rad_col] if rad_col else ["mission_day"]).copy()
-                if not chart_df.empty:
-                    chart_df = chart_df.sort_values("mission_day").set_index("mission_day")
-                    chart_df["radiation_dose_msv"] = pd.to_numeric(chart_df[rad_col], errors="coerce")
-                    chart_df.rename(columns={"radiation_dose_msv": "Radiation (mSv)"}, inplace=True)
-                    _render_profile_line_chart(
-                        chart_df[["Radiation (mSv)"]],
-                        title="Radiation Dose vs. Mission Day",
-                        y_axis_label="mSv",
-                    )
+    # Radiation exposure - Enhanced with evidence-based dose models
+    _render_radiation_exposure_section(user, history_df, latest_entry)
 
     # EVA workload
     st.markdown("##### 🧑‍🚀 EVA Workload")
