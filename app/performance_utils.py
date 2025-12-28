@@ -11,7 +11,7 @@ Features (v1.1.0):
 - DataFrame optimization utilities
 - Integration with cpu_optimization module
 
-Author: AI Assistant
+Author: Dr Diego Malpica MD
 Version: 1.1.0
 """
 
