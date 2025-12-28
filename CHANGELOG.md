@@ -10,7 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Enhanced Unified Timeline Tab** (`app/app.py`): Major overhaul of the Unified Timeline with:
   - **Recording Timeline Summary**: Table showing all uploaded RR files with their actual recording start times (extracted from filenames), duration, and mean HR. Timeline span displayed at bottom.
+  - **Visual HR Trend Chart**: ECharts sparkline showing Mean HR trend across recordings with quick stats (average, range, CV%, trend direction).
   - **Isolation Forest Anomaly Detection**: Multivariate ML algorithm (Liu et al., 2008) for detecting unusual recordings based on multiple HRV metrics simultaneously. Includes configurable contamination rate, anomaly score display, and interpretive guidance.
+  - **Anomaly Score Distribution Chart**: Bar chart visualization of anomaly scores with color-coded normal (green) vs anomaly (red) recordings.
   - **Garmin Wearable Triangulation**: Integration with Garmin daily metrics (Body Battery, Stress Score, Sleep Score, HRV RMSSD) for cross-validation with Polar H10 data. Includes 7-day rolling metrics with week-over-week comparisons.
   - **Statistical Summary Table**: Comprehensive descriptive statistics (N, Mean, SD, Median, CV%, IQR) for selected metrics with expandable interpretation guide.
   - **Graduate-Level Explanations**: Added peer-reviewed citations throughout (Liu 2008, Dalmeida 2021, Karasmanoglou 2023, Shaffer 2017, Task Force 1996, Plews 2013, Buitrago-Ricaurte 2025).
