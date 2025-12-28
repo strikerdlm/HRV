@@ -3819,8 +3819,32 @@ def _render_advanced_hrv_analytics(
     st.markdown("### 🧬 Advanced HRV Analytics Platform")
     st.caption(
         "State-of-the-art statistical analysis, ML pattern recognition, and clinical decision support. "
-        "References: Task Force (1996), Shaffer & Ginsberg (2017), Nunan et al. (2010), Thayer et al. (2012)."
+        "Based on the Neurovisceral Integration Model (Thayer & Lane, 2009)."
     )
+    
+    # Educational intro checkbox
+    if st.checkbox("📖 What is this? (Scientific Background)", value=False, key="adv_hrv_intro"):
+        st.info("""
+        **The Neurovisceral Integration Model**
+        
+        Heart rate variability (HRV) reflects the dynamic interplay between sympathetic and parasympathetic 
+        branches of the autonomic nervous system (ANS). The **neurovisceral integration model** 
+        (Thayer & Lane, 2000, 2009) proposes that HRV serves as an index of the functional integrity 
+        of a central autonomic network (CAN) linking prefrontal cortex with brainstem cardiac control centers.
+        
+        **Why HRV Matters:**
+        - **Higher HRV** = Greater physiological flexibility, better stress adaptation, healthy vagal tone
+        - **Lower HRV** = Reduced adaptive capacity, chronic stress, elevated cardiovascular risk
+        
+        **Clinical Significance:**
+        Low HRV independently predicts all-cause mortality, cardiovascular events, and mental health disorders. 
+        This platform applies evidence-based statistical methods to help interpret your HRV patterns.
+        
+        **Key References:**
+        - Task Force (1996). *Circulation, 93*(5), 1043-1065 — Gold standard HRV guidelines
+        - Thayer et al. (2012). *Neurosci Biobehav Rev, 36*(2), 747-756 — Neurovisceral integration
+        - Nunan et al. (2010). *PACE, 33*(11), 1407-1417 — Age-stratified reference values
+        """)
     
     if not ADVANCED_HRV_ANALYTICS_AVAILABLE:
         st.warning(
@@ -3901,6 +3925,30 @@ def _risk_level_to_emoji(risk: "HRVRiskLevel") -> str:
 def _render_clinical_decision_tab(result: "AdvancedHRVAnalysisResult") -> None:
     """Render clinical decision support with gauges and semaphored recommendations."""
     cds = result.clinical_decision
+    
+    # Educational intro for Clinical Decision tab
+    if st.checkbox("📖 Understanding Clinical Decision Support", value=False, key="cds_edu"):
+        st.info("""
+        **What This Tab Shows**
+        
+        This tab synthesizes your HRV data into actionable clinical insights using evidence-based thresholds.
+        
+        **Autonomic Balance Score (0-100):**
+        - Combines RMSSD deviation from age norms, Stress Index (Baevsky), and LF/HF considerations
+        - **Score >70**: Parasympathetic dominant — rest-and-digest physiology, good recovery
+        - **Score 50-70**: Balanced — healthy autonomic regulation, adaptive stress response
+        - **Score 30-50**: Sympathetic shift — elevated stress response, monitor closely
+        - **Score <30**: Dysregulated — consider lifestyle factors or medical consultation
+        
+        **Autonomic States (LF/HF Ratio):**
+        - **Parasympathetic** (<0.8): High vagal tone; typical during deep relaxation or in trained athletes
+        - **Balanced** (0.8-2.0): Homeostatic equilibrium; optimal for adaptive function
+        - **Sympathetic** (>3.0): Fight-or-flight activation; may indicate stress or physical exertion
+        
+        **Z-Scores:** Standardized comparison to population norms. |Z| > 2.0 indicates clinically significant deviation.
+        
+        *Reference: Thayer & Lane (2009). Neurosci Biobehav Rev, 33(2), 81-88*
+        """)
     
     # Overall Status Header with colored badge
     status_color = _risk_level_to_color(cds.overall_status)
@@ -4020,9 +4068,39 @@ def _render_clinical_decision_tab(result: "AdvancedHRVAnalysisResult") -> None:
 def _render_statistical_tests_tab(result: "AdvancedHRVAnalysisResult") -> None:
     """Render statistical tests results with p-values."""
     st.markdown("#### 📊 Statistical Analysis Results")
+    
+    # Educational intro for Statistical Tests tab
+    if st.checkbox("📖 Understanding Statistical Tests", value=False, key="stat_edu"):
+        st.info("""
+        **Why Statistical Tests Matter**
+        
+        Statistical tests determine whether your HRV values differ significantly from healthy reference populations, 
+        accounting for natural biological variability. This helps distinguish genuine physiological differences 
+        from random fluctuation.
+        
+        **Descriptive Statistics:**
+        - **Mean/Median**: Central tendency of your HRV distribution
+        - **SD (Standard Deviation)**: Total variability — reflects overall ANS flexibility
+        - **CV% (Coefficient of Variation)**: Normalized variability allowing cross-metric comparison
+        - **Skewness**: Distribution asymmetry (HRV data often shows positive skew)
+        - **Kurtosis**: Tail heaviness — excess kurtosis indicates outlier-prone measurements
+        
+        **Normality Testing (Shapiro-Wilk):**
+        Tests whether your data follows a Gaussian distribution. HRV metrics often require 
+        log-transformation (lnRMSSD) for parametric analysis due to inherent positive skewness.
+        - p > 0.05: Data approximately normal → parametric tests appropriate
+        - p ≤ 0.05: Non-normal → consider non-parametric alternatives
+        
+        **Reference Comparison (t-test vs Mann-Whitney):**
+        Compares your mean against age-stratified population values (Nunan et al., 2010).
+        - **p < 0.05**: Your HRV differs significantly from age-matched healthy population
+        - **Effect size (Cohen's d)**: Practical significance — d > 0.8 is clinically meaningful
+        
+        *References: Task Force (1996), Shapiro & Wilk (1965), Cohen (1988)*
+        """)
+    
     st.caption(
-        "Statistical tests comparing your HRV metrics against age-appropriate reference values. "
-        "p-values < 0.05 indicate statistically significant differences."
+        "p-values < 0.05 indicate statistically significant differences from reference populations."
     )
     
     # Descriptive Statistics
@@ -4113,6 +4191,40 @@ def _render_trends_forecast_tab(result: "AdvancedHRVAnalysisResult", hrv_df: pd.
     """Render trend analysis and forecasting."""
     st.markdown("#### 📈 Trend Analysis & Forecasting")
     
+    # Educational intro for Trends tab
+    if st.checkbox("📖 Understanding HRV Trends", value=False, key="trend_edu"):
+        st.info("""
+        **Why Track HRV Trends?**
+        
+        Day-to-day HRV fluctuations reflect the integration of multiple physiological inputs:
+        
+        **Factors That Reduce HRV:**
+        - Poor sleep quality or duration (Tobaldini et al., 2013)
+        - Overtraining or inadequate recovery (Plews et al., 2013)
+        - Psychological stress — acute or chronic (Lennartsson et al., 2016)
+        - Illness and systemic inflammation (Thayer & Sternberg, 2006)
+        - Alcohol consumption within 24 hours
+        
+        **Factors That Increase HRV:**
+        - Quality sleep (7-9 hours)
+        - Appropriate physical training with recovery
+        - Stress management and relaxation practices
+        - Consistent measurement conditions
+        
+        **Interpreting the Trend:**
+        - **Slope (β₁)**: Rate of change per day. Positive = improving, negative = declining
+        - **R²**: How well the linear model fits your data (>0.5 = moderate-good fit)
+        - **p-value**: Statistical significance of the trend (p < 0.05 = genuine trend)
+        - **% Change**: Total change over the analysis period
+        
+        **7-Day Forecast:**
+        Linear extrapolation with 95% confidence intervals. Wide intervals indicate variable HRV patterns.
+        
+        ⚠️ **Caution**: Forecasts assume trend continuation. Sudden stressors can invalidate predictions.
+        
+        *Reference: Plews et al. (2013). Sports Medicine, 43(9), 773-781*
+        """)
+    
     if not result.trend_analyses:
         st.info("Not enough temporal data for trend analysis. At least 5 recordings with dates required.")
         return
@@ -4174,6 +4286,42 @@ def _render_trends_forecast_tab(result: "AdvancedHRVAnalysisResult", hrv_df: pd.
 def _render_anomalies_patterns_tab(result: "AdvancedHRVAnalysisResult") -> None:
     """Render anomaly detection and pattern recognition results."""
     cds = result.clinical_decision
+    
+    # Educational intro for Anomalies tab
+    if st.checkbox("📖 Understanding Anomalies & Patterns", value=False, key="anomaly_edu"):
+        st.info("""
+        **Anomaly Detection Methods**
+        
+        Anomalies are recordings that deviate significantly from your typical pattern. Two methods are used:
+        
+        **Z-Score Method:**
+        Flags recordings where |Z| > 2.5 standard deviations from your personal mean.
+        - **Unusually LOW RMSSD**: May indicate acute illness, severe stress, cardiac arrhythmia, or measurement artifact
+        - **Unusually HIGH RMSSD**: May indicate post-exercise parasympathetic rebound or measurement error
+        
+        **IQR Method (Robust):**
+        Flags values outside Q₁ - 1.5×IQR or Q₃ + 1.5×IQR. Resistant to non-normal distributions.
+        
+        **Pattern Recognition**
+        
+        The platform identifies recurring patterns in your data:
+        
+        **RMSSD Variability (CV%):**
+        - CV < 15%: Very stable — excellent for trend detection
+        - CV 15-40%: Normal day-to-day variation
+        - CV > 40%: High variability — consider standardizing measurement protocol
+        
+        **Chronic Stress Pattern:**
+        Detected when >50% of recordings show Stress Index > 150. Sustained sympathetic dominance 
+        is associated with increased cardiovascular risk and impaired cognitive performance.
+        
+        **What to Do with Anomalies:**
+        1. Review measurement conditions on flagged dates
+        2. Check for confounders (illness, travel, poor sleep, alcohol)
+        3. If genuine, investigate underlying cause
+        
+        *References: Thayer et al. (2012), Plews et al. (2013)*
+        """)
     
     # Anomaly Detection
     st.markdown("#### 🔍 Anomaly Detection")
@@ -4250,6 +4398,45 @@ def _render_hrv_garmin_integration_tab(
 ) -> None:
     """Render HRV + Garmin integration analysis."""
     st.markdown("#### 🔗 HRV + Garmin Wearable Integration")
+    
+    # Educational intro for Integration tab
+    if st.checkbox("📖 Understanding Multi-Device Integration", value=False, key="integration_edu"):
+        st.info("""
+        **Why Cross-Validate HRV with Wearables?**
+        
+        Consumer wearables (Garmin, Oura, Whoop) provide continuous physiological monitoring but with 
+        varying accuracy compared to research-grade ECG (Polar H10). Cross-validation identifies:
+        
+        **Concordance (Agreement):**
+        Agreement between sources strengthens confidence in the data. High concordance (>70%) indicates 
+        reliable measurements.
+        
+        **Discordance (Disagreement):**
+        Disagreement warrants investigation:
+        - **Timing mismatch**: Garmin averages overnight; Polar captures a morning snapshot
+        - **Algorithm differences**: Proprietary Garmin algorithms weight factors differently
+        - **Measurement artifact**: Wrist-based PPG is susceptible to motion artifact
+        
+        **Device Validation Evidence:**
+        | Device | RMSSD Accuracy (CCC) | Source |
+        |--------|---------------------|--------|
+        | Polar H10 | 0.97-0.99 | Gold standard |
+        | Oura Ring | 0.97-0.99 | Dial et al. (2025) |
+        | Garmin (wrist) | 0.87 | Dial et al. (2025) |
+        | Whoop 4.0 | 0.94 | Dial et al. (2025) |
+        
+        **Expected Correlations:**
+        - RMSSD ↔ Body Battery: Moderate positive (r ≈ 0.3-0.5)
+        - Stress Index ↔ Garmin Stress: Moderate positive (r ≈ 0.4-0.6)
+        - SDNN ↔ Sleep Score: Moderate positive (r ≈ 0.3-0.5)
+        
+        **Spearman ρ Interpretation:**
+        - |ρ| > 0.7: Strong correlation
+        - |ρ| 0.4-0.7: Moderate correlation
+        - |ρ| < 0.4: Weak correlation
+        
+        *References: Miller et al. (2022). Sensors, 22(16), 6317; Dial et al. (2025). Physiol Rep, 13(2)*
+        """)
     
     if not has_garmin:
         st.info(
