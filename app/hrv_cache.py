@@ -12,7 +12,7 @@ Performance optimizations:
 - Database-backed result persistence
 - Automatic cleanup of stale cache entries
 
-Author: AI Assistant
+Author: Dr Diego Malpica MD
 Version: 1.0.0
 """
 
