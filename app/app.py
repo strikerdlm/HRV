@@ -267,6 +267,18 @@ except ImportError:
     GPU_PROCESSING_AVAILABLE = False
 
 # User profile tab for centralized user data management
+# Define fallbacks FIRST to avoid UnboundLocalError scoping issues
+def _fallback_get_active_user_context() -> Dict[str, Any]:
+    """Fallback user context when profile tab is unavailable."""
+    return _guest_user_context()
+
+
+def _fallback_get_all_active_users() -> List[Dict[str, Any]]:
+    """Fallback when profile tab is unavailable - returns empty list."""
+    return []
+
+
+# Attempt to import user profile tab; use fallbacks if unavailable
 try:
     from user_profile_tab import (
         render_user_profile_tab,
@@ -277,14 +289,10 @@ try:
     USER_PROFILE_TAB_AVAILABLE = True
 except ImportError:
     USER_PROFILE_TAB_AVAILABLE = False
-
-    def get_active_user_context() -> Dict[str, Any]:
-        """Fallback user context when profile tab is unavailable."""
-        return _guest_user_context()
-
-    def get_all_active_users() -> List[Dict[str, Any]]:
-        """Fallback when profile tab is unavailable - returns empty list."""
-        return []
+    render_user_profile_tab = None  # type: ignore[assignment]
+    get_current_user_data = None  # type: ignore[assignment]
+    get_active_user_context = _fallback_get_active_user_context
+    get_all_active_users = _fallback_get_all_active_users
 
 # Space weather impact prediction module
 try:
