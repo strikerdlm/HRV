@@ -144,10 +144,11 @@ except ImportError:
 
 # NOAA / space-weather datasets (used for profile radiation + alert enrichment)
 try:
-    from noaa_space import load_noaa_space_cache
+    from noaa_space import load_noaa_space_cache, load_noaa_space_data
     NOAA_SPACE_AVAILABLE = True
 except ImportError:
     NOAA_SPACE_AVAILABLE = False
+    load_noaa_space_data = None  # type: ignore[assignment]
 
 # Radiation exposure module (evidence-based dose models)
 try:
@@ -9064,6 +9065,54 @@ def _render_medical_record_form(user: UserProfile) -> None:
         "Limited Autonomy (hours to days delay)",
         "Full EIMO (crew autonomous)",
     ]
+    
+    # ─────────────────────────────────────────────────────────────────────
+    # Space Weather Refresh Button (outside form to allow immediate action)
+    # ─────────────────────────────────────────────────────────────────────
+    sw_refresh_col1, sw_refresh_col2 = st.columns([3, 1])
+    with sw_refresh_col1:
+        st.caption(
+            "☢️ **Space Weather Data** — Real-time Kp index, proton flux, and storm scales "
+            "from NOAA SWPC ([swpc.noaa.gov](https://www.swpc.noaa.gov/)). "
+            "Scales: G0–G5 (geomagnetic), S0–S5 (solar radiation). "
+            "References: NOAA Space Weather Scales (2011); Pulkkinen et al. (2017) Space Weather."
+        )
+    with sw_refresh_col2:
+        refresh_key = f"refresh_space_weather_{user.user_id}"
+        if st.button(
+            "🔄 Fetch Space Weather",
+            key=refresh_key,
+            help=(
+                "Fetch latest NOAA space weather data (Kp index, >10 MeV proton flux). "
+                "Sources: NOAA SWPC Planetary K-index (1-min), GOES Integral Protons. "
+                "Data used for G-scale (geomagnetic) and S-scale (radiation storm) classification."
+            ),
+            use_container_width=True,
+        ):
+            if NOAA_SPACE_AVAILABLE and load_noaa_space_data is not None:
+                with st.spinner("Fetching NOAA space weather data..."):
+                    try:
+                        # Force fresh fetch from NOAA SWPC
+                        _bundles, _errors = load_noaa_space_data(
+                            keys=("planetary_k_index_1m", "goes_integral_protons"),
+                            use_cache=False,  # Force network fetch
+                            max_workers=2,
+                            overall_timeout_s=15.0,
+                        )
+                        # Clear the profile cache so it reloads with fresh data
+                        _load_noaa_profile_bundles.clear()
+                        if _errors:
+                            _LOGGER.warning("Space weather partial fetch: %s", _errors)
+                            st.warning(f"Partial fetch: {', '.join(_errors.values())}")
+                        else:
+                            _LOGGER.info("Space weather data refreshed for user %s", user.user_id)
+                            st.success("✅ Space weather data updated from NOAA SWPC")
+                        st.rerun()
+                    except Exception as exc:
+                        _LOGGER.warning("Space weather refresh failed: %s", exc)
+                        st.error(f"Refresh failed: {exc}")
+            else:
+                st.warning("NOAA space module not available.")
     
     form_key = f"exploration_medical_record_form_{user.user_id}"
     with st.form(form_key, clear_on_submit=False):
