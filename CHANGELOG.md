@@ -5,6 +5,35 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.82] - 2025-12-28
+
+### Added
+- **Advanced HRV Analytics Module** (`app/advanced_hrv_analytics.py`): State-of-the-art statistical analysis, ML pattern recognition, and clinical decision support:
+  - **Descriptive Statistics**: N, Mean, SD, Median, Q1, Q3, IQR, Range, CV%, Skewness, Kurtosis, SEM
+  - **Normality Tests**: Shapiro-Wilk test with p-values (Task Force 1996 standards)
+  - **Comparison Tests**: One-sample t-test, paired t-test, Mann-Whitney U, Wilcoxon signed-rank with effect sizes (Cohen's d)
+  - **Age-Stratified References**: RMSSD and SDNN reference values by age (Nunan et al. 2010, Shaffer 2017)
+  - **Trend Analysis**: Linear regression with R², slope significance testing, 7-day forecasting with 95% CI
+  - **Anomaly Detection**: Z-score and IQR methods for outlier identification
+  - **Pattern Recognition**: Autonomic balance patterns, chronic stress detection, RMSSD variability analysis
+  - **HRV + Garmin Integration**: Cross-correlation matrix, concordance scoring, integrated stress/recovery scores
+  - **Clinical Decision Support**: Semaphored risk levels (Green/Yellow/Orange/Red), metric assessments, automated recommendations
+
+- **Advanced HRV Analytics UI** (`app/user_profile_tab.py`): New "🧬 Advanced HRV Analytics" expander in HRV History:
+  - **5-tab interface**: Clinical Decision, Statistical Tests, Trends & Forecast, Anomalies & Patterns, HRV + Garmin
+  - **Autonomic Balance Gauge**: ECharts gauge showing balance score 0-100 with color-coded zones
+  - **Metric Assessment Table**: Value, Z-score, Percentile, Reference Range, Risk Level, Interpretation
+  - **Statistical Results Table**: Test name, Statistic, p-value (4 decimals), Effect Size, Significance
+  - **Trend Visualization**: RMSSD trend with 7-day moving average
+  - **Correlation Analysis**: HRV-Garmin cross-correlation with Spearman ρ and significance
+
+### Scientific References
+- Task Force (1996). Circulation 93(5):1043-65 - HRV measurement standards
+- Shaffer & Ginsberg (2017). Front Public Health 5:258 - HRV overview
+- Nunan et al. (2010). Scand J Med Sci Sports 20(1):e30-44 - RMSSD/SDNN reference values
+- Thayer et al. (2012). Neurosci Biobehav Rev 36(2):747-56 - HRV-prefrontal cortex model
+- Cohen (1988). Statistical Power Analysis - Effect size interpretation
+
 ## [1.8.81] - 2025-12-28
 
 ### Added
