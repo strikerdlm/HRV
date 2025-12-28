@@ -172,6 +172,31 @@ try:
 except ImportError:
     RADIATION_MODULE_AVAILABLE = False
 
+# Advanced wearable analytics module
+try:
+    from wearable_analytics import (
+        generate_wearable_insights,
+        forecast_body_battery,
+        calculate_allostatic_load,
+        analyze_circadian_rhythm,
+        predict_stress,
+        analyze_recovery,
+        calculate_metric_statistics,
+        WearableInsights,
+        BodyBatteryForecast,
+        AllostasticLoadScore,
+        CircadianAnalysis,
+        StressPrediction,
+        RecoveryAnalysis,
+        RecoveryState,
+        Chronotype,
+        TrendDirection,
+        RiskLevel,
+    )
+    WEARABLE_ANALYTICS_AVAILABLE = True
+except ImportError:
+    WEARABLE_ANALYTICS_AVAILABLE = False
+
 # Visualization helpers
 from echarts_component import EChartsConfig, render_echarts
 from gauge_builder import GaugeThresholds, build_two_ring_gauge, get_gauge_thresholds
@@ -3032,6 +3057,405 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
             use_container_width=True,
             hide_index=True,
         )
+    
+    # Advanced Analytics Section
+    if WEARABLE_ANALYTICS_AVAILABLE and len(df) >= 7:
+        st.markdown("---")
+        st.markdown("### 🧠 Advanced Predictive Analytics")
+        st.caption("Evidence-based modeling using Body Battery, stress, heart rate, and sleep patterns.")
+        
+        _render_advanced_wearable_analytics(df)
+
+
+def _render_advanced_wearable_analytics(df: pd.DataFrame) -> None:
+    """Render advanced wearable analytics with predictive models and insights."""
+    if not WEARABLE_ANALYTICS_AVAILABLE:
+        st.info("Advanced analytics module not available.")
+        return
+    
+    # Generate comprehensive insights
+    try:
+        insights = generate_wearable_insights(df)
+    except Exception as exc:
+        _LOGGER.warning("Failed to generate wearable insights: %s", exc)
+        st.warning("Unable to generate advanced analytics. Insufficient data or analysis error.")
+        return
+    
+    if insights is None:
+        st.info("Need at least 7 days of data for advanced analytics.")
+        return
+    
+    # Data quality indicator
+    quality_color = "#28a745" if insights.data_quality_score >= 70 else "#ffc107" if insights.data_quality_score >= 40 else "#dc3545"
+    st.markdown(
+        f"**Data Quality:** <span style='color: {quality_color}; font-weight: bold;'>{insights.data_quality_score:.0f}%</span>",
+        unsafe_allow_html=True,
+    )
+    
+    # Create tabs for different analyses
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "🔋 Body Battery Forecast",
+        "⚡ Allostatic Load",
+        "🌙 Circadian Analysis",
+        "😰 Stress Prediction",
+        "💪 Recovery Status",
+    ])
+    
+    with tab1:
+        _render_body_battery_forecast(insights.body_battery_forecast, df)
+    
+    with tab2:
+        _render_allostatic_load(insights.allostatic_load)
+    
+    with tab3:
+        _render_circadian_analysis(insights.circadian_analysis)
+    
+    with tab4:
+        _render_stress_prediction(insights.stress_prediction)
+    
+    with tab5:
+        _render_recovery_analysis(insights.recovery_analysis)
+    
+    # Correlations section
+    if insights.correlations:
+        st.markdown("#### 🔗 Key Metric Correlations")
+        corr_data = []
+        for corr in insights.correlations[:5]:
+            corr_data.append({
+                "Metric A": corr.metric_a.replace("_", " ").title(),
+                "Metric B": corr.metric_b.replace("_", " ").title(),
+                "Correlation": f"{corr.pearson_r:+.2f}",
+                "P-value": f"{corr.p_value:.4f}",
+                "Interpretation": corr.interpretation,
+            })
+        st.dataframe(pd.DataFrame(corr_data), use_container_width=True, hide_index=True)
+
+
+def _render_body_battery_forecast(
+    forecast: Optional[BodyBatteryForecast],
+    df: pd.DataFrame,
+) -> None:
+    """Render Body Battery forecast with confidence intervals."""
+    st.markdown("##### 🔮 7-Day Body Battery Prediction")
+    
+    if forecast is None:
+        st.info("Need at least 14 days of Body Battery data for forecasting.")
+        return
+    
+    # Trend indicator
+    trend_icons = {
+        TrendDirection.IMPROVING: "📈",
+        TrendDirection.STABLE: "➡️",
+        TrendDirection.DECLINING: "📉",
+        TrendDirection.VARIABLE: "📊",
+    }
+    trend_colors = {
+        TrendDirection.IMPROVING: "#28a745",
+        TrendDirection.STABLE: "#6c757d",
+        TrendDirection.DECLINING: "#dc3545",
+        TrendDirection.VARIABLE: "#ffc107",
+    }
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.metric(
+            "Trend",
+            f"{trend_icons.get(forecast.trend, '➡️')} {forecast.trend.value.title()}",
+        )
+    with col2:
+        st.metric("Model Accuracy", f"{forecast.model_accuracy:.0f}%")
+    with col3:
+        if forecast.recovery_hours is not None:
+            st.metric("Est. Recovery Time", f"{forecast.recovery_hours:.1f}h")
+        else:
+            st.metric("Recovery Status", "✅ Optimal")
+    
+    # Build forecast chart
+    # Get historical data
+    hist_dates = []
+    hist_values = []
+    if "metric_date" in df.columns and "body_battery_avg" in df.columns:
+        df_hist = df[["metric_date", "body_battery_avg"]].dropna().tail(14)
+        if not df_hist.empty:
+            df_hist = df_hist.sort_values("metric_date")
+            hist_dates = [pd.to_datetime(d).strftime("%Y-%m-%d") for d in df_hist["metric_date"]]
+            hist_values = df_hist["body_battery_avg"].tolist()
+    
+    forecast_dates = [d.strftime("%Y-%m-%d") for d in forecast.forecast_dates]
+    all_dates = hist_dates + forecast_dates
+    
+    # Historical values + nulls for forecast
+    hist_series = hist_values + [None] * len(forecast_dates)
+    # Nulls for historical + forecast values
+    forecast_series = [None] * len(hist_dates) + forecast.predicted_values
+    lower_series = [None] * len(hist_dates) + forecast.confidence_lower
+    upper_series = [None] * len(hist_dates) + forecast.confidence_upper
+    
+    chart_option = {
+        "title": {"text": "Body Battery: Historical + Forecast", "left": "center", "textStyle": {"fontSize": 14}},
+        "tooltip": {"trigger": "axis"},
+        "legend": {"data": ["Historical", "Forecast", "95% CI"], "top": 30},
+        "grid": {"left": 50, "right": 30, "top": 70, "bottom": 50},
+        "xAxis": {
+            "type": "category",
+            "data": all_dates,
+            "axisLabel": {"rotate": 45, "fontSize": 10},
+        },
+        "yAxis": {"type": "value", "name": "Body Battery", "min": 0, "max": 100},
+        "series": [
+            {
+                "name": "Historical",
+                "type": "line",
+                "data": hist_series,
+                "lineStyle": {"color": "#007bff", "width": 2},
+                "itemStyle": {"color": "#007bff"},
+                "symbol": "circle",
+                "symbolSize": 6,
+            },
+            {
+                "name": "Forecast",
+                "type": "line",
+                "data": forecast_series,
+                "lineStyle": {"color": "#28a745", "width": 2, "type": "dashed"},
+                "itemStyle": {"color": "#28a745"},
+                "symbol": "circle",
+                "symbolSize": 6,
+            },
+            {
+                "name": "95% CI",
+                "type": "line",
+                "data": upper_series,
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(40, 167, 69, 0.2)"},
+                "symbol": "none",
+                "stack": "confidence",
+            },
+            {
+                "name": "CI Lower",
+                "type": "line",
+                "data": lower_series,
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(255,255,255,1)"},
+                "symbol": "none",
+                "stack": "confidence-lower",
+            },
+        ],
+    }
+    render_echarts(chart_option, height_px=320)
+    
+    st.caption(
+        "**Method:** Holt-Winters double exponential smoothing. "
+        "Shaded area shows 95% confidence interval."
+    )
+
+
+def _render_allostatic_load(load: Optional[AllostasticLoadScore]) -> None:
+    """Render allostatic load assessment."""
+    st.markdown("##### 📊 Allostatic Load Index")
+    st.caption(
+        "Allostatic load measures cumulative biological burden from chronic stress "
+        "(McEwen, 1998). Higher scores indicate greater physiological wear."
+    )
+    
+    if load is None:
+        st.info("Need at least 7 days of stress, sleep, and heart rate data.")
+        return
+    
+    # Risk level colors
+    risk_colors = {
+        RiskLevel.LOW: "#28a745",
+        RiskLevel.MODERATE: "#ffc107",
+        RiskLevel.HIGH: "#fd7e14",
+        RiskLevel.VERY_HIGH: "#dc3545",
+    }
+    risk_color = risk_colors.get(load.risk_level, "#6c757d")
+    
+    # Main score display
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(
+            f"""<div style="text-align: center; padding: 15px; background: {risk_color}20; border-radius: 10px;">
+                <div style="font-size: 36px; font-weight: bold; color: {risk_color};">{load.total_score:.1f}</div>
+                <div style="font-size: 14px; color: #666;">/ 10</div>
+                <div style="font-size: 16px; font-weight: bold; color: {risk_color};">{load.risk_level.value.upper()}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    with col2:
+        trend_7d_icon = "📈" if load.trend_7d == TrendDirection.IMPROVING else "📉" if load.trend_7d == TrendDirection.DECLINING else "➡️"
+        trend_30d_icon = "📈" if load.trend_30d == TrendDirection.IMPROVING else "📉" if load.trend_30d == TrendDirection.DECLINING else "➡️"
+        st.metric("7-Day Trend", f"{trend_7d_icon} {load.trend_7d.value.title()}")
+        st.metric("30-Day Trend", f"{trend_30d_icon} {load.trend_30d.value.title()}")
+    with col3:
+        st.metric("Recovery Debt", f"{load.recovery_debt_hours:.1f} hours")
+    
+    # Component breakdown
+    if load.component_scores:
+        st.markdown("**Component Scores:**")
+        comp_data = []
+        for comp, score in load.component_scores.items():
+            comp_data.append({
+                "System": comp.replace("_", " ").title(),
+                "Score": f"{score:.1f}/10",
+                "Status": "🟢" if score < 3 else "🟡" if score < 5 else "🟠" if score < 7 else "🔴",
+            })
+        st.dataframe(pd.DataFrame(comp_data), use_container_width=True, hide_index=True)
+    
+    # Interpretation and recommendations
+    st.info(f"**Interpretation:** {load.interpretation}")
+    
+    if load.recommendations:
+        st.markdown("**Recommendations:**")
+        for rec in load.recommendations:
+            st.markdown(f"- {rec}")
+
+
+def _render_circadian_analysis(analysis: Optional[CircadianAnalysis]) -> None:
+    """Render circadian rhythm analysis."""
+    st.markdown("##### 🕐 Circadian Rhythm Profile")
+    
+    if analysis is None:
+        st.info("Need at least 7 days of heart rate and stress data for circadian analysis.")
+        return
+    
+    # Chronotype display
+    chronotype_icons = {
+        Chronotype.EARLY_BIRD: "🌅",
+        Chronotype.INTERMEDIATE: "☀️",
+        Chronotype.NIGHT_OWL: "🌙",
+        Chronotype.UNDEFINED: "❓",
+    }
+    chronotype_desc = {
+        Chronotype.EARLY_BIRD: "Morning type - Peak performance in early hours",
+        Chronotype.INTERMEDIATE: "Intermediate - Balanced energy throughout day",
+        Chronotype.NIGHT_OWL: "Evening type - Peak performance in afternoon/evening",
+        Chronotype.UNDEFINED: "Insufficient data to determine",
+    }
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        icon = chronotype_icons.get(analysis.chronotype, "❓")
+        st.markdown(
+            f"""<div style="text-align: center; padding: 20px; background: #f8f9fa; border-radius: 10px;">
+                <div style="font-size: 48px;">{icon}</div>
+                <div style="font-size: 20px; font-weight: bold;">{analysis.chronotype.value.replace('_', ' ').title()}</div>
+                <div style="font-size: 12px; color: #666;">{chronotype_desc.get(analysis.chronotype, '')}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    
+    with col2:
+        st.metric("Rhythm Regularity", f"{analysis.regularity_score:.0f}%")
+        st.metric("Peak Time", f"{int(analysis.rhythm_acrophase):02d}:00")
+        sleep_start, sleep_end = analysis.optimal_sleep_window
+        st.metric("Optimal Sleep", f"{sleep_start:02d}:00 - {sleep_end:02d}:00")
+    
+    # Peak performance hours
+    peak_hours_str = ", ".join([f"{h:02d}:00" for h in analysis.peak_performance_hours])
+    st.success(f"**🎯 Peak Performance Hours:** {peak_hours_str}")
+    
+    # Recommendations based on chronotype
+    if analysis.chronotype == Chronotype.EARLY_BIRD:
+        st.markdown("""
+        **Optimization Tips:**
+        - Schedule important tasks for morning hours (8-11 AM)
+        - Avoid late-night activities that delay sleep
+        - Exposure to morning light reinforces your rhythm
+        """)
+    elif analysis.chronotype == Chronotype.NIGHT_OWL:
+        st.markdown("""
+        **Optimization Tips:**
+        - Reserve complex tasks for afternoon/evening
+        - If early wake required, use bright light therapy
+        - Avoid morning high-stakes meetings if possible
+        """)
+
+
+def _render_stress_prediction(prediction: Optional[StressPrediction]) -> None:
+    """Render stress prediction."""
+    st.markdown("##### 😰 Next-Day Stress Prediction")
+    
+    if prediction is None:
+        st.info("Need at least 5 days of stress data for prediction.")
+        return
+    
+    # Risk colors
+    risk_colors = {
+        RiskLevel.LOW: "#28a745",
+        RiskLevel.MODERATE: "#ffc107",
+        RiskLevel.HIGH: "#fd7e14",
+        RiskLevel.VERY_HIGH: "#dc3545",
+    }
+    color = risk_colors.get(prediction.risk_level, "#6c757d")
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.markdown(
+            f"""<div style="text-align: center; padding: 20px; background: {color}20; border-radius: 10px;">
+                <div style="font-size: 42px; font-weight: bold; color: {color};">{prediction.predicted_stress:.0f}</div>
+                <div style="font-size: 14px; color: #666;">Predicted Stress Level</div>
+                <div style="font-size: 12px; color: #888;">95% CI: {prediction.confidence_interval[0]:.0f} - {prediction.confidence_interval[1]:.0f}</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    
+    with col2:
+        st.metric("Risk Level", f"{prediction.risk_level.value.upper()}")
+        
+        if prediction.contributing_factors:
+            st.markdown("**Contributing Factors:**")
+            for factor in prediction.contributing_factors:
+                st.markdown(f"- {factor}")
+    
+    if prediction.recommendations:
+        st.markdown("**Recommendations:**")
+        for rec in prediction.recommendations:
+            st.markdown(f"✓ {rec}")
+
+
+def _render_recovery_analysis(recovery: Optional[RecoveryAnalysis]) -> None:
+    """Render recovery status analysis."""
+    st.markdown("##### 💪 Recovery Status")
+    
+    if recovery is None:
+        st.info("Need Body Battery, sleep, and stress data for recovery analysis.")
+        return
+    
+    # State colors and icons
+    state_config = {
+        RecoveryState.EXCELLENT: ("#28a745", "🌟"),
+        RecoveryState.GOOD: ("#17a2b8", "✅"),
+        RecoveryState.FAIR: ("#ffc107", "⚠️"),
+        RecoveryState.POOR: ("#fd7e14", "🔶"),
+        RecoveryState.CRITICAL: ("#dc3545", "🚨"),
+    }
+    color, icon = state_config.get(recovery.current_state, ("#6c757d", "❓"))
+    
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(
+            f"""<div style="text-align: center; padding: 15px; background: {color}20; border-radius: 10px;">
+                <div style="font-size: 36px;">{icon}</div>
+                <div style="font-size: 20px; font-weight: bold; color: {color};">{recovery.current_state.value.upper()}</div>
+                <div style="font-size: 14px; color: #666;">Recovery Score: {recovery.recovery_score:.0f}/100</div>
+            </div>""",
+            unsafe_allow_html=True,
+        )
+    with col2:
+        st.metric("Sleep Debt", f"{recovery.sleep_debt_hours:.1f} hours")
+        st.metric("Stress Load", f"{recovery.stress_accumulation:.0f}")
+    with col3:
+        if recovery.days_to_full_recovery == 0:
+            st.success("✅ Fully Recovered")
+        else:
+            st.metric("Days to Full Recovery", f"~{recovery.days_to_full_recovery}")
+    
+    # Recovery protocol
+    if recovery.optimal_rest_protocol:
+        st.markdown("**Optimal Recovery Protocol:**")
+        for step in recovery.optimal_rest_protocol:
+            st.markdown(f"{step}")
+
 
 # ---------------------------------------------------------------------------
 # HRV History Section
