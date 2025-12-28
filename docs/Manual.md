@@ -4768,103 +4768,281 @@ Location: **User Profile → Clinical Profile → Wrist Monitoring Data → 🧠
 
 *Added in v1.8.82*
 
-The Advanced HRV Analytics Platform provides state-of-the-art statistical analysis, machine learning pattern recognition, and clinical decision support for comprehensive HRV assessment.
+The Advanced HRV Analytics Platform provides state-of-the-art statistical analysis, machine learning pattern recognition, and clinical decision support for comprehensive HRV assessment. This section provides graduate-level physiological explanations for each visualization and metric.
 
 ### Overview
 
 Location: **User Profile → History → HRV Measurement History → 🧬 Advanced HRV Analytics**
 
-### Features
+### Physiological Foundation: The Neurovisceral Integration Model
 
-**5-Tab Interface:**
+Heart rate variability reflects the dynamic interplay between the sympathetic and parasympathetic branches of the autonomic nervous system (ANS). The **neurovisceral integration model** (Thayer & Lane, 2000, 2009; Thayer et al., 2012) proposes that HRV serves as an index of the functional integrity of a central autonomic network (CAN) that links prefrontal cortical regions with brainstem nuclei controlling cardiac chronotropy.
 
-#### Tab 1: Clinical Decision Support
+The CAN comprises inhibitory GABAergic pathways from the medial prefrontal cortex (mPFC) to the amygdala, which in turn modulates vagal efferent output via the nucleus ambiguus. Under conditions of safety, prefrontal inhibition of the amygdala permits high vagal tone and correspondingly high HRV. Conversely, threat perception or chronic stress disinhibits the amygdala, reducing vagal output and lowering HRV (Thayer & Lane, 2009).
 
-- **Overall Status**: Semaphored risk level (🟢 Green / 🟡 Yellow / 🟠 Orange / 🔴 Red)
-- **Autonomic Balance Gauge**: 0-100 scale ECharts gauge showing autonomic state
-- **Autonomic State Classification**:
-  - Parasympathetic Dominant (LF/HF < 0.8)
-  - Balanced (LF/HF 0.8-2.0)
-  - Sympathetic Dominant (LF/HF > 3.0)
-  - Dysregulated (inconsistent patterns)
-- **Metric Assessments Table**: Value, Z-score, Percentile, Reference Range, Risk Level, Interpretation
-- **Alerts & Recommendations**: Prioritized clinical guidance
+This model explains why reduced HRV is associated with:
+- **Impaired executive function** (prefrontal hypofunction)
+- **Emotional dysregulation** (amygdala hyperactivity)
+- **Chronic disease states** (sustained sympathetic dominance)
+- **All-cause mortality** (reduced physiological flexibility)
 
-#### Tab 2: Statistical Tests
+### Tab 1: Clinical Decision Support — Physiological Interpretation
 
-- **Descriptive Statistics**: N, Mean, SD, Median, Q1, Q3, IQR, Range, CV%, Skewness, Kurtosis, SEM
-- **Normality Tests**: Shapiro-Wilk test with p-values (4 decimal precision)
-- **Comparison Tests**:
-  - One-sample t-test against age-stratified reference values
-  - Paired t-test for pre/post comparisons
-  - Mann-Whitney U test (non-parametric alternative)
-  - Wilcoxon signed-rank test
-- **Effect Sizes**: Cohen's d with interpretation (Negligible/Small/Medium/Large)
-- **Age-Stratified References**: RMSSD and SDNN by age group (Nunan 2010, Shaffer 2017)
+#### Autonomic Balance Gauge (0-100 Scale)
 
-| Age Group | RMSSD Reference (ms) | SDNN Reference (ms) |
-|-----------|---------------------|---------------------|
-| 20-29 | 42.6 ± 18.5 | 50.0 ± 16.0 |
-| 30-39 | 34.0 ± 14.5 | 45.0 ± 14.0 |
-| 40-49 | 28.5 ± 12.0 | 40.0 ± 12.0 |
-| 50-59 | 24.0 ± 10.0 | 35.0 ± 11.0 |
-| 60+ | 20.0 ± 8.5 | 30.0 ± 10.0 |
+The autonomic balance score synthesizes multiple HRV indices into a single metric reflecting the sympathovagal equilibrium. Higher scores indicate greater parasympathetic (vagal) predominance, associated with rest-and-digest physiology and adaptive stress responses.
 
-#### Tab 3: Trends & Forecast
+**Physiological Basis:**
 
-- **Trend Summary**: Direction (Improving/Stable/Declining), strength, significance
-- **7-Day Forecast**: Linear regression extrapolation with 95% confidence intervals
-- **RMSSD Trend Visualization**: ECharts line chart with 7-day moving average
+The score integrates:
+- **RMSSD deviation from age norms**: RMSSD (root mean square of successive differences) reflects beat-to-beat variability primarily mediated by the vagus nerve. Mathematically, RMSSD = √[Σ(RRᵢ₊₁ - RRᵢ)² / (N-1)]. Because successive beat differences are filtered at ~0.15 Hz, RMSSD captures high-frequency vagal modulation with minimal sympathetic contamination (Task Force, 1996).
 
-#### Tab 4: Anomalies & Patterns
+- **Stress Index (Baevsky)**: SI = AMo / (2 × Mo × MxDMn), where AMo is the amplitude of the modal RR interval, Mo is the mode, and MxDMn is the variation range. Elevated SI (>150) indicates sympathetic dominance and reduced cardiac autonomic flexibility (Baevsky et al., 1984).
 
-- **Anomaly Detection**:
-  - Z-score method (|z| > 2.5)
-  - IQR method (< Q1 - 1.5×IQR or > Q3 + 1.5×IQR)
-  - Anomaly count and severity scoring
-- **Pattern Recognition**:
-  - RMSSD variability classification (CV% categories)
-  - Autonomic balance pattern identification
-  - Chronic stress detection (>50% recordings with Stress Index > 150)
+- **LF/HF ratio considerations**: While historically interpreted as sympathovagal balance, the LF/HF ratio is now understood to reflect complex, non-linear ANS interactions rather than simple sympathetic-to-parasympathetic ratios. Low-frequency power (0.04-0.15 Hz) contains both sympathetic and parasympathetic contributions, including baroreflex activity (Reyes del Paso et al., 2013).
 
-#### Tab 5: HRV + Garmin Integration
+#### Autonomic State Classification
 
-- **Data Concordance**: Correlation between HRV metrics and Garmin wearable data
-- **Discordance Flags**: Alerts when HRV and wearable data disagree
-- **Cross-Correlation Matrix**: Spearman ρ with significance (p-values)
-- **Integrated Stress/Recovery Score**: Combined metric from both sources
+| State | LF/HF Range | Physiological Interpretation |
+|-------|-------------|------------------------------|
+| **Parasympathetic Dominant** | <0.8 | High vagal tone; rest-and-digest predominance; typically seen during deep relaxation, post-prandial periods, or trained athletes at rest |
+| **Balanced** | 0.8-2.0 | Homeostatic equilibrium; flexible autonomic responsivity; associated with adaptive stress coping |
+| **Sympathetic Dominant** | >3.0 | Fight-or-flight activation; elevated catecholamine release; may indicate acute stress, physical exertion, or chronic dysregulation |
+| **Dysregulated** | Variable | Inconsistent patterns; may indicate autonomic neuropathy, severe deconditioning, or measurement artifact |
 
-### Statistical Methods
+#### Metric Assessments and Z-Scores
 
-| Test | Purpose | Assumptions |
-|------|---------|-------------|
-| Shapiro-Wilk | Normality testing | n < 5000 |
-| One-sample t-test | Compare to reference | Normal distribution |
-| Mann-Whitney U | Non-parametric comparison | Independent samples |
-| Spearman ρ | Correlation | Monotonic relationship |
-| Cohen's d | Effect size | — |
+Each HRV metric is compared against age- and sex-stratified reference distributions. The Z-score transformation standardizes values: Z = (X - μ) / σ, where X is the observed value, μ is the population mean, and σ is the population standard deviation.
 
-### Interpretation Guide
+**Clinical Significance Thresholds:**
+- |Z| < 1.0: Within normal range (68% of healthy population)
+- 1.0 ≤ |Z| < 2.0: Borderline (warning zone)
+- |Z| ≥ 2.0: Clinically significant deviation (<5% of healthy population)
 
-**p-value Interpretation:**
-- p < 0.001: Highly significant (***)
-- p < 0.01: Very significant (**)
-- p < 0.05: Significant (*)
-- p ≥ 0.05: Not significant
+### Tab 2: Statistical Tests — Methodological Rationale
 
-**Cohen's d Effect Size:**
-- |d| < 0.2: Negligible
-- 0.2 ≤ |d| < 0.5: Small
-- 0.5 ≤ |d| < 0.8: Medium
-- |d| ≥ 0.8: Large
+#### Descriptive Statistics
 
-### Scientific References
+| Statistic | Formula | Physiological Relevance |
+|-----------|---------|------------------------|
+| **Mean** | Σxᵢ/n | Central tendency of HRV distribution |
+| **SD** | √[Σ(xᵢ-x̄)²/(n-1)] | Total variability; reflects overall ANS flexibility |
+| **Median** | Middle value | Robust central tendency; resistant to outliers |
+| **CV%** | (SD/Mean)×100 | Normalized variability; allows cross-metric comparison |
+| **Skewness** | Σ[(xᵢ-x̄)/σ]³/n | Distribution asymmetry; positive skew common in HRV |
+| **Kurtosis** | Σ[(xᵢ-x̄)/σ]⁴/n - 3 | Tail heaviness; excess kurtosis indicates outlier-prone data |
+| **SEM** | SD/√n | Precision of mean estimate; critical for power analysis |
 
-- Task Force of ESC/NASPE. (1996). Heart rate variability: Standards of measurement, physiological interpretation, and clinical use. *Circulation, 93*(5), 1043-1065. https://doi.org/10.1161/01.CIR.93.5.1043
+#### Shapiro-Wilk Normality Test
+
+The Shapiro-Wilk test (1965) evaluates the null hypothesis that data are drawn from a normal (Gaussian) distribution. HRV metrics often exhibit positive skewness due to physiological floor effects (RR intervals cannot be negative) and the multiplicative nature of autonomic modulation.
+
+**Test Statistic:** W = (Σaᵢx₍ᵢ₎)² / Σ(xᵢ-x̄)²
+
+**Interpretation:**
+- W → 1: Data approximate normality
+- p > 0.05: Fail to reject normality (parametric tests appropriate)
+- p ≤ 0.05: Significant deviation from normality (consider non-parametric alternatives or log-transformation)
+
+**Clinical Note:** RMSSD and HF power typically require natural log transformation (lnRMSSD, lnHF) for parametric analysis due to inherent positive skewness (Plews et al., 2013).
+
+#### One-Sample t-Test Against Age-Stratified References
+
+The one-sample t-test compares the individual's mean HRV against population reference values:
+
+t = (x̄ - μ₀) / (s/√n)
+
+where μ₀ is the age-stratified reference mean. This test addresses the question: "Is this individual's HRV significantly different from what we expect for their age group?"
+
+**Age-Stratified Reference Values (5-minute recordings):**
+
+| Age Group | RMSSD (ms) | SDNN (ms) | Source |
+|-----------|------------|-----------|--------|
+| 20-29 | 42.6 ± 18.5 | 50.0 ± 16.0 | Nunan et al. (2010) |
+| 30-39 | 34.0 ± 14.5 | 45.0 ± 14.0 | Nunan et al. (2010) |
+| 40-49 | 28.5 ± 12.0 | 40.0 ± 12.0 | Shaffer & Ginsberg (2017) |
+| 50-59 | 24.0 ± 10.0 | 35.0 ± 11.0 | Shaffer & Ginsberg (2017) |
+| 60+ | 20.0 ± 8.5 | 30.0 ± 10.0 | O'Neal et al. (2016) |
+
+**Physiological Rationale:** HRV declines approximately 3-4% per decade due to progressive vagal withdrawal, reduced sinoatrial node responsivity, and arterial stiffening (Geovanini et al., 2020).
+
+#### Cohen's d Effect Size
+
+Cohen's d quantifies the standardized magnitude of difference:
+
+d = (x̄₁ - x̄₂) / s_pooled
+
+**Interpretation (Cohen, 1988):**
+- |d| < 0.2: Negligible effect (clinically meaningless)
+- 0.2 ≤ |d| < 0.5: Small effect (detectable but modest)
+- 0.5 ≤ |d| < 0.8: Medium effect (clinically relevant)
+- |d| ≥ 0.8: Large effect (substantial clinical significance)
+
+**Clinical Application:** Effect sizes complement p-values by quantifying practical significance. A statistically significant (p < 0.05) but small (d = 0.2) effect may not warrant clinical intervention.
+
+### Tab 3: Trends & Forecast — Longitudinal Analysis
+
+#### Physiological Rationale for Trend Monitoring
+
+Day-to-day HRV fluctuations reflect the integration of multiple physiological and behavioral inputs:
+- **Sleep quality and duration**: Sleep deprivation reduces vagal tone (Tobaldini et al., 2013)
+- **Physical training load**: Overtraining suppresses HRV; adequate recovery restores it (Plews et al., 2013)
+- **Psychological stress**: Acute stress elevates sympathetic activity; chronic stress produces sustained HRV depression (Lennartsson et al., 2016)
+- **Illness and inflammation**: Systemic inflammation reduces vagal tone via the inflammatory reflex (Thayer & Sternberg, 2006)
+
+#### Linear Regression Trend Analysis
+
+The 7-day trend uses ordinary least squares (OLS) regression:
+
+ŷ = β₀ + β₁t
+
+where t is time (days) and ŷ is predicted HRV. The slope (β₁) indicates trend direction:
+- β₁ > 0: Improving (increasing vagal tone)
+- β₁ ≈ 0: Stable (homeostatic maintenance)
+- β₁ < 0: Declining (progressive sympathetic shift or accumulated stress)
+
+**Slope Significance Testing:**
+
+t = β₁ / SE(β₁)
+
+A significant positive slope (p < 0.05) suggests genuine physiological improvement rather than random fluctuation.
+
+#### 7-Day Forecast with Confidence Intervals
+
+The forecast extrapolates the linear trend with 95% confidence bounds:
+
+CI = ŷ ± t₀.₀₂₅ × SE(ŷ)
+
+**Clinical Interpretation:**
+- **Narrow CI**: Consistent HRV pattern; high forecast confidence
+- **Wide CI**: Variable HRV; forecast uncertainty reflects physiological instability
+
+**Caution:** Linear extrapolation assumes trend continuation. Sudden stressors (illness, travel, acute psychological stress) can invalidate forecasts.
+
+### Tab 4: Anomalies & Patterns — Machine Learning Approaches
+
+#### Anomaly Detection: Z-Score Method
+
+The Z-score method flags observations exceeding ±2.5 standard deviations:
+
+Anomaly if: |Z| = |(xᵢ - x̄) / s| > 2.5
+
+**Physiological Causes of HRV Anomalies:**
+- **Unusually low RMSSD**: Acute illness, severe stress, cardiac arrhythmia, measurement artifact
+- **Unusually high RMSSD**: Post-exercise parasympathetic rebound, vagal maneuvers, measurement error
+
+#### Anomaly Detection: IQR Method
+
+The interquartile range (IQR) method is robust to non-normal distributions:
+
+Anomaly if: xᵢ < Q₁ - 1.5×IQR or xᵢ > Q₃ + 1.5×IQR
+
+This method identifies outliers in the tails of the distribution without assuming normality.
+
+#### Pattern Recognition: RMSSD Variability (CV%)
+
+Day-to-day RMSSD variability, quantified as coefficient of variation (CV%), indicates measurement consistency and autonomic stability:
+
+| CV% Category | Interpretation | Clinical Implication |
+|--------------|----------------|---------------------|
+| <15% | Very stable | Consistent physiology; reliable trend detection |
+| 15-40% | Normal variability | Expected day-to-day fluctuation |
+| >40% | High variability | Inconsistent conditions; consider standardizing measurement protocol |
+
+**Sources of Elevated CV%:**
+- Inconsistent measurement timing (circadian effects)
+- Variable pre-recording conditions (caffeine, exercise, posture)
+- Genuine physiological instability (autonomic dysfunction)
+
+#### Chronic Stress Pattern Detection
+
+The platform identifies chronic stress when >50% of recordings show Stress Index (SI) > 150. Sustained sympathetic dominance is associated with:
+- Increased cardiovascular morbidity (Thayer et al., 2010)
+- Impaired cognitive performance (Thayer et al., 2009)
+- Reduced emotional regulation capacity (Thayer & Lane, 2000)
+
+### Tab 5: HRV + Garmin Integration — Multi-Modal Validation
+
+#### Cross-Validation Rationale
+
+Consumer wearables (Garmin, Oura, Whoop) provide continuous physiological monitoring but with varying accuracy compared to research-grade ECG. Cross-validation identifies:
+- **Concordance**: Agreement between sources strengthens confidence
+- **Discordance**: Disagreement warrants investigation (device error, timing mismatch, or genuine physiological difference)
+
+#### Validation Evidence for Consumer Wearables
+
+| Device | RMSSD Accuracy | Source |
+|--------|----------------|--------|
+| Polar H10 (chest strap) | CCC = 0.97-0.99 | Miller et al. (2022); Gold standard for research |
+| Oura Ring Gen 3/4 | CCC = 0.97-0.99 | Dial et al. (2025) |
+| Garmin (wrist-based) | CCC = 0.87 | Dial et al. (2025); Lower accuracy due to PPG limitations |
+| Whoop 4.0 | CCC = 0.94 | Dial et al. (2025) |
+
+#### Cross-Correlation Matrix (Spearman ρ)
+
+Spearman's rank correlation is used because:
+1. It does not assume linear relationships
+2. It is robust to outliers
+3. HRV metrics often have non-normal distributions
+
+**Expected Correlations:**
+- **RMSSD ↔ Body Battery**: Moderate positive (r ≈ 0.3-0.5); higher vagal tone supports recovery
+- **Stress Index ↔ Garmin Stress Score**: Moderate positive (r ≈ 0.4-0.6); both reflect sympathetic activation
+- **SDNN ↔ Sleep Score**: Moderate positive (r ≈ 0.3-0.5); overall HRV reflects sleep quality
+
+#### Discordance Flags
+
+The platform flags discordance when Polar H10 HRV and Garmin metrics disagree significantly (e.g., high RMSSD but low Body Battery). Possible explanations:
+- **Timing mismatch**: Garmin averages overnight; Polar captures morning snapshot
+- **Algorithm differences**: Proprietary Garmin algorithms may weight factors differently
+- **Measurement artifact**: Wrist-based PPG susceptible to motion artifact
+
+### Methodological Considerations for Valid HRV Assessment
+
+Following Task Force (1996) and Quigley et al. (2024) guidelines:
+
+1. **Recording duration**: Minimum 5 minutes for short-term analysis; 24 hours for circadian patterns
+2. **Posture standardization**: Supine or seated; consistent across sessions
+3. **Time of day**: Circadian variation peaks vagal tone at night; standardize timing
+4. **Pre-recording conditions**: Avoid caffeine, alcohol, and vigorous exercise 2+ hours prior
+5. **Breathing**: Spontaneous breathing preferred; controlled breathing affects HF power
+6. **Artifact handling**: <5% ectopic beats; use validated artifact correction
+
+### Comprehensive Scientific References
+
+**Core HRV Standards:**
+- Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology. (1996). Heart rate variability: Standards of measurement, physiological interpretation, and clinical use. *Circulation, 93*(5), 1043-1065. https://doi.org/10.1161/01.CIR.93.5.1043
 - Shaffer, F., & Ginsberg, J. P. (2017). An overview of heart rate variability metrics and norms. *Frontiers in Public Health, 5*, 258. https://doi.org/10.3389/fpubh.2017.00258
-- Nunan, D., et al. (2010). A quantitative systematic review of normal values for short-term heart rate variability in healthy adults. *Pacing and Clinical Electrophysiology, 33*(11), 1407-1417. https://doi.org/10.1111/j.1540-8159.2010.02841.x
-- Thayer, J. F., et al. (2012). A meta-analysis of heart rate variability and neuroimaging studies: Implications for heart rate variability as a marker of stress and health. *Neuroscience & Biobehavioral Reviews, 36*(2), 747-756. https://doi.org/10.1016/j.neubiorev.2011.11.009
-- Cohen, J. (1988). *Statistical Power Analysis for the Behavioral Sciences* (2nd ed.). Lawrence Erlbaum Associates.
+- Quigley, K. S., Kanoski, S., Grill, W. M., Barrett, L. F., & Tsakiris, M. (2024). Publication guidelines for heart rate and heart rate variability. *Psychophysiology, 61*(4), e14604. https://doi.org/10.1111/psyp.14604
+
+**Normative Values:**
+- Nunan, D., Sandercock, G. R., & Brodie, D. A. (2010). A quantitative systematic review of normal values for short-term heart rate variability in healthy adults. *Pacing and Clinical Electrophysiology, 33*(11), 1407-1417. https://doi.org/10.1111/j.1540-8159.2010.02841.x
+- O'Neal, W. T., Chen, L. Y., Nazarian, S., & Soliman, E. Z. (2016). Reference ranges for short-term heart rate variability measures in individuals free of cardiovascular disease: The Multi-Ethnic Study of Atherosclerosis (MESA). *Journal of Electrocardiology, 49*(5), 686-690. https://doi.org/10.1016/j.jelectrocard.2016.06.008
+- Ortega, E., Bryan, C. Y. X., & Christine, N. S. C. (2024). The pulse of Singapore: Short-term HRV norms. *Journal of General Internal Medicine, 39*(1), 101-108. https://doi.org/10.1007/s10484-023-09603-4
+- Geovanini, G. R., Vasques, E. R., de Oliveira Alvim, R., et al. (2020). Age and sex differences in heart rate variability and vagal specific patterns—Baependi Heart Study. *Global Heart, 15*(1), 71. https://doi.org/10.5334/gh.873
+
+**Neurovisceral Integration Model:**
+- Thayer, J. F., & Lane, R. D. (2000). A model of neurovisceral integration in emotion regulation and dysregulation. *Journal of Affective Disorders, 61*(3), 201-216. https://doi.org/10.1016/S0165-0327(00)00338-4
+- Thayer, J. F., & Lane, R. D. (2009). Claude Bernard and the heart-brain connection: Further elaboration of a model of neurovisceral integration. *Neuroscience & Biobehavioral Reviews, 33*(2), 81-88. https://doi.org/10.1016/j.neubiorev.2008.08.004
+- Thayer, J. F., Åhs, F., Fredrikson, M., Sollers, J. J., & Wager, T. D. (2012). A meta-analysis of heart rate variability and neuroimaging studies: Implications for heart rate variability as a marker of stress and health. *Neuroscience & Biobehavioral Reviews, 36*(2), 747-756. https://doi.org/10.1016/j.neubiorev.2011.11.009
+- Thayer, J. F., Hansen, A. L., Saus-Rose, E., & Johnsen, B. H. (2009). Heart rate variability, prefrontal neural function, and cognitive performance: The neurovisceral integration perspective on self-regulation, adaptation, and health. *Annals of Behavioral Medicine, 37*(2), 141-153. https://doi.org/10.1007/s12160-009-9101-z
+- Thayer, J. F., & Sternberg, E. (2006). Beyond heart rate variability: Vagal regulation of allostatic systems. *Annals of the New York Academy of Sciences, 1088*(1), 361-372. https://doi.org/10.1196/annals.1366.014
+
+**Stress and Clinical Applications:**
+- Lennartsson, A. K., Jonsdottir, I., & Sjörs, A. (2016). Low heart rate variability in patients with clinical burnout. *International Journal of Psychophysiology, 110*, 171-178. https://doi.org/10.1016/j.ijpsycho.2016.08.005
+- Gruionu, G., Aktaruzzaman, M., Gupta, A., et al. (2024). Heart rate variability parameters indicate altered autonomic tone in subjects with COVID-19. *Scientific Reports, 14*, 31082. https://doi.org/10.1038/s41598-024-80918-w
+- Roddick, C. M., Seo, Y. S., Barkovich, S. L., et al. (2025). Cardiac vagal recovery following acute psychological stress in human adults: A scoping review. *Neuroscience & Biobehavioral Reviews, 169*, 106268. https://doi.org/10.1016/j.neubiorev.2025.106268
+
+**Wearable Validation:**
+- Miller, D. J., Sargent, C., & Roach, G. D. (2022). A validation of six wearable devices for estimating sleep, heart rate and heart rate variability in healthy adults. *Sensors, 22*(16), 6317. https://doi.org/10.3390/s22166317
+- Dial, M. B., Hollander, M. E., Vatne, E. A., et al. (2025). Validation of nocturnal resting heart rate and heart rate variability in consumer wearables. *Physiological Reports, 13*(2), e70527. https://doi.org/10.14814/phy2.70527
+- Hannon, J., O'Hagan, A., Lambe, R., et al. (2025). Associations between daily heart rate variability and self-reported wellness: A 14-day observational study in healthy adults. *Sensors, 25*(14), 4415. https://doi.org/10.3390/s25144415
+- Fuller, D., Colwell, E., Low, J., et al. (2020). Reliability and validity of commercially available wearable devices for measuring steps, energy expenditure, and heart rate: Systematic review. *JMIR mHealth and uHealth, 8*(9), e18694. https://doi.org/10.2196/18694
+
+**Statistical Methods:**
+- Cohen, J. (1988). *Statistical power analysis for the behavioral sciences* (2nd ed.). Lawrence Erlbaum Associates.
+- Shapiro, S. S., & Wilk, M. B. (1965). An analysis of variance test for normality (complete samples). *Biometrika, 52*(3-4), 591-611. https://doi.org/10.1093/biomet/52.3-4.591
+- Plews, D. J., Laursen, P. B., Stanley, J., Kilding, A. E., & Buchheit, M. (2013). Training adaptation and heart rate variability in elite endurance athletes: Opening the door to effective monitoring. *Sports Medicine, 43*(9), 773-781. https://doi.org/10.1007/s40279-013-0071-8
 
 ---
 
