@@ -5,6 +5,29 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.81] - 2025-12-28
+
+### Added
+- **Advanced Wearable Analytics Module** (`app/wearable_analytics.py`): Sophisticated predictive modeling for Garmin metrics:
+  - **Body Battery Forecasting**: Holt-Winters double exponential smoothing with 95% confidence intervals, recovery time estimation
+  - **Allostatic Load Index**: Chronic stress assessment based on McEwen (1998) and Seeman (2001) - cardiovascular, autonomic, sleep, and energy components
+  - **Circadian Rhythm Analysis**: Chronotype detection (Early Bird/Intermediate/Night Owl), peak performance hours, optimal sleep window
+  - **Stress Prediction**: Next-day stress level forecasting with contributing factors and recommendations
+  - **Recovery Analysis**: Recovery state classification, sleep debt calculation, optimal rest protocols
+  - **Cross-Metric Correlations**: Pearson/Spearman correlations with significance testing
+
+- **Advanced Predictive Analytics UI** (`app/user_profile_tab.py`): New "🧠 Advanced Predictive Analytics" section in Wrist Monitoring:
+  - **5-tab interface**: Body Battery Forecast, Allostatic Load, Circadian Analysis, Stress Prediction, Recovery Status
+  - **Body Battery forecast chart**: Historical + predicted values with confidence interval bands
+  - **Allostatic load gauge**: 0-10 scale with component breakdown and recovery recommendations
+  - **Chronotype profile**: Visual chronotype identification with optimal scheduling recommendations
+  - **Stress prediction widget**: Risk level display with contributing factors
+  - **Recovery dashboard**: Recovery score, sleep debt, days to full recovery estimation
+
+### Improved
+- **Radiation Exposure Gauge**: Simplified to clean arc + needle with status displayed below (no overlapping labels)
+- **EVA Risk Matrix**: Larger chart (380px), bigger fonts, HTML legend below to avoid clutter
+
 ## [1.8.80] - 2025-12-28
 
 ### Added
