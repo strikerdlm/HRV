@@ -5,6 +5,31 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.80] - 2025-12-28
+
+### Added
+- **Radiation Exposure Module** (`app/radiation_exposure.py`): New evidence-based module for space radiation dose estimation with:
+  - **10 radiation environments**: Earth surface, Antarctica, flight altitude, LEO/ISS, Lunar Gateway, Lunar transit, Lunar surface (nominal + SPE), Mars transit, Mars surface
+  - **Literature-derived dose rates**: Chang'E-4 LND (Zhang et al. 2020), MSL RAD (Zeitlin 2013, Hassler 2014), ISS MATROSHKA-R (Berger 2020)
+  - **Day-by-day cumulative tracking**: `build_radiation_timeline()` with solar cycle phase adjustment and EVA schedule modeling
+  - **EVA Go/No-Go assessment**: `assess_eva_radiation_risk()` with space weather integration (NOAA S/G scales)
+  - **NASA STD-3001 limits**: Career 600 mSv, operational thresholds, alert zones (30/60/80% career)
+  - **Environment comparison**: Side-by-side projected dose analysis across all environments
+
+- **Enhanced Exploration Medical Analytics** (`app/user_profile_tab.py`): Complete overhaul of the Radiation Exposure section:
+  - **4-tab interface**: Current Status, Day-by-Day Timeline, Environment Comparison, EVA Go/No-Go Matrix
+  - **Radiation gauge**: Two-ring gauge visualization with career % and Go/No-Go status (styled like SAFTE gauges)
+  - **Cumulative dose projection**: ECharts line chart with limit lines at 30%, 60%, 80%, 100% career
+  - **Environment comparison bar chart**: All environments ranked by projected dose with color-coded risk levels
+  - **EVA risk matrix**: Heatmap visualization similar to ICAO/USAF FRMS matrices with current position indicator
+  - **Scientific references**: Inline citations to NASA STD-3001, ICRP 123, Zhang 2020, Simonsen 2025
+
+### Fixed
+- **Recording Timeline Summary** (`app/app.py`): Fixed issue where timeline showed "no RR intervals" despite data being loaded from user profiles. Now correctly merges data from:
+  - `uploaded_rr_cache` (direct file uploads)
+  - `_persisted_uploads` (persisted across reruns)
+  - Current `uploads` variable (queued from profile storage)
+
 ## [1.8.79] - 2025-12-27
 
 ### Added
