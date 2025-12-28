@@ -25,7 +25,7 @@ Features:
     - WebSocket event logging
     - Performance timing helpers
 
-Author: Mission Control - Flight Surgeon
+Author: Dr Diego Malpica MD
 Version: 2.0.0
 """
 
