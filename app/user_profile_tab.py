@@ -6926,8 +6926,8 @@ def _render_radiation_gauge(
     career_limit_msv: float,
     environment_label: str,
 ) -> None:
-    """Render a two-ring gauge for radiation exposure similar to SAFTE gauges."""
-    career_pct = (cumulative_msv / career_limit_msv) * 100.0
+    """Render a clean two-ring gauge for radiation exposure with lowered center detail."""
+    career_pct = min((cumulative_msv / career_limit_msv) * 100.0, 120.0)  # Cap at 120%
     
     # Determine zone
     if career_pct < 30.0:
@@ -6944,58 +6944,138 @@ def _render_radiation_gauge(
         zone_label = "NO-GO"
     
     gauge_option = {
-        "tooltip": {"formatter": "{a} <br/>{b}: {c}%"},
         "series": [
+            # Outer decorative ring (background track)
             {
-                "name": "Career Dose Limit",
                 "type": "gauge",
-                "radius": "100%",
-                "center": ["50%", "60%"],
+                "radius": "95%",
+                "center": ["50%", "55%"],
                 "startAngle": 200,
                 "endAngle": -20,
                 "min": 0,
                 "max": 100,
-                "splitNumber": 4,
                 "axisLine": {
                     "lineStyle": {
-                        "width": 20,
+                        "width": 3,
+                        "color": [[1, "rgba(200,200,200,0.3)"]],
+                    }
+                },
+                "axisTick": {"show": False},
+                "splitLine": {"show": False},
+                "axisLabel": {"show": False},
+                "pointer": {"show": False},
+                "detail": {"show": False},
+            },
+            # Main colored gauge ring
+            {
+                "name": "Radiation Exposure",
+                "type": "gauge",
+                "radius": "85%",
+                "center": ["50%", "55%"],
+                "startAngle": 200,
+                "endAngle": -20,
+                "min": 0,
+                "max": 100,
+                "splitNumber": 10,
+                "axisLine": {
+                    "lineStyle": {
+                        "width": 18,
                         "color": [
-                            [0.30, "#28a745"],
-                            [0.60, "#ffc107"],
-                            [0.80, "#fd7e14"],
-                            [1.00, "#dc3545"],
+                            [0.30, "#28a745"],  # Green: GO (0-30%)
+                            [0.60, "#ffc107"],  # Yellow: MONITOR (30-60%)
+                            [0.80, "#fd7e14"],  # Orange: CAUTION (60-80%)
+                            [1.00, "#dc3545"],  # Red: NO-GO (80-100%)
                         ],
                     }
                 },
                 "pointer": {
-                    "icon": "path://M2.9,0.7L2.9,0.7c1.4,0,2.6,1.2,2.6,2.6v115c0,1.4-1.2,2.6-2.6,2.6l0,0c-1.4,0-2.6-1.2-2.6-2.6V3.3C0.3,1.9,1.4,0.7,2.9,0.7z",
-                    "width": 8,
-                    "length": "70%",
-                    "offsetCenter": [0, "0%"],
-                    "itemStyle": {"color": "#333"},
+                    "icon": "path://M2090.36389,615.30999 L2## Needle path",
+                    "length": "65%",
+                    "width": 6,
+                    "offsetCenter": [0, "-5%"],
+                    "itemStyle": {"color": "#394867"},
                 },
-                "axisTick": {"length": 8, "lineStyle": {"color": "auto", "width": 1}},
-                "splitLine": {"length": 15, "lineStyle": {"color": "auto", "width": 2}},
+                "anchor": {
+                    "show": True,
+                    "size": 12,
+                    "itemStyle": {"borderColor": "#394867", "borderWidth": 2},
+                },
+                "axisTick": {
+                    "show": True,
+                    "length": 6,
+                    "distance": 2,
+                    "lineStyle": {"color": "auto", "width": 1},
+                },
+                "splitLine": {
+                    "show": True,
+                    "length": 10,
+                    "distance": 2,
+                    "lineStyle": {"color": "auto", "width": 2},
+                },
                 "axisLabel": {
+                    "show": True,
+                    "distance": 25,
                     "color": "#666",
-                    "fontSize": 10,
-                    "formatter": "{value}%",
+                    "fontSize": 11,
+                    "formatter": "{value}",
                 },
-                "title": {"offsetCenter": [0, "85%"], "fontSize": 12, "color": "#333"},
+                "title": {
+                    "show": True,
+                    "offsetCenter": [0, "75%"],
+                    "fontSize": 11,
+                    "color": "#888",
+                },
                 "detail": {
+                    "show": True,
                     "valueAnimation": True,
-                    "formatter": f"{{value}}%\n{zone_label}",
-                    "color": zone_color,
-                    "fontSize": 24,
+                    "fontSize": 20,
                     "fontWeight": "bold",
-                    "offsetCenter": [0, "45%"],
+                    "color": zone_color,
+                    "offsetCenter": [0, "35%"],
+                    "formatter": f"{{value}}%",
                 },
-                "data": [{"value": round(career_pct, 1), "name": f"{cumulative_msv:.1f} / {career_limit_msv:.0f} mSv"}],
-            }
+                "data": [
+                    {
+                        "value": round(career_pct, 1),
+                        "name": f"{cumulative_msv:.1f} / {career_limit_msv:.0f} mSv",
+                    }
+                ],
+            },
+            # Inner status badge
+            {
+                "type": "gauge",
+                "radius": "45%",
+                "center": ["50%", "55%"],
+                "startAngle": 0,
+                "endAngle": 360,
+                "min": 0,
+                "max": 1,
+                "axisLine": {
+                    "lineStyle": {
+                        "width": 0,
+                        "color": [[1, "transparent"]],
+                    }
+                },
+                "axisTick": {"show": False},
+                "splitLine": {"show": False},
+                "axisLabel": {"show": False},
+                "pointer": {"show": False},
+                "title": {"show": False},
+                "detail": {
+                    "show": True,
+                    "offsetCenter": [0, "85%"],
+                    "fontSize": 16,
+                    "fontWeight": "bold",
+                    "color": zone_color,
+                    "formatter": zone_label,
+                    "rich": {},
+                },
+                "data": [{"value": 0}],
+            },
         ],
     }
     
-    render_echarts(gauge_option, height_px=280)
+    render_echarts(gauge_option, height_px=260)
     st.caption(f"**Environment:** {environment_label.replace('_', ' ').title()}")
 
 
