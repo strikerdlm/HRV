@@ -22,6 +22,7 @@ Scientific References:
 from __future__ import annotations
 
 import math
+import sys as _sys
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from enum import Enum
@@ -30,6 +31,14 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
 from scipy import stats
+
+# ---------------------------------------------------------------------------
+# Module registration safeguard for Streamlit hot-reloads
+# ---------------------------------------------------------------------------
+# Streamlit's reloader can leave sys.modules[__name__] as None momentarily,
+# causing @dataclass to fail with "NoneType has no attribute '__dict__'".
+if _sys.modules.get(__name__) is None:
+    _sys.modules[__name__] = type(_sys)(__name__)
 
 try:
     from logging_config import get_logger, log_exception
@@ -1125,7 +1134,7 @@ def determine_autonomic_state(
         if lf_hf is not None and lf_hf > 3.0:
             state = AutonomicState.SYMPATHETIC_DOMINANT
         else:
-            state = AutonomicState.SYMPATHETIC_DOMINANT
+            state = AutonomicState.BALANCED  # Low balance but LF/HF not elevated
     else:
         state = AutonomicState.DYSREGULATED
 
@@ -1363,10 +1372,12 @@ def run_advanced_hrv_analysis(
     if date_col:
         for metric in ["rmssd_ms", "sdnn_ms", "mean_hr_bpm"]:
             if metric in hrv_df.columns:
-                dates = hrv_df[date_col].values
-                values = hrv_df[metric].dropna().values
+                # Filter dates and values together to maintain alignment
+                valid_mask = hrv_df[metric].notna()
+                dates = hrv_df.loc[valid_mask, date_col].values
+                values = hrv_df.loc[valid_mask, metric].values
                 if len(values) >= 5:
-                    trend = analyze_trend(dates[:len(values)], values, metric)
+                    trend = analyze_trend(dates, values, metric)
                     trend_analyses[metric] = trend
                     if trend.forecast_7d is not None:
                         forecasts[metric] = {
