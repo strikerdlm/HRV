@@ -1052,6 +1052,34 @@ The Clinical Profile tab now exposes an **Exploration Medical Analytics** dashbo
 
 All indicators update in real time once a record is saved, giving crews immediate feedback without leaving the Clinical Profile context.
 
+#### Radiation Exposure Module (v1.8.80+)
+
+The `radiation_exposure` module provides evidence-based dose rate estimates for space mission planning:
+
+| Environment | Nominal Rate (mSv/day) | Reference |
+|-------------|------------------------|-----------|
+| Earth Surface | 0.0066 | UNSCEAR 2000 (~2.4 mSv/year) |
+| Antarctica (high altitude) | 0.003–0.008 | Mishev et al. (2023) |
+| Flight Altitude (35,000 ft) | 0.144 | FAA AC 120-52; O'Brien 1978 |
+| Low Earth Orbit (ISS) | 0.20–0.73 | Berger et al. (2020); NASA LSAH 2023 |
+| Lunar Gateway | 0.80–1.80 | Simonsen et al. (2025); ICRP 123 |
+| Lunar Surface | 1.00–1.80 | Zhang et al. (2020), Science Advances |
+| Mars Transit | 1.30–2.50 | Zeitlin et al. (2013), MSL RAD |
+| Mars Surface | 0.45–0.80 | Hassler et al. (2014), MSL RAD |
+
+**Key Features:**
+- **Career Limit Tracking**: NASA STD-3001 Vol 1 Rev B sets career effective dose design limit at **600 mSv**
+- **Alert Zones**: GO (<30%), MONITOR (30–60%), CAUTION (60–80%), NO-GO (>80%)
+- **Solar Cycle Adjustment**: Dose rates modulated by solar cycle phase (minimum = higher GCR, maximum = lower GCR but more SPE risk)
+- **EVA Multipliers**: Environment-specific shielding reduction factors for EVA operations
+- **SPE Alerts**: Solar Particle Event risk flagged when NOAA S-scale ≥2
+
+**EVA Risk Matrix:**
+The Go/No-Go assessment follows ICAO/USAF FRMS-style risk matrix methodology:
+- **Severity axis**: Based on cumulative career dose (Negligible/Minor/Major/Severe)
+- **Likelihood axis**: Based on space weather conditions (S/G storm scales)
+- **Recommendations**: Active dosimetry, task reassignment, shelter protocols
+
 ### Polar AccessLink VO₂max (optional)
 
 If a crew member uses Polar Flow, the NASA Nutrition calculator can import and track VO₂max via Polar AccessLink. The system now provides **automated sync** with persistent token storage and historical tracking.
