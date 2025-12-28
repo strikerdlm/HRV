@@ -5,6 +5,16 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.79] - 2025-12-27
+
+### Added
+- **Enhanced Unified Timeline Tab** (`app/app.py`): Major overhaul of the Unified Timeline with:
+  - **Recording Timeline Summary**: Table showing all uploaded RR files with their actual recording start times (extracted from filenames), duration, and mean HR. Timeline span displayed at bottom.
+  - **Isolation Forest Anomaly Detection**: Multivariate ML algorithm (Liu et al., 2008) for detecting unusual recordings based on multiple HRV metrics simultaneously. Includes configurable contamination rate, anomaly score display, and interpretive guidance.
+  - **Garmin Wearable Triangulation**: Integration with Garmin daily metrics (Body Battery, Stress Score, Sleep Score, HRV RMSSD) for cross-validation with Polar H10 data. Includes 7-day rolling metrics with week-over-week comparisons.
+  - **Statistical Summary Table**: Comprehensive descriptive statistics (N, Mean, SD, Median, CV%, IQR) for selected metrics with expandable interpretation guide.
+  - **Graduate-Level Explanations**: Added peer-reviewed citations throughout (Liu 2008, Dalmeida 2021, Karasmanoglou 2023, Shaffer 2017, Task Force 1996, Plews 2013, Buitrago-Ricaurte 2025).
+
 ## [1.8.78] - 2025-12-27
 
 ### Fixed
