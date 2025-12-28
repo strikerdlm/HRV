@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.8.39  
-**Last Updated:** 2025-12-23
+**Version:** 1.8.82  
+**Last Updated:** 2025-12-28
 
 ---
 
@@ -49,7 +49,10 @@ This manual provides step-by-step instructions for all features of Mission Contr
 27. [Machine Learning Predictions](#machine-learning-predictions)
 28. [Real-Time BLE Integration](#real-time-ble-integration)
 29. [Docker Deployment](#docker-deployment)
-30. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
+30. [Radiation Exposure Module](#radiation-exposure-module) ✨NEW
+31. [Advanced Wearable Analytics](#advanced-wearable-analytics) ✨NEW
+32. [Advanced HRV Analytics Platform](#advanced-hrv-analytics-platform) ✨NEW
+33. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
 
 ---
 
@@ -4651,12 +4654,229 @@ docker-compose --profile admin up -d
 
 ---
 
+## Radiation Exposure Module
+
+*Added in v1.8.80*
+
+The Radiation Exposure Module provides evidence-based space radiation dose estimation, day-by-day cumulative tracking, and EVA Go/No-Go assessment for exploration medicine operations.
+
+### Overview
+
+Location: **User Profile → Clinical Profile → Exploration Medical Analytics → ☢️ Radiation Exposure**
+
+The module supports 10 radiation environments with literature-derived dose rates:
+
+| Environment | Dose Rate (mSv/day) | Source |
+|-------------|---------------------|--------|
+| Earth Surface | 0.007 | Background radiation |
+| Antarctica | 0.009 | Elevated cosmic rays |
+| Flight Altitude (12 km) | 0.015 | Aviation exposure |
+| LEO/ISS | 0.50 | MATROSHKA-R (Berger 2020) |
+| Lunar Gateway | 1.05 | NASA estimates |
+| Lunar Transit | 1.30 | Deep space GCR |
+| Lunar Surface (nominal) | 0.55 | Chang'E-4 LND (Zhang 2020) |
+| Lunar Surface (SPE) | 5.50 | Solar particle events |
+| Mars Transit | 1.84 | MSL RAD (Zeitlin 2013) |
+| Mars Surface | 0.67 | MSL RAD (Hassler 2014) |
+
+### Features
+
+**4-Tab Interface:**
+
+1. **Current Status**: Cumulative dose gauge showing career percentage against NASA STD-3001 limits (600 mSv career)
+2. **Day-by-Day Timeline**: ECharts line chart with dose accumulation over time and limit threshold lines (30%, 60%, 80%, 100%)
+3. **Environment Comparison**: Bar chart comparing projected doses across all environments
+4. **EVA Go/No-Go Matrix**: SAFTE-style heatmap showing risk levels based on cumulative dose and space weather conditions
+
+**EVA Risk Assessment:**
+
+| Status | Career % | Criteria |
+|--------|----------|----------|
+| 🟢 GO | <30% | Normal operations |
+| 🟡 CAUTION | 30-60% | Enhanced monitoring |
+| 🟠 MARGINAL | 60-80% | Mission review required |
+| 🔴 NO-GO | >80% | EVA prohibited |
+
+### Scientific References
+
+- NASA. (2015). *NASA Space Flight Human-System Standard Volume 1, Revision A: Crew Health* (NASA-STD-3001). https://www.nasa.gov/sites/default/files/atoms/files/nasa-std-3001_vol_1_rev_a.pdf
+- Zhang, S., et al. (2020). First measurements of the radiation dose on the lunar surface. *Science Advances, 6*(39), eaaz1334. https://doi.org/10.1126/sciadv.aaz1334
+- Zeitlin, C., et al. (2013). Measurements of energetic particle radiation in transit to Mars on the Mars Science Laboratory. *Science, 340*(6136), 1080-1084. https://doi.org/10.1126/science.1235989
+- Hassler, D. M., et al. (2014). Mars' surface radiation environment measured with the Mars Science Laboratory's Curiosity rover. *Science, 343*(6169), 1244797. https://doi.org/10.1126/science.1244797
+- Berger, T., et al. (2020). MATROSHKA-R results on the ISS. *Life Sciences in Space Research, 27*, 58-69.
+- ICRP. (2013). *Assessment of Radiation Exposure of Astronauts in Space* (Publication 123). Annals of the ICRP, 42(4).
+
+---
+
+## Advanced Wearable Analytics
+
+*Added in v1.8.81*
+
+The Advanced Wearable Analytics module provides sophisticated predictive modeling for Garmin wearable metrics, enabling proactive health monitoring and performance optimization.
+
+### Overview
+
+Location: **User Profile → Clinical Profile → Wrist Monitoring Data → 🧠 Advanced Predictive Analytics**
+
+### Features
+
+**5-Tab Interface:**
+
+1. **Body Battery Forecast**
+   - Holt-Winters double exponential smoothing
+   - 3-day prediction with 95% confidence intervals
+   - Recovery time estimation
+   - ECharts visualization with historical + forecast
+
+2. **Allostatic Load Index**
+   - Chronic stress assessment (0-10 scale)
+   - Based on McEwen (1998) allostatic load model
+   - Component breakdown:
+     - Cardiovascular (resting HR deviation)
+     - Autonomic (HRV depression)
+     - Sleep (quality deficit)
+     - Energy (Body Battery depletion)
+   - Risk levels: Low (0-3), Moderate (3-5), High (5-7), Very High (>7)
+
+3. **Circadian Rhythm Analysis**
+   - Chronotype detection (Early Bird / Intermediate / Night Owl)
+   - Peak performance hour identification
+   - Optimal sleep window recommendations
+   - Activity pattern visualization
+
+4. **Stress Prediction**
+   - Next-day stress level forecasting
+   - Contributing factor identification
+   - Personalized recommendations
+   - Risk level semaphore (Low/Moderate/High/Very High)
+
+5. **Recovery Status**
+   - Recovery state classification (Recovered / Partial / Fatigued / Depleted)
+   - Sleep debt calculation (hours)
+   - Days to full recovery estimation
+   - Optimal rest protocol recommendations
+
+### Scientific References
+
+- McEwen, B. S. (1998). Stress, adaptation, and disease: Allostasis and allostatic load. *Annals of the New York Academy of Sciences, 840*(1), 33-44. https://doi.org/10.1111/j.1749-6632.1998.tb09546.x
+- Seeman, T. E., et al. (2001). Allostatic load as a marker of cumulative biological risk. *PNAS, 98*(8), 4770-4775. https://doi.org/10.1073/pnas.081072698
+- Hyndman, R. J., & Athanasopoulos, G. (2021). *Forecasting: Principles and Practice* (3rd ed.). OTexts. https://otexts.com/fpp3/
+
+---
+
+## Advanced HRV Analytics Platform
+
+*Added in v1.8.82*
+
+The Advanced HRV Analytics Platform provides state-of-the-art statistical analysis, machine learning pattern recognition, and clinical decision support for comprehensive HRV assessment.
+
+### Overview
+
+Location: **User Profile → History → HRV Measurement History → 🧬 Advanced HRV Analytics**
+
+### Features
+
+**5-Tab Interface:**
+
+#### Tab 1: Clinical Decision Support
+
+- **Overall Status**: Semaphored risk level (🟢 Green / 🟡 Yellow / 🟠 Orange / 🔴 Red)
+- **Autonomic Balance Gauge**: 0-100 scale ECharts gauge showing autonomic state
+- **Autonomic State Classification**:
+  - Parasympathetic Dominant (LF/HF < 0.8)
+  - Balanced (LF/HF 0.8-2.0)
+  - Sympathetic Dominant (LF/HF > 3.0)
+  - Dysregulated (inconsistent patterns)
+- **Metric Assessments Table**: Value, Z-score, Percentile, Reference Range, Risk Level, Interpretation
+- **Alerts & Recommendations**: Prioritized clinical guidance
+
+#### Tab 2: Statistical Tests
+
+- **Descriptive Statistics**: N, Mean, SD, Median, Q1, Q3, IQR, Range, CV%, Skewness, Kurtosis, SEM
+- **Normality Tests**: Shapiro-Wilk test with p-values (4 decimal precision)
+- **Comparison Tests**:
+  - One-sample t-test against age-stratified reference values
+  - Paired t-test for pre/post comparisons
+  - Mann-Whitney U test (non-parametric alternative)
+  - Wilcoxon signed-rank test
+- **Effect Sizes**: Cohen's d with interpretation (Negligible/Small/Medium/Large)
+- **Age-Stratified References**: RMSSD and SDNN by age group (Nunan 2010, Shaffer 2017)
+
+| Age Group | RMSSD Reference (ms) | SDNN Reference (ms) |
+|-----------|---------------------|---------------------|
+| 20-29 | 42.6 ± 18.5 | 50.0 ± 16.0 |
+| 30-39 | 34.0 ± 14.5 | 45.0 ± 14.0 |
+| 40-49 | 28.5 ± 12.0 | 40.0 ± 12.0 |
+| 50-59 | 24.0 ± 10.0 | 35.0 ± 11.0 |
+| 60+ | 20.0 ± 8.5 | 30.0 ± 10.0 |
+
+#### Tab 3: Trends & Forecast
+
+- **Trend Summary**: Direction (Improving/Stable/Declining), strength, significance
+- **7-Day Forecast**: Linear regression extrapolation with 95% confidence intervals
+- **RMSSD Trend Visualization**: ECharts line chart with 7-day moving average
+
+#### Tab 4: Anomalies & Patterns
+
+- **Anomaly Detection**:
+  - Z-score method (|z| > 2.5)
+  - IQR method (< Q1 - 1.5×IQR or > Q3 + 1.5×IQR)
+  - Anomaly count and severity scoring
+- **Pattern Recognition**:
+  - RMSSD variability classification (CV% categories)
+  - Autonomic balance pattern identification
+  - Chronic stress detection (>50% recordings with Stress Index > 150)
+
+#### Tab 5: HRV + Garmin Integration
+
+- **Data Concordance**: Correlation between HRV metrics and Garmin wearable data
+- **Discordance Flags**: Alerts when HRV and wearable data disagree
+- **Cross-Correlation Matrix**: Spearman ρ with significance (p-values)
+- **Integrated Stress/Recovery Score**: Combined metric from both sources
+
+### Statistical Methods
+
+| Test | Purpose | Assumptions |
+|------|---------|-------------|
+| Shapiro-Wilk | Normality testing | n < 5000 |
+| One-sample t-test | Compare to reference | Normal distribution |
+| Mann-Whitney U | Non-parametric comparison | Independent samples |
+| Spearman ρ | Correlation | Monotonic relationship |
+| Cohen's d | Effect size | — |
+
+### Interpretation Guide
+
+**p-value Interpretation:**
+- p < 0.001: Highly significant (***)
+- p < 0.01: Very significant (**)
+- p < 0.05: Significant (*)
+- p ≥ 0.05: Not significant
+
+**Cohen's d Effect Size:**
+- |d| < 0.2: Negligible
+- 0.2 ≤ |d| < 0.5: Small
+- 0.5 ≤ |d| < 0.8: Medium
+- |d| ≥ 0.8: Large
+
+### Scientific References
+
+- Task Force of ESC/NASPE. (1996). Heart rate variability: Standards of measurement, physiological interpretation, and clinical use. *Circulation, 93*(5), 1043-1065. https://doi.org/10.1161/01.CIR.93.5.1043
+- Shaffer, F., & Ginsberg, J. P. (2017). An overview of heart rate variability metrics and norms. *Frontiers in Public Health, 5*, 258. https://doi.org/10.3389/fpubh.2017.00258
+- Nunan, D., et al. (2010). A quantitative systematic review of normal values for short-term heart rate variability in healthy adults. *Pacing and Clinical Electrophysiology, 33*(11), 1407-1417. https://doi.org/10.1111/j.1540-8159.2010.02841.x
+- Thayer, J. F., et al. (2012). A meta-analysis of heart rate variability and neuroimaging studies: Implications for heart rate variability as a marker of stress and health. *Neuroscience & Biobehavioral Reviews, 36*(2), 747-756. https://doi.org/10.1016/j.neubiorev.2011.11.009
+- Cohen, J. (1988). *Statistical Power Analysis for the Behavioral Sciences* (2nd ed.). Lawrence Erlbaum Associates.
+
+---
+
 ## Pending Developments and Roadmap
 
 This section outlines completed features and remaining planned enhancements for the Mission Control - Flight Surgeon.
 
 ### Completed Features (Q4 2025)
 
+✅ **Radiation Exposure Module (v1.8.80)** - Evidence-based dose models for 10 environments, day-by-day tracking, EVA Go/No-Go matrix  
+✅ **Advanced Wearable Analytics (v1.8.81)** - Body Battery forecasting, Allostatic Load Index, Circadian Rhythm Analysis, Stress Prediction  
+✅ **Advanced HRV Analytics Platform (v1.8.82)** - ML pattern recognition, statistical tests, trend forecasting, clinical decision support  
 ✅ **ECG R-Peak Detection** - Pan-Tompkins algorithm with template matching  
 ✅ **Multi-Modal Sensor Fusion** - Oura, WHOOP, Apple Health, Fitbit integration  
 ✅ **Long-Term Trending** - Baseline establishment, trend detection, alerts  
