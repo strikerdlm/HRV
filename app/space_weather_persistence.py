@@ -42,6 +42,15 @@ try:
 except ImportError:
     REDIS_AVAILABLE = False
 
+# ---------------------------------------------------------------------------
+# Module registration safeguard for Streamlit hot-reloads
+# ---------------------------------------------------------------------------
+# Streamlit's reloader can leave sys.modules[__name__] as None momentarily,
+# causing @dataclass to fail with "NoneType has no attribute '__dict__'".
+import sys as _sys
+if _sys.modules.get(__name__) is None:
+    _sys.modules[__name__] = type(_sys)(__name__)
+
 
 # ============================================================================
 # Data Models
