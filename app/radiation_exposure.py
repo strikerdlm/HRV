@@ -16,7 +16,7 @@ References:
   NASA ASCEND Technical Report.
 - ICRP Publication 123 (2013). Assessment of radiation exposure of astronauts in space.
 
-Author: Diego Malpica
+Author: Dr Diego Malpica MD
 Version: 1.0.0
 """
 
@@ -605,7 +605,7 @@ def get_dose_rate_info(environment: RadiationEnvironment) -> Dict[str, Any]:
 def get_radiation_gauge_thresholds(
     career_limit_msv: float = 600.0,
 ) -> Dict[str, Any]:
-    """Get threshold values for radiation exposure gauges.
+    """Get threshold values for radiation exposure ![1766925665221](image/radiation_exposure/1766925665221.png)s.
     
     Returns:
         Dict with keys: thresholds (list), colors (list), labels (list).
