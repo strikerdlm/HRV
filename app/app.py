@@ -93,6 +93,21 @@ from gpt_interpretation import (
     build_analysis_payload,
     request_interpretation,
 )
+
+# Agentic report generation (Graduate and Doctoral level)
+try:
+    from agentic_reports import (
+        ReportLevel,
+        ReportResult,
+        ReportStatus,
+        UserProfileData,
+        collect_user_profile_data,
+        generate_graduate_report,
+        generate_doctoral_report,
+    )
+    AGENTIC_REPORTS_AVAILABLE = True
+except ImportError:
+    AGENTIC_REPORTS_AVAILABLE = False
 from hrv_core import (
     build_readiness_baseline,
     clean_rr_intervals,
@@ -24203,6 +24218,194 @@ This allows models to capture delayed biological responses to space weather chan
                                 mime="text/markdown",
                                 key="export_metric_explainer_markdown_download",
                             )
+                    
+                    # ---------------------------------------------------------------
+                    # Agentic Reports (Graduate & Doctoral Level)
+                    # ---------------------------------------------------------------
+                    st.markdown("---")
+                    st.subheader("📚 Agentic Research Reports")
+                    
+                    if not AGENTIC_REPORTS_AVAILABLE:
+                        st.warning(
+                            "Agentic reports module not available. "
+                            "Ensure `agentic_reports.py` is in the app directory."
+                        )
+                    else:
+                        st.markdown("""
+                        **Advanced AI-Powered Report Generation:**
+                        
+                        Generate comprehensive research reports using GPT-5.2 with high reasoning, 
+                        code interpreter, and web search capabilities:
+                        
+                        🎓 **Graduate Level Report**: Individual profile analysis with plots and explanations 
+                        across all profile sections (assessments, clinical profile, history, HRV, readiness).
+                        
+                        🔬 **Doctoral Level Report**: Comparative analysis following IMRaD academic paper structure 
+                        (Introduction, Methods, Results, Discussion) with statistical comparisons between profiles.
+                        """)
+                        
+                        # Check for active user profile
+                        from user_profile_tab import get_current_user_data, get_all_active_users, get_database
+                        
+                        current_user_data = get_current_user_data()
+                        all_users = get_all_active_users()
+                        
+                        if not current_user_data:
+                            st.info(
+                                "📋 Log in to a user profile (User Profile tab) to generate agentic reports. "
+                                "These reports integrate all available data for a comprehensive analysis."
+                            )
+                        else:
+                            st.success(f"✅ Active profile: **{current_user_data.get('full_name', current_user_data.get('username'))}**")
+                            
+                            agentic_report_state = st.session_state.setdefault(
+                                "agentic_report_state",
+                                {
+                                    "graduate_report": "",
+                                    "doctoral_report": "",
+                                    "graduate_status": "",
+                                    "doctoral_status": "",
+                                    "generation_time": 0.0,
+                                }
+                            )
+                            
+                            report_type_col, action_col = st.columns([2, 1])
+                            
+                            with report_type_col:
+                                report_type = st.radio(
+                                    "Report Type",
+                                    options=["🎓 Graduate Level", "🔬 Doctoral Level"],
+                                    horizontal=True,
+                                    key="agentic_report_type",
+                                    help=(
+                                        "Graduate: Comprehensive individual analysis. "
+                                        "Doctoral: Comparative analysis with other profiles."
+                                    ),
+                                )
+                            
+                            # For Doctoral reports, allow selecting comparison profiles
+                            comparison_user_ids: list[str] = []
+                            if report_type == "🔬 Doctoral Level" and len(all_users) > 1:
+                                other_users = [
+                                    u for u in all_users 
+                                    if u.get("user_id") != current_user_data.get("user_id")
+                                ]
+                                if other_users:
+                                    comparison_options = {
+                                        u.get("full_name", u.get("username", u.get("user_id"))): u.get("user_id")
+                                        for u in other_users
+                                    }
+                                    selected_names = st.multiselect(
+                                        "Select comparison profiles",
+                                        options=list(comparison_options.keys()),
+                                        default=list(comparison_options.keys())[:3],
+                                        key="agentic_comparison_profiles",
+                                        help="Select profiles to compare against the primary subject.",
+                                    )
+                                    comparison_user_ids = [comparison_options[n] for n in selected_names]
+                                else:
+                                    st.info(
+                                        "Open additional user sessions (User Profile tab) "
+                                        "for comparative analysis."
+                                    )
+                            
+                            with action_col:
+                                generate_btn = st.button(
+                                    "🚀 Generate Report",
+                                    key="agentic_generate_report",
+                                    type="primary",
+                                    use_container_width=True,
+                                )
+                            
+                            if generate_btn:
+                                with st.spinner("Generating agentic report... This may take 1-3 minutes."):
+                                    try:
+                                        db = get_database()
+                                        user_id = current_user_data.get("user_id")
+                                        
+                                        # Collect primary profile data
+                                        primary_data = collect_user_profile_data(
+                                            user_id=user_id,
+                                            db=db,
+                                            include_hrv_analysis=True,
+                                            include_profile_tools=True,
+                                        )
+                                        
+                                        if report_type == "🎓 Graduate Level":
+                                            result = generate_graduate_report(primary_data)
+                                            agentic_report_state["graduate_report"] = result.markdown
+                                            agentic_report_state["graduate_status"] = result.status.value
+                                            agentic_report_state["generation_time"] = result.generation_time_seconds
+                                            st.success(
+                                                f"✅ Graduate report generated in {result.generation_time_seconds:.1f}s "
+                                                f"(status: {result.status.value})"
+                                            )
+                                        else:
+                                            # Collect comparison profiles
+                                            comparison_data: list[UserProfileData] = []
+                                            for comp_id in comparison_user_ids:
+                                                try:
+                                                    comp_profile = collect_user_profile_data(
+                                                        user_id=comp_id,
+                                                        db=db,
+                                                        include_profile_tools=True,
+                                                    )
+                                                    comparison_data.append(comp_profile)
+                                                except Exception as comp_exc:
+                                                    logger.warning(f"Failed to collect comparison profile {comp_id}: {comp_exc}")
+                                            
+                                            result = generate_doctoral_report(
+                                                primary_profile=primary_data,
+                                                comparison_profiles=comparison_data,
+                                            )
+                                            agentic_report_state["doctoral_report"] = result.markdown
+                                            agentic_report_state["doctoral_status"] = result.status.value
+                                            agentic_report_state["generation_time"] = result.generation_time_seconds
+                                            st.success(
+                                                f"✅ Doctoral report generated in {result.generation_time_seconds:.1f}s "
+                                                f"(status: {result.status.value}, compared with {len(comparison_data)} profiles)"
+                                            )
+                                    except Exception as exc:
+                                        log_exception(logger, "Agentic report generation failed", exc)
+                                        st.error(f"Report generation failed: {exc}")
+                            
+                            # Display generated reports
+                            grad_report = agentic_report_state.get("graduate_report", "")
+                            doc_report = agentic_report_state.get("doctoral_report", "")
+                            
+                            if grad_report:
+                                with st.expander("📄 Graduate Level Report", expanded=True):
+                                    st.text_area(
+                                        "Graduate Report Preview",
+                                        grad_report,
+                                        height=400,
+                                        key="agentic_graduate_preview",
+                                    )
+                                    grad_filename = f"graduate_report_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.md"
+                                    st.download_button(
+                                        "📥 Download Graduate Report",
+                                        data=grad_report.encode("utf-8"),
+                                        file_name=grad_filename,
+                                        mime="text/markdown",
+                                        key="download_graduate_report",
+                                    )
+                            
+                            if doc_report:
+                                with st.expander("📄 Doctoral Level Report", expanded=True):
+                                    st.text_area(
+                                        "Doctoral Report Preview",
+                                        doc_report,
+                                        height=400,
+                                        key="agentic_doctoral_preview",
+                                    )
+                                    doc_filename = f"doctoral_report_{pd.Timestamp.utcnow().strftime('%Y%m%dT%H%M%SZ')}.md"
+                                    st.download_button(
+                                        "📥 Download Doctoral Report",
+                                        data=doc_report.encode("utf-8"),
+                                        file_name=doc_filename,
+                                        mime="text/markdown",
+                                        key="download_doctoral_report",
+                                    )
             else:
                 st.info("Click **Generate report** to build the markdown preview and download.")
         gpt_report_md = st.session_state.get("gpt5_export_markdown", "")
