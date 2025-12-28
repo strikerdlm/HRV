@@ -13287,12 +13287,32 @@ proportion of anomalous recordings. For healthy individuals, 2–5% anomaly rate
         st.markdown("### 📅 Recording Timeline Summary")
         
         # Build recording timeline from uploaded files
+        # Check multiple sources: uploaded_rr_cache, _persisted_uploads, and uploads variable
         _uploads_cache = st.session_state.get("uploaded_rr_cache", {})
-        if _uploads_cache and isinstance(_uploads_cache, dict):
+        _persisted_cache = st.session_state.get("_persisted_uploads", {})
+        
+        # Merge all available upload sources (prioritize persisted over cache)
+        _all_uploads: Dict[str, UploadedRR] = {}
+        if isinstance(_uploads_cache, dict):
+            for k, v in _uploads_cache.items():
+                if isinstance(v, UploadedRR):
+                    _all_uploads[k] = v
+        if isinstance(_persisted_cache, dict):
+            for k, v in _persisted_cache.items():
+                if isinstance(v, UploadedRR):
+                    _all_uploads[k] = v
+        # Also include `uploads` from current run context if available
+        try:
+            if "uploads" in dir() and uploads and isinstance(uploads, dict):
+                for k, v in uploads.items():
+                    if isinstance(v, UploadedRR):
+                        _all_uploads[k] = v
+        except NameError:
+            pass  # uploads not defined in this scope
+        
+        if _all_uploads:
             _timeline_rows: List[Dict[str, Any]] = []
-            for _fname, _up in _uploads_cache.items():
-                if not isinstance(_up, UploadedRR):
-                    continue
+            for _fname, _up in _all_uploads.items():
                 _rec_ts = _up.recording_start_utc
                 if _rec_ts is None:
                     _rec_ts, _ = _infer_recording_start(_fname)
