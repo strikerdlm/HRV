@@ -3837,8 +3837,8 @@ def _render_advanced_hrv_analytics(
         return
     
     # Get user age and sex for reference-based analysis
-    user_age = user.age or 40
-    user_sex = user.sex.value if user.sex else "unknown"
+    user_age = _calculate_age(user.date_of_birth) or 40
+    user_sex = user.sex if user.sex else "unknown"
     
     try:
         with st.spinner("Running advanced analysis..."):
@@ -4081,8 +4081,8 @@ def _render_statistical_tests_tab(result: "AdvancedHRVAnalysisResult") -> None:
         else:
             st.info("No comparison tests available. More data may be needed.")
     
-    # Statistical Interpretation Guide
-    with st.expander("📚 Statistical Test Interpretation Guide", expanded=False):
+    # Statistical Interpretation Guide (using checkbox to avoid nested expanders)
+    if st.checkbox("📚 Statistical Test Interpretation Guide", value=False, key="stat_test_guide"):
         st.markdown("""
         **Shapiro-Wilk Test (Normality)**
         - Tests if data follows a normal (Gaussian) distribution
@@ -4222,8 +4222,8 @@ def _render_anomalies_patterns_tab(result: "AdvancedHRVAnalysisResult") -> None:
     else:
         st.info("Pattern recognition requires at least 5 recordings.")
     
-    # Pattern Interpretation Guide
-    with st.expander("📚 Pattern Interpretation Guide", expanded=False):
+    # Pattern Interpretation Guide (using checkbox to avoid nested expanders)
+    if st.checkbox("📚 Pattern Interpretation Guide", value=False, key="pattern_guide"):
         st.markdown("""
         **RMSSD Variability (CV%)**
         - CV > 40%: High day-to-day variability - may indicate inconsistent recovery or measurement conditions
