@@ -9,21 +9,23 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.68-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.8.82-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2025--12--27-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2025--12--28-blue)](CHANGELOG.md)
 
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
 
+**NEW in v1.8.82**: **Advanced HRV Analytics Platform** — State-of-the-art statistical analysis, ML pattern recognition, and clinical decision support with 5-tab interface (Clinical Decision, Statistical Tests, Trends & Forecast, Anomalies & Patterns, HRV + Garmin Integration). Features Shapiro-Wilk normality tests, age-stratified t-tests with Cohen's d effect sizes, 7-day forecasting with 95% CI, anomaly detection (Z-score/IQR), autonomic balance assessment, and semaphored risk recommendations (Green/Yellow/Orange/Red). All p-values displayed to 4 decimal places with scientific citations (Task Force 1996, Nunan 2010, Shaffer 2017).
+
+**NEW in v1.8.81**: **Advanced Wearable Analytics** — Sophisticated predictive modeling for Garmin metrics: Body Battery forecasting (Holt-Winters smoothing with 95% CI), Allostatic Load Index (McEwen 1998), Circadian Rhythm Analysis (chronotype detection, peak performance hours), Stress Prediction (next-day forecasting), and Recovery Analysis (sleep debt calculation, days to full recovery).
+
+**NEW in v1.8.80**: **Radiation Exposure Module** — Evidence-based space radiation dose estimation with 10 environments (Earth, Antarctica, LEO/ISS, Lunar Gateway, Lunar Transit, Lunar Surface ± SPE, Mars Transit, Mars Surface). Day-by-day cumulative tracking, EVA Go/No-Go assessment matrix (SAFTE-style visualization), NASA STD-3001 career limits (600 mSv), and literature-derived dose rates (Zhang 2020, Zeitlin 2013, Hassler 2014, Berger 2020).
+
 **NEW in v1.8.68**: **Modern HRV Progress Tracking** — Real-time, detailed progress indicators for all HRV computations with step-by-step status, elapsed time tracking, and animated visual feedback. **Tab Persistence** keeps you on the current tab during analysis. **Enhanced HRV Metrics** including LnRMSSD, CVI (Cardiac Vagal Index), CSI (Cardiac Sympathetic Index), SDANN, SDNNi, and generalized pNNx. **HRF ↔ HRV Correlation Visualization** with interactive ECharts heatmaps showing r-values, t-statistics, and p-values (4 decimals) with scientific context.
-
-**NEW in v1.8.67**: **Space Weather Progress Indicators** — Real-time progress tracking for all space weather fetch operations with step-by-step status and error details.
-
-**NEW in v1.8.39**: **Low-End Computer Performance Mode** — Optimized for users with limited CPU/memory. New toggles in Performance Settings let you disable heavy computations (spectrogram, nonlinear metrics, ML clustering) and heavy downloads (NOAA, SpaceWeatherLive, NASA DONKI, GPT) individually. Auto-detection adjusts defaults based on CPU tier.
 
 **NEW in v1.8.37**: **Dual Garmin sleep autofill buttons + synced sleep/chronotype inputs** — One-click Vivosmart/Garmin pull now exists in both the Profile Tools Engine and the Sleep & Chronotype section under Energy & Nutrition. It fills sleep hours, quality, hours awake, RMSSD, resting HR, and feeds SAFTE fatigue plus Operational Performance.
 **NEW in v1.8.28**: **Crew mission workspaces** — The app now organizes data under `crew/` with **Mission 1** and **Mission 2**. The active mission’s **SQLite DB + backups** live in `crew/<Mission>/db/`, and per-subject files live in `crew/<Mission>/subjects/`.
@@ -206,6 +208,9 @@ All other tabs show **example data** and **reference values** to help you unders
 | **Personalized HRV Interpretation**    | Age/sex-adjusted reference ranges from Nunan et al. (2010) and Shaffer & Ginsberg (2017); status, percentile estimate, and recommendations per metric                                             |
 | **Exploration Medical Record**         | NASA isolation/mission log with EVA, radiation, stress, and behavioral metrics                                                                                                                     |
 | **Exploration Medical Analytics**      | Radiation/EVA/stress dashboards with trend cards sourced from ExMC logs                                                                                                                            |
+| **Radiation Exposure Module** ✨NEW    | Evidence-based dose models for 10 environments (LEO, Lunar, Mars), day-by-day tracking, EVA Go/No-Go matrix, NASA STD-3001 limits, space weather integration                                      |
+| **Advanced Wearable Analytics** ✨NEW  | Body Battery forecasting (Holt-Winters), Allostatic Load Index, Circadian Rhythm Analysis, Stress Prediction, Recovery Analysis with sleep debt calculation                                       |
+| **Advanced HRV Analytics** ✨NEW       | ML pattern recognition, statistical tests (Shapiro-Wilk, t-tests, Mann-Whitney U), trend forecasting, anomaly detection, clinical decision support with semaphored recommendations                |
 | **Polar AccessLink VO2 Integration**   | Optional VO2max sync for exercise compensation via AccessLink API                                                                                                                                  |
 | **Multi-Language**                     | English + Spanish (Colombian-validated scales: ESE-VC, KSS-CO)                                                                                                                                     |
 | **Laboratory Tracking**                | CBC/Hemogram, Blood Chemistry, Urinalysis with normal ranges                                                                                                                                       |
@@ -782,6 +787,9 @@ HRV/
 │   ├── performance_utils.py        # CPU performance optimization utilities
 │   ├── space_weather_impact.py     # Impact predictions & Polar H10 timing
 │   ├── space_weather_persistence.py # NOAA/NASA data persistence
+│   ├── radiation_exposure.py       # Evidence-based radiation dose models (v1.8.80)
+│   ├── wearable_analytics.py       # Advanced Garmin predictive analytics (v1.8.81)
+│   ├── advanced_hrv_analytics.py   # ML/statistics/clinical decision support (v1.8.82)
 │   ├── user_profile_tab.py         # Centralized user profile & clinical scales
 │   ├── garmin_import.py            # Garmin data import
 │   ├── actigraph_import.py         # ActiGraph GT3X/GT3X+ import
