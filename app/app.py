@@ -13244,7 +13244,7 @@ accurate temporal analysis of physiological patterns across days and weeks.
 | **HRV Time-Domain** | RMSSD, SDNN, pNN50 | Vagal modulation & overall variability |
 | **HRV Frequency** | LF/HF, HF power, VLF | Autonomic balance & rhythmic components |
 | **Cardiac** | Mean HR, Resting HR | Cardiovascular load and fitness |
-| **Garmin Wearables** | Body Battery, Stress Score, Sleep Score | Allostatic load & recovery capacity |
+| **Garmin Wearables** | Body Battery, Stress Score, Sleep Efficiency | Allostatic load & recovery capacity |
 
 ## ML-Based Pattern Detection
 
@@ -13632,7 +13632,7 @@ The app implements multiple complementary anomaly detection algorithms:
                             "resting_hr_bpm": "Resting HR",
                             "avg_hr_bpm": "Avg HR",
                             "stress_score": "Stress",
-                            "sleep_score": "Sleep Score",
+                            "sleep_score": "Sleep Efficiency (%)",
                             "sleep_efficiency": "Sleep Eff %",
                             "sleep_duration_hours": "Sleep (h)",
                             "body_battery_avg": "Body Battery",
@@ -13660,7 +13660,7 @@ The app implements multiple complementary anomaly detection algorithms:
                                           delta_color="inverse")
                         with _insight_cols[2]:
                             if not _g_sleep.empty:
-                                st.metric("Sleep Score (7d)", f"{_g_sleep.head(7).mean():.0f}",
+                                st.metric("Sleep Efficiency (7d)", f"{_g_sleep.head(7).mean():.0f}%",
                                           delta=f"{_g_sleep.head(7).mean() - _g_sleep.tail(7).mean():.0f} vs last week" if len(_g_sleep) >= 14 else None)
                         with _insight_cols[3]:
                             if not _g_battery.empty:
@@ -15702,13 +15702,13 @@ that predicts cognitive performance based on:
                         display_df = assessment_df[display_cols].copy()
                         # Rename sleep_score to clarify its use as efficiency
                         if "sleep_score" in display_df.columns:
-                            display_df = display_df.rename(columns={"sleep_score": "sleep_score (efficiency)"})
+                            display_df = display_df.rename(columns={"sleep_score": "Sleep Efficiency (%)"})
                         st.dataframe(
                             display_df,
                             use_container_width=True,
                         )
                         st.caption(
-                            "💡 **sleep_score** is used as the sleep efficiency metric for SAFTE calculations. "
+                            "💡 **Sleep Efficiency** (Garmin sleep_score) is used as the sleep efficiency metric for SAFTE calculations. "
                             "This composite score (0-100) reflects overall sleep quality and restorative value."
                         )
                 
