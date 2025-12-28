@@ -5,6 +5,55 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.83] - 2025-12-28
+
+### Added
+- **Agentic Research Reports Module** (`app/agentic_reports.py`): Sophisticated AI-powered report generation using OpenAI's GPT-5.2 with full agentic capabilities:
+  - **Graduate Level Report**: Comprehensive individual profile analysis with:
+    - Executive summary with key findings
+    - Subject profile (demographics, anthropometrics, fitness metrics)
+    - Clinical assessment overview (ESS, Samn-Perelli, KSS, PSQI, FSS scales)
+    - Body composition analysis with BMI interpretation
+    - HRV analysis (time-domain, frequency-domain, nonlinear metrics)
+    - Autonomic function assessment (parasympathetic index, stress markers)
+    - Readiness and recovery status from Profile Tools Engine
+    - Evidence-based clinical recommendations
+    - APA-format citations from peer-reviewed literature
+  - **Doctoral Level Report**: Comparative analysis following academic IMRaD structure:
+    - Title page with abstract (Background, Methods, Results, Conclusions)
+    - Introduction with research objectives and hypotheses
+    - Methods with statistical analysis plan
+    - Results with descriptive statistics, between-subject comparisons, effect sizes (Cohen's d, η²)
+    - Discussion with literature comparison and clinical implications
+    - Minimum 15 APA-format references
+    - Suitable for peer-reviewed publication
+  - **Agentic Capabilities**:
+    - `code_interpreter`: Data analysis, statistical computations, visualization generation
+    - `web_search`: Real-time literature search for evidence-based citations
+    - `high reasoning effort`: Maximum analytical depth for doctoral-level interpretation
+  - **Comprehensive Data Collection**: `collect_user_profile_data()` aggregates:
+    - Demographics and fitness metrics
+    - Clinical scales history
+    - Medical history and body composition
+    - HRV measurements with summary statistics
+    - Sleep records and Garmin daily metrics
+    - Profile Tools Engine results (recovery, readiness, fatigue)
+  - **Graceful Degradation**: Local rule-based fallback reports when API unavailable
+
+- **Agentic Reports UI** (`app/app.py`): New "📚 Agentic Research Reports" section in Export tab (under AI Tools):
+  - Report type selector (Graduate vs Doctoral)
+  - Comparison profile selector for Doctoral reports (multi-select from active sessions)
+  - Generation status with timing and mode indicators
+  - Preview text areas with expandable sections
+  - Download buttons for markdown export
+
+### Scientific References
+- Task Force (1996). Circulation 93(5):1043-65 - HRV measurement standards
+- Shaffer & Ginsberg (2017). Front Public Health 5:258 - HRV metrics and norms
+- Nunan et al. (2010). PACE 33(11):1407-1417 - Short-term HRV normal values
+- Plews et al. (2013). J Appl Physiol 114(6):736-745 - lnRMSSD recovery monitoring
+- Kiviniemi et al. (2007). Eur J Appl Physiol 101(6):743-751 - HRV-guided training
+
 ## [1.8.82] - 2025-12-28
 
 ### Added
