@@ -5,6 +5,41 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.90] - 2025-12-29
+
+### Added - Publication-Quality Charts for Exploration Medical Analytics Dashboard
+
+Upgraded the **Stress & Behavioral Indicators** section with publication-quality visualizations
+following the `.cursor/rules/plots/RULE.md` standards.
+
+**New Chart Builders:**
+
+1. **Stress Index & Parasympathetic Index Chart** (`_build_stress_pns_chart`):
+   - Dual-axis time series with dynamic axis scaling via `_auto_axis_bounds()`
+   - Stress Index zones: <50 low (green) | 50-100 normal (blue) | 100-150 elevated (yellow) | >150 high (red)
+   - Threshold lines at 100 and 150 for clinical interpretation
+   - PNS Index on secondary axis with 0-baseline reference
+   - 7-day EWMA trend lines for both metrics
+   - Scientific citations: Baevsky et al. (2002), Shaffer & Ginsberg (2017)
+
+2. **Sleep Duration Chart** (`_build_sleep_duration_chart`):
+   - Bar chart with NSF-recommended 7-9 hour optimal zone (green shaded)
+   - Sleep deprivation warning zone (<6 hours, red tint)
+   - 7-hour minimum and 6-hour warning threshold lines
+   - 7-day EWMA trend line overlay
+   - Dynamic y-axis bounds ensuring all data fits
+   - Scientific citations: Hirshkowitz et al. (2015), Watson et al. (2015)
+
+**Features per Plotting Rule:**
+- Dynamic axis scaling (`_auto_axis_bounds()`) — no data clipping
+- Age-appropriate reference zones with color semantics
+- Interactive tooltips with formatted values
+- EWMA smoothing for trend visualization
+- Scientific interpretation captions below each chart
+- 380px height for optimal viewing
+
+---
+
 ## [1.8.89] - 2025-12-29
 
 ### Fixed - Dynamic Axis Bounds for All Charts
