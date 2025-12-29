@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.8.82  
-**Last Updated:** 2025-12-28
+**Version:** 1.9.0  
+**Last Updated:** 2025-12-29
 
 ---
 
@@ -49,10 +49,11 @@ This manual provides step-by-step instructions for all features of Mission Contr
 27. [Machine Learning Predictions](#machine-learning-predictions)
 28. [Real-Time BLE Integration](#real-time-ble-integration)
 29. [Docker Deployment](#docker-deployment)
-30. [Radiation Exposure Module](#radiation-exposure-module) ✨NEW
-31. [Advanced Wearable Analytics](#advanced-wearable-analytics) ✨NEW
-32. [Advanced HRV Analytics Platform](#advanced-hrv-analytics-platform) ✨NEW
-33. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
+30. [Radiation Exposure Module](#radiation-exposure-module)
+31. [Advanced Wearable Analytics](#advanced-wearable-analytics)
+32. [Advanced HRV Analytics Platform](#advanced-hrv-analytics-platform)
+33. [Crew Scheduling & Human Performance](#crew-scheduling--human-performance) ✨NEW
+34. [Pending Developments and Roadmap](#pending-developments-and-roadmap)
 
 ---
 
@@ -5046,12 +5047,169 @@ Following Task Force (1996) and Quigley et al. (2024) guidelines:
 
 ---
 
+## Crew Scheduling & Human Performance
+
+### Overview
+
+The **Crew Scheduling and Human Performance Management** module is a comprehensive tool for mission planning, risk assessment, and GO/NO-GO decisions. It implements evidence-based scoring functions following SAFTE-FAST validation, NASA Human Performance standards, and IOC Energy Availability thresholds.
+
+**Access:** Operational App → 🗓️ Crew Scheduling tab
+
+### Key Components
+
+#### 1. Integrated Human Performance Indicator (IHPI)
+
+The IHPI is a composite score (0-100) that integrates eight performance domains with hard-cap gating logic:
+
+| Component | Weight | Source/Standard |
+|-----------|--------|-----------------|
+| SAFTE Effectiveness | 30% | SAFTE-FAST validation |
+| PVT Performance | 20% | 3-min protocol, 355ms lapse |
+| Circadian Alignment | 10% | Phase offset vs chronotype |
+| HRV (lnRMSSD z-score) | 10% | Plews et al. (2013) |
+| Hydration Status | 10% | ACSM + USG thresholds |
+| Energy Availability | 10% | IOC Consensus (2018) |
+| Subjective Sleepiness | 5% | KSS + Samn-Perelli |
+| Task-Specific Readiness | 5% | VO2max + recovery time |
+
+**Hard-Cap Gating:** If any critical domain (SAFTE, Hydration, PVT, Subjective) scores 0, the entire IHPI is capped at 0 regardless of other component scores.
+
+#### 2. Subscore Mappers (0-1 Scale)
+
+Each component uses scientifically validated scoring functions:
+
+| Metric | Score = 1.0 | Score = 0.0 | Mapping |
+|--------|-------------|-------------|---------|
+| SAFTE Effectiveness | ≥90% | ≤70% | Linear 70→90 |
+| KSS (Sleepiness) | ≤5 | ≥8 | Linear 5→8 |
+| PVT Lapses (3-min) | ≤10 | ≥20 | Linear 10→20 |
+| HRV z-score | ≥-0.5 | ≤-2.0 | Linear |
+| Body Mass Loss | ≤0.5% | ≥2.0% | Linear |
+| USG | <1.020 | ≥1.030 | Linear |
+| Energy Availability | ≥45 kcal/kg FFM | ≤30 kcal/kg FFM | Linear |
+| Circadian Offset | ≤1 hour | ≥6 hours | Linear |
+
+#### 3. EVA GO/NO-GO Decision Matrix
+
+The decision algorithm follows a hierarchical gate structure:
+
+**Hard NO-GO Gates (any triggers NO-GO):**
+- SAFTE Effectiveness < 70% (critical risk zone)
+- KSS Score ≥ 8 (severe sleepiness)
+- Sleep < 6h in last 24h
+- Time Awake ≥ 21h
+- Body Mass Loss > 2%
+- USG ≥ 1.030
+- PVT Lapses ≥ 20 (3-min protocol)
+- VO2max < 32.9 ml/kg/min (NASA requirement)
+- Time Since Last EVA < 24h
+
+**HOLD Zone:**
+- SAFTE 70-79% (high-risk zone, requires mitigation)
+
+**GO Thresholds:**
+- **GO**: IHPI ≥ 85, all gates passed
+- **GO-with-mitigation**: IHPI 75-84, add naps/breaks/task simplification
+- **HOLD**: IHPI < 75, optimize sleep / delay EVA / reduce workload
+
+### Activity Management
+
+#### Fixed Activities (Daily Requirements)
+
+| Activity | Duration | Timing | MET Value |
+|----------|----------|--------|-----------|
+| Briefing | 60 min | 07:00 (sync) | 1.3-1.8 |
+| Breakfast | 45 min | Flexible | 1.5 |
+| Lunch | 45 min | Flexible | 1.5 |
+| Dinner | 45 min | Flexible | 1.5 |
+| Exercise | 60 min | Resource limited | 6-8 |
+| Recreation | 60 min | Individual | 1-6 |
+| Hygiene | 30 min | Pre-duty | 2.0-2.8 |
+| Sleep | 8 hours | Optimized | 1.0 |
+
+#### Variable Activities
+
+| Activity | MET Value | Recovery | Special Requirements |
+|----------|-----------|----------|---------------------|
+| Lab Work | 1.5-2.5 | 15 min/hr | Cognitive load |
+| EVA | 2-7 | 48h min | VO2max ≥32.9, medical clearance |
+
+**Energy Computation:** All metabolic costs stored in kcal (nutrition) and Watts (thermal/ECLSS).
+- Formula: `kcal/hr = MET × body_mass_kg`
+- EVA planning: +200 kcal per EVA-hour above nominal intake
+
+### UI Tabs
+
+#### Status Dashboard
+- **Live Crew Cards**: 6 crew status cards with color-coded IHPI gauges
+- **Alert Panel**: Active warnings and recommendations
+- **Quick Actions**: One-click access to individual crew details
+
+#### Timeline & Scheduling
+- **24-Hour Gantt Chart**: Activity timeline with crew assignments
+- **Activity Legend**: Color-coded by activity type
+- **Scheduling Controls**: Add, modify, or remove activities
+- **Optimization**: "Optimize Schedule" button for constraint-based optimization
+
+#### Risk Analysis
+- **Risk Matrix Heatmap**: Likelihood × Severity grid per domain
+- **Individual Performance Gauges**: IHPI radar charts per crew member
+- **Trend Analysis**: Historical risk patterns
+
+#### Summary & Export
+- **Readiness Metrics**: Aggregate crew readiness statistics
+- **Alerts Summary**: Consolidated warning list
+- **Export Options**: JSON, CSV data export
+
+### Scientific References
+
+- **SAFTE-FAST Validation**: Hursh SR, Redmond DP, Johnson ML, et al. (2004). Fatigue models for applied research in warfighting. *Aviation, Space, and Environmental Medicine, 75*(3), A44-A53.
+- **HRV lnRMSSD z-score**: Plews DJ, Laursen PB, Stanley J, Kilding AE, Buchheit M. (2013). Training adaptation and heart rate variability in elite endurance athletes. *Sports Medicine, 43*(9), 773-781. https://doi.org/10.1007/s40279-013-0071-8
+- **Energy Availability**: Mountjoy M, Sundgot-Borgen JK, Burke LM, et al. (2018). IOC consensus statement on relative energy deficiency in sport (RED-S). *British Journal of Sports Medicine, 52*(11), 687-697. https://doi.org/10.1136/bjsports-2018-099193
+- **NASA EVA Standard**: NASA-STD-3001 Vol 1 Rev B (2022). Human Performance Capabilities. NASA Johnson Space Center.
+- **MET Values**: Ainsworth BE, Haskell WL, Herrmann SD, et al. (2024). 2024 Compendium of Physical Activities. *Medicine & Science in Sports & Exercise*.
+- **EVA Metabolic Rates**: Skylab EVA ~238 kcal/hr, Shuttle EVA ~194 kcal/hr (NASA NTRS).
+- **USAF Crew Rest**: AFMAN 11-202V3 General Flight Rules (crew rest requirements).
+- **ICAO FRMS**: ICAO Doc 9966 (2016). Manual for the Oversight of Fatigue Management Approaches.
+
+### Interpreting Results
+
+#### IHPI Score Interpretation
+
+| Score Range | Status | Action |
+|-------------|--------|--------|
+| 85-100 | GO | All systems nominal |
+| 75-84 | GO-with-mitigation | Add countermeasures |
+| 60-74 | HOLD | Delay activity, optimize rest |
+| <60 | NO-GO | Medical/rest intervention required |
+
+#### Risk Level Colors
+
+| Color | Risk Level | Meaning |
+|-------|------------|---------|
+| 🟢 Green | Low | Optimal performance expected |
+| 🔵 Blue | Normal | Acceptable with monitoring |
+| 🟡 Yellow | Moderate | Caution, mitigation recommended |
+| 🔴 Red | High/Critical | Activity restriction required |
+
+### Best Practices
+
+1. **Baseline Establishment**: Allow 2 weeks minimum for HRV baseline (rolling 14-28 day window)
+2. **Standardized Measurements**: HRV measured morning, seated, 5-min duration
+3. **Recovery Planning**: Minimum 48h between EVAs (24h absolute minimum with FS approval)
+4. **Energy Balance**: Monitor Energy Availability to prevent RED-S
+5. **Hydration Tracking**: Daily body mass measurements + USG when available
+6. **Circadian Alignment**: Optimize sleep timing to individual chronotype
+
+---
+
 ## Pending Developments and Roadmap
 
 This section outlines completed features and remaining planned enhancements for the Mission Control - Flight Surgeon.
 
 ### Completed Features (Q4 2025)
 
+✅ **Crew Scheduling & Human Performance (v1.9.0)** - IHPI composite scoring, EVA GO/NO-GO matrix, constraint-based optimization, real-time risk assessment  
 ✅ **Radiation Exposure Module (v1.8.80)** - Evidence-based dose models for 10 environments, day-by-day tracking, EVA Go/No-Go matrix  
 ✅ **Advanced Wearable Analytics (v1.8.81)** - Body Battery forecasting, Allostatic Load Index, Circadian Rhythm Analysis, Stress Prediction  
 ✅ **Advanced HRV Analytics Platform (v1.8.82)** - ML pattern recognition, statistical tests, trend forecasting, clinical decision support  
