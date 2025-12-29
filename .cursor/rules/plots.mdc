@@ -11,13 +11,32 @@ This project uses **Apache ECharts** for all visualizations following Nature Res
 **Colors**: Use `SCIENTIFIC_COLORS` palette from `user_profile_tab.py`
 **Style**: Age-stratified norms, reference zones, EWMA trends, scientific citations
 
+## ⚠️ CRITICAL: Dynamic Axis Bounds
+
+**NEVER use hardcoded axis min/max values that might clip data!**
+
+Use `_auto_axis_bounds()` helper to ensure ALL data points are visible:
+
+```python
+# Calculate dynamic bounds
+hr_min, hr_max = _auto_axis_bounds(
+    resting_hr, avg_hr,
+    padding_pct=0.15,
+    min_floor=30,
+)
+
+# Use in yAxis
+"yAxis": {"min": hr_min, "max": hr_max, ...}
+```
+
 ## Key Requirements
 
-1. **Every chart MUST have**: Title, subtitle (methodology), axis labels with units, legend, tooltip
-2. **Reference zones**: Shaded bands for normal ranges (using stacked area technique)
-3. **Trend lines**: 7-day EWMA smoothing for time series
-4. **Citations**: Evidence-based references below each chart
-5. **Export**: SVG, PDF, PNG (300+ DPI), HTML, CSV/JSON
+1. **Dynamic axis scaling**: Use `_auto_axis_bounds()` — no hardcoded limits that clip data!
+2. **Every chart MUST have**: Title, subtitle (methodology), axis labels with units, legend, tooltip
+3. **Reference zones**: Shaded bands for normal ranges (using stacked area technique)
+4. **Trend lines**: 7-day EWMA smoothing for time series
+5. **Citations**: Evidence-based references below each chart
+6. **Export**: SVG, PDF, PNG (300+ DPI), HTML, CSV/JSON
 
 ## Standard Heights
 
