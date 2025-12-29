@@ -5,6 +5,47 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.87] - 2025-12-29
+
+### Added - EVA Clearance Semaphore & Space Weather Improvements
+
+**EVA Clearance Semaphore Optimization (`_render_eva_semaphore`, `_compute_joint_eva_decision`):**
+- Semaphore now reflects **joint decision** from multiple safety factors:
+  - **Flight Surgeon's clearance** (authoritative - can override all other factors)
+  - **EVA Radiation Risk Matrix** assessment (GO, GO_WITH_MONITORING, CAUTION, NO_GO)
+  - **NOAA S-Scale** (Solar Radiation Storm, 0-5)
+  - **NOAA G-Scale** (Geomagnetic Storm, 0-5)
+- Uses **conservative (most restrictive) approach** - worst status determines final decision
+- Added new **CAUTION** state between MONITOR and NO-GO for intermediate risk levels
+- Prominent joint decision summary with icon and rationale
+- Collapsible **Contributing Factors** breakdown showing each input's contribution
+- If Flight Surgeon says "No EVA" → immediate NO-GO regardless of other factors
+
+**Space Weather Auto-Fetch for EVA Radiation Risk Matrix:**
+- New **"Auto-fetch from NOAA SWPC"** checkbox to retrieve real-time S/G scales
+- Real-time metrics display when auto-fetch enabled:
+  - Kp Index (max) with G-Scale delta
+  - >10 MeV Proton flux (pfu) with S-Scale delta
+  - S-Scale and G-Scale severity labels
+- **Refresh button** to force-fetch latest data from NOAA SWPC
+- **Manual override** always available - user can select different values
+- Notification when manual override is active (different from NOAA data)
+
+**Helper Functions:**
+- `_compute_joint_eva_decision()`: Combines all safety inputs into unified GO/MONITOR/CAUTION/NO-GO
+- `_s_scale_severity_label()`: Returns severity label (None/Minor/Moderate/Strong/Severe/Extreme)
+- `_g_scale_severity_label()`: Returns severity label for G-Scale
+
+### Fixed
+- **Nested Expander Error**: Replaced `st.expander()` in EVA semaphore with HTML `<details>` element
+  to avoid Streamlit's "Expanders may not be nested inside other expanders" error
+
+### References
+- NOAA Space Weather Scales: https://www.swpc.noaa.gov/noaa-scales-explanation
+- NASA STD-3001 Space Flight Human-System Standard
+
+---
+
 ## [1.8.86] - 2025-12-29
 
 ### Fixed
