@@ -5,6 +5,38 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.89] - 2025-12-29
+
+### Fixed - Dynamic Axis Bounds for All Charts
+
+**Problem:** Charts with hardcoded axis min/max values (e.g., `"min": 40, "max": 110`) would 
+clip data points that fell outside these ranges, making them invisible or cut off at the edge.
+
+**Solution:** Added `_auto_axis_bounds()` helper function that dynamically calculates axis 
+bounds to fit ALL data with appropriate padding.
+
+**Helper Function:**
+```python
+def _auto_axis_bounds(
+    *data_arrays,           # Variable number of data arrays
+    padding_pct=0.10,       # 10% padding by default
+    min_floor=None,         # Optional minimum (e.g., 0 for non-negative)
+    max_ceil=None,          # Optional maximum (e.g., 100 for percentages)
+    nice_round=True,        # Round to "nice" axis labels
+) -> Tuple[float, float]:
+```
+
+**Charts Updated:**
+- `_build_hr_stress_chart()` — Now uses dynamic HR bounds (was 40-110)
+- `_build_respiration_spo2_chart()` — Now uses dynamic SpO₂ and respiration bounds
+
+**Plotting Rules Updated:**
+- Added Section 3 "Dynamic Axis Bounds (CRITICAL)" to `.cursor/rules/plots/RULE.md`
+- Updated checklist to include dynamic bounds verification
+- Updated `.cursor/rules/plots.mdc` quick reference
+
+---
+
 ## [1.8.88] - 2025-12-29
 
 ### Added - Publication-Quality Wearable Monitoring & Predictive Analytics Charts
