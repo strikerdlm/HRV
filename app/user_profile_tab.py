@@ -3570,6 +3570,482 @@ def _build_radiation_dose_chart(
     }
 
 
+def _build_fatigue_sleepiness_chart(
+    dates: List[str],
+    samn_perelli: Optional[List[float]] = None,
+    karolinska: Optional[List[float]] = None,
+    title: str = "Fatigue & Sleepiness Trends",
+) -> Dict[str, Any]:
+    """Build publication-quality Fatigue & Sleepiness trends chart.
+    
+    Scales:
+    - Samn-Perelli Fatigue Scale (SP): 1-7
+      1 = Fully alert, wide awake
+      2 = Very lively, responsive
+      3 = Okay, somewhat fresh
+      4 = A little tired, less than fresh
+      5 = Moderately tired, let down
+      6 = Extremely tired, very difficult to concentrate
+      7 = Completely exhausted, unable to function
+      
+    - Karolinska Sleepiness Scale (KSS): 1-9
+      1 = Extremely alert
+      3 = Alert
+      5 = Neither alert nor sleepy
+      7 = Sleepy, but no effort to stay awake
+      9 = Extremely sleepy, fighting sleep
+    
+    References:
+    - Samn & Perelli (1982). USAF School of Aerospace Medicine.
+    - Åkerstedt & Gillberg (1990). Int J Neurosci, 52(1-2), 29-37.
+    """
+    date_labels = [str(d)[:10] for d in dates]
+    series = []
+    legend_data = []
+    
+    has_sp = samn_perelli and any(v is not None for v in samn_perelli)
+    has_kss = karolinska and any(v is not None for v in karolinska)
+    
+    if not has_sp and not has_kss:
+        return {"series": [], "title": {"text": title}}
+    
+    # Reference zones for both scales
+    # SP: 1-3 Alert, 4-5 Tired, 6-7 Exhausted
+    # KSS: 1-4 Alert, 5-6 Neutral, 7-9 Sleepy
+    
+    # Reference zone: Alert/Good (SP 1-3, KSS 1-4)
+    series.extend([
+        {
+            "name": "Alert Zone",
+            "type": "line",
+            "data": [3.5] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "rgba(46, 204, 113, 0.12)"},
+            "symbol": "none",
+            "silent": True,
+        },
+        # Tired/Neutral zone (SP 3.5-5.5, KSS 4-7)
+        {
+            "name": "Tired Zone",
+            "type": "line",
+            "data": [5.5] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "rgba(243, 156, 18, 0.12)"},
+            "stack": "zone_tired",
+            "symbol": "none",
+            "silent": True,
+        },
+        {
+            "name": "_tired_base",
+            "type": "line",
+            "data": [3.5] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "#fff"},
+            "stack": "zone_tired",
+            "symbol": "none",
+            "silent": True,
+        },
+        # Exhausted/Sleepy zone (SP 5.5-7, KSS 7-9)
+        {
+            "name": "Exhausted Zone",
+            "type": "line",
+            "data": [9] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "rgba(231, 76, 60, 0.12)"},
+            "stack": "zone_exhausted",
+            "symbol": "none",
+            "silent": True,
+        },
+        {
+            "name": "_exhausted_base",
+            "type": "line",
+            "data": [5.5] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "#fff"},
+            "stack": "zone_exhausted",
+            "symbol": "none",
+            "silent": True,
+        },
+    ])
+    
+    # Threshold lines
+    series.extend([
+        {
+            "name": "Alert Threshold",
+            "type": "line",
+            "data": [3.5] * len(dates),
+            "lineStyle": {"color": "#27ae60", "width": 1.5, "type": "dashed"},
+            "symbol": "none",
+        },
+        {
+            "name": "Fatigue Threshold",
+            "type": "line",
+            "data": [5.5] * len(dates),
+            "lineStyle": {"color": "#e74c3c", "width": 1.5, "type": "dashed"},
+            "symbol": "none",
+        },
+    ])
+    legend_data.extend(["Alert Threshold", "Fatigue Threshold"])
+    
+    # Samn-Perelli data
+    if has_sp:
+        sp_clean = [v if v is not None else None for v in samn_perelli]
+        sp_ewma = _ewma_smooth(
+            np.array([v if v else 3 for v in samn_perelli], dtype=float), span=5
+        ).tolist()
+        
+        series.extend([
+            {
+                "name": "Samn-Perelli (SP)",
+                "type": "line",
+                "data": sp_clean,
+                "symbol": "circle",
+                "symbolSize": 8,
+                "lineStyle": {"color": "#e74c3c", "width": 2.5},
+                "itemStyle": {"color": "#e74c3c"},
+            },
+            {
+                "name": "SP Trend",
+                "type": "line",
+                "data": sp_ewma,
+                "symbol": "none",
+                "lineStyle": {"color": "#c0392b", "width": 2},
+                "smooth": True,
+            },
+        ])
+        legend_data.extend(["Samn-Perelli (SP)", "SP Trend"])
+    
+    # Karolinska data
+    if has_kss:
+        kss_clean = [v if v is not None else None for v in karolinska]
+        kss_ewma = _ewma_smooth(
+            np.array([v if v else 5 for v in karolinska], dtype=float), span=5
+        ).tolist()
+        
+        series.extend([
+            {
+                "name": "Karolinska (KSS)",
+                "type": "line",
+                "data": kss_clean,
+                "symbol": "diamond",
+                "symbolSize": 7,
+                "lineStyle": {"color": "#3498db", "width": 2.5},
+                "itemStyle": {"color": "#3498db"},
+            },
+            {
+                "name": "KSS Trend",
+                "type": "line",
+                "data": kss_ewma,
+                "symbol": "none",
+                "lineStyle": {"color": "#2980b9", "width": 2},
+                "smooth": True,
+            },
+        ])
+        legend_data.extend(["Karolinska (KSS)", "KSS Trend"])
+    
+    # Dynamic y-axis bounds
+    all_values = []
+    if has_sp:
+        all_values.extend([v for v in samn_perelli if v is not None])
+    if has_kss:
+        all_values.extend([v for v in karolinska if v is not None])
+    
+    y_min, y_max = _auto_axis_bounds(
+        all_values,
+        padding_pct=0.10,
+        min_floor=1,
+        max_ceil=9,
+    )
+    
+    return {
+        "title": {
+            "text": title,
+            "subtext": "SP: 1-7 (1=alert, 7=exhausted) | KSS: 1-9 (1=extremely alert, 9=fighting sleep)",
+            "left": "center",
+            "textStyle": {"fontSize": 15, "fontWeight": "bold", "color": SCIENTIFIC_COLORS["text"]},
+            "subtextStyle": {"fontSize": 10, "color": "#7f8c8d"},
+        },
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "cross"},
+            "formatter": """function(params) {
+                var date = params[0].axisValue;
+                var result = '<b>' + date + '</b><br/>';
+                params.forEach(function(p) {
+                    if (p.seriesName && p.seriesName.indexOf('_') !== 0 && 
+                        p.seriesName.indexOf('Zone') === -1 && 
+                        p.seriesName.indexOf('Threshold') === -1 &&
+                        p.value !== null && p.value !== undefined) {
+                        var val = typeof p.value === 'number' ? p.value.toFixed(1) : p.value;
+                        result += p.marker + ' ' + p.seriesName + ': <b>' + val + '</b><br/>';
+                    }
+                });
+                return result;
+            }""",
+        },
+        "legend": {"data": legend_data, "bottom": 5, "textStyle": {"fontSize": 10}},
+        "grid": {
+            "left": "8%",
+            "right": "5%",
+            "top": "18%",
+            "bottom": "15%",
+            "containLabel": True,
+        },
+        "xAxis": {
+            "type": "category",
+            "data": date_labels,
+            "name": "Assessment Date",
+            "nameLocation": "middle",
+            "nameGap": 30,
+            "axisLabel": {"rotate": 45, "fontSize": 9},
+        },
+        "yAxis": {
+            "type": "value",
+            "name": "Fatigue/Sleepiness Score",
+            "nameLocation": "middle",
+            "nameGap": 45,
+            "nameTextStyle": {"fontSize": 12, "fontWeight": "bold"},
+            "min": y_min,
+            "max": y_max,
+            "splitLine": {"lineStyle": {"color": SCIENTIFIC_COLORS["grid"], "type": "dashed"}},
+        },
+        "series": series,
+        "dataZoom": [{"type": "inside", "start": 0, "end": 100}],
+    }
+
+
+def _build_panas_affect_chart(
+    dates: List[str],
+    positive_affect: Optional[List[float]] = None,
+    negative_affect: Optional[List[float]] = None,
+    title: str = "PANAS Affect Trends",
+) -> Dict[str, Any]:
+    """Build publication-quality PANAS Positive/Negative Affect chart.
+    
+    PANAS (Positive and Negative Affect Schedule):
+    - Each scale consists of 10 items rated 1-5 (total range: 10-50)
+    - Positive Affect (PA): enthusiasm, interest, determination, excitement, inspiration
+    - Negative Affect (NA): distress, upset, guilt, scared, hostile
+    
+    Interpretation:
+    - PA: Higher scores = more positive affect (desirable)
+    - NA: Lower scores = less negative affect (desirable)
+    
+    Population norms (Watson et al., 1988):
+    - PA mean: ~31-35, SD ~7-8
+    - NA mean: ~16-19, SD ~6-7
+    
+    References:
+    - Watson, Clark, & Tellegen (1988). Development and validation of brief measures
+      of positive and negative affect: The PANAS scales. J Pers Soc Psychol, 54(6), 1063-1070.
+    - Crawford & Henry (2004). The Positive and Negative Affect Schedule (PANAS):
+      Construct validity, measurement properties and normative data. Br J Clin Psychol, 43, 245-265.
+    """
+    date_labels = [str(d)[:10] for d in dates]
+    series = []
+    legend_data = []
+    
+    has_pa = positive_affect and any(v is not None for v in positive_affect)
+    has_na = negative_affect and any(v is not None for v in negative_affect)
+    
+    if not has_pa and not has_na:
+        return {"series": [], "title": {"text": title}}
+    
+    # Reference zones based on population norms
+    # PA: High >38, Moderate 25-38, Low <25
+    # NA: Low <15 (good), Moderate 15-25, High >25 (concerning)
+    
+    series.extend([
+        # Healthy PA zone (high PA > 35)
+        {
+            "name": "High PA Zone",
+            "type": "line",
+            "data": [50] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "rgba(46, 204, 113, 0.10)"},
+            "stack": "pa_zone_high",
+            "symbol": "none",
+            "silent": True,
+        },
+        {
+            "name": "_pa_high_base",
+            "type": "line",
+            "data": [35] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "#fff"},
+            "stack": "pa_zone_high",
+            "symbol": "none",
+            "silent": True,
+        },
+        # Concerning NA zone (>25)
+        {
+            "name": "High NA Zone",
+            "type": "line",
+            "data": [50] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "rgba(231, 76, 60, 0.08)"},
+            "stack": "na_zone_high",
+            "symbol": "none",
+            "silent": True,
+        },
+        {
+            "name": "_na_high_base",
+            "type": "line",
+            "data": [25] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "#fff"},
+            "stack": "na_zone_high",
+            "symbol": "none",
+            "silent": True,
+        },
+    ])
+    
+    # Reference lines
+    series.extend([
+        {
+            "name": "PA Mean (~33)",
+            "type": "line",
+            "data": [33] * len(dates),
+            "lineStyle": {"color": "#27ae60", "width": 1.5, "type": "dotted"},
+            "symbol": "none",
+        },
+        {
+            "name": "NA Mean (~17)",
+            "type": "line",
+            "data": [17] * len(dates),
+            "lineStyle": {"color": "#e74c3c", "width": 1.5, "type": "dotted"},
+            "symbol": "none",
+        },
+    ])
+    legend_data.extend(["PA Mean (~33)", "NA Mean (~17)"])
+    
+    # Positive Affect data
+    if has_pa:
+        pa_clean = [v if v is not None else None for v in positive_affect]
+        pa_ewma = _ewma_smooth(
+            np.array([v if v else 30 for v in positive_affect], dtype=float), span=5
+        ).tolist()
+        
+        series.extend([
+            {
+                "name": "Positive Affect",
+                "type": "line",
+                "data": pa_clean,
+                "symbol": "circle",
+                "symbolSize": 8,
+                "lineStyle": {"color": "#27ae60", "width": 2.5},
+                "itemStyle": {"color": "#27ae60"},
+            },
+            {
+                "name": "PA Trend",
+                "type": "line",
+                "data": pa_ewma,
+                "symbol": "none",
+                "lineStyle": {"color": "#1e8449", "width": 2},
+                "smooth": True,
+            },
+        ])
+        legend_data.extend(["Positive Affect", "PA Trend"])
+    
+    # Negative Affect data
+    if has_na:
+        na_clean = [v if v is not None else None for v in negative_affect]
+        na_ewma = _ewma_smooth(
+            np.array([v if v else 20 for v in negative_affect], dtype=float), span=5
+        ).tolist()
+        
+        series.extend([
+            {
+                "name": "Negative Affect",
+                "type": "line",
+                "data": na_clean,
+                "symbol": "triangle",
+                "symbolSize": 7,
+                "lineStyle": {"color": "#e74c3c", "width": 2.5},
+                "itemStyle": {"color": "#e74c3c"},
+            },
+            {
+                "name": "NA Trend",
+                "type": "line",
+                "data": na_ewma,
+                "symbol": "none",
+                "lineStyle": {"color": "#c0392b", "width": 2},
+                "smooth": True,
+            },
+        ])
+        legend_data.extend(["Negative Affect", "NA Trend"])
+    
+    # Dynamic y-axis bounds
+    all_values = []
+    if has_pa:
+        all_values.extend([v for v in positive_affect if v is not None])
+    if has_na:
+        all_values.extend([v for v in negative_affect if v is not None])
+    
+    y_min, y_max = _auto_axis_bounds(
+        all_values,
+        padding_pct=0.10,
+        min_floor=10,
+        max_ceil=50,
+    )
+    
+    return {
+        "title": {
+            "text": title,
+            "subtext": "PA: Higher=better (goal >35) | NA: Lower=better (goal <17) | Range: 10-50",
+            "left": "center",
+            "textStyle": {"fontSize": 15, "fontWeight": "bold", "color": SCIENTIFIC_COLORS["text"]},
+            "subtextStyle": {"fontSize": 10, "color": "#7f8c8d"},
+        },
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "cross"},
+            "formatter": """function(params) {
+                var date = params[0].axisValue;
+                var result = '<b>' + date + '</b><br/>';
+                params.forEach(function(p) {
+                    if (p.seriesName && p.seriesName.indexOf('_') !== 0 && 
+                        p.seriesName.indexOf('Zone') === -1 && 
+                        p.seriesName.indexOf('Mean') === -1 &&
+                        p.value !== null && p.value !== undefined) {
+                        var val = typeof p.value === 'number' ? p.value.toFixed(0) : p.value;
+                        result += p.marker + ' ' + p.seriesName + ': <b>' + val + '/50</b><br/>';
+                    }
+                });
+                return result;
+            }""",
+        },
+        "legend": {"data": legend_data, "bottom": 5, "textStyle": {"fontSize": 10}},
+        "grid": {
+            "left": "8%",
+            "right": "5%",
+            "top": "18%",
+            "bottom": "15%",
+            "containLabel": True,
+        },
+        "xAxis": {
+            "type": "category",
+            "data": date_labels,
+            "name": "Assessment Date",
+            "nameLocation": "middle",
+            "nameGap": 30,
+            "axisLabel": {"rotate": 45, "fontSize": 9},
+        },
+        "yAxis": {
+            "type": "value",
+            "name": "Affect Score (10-50)",
+            "nameLocation": "middle",
+            "nameGap": 45,
+            "nameTextStyle": {"fontSize": 12, "fontWeight": "bold"},
+            "min": y_min,
+            "max": y_max,
+            "splitLine": {"lineStyle": {"color": SCIENTIFIC_COLORS["grid"], "type": "dashed"}},
+        },
+        "series": series,
+        "dataZoom": [{"type": "inside", "start": 0, "end": 100}],
+    }
+
+
 def _build_sleep_duration_chart(
     dates: List[str],
     sleep_hours: Optional[List[float]] = None,
@@ -6447,33 +6923,69 @@ def _render_assessment_history(user: UserProfile) -> None:
                 mean_na = df["panas_negative_affect"].mean()
                 st.metric("Avg NA", f"{mean_na:.0f}" if pd.notna(mean_na) else "—", help="PANAS Negative Affect")
         
-        # Trend charts - Fatigue scales
+        # Publication-quality Fatigue & Sleepiness trends chart
         if len(df) > 1:
-            st.markdown("##### 📈 Fatigue & Sleepiness Trends")
             chart_cols = ["samn_perelli_fatigue", "karolinska_sleepiness_scale"]
             available_cols = [c for c in chart_cols if c in df.columns]
             if available_cols:
                 chart_data = df[["assessment_date"] + available_cols].dropna(how="all", subset=available_cols)
                 if not chart_data.empty:
-                    chart_data = chart_data.set_index("assessment_date")
-                    _render_profile_line_chart(
-                        chart_data,
+                    chart_data = chart_data.sort_values("assessment_date")
+                    dates_list = [str(d)[:10] for d in chart_data["assessment_date"].tolist()]
+                    sp_data = (
+                        chart_data["samn_perelli_fatigue"].tolist()
+                        if "samn_perelli_fatigue" in chart_data.columns
+                        else None
+                    )
+                    kss_data = (
+                        chart_data["karolinska_sleepiness_scale"].tolist()
+                        if "karolinska_sleepiness_scale" in chart_data.columns
+                        else None
+                    )
+                    fatigue_chart = _build_fatigue_sleepiness_chart(
+                        dates=dates_list,
+                        samn_perelli=sp_data,
+                        karolinska=kss_data,
                         title="Fatigue & Sleepiness Trends",
-                        y_axis_label="Score",
+                    )
+                    render_echarts(fatigue_chart, height_px=380)
+                    st.markdown(
+                        "*Samn-Perelli (SP): 1-7 fatigue scale used in aviation medicine. "
+                        "Karolinska (KSS): 1-9 sleepiness scale. Scores >5.5 suggest "
+                        "fatigue-related performance impairment.* "
+                        "*(Samn & Perelli, 1982; Åkerstedt & Gillberg, 1990)*"
                     )
             
-            # PANAS Trend chart
+            # Publication-quality PANAS Affect trends chart
             panas_cols = ["panas_positive_affect", "panas_negative_affect"]
             available_panas = [c for c in panas_cols if c in df.columns]
             if available_panas and df[available_panas].notna().any().any():
-                st.markdown("##### 🎭 PANAS Affect Trends")
                 panas_data = df[["assessment_date"] + available_panas].dropna(how="all", subset=available_panas)
                 if not panas_data.empty:
-                    panas_data = panas_data.set_index("assessment_date")
-                    _render_profile_line_chart(
-                        panas_data,
+                    panas_data = panas_data.sort_values("assessment_date")
+                    panas_dates = [str(d)[:10] for d in panas_data["assessment_date"].tolist()]
+                    pa_data = (
+                        panas_data["panas_positive_affect"].tolist()
+                        if "panas_positive_affect" in panas_data.columns
+                        else None
+                    )
+                    na_data = (
+                        panas_data["panas_negative_affect"].tolist()
+                        if "panas_negative_affect" in panas_data.columns
+                        else None
+                    )
+                    panas_chart = _build_panas_affect_chart(
+                        dates=panas_dates,
+                        positive_affect=pa_data,
+                        negative_affect=na_data,
                         title="PANAS Affect Trends",
-                        y_axis_label="Score",
+                    )
+                    render_echarts(panas_chart, height_px=380)
+                    st.markdown(
+                        "*PANAS measures Positive Affect (PA: enthusiasm, interest) and "
+                        "Negative Affect (NA: distress, hostility). Goal: PA >35, NA <17. "
+                        "Persistent low PA or high NA may indicate mood concerns.* "
+                        "*(Watson et al., 1988; Crawford & Henry, 2004)*"
                     )
         
         # Data table
