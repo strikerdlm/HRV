@@ -5,6 +5,46 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.92] - 2025-12-29
+
+### Added - Publication-Quality Assessment History Charts
+
+Upgraded **Assessment History** section with publication-quality visualizations
+following `.cursor/rules/plots/RULE.md` standards.
+
+**New Chart Builders:**
+
+1. **Fatigue & Sleepiness Trends** (`_build_fatigue_sleepiness_chart`):
+   - Dual-series: Samn-Perelli (SP, 1-7) and Karolinska (KSS, 1-9)
+   - **Color-coded zones:**
+     - 🟢 Alert Zone (1-3.5): Optimal performance
+     - 🟡 Tired Zone (3.5-5.5): Caution warranted
+     - 🔴 Exhausted Zone (>5.5): Performance impairment risk
+   - Threshold lines at 3.5 (alert) and 5.5 (fatigue)
+   - 5-day EWMA trend lines for both scales
+   - Dynamic axis bounds (1-9 range)
+   - References: Samn & Perelli (1982), Åkerstedt & Gillberg (1990)
+
+2. **PANAS Affect Trends** (`_build_panas_affect_chart`):
+   - Dual-series: Positive Affect (PA) and Negative Affect (NA)
+   - **Color-coded zones:**
+     - 🟢 High PA Zone (>35): Optimal mood state
+     - 🔴 High NA Zone (>25): Mood concern indicator
+   - Population mean reference lines (PA ~33, NA ~17)
+   - 5-day EWMA trend lines
+   - Triangle markers for NA, circle for PA (visual distinction)
+   - Dynamic axis bounds (10-50 scale)
+   - References: Watson et al. (1988), Crawford & Henry (2004)
+
+**Features per Plotting Rule:**
+- Dynamic axis scaling (`_auto_axis_bounds()`)
+- Evidence-based reference zones
+- Interactive cross-hair tooltips
+- Scientific interpretation captions
+- 380px height, DataZoom enabled
+
+---
+
 ## [1.8.91] - 2025-12-29
 
 ### Added - Publication-Quality Radiation Dose Chart
