@@ -2,7 +2,7 @@
 
 This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when working with code in this repository.
 
-**Version**: 1.8.27 | **Last Updated**: 2025-12-18 | **Environment**: conda (`hrv-py312`)
+**Version**: 1.9.0 | **Last Updated**: 2025-12-29 | **Environment**: conda (`hrv-py312`)
 
 ---
 
@@ -513,6 +513,28 @@ The application follows a modular architecture with strict separation of concern
     - Audit trail for user actions
     - Console + file dual output
 
+15. **`app/scheduling_core.py`** — Crew scheduling science layer (NEW v1.9.0)
+    - MET/energy conversions (kcal/hr, Watts, activity energy)
+    - Subscore mappers: SAFTE, KSS, PVT, HRV, Hydration, EA, Circadian, Task-specific
+    - IHPI composite calculation with hard-cap gating
+    - EVA GO/NO-GO decision logic with science-based gates
+    - Activity definitions with MET values from 2024 Compendium
+    - References: SAFTE-FAST validation, NASA-STD-3001, IOC EA thresholds
+
+16. **`app/scheduling_engine.py`** — Constraint-based optimization (NEW v1.9.0)
+    - Crew management for up to 6 crew members
+    - Schedule generation with fixed/variable activities
+    - Conflict detection (concurrent exercise limits, recovery requirements)
+    - Optimization algorithm with hard/soft constraints
+    - Export to JSON/CSV formats
+
+17. **`app/scheduling_tab.py`** — Crew scheduling UI tab (NEW v1.9.0)
+    - Status Dashboard: Live crew cards with IHPI gauges
+    - Timeline & Scheduling: ECharts Gantt chart with activities
+    - Risk Analysis: Risk matrix heatmap + performance gauges
+    - Summary & Export: Readiness metrics, alerts, data export
+    - Publication-quality charts following `.cursor/rules/plots/RULE.md`
+
 ### Data Flow
 1. User uploads Polar RR-interval text files (one RR in ms per line, filename format `YYYY-MM-DD HH-MM-SS.txt` inferred as GMT-5)
 2. `hrv_core.clean_rr_intervals` detects artifacts via threshold-median or threshold-prev heuristics
@@ -835,11 +857,13 @@ The app includes Windows console safety workarounds (Colorama fix) in `app/app.p
 - **README**: `README.md` — quick start and high-level features
 - **Agent Rules**: `.cursor/rules/agent.mdc` — AI agent development guidelines
 
-## Project Structure (Updated v1.8.23)
+## Project Structure (Updated v1.9.0)
 ```
 HRV/
 ├── app/
-│   ├── app.py                    # Main Streamlit application
+│   ├── app.py                    # Research app Streamlit UI
+│   ├── operational_app.py        # Operational app (crew intake + scheduling)
+│   ├── research_app.py           # Research app entrypoint
 │   ├── hrv_core.py               # Core HRV computations
 │   ├── noaa_space.py             # NOAA data ingestion
 │   ├── gpu_processing.py         # GPU-accelerated computations
@@ -849,17 +873,22 @@ HRV/
 │   ├── performance_utils.py      # CPU optimization utilities
 │   ├── space_weather_impact.py   # Solar event predictions
 │   ├── logging_config.py         # Centralized logging
-│   ├── profile_tools_engine.py   # Profile calculation engines (NEW v1.8.23)
+│   ├── profile_tools_engine.py   # Profile calculation engines
 │   ├── personalized_computations.py  # Personalized health metrics
+│   ├── scheduling_core.py        # Crew scheduling science layer (NEW v1.9.0)
+│   ├── scheduling_engine.py      # Constraint-based optimization (NEW v1.9.0)
+│   ├── scheduling_tab.py         # Scheduling UI tab (NEW v1.9.0)
 │   └── data_cache/               # Cached API responses
 ├── logs/                         # Application logs
 │   ├── app.log                   # Main log (rotating)
 │   └── errors.log                # Error-only log
 ├── tests/                        # pytest test suite
-│   └── test_polar_accesslink.py  # Polar integration tests (NEW)
+│   ├── test_scheduling_core.py   # Scheduling science tests (NEW v1.9.0)
+│   └── test_polar_accesslink.py  # Polar integration tests
 ├── docs/                         # Documentation
 ├── requirements.txt              # Dependencies
 ├── WARP.md                       # This file
+├── SchedulingTool.md             # Scheduling tool specification
 └── .cursor/rules/agent.mdc       # AI agent rules
 ```
 
