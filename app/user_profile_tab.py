@@ -245,6 +245,22 @@ except ImportError:
 from user_data_manager import create_user_manager, get_user_data_path, parse_filename_date
 from hrv_core import build_readiness_baseline, load_rr_intervals_from_text, readiness_from_pns
 
+# Polar H10 BLE Recorder
+try:
+    from polar_h10_recorder import (
+        PolarH10RecorderSync,
+        RecorderState,
+        RecordingStats,
+        ScannedDevice,
+        get_output_directory,
+        is_bleak_available,
+        list_recordings,
+    )
+    POLAR_RECORDER_AVAILABLE = True
+except ImportError:
+    POLAR_RECORDER_AVAILABLE = False
+    is_bleak_available = lambda: False  # type: ignore[misc]
+
 _LOGGER: Final[logging.Logger] = (
     get_logger(__name__) if get_logger is not None else logging.getLogger(__name__)
 )
@@ -1405,6 +1421,243 @@ def _render_login_section() -> Optional[UserProfile]:
 
 
 # ---------------------------------------------------------------------------
+# BLE RR Interval Recorder
+# ---------------------------------------------------------------------------
+
+
+def _render_ble_rr_recorder(user: UserProfile) -> None:
+    """Render BLE RR interval recording interface for Polar H10.
+    
+    This allows users to connect to a Polar H10 chest strap via Bluetooth
+    and record RR intervals to a text file in the user's data directory.
+    
+    Args:
+        user: Current user profile.
+    """
+    if not POLAR_RECORDER_AVAILABLE:
+        return
+    
+    with st.expander("📡 BLE Heart Rate Recording (Polar H10)", expanded=False):
+        # Check if bleak is available
+        if not is_bleak_available():
+            st.warning(
+                "🔌 Bluetooth support requires the `bleak` library. "
+                "Install with: `pip install bleak`"
+            )
+            st.code("pip install bleak", language="bash")
+            return
+        
+        # Initialize session state for recorder
+        recorder_key = f"ble_recorder_{user.user_id}"
+        if recorder_key not in st.session_state:
+            # Get output directory for user (based on full name)
+            output_dir = get_output_directory(user.full_name or user.username)
+            st.session_state[recorder_key] = {
+                "recorder": None,
+                "output_dir": str(output_dir),
+                "devices": [],
+                "selected_device_idx": 0,
+                "is_scanning": False,
+                "is_connecting": False,
+                "is_recording": False,
+                "last_hr": 0.0,
+                "last_rr": 0.0,
+                "rr_count": 0,
+                "duration": 0.0,
+                "file_path": None,
+                "error_msg": None,
+            }
+        
+        state = st.session_state[recorder_key]
+        
+        # Output directory info
+        st.caption(f"📁 Recording directory: `{state['output_dir']}`")
+        
+        # Get or create recorder instance
+        recorder: PolarH10RecorderSync | None = state.get("recorder")
+        if recorder is None:
+            recorder = PolarH10RecorderSync(output_dir=state["output_dir"])
+            state["recorder"] = recorder
+        
+        # Connection status
+        status_col, action_col = st.columns([2, 1])
+        
+        with status_col:
+            if recorder.is_recording:
+                st.success("🔴 Recording in progress")
+            elif recorder.is_connected:
+                st.success("🟢 Connected")
+            else:
+                st.info("⚪ Not connected")
+        
+        # Error display
+        if state.get("error_msg"):
+            st.error(state["error_msg"])
+            if st.button("Clear Error", key=f"clear_ble_error_{user.user_id}"):
+                state["error_msg"] = None
+                st.rerun()
+        
+        # --- Scan Section ---
+        if not recorder.is_connected and not state.get("is_scanning"):
+            st.markdown("#### 1️⃣ Scan for Devices")
+            st.caption("Make sure your Polar H10 is worn and in range.")
+            
+            scan_col1, scan_col2 = st.columns([1, 2])
+            with scan_col1:
+                if st.button("🔍 Scan", key=f"ble_scan_{user.user_id}", use_container_width=True):
+                    state["is_scanning"] = True
+                    state["error_msg"] = None
+                    st.rerun()
+            
+            # Show previously found devices
+            if state["devices"]:
+                device_names = [f"{d.name} ({d.rssi} dBm)" for d in state["devices"]]
+                selected_idx = st.selectbox(
+                    "Select Device",
+                    options=range(len(device_names)),
+                    format_func=lambda i: device_names[i],
+                    key=f"ble_device_select_{user.user_id}",
+                )
+                state["selected_device_idx"] = selected_idx
+                
+                if st.button("🔗 Connect", key=f"ble_connect_{user.user_id}", use_container_width=True):
+                    state["is_connecting"] = True
+                    st.rerun()
+        
+        # Handle scanning (separate from UI)
+        if state.get("is_scanning"):
+            with st.spinner("Scanning for BLE devices..."):
+                try:
+                    devices = recorder.scan_devices(timeout=10.0)
+                    state["devices"] = devices
+                    state["is_scanning"] = False
+                    if not devices:
+                        state["error_msg"] = "No heart rate monitors found. Ensure device is active."
+                except Exception as exc:
+                    state["error_msg"] = f"Scan failed: {exc}"
+                    state["is_scanning"] = False
+                st.rerun()
+        
+        # Handle connection (separate from UI)
+        if state.get("is_connecting"):
+            with st.spinner("Connecting..."):
+                try:
+                    idx = state.get("selected_device_idx", 0)
+                    if state["devices"] and 0 <= idx < len(state["devices"]):
+                        device = state["devices"][idx]
+                        success = recorder.connect(device)
+                        if success:
+                            state["error_msg"] = None
+                        else:
+                            state["error_msg"] = "Connection failed. Try again."
+                    state["is_connecting"] = False
+                except Exception as exc:
+                    state["error_msg"] = f"Connection error: {exc}"
+                    state["is_connecting"] = False
+                st.rerun()
+        
+        # --- Connected Section ---
+        if recorder.is_connected:
+            # Device info
+            st.markdown("#### 2️⃣ Record RR Intervals")
+            
+            # Battery level (optional)
+            try:
+                battery = recorder.get_battery_level()
+                if battery is not None:
+                    st.caption(f"🔋 Battery: {battery}%")
+            except Exception:
+                pass
+            
+            # Recording controls
+            rec_col1, rec_col2 = st.columns(2)
+            
+            with rec_col1:
+                if not recorder.is_recording:
+                    if st.button(
+                        "▶️ Start Recording",
+                        key=f"ble_start_rec_{user.user_id}",
+                        use_container_width=True,
+                        type="primary",
+                    ):
+                        try:
+                            success = recorder.start_recording()
+                            if success:
+                                state["is_recording"] = True
+                                state["error_msg"] = None
+                            else:
+                                state["error_msg"] = "Failed to start recording"
+                        except Exception as exc:
+                            state["error_msg"] = f"Start error: {exc}"
+                        st.rerun()
+                else:
+                    if st.button(
+                        "⏹️ Stop Recording",
+                        key=f"ble_stop_rec_{user.user_id}",
+                        use_container_width=True,
+                        type="primary",
+                    ):
+                        try:
+                            filepath = recorder.stop_recording()
+                            state["is_recording"] = False
+                            state["file_path"] = filepath
+                            state["error_msg"] = None
+                            st.success(f"✅ Recording saved: `{filepath}`")
+                        except Exception as exc:
+                            state["error_msg"] = f"Stop error: {exc}"
+                        st.rerun()
+            
+            with rec_col2:
+                if st.button(
+                    "🔌 Disconnect",
+                    key=f"ble_disconnect_{user.user_id}",
+                    use_container_width=True,
+                ):
+                    try:
+                        recorder.disconnect()
+                        state["is_recording"] = False
+                    except Exception as exc:
+                        state["error_msg"] = f"Disconnect error: {exc}"
+                    st.rerun()
+            
+            # Recording stats
+            if recorder.is_recording:
+                stats = recorder.stats
+                
+                # Metrics display
+                m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+                with m_col1:
+                    st.metric("RR Count", f"{stats.rr_count:,}")
+                with m_col2:
+                    st.metric("Last HR", f"{stats.last_hr:.0f} bpm")
+                with m_col3:
+                    st.metric("Last RR", f"{stats.last_rr:.0f} ms")
+                with m_col4:
+                    mins = stats.duration_sec / 60
+                    st.metric("Duration", f"{mins:.1f} min")
+                
+                # Refresh button for live updates
+                if st.button("🔄 Refresh Stats", key=f"ble_refresh_{user.user_id}"):
+                    st.rerun()
+                
+                st.caption(f"📁 Saving to: `{stats.file_path}`")
+        
+        # --- Recent Recordings ---
+        st.markdown("---")
+        st.markdown("#### 📚 Recent Recordings")
+        
+        recordings = list_recordings(state["output_dir"])
+        if recordings:
+            # Show last 5 recordings
+            for rec in recordings[:5]:
+                rec_size = rec.stat().st_size
+                rec_lines = rec_size // 4  # Approximate line count
+                st.caption(f"• `{rec.name}` ({rec_lines:,} RR intervals)")
+        else:
+            st.caption("No recordings yet.")
+
+
+# ---------------------------------------------------------------------------
 # Profile Display & Edit
 # ---------------------------------------------------------------------------
 
@@ -1459,6 +1712,9 @@ def _render_profile_view(user: UserProfile) -> None:
     if st.button("✏️ Edit Profile"):
         st.session_state["edit_profile_mode"] = True
         st.rerun()
+    
+    # BLE RR Interval Recording Section
+    _render_ble_rr_recorder(user)
 
 
 def _render_profile_edit(user: UserProfile) -> None:
