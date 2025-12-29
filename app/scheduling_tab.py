@@ -1056,7 +1056,7 @@ def _render_workload_balance(
     crew_list = list(engine.crew_members.values())
     
     # Get schedule for the day
-    schedule = engine.get_schedule(schedule_date)
+    schedule = engine.get_or_create_daily_schedule(schedule_date)
     
     # Calculate workload for each crew member
     workload_data = []
