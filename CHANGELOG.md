@@ -5,6 +5,40 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.84] - 2025-12-29
+
+### Added
+- **Polar H10 BLE RR Interval Recorder** (`app/polar_h10_recorder.py`): Real-time Bluetooth Low Energy connection to Polar H10 (and compatible) chest straps for HRV biofeedback and coherence training:
+  - **Device Scanning**: Automatic discovery of BLE heart rate monitors (Polar H10/H9/OH1, Garmin HRM, Wahoo TICKR)
+  - **RR Interval Recording**: Direct streaming of RR intervals via BLE Heart Rate Measurement characteristic (UUID: 0x2A37)
+  - **File Format**: One RR interval (ms) per line, filename format: `YYYY-MM-DD HH-MM-SS.txt` (matches existing HRV analysis format)
+  - **Real-Time Stats**: Live display of HR, RR interval, count, and duration during recording
+  - **Battery Monitoring**: Device battery level display when available
+  - **Session Management**: Async BLE operations with sync wrapper for Streamlit integration
+  - **Output Directory**: Automatic directory creation based on user's full name (e.g., `Diego_Malpica/`)
+
+- **BLE Recording UI** (`app/user_profile_tab.py`): New "📡 BLE Heart Rate Recording (Polar H10)" section in User Profile view:
+  - Scan for BLE devices with signal strength (RSSI)
+  - Device selection dropdown with Polar devices prioritized
+  - Connect/disconnect controls
+  - Start/stop recording with live metrics
+  - Recent recordings list with approximate RR counts
+
+- **Dependencies**: Added `bleak>=0.21,<1.0` to `requirements.txt` for BLE communication
+
+### Technical Details
+- Follows Bluetooth SIG Heart Rate Service specification
+- RR intervals are in 1/1024 second units, converted to milliseconds
+- Validates RR intervals (200-2500 ms range, ~24-300 BPM)
+- Parses HR format flags, energy expended, sensor contact status
+- Thread-safe async wrapper for Streamlit's synchronous context
+
+### Scientific References
+- Bluetooth SIG Heart Rate Service Specification (UUID: 0x180D)
+- Heart Rate Measurement Characteristic (UUID: 0x2A37)
+- Schaffarczyk et al. (2022). RR interval accuracy of wearable sensors
+- Schweizer & Gilgen-Ammann (2024). Polar H10 validation study
+
 ## [1.8.83] - 2025-12-28
 
 ### Added
