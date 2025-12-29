@@ -1227,19 +1227,24 @@ def analyze_what_if(
     # Compute projected IHPI
     # Create modified status for IHPI computation
     modified_status = CrewPhysiologicalStatus(
+        crew_id=current_status.crew_id,
+        timestamp=current_status.timestamp,
         safte_effectiveness=new_effectiveness,
         kss_score=current_status.kss_score,
+        samn_perelli_score=current_status.samn_perelli_score,
         pvt_lapses_3min=current_status.pvt_lapses_3min,
-        lnrmssd_zscore=current_status.lnrmssd_zscore,
+        lnrmssd_current=current_status.lnrmssd_current,
+        lnrmssd_baseline_mean=current_status.lnrmssd_baseline_mean,
+        lnrmssd_baseline_sd=current_status.lnrmssd_baseline_sd,
         body_mass_change_pct=current_status.body_mass_change_pct,
         usg=current_status.usg,
         energy_availability=current_status.energy_availability,
-        circadian_phase_offset_hours=current_status.circadian_phase_offset_hours,
-        vo2max_ml_kg_min=current_status.vo2max_ml_kg_min,
+        phase_offset_hours=current_status.phase_offset_hours,
+        chronotype=current_status.chronotype,
+        vo2max=current_status.vo2max,
         hours_since_last_eva=current_status.hours_since_last_eva,
         hours_awake=max(0, current_status.hours_awake - scenario.nap_added_minutes / 60),
-        sleep_last_24h_hours=current_status.sleep_last_24h_hours + scenario.sleep_change_hours,
-        flight_surgeon_approval=current_status.flight_surgeon_approval,
+        sleep_last_24h=current_status.sleep_last_24h + scenario.sleep_change_hours,
     )
     
     projected_ihpi = modified_status.compute_ihpi()
