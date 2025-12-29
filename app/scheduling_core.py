@@ -902,6 +902,400 @@ def check_activity_suitability(
 
 
 # ---------------------------------------------------------------------------
+# SAFTE Simulation & Performance Forecasting (Advanced)
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class SAFTEForecastPoint:
+    """A single point in the SAFTE effectiveness forecast."""
+    timestamp: datetime
+    effectiveness: float  # 0-100
+    sleep_reservoir: float  # 0-1
+    circadian_phase: float  # 0-2π
+    sleep_inertia: float  # 0-1
+    risk_level: RiskLevel
+
+
+@dataclass
+class PerformanceForecast:
+    """24-hour performance forecast for a crew member."""
+    crew_id: str
+    forecast_start: datetime
+    forecast_points: List[SAFTEForecastPoint]
+    
+    # Summary statistics
+    min_effectiveness: float = 100.0
+    avg_effectiveness: float = 100.0
+    time_below_90_minutes: int = 0
+    time_below_70_minutes: int = 0
+    optimal_work_windows: List[Tuple[datetime, datetime]] = field(default_factory=list)
+    recommended_nap_windows: List[Tuple[datetime, datetime]] = field(default_factory=list)
+    
+    def get_effectiveness_at(self, time: datetime) -> float:
+        """Get interpolated effectiveness at a specific time."""
+        if not self.forecast_points:
+            return 85.0
+        
+        # Find bracketing points
+        for i, point in enumerate(self.forecast_points):
+            if point.timestamp >= time:
+                if i == 0:
+                    return point.effectiveness
+                # Linear interpolation
+                prev = self.forecast_points[i - 1]
+                dt_total = (point.timestamp - prev.timestamp).total_seconds()
+                dt_current = (time - prev.timestamp).total_seconds()
+                if dt_total > 0:
+                    ratio = dt_current / dt_total
+                    return prev.effectiveness + ratio * (point.effectiveness - prev.effectiveness)
+                return point.effectiveness
+        
+        return self.forecast_points[-1].effectiveness if self.forecast_points else 85.0
+
+
+def simulate_safte_24h(
+    current_status: CrewPhysiologicalStatus,
+    planned_sleep_start: datetime,
+    planned_sleep_duration_hours: float = 8.0,
+    chronotype_offset_hours: float = 0.0,
+    resolution_minutes: int = 15,
+) -> PerformanceForecast:
+    """
+    Simulate 24-hour SAFTE effectiveness forecast.
+    
+    This is a simplified SAFTE model implementation for scheduling.
+    For full SAFTE simulation, use fatigue_calculator/safte_model.py.
+    
+    Args:
+        current_status: Current crew physiological status
+        planned_sleep_start: Planned sleep start time
+        planned_sleep_duration_hours: Planned sleep duration
+        chronotype_offset_hours: Chronotype adjustment (early=-2, late=+2)
+        resolution_minutes: Forecast resolution in minutes
+        
+    Returns:
+        24-hour performance forecast
+    """
+    from datetime import timezone
+    
+    # Initialize forecast
+    now = datetime.now()
+    forecast_points: List[SAFTEForecastPoint] = []
+    
+    # Current state
+    current_effectiveness = current_status.safte_effectiveness
+    hours_awake = current_status.hours_awake
+    sleep_reservoir = min(1.0, current_effectiveness / 100.0)
+    
+    # SAFTE parameters (simplified)
+    TAU_DECAY = 18.2  # Sleep reservoir decay time constant (hours)
+    TAU_RECOVERY = 4.5  # Sleep reservoir recovery time constant (hours)
+    CIRCADIAN_AMPLITUDE = 15.0  # Circadian modulation amplitude (%)
+    CIRCADIAN_PERIOD = 24.0  # hours
+    
+    # Circadian nadir at ~4 AM (adjusted for chronotype)
+    nadir_hour = 4.0 + chronotype_offset_hours
+    
+    # Simulate each time point
+    planned_sleep_end = planned_sleep_start + timedelta(hours=planned_sleep_duration_hours)
+    
+    for i in range(int(24 * 60 / resolution_minutes) + 1):
+        t = now + timedelta(minutes=i * resolution_minutes)
+        hour_of_day = t.hour + t.minute / 60.0
+        
+        # Check if sleeping
+        is_sleeping = planned_sleep_start <= t < planned_sleep_end
+        
+        # Update sleep reservoir
+        dt_hours = resolution_minutes / 60.0
+        if is_sleeping:
+            # Recovery during sleep
+            recovery_rate = (1.0 - sleep_reservoir) / TAU_RECOVERY
+            sleep_reservoir = min(1.0, sleep_reservoir + recovery_rate * dt_hours)
+            hours_awake = 0.0
+        else:
+            # Decay while awake
+            decay_rate = sleep_reservoir / TAU_DECAY
+            sleep_reservoir = max(0.0, sleep_reservoir - decay_rate * dt_hours)
+            hours_awake += dt_hours
+        
+        # Circadian component (cosine with nadir at ~4 AM)
+        phase = 2 * math.pi * ((hour_of_day - nadir_hour) / CIRCADIAN_PERIOD)
+        circadian_factor = 1.0 - (CIRCADIAN_AMPLITUDE / 100.0) * (1 - math.cos(phase)) / 2
+        
+        # Sleep inertia (if just woke up)
+        inertia = 0.0
+        if not is_sleeping and planned_sleep_end <= t < planned_sleep_end + timedelta(minutes=30):
+            minutes_since_wake = (t - planned_sleep_end).total_seconds() / 60
+            inertia = max(0, 0.15 * (1 - minutes_since_wake / 30))  # 15% reduction for 30 min
+        
+        # Combined effectiveness
+        effectiveness = 100.0 * sleep_reservoir * circadian_factor * (1 - inertia)
+        effectiveness = clamp(effectiveness, 0.0, 100.0)
+        
+        # Determine risk level
+        if effectiveness >= SAFTE_LOW_RISK_MIN:
+            risk = RiskLevel.LOW
+        elif effectiveness >= SAFTE_CAUTION_MIN:
+            risk = RiskLevel.MODERATE
+        elif effectiveness >= SAFTE_HIGH_RISK_MIN:
+            risk = RiskLevel.HIGH
+        else:
+            risk = RiskLevel.VERY_HIGH
+        
+        forecast_points.append(SAFTEForecastPoint(
+            timestamp=t,
+            effectiveness=effectiveness,
+            sleep_reservoir=sleep_reservoir,
+            circadian_phase=phase,
+            sleep_inertia=inertia,
+            risk_level=risk,
+        ))
+    
+    # Calculate summary statistics
+    effectivenesses = [p.effectiveness for p in forecast_points]
+    min_eff = min(effectivenesses)
+    avg_eff = sum(effectivenesses) / len(effectivenesses)
+    time_below_90 = sum(1 for p in forecast_points if p.effectiveness < 90) * resolution_minutes
+    time_below_70 = sum(1 for p in forecast_points if p.effectiveness < 70) * resolution_minutes
+    
+    # Find optimal work windows (effectiveness >= 90)
+    optimal_windows: List[Tuple[datetime, datetime]] = []
+    window_start = None
+    for p in forecast_points:
+        if p.effectiveness >= 90 and window_start is None:
+            window_start = p.timestamp
+        elif p.effectiveness < 90 and window_start is not None:
+            optimal_windows.append((window_start, p.timestamp))
+            window_start = None
+    if window_start is not None:
+        optimal_windows.append((window_start, forecast_points[-1].timestamp))
+    
+    # Find recommended nap windows (effectiveness < 80, not sleeping)
+    nap_windows: List[Tuple[datetime, datetime]] = []
+    for p in forecast_points:
+        if p.effectiveness < 80:
+            # Simple 15-30 min nap recommendation
+            is_during_planned_sleep = planned_sleep_start <= p.timestamp < planned_sleep_end
+            if not is_during_planned_sleep and 10 <= p.timestamp.hour <= 16:
+                nap_windows.append((p.timestamp, p.timestamp + timedelta(minutes=20)))
+    
+    # Remove duplicate nap windows (keep first per 2-hour block)
+    filtered_naps = []
+    last_nap_hour = -3
+    for start, end in nap_windows:
+        if start.hour - last_nap_hour >= 2:
+            filtered_naps.append((start, end))
+            last_nap_hour = start.hour
+    
+    return PerformanceForecast(
+        crew_id=current_status.crew_id if hasattr(current_status, 'crew_id') else "unknown",
+        forecast_start=now,
+        forecast_points=forecast_points,
+        min_effectiveness=min_eff,
+        avg_effectiveness=avg_eff,
+        time_below_90_minutes=time_below_90,
+        time_below_70_minutes=time_below_70,
+        optimal_work_windows=optimal_windows,
+        recommended_nap_windows=filtered_naps,
+    )
+
+
+# ---------------------------------------------------------------------------
+# What-If Analysis
+# ---------------------------------------------------------------------------
+
+@dataclass
+class WhatIfScenario:
+    """A what-if scenario for schedule analysis."""
+    scenario_id: str
+    name: str
+    description: str
+    
+    # Modified parameters
+    sleep_change_hours: float = 0.0  # Change to sleep duration
+    wake_time_shift_hours: float = 0.0  # Shift wake time
+    nap_added_minutes: int = 0  # Add a nap
+    activity_removed: Optional[str] = None  # Remove an activity
+    activity_added: Optional[str] = None  # Add an activity
+    
+    # Results (computed)
+    projected_ihpi: float = 0.0
+    projected_risk: RiskLevel = RiskLevel.MODERATE
+    effectiveness_delta: float = 0.0
+    recommendation: str = ""
+
+
+def analyze_what_if(
+    current_status: CrewPhysiologicalStatus,
+    scenario: WhatIfScenario,
+) -> WhatIfScenario:
+    """
+    Analyze a what-if scenario and project outcomes.
+    
+    Args:
+        current_status: Current crew physiological status
+        scenario: What-if scenario to analyze
+        
+    Returns:
+        Updated scenario with projected outcomes
+    """
+    # Start from current effectiveness
+    base_effectiveness = current_status.safte_effectiveness
+    new_effectiveness = base_effectiveness
+    
+    # Apply scenario modifications
+    if scenario.sleep_change_hours != 0:
+        # Each hour of extra sleep ≈ +5 effectiveness, each hour less ≈ -8 effectiveness
+        if scenario.sleep_change_hours > 0:
+            new_effectiveness += scenario.sleep_change_hours * 5.0
+        else:
+            new_effectiveness += scenario.sleep_change_hours * 8.0
+    
+    if scenario.nap_added_minutes > 0:
+        # 20-minute nap ≈ +8 effectiveness, diminishing returns
+        nap_benefit = min(12.0, scenario.nap_added_minutes * 0.4)
+        new_effectiveness += nap_benefit
+    
+    if scenario.wake_time_shift_hours != 0:
+        # Shift toward chronotype optimal = +2-3, away = -2-3
+        # Simplified: assume shift is toward optimal
+        new_effectiveness += abs(scenario.wake_time_shift_hours) * 1.5
+    
+    new_effectiveness = clamp(new_effectiveness, 0.0, 100.0)
+    
+    # Compute projected IHPI
+    # Create modified status for IHPI computation
+    modified_status = CrewPhysiologicalStatus(
+        safte_effectiveness=new_effectiveness,
+        kss_score=current_status.kss_score,
+        pvt_lapses_3min=current_status.pvt_lapses_3min,
+        lnrmssd_zscore=current_status.lnrmssd_zscore,
+        body_mass_change_pct=current_status.body_mass_change_pct,
+        usg=current_status.usg,
+        energy_availability=current_status.energy_availability,
+        circadian_phase_offset_hours=current_status.circadian_phase_offset_hours,
+        vo2max_ml_kg_min=current_status.vo2max_ml_kg_min,
+        hours_since_last_eva=current_status.hours_since_last_eva,
+        hours_awake=max(0, current_status.hours_awake - scenario.nap_added_minutes / 60),
+        sleep_last_24h_hours=current_status.sleep_last_24h_hours + scenario.sleep_change_hours,
+        flight_surgeon_approval=current_status.flight_surgeon_approval,
+    )
+    
+    projected_ihpi = modified_status.compute_ihpi()
+    
+    # Determine risk level
+    if projected_ihpi >= 85:
+        risk = RiskLevel.LOW
+    elif projected_ihpi >= 75:
+        risk = RiskLevel.MODERATE
+    elif projected_ihpi >= 60:
+        risk = RiskLevel.HIGH
+    else:
+        risk = RiskLevel.VERY_HIGH
+    
+    # Generate recommendation
+    effectiveness_delta = new_effectiveness - base_effectiveness
+    if effectiveness_delta > 5:
+        recommendation = f"✅ Scenario improves effectiveness by {effectiveness_delta:.1f}%"
+    elif effectiveness_delta > 0:
+        recommendation = f"↗️ Slight improvement: +{effectiveness_delta:.1f}%"
+    elif effectiveness_delta < -5:
+        recommendation = f"⚠️ Scenario reduces effectiveness by {abs(effectiveness_delta):.1f}%"
+    else:
+        recommendation = "➡️ Minimal impact on effectiveness"
+    
+    # Update scenario with results
+    scenario.projected_ihpi = projected_ihpi
+    scenario.projected_risk = risk
+    scenario.effectiveness_delta = effectiveness_delta
+    scenario.recommendation = recommendation
+    
+    return scenario
+
+
+# ---------------------------------------------------------------------------
+# Workload Balancing
+# ---------------------------------------------------------------------------
+
+@dataclass
+class WorkloadMetrics:
+    """Workload metrics for a crew member."""
+    crew_id: str
+    total_work_minutes: int = 0
+    total_rest_minutes: int = 0
+    high_intensity_minutes: int = 0  # MET > 4
+    cognitive_load_minutes: int = 0
+    total_kcal_expenditure: float = 0.0
+    work_rest_ratio: float = 0.0
+    recovery_score: float = 100.0  # 0-100
+
+
+def compute_workload_balance(
+    crew_activities: List[Any],  # List of ScheduledActivity
+    crew_weight_kg: float,
+) -> WorkloadMetrics:
+    """
+    Compute workload balance metrics for a crew member's schedule.
+    
+    Args:
+        crew_activities: List of scheduled activities
+        crew_weight_kg: Crew member's body weight in kg
+        
+    Returns:
+        Workload metrics
+    """
+    total_work = 0
+    total_rest = 0
+    high_intensity = 0
+    cognitive = 0
+    total_kcal = 0.0
+    
+    for activity in crew_activities:
+        duration = getattr(activity, 'duration_minutes', 60)
+        met = getattr(activity, 'met_value', 1.5)
+        activity_id = getattr(activity, 'activity_id', '')
+        
+        # Classify activity
+        if activity_id in ('sleep', 'recreation'):
+            total_rest += duration
+        else:
+            total_work += duration
+        
+        if met > 4.0:
+            high_intensity += duration
+        
+        if activity_id in ('lab_work', 'briefing', 'eva'):
+            cognitive += duration
+        
+        # Energy expenditure
+        kcal = kcal_from_met_duration(met, crew_weight_kg, duration)
+        total_kcal += kcal
+    
+    # Work-rest ratio
+    work_rest = total_work / max(1, total_rest)
+    
+    # Recovery score (simplified)
+    recovery = 100.0
+    if work_rest > 2.0:
+        recovery -= (work_rest - 2.0) * 20
+    if high_intensity > 120:
+        recovery -= (high_intensity - 120) / 10
+    recovery = clamp(recovery, 0.0, 100.0)
+    
+    return WorkloadMetrics(
+        crew_id="",  # Set by caller
+        total_work_minutes=total_work,
+        total_rest_minutes=total_rest,
+        high_intensity_minutes=high_intensity,
+        cognitive_load_minutes=cognitive,
+        total_kcal_expenditure=total_kcal,
+        work_rest_ratio=work_rest,
+        recovery_score=recovery,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Module Exports
 # ---------------------------------------------------------------------------
 
@@ -947,6 +1341,16 @@ __all__ = [
     "CrewMember",
     # Suitability
     "ACTIVITY_SUITABILITY_THRESHOLDS",
+    # Advanced - SAFTE Simulation
+    "SAFTEForecastPoint",
+    "PerformanceForecast",
+    "simulate_safte_24h",
+    # Advanced - What-If Analysis
+    "WhatIfScenario",
+    "analyze_what_if",
+    # Advanced - Workload Balancing
+    "WorkloadMetrics",
+    "compute_workload_balance",
     "check_activity_suitability",
 ]
 
