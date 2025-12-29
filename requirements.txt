@@ -1,6 +1,6 @@
 # Mission Control - Flight Surgeon - Python Dependencies
-# Last updated: 2025-12-18
-# Version: 1.8.27
+# Last updated: 2025-12-29
+# Version: 1.8.28
 
 # ===========================================================================
 # CORE DEPENDENCIES (Required)
@@ -74,6 +74,11 @@ garminconnect>=0.2.36
 # PlatformIO CLI helpers (optional; resolves pip conflict warnings)
 pyelftools>=0.27,<1
 pyserial==3.5.*
+
+# Bluetooth Low Energy (BLE) for HRV Biofeedback & Coherence Training
+# Required for real-time HRV streaming from BLE heart rate monitors
+# Supports: Polar H10/H9/OH1, Garmin HRM-Pro, Wahoo TICKR, and generic BLE HR devices
+bleak>=0.21,<1.0  # BLE communication library for real-time HRV biofeedback
 
 # ===========================================================================
 # GPU ACCELERATION (Optional - NVIDIA CUDA)
