@@ -3,21 +3,81 @@ Crew Scheduling and Human Performance Management - Core Science Layer.
 
 This module implements evidence-based scoring functions for crew scheduling,
 performance prediction, and GO/NO-GO decision support following:
-- SAFTE-FAST validation evidence (U.S. Senate testimony)
+- SAFTE-FAST validation evidence (U.S. Senate testimony & military aviation studies)
 - NASA Human Performance standards (VO2max ≥32.9 ml/kg/min for EVA)
-- IOC Energy Availability thresholds
+- IOC Energy Availability thresholds (RED-S consensus)
 - Task Force ESC/NASPE HRV standards
 
-Scientific References:
-- SAFTE-FAST validation: Hursh SR et al. (2004). Aviat Space Environ Med.
-- EVA metabolic rates: Skylab EVA ~238 kcal/hr, Shuttle EVA ~194 kcal/hr (NASA NTRS)
-- HRV lnRMSSD z-score approach: Plews DJ et al. (2013). Int J Sports Physiol Perform.
-- Energy Availability: IOC Consensus Statement (2018). Br J Sports Med.
-- MET values: 2024 Adult Compendium of Physical Activities
-- NASA VO2max requirement: NASA-STD-3001 Human Performance Capabilities
+Scientific References (with DOI/PMID for verification):
+─────────────────────────────────────────────────────────────────────────────
+FATIGUE MODELS:
+  • Hursh SR, Redmond DP, Johnson ML, et al. (2004). Fatigue models for applied
+    research in warfighting. Aviat Space Environ Med. 75(3 Suppl):A44-53.
+    PMID: 15018265
+    → SAFTE effectiveness thresholds: ≥90% low-risk, ≤70% ~0.08 BAC equivalence
+
+  • Paul MA, Hursh SR, Love R. (2020). Validating Sleep Behavior Models for
+    Fatigue Management Software in Military Aviation. Mil Med. 185(11-12):e1986.
+    DOI: 10.1093/milmed/usaa210
+    → SAFTE-FAST harmonization in Canadian Air Force
+
+HRV & RECOVERY:
+  • Task Force ESC/NASPE. (1996). Heart rate variability: standards of
+    measurement, physiological interpretation and clinical use.
+    Eur Heart J. 17:354-381. DOI: 10.1093/oxfordjournals.eurheartj.a014868
+    → 5-min short-term HRV standards, RMSSD for vagal tone
+
+  • Plews DJ, Laursen PB, Stanley J, Kilding AE, Buchheit M. (2013). Training
+    adaptation and heart rate variability in elite endurance athletes.
+    Sports Med. 43(9):773-781. DOI: 10.1007/s40279-013-0071-8
+    → lnRMSSD z-score with 14-28 day rolling baseline
+
+ENERGY AVAILABILITY:
+  • Mountjoy M, et al. (2018). IOC Consensus Statement on RED-S: 2018 Update.
+    Br J Sports Med. 52(11):687-697. DOI: 10.1136/bjsports-2018-099193
+    → EA thresholds: ≥45 optimal, <30 kcal/kg FFM/day low
+
+  • Mountjoy M, et al. (2023). 2023 IOC Consensus Statement on REDs.
+    Br J Sports Med. 57(17):1073-1097. DOI: 10.1136/bjsports-2023-106994
+    → Updated REDs Clinical Assessment Tool V2
+
+VIGILANCE & SLEEPINESS:
+  • Basner M, Dinges DF. (2011). Maximizing sensitivity of the PVT to sleep loss.
+    Sleep. 34(5):581-591. DOI: 10.1093/sleep/34.5.581
+    → 3-min PVT, 355ms lapse threshold
+
+  • Åkerstedt T, Gillberg M. (1990). Subjective and objective sleepiness.
+    Int J Neurosci. 52(1-2):29-37. DOI: 10.3109/00207459008994241
+    → KSS validation: 1-5 alert, 8-9 severe
+
+EVA PHYSIOLOGY & NASA STANDARDS:
+  • NASA-STD-3001 Vol 1 Rev B. (2022). Human Performance Capabilities.
+    → EVA VO₂max requirement: ≥32.9 ml/kg/min
+
+  • Waligora JM, Kumar KV. (1995). Energy utilization rates during shuttle EVA.
+    NASA NTRS. PMID: 11540993
+    → Shuttle EVA: 194 kcal/hr; Skylab EVA: 238 kcal/hr
+
+METABOLIC EQUIVALENTS:
+  • Ainsworth BE, et al. (2024). 2024 Compendium of Physical Activities.
+    Med Sci Sports Exerc. 56(Suppl):S1-152. DOI: 10.1249/MSS.0000000000003356
+    → Standardized MET values for 800+ activities
+
+HYDRATION:
+  • Armstrong LE, et al. (2007). ACSM position stand: Exertional heat illness.
+    Med Sci Sports Exerc. 39(3):556-572. DOI: 10.1249/mss.0b013e31802fa199
+    → >2% body mass loss impairs cognition; USG ≥1.030 significant dehydration
+
+CIRCADIAN & CREW REST:
+  • ICAO Doc 9966. (2016). Manual for Oversight of Fatigue Management.
+    → Phase misalignment >6h severely degrades performance
+
+  • AFMAN 11-202V3. (2022). General Flight Rules.
+    → Military crew rest requirements
+─────────────────────────────────────────────────────────────────────────────
 
 Author: Dr. Diego Leonel Malpica Hincapié, MD
-Version: 1.0.0
+Version: 1.1.0
 """
 
 from __future__ import annotations
