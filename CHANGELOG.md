@@ -5,6 +5,57 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.93] - 2025-12-29
+
+### Added - Publication-Quality HRV × Activity Charts
+
+Upgraded **HRV × Activity (Garmin daily metrics)** section with publication-quality visualizations
+following `.cursor/rules/plots/RULE.md` standards.
+
+**New Chart Builders:**
+
+1. **HRV × Activity Time Series** (`_build_hrv_activity_timeseries_chart`):
+   - Dual-axis chart: Steps (bars) + RMSSD (line)
+   - **WHO Target Zone** (8k-10k steps) shaded in green
+   - **10k Goal** dashed line marker
+   - 7-day EWMA trend lines for both metrics
+   - Dynamic axis scaling for both axes
+   - Blue gradient bars for steps, red line for RMSSD
+   - References: Plews et al. (2013), Stanley et al. (2013)
+
+2. **HRV × Activity Scatter Plots** (`_build_hrv_activity_scatter_chart`):
+   - Scatter points with semi-transparent blue fill
+   - **Linear regression line** (red) showing trend
+   - **Correlation strength** color-coded in subtitle:
+     - 🟢 Strong (|r| ≥ 0.7)
+     - 🟡 Moderate (0.4-0.7)
+     - ⚪ Weak (0.2-0.4)
+     - ⚫ Negligible (<0.2)
+   - Dynamic axis bounds for all scatter plots
+   - 2-column layout for correlation matrix
+   - Reference: Buchheit (2014)
+
+**Scatter Correlations Available:**
+- RMSSD vs Steps
+- RMSSD vs Distance (km)
+- RMSSD vs Calories
+- RMSSD vs Sleep Score
+- RMSSD vs Stress Score
+- RMSSD vs Body Battery
+
+**Features per Plotting Rule:**
+- Dynamic axis scaling (`_auto_axis_bounds()`)
+- Evidence-based reference zones
+- Interactive tooltips
+- Scientific interpretation captions
+- 400px height for time series, 320px for scatter plots
+
+### Fixed
+
+- Fixed indentation errors in `_render_eva_semaphore()` and `_render_allostatic_load()`
+
+---
+
 ## [1.8.92] - 2025-12-29
 
 ### Added - Publication-Quality Assessment History Charts
