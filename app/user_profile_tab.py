@@ -3023,6 +3023,460 @@ def _build_body_battery_chart(
     }
 
 
+def _build_stress_pns_chart(
+    dates: List[str],
+    stress_index: Optional[List[float]] = None,
+    pns_index: Optional[List[float]] = None,
+    title: str = "HRV Stress & Parasympathetic Index Trends",
+) -> Dict[str, Any]:
+    """Build publication-quality Stress Index and PNS chart with dynamic axis scaling.
+    
+    Stress Index (Baevsky): Reflects sympathetic activation.
+    - <50: Low stress (parasympathetic dominant)
+    - 50-100: Moderate stress (balanced ANS)
+    - 100-150: Elevated stress (sympathetic activation)
+    - >150: High stress (significant sympathetic dominance)
+    
+    Parasympathetic Index (PNS): Higher values indicate greater vagal tone.
+    - >1.0: High vagal activity (good recovery capacity)
+    - 0.0-1.0: Normal vagal tone
+    - <0.0: Reduced vagal activity (stress/fatigue)
+    
+    References:
+    - Baevsky RM et al. (2002). J Am Coll Cardiol.
+    - Shaffer & Ginsberg (2017). Front Public Health.
+    """
+    date_labels = [str(d)[:10] for d in dates]
+    series = []
+    legend_data = []
+    y_axes = []
+    
+    # Stress Index (primary axis)
+    if stress_index and any(v is not None for v in stress_index):
+        # Dynamic axis bounds for stress index
+        stress_min, stress_max = _auto_axis_bounds(
+            stress_index,
+            padding_pct=0.15,
+            min_floor=0,
+        )
+        # Ensure stress threshold zones are visible
+        stress_max = max(stress_max, 200)
+        
+        legend_data.append("Stress Index")
+        stress_clean = [v if v is not None else None for v in stress_index]
+        stress_ewma = _ewma_smooth(
+            np.array([v if v else 75 for v in stress_index], dtype=float), span=7
+        ).tolist()
+        
+        # Reference zones for stress index
+        series.extend([
+            # High stress zone (>150)
+            {
+                "name": "High Stress Zone",
+                "type": "line",
+                "data": [stress_max] * len(dates),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(231, 76, 60, 0.12)"},
+                "stack": "stress_zone_high",
+                "symbol": "none",
+                "silent": True,
+            },
+            {
+                "name": "_stress_high_base",
+                "type": "line",
+                "data": [150] * len(dates),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "#fff"},
+                "stack": "stress_zone_high",
+                "symbol": "none",
+                "silent": True,
+            },
+            # Elevated stress zone (100-150)
+            {
+                "name": "Elevated Stress",
+                "type": "line",
+                "data": [150] * len(dates),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(243, 156, 18, 0.12)"},
+                "stack": "stress_zone_elevated",
+                "symbol": "none",
+                "silent": True,
+            },
+            {
+                "name": "_stress_elev_base",
+                "type": "line",
+                "data": [100] * len(dates),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "#fff"},
+                "stack": "stress_zone_elevated",
+                "symbol": "none",
+                "silent": True,
+            },
+            # Normal zone (50-100)
+            {
+                "name": "Normal Range",
+                "type": "line",
+                "data": [100] * len(dates),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(52, 152, 219, 0.10)"},
+                "stack": "stress_zone_normal",
+                "symbol": "none",
+                "silent": True,
+            },
+            {
+                "name": "_stress_normal_base",
+                "type": "line",
+                "data": [50] * len(dates),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "#fff"},
+                "stack": "stress_zone_normal",
+                "symbol": "none",
+                "silent": True,
+            },
+            # Low stress zone (<50) - green
+            {
+                "name": "Low Stress",
+                "type": "line",
+                "data": [50] * len(dates),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(46, 204, 113, 0.10)"},
+                "symbol": "none",
+                "silent": True,
+            },
+            # Threshold markers
+            {
+                "name": "150 Threshold",
+                "type": "line",
+                "data": [150] * len(dates),
+                "lineStyle": {"color": "#e74c3c", "width": 1.5, "type": "dashed"},
+                "symbol": "none",
+            },
+            {
+                "name": "100 Threshold",
+                "type": "line",
+                "data": [100] * len(dates),
+                "lineStyle": {"color": "#f39c12", "width": 1.5, "type": "dotted"},
+                "symbol": "none",
+            },
+            # Stress Index data
+            {
+                "name": "Stress Index",
+                "type": "line",
+                "data": stress_clean,
+                "symbol": "circle",
+                "symbolSize": 7,
+                "lineStyle": {"color": "#e74c3c", "width": 2.5},
+                "itemStyle": {"color": "#e74c3c"},
+            },
+            {
+                "name": "Stress Trend",
+                "type": "line",
+                "data": stress_ewma,
+                "symbol": "none",
+                "lineStyle": {"color": "#c0392b", "width": 2.5},
+                "smooth": True,
+            },
+        ])
+        legend_data.extend(["Stress Trend", "150 Threshold", "100 Threshold"])
+        
+        y_axes.append({
+            "type": "value",
+            "name": "Stress Index (Baevsky)",
+            "nameLocation": "middle",
+            "nameGap": 55,
+            "nameTextStyle": {"fontSize": 12, "fontWeight": "bold"},
+            "min": stress_min,
+            "max": stress_max,
+            "splitLine": {"lineStyle": {"color": SCIENTIFIC_COLORS["grid"], "type": "dashed"}},
+        })
+    
+    # PNS Index (secondary axis)
+    if pns_index and any(v is not None for v in pns_index):
+        # Dynamic axis bounds for PNS
+        pns_min, pns_max = _auto_axis_bounds(
+            pns_index,
+            padding_pct=0.20,
+        )
+        # Ensure 0 line is visible as reference
+        pns_min = min(pns_min, -0.5)
+        pns_max = max(pns_max, 1.5)
+        
+        legend_data.append("PNS Index")
+        pns_clean = [v if v is not None else None for v in pns_index]
+        pns_ewma = _ewma_smooth(
+            np.array([v if v else 0.5 for v in pns_index], dtype=float), span=7
+        ).tolist()
+        
+        series.extend([
+            # Zero reference line for PNS
+            {
+                "name": "PNS Baseline",
+                "type": "line",
+                "data": [0] * len(dates),
+                "lineStyle": {"color": "#95a5a6", "width": 1.5, "type": "dashed"},
+                "symbol": "none",
+                "yAxisIndex": 1 if stress_index else 0,
+            },
+            # PNS data
+            {
+                "name": "PNS Index",
+                "type": "line",
+                "data": pns_clean,
+                "symbol": "diamond",
+                "symbolSize": 6,
+                "lineStyle": {"color": "#27ae60", "width": 2},
+                "itemStyle": {"color": "#27ae60"},
+                "yAxisIndex": 1 if stress_index else 0,
+            },
+            {
+                "name": "PNS Trend",
+                "type": "line",
+                "data": pns_ewma,
+                "symbol": "none",
+                "lineStyle": {"color": "#1e8449", "width": 2.5},
+                "smooth": True,
+                "yAxisIndex": 1 if stress_index else 0,
+            },
+        ])
+        legend_data.extend(["PNS Trend", "PNS Baseline"])
+        
+        y_axes.append({
+            "type": "value",
+            "name": "PNS Index",
+            "nameLocation": "middle",
+            "nameGap": 45,
+            "position": "right" if stress_index else "left",
+            "min": pns_min,
+            "max": pns_max,
+            "axisLine": {"lineStyle": {"color": "#27ae60"}},
+            "splitLine": {"show": False},
+        })
+    
+    return {
+        "title": {
+            "text": title,
+            "subtext": "Stress Index: <50 low | 50-100 normal | 100-150 elevated | >150 high | "
+                       "PNS: >1.0 high vagal | <0 reduced",
+            "left": "center",
+            "textStyle": {"fontSize": 15, "fontWeight": "bold", "color": SCIENTIFIC_COLORS["text"]},
+            "subtextStyle": {"fontSize": 10, "color": "#7f8c8d"},
+        },
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "cross"},
+            "formatter": """function(params) {
+                var date = params[0].axisValue;
+                var result = '<b>' + date + '</b><br/>';
+                params.forEach(function(p) {
+                    if (p.seriesName && p.seriesName.indexOf('_') !== 0 && 
+                        p.seriesName.indexOf('Zone') === -1 && 
+                        p.seriesName.indexOf('Threshold') === -1 &&
+                        p.seriesName.indexOf('Baseline') === -1 &&
+                        p.value !== null && p.value !== undefined) {
+                        var val = typeof p.value === 'number' ? p.value.toFixed(1) : p.value;
+                        result += p.marker + ' ' + p.seriesName + ': <b>' + val + '</b><br/>';
+                    }
+                });
+                return result;
+            }""",
+        },
+        "legend": {"data": legend_data, "bottom": 5, "textStyle": {"fontSize": 10}},
+        "grid": {
+            "left": "10%",
+            "right": "10%",
+            "top": "18%",
+            "bottom": "15%",
+            "containLabel": True,
+        },
+        "xAxis": {
+            "type": "category",
+            "data": date_labels,
+            "name": "Date",
+            "nameLocation": "middle",
+            "nameGap": 30,
+            "axisLabel": {"rotate": 45, "fontSize": 9},
+        },
+        "yAxis": y_axes if y_axes else [{"type": "value"}],
+        "series": series,
+        "dataZoom": [{"type": "inside", "start": 0, "end": 100}],
+    }
+
+
+def _build_sleep_duration_chart(
+    dates: List[str],
+    sleep_hours: Optional[List[float]] = None,
+    title: str = "Sleep Duration Trends",
+) -> Dict[str, Any]:
+    """Build publication-quality sleep duration chart with dynamic axis scaling.
+    
+    Guidelines:
+    - NSF (2015): Adults need 7-9 hours of sleep
+    - <6 hours: Sleep deprivation, cognitive impairment risk
+    - >9 hours: May indicate health issues or recovery needs
+    
+    References:
+    - Hirshkowitz et al. (2015). Sleep Health, 1(1), 40-43.
+    - Watson et al. (2015). Sleep, 38(6), 843-844.
+    """
+    date_labels = [str(d)[:10] for d in dates]
+    series = []
+    legend_data = []
+    
+    if not sleep_hours or not any(v is not None for v in sleep_hours):
+        return {"series": [], "title": {"text": title}}
+    
+    # Dynamic axis bounds for sleep
+    sleep_min, sleep_max = _auto_axis_bounds(
+        sleep_hours,
+        padding_pct=0.15,
+        min_floor=0,
+    )
+    # Ensure optimal zone (7-9) is visible
+    sleep_min = min(sleep_min, 4)
+    sleep_max = max(sleep_max, 11)
+    
+    legend_data.append("Sleep Duration")
+    sleep_clean = [v if v is not None else None for v in sleep_hours]
+    sleep_ewma = _ewma_smooth(
+        np.array([v if v else 7 for v in sleep_hours], dtype=float), span=7
+    ).tolist()
+    
+    # Reference zones
+    series.extend([
+        # Optimal sleep zone (7-9 hours)
+        {
+            "name": "Optimal Zone",
+            "type": "line",
+            "data": [9] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "rgba(46, 204, 113, 0.15)"},
+            "stack": "sleep_zone_optimal",
+            "symbol": "none",
+            "silent": True,
+        },
+        {
+            "name": "_sleep_opt_base",
+            "type": "line",
+            "data": [7] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "#fff"},
+            "stack": "sleep_zone_optimal",
+            "symbol": "none",
+            "silent": True,
+        },
+        # Sleep deprivation warning zone (<6 hours)
+        {
+            "name": "Deprivation Risk",
+            "type": "line",
+            "data": [6] * len(dates),
+            "lineStyle": {"opacity": 0},
+            "areaStyle": {"color": "rgba(231, 76, 60, 0.10)"},
+            "symbol": "none",
+            "silent": True,
+        },
+        # 7-hour threshold line (minimum recommended)
+        {
+            "name": "7h Minimum",
+            "type": "line",
+            "data": [7] * len(dates),
+            "lineStyle": {"color": "#27ae60", "width": 2, "type": "dashed"},
+            "symbol": "none",
+        },
+        # 6-hour warning line
+        {
+            "name": "6h Warning",
+            "type": "line",
+            "data": [6] * len(dates),
+            "lineStyle": {"color": "#e74c3c", "width": 1.5, "type": "dotted"},
+            "symbol": "none",
+        },
+        # Sleep data as bars
+        {
+            "name": "Sleep Duration",
+            "type": "bar",
+            "data": sleep_clean,
+            "itemStyle": {
+                "color": {
+                    "type": "linear",
+                    "x": 0, "y": 0, "x2": 0, "y2": 1,
+                    "colorStops": [
+                        {"offset": 0, "color": "#9b59b6"},
+                        {"offset": 1, "color": "#8e44ad"},
+                    ],
+                },
+                "borderRadius": [4, 4, 0, 0],
+            },
+            "barMaxWidth": 25,
+        },
+        # 7-day trend line
+        {
+            "name": "7-Day Trend",
+            "type": "line",
+            "data": sleep_ewma,
+            "symbol": "none",
+            "lineStyle": {"color": "#2c3e50", "width": 2.5},
+            "smooth": True,
+        },
+    ])
+    legend_data.extend(["7-Day Trend", "7h Minimum", "6h Warning"])
+    
+    return {
+        "title": {
+            "text": title,
+            "subtext": "NSF Guidelines: 7-9h optimal for adults | <6h increases cognitive impairment risk",
+            "left": "center",
+            "textStyle": {"fontSize": 15, "fontWeight": "bold", "color": SCIENTIFIC_COLORS["text"]},
+            "subtextStyle": {"fontSize": 10, "color": "#7f8c8d"},
+        },
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "shadow"},
+            "formatter": """function(params) {
+                var date = params[0].axisValue;
+                var result = '<b>' + date + '</b><br/>';
+                params.forEach(function(p) {
+                    if (p.seriesName && p.seriesName.indexOf('_') !== 0 && 
+                        p.seriesName.indexOf('Zone') === -1 && 
+                        p.seriesName.indexOf('Risk') === -1 &&
+                        p.value !== null && p.value !== undefined) {
+                        var val = typeof p.value === 'number' ? p.value.toFixed(1) : p.value;
+                        result += p.marker + ' ' + p.seriesName + ': <b>' + val + ' h</b><br/>';
+                    }
+                });
+                return result;
+            }""",
+        },
+        "legend": {"data": legend_data, "bottom": 5, "textStyle": {"fontSize": 10}},
+        "grid": {
+            "left": "8%",
+            "right": "5%",
+            "top": "18%",
+            "bottom": "15%",
+            "containLabel": True,
+        },
+        "xAxis": {
+            "type": "category",
+            "data": date_labels,
+            "name": "Date",
+            "nameLocation": "middle",
+            "nameGap": 30,
+            "axisLabel": {"rotate": 45, "fontSize": 9},
+        },
+        "yAxis": {
+            "type": "value",
+            "name": "Sleep Duration (hours)",
+            "nameLocation": "middle",
+            "nameGap": 45,
+            "nameTextStyle": {"fontSize": 12, "fontWeight": "bold"},
+            "min": sleep_min,
+            "max": sleep_max,
+            "splitLine": {"lineStyle": {"color": SCIENTIFIC_COLORS["grid"], "type": "dashed"}},
+        },
+        "series": series,
+        "dataZoom": [{"type": "inside", "start": 0, "end": 100}],
+    }
+
+
 def _render_profile_line_chart(
     df: pd.DataFrame,
     *,
@@ -13366,20 +13820,53 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
         delta=None,
     )
 
+    # Publication-quality Stress Index & PNS chart
     if not hrv_daily.empty:
-        plot_cols = [c for c in ["stress_index", "parasympathetic_index"] if c in hrv_daily.columns]
-        if plot_cols:
-            _render_profile_line_chart(
-                hrv_daily[plot_cols],
-                title="Objective HRV stress & PNS (daily medians)",
-                y_axis_label="value",
+        has_stress = "stress_index" in hrv_daily.columns and hrv_daily["stress_index"].dropna().any()
+        has_pns = "parasympathetic_index" in hrv_daily.columns and hrv_daily["parasympathetic_index"].dropna().any()
+        if has_stress or has_pns:
+            # Extract data with index as dates
+            hrv_sorted = hrv_daily.sort_index()
+            dates_list = [str(d) for d in hrv_sorted.index.tolist()]
+            stress_data = (
+                hrv_sorted["stress_index"].tolist() if has_stress else None
             )
+            pns_data = (
+                hrv_sorted["parasympathetic_index"].tolist() if has_pns else None
+            )
+            stress_pns_chart = _build_stress_pns_chart(
+                dates=dates_list,
+                stress_index=stress_data,
+                pns_index=pns_data,
+                title="HRV Stress Index & Parasympathetic Index (Daily Medians)",
+            )
+            render_echarts(stress_pns_chart, height=380)
+            st.markdown(
+                "*Stress Index (Baevsky) reflects sympathetic activation; elevated values "
+                "(>100) indicate sustained stress. PNS Index measures parasympathetic "
+                "(vagal) activity; values >1.0 suggest good recovery capacity.* "
+                "*(Baevsky et al., 2002; Shaffer & Ginsberg, 2017)*"
+            )
+    
+    # Publication-quality Sleep Duration chart
     if not garmin_daily.empty and "sleep_duration_hours" in garmin_daily.columns:
-        _render_profile_line_chart(
-            garmin_daily[["sleep_duration_hours"]].rename(columns={"sleep_duration_hours": "Sleep (h)"}),
-            title="Objective sleep duration (Garmin)",
-            y_axis_label="hours",
-        )
+        sleep_col = garmin_daily["sleep_duration_hours"].dropna()
+        if not sleep_col.empty:
+            garmin_sorted = garmin_daily.sort_index()
+            sleep_dates = [str(d) for d in garmin_sorted.index.tolist()]
+            sleep_values = garmin_sorted["sleep_duration_hours"].tolist()
+            sleep_chart = _build_sleep_duration_chart(
+                dates=sleep_dates,
+                sleep_hours=sleep_values,
+                title="Objective Sleep Duration (Garmin Wearable)",
+            )
+            render_echarts(sleep_chart, height=380)
+            st.markdown(
+                "*NSF guidelines recommend 7-9 hours of sleep for adults. "
+                "Sleep <6 hours is associated with cognitive impairment and "
+                "increased accident risk in operational settings.* "
+                "*(Hirshkowitz et al., 2015; Watson et al., 2015)*"
+            )
 
     # Subjective logs (optional): stored exploration medical record fields.
     show_subjective = st.checkbox(
