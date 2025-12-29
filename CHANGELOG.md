@@ -5,6 +5,92 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2025-12-29
+
+### Added - Crew Scheduling & Human Performance Management System
+
+Implemented a comprehensive **Crew Scheduling and Human Performance Management** tool for the operational app following the scientific specifications in `SchedulingTool.md`. This system supports mission planning, risk assessment, and GO/NO-GO decisions for up to 6 crew members.
+
+#### New Modules
+
+1. **`app/scheduling_core.py`** — Core Science Layer:
+   - **MET/Energy Conversions**: kcal/hr from MET, Watts conversion, activity energy estimation
+   - **Subscore Mappers (0-1 scale)**:
+     - `score_safte()`: SAFTE effectiveness (70→0, 90→1)
+     - `score_kss()`: Karolinska Sleepiness Scale (5→1, 8→0)
+     - `score_pvt_lapses_3min()`: PVT performance (≤10→1, ≥20→0)
+     - `score_hrv_z()`: lnRMSSD z-score (-0.5→1, -2.0→0)
+     - `score_hydration()`: Body mass loss + USG combined
+     - `score_energy_availability()`: IOC thresholds (30→0, 45→1)
+     - `score_circadian_alignment()`: Phase offset (1h→1, 6h→0)
+     - `score_task_specific()`: VO2max + recovery time
+   - **IHPI Composite**: Weighted sum with hard-cap gating (critical=0 → IHPI=0)
+   - **EVA GO/NO-GO**: Science-based decision tree with reasons
+   - **Activity Definitions**: 12+ activity types with MET values from 2024 Compendium
+
+2. **`app/scheduling_engine.py`** — Constraint-Based Optimization:
+   - **Crew Management**: Up to 6 crew members with physiological status
+   - **Schedule Generation**: Automatic fixed activity scheduling
+   - **Conflict Detection**: Concurrent exercise limits, recovery requirements
+   - **Risk Classification**: Per-activity risk assessment
+   - **Optimization Algorithm**: Constraint satisfaction with soft optimization
+
+3. **`app/scheduling_tab.py`** — Streamlit UI (4 Tabs):
+   - **Status Dashboard**: Live crew status cards with IHPI gauges
+   - **Timeline & Scheduling**: ECharts Gantt chart with drag-drop (planned)
+   - **Risk Analysis**: Risk matrix heatmap + individual performance gauges
+   - **Summary & Export**: Readiness metrics, alerts, JSON/CSV export
+
+#### Scientific Foundations
+
+- **SAFTE-FAST Validation**: Risk thresholds from U.S. Senate testimony (≥90 low-risk, <70 ≈0.08 BAC)
+- **NASA Standards**: EVA VO2max ≥32.9 ml/kg/min (NASA-STD-3001)
+- **IOC Consensus**: Energy Availability thresholds (45/30 kcal/kg FFM/day)
+- **HRV Monitoring**: lnRMSSD z-score approach (Plews et al., 2013)
+- **Hydration**: ACSM >2% body mass loss threshold; USG operational bins
+- **PVT Anchors**: 3-min protocol with 355ms lapse threshold
+
+#### Key Features
+
+- **Integrated Human Performance Indicator (IHPI)**: 8-component weighted score with weights:
+  - SAFTE effectiveness: 30%
+  - PVT performance: 20%
+  - Circadian alignment: 10%
+  - HRV (lnRMSSD z): 10%
+  - Hydration status: 10%
+  - Energy availability: 10%
+  - Subjective sleepiness: 5%
+  - Task-specific readiness: 5%
+
+- **EVA GO/NO-GO Decision Matrix**:
+  - Hard NO-GO gates: SAFTE<70, KSS≥8, sleep<6h, awake≥21h, dehydration>2%, PVT≥20, VO2max<32.9
+  - HOLD zone: SAFTE 70-79 (high-risk)
+  - GO thresholds: IHPI≥85 (full GO), IHPI 75-84 (GO-with-mitigation)
+
+- **Activity Scheduling**:
+  - Fixed activities: Briefing (07:00), Meals, Sleep (8h blocks)
+  - Variable activities: Lab Work, EVA (with recovery requirements)
+  - Resource-limited: Exercise (max 2 concurrent)
+
+#### References
+
+- Hursh SR et al. (2004). Fatigue models for applied research. Aviat Space Environ Med.
+- Plews DJ et al. (2013). Training adaptation and HRV. Int J Sports Physiol Perform.
+- IOC Consensus Statement (2018). Relative Energy Deficiency. Br J Sports Med.
+- NASA-STD-3001 Vol 1 Rev B (2022). Human Performance Capabilities.
+- 2024 Adult Compendium of Physical Activities.
+
+### Tests
+
+- Added `tests/test_scheduling_core.py` with comprehensive unit tests for:
+  - MET/energy conversions
+  - All subscore mappers with boundary conditions
+  - IHPI computation with hard-cap gating
+  - EVA GO/NO-GO decision logic
+  - Activity definitions and crew status
+
+---
+
 ## [1.8.93] - 2025-12-29
 
 ### Added - Publication-Quality HRV × Activity Charts
