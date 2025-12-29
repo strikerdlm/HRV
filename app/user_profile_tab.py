@@ -7081,10 +7081,6 @@ def _render_hrv_history(user: UserProfile) -> None:
                         title="Resting Heart Rate with Physiological Zones",
                     )
                     render_echarts(hr_chart, height_px=350)
-                    
-                    # Physiological interpretation
-                    with st.expander("📖 Physiological Interpretation: Resting Heart Rate", expanded=False):
-                        st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["heart_rate"])
             
             # === LF/HF Ratio (Sympathovagal Balance) ===
             if "lf_hf_ratio" in df.columns and df["lf_hf_ratio"].notna().any():
@@ -7099,10 +7095,6 @@ def _render_hrv_history(user: UserProfile) -> None:
                         title="LF/HF Ratio Trend with Autonomic Interpretation",
                     )
                     render_echarts(lf_hf_chart, height_px=350)
-                    
-                    # Physiological interpretation
-                    with st.expander("📖 Physiological Interpretation: LF/HF Ratio", expanded=False):
-                        st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["lf_hf_ratio"])
             
             # === Autonomic Indices (Stress, PNS, HRV Score) ===
             stress_vals = None
@@ -7244,10 +7236,6 @@ def _render_hrv_history(user: UserProfile) -> None:
                         "dataZoom": [{"type": "inside"}],
                     }
                     render_echarts(ln_chart, height_px=350)
-                    
-                    # Interpretation guidance
-                    with st.expander("📖 Physiological Interpretation: Stress & Recovery", expanded=False):
-                        st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["stress_recovery"])
             
             # === Data Quality Trend ===
             qual_cols = [
@@ -7267,6 +7255,34 @@ def _render_hrv_history(user: UserProfile) -> None:
                         "High artifact percentage (>5%) or low quality score may indicate "
                         "movement artifacts, poor electrode contact, or arrhythmias."
                     )
+
+        # Physiological Interpretations (separate section, not nested)
+        with st.expander("📖 Physiological Interpretations (Graduate-Level)", expanded=False):
+            st.markdown("""
+            **Reference Guide:** Click each topic below for detailed physiological background 
+            and clinical interpretation guidelines. Content is based on peer-reviewed literature.
+            """)
+            
+            interp_col1, interp_col2 = st.columns(2)
+            with interp_col1:
+                st.markdown("##### ❤️ Resting Heart Rate")
+                st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["heart_rate"])
+                
+                st.markdown("---")
+                st.markdown("##### 📊 RMSSD")
+                st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["rmssd"])
+            
+            with interp_col2:
+                st.markdown("##### ⚖️ LF/HF Ratio")
+                st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["lf_hf_ratio"])
+                
+                st.markdown("---")
+                st.markdown("##### 📈 SDNN")
+                st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["sdnn"])
+            
+            st.markdown("---")
+            st.markdown("##### 🧘 Stress & Recovery")
+            st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["stress_recovery"])
 
         # HRV × wearable/activity relationships (when daily metrics exist)
         with st.expander("🔗 HRV × Activity (Garmin daily metrics)", expanded=False):
