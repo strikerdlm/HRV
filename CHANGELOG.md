@@ -5,6 +5,36 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.91] - 2025-12-29
+
+### Added - Publication-Quality Radiation Dose Chart
+
+Upgraded the **Radiation Exposure** section in the Exploration Medical Analytics Dashboard
+with a publication-quality radiation dose visualization following `.cursor/rules/plots/RULE.md`.
+
+**New Chart Builder:** `_build_radiation_dose_chart()`
+
+**Features:**
+- **Mission Day x-axis** with clear labeling
+- **Dynamic y-axis scaling** via `_auto_axis_bounds()` — ensures all data fits
+- **Color-coded risk zones** based on NASA-STD-3001 Rev B (2022):
+  - 🟢 **GO Zone** (<30% = 0-180 mSv): Nominal operations
+  - 🟡 **MONITOR Zone** (30-60% = 180-360 mSv): Enhanced monitoring
+  - 🟠 **CAUTION Zone** (60-80% = 360-480 mSv): Mission planning review
+  - 🔴 **NO-GO Zone** (>80% = >480 mSv): Operational restrictions
+- **Threshold lines** at 30%, 60%, 80% limits (dynamically shown when relevant)
+- **5-day EWMA trend line** for dose accumulation trend
+- **Purple gradient** for cumulative dose with subtle area fill
+- **Interactive tooltip** showing mSv values and mission day
+- **Scientific caption** citing NASA-STD-3001, ICRP Publication 123, Cucinotta et al.
+
+**References:**
+- NASA-STD-3001 Vol 1 Rev B (2022). Crew Health Standard.
+- ICRP Publication 123 (2013). Assessment of radiation exposure of astronauts.
+- Cucinotta et al. (2017). Space radiation risks for astronauts on multiple ISS missions.
+
+---
+
 ## [1.8.90] - 2025-12-29
 
 ### Added - Publication-Quality Charts for Exploration Medical Analytics Dashboard
