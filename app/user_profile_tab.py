@@ -13840,7 +13840,7 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
                 pns_index=pns_data,
                 title="HRV Stress Index & Parasympathetic Index (Daily Medians)",
             )
-            render_echarts(stress_pns_chart, height=380)
+            render_echarts(stress_pns_chart, height_px=380)
             st.markdown(
                 "*Stress Index (Baevsky) reflects sympathetic activation; elevated values "
                 "(>100) indicate sustained stress. PNS Index measures parasympathetic "
@@ -13860,7 +13860,7 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
                 sleep_hours=sleep_values,
                 title="Objective Sleep Duration (Garmin Wearable)",
             )
-            render_echarts(sleep_chart, height=380)
+            render_echarts(sleep_chart, height_px=380)
             st.markdown(
                 "*NSF guidelines recommend 7-9 hours of sleep for adults. "
                 "Sleep <6 hours is associated with cognitive impairment and "
