@@ -407,20 +407,48 @@ def _get_age_group_label(age: int) -> str:
 
 
 def _ewma_smooth(data: np.ndarray, span: int = 7) -> np.ndarray:
-    """Apply exponentially weighted moving average smoothing.
+    """Apply exponentially weighted moving average smoothing with NaN handling.
+    
+    NaN values are skipped during computation - the smoothed value carries forward
+    from the previous valid observation. This prevents a single NaN from propagating
+    through the entire output array.
     
     Args:
-        data: Input time series.
+        data: Input time series (may contain NaN values).
         span: Decay span (higher = more smoothing).
         
     Returns:
-        Smoothed time series.
+        Smoothed time series with NaN preserved at positions where no prior
+        valid data exists.
     """
+    if len(data) == 0:
+        return np.array([], dtype=float)
+    
     alpha = 2.0 / (span + 1)
-    result = np.zeros_like(data, dtype=float)
-    result[0] = data[0]
-    for i in range(1, len(data)):
-        result[i] = alpha * data[i] + (1 - alpha) * result[i - 1]
+    result = np.full_like(data, np.nan, dtype=float)
+    
+    # Find first non-NaN value to initialize
+    first_valid_idx = -1
+    for i in range(len(data)):
+        if not np.isnan(data[i]):
+            first_valid_idx = i
+            result[i] = data[i]
+            break
+    
+    # If no valid data, return all NaN
+    if first_valid_idx == -1:
+        return result
+    
+    # Apply EWMA, skipping NaN values
+    last_valid = result[first_valid_idx]
+    for i in range(first_valid_idx + 1, len(data)):
+        if np.isnan(data[i]):
+            # Carry forward the last valid smoothed value
+            result[i] = last_valid
+        else:
+            result[i] = alpha * data[i] + (1 - alpha) * last_valid
+            last_valid = result[i]
+    
     return result
 
 
@@ -6739,6 +6767,15 @@ def _render_hrv_history(user: UserProfile) -> None:
                 
                 st.caption(f"Your latest RMSSD ({rmssd_latest:.1f} ms) is in the **{percentile_desc}** "
                           f"for your age group ({_get_age_group_label(int(user_age))}).")
+                
+                # Physiological interpretation expandables
+                col_interp1, col_interp2 = st.columns(2)
+                with col_interp1:
+                    with st.expander("📖 What is RMSSD? (Physiological Interpretation)", expanded=False):
+                        st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["rmssd"])
+                with col_interp2:
+                    with st.expander("📖 What is SDNN? (Physiological Interpretation)", expanded=False):
+                        st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["sdnn"])
 
         # Longitudinal baseline/change analytics (T0–T21)
         with st.expander("🧪 Baseline / Δ by timepoint (T0–T21)", expanded=False):
@@ -6814,56 +6851,213 @@ def _render_hrv_history(user: UserProfile) -> None:
                             "computed as (timepoint_value − baseline_value)."
                         )
 
-        # Additional performance & recovery visuals
-        with st.expander("🏃 Performance & Recovery plots", expanded=False):
-            # lnRMSSD is commonly used for daily recovery tracking; we plot it without
-            # attaching thresholds/interpretation here.
+        # Additional performance & recovery visuals with publication-quality charts
+        with st.expander("🏃 Performance & Recovery Plots (Publication Quality)", expanded=False):
+            st.markdown("""
+            **Scientific Background:** These visualizations follow guidelines from Nature Research 
+            and incorporate age-stratified normative data for clinical interpretation. 
+            Each metric provides insight into different aspects of autonomic function and recovery capacity.
+            """)
+            
+            # === Heart Rate Trend with Age-Based Reference ===
+            if "mean_hr_bpm" in df.columns and df["mean_hr_bpm"].notna().any():
+                hr_df = df[["measurement_date", "mean_hr_bpm"]].dropna()
+                hr_df = hr_df.sort_values("measurement_date")
+                if len(hr_df) >= 3:
+                    st.markdown("##### ❤️ Resting Heart Rate Trend")
+                    hr_chart = _build_hr_trend_chart(
+                        dates=hr_df["measurement_date"].astype(str).tolist(),
+                        hr_values=hr_df["mean_hr_bpm"].tolist(),
+                        age=int(user_age),
+                        title="Resting Heart Rate with Physiological Zones",
+                    )
+                    render_echarts(hr_chart, height_px=350)
+                    
+                    # Physiological interpretation
+                    with st.expander("📖 Physiological Interpretation: Resting Heart Rate", expanded=False):
+                        st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["heart_rate"])
+            
+            # === LF/HF Ratio (Sympathovagal Balance) ===
+            if "lf_hf_ratio" in df.columns and df["lf_hf_ratio"].notna().any():
+                lf_hf_df = df[["measurement_date", "lf_hf_ratio"]].dropna()
+                lf_hf_df = lf_hf_df.sort_values("measurement_date")
+                if len(lf_hf_df) >= 3:
+                    st.markdown("##### ⚖️ Sympathovagal Balance (LF/HF Ratio)")
+                    lf_hf_chart = _build_lf_hf_trend_chart(
+                        dates=lf_hf_df["measurement_date"].astype(str).tolist(),
+                        lf_hf_values=lf_hf_df["lf_hf_ratio"].tolist(),
+                        age=int(user_age),
+                        title="LF/HF Ratio Trend with Autonomic Interpretation",
+                    )
+                    render_echarts(lf_hf_chart, height_px=350)
+                    
+                    # Physiological interpretation
+                    with st.expander("📖 Physiological Interpretation: LF/HF Ratio", expanded=False):
+                        st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["lf_hf_ratio"])
+            
+            # === Autonomic Indices (Stress, PNS, HRV Score) ===
+            stress_vals = None
+            pns_vals = None
+            hrv_score_vals = None
+            idx_dates = None
+            
+            if "stress_index" in df.columns and df["stress_index"].notna().any():
+                stress_df = df[["measurement_date", "stress_index"]].dropna()
+                if len(stress_df) >= 3:
+                    stress_df = stress_df.sort_values("measurement_date")
+                    idx_dates = stress_df["measurement_date"].astype(str).tolist()
+                    stress_vals = stress_df["stress_index"].tolist()
+            
+            if "parasympathetic_index" in df.columns and df["parasympathetic_index"].notna().any():
+                pns_df = df[["measurement_date", "parasympathetic_index"]].dropna()
+                if len(pns_df) >= 3:
+                    pns_df = pns_df.sort_values("measurement_date")
+                    if idx_dates is None:
+                        idx_dates = pns_df["measurement_date"].astype(str).tolist()
+                    pns_vals = pns_df["parasympathetic_index"].tolist()
+            
+            if "hrv_score" in df.columns and df["hrv_score"].notna().any():
+                score_df = df[["measurement_date", "hrv_score"]].dropna()
+                if len(score_df) >= 3:
+                    score_df = score_df.sort_values("measurement_date")
+                    if idx_dates is None:
+                        idx_dates = score_df["measurement_date"].astype(str).tolist()
+                    hrv_score_vals = score_df["hrv_score"].tolist()
+            
+            if idx_dates and (stress_vals or pns_vals or hrv_score_vals):
+                st.markdown("##### 📊 Autonomic Function Indices")
+                idx_chart = _build_autonomic_indices_chart(
+                    dates=idx_dates,
+                    stress_index=stress_vals,
+                    parasympathetic_index=pns_vals,
+                    hrv_score=hrv_score_vals,
+                    title="Autonomic Function Indices Over Time",
+                )
+                render_echarts(idx_chart, height_px=380)
+            
+            # === lnRMSSD Trend (Athletic Performance Tracking) ===
             if "rmssd_ms" in df.columns and df["rmssd_ms"].notna().any():
                 ln_df = df[["measurement_date", "rmssd_ms"]].copy()
                 ln_df = ln_df[(ln_df["rmssd_ms"].notna()) & (ln_df["rmssd_ms"] > 0)]
-                if not ln_df.empty:
-                    ln_df = ln_df.set_index("measurement_date").sort_index()
-                    ln_df["ln_rmssd"] = np.log(ln_df["rmssd_ms"].astype(float))
-                    _render_profile_line_chart(
-                        ln_df[["ln_rmssd"]],
-                        title="lnRMSSD trend",
-                        y_axis_label="ln(ms)",
+                if len(ln_df) >= 5:
+                    ln_df = ln_df.sort_values("measurement_date")
+                    ln_rmssd_values = np.log(ln_df["rmssd_ms"].astype(float)).tolist()
+                    dates_ln = ln_df["measurement_date"].astype(str).tolist()
+                    
+                    st.markdown("##### 📐 lnRMSSD Trend (Log-Transformed)")
+                    st.caption(
+                        "lnRMSSD is commonly used in athletic monitoring to track recovery. "
+                        "Log transformation normalizes the distribution and reduces the influence "
+                        "of outliers. Coefficient of Variation (CV) < 10% indicates stable baseline."
                     )
-
-            hr_cols = [c for c in ["mean_hr_bpm", "sdhr_bpm"] if c in df.columns and df[c].notna().any()]
-            if hr_cols:
-                hr_df = df.set_index("measurement_date")[hr_cols]
-                _render_profile_line_chart(
-                    hr_df,
-                    title="Heart rate trend",
-                    y_axis_label="bpm",
-                )
-
-            idx_cols = [
-                c
-                for c in ["stress_index", "parasympathetic_index", "hrv_score"]
-                if c in df.columns and df[c].notna().any()
-            ]
-            if idx_cols:
-                idx_df = df.set_index("measurement_date")[idx_cols]
-                _render_profile_line_chart(
-                    idx_df,
-                    title="Autonomic / recovery indices",
-                    y_axis_label="index",
-                )
-
+                    
+                    # Calculate CV
+                    ln_arr = np.array(ln_rmssd_values)
+                    ln_mean = float(np.mean(ln_arr))
+                    ln_sd = float(np.std(ln_arr))
+                    ln_cv = (ln_sd / ln_mean * 100) if ln_mean > 0 else 0
+                    
+                    ln_ewma = _ewma_smooth(ln_arr, span=7).tolist()
+                    
+                    ln_chart = {
+                        "title": {
+                            "text": "lnRMSSD Trend for Recovery Monitoring",
+                            "subtext": f"Mean: {ln_mean:.2f} | SD: {ln_sd:.2f} | CV: {ln_cv:.1f}% | "
+                                      f"{'✓ Stable baseline' if ln_cv < 10 else '⚠ High variability'}",
+                            "left": "center",
+                            "textStyle": {"fontSize": 15, "fontWeight": "bold"},
+                            "subtextStyle": {"fontSize": 10, "color": "#7f8c8d"},
+                        },
+                        "tooltip": {"trigger": "axis"},
+                        "legend": {"data": ["lnRMSSD", "EWMA Trend", "Mean ± 1 SD"], "bottom": 5},
+                        "grid": {"left": "8%", "right": "5%", "top": "15%", "bottom": "15%"},
+                        "xAxis": {
+                            "type": "category",
+                            "data": dates_ln,
+                            "axisLabel": {"rotate": 45, "fontSize": 9},
+                        },
+                        "yAxis": {
+                            "type": "value",
+                            "name": "lnRMSSD",
+                            "nameLocation": "middle",
+                            "nameGap": 40,
+                            "min": max(2.0, ln_mean - 3 * ln_sd),
+                            "max": ln_mean + 3 * ln_sd,
+                        },
+                        "series": [
+                            # Mean ± 1 SD band
+                            {
+                                "name": "Mean ± 1 SD",
+                                "type": "line",
+                                "data": [ln_mean + ln_sd] * len(dates_ln),
+                                "lineStyle": {"opacity": 0},
+                                "areaStyle": {"color": "rgba(52, 152, 219, 0.15)"},
+                                "stack": "ln_band",
+                                "symbol": "none",
+                            },
+                            {
+                                "name": "_ln_lower",
+                                "type": "line",
+                                "data": [ln_mean - ln_sd] * len(dates_ln),
+                                "lineStyle": {"opacity": 0},
+                                "areaStyle": {"color": "#fff"},
+                                "stack": "ln_band",
+                                "symbol": "none",
+                            },
+                            # Mean line
+                            {
+                                "name": "Baseline Mean",
+                                "type": "line",
+                                "data": [ln_mean] * len(dates_ln),
+                                "lineStyle": {"color": "#27ae60", "width": 2, "type": "dashed"},
+                                "symbol": "none",
+                            },
+                            # lnRMSSD data
+                            {
+                                "name": "lnRMSSD",
+                                "type": "line",
+                                "data": ln_rmssd_values,
+                                "symbol": "circle",
+                                "symbolSize": 6,
+                                "itemStyle": {"color": SCIENTIFIC_COLORS["primary"]},
+                                "lineStyle": {"color": SCIENTIFIC_COLORS["primary"], "width": 2},
+                            },
+                            # EWMA trend
+                            {
+                                "name": "EWMA Trend",
+                                "type": "line",
+                                "data": ln_ewma,
+                                "symbol": "none",
+                                "lineStyle": {"color": "#e67e22", "width": 2.5},
+                                "smooth": True,
+                            },
+                        ],
+                        "dataZoom": [{"type": "inside"}],
+                    }
+                    render_echarts(ln_chart, height_px=350)
+                    
+                    # Interpretation guidance
+                    with st.expander("📖 Physiological Interpretation: Stress & Recovery", expanded=False):
+                        st.markdown(HRV_PHYSIOLOGICAL_INTERPRETATIONS["stress_recovery"])
+            
+            # === Data Quality Trend ===
             qual_cols = [
-                c
-                for c in ["artifact_percentage", "quality_score"]
+                c for c in ["artifact_percentage", "quality_score"]
                 if c in df.columns and df[c].notna().any()
             ]
             if qual_cols:
-                qual_df = df.set_index("measurement_date")[qual_cols]
-                _render_profile_line_chart(
-                    qual_df,
-                    title="Data quality trend",
-                    y_axis_label="% / score",
-                )
+                qual_df = df.set_index("measurement_date")[qual_cols].dropna(how="all")
+                if not qual_df.empty:
+                    st.markdown("##### 🔍 Data Quality Trend")
+                    _render_profile_line_chart(
+                        qual_df,
+                        title="Recording Quality Over Time",
+                        y_axis_label="% / score",
+                    )
+                    st.caption(
+                        "High artifact percentage (>5%) or low quality score may indicate "
+                        "movement artifacts, poor electrode contact, or arrhythmias."
+                    )
 
         # HRV × wearable/activity relationships (when daily metrics exist)
         with st.expander("🔗 HRV × Activity (Garmin daily metrics)", expanded=False):
