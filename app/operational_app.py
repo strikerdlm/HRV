@@ -175,10 +175,21 @@ def main() -> None:
         st.title("🧬 Mission Control - Flight Surgeon")
 
     st.markdown("---")
-    
+
     # Build navigation options dynamically based on available modules
-    nav_options = ["🗓️ Crew Scheduling", "👤 User Profile", "ℹ️ About"]
-    
+    nav_options: list[str] = []
+    if scheduling_available:
+        nav_options.append("🗓️ Crew Scheduling")
+    if user_profile_available:
+        nav_options.append("👤 User Profile")
+    if about_available:
+        nav_options.append("ℹ️ About")
+
+    # Fallback if no modules available (shouldn't happen in practice)
+    if not nav_options:
+        st.error("No navigation modules available. Check application installation.")
+        return
+
     page = st.sidebar.radio(
         "Navigation",
         options=nav_options,
