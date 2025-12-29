@@ -107,7 +107,85 @@ Every publication-quality chart MUST include:
 
 ---
 
-## 3. Reference Zones & Thresholds
+## 3. Dynamic Axis Bounds (CRITICAL)
+
+**⚠️ NEVER use hardcoded axis min/max values that might clip data!**
+
+All charts MUST use dynamic axis scaling to ensure ALL data points are visible within the frame.
+
+### 3.1 The Problem
+Hardcoded values like `"min": 40, "max": 110` will clip data that falls outside this range,
+making data points invisible or cut off at the edge of the chart.
+
+### 3.2 The Solution: `_auto_axis_bounds()` Helper
+
+Use the `_auto_axis_bounds()` helper function from `user_profile_tab.py`:
+
+```python
+def _auto_axis_bounds(
+    *data_arrays: Optional[List[Optional[float]]],
+    padding_pct: float = 0.10,      # 10% padding by default
+    min_floor: Optional[float] = None,  # Optional minimum (e.g., 0 for non-negative)
+    max_ceil: Optional[float] = None,   # Optional maximum (e.g., 100 for percentages)
+    nice_round: bool = True,            # Round to "nice" axis labels
+) -> Tuple[float, float]:
+    """Calculate dynamic axis bounds that fit all data with padding."""
+```
+
+### 3.3 Usage Examples
+
+```python
+# Heart rate with 15% padding, floor at 30 bpm
+hr_min, hr_max = _auto_axis_bounds(
+    resting_hr, avg_hr,
+    padding_pct=0.15,
+    min_floor=30,
+)
+
+# SpO2 with ceiling at 100%
+spo2_min, spo2_max = _auto_axis_bounds(
+    spo2_values,
+    padding_pct=0.05,
+    min_floor=80,
+    max_ceil=100,
+)
+
+# Then use in yAxis:
+"yAxis": {
+    "type": "value",
+    "min": hr_min,
+    "max": hr_max,
+    ...
+}
+```
+
+### 3.4 Ensuring Reference Zones Remain Visible
+
+When charts include reference zones/thresholds, ensure they're visible:
+
+```python
+# Calculate bounds first
+hr_min, hr_max = _auto_axis_bounds(avg_hr, resting_hr, padding_pct=0.15, min_floor=30)
+
+# Then ensure reference zones (60, 80) are visible
+hr_max = max(hr_max, 105)  # Always show elevated zone marker
+```
+
+### 3.5 Rules for Dynamic Bounds
+
+| Data Type | padding_pct | min_floor | max_ceil | Notes |
+|-----------|-------------|-----------|----------|-------|
+| Heart Rate | 0.15 | 30 | None | Show athletic (<60) & elevated (>80) zones |
+| SpO₂ | 0.05 | 80 | 100 | SpO₂ can't exceed 100% |
+| Respiration | 0.15 | 5 | None | Ensure normal zone (12-20) visible |
+| Stress Score | 0.10 | 0 | 100 | Fixed 0-100 scale |
+| Percentages | 0.05 | 0 | 100 | Fixed 0-100 scale |
+| Steps | 0.10 | 0 | None | Non-negative |
+| HRV metrics | 0.15 | 0 | None | Non-negative |
+
+---
+
+## 4. Reference Zones & Thresholds
 
 ### 3.1 Shaded Reference Zones (Stacked Area)
 Use stacked invisible lines to create shaded bands:
@@ -160,7 +238,7 @@ Use stacked invisible lines to create shaded bands:
 
 ---
 
-## 4. Data Series Styling
+## 5. Data Series Styling
 
 ### 4.1 Primary Data Line
 ```python
@@ -247,7 +325,7 @@ Use stacked invisible lines to create shaded bands:
 
 ---
 
-## 5. Gauge Charts
+## 6. Gauge Charts
 
 ### 5.1 Semi-Circular Gauge (for scores 0-100)
 ```python
@@ -306,7 +384,7 @@ Use stacked invisible lines to create shaded bands:
 
 ---
 
-## 6. Radar Charts (Multi-Dimensional Comparison)
+## 7. Radar Charts (Multi-Dimensional Comparison)
 
 ```python
 {
@@ -343,7 +421,7 @@ Use stacked invisible lines to create shaded bands:
 
 ---
 
-## 7. Polar Charts (24-Hour/Circadian)
+## 8. Polar Charts (24-Hour/Circadian)
 
 ```python
 {
@@ -371,7 +449,7 @@ Use stacked invisible lines to create shaded bands:
 
 ---
 
-## 8. Scientific Documentation Requirements
+## 9. Scientific Documentation Requirements
 
 ### 8.1 Every Chart MUST Have:
 1. **Title** with descriptive text
@@ -399,7 +477,7 @@ Always cite evidence-based sources:
 
 ---
 
-## 9. Age-Stratified Normative Data
+## 10. Age-Stratified Normative Data
 
 When displaying physiological metrics, use age-stratified reference ranges:
 
@@ -420,7 +498,7 @@ def _get_age_rmssd_norms(age: int) -> dict:
 
 ---
 
-## 10. EWMA Smoothing for Trend Lines
+## 11. EWMA Smoothing for Trend Lines
 
 Use Exponential Weighted Moving Average for smooth trend visualization:
 
@@ -442,7 +520,7 @@ def _ewma_smooth(data: np.ndarray, span: int = 7) -> np.ndarray:
 
 ---
 
-## 11. Export Requirements
+## 12. Export Requirements
 
 Every plot MUST support export at highest quality:
 
@@ -456,7 +534,7 @@ Every plot MUST support export at highest quality:
 
 ---
 
-## 12. Chart Height Standards
+## 13. Chart Height Standards
 
 | Chart Type | Recommended Height |
 |------------|-------------------|
@@ -468,7 +546,7 @@ Every plot MUST support export at highest quality:
 
 ---
 
-## 13. Color Semantics
+## 14. Color Semantics
 
 Maintain consistent color meanings across all charts:
 
@@ -484,7 +562,7 @@ Maintain consistent color meanings across all charts:
 
 ---
 
-## 14. Function Naming Convention
+## 15. Function Naming Convention
 
 Chart builder functions should follow this pattern:
 
@@ -514,13 +592,15 @@ def _build_{metric}_{chart_type}_chart(
 
 ---
 
-## 15. Checklist for New Charts
+## 16. Checklist for New Charts
 
 Before committing a new chart, verify:
 
+- [ ] **⚠️ DYNAMIC AXIS BOUNDS** — Use `_auto_axis_bounds()` to ensure ALL data fits
 - [ ] Title and subtitle present with methodology context
 - [ ] All axes labeled with units
 - [ ] Reference zones/thresholds included where applicable
+- [ ] Reference zones visible within calculated bounds
 - [ ] Age-stratified norms used (if physiological metric)
 - [ ] EWMA trend line included (for time series)
 - [ ] Tooltip shows formatted values with units
@@ -530,3 +610,4 @@ Before committing a new chart, verify:
 - [ ] Citation(s) included for reference values
 - [ ] Interactive zoom enabled
 - [ ] Chart height appropriate for content
+- [ ] No hardcoded min/max that could clip data
