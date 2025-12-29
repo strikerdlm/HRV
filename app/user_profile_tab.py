@@ -3814,6 +3814,376 @@ def _build_fatigue_sleepiness_chart(
     }
 
 
+def _build_hrv_activity_timeseries_chart(
+    dates: List[str],
+    steps: Optional[List[float]] = None,
+    rmssd_ms: Optional[List[float]] = None,
+    title: str = "HRV × Activity Time Series",
+) -> Dict[str, Any]:
+    """Build publication-quality dual-axis chart for HRV and Activity metrics.
+    
+    This chart displays daily steps (activity/load) alongside RMSSD (recovery)
+    to visualize the relationship between physical activity and autonomic recovery.
+    
+    Interpretation:
+    - High steps + High RMSSD: Good fitness, adequate recovery
+    - High steps + Low RMSSD: Possible overtraining, insufficient recovery
+    - Low steps + High RMSSD: Good recovery, potential for increased load
+    - Low steps + Low RMSSD: Low activity but poor recovery (stress/illness?)
+    
+    References:
+    - Plews et al. (2013). Training adaptation and HRV in elite endurance athletes.
+    - Stanley et al. (2013). Cardiac parasympathetic reactivation following exercise.
+    """
+    date_labels = [str(d)[:10] for d in dates]
+    series = []
+    legend_data = []
+    y_axes = []
+    
+    has_steps = steps and any(v is not None for v in steps)
+    has_rmssd = rmssd_ms and any(v is not None for v in rmssd_ms)
+    
+    if not has_steps and not has_rmssd:
+        return {"series": [], "title": {"text": title}}
+    
+    # Steps (primary axis - bars)
+    if has_steps:
+        steps_min, steps_max = _auto_axis_bounds(
+            steps,
+            padding_pct=0.15,
+            min_floor=0,
+        )
+        # Ensure 10k step goal marker is visible
+        steps_max = max(steps_max, 12000)
+        
+        legend_data.append("Daily Steps")
+        steps_clean = [v if v is not None else None for v in steps]
+        steps_ewma = _ewma_smooth(
+            np.array([v if v else 5000 for v in steps], dtype=float), span=7
+        ).tolist()
+        
+        # WHO target zone (8k-10k steps)
+        series.extend([
+            {
+                "name": "WHO Target Zone",
+                "type": "line",
+                "data": [10000] * len(dates),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(46, 204, 113, 0.12)"},
+                "stack": "steps_zone",
+                "symbol": "none",
+                "silent": True,
+            },
+            {
+                "name": "_steps_zone_base",
+                "type": "line",
+                "data": [8000] * len(dates),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "#fff"},
+                "stack": "steps_zone",
+                "symbol": "none",
+                "silent": True,
+            },
+            # 10k goal line
+            {
+                "name": "10k Goal",
+                "type": "line",
+                "data": [10000] * len(dates),
+                "lineStyle": {"color": "#27ae60", "width": 2, "type": "dashed"},
+                "symbol": "none",
+            },
+            # Steps bars
+            {
+                "name": "Daily Steps",
+                "type": "bar",
+                "data": steps_clean,
+                "itemStyle": {
+                    "color": {
+                        "type": "linear",
+                        "x": 0, "y": 0, "x2": 0, "y2": 1,
+                        "colorStops": [
+                            {"offset": 0, "color": "#3498db"},
+                            {"offset": 1, "color": "#2980b9"},
+                        ],
+                    },
+                    "borderRadius": [3, 3, 0, 0],
+                },
+                "barMaxWidth": 20,
+            },
+            # 7-day steps trend
+            {
+                "name": "Steps Trend",
+                "type": "line",
+                "data": steps_ewma,
+                "symbol": "none",
+                "lineStyle": {"color": "#1a5276", "width": 2.5},
+                "smooth": True,
+            },
+        ])
+        legend_data.extend(["Steps Trend", "10k Goal"])
+        
+        y_axes.append({
+            "type": "value",
+            "name": "Daily Steps",
+            "nameLocation": "middle",
+            "nameGap": 55,
+            "nameTextStyle": {"fontSize": 12, "fontWeight": "bold"},
+            "min": steps_min,
+            "max": steps_max,
+            "splitLine": {"lineStyle": {"color": SCIENTIFIC_COLORS["grid"], "type": "dashed"}},
+        })
+    
+    # RMSSD (secondary axis - line)
+    if has_rmssd:
+        rmssd_min, rmssd_max = _auto_axis_bounds(
+            rmssd_ms,
+            padding_pct=0.20,
+            min_floor=0,
+        )
+        
+        legend_data.append("RMSSD (ms)")
+        rmssd_clean = [v if v is not None else None for v in rmssd_ms]
+        rmssd_ewma = _ewma_smooth(
+            np.array([v if v else 40 for v in rmssd_ms], dtype=float), span=7
+        ).tolist()
+        
+        series.extend([
+            # RMSSD line
+            {
+                "name": "RMSSD (ms)",
+                "type": "line",
+                "data": rmssd_clean,
+                "symbol": "circle",
+                "symbolSize": 7,
+                "lineStyle": {"color": "#e74c3c", "width": 2.5},
+                "itemStyle": {"color": "#e74c3c"},
+                "yAxisIndex": 1 if has_steps else 0,
+            },
+            # RMSSD trend
+            {
+                "name": "RMSSD Trend",
+                "type": "line",
+                "data": rmssd_ewma,
+                "symbol": "none",
+                "lineStyle": {"color": "#922b21", "width": 2.5},
+                "smooth": True,
+                "yAxisIndex": 1 if has_steps else 0,
+            },
+        ])
+        legend_data.append("RMSSD Trend")
+        
+        y_axes.append({
+            "type": "value",
+            "name": "RMSSD (ms)",
+            "nameLocation": "middle",
+            "nameGap": 45,
+            "position": "right" if has_steps else "left",
+            "min": rmssd_min,
+            "max": rmssd_max,
+            "axisLine": {"lineStyle": {"color": "#e74c3c"}},
+            "splitLine": {"show": False},
+        })
+    
+    return {
+        "title": {
+            "text": title,
+            "subtext": "Steps (activity load) vs RMSSD (parasympathetic recovery) | WHO: 8k-10k steps/day",
+            "left": "center",
+            "textStyle": {"fontSize": 15, "fontWeight": "bold", "color": SCIENTIFIC_COLORS["text"]},
+            "subtextStyle": {"fontSize": 10, "color": "#7f8c8d"},
+        },
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "cross"},
+            "formatter": """function(params) {
+                var date = params[0].axisValue;
+                var result = '<b>' + date + '</b><br/>';
+                params.forEach(function(p) {
+                    if (p.seriesName && p.seriesName.indexOf('_') !== 0 && 
+                        p.seriesName.indexOf('Zone') === -1 && 
+                        p.seriesName.indexOf('Goal') === -1 &&
+                        p.value !== null && p.value !== undefined) {
+                        var val = typeof p.value === 'number' ? p.value.toFixed(0) : p.value;
+                        var unit = p.seriesName.indexOf('RMSSD') >= 0 ? ' ms' : '';
+                        result += p.marker + ' ' + p.seriesName + ': <b>' + val + unit + '</b><br/>';
+                    }
+                });
+                return result;
+            }""",
+        },
+        "legend": {"data": legend_data, "bottom": 5, "textStyle": {"fontSize": 10}},
+        "grid": {
+            "left": "10%",
+            "right": "10%",
+            "top": "18%",
+            "bottom": "15%",
+            "containLabel": True,
+        },
+        "xAxis": {
+            "type": "category",
+            "data": date_labels,
+            "name": "Date",
+            "nameLocation": "middle",
+            "nameGap": 30,
+            "axisLabel": {"rotate": 45, "fontSize": 9},
+        },
+        "yAxis": y_axes if y_axes else [{"type": "value"}],
+        "series": series,
+        "dataZoom": [{"type": "inside", "start": 0, "end": 100}],
+    }
+
+
+def _build_hrv_activity_scatter_chart(
+    x_values: List[float],
+    y_values: List[float],
+    x_label: str,
+    y_label: str,
+    title: str,
+    correlation: Optional[float] = None,
+    n_samples: Optional[int] = None,
+) -> Dict[str, Any]:
+    """Build publication-quality scatter plot with regression line for HRV × Activity.
+    
+    Features:
+    - Scatter points with semi-transparent fill
+    - Linear regression line with confidence band
+    - Correlation coefficient display
+    - Dynamic axis scaling
+    
+    References:
+    - Plews et al. (2013). Training adaptation and HRV in elite endurance athletes.
+    - Buchheit (2014). Monitoring training status with HR measures.
+    """
+    if not x_values or not y_values:
+        return {"series": [], "title": {"text": title}}
+    
+    # Prepare scatter data
+    scatter_data = [
+        [x, y] for x, y in zip(x_values, y_values)
+        if x is not None and y is not None and not np.isnan(x) and not np.isnan(y)
+    ]
+    
+    if len(scatter_data) < 3:
+        return {"series": [], "title": {"text": title}}
+    
+    # Extract clean x, y for regression
+    x_clean = [p[0] for p in scatter_data]
+    y_clean = [p[1] for p in scatter_data]
+    
+    # Calculate regression line
+    x_arr = np.array(x_clean)
+    y_arr = np.array(y_clean)
+    
+    # Simple linear regression
+    slope, intercept = np.polyfit(x_arr, y_arr, 1)
+    x_line = np.linspace(min(x_arr), max(x_arr), 50)
+    y_line = slope * x_line + intercept
+    regression_data = [[float(x), float(y)] for x, y in zip(x_line, y_line)]
+    
+    # Dynamic axis bounds
+    x_min, x_max = _auto_axis_bounds(x_clean, padding_pct=0.10, min_floor=0)
+    y_min, y_max = _auto_axis_bounds(y_clean, padding_pct=0.10, min_floor=0)
+    
+    # Correlation interpretation
+    corr_text = ""
+    corr_color = "#7f8c8d"
+    if correlation is not None and not np.isnan(correlation):
+        abs_corr = abs(correlation)
+        if abs_corr >= 0.7:
+            corr_text = "Strong"
+            corr_color = "#27ae60" if correlation > 0 else "#e74c3c"
+        elif abs_corr >= 0.4:
+            corr_text = "Moderate"
+            corr_color = "#f39c12"
+        elif abs_corr >= 0.2:
+            corr_text = "Weak"
+            corr_color = "#95a5a6"
+        else:
+            corr_text = "Negligible"
+            corr_color = "#bdc3c7"
+    
+    # Build subtitle
+    subtitle_parts = []
+    if correlation is not None and not np.isnan(correlation):
+        subtitle_parts.append(f"Pearson r = {correlation:.3f} ({corr_text})")
+    if n_samples is not None:
+        subtitle_parts.append(f"n = {n_samples}")
+    subtitle = " | ".join(subtitle_parts) if subtitle_parts else "Correlation analysis"
+    
+    series = [
+        # Scatter points
+        {
+            "name": "Data Points",
+            "type": "scatter",
+            "data": scatter_data,
+            "symbolSize": 10,
+            "itemStyle": {
+                "color": "rgba(52, 152, 219, 0.7)",
+                "borderColor": "#2980b9",
+                "borderWidth": 1,
+            },
+        },
+        # Regression line
+        {
+            "name": "Regression Line",
+            "type": "line",
+            "data": regression_data,
+            "symbol": "none",
+            "lineStyle": {"color": "#e74c3c", "width": 2.5, "type": "solid"},
+            "smooth": False,
+        },
+    ]
+    
+    return {
+        "title": {
+            "text": title,
+            "subtext": subtitle,
+            "left": "center",
+            "textStyle": {"fontSize": 15, "fontWeight": "bold", "color": SCIENTIFIC_COLORS["text"]},
+            "subtextStyle": {"fontSize": 11, "color": corr_color, "fontWeight": "bold"},
+        },
+        "tooltip": {
+            "trigger": "item",
+            "formatter": """function(params) {
+                if (params.seriesType === 'scatter') {
+                    return '<b>""" + x_label + """</b>: ' + params.value[0].toFixed(1) + 
+                           '<br/><b>""" + y_label + """</b>: ' + params.value[1].toFixed(1) + ' ms';
+                }
+                return '';
+            }""",
+        },
+        "legend": {"data": ["Data Points", "Regression Line"], "bottom": 5, "textStyle": {"fontSize": 10}},
+        "grid": {
+            "left": "12%",
+            "right": "8%",
+            "top": "18%",
+            "bottom": "15%",
+            "containLabel": True,
+        },
+        "xAxis": {
+            "type": "value",
+            "name": x_label,
+            "nameLocation": "middle",
+            "nameGap": 35,
+            "nameTextStyle": {"fontSize": 12, "fontWeight": "bold"},
+            "min": x_min,
+            "max": x_max,
+            "splitLine": {"lineStyle": {"color": SCIENTIFIC_COLORS["grid"], "type": "dashed"}},
+        },
+        "yAxis": {
+            "type": "value",
+            "name": y_label,
+            "nameLocation": "middle",
+            "nameGap": 50,
+            "nameTextStyle": {"fontSize": 12, "fontWeight": "bold"},
+            "min": y_min,
+            "max": y_max,
+            "splitLine": {"lineStyle": {"color": SCIENTIFIC_COLORS["grid"], "type": "dashed"}},
+        },
+        "series": series,
+    }
+
+
 def _build_panas_affect_chart(
     dates: List[str],
     positive_affect: Optional[List[float]] = None,
@@ -4488,7 +4858,7 @@ def _render_eva_semaphore(
     - Flight Surgeon's clearance decision (authoritative)
     - EVA Radiation Risk Matrix assessment
     - Current Space Weather conditions (NOAA S/G scales)
-    
+
     Args:
         eva_counts: Series indexed by ["GO", "MONITOR", "NO-GO"] with integer counts.
         joint_decision: Pre-computed joint decision override.
@@ -4652,14 +5022,14 @@ def _render_eva_semaphore(
         )
 
     # Joint Decision Summary (prominent display)
-    st.markdown(
-        f"""
-        <div style="
+        st.markdown(
+            f"""
+            <div style="
             padding: 16px 20px;
             background: linear-gradient(135deg, {dominant_color}22 0%, {dominant_color}11 100%);
             border: 2px solid {dominant_color};
             border-radius: 12px;
-            text-align: center;
+                text-align: center;
             margin-top: 12px;
         ">
             <div style="
@@ -4674,8 +5044,8 @@ def _render_eva_semaphore(
                 font-size: 0.9rem;
                 color: #4b5563;
             ">{rationale}</div>
-        </div>
-        """,
+            </div>
+            """,
         unsafe_allow_html=True,
     )
     
@@ -8353,7 +8723,7 @@ def _render_circadian_analysis(analysis: Optional[CircadianAnalysis]) -> None:
             </div>""",
             unsafe_allow_html=True,
         )
-        
+    
         # Key metrics
         reg_color = "#27ae60" if analysis.regularity_score >= 70 else "#f39c12" if analysis.regularity_score >= 50 else "#e74c3c"
         st.markdown(
@@ -8537,7 +8907,7 @@ def _render_stress_prediction(prediction: Optional[StressPrediction]) -> None:
             </div>""",
             unsafe_allow_html=True,
         )
-        
+    
         # Contributing factors
         if prediction.contributing_factors:
             st.markdown("**Contributing Factors:**")
@@ -10349,21 +10719,32 @@ def _render_hrv_history(user: UserProfile) -> None:
                             if merged.empty:
                                 st.info("No overlapping days between HRV measurements and Garmin daily metrics yet.")
                             else:
-                                # Time series: activity alongside HRV (separate charts for units)
-                                if "steps" in merged.columns and merged["steps"].notna().any():
-                                    _render_profile_line_chart(
-                                        merged[["steps"]],
-                                        title="Daily steps",
-                                        y_axis_label="steps",
+                                # Publication-quality HRV × Activity time series
+                                has_steps = "steps" in merged.columns and merged["steps"].notna().any()
+                                has_rmssd = "rmssd_ms" in merged.columns and merged["rmssd_ms"].notna().any()
+                                
+                                if has_steps or has_rmssd:
+                                    merged_sorted = merged.sort_index()
+                                    dates_list = [str(d)[:10] for d in merged_sorted.index.tolist()]
+                                    steps_data = merged_sorted["steps"].tolist() if has_steps else None
+                                    rmssd_data = merged_sorted["rmssd_ms"].tolist() if has_rmssd else None
+                                    
+                                    activity_chart = _build_hrv_activity_timeseries_chart(
+                                        dates=dates_list,
+                                        steps=steps_data,
+                                        rmssd_ms=rmssd_data,
+                                        title="HRV × Activity Time Series",
                                     )
-                                if "rmssd_ms" in merged.columns and merged["rmssd_ms"].notna().any():
-                                    _render_profile_line_chart(
-                                        merged[["rmssd_ms"]],
-                                        title="Daily median RMSSD",
-                                        y_axis_label="ms",
+                                    render_echarts(activity_chart, height_px=400)
+                                    st.markdown(
+                                        "*Daily steps (activity load) plotted with RMSSD (parasympathetic recovery). "
+                                        "High activity + high RMSSD indicates good fitness and recovery. "
+                                        "High activity + low RMSSD may suggest overtraining.* "
+                                        "*(Plews et al., 2013; Stanley et al., 2013)*"
                                     )
 
-                                # Scatter relationships (shown only when both sides exist)
+                                # Publication-quality scatter plots with regression
+                                st.markdown("##### 📊 HRV × Activity Correlations")
                                 scatter_pairs = [
                                     ("steps", "rmssd_ms", "RMSSD vs Steps", "Steps", "RMSSD (ms)"),
                                     ("distance_km", "rmssd_ms", "RMSSD vs Distance", "Distance (km)", "RMSSD (ms)"),
@@ -10372,23 +10753,42 @@ def _render_hrv_history(user: UserProfile) -> None:
                                     ("stress_score", "rmssd_ms", "RMSSD vs Stress Score", "Stress Score", "RMSSD (ms)"),
                                     ("body_battery_avg", "rmssd_ms", "RMSSD vs Body Battery", "Body Battery (avg)", "RMSSD (ms)"),
                                 ]
-                                for x_col, y_col, title, xlab, ylab in scatter_pairs:
+                                
+                                scatter_cols = st.columns(2)
+                                scatter_idx = 0
+                                
+                                for x_col, y_col, chart_title, xlab, ylab in scatter_pairs:
                                     if x_col not in merged.columns or y_col not in merged.columns:
                                         continue
                                     paired = merged[[x_col, y_col]].dropna()
                                     if len(paired) < 3:
                                         continue
-                                    _render_profile_scatter_chart(
-                                        merged,
-                                        x_col=x_col,
-                                        y_col=y_col,
-                                        title=title,
-                                        x_axis_label=xlab,
-                                        y_axis_label=ylab,
-                                    )
+                                    
                                     corr = paired[x_col].corr(paired[y_col])
-                                    if corr is not None and not pd.isna(corr):
-                                        st.caption(f"{title}: Pearson r = {corr:.2f} (n={len(paired)})")
+                                    x_vals = paired[x_col].tolist()
+                                    y_vals = paired[y_col].tolist()
+                                    
+                                    scatter_chart = _build_hrv_activity_scatter_chart(
+                                        x_values=x_vals,
+                                        y_values=y_vals,
+                                        x_label=xlab,
+                                        y_label=ylab,
+                                        title=chart_title,
+                                        correlation=corr,
+                                        n_samples=len(paired),
+                                    )
+                                    
+                                    with scatter_cols[scatter_idx % 2]:
+                                        render_echarts(scatter_chart, height_px=320)
+                                    scatter_idx += 1
+                                
+                                if scatter_idx > 0:
+                                    st.markdown(
+                                        "*Scatter plots show relationships between activity metrics and RMSSD. "
+                                        "Regression lines indicate trend direction. Correlation strength: "
+                                        "|r| ≥0.7 strong, 0.4-0.7 moderate, 0.2-0.4 weak, <0.2 negligible.* "
+                                        "*(Buchheit, 2014)*"
+                                    )
         
         # Advanced HRV Analytics Platform
         with st.expander("🧬 Advanced HRV Analytics (ML, Statistics, Clinical Decision Support)", expanded=False):
@@ -14658,7 +15058,7 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
                 "Sleep <6 hours is associated with cognitive impairment and "
                 "increased accident risk in operational settings.* "
                 "*(Hirshkowitz et al., 2015; Watson et al., 2015)*"
-            )
+        )
 
     # Subjective logs (optional): stored exploration medical record fields.
     show_subjective = st.checkbox(
