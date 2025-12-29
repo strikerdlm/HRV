@@ -452,6 +452,90 @@ def _ewma_smooth(data: np.ndarray, span: int = 7) -> np.ndarray:
     return result
 
 
+def _auto_axis_bounds(
+    *data_arrays: Optional[List[Optional[float]]],
+    padding_pct: float = 0.10,
+    min_floor: Optional[float] = None,
+    max_ceil: Optional[float] = None,
+    nice_round: bool = True,
+) -> Tuple[float, float]:
+    """Calculate dynamic axis bounds that fit all data with padding.
+    
+    This ensures all data points are visible within the chart frame,
+    with appropriate padding for visual clarity.
+    
+    Args:
+        *data_arrays: Variable number of data arrays to consider.
+        padding_pct: Padding as percentage of data range (default 10%).
+        min_floor: Optional minimum floor value (e.g., 0 for non-negative data).
+        max_ceil: Optional maximum ceiling value (e.g., 100 for percentages).
+        nice_round: If True, round to "nice" values for cleaner axis labels.
+        
+    Returns:
+        Tuple of (min_value, max_value) for axis configuration.
+        
+    Example:
+        >>> hr_min, hr_max = _auto_axis_bounds(resting_hr, avg_hr, padding_pct=0.15)
+        >>> y_axis = {"type": "value", "min": hr_min, "max": hr_max}
+    """
+    # Collect all valid (non-None, non-NaN) values
+    all_values: List[float] = []
+    for arr in data_arrays:
+        if arr is None:
+            continue
+        for v in arr:
+            if v is not None and not (isinstance(v, float) and np.isnan(v)):
+                all_values.append(float(v))
+    
+    # If no valid data, return sensible defaults
+    if not all_values:
+        return (0.0, 100.0)
+    
+    data_min = min(all_values)
+    data_max = max(all_values)
+    data_range = data_max - data_min
+    
+    # Handle edge case where all values are the same
+    if data_range == 0:
+        data_range = abs(data_min) * 0.2 if data_min != 0 else 10.0
+    
+    # Apply padding
+    padding = data_range * padding_pct
+    calc_min = data_min - padding
+    calc_max = data_max + padding
+    
+    # Apply floor/ceiling constraints
+    if min_floor is not None:
+        calc_min = max(calc_min, min_floor)
+    if max_ceil is not None:
+        calc_max = min(calc_max, max_ceil)
+    
+    # Round to "nice" values for cleaner axis labels
+    if nice_round:
+        # Determine appropriate rounding based on magnitude
+        magnitude = 10 ** np.floor(np.log10(max(abs(calc_max - calc_min), 1)))
+        round_to = magnitude / 2  # Round to half the magnitude
+        
+        # For small ranges (like percentages), use smaller rounding
+        if data_range < 20:
+            round_to = 5
+        elif data_range < 100:
+            round_to = 10
+        else:
+            round_to = max(10, round_to)
+        
+        calc_min = np.floor(calc_min / round_to) * round_to
+        calc_max = np.ceil(calc_max / round_to) * round_to
+        
+        # Re-apply constraints after rounding
+        if min_floor is not None:
+            calc_min = max(calc_min, min_floor)
+        if max_ceil is not None:
+            calc_max = min(calc_max, max_ceil)
+    
+    return (float(calc_min), float(calc_max))
+
+
 # ---------------------------------------------------------------------------
 # Physiological Interpretation Constants for Graduate-Level Documentation
 # References: Shaffer & Ginsberg (2017), Thayer et al. (2012), Porges (2007)
@@ -2175,7 +2259,7 @@ def _build_hr_stress_chart(
     stress_score: Optional[List[float]] = None,
     title: str = "Heart Rate & Stress Trends",
 ) -> Dict[str, Any]:
-    """Build publication-quality HR and stress chart.
+    """Build publication-quality HR and stress chart with dynamic axis scaling.
     
     Resting HR <60 bpm indicates athletic conditioning.
     Garmin stress score: 0-25 (rest), 26-50 (low), 51-75 (medium), 76-100 (high).
@@ -2190,12 +2274,21 @@ def _build_hr_stress_chart(
              (resting_hr and any(v is not None for v in resting_hr))
     
     if has_hr:
-        # HR zones
+        # Calculate dynamic HR axis bounds to fit all data
+        hr_min, hr_max = _auto_axis_bounds(
+            avg_hr, resting_hr,
+            padding_pct=0.15,
+            min_floor=30,  # HR won't go below 30 in normal circumstances
+        )
+        # Ensure reference zones (60, 80, 100) are visible if relevant
+        hr_max = max(hr_max, 105)  # Always show elevated zone marker
+        
+        # HR zones (use dynamic max)
         series.extend([
             {
                 "name": "Elevated HR Zone",
                 "type": "line",
-                "data": [100] * len(dates),
+                "data": [hr_max] * len(dates),
                 "lineStyle": {"opacity": 0},
                 "areaStyle": {"color": "rgba(231, 76, 60, 0.1)"},
                 "stack": "hr_zone_high",
@@ -2267,8 +2360,8 @@ def _build_hr_stress_chart(
             "nameLocation": "middle",
             "nameGap": 50,
             "nameTextStyle": {"fontSize": 12, "fontWeight": "bold"},
-            "min": 40,
-            "max": 110,
+            "min": hr_min,
+            "max": hr_max,
             "splitLine": {"lineStyle": {"color": SCIENTIFIC_COLORS["grid"], "type": "dashed"}},
         })
     
@@ -2539,7 +2632,7 @@ def _build_respiration_spo2_chart(
     resp_sleep: Optional[List[float]] = None,
     title: str = "Respiration & SpO₂ Trends",
 ) -> Dict[str, Any]:
-    """Build publication-quality respiration/SpO2 chart with clinical thresholds.
+    """Build publication-quality respiration/SpO2 chart with dynamic axis scaling.
     
     References:
     - Normal SpO₂: 95-100% (WHO, 2022).
@@ -2555,6 +2648,16 @@ def _build_respiration_spo2_chart(
     if spo2 and any(v is not None for v in spo2):
         legend_data.append("SpO₂")
         spo2_clean = [v if v is not None else None for v in spo2]
+        
+        # Dynamic SpO2 axis bounds - ensure 95% threshold and data are visible
+        spo2_min, spo2_max = _auto_axis_bounds(
+            spo2,
+            padding_pct=0.05,
+            min_floor=80,   # SpO2 below 80 is severe hypoxemia
+            max_ceil=100,   # SpO2 can't exceed 100%
+        )
+        # Ensure 95% threshold is visible
+        spo2_min = min(spo2_min, 93)
         
         series.extend([
             # Normal SpO2 zone (95-100)
@@ -2605,8 +2708,8 @@ def _build_respiration_spo2_chart(
             "nameLocation": "middle",
             "nameGap": 45,
             "nameTextStyle": {"fontSize": 12, "fontWeight": "bold"},
-            "min": 88,
-            "max": 100,
+            "min": spo2_min,
+            "max": spo2_max,
             "splitLine": {"lineStyle": {"color": SCIENTIFIC_COLORS["grid"], "type": "dashed"}},
         })
     
@@ -2615,6 +2718,16 @@ def _build_respiration_spo2_chart(
                (resp_sleep and any(v is not None for v in resp_sleep))
     
     if has_resp:
+        # Dynamic respiration axis bounds
+        resp_min, resp_max = _auto_axis_bounds(
+            resp_awake, resp_sleep,
+            padding_pct=0.15,
+            min_floor=5,   # Respiratory rate below 5 is critical
+        )
+        # Ensure normal zone (12-20) markers are visible
+        resp_min = min(resp_min, 10)
+        resp_max = max(resp_max, 22)
+        
         # Normal respiration zone (12-20)
         series.extend([
             {
@@ -2675,8 +2788,8 @@ def _build_respiration_spo2_chart(
             "nameLocation": "middle",
             "nameGap": 40,
             "position": "right" if spo2 else "left",
-            "min": 8,
-            "max": 25,
+            "min": resp_min,
+            "max": resp_max,
             "axisLine": {"lineStyle": {"color": "#3498db"}},
             "splitLine": {"show": False},
         })
