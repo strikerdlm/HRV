@@ -11,7 +11,7 @@ Provides a centralized interface for:
 All data is stored in SQLite database with timestamped entries.
 Supports English and Spanish (Colombian validated scales).
 
-Author: AI Assistant
+Author: Dr Diego Malpica MD
 Version: 1.1.0
 """
 
@@ -2130,37 +2130,201 @@ def _render_profile_bar_chart(
     render_echarts(option, height_px=height_px)
 
 
-def _render_eva_semaphore(eva_counts: pd.Series) -> None:
+def _compute_joint_eva_decision(
+    *,
+    flight_surgeon_clearance: str,
+    radiation_status: Optional[str] = None,
+    s_scale: int = 0,
+    g_scale: int = 0,
+) -> tuple[str, str, List[str]]:
+    """Compute joint EVA clearance decision from multiple inputs.
+    
+    The decision follows a conservative (most restrictive) approach:
+    - Flight Surgeon decision is authoritative and can override all other inputs
+    - Radiation status and Space Weather contribute to the final decision
+    - The most restrictive status wins (NO-GO > CAUTION > MONITOR > GO)
+    
+    Args:
+        flight_surgeon_clearance: Flight surgeon's EVA clearance decision.
+        radiation_status: EVA radiation risk assessment status (GO, GO_WITH_MONITORING, CAUTION, NO_GO).
+        s_scale: NOAA S-scale (0-5) for radiation storms.
+        g_scale: NOAA G-scale (0-5) for geomagnetic storms.
+        
+    Returns:
+        Tuple of (final_decision, rationale, contributing_factors).
+        
+    References:
+        - NASA STD-3001 Space Flight Human-System Standard
+        - NOAA Space Weather Scales (https://www.swpc.noaa.gov/noaa-scales-explanation)
+    """
+    # Priority mapping (higher = more restrictive)
+    PRIORITY: Dict[str, int] = {
+        "GO": 1,
+        "MONITOR": 2,
+        "CAUTION": 3,
+        "NO-GO": 4,
+    }
+    
+    decisions: List[tuple[str, str]] = []  # (decision, source)
+    factors: List[str] = []
+    
+    # 1. Flight Surgeon Decision (authoritative)
+    fs_norm = str(flight_surgeon_clearance).strip().lower()
+    if fs_norm in {"cleared", "go", "1", "yes", "approved", "green"}:
+        decisions.append(("GO", "Flight Surgeon"))
+        factors.append("✅ Flight Surgeon: CLEARED")
+    elif fs_norm in {"cleared with restriction", "monitor", "caution", "yellow"}:
+        decisions.append(("MONITOR", "Flight Surgeon"))
+        factors.append("⚠️ Flight Surgeon: CLEARED WITH RESTRICTION")
+    elif fs_norm in {"no eva", "no-go", "nogo", "0", "no", "red", "hold", "denied"}:
+        decisions.append(("NO-GO", "Flight Surgeon"))
+        factors.append("🚫 Flight Surgeon: NO EVA")
+    elif fs_norm in {"post-eva recovery", "recovery"}:
+        decisions.append(("MONITOR", "Flight Surgeon"))
+        factors.append("🔄 Flight Surgeon: POST-EVA RECOVERY")
+    else:
+        decisions.append(("MONITOR", "Flight Surgeon"))
+        factors.append(f"⚠️ Flight Surgeon: {flight_surgeon_clearance}")
+    
+    # 2. Radiation Status
+    if radiation_status:
+        rad_norm = str(radiation_status).strip().upper().replace("_", " ")
+        if rad_norm in {"GO", "GO"}:
+            decisions.append(("GO", "Radiation"))
+            factors.append("✅ Radiation: GO")
+        elif rad_norm in {"GO WITH MONITORING", "GO_WITH_MONITORING"}:
+            decisions.append(("MONITOR", "Radiation"))
+            factors.append("⚠️ Radiation: GO WITH MONITORING")
+        elif rad_norm in {"CAUTION"}:
+            decisions.append(("CAUTION", "Radiation"))
+            factors.append("⚠️ Radiation: CAUTION")
+        elif rad_norm in {"NO GO", "NO_GO"}:
+            decisions.append(("NO-GO", "Radiation"))
+            factors.append("🚫 Radiation: NO-GO")
+    
+    # 3. Space Weather (S-Scale)
+    if s_scale >= 4:
+        decisions.append(("NO-GO", "S-Scale"))
+        factors.append(f"🚫 S{s_scale} Radiation Storm: NO-GO (Extreme SPE hazard)")
+    elif s_scale >= 3:
+        decisions.append(("CAUTION", "S-Scale"))
+        factors.append(f"⚠️ S{s_scale} Radiation Storm: CAUTION (Strong)")
+    elif s_scale >= 2:
+        decisions.append(("MONITOR", "S-Scale"))
+        factors.append(f"⚠️ S{s_scale} Radiation Storm: MONITOR (Moderate)")
+    elif s_scale >= 1:
+        decisions.append(("MONITOR", "S-Scale"))
+        factors.append(f"📡 S{s_scale} Radiation Storm: Active (Minor)")
+    
+    # 4. Space Weather (G-Scale)
+    if g_scale >= 4:
+        decisions.append(("CAUTION", "G-Scale"))
+        factors.append(f"⚠️ G{g_scale} Geomagnetic Storm: CAUTION (Severe/Extreme)")
+    elif g_scale >= 3:
+        decisions.append(("MONITOR", "G-Scale"))
+        factors.append(f"📡 G{g_scale} Geomagnetic Storm: MONITOR (Strong)")
+    elif g_scale >= 1:
+        factors.append(f"📡 G{g_scale} Geomagnetic Activity: Active")
+    
+    # Determine final decision (most restrictive wins)
+    final_decision = "GO"
+    final_priority = PRIORITY["GO"]
+    for dec, source in decisions:
+        if PRIORITY.get(dec, 1) > final_priority:
+            final_decision = dec
+            final_priority = PRIORITY[dec]
+    
+    # Build rationale
+    if final_decision == "NO-GO":
+        rationale = "EVA NOT CLEARED — Flight Surgeon or critical safety factor override"
+    elif final_decision == "CAUTION":
+        rationale = "EVA with CAUTION — Elevated risk, limit duration and tasks"
+    elif final_decision == "MONITOR":
+        rationale = "EVA with MONITORING — Enhanced oversight required"
+    else:
+        rationale = "EVA CLEARED — Nominal conditions"
+    
+    return final_decision, rationale, factors
+
+
+def _render_eva_semaphore(
+    eva_counts: pd.Series,
+    *,
+    joint_decision: Optional[str] = None,
+    radiation_status: Optional[str] = None,
+    s_scale: int = 0,
+    g_scale: int = 0,
+    flight_surgeon_clearance: Optional[str] = None,
+    show_factors: bool = True,
+) -> None:
     """Render a traffic-light semaphore for EVA clearance states.
 
+    The semaphore reflects the joint decision from:
+    - Flight Surgeon's clearance decision (authoritative)
+    - EVA Radiation Risk Matrix assessment
+    - Current Space Weather conditions (NOAA S/G scales)
+    
     Args:
         eva_counts: Series indexed by ["GO", "MONITOR", "NO-GO"] with integer counts.
+        joint_decision: Pre-computed joint decision override.
+        radiation_status: EVA radiation assessment status.
+        s_scale: NOAA S-scale (0-5).
+        g_scale: NOAA G-scale (0-5).
+        flight_surgeon_clearance: Flight surgeon's current EVA clearance.
+        show_factors: Whether to show contributing factors breakdown.
     """
-    go_count = int(eva_counts.get("GO", 0))
+    # Extract counts from historical data (used for fallback logic)
+    _go_count = int(eva_counts.get("GO", 0))
     monitor_count = int(eva_counts.get("MONITOR", 0))
     nogo_count = int(eva_counts.get("NO-GO", 0))
-    total = go_count + monitor_count + nogo_count
 
-    # Determine dominant status for display
-    if nogo_count > 0:
-        dominant = "NO-GO"
-        dominant_color = "#dc2626"  # red-600
-    elif monitor_count > 0:
-        dominant = "MONITOR"
-        dominant_color = "#f59e0b"  # amber-500
+    # Compute joint decision if inputs are provided
+    if joint_decision is None and flight_surgeon_clearance is not None:
+        joint_decision, rationale, factors = _compute_joint_eva_decision(
+            flight_surgeon_clearance=flight_surgeon_clearance,
+            radiation_status=radiation_status,
+            s_scale=s_scale,
+            g_scale=g_scale,
+        )
     else:
-        dominant = "GO"
-        dominant_color = "#16a34a"  # green-600
+        # Fallback to historical counts-based dominant status
+        if nogo_count > 0:
+            joint_decision = "NO-GO"
+        elif monitor_count > 0:
+            joint_decision = "MONITOR"
+        else:
+            joint_decision = "GO"
+        rationale = "Based on historical EVA status records"
+        factors = []
+    
+    # Color mapping
+    color_map = {
+        "GO": "#16a34a",      # green-600
+        "MONITOR": "#f59e0b", # amber-500
+        "CAUTION": "#f97316", # orange-500
+        "NO-GO": "#dc2626",   # red-600
+    }
+    dominant_color = color_map.get(joint_decision, "#6b7280")
+    
+    # Icon mapping
+    icon_map = {
+        "GO": "✅",
+        "MONITOR": "⚠️",
+        "CAUTION": "⚠️",
+        "NO-GO": "🚫",
+    }
+    icon = icon_map.get(joint_decision, "❓")
 
     st.markdown("##### 🚦 EVA Clearance Semaphore")
 
     # Use columns to create a horizontal semaphore layout
-    col_go, col_mon, col_nogo, col_summary = st.columns([1, 1, 1, 2])
+    col_go, col_mon, col_caution, col_nogo = st.columns([1, 1, 1, 1])
 
     # Color logic: bright when active, dim when inactive
-    go_active = go_count > 0
-    mon_active = monitor_count > 0
-    nogo_active = nogo_count > 0
+    go_active = joint_decision == "GO"
+    mon_active = joint_decision == "MONITOR"
+    caution_active = joint_decision == "CAUTION"
+    nogo_active = joint_decision == "NO-GO"
 
     with col_go:
         bg = "#16a34a" if go_active else "#e5e7eb"
@@ -2212,6 +2376,31 @@ def _render_eva_semaphore(eva_counts: pd.Series) -> None:
             unsafe_allow_html=True,
         )
 
+    with col_caution:
+        bg = "#f97316" if caution_active else "#e5e7eb"
+        text_color = "white" if caution_active else "#9ca3af"
+        st.markdown(
+            f"""
+            <div style="
+                background: {bg};
+                color: {text_color};
+                border-radius: 50%;
+                width: 70px;
+                height: 70px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 800;
+                font-size: 10px;
+                letter-spacing: 0.5px;
+                margin: auto;
+                text-transform: uppercase;
+                box-shadow: {'0 0 12px #f97316' if caution_active else 'none'};
+            ">CAUTION</div>
+            """,
+            unsafe_allow_html=True,
+        )
+
     with col_nogo:
         bg = "#dc2626" if nogo_active else "#e5e7eb"
         text_color = "white" if nogo_active else "#9ca3af"
@@ -2237,24 +2426,44 @@ def _render_eva_semaphore(eva_counts: pd.Series) -> None:
             unsafe_allow_html=True,
         )
 
-    # Summary badge showing only the dominant state (no numeric counts)
-    with col_summary:
-        st.markdown(
-            f"""
+    # Joint Decision Summary (prominent display)
+    st.markdown(
+        f"""
+        <div style="
+            padding: 16px 20px;
+            background: linear-gradient(135deg, {dominant_color}22 0%, {dominant_color}11 100%);
+            border: 2px solid {dominant_color};
+            border-radius: 12px;
+            text-align: center;
+            margin-top: 12px;
+        ">
             <div style="
-                padding: 12px;
-                background: {dominant_color}22;
-                border: 1px solid {dominant_color}55;
-                border-radius: 8px;
-                text-align: center;
+                font-size: 2rem;
                 font-weight: 900;
-                letter-spacing: 0.6px;
+                letter-spacing: 1px;
                 text-transform: uppercase;
                 color: {dominant_color};
-            ">
-                {dominant}
-            </div>
-            """,
+                margin-bottom: 4px;
+            ">{icon} {joint_decision}</div>
+            <div style="
+                font-size: 0.9rem;
+                color: #4b5563;
+            ">{rationale}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    
+    # Show contributing factors if available (using caption/markdown to avoid nested expanders)
+    if show_factors and factors:
+        st.markdown(
+            """
+            <details style="margin-top: 8px; padding: 8px; background: #f8fafc; border-radius: 6px; border: 1px solid #e2e8f0;">
+            <summary style="cursor: pointer; font-weight: 600; color: #475569;">📋 Contributing Factors</summary>
+            <div style="padding-top: 8px;">
+            """
+            + "".join(f"<div style='padding: 2px 0; color: #374151;'>{factor}</div>" for factor in factors)
+            + "</div></details>",
             unsafe_allow_html=True,
         )
 
@@ -10077,6 +10286,38 @@ def _g_scale_from_kp(max_kp: Optional[float]) -> tuple[str, int]:
     return "G0", 0
 
 
+def _s_scale_severity_label(s_level: int) -> str:
+    """Return human-readable severity label for NOAA S-Scale.
+    
+    Reference: NOAA Space Weather Scales (https://www.swpc.noaa.gov/noaa-scales-explanation)
+    """
+    labels = {
+        0: "None",
+        1: "Minor",
+        2: "Moderate",
+        3: "Strong",
+        4: "Severe",
+        5: "Extreme",
+    }
+    return labels.get(int(s_level), "Unknown")
+
+
+def _g_scale_severity_label(g_level: int) -> str:
+    """Return human-readable severity label for NOAA G-Scale.
+    
+    Reference: NOAA Space Weather Scales (https://www.swpc.noaa.gov/noaa-scales-explanation)
+    """
+    labels = {
+        0: "None",
+        1: "Minor",
+        2: "Moderate",
+        3: "Strong",
+        4: "Severe",
+        5: "Extreme",
+    }
+    return labels.get(int(g_level), "Unknown")
+
+
 def _space_weather_alert_category(g_level: int, s_level: int) -> str:
     """Map G/S storm levels into the profile alert taxonomy."""
     if max(g_level, s_level) >= 3:
@@ -10873,25 +11114,112 @@ def _render_radiation_eva_matrix(
             key="eva_matrix_cumulative",
         )
     
-    # Space weather inputs
+    # Space Weather Conditions with Auto-Fetch Option
     st.markdown("##### 🌞 Space Weather Conditions")
+    
+    # Auto-fetch toggle and button
+    col_auto, col_fetch = st.columns([2, 1])
+    with col_auto:
+        auto_fetch_sw = st.checkbox(
+            "🛰️ Auto-fetch from NOAA SWPC",
+            value=True,
+            key=f"eva_auto_fetch_sw_{user.user_id}",
+            help=(
+                "Automatically retrieve current space weather conditions from NOAA Space Weather "
+                "Prediction Center. S-Scale (Solar Radiation Storm) is based on >10 MeV proton flux. "
+                "G-Scale (Geomagnetic Storm) is based on planetary Kp index."
+            ),
+        )
+    
+    # Fetch and display real-time space weather data
+    noaa_s_scale: int = 0
+    noaa_g_scale: int = 0
+    noaa_kp_max: Optional[float] = None
+    noaa_proton_max: Optional[float] = None
+    fetch_timestamp: Optional[str] = None
+    
+    if auto_fetch_sw:
+        # Get today's space weather summary
+        target_date = date.today()
+        space_summary = _space_weather_summary_for_date(target_date)
+        noaa_s_scale = int(space_summary.get("proton_s_level", 0))
+        noaa_g_scale = int(space_summary.get("kp_g_level", 0))
+        noaa_kp_max = space_summary.get("kp_max")
+        noaa_proton_max = space_summary.get("proton_max_pfu")
+        
+        # Show real-time data metrics
+        col_sw_m1, col_sw_m2, col_sw_m3, col_sw_m4 = st.columns(4)
+        with col_sw_m1:
+            kp_display = f"{noaa_kp_max:.1f}" if noaa_kp_max is not None and np.isfinite(float(noaa_kp_max)) else "—"
+            st.metric("Kp Index (max)", kp_display, delta=space_summary.get("kp_g_scale", "G0"))
+        with col_sw_m2:
+            proton_display = f"{noaa_proton_max:.0f} pfu" if noaa_proton_max is not None and np.isfinite(float(noaa_proton_max)) else "—"
+            st.metric(">10 MeV Protons", proton_display, delta=space_summary.get("proton_s_scale", "S0"))
+        with col_sw_m3:
+            st.metric("S-Scale", f"S{noaa_s_scale}", delta=_s_scale_severity_label(noaa_s_scale))
+        with col_sw_m4:
+            st.metric("G-Scale", f"G{noaa_g_scale}", delta=_g_scale_severity_label(noaa_g_scale))
+        
+        # Alert if data is unavailable or stale
+        errors = space_summary.get("errors", {})
+        if errors:
+            st.caption(f"⚠️ NOAA data may be stale or unavailable. Use manual override if needed.")
+    
+    with col_fetch:
+        if st.button(
+            "🔄 Refresh",
+            key=f"eva_refresh_sw_{user.user_id}",
+            help="Force refresh space weather data from NOAA SWPC",
+            use_container_width=True,
+        ):
+            if NOAA_SPACE_AVAILABLE and load_noaa_space_data is not None:
+                with st.spinner("Fetching NOAA data..."):
+                    try:
+                        _bundles, _errors = load_noaa_space_data(
+                            keys=("planetary_k_index_1m", "goes_integral_protons"),
+                            use_cache=False,
+                            max_workers=2,
+                            overall_timeout_s=15.0,
+                        )
+                        _load_noaa_profile_bundles.clear()
+                        if not _errors:
+                            st.success("✅ Space weather data refreshed")
+                        else:
+                            st.warning(f"Partial fetch: {', '.join(_errors.values())}")
+                        st.rerun()
+                    except Exception as exc:
+                        _LOGGER.warning("EVA matrix space weather refresh failed: %s", exc)
+                        st.error(f"Refresh failed: {exc}")
+            else:
+                st.warning("NOAA space module not available.")
+    
+    # Manual override or fallback inputs
     col_sw1, col_sw2 = st.columns(2)
     with col_sw1:
+        default_s = noaa_s_scale if auto_fetch_sw else 0
         s_scale = st.selectbox(
             "NOAA S-Scale (Radiation Storm)",
             options=[0, 1, 2, 3, 4, 5],
-            index=0,
-            format_func=lambda x: f"S{x}" + (" - None" if x == 0 else f" - {'Minor' if x == 1 else 'Moderate' if x == 2 else 'Strong' if x == 3 else 'Severe' if x == 4 else 'Extreme'}"),
+            index=default_s,
+            format_func=lambda x: f"S{x}" + (" - None" if x == 0 else f" - {_s_scale_severity_label(x)}"),
             key="eva_s_scale",
+            disabled=False,  # Always allow override
+            help="S-Scale: S0=None, S1=Minor, S2=Moderate, S3=Strong, S4=Severe, S5=Extreme. Based on >10 MeV proton flux (pfu).",
         )
     with col_sw2:
+        default_g = noaa_g_scale if auto_fetch_sw else 0
         g_scale = st.selectbox(
             "NOAA G-Scale (Geomagnetic Storm)",
             options=[0, 1, 2, 3, 4, 5],
-            index=0,
-            format_func=lambda x: f"G{x}" + (" - None" if x == 0 else f" - {'Minor' if x == 1 else 'Moderate' if x == 2 else 'Strong' if x == 3 else 'Severe' if x == 4 else 'Extreme'}"),
+            index=default_g,
+            format_func=lambda x: f"G{x}" + (" - None" if x == 0 else f" - {_g_scale_severity_label(x)}"),
             key="eva_g_scale",
+            disabled=False,  # Always allow override
+            help="G-Scale: G0=None, G1=Minor, G2=Moderate, G3=Strong, G4=Severe, G5=Extreme. Based on Kp index.",
         )
+    
+    if auto_fetch_sw and (s_scale != noaa_s_scale or g_scale != noaa_g_scale):
+        st.caption("ℹ️ Manual override active — using selected values instead of NOAA data.")
     
     # Perform assessment
     assessment = assess_eva_radiation_risk(
@@ -11119,7 +11447,7 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
     _render_radiation_exposure_section(user, history_df, latest_entry)
 
     # EVA workload
-    st.markdown("##### 🧑‍🚀 EVA Workload")
+    st.markdown("##### 🧑‍🚀 EVA Workload & Clearance Status")
     eva_series = history_df["eva_hours_72h"].dropna() if "eva_hours_72h" in history_df.columns else pd.Series(dtype=float)
     avg_eva = float(eva_series.mean()) if not eva_series.empty else None
     peak_eva = float(eva_series.max()) if not eva_series.empty else None
@@ -11131,6 +11459,39 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
     col_e1.metric("Avg EVA hrs (72h)", f"{avg_eva:.1f} h" if avg_eva is not None else "—")
     col_e2.metric("Peak EVA load", f"{peak_eva:.1f} h" if peak_eva is not None else "—", delta="Rolling 72h window")
     col_e3.metric("Days since last EVA", days_since_last_display)
+    
+    # Get current space weather for semaphore
+    space_summary = _space_weather_summary_for_date(date.today())
+    current_s_scale = int(space_summary.get("proton_s_level", 0))
+    current_g_scale = int(space_summary.get("kp_g_level", 0))
+    
+    # Get Flight Surgeon's latest EVA clearance decision
+    flight_surgeon_clearance = str(latest_entry.get("eva_status", "")) if latest_entry is not None else ""
+    
+    # Get radiation assessment status if available (from latest entry or compute)
+    radiation_status: Optional[str] = None
+    if RADIATION_MODULE_AVAILABLE:
+        # Try to get cumulative dose for radiation assessment
+        cumulative_dose_msv = 0.0
+        if "radiation_dose_msv" in history_df.columns:
+            dose_series = pd.to_numeric(history_df["radiation_dose_msv"], errors="coerce").dropna()
+            if not dose_series.empty:
+                cumulative_dose_msv = float(dose_series.max())
+        
+        # Perform quick radiation assessment for semaphore
+        try:
+            from radiation_exposure import assess_eva_radiation_risk, RadiationEnvironment
+            rad_assessment = assess_eva_radiation_risk(
+                cumulative_dose_msv=cumulative_dose_msv,
+                environment=RadiationEnvironment.LEO_ISS,  # Default for quick check
+                eva_duration_hours=6.0,
+                space_weather_s_scale=current_s_scale,
+                space_weather_g_scale=current_g_scale,
+            )
+            radiation_status = rad_assessment.status.value
+        except Exception as exc:
+            _LOGGER.debug("Radiation assessment for semaphore failed: %s", exc)
+    
     if "eva_status" in history_df.columns:
         def _normalize_eva_status(value: Any) -> str:
             text = str(value).strip().lower()
@@ -11142,11 +11503,36 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
 
         eva_norm = history_df["eva_status"].dropna().map(_normalize_eva_status)
         eva_status_counts = eva_norm.value_counts().reindex(["GO", "MONITOR", "NO-GO"]).fillna(0).astype(int)
-        if eva_status_counts.sum() > 0:
-            _render_eva_semaphore(eva_status_counts)
+        if eva_status_counts.sum() > 0 or flight_surgeon_clearance:
+            # Render enhanced semaphore with joint decision
+            _render_eva_semaphore(
+                eva_status_counts,
+                flight_surgeon_clearance=flight_surgeon_clearance,
+                radiation_status=radiation_status,
+                s_scale=current_s_scale,
+                g_scale=current_g_scale,
+                show_factors=True,
+            )
             st.caption(
-                "EVA clearance standardized: GO (cleared), MONITOR (requires mitigation/flight surgeon review), "
-                "NO-GO (not cleared)."
+                "EVA clearance based on joint decision: Flight Surgeon clearance (authoritative), "
+                "Radiation Risk Matrix assessment, and Space Weather conditions (NOAA S/G scales). "
+                "The most restrictive status determines the final decision."
+            )
+    else:
+        # No eva_status column, but still show semaphore based on space weather + radiation
+        if flight_surgeon_clearance or current_s_scale > 0 or current_g_scale > 0:
+            empty_counts = pd.Series({"GO": 0, "MONITOR": 0, "NO-GO": 0})
+            _render_eva_semaphore(
+                empty_counts,
+                flight_surgeon_clearance=flight_surgeon_clearance or "Cleared",
+                radiation_status=radiation_status,
+                s_scale=current_s_scale,
+                g_scale=current_g_scale,
+                show_factors=True,
+            )
+            st.caption(
+                "EVA clearance based on current Space Weather (NOAA S/G scales) and Radiation Risk. "
+                "Log medical records with EVA status for historical tracking."
             )
 
     # Stress and behavioral indicators
