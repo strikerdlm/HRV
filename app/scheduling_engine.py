@@ -336,8 +336,25 @@ class SchedulingEngine:
             return True
         return False
     
+    def get_daily_schedule(self, schedule_date: date) -> Optional[DailySchedule]:
+        """Get a daily schedule (read-only, does not create if missing).
+        
+        Use this method for display-only operations to avoid side effects.
+        
+        Args:
+            schedule_date: The date to look up.
+            
+        Returns:
+            The DailySchedule if it exists, otherwise None.
+        """
+        return self.schedules.get(schedule_date)
+    
     def get_or_create_daily_schedule(self, schedule_date: date) -> DailySchedule:
-        """Get or create a daily schedule."""
+        """Get or create a daily schedule.
+        
+        Use this method only when you intend to modify the schedule.
+        For display-only operations, use get_daily_schedule() instead.
+        """
         if schedule_date not in self.schedules:
             self.schedules[schedule_date] = DailySchedule(schedule_date=schedule_date)
         return self.schedules[schedule_date]
@@ -784,11 +801,11 @@ class SchedulingEngine:
         Returns:
             List of crew summary dictionaries
         """
-        daily = self.get_or_create_daily_schedule(schedule_date)
+        daily = self.get_daily_schedule(schedule_date)
         summaries: List[Dict[str, Any]] = []
         
         for crew_id, crew in self.crew_members.items():
-            crew_activities = daily.get_crew_activities(crew_id)
+            crew_activities = daily.get_crew_activities(crew_id) if daily else []
             
             summary = {
                 "crew_id": crew_id,
@@ -824,14 +841,14 @@ class SchedulingEngine:
         self,
         schedule_date: date,
     ) -> str:
-        """Export daily schedule to JSON format."""
-        daily = self.get_or_create_daily_schedule(schedule_date)
+        """Export daily schedule to JSON format (read-only)."""
+        daily = self.get_daily_schedule(schedule_date)
         
         export_data = {
             "schedule_date": schedule_date.isoformat(),
-            "is_optimized": daily.is_optimized,
-            "optimization_score": daily.optimization_score,
-            "activities": [a.to_dict() for a in daily.activities],
+            "is_optimized": daily.is_optimized if daily else False,
+            "optimization_score": daily.optimization_score if daily else 0.0,
+            "activities": [a.to_dict() for a in daily.activities] if daily else [],
             "conflicts": [
                 {
                     "conflict_id": c.conflict_id,
@@ -842,7 +859,7 @@ class SchedulingEngine:
                     "description": c.description,
                     "suggested_resolution": c.suggested_resolution,
                 }
-                for c in daily.conflicts
+                for c in (daily.conflicts if daily else [])
             ],
             "crew_summary": self.get_crew_summary(schedule_date),
         }
