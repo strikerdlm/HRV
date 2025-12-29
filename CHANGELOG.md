@@ -18,11 +18,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - **Output Directory**: Automatic directory creation based on user's full name (e.g., `Diego_Malpica/`)
 
 - **BLE Recording UI** (`app/user_profile_tab.py`): New "📡 BLE Heart Rate Recording (Polar H10)" section in User Profile view:
+  - **Available for both logged-in users and guests**
   - Scan for BLE devices with signal strength (RSSI)
   - Device selection dropdown with Polar devices prioritized
   - Connect/disconnect controls
   - Start/stop recording with live metrics
   - Recent recordings list with approximate RR counts
+  - Guest recordings saved to `Guest/` directory
 
 - **Dependencies**: Added `bleak>=0.21,<1.0` to `requirements.txt` for BLE communication
 
