@@ -3302,6 +3302,274 @@ def _build_stress_pns_chart(
     }
 
 
+def _build_radiation_dose_chart(
+    mission_days: List[int],
+    radiation_msv: List[float],
+    career_limit_msv: float = 600.0,
+    title: str = "Cumulative Radiation Dose vs. Mission Day",
+) -> Dict[str, Any]:
+    """Build publication-quality radiation dose chart with dynamic axis scaling.
+    
+    Guidelines (NASA-STD-3001 Vol 1 Rev B, 2022):
+    - Career effective dose limit: 600 mSv (design limit)
+    - Legacy limit (pre-2022): 1000 mSv
+    - ALARA principle: As Low As Reasonably Achievable
+    
+    Risk Zones (% of 600 mSv limit):
+    - <30% (0-180 mSv): GO — Nominal operations
+    - 30-60% (180-360 mSv): MONITOR — Enhanced monitoring
+    - 60-80% (360-480 mSv): CAUTION — Mission planning review
+    - >80% (>480 mSv): NO-GO — Operational restrictions
+    
+    References:
+    - NASA-STD-3001 Vol 1 Rev B (2022). Crew Health Standard.
+    - ICRP Publication 123 (2013). Assessment of radiation exposure of astronauts.
+    - Cucinotta et al. (2017). Space radiation risks for astronauts on multiple ISS missions.
+    """
+    day_labels = [f"Day {d}" for d in mission_days]
+    series = []
+    legend_data = []
+    
+    if not radiation_msv or not any(v is not None for v in radiation_msv):
+        return {"series": [], "title": {"text": title}}
+    
+    # Calculate threshold values
+    threshold_30 = career_limit_msv * 0.30  # 180 mSv
+    threshold_60 = career_limit_msv * 0.60  # 360 mSv
+    threshold_80 = career_limit_msv * 0.80  # 480 mSv
+    
+    # Dynamic axis bounds — ensure all data + reference zones visible
+    rad_min, rad_max = _auto_axis_bounds(
+        radiation_msv,
+        padding_pct=0.15,
+        min_floor=0,
+    )
+    # Ensure at least the MONITOR threshold (30%) is visible for context
+    rad_max = max(rad_max, threshold_30 * 1.2)
+    
+    legend_data.append("Cumulative Dose")
+    rad_clean = [v if v is not None else None for v in radiation_msv]
+    
+    # Calculate EWMA trend if enough data points
+    rad_ewma = None
+    if len([v for v in radiation_msv if v is not None]) >= 3:
+        rad_ewma = _ewma_smooth(
+            np.array([v if v else 0 for v in radiation_msv], dtype=float), span=5
+        ).tolist()
+    
+    # Reference zones (only show zones within visible range)
+    zone_series = []
+    
+    # GO zone (0-30% = 0-180 mSv)
+    if rad_max > 0:
+        zone_upper = min(threshold_30, rad_max)
+        zone_series.extend([
+            {
+                "name": "GO Zone (<30%)",
+                "type": "line",
+                "data": [zone_upper] * len(mission_days),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(40, 167, 69, 0.12)"},
+                "symbol": "none",
+                "silent": True,
+            },
+        ])
+    
+    # MONITOR zone (30-60% = 180-360 mSv)
+    if rad_max > threshold_30:
+        zone_upper = min(threshold_60, rad_max)
+        zone_series.extend([
+            {
+                "name": "MONITOR Zone (30-60%)",
+                "type": "line",
+                "data": [zone_upper] * len(mission_days),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(255, 193, 7, 0.12)"},
+                "stack": "zone_monitor",
+                "symbol": "none",
+                "silent": True,
+            },
+            {
+                "name": "_monitor_base",
+                "type": "line",
+                "data": [threshold_30] * len(mission_days),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "#fff"},
+                "stack": "zone_monitor",
+                "symbol": "none",
+                "silent": True,
+            },
+        ])
+    
+    # CAUTION zone (60-80% = 360-480 mSv)
+    if rad_max > threshold_60:
+        zone_upper = min(threshold_80, rad_max)
+        zone_series.extend([
+            {
+                "name": "CAUTION Zone (60-80%)",
+                "type": "line",
+                "data": [zone_upper] * len(mission_days),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(253, 126, 20, 0.12)"},
+                "stack": "zone_caution",
+                "symbol": "none",
+                "silent": True,
+            },
+            {
+                "name": "_caution_base",
+                "type": "line",
+                "data": [threshold_60] * len(mission_days),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "#fff"},
+                "stack": "zone_caution",
+                "symbol": "none",
+                "silent": True,
+            },
+        ])
+    
+    # NO-GO zone (>80% = >480 mSv)
+    if rad_max > threshold_80:
+        zone_series.extend([
+            {
+                "name": "NO-GO Zone (>80%)",
+                "type": "line",
+                "data": [rad_max] * len(mission_days),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "rgba(220, 53, 69, 0.12)"},
+                "stack": "zone_nogo",
+                "symbol": "none",
+                "silent": True,
+            },
+            {
+                "name": "_nogo_base",
+                "type": "line",
+                "data": [threshold_80] * len(mission_days),
+                "lineStyle": {"opacity": 0},
+                "areaStyle": {"color": "#fff"},
+                "stack": "zone_nogo",
+                "symbol": "none",
+                "silent": True,
+            },
+        ])
+    
+    series.extend(zone_series)
+    
+    # Threshold lines (only if within visible range)
+    threshold_lines = []
+    if rad_max >= threshold_30 * 0.8:  # Show if approaching
+        threshold_lines.append({
+            "name": "30% Limit (180 mSv)",
+            "type": "line",
+            "data": [threshold_30] * len(mission_days),
+            "lineStyle": {"color": "#ffc107", "width": 2, "type": "dashed"},
+            "symbol": "none",
+        })
+        legend_data.append("30% Limit (180 mSv)")
+    
+    if rad_max >= threshold_60 * 0.9:
+        threshold_lines.append({
+            "name": "60% Limit (360 mSv)",
+            "type": "line",
+            "data": [threshold_60] * len(mission_days),
+            "lineStyle": {"color": "#fd7e14", "width": 2, "type": "dashed"},
+            "symbol": "none",
+        })
+        legend_data.append("60% Limit (360 mSv)")
+    
+    if rad_max >= threshold_80 * 0.95:
+        threshold_lines.append({
+            "name": "80% Limit (480 mSv)",
+            "type": "line",
+            "data": [threshold_80] * len(mission_days),
+            "lineStyle": {"color": "#dc3545", "width": 2, "type": "dashed"},
+            "symbol": "none",
+        })
+        legend_data.append("80% Limit (480 mSv)")
+    
+    series.extend(threshold_lines)
+    
+    # Main data series
+    series.append({
+        "name": "Cumulative Dose",
+        "type": "line",
+        "data": rad_clean,
+        "symbol": "circle",
+        "symbolSize": 8,
+        "lineStyle": {"color": "#8e44ad", "width": 3},
+        "itemStyle": {"color": "#8e44ad"},
+        "areaStyle": {"color": "rgba(142, 68, 173, 0.08)"},
+    })
+    
+    # Trend line
+    if rad_ewma:
+        series.append({
+            "name": "5-Day Trend",
+            "type": "line",
+            "data": rad_ewma,
+            "symbol": "none",
+            "lineStyle": {"color": "#2c3e50", "width": 2.5},
+            "smooth": True,
+        })
+        legend_data.append("5-Day Trend")
+    
+    return {
+        "title": {
+            "text": title,
+            "subtext": f"NASA Career Limit: {career_limit_msv:.0f} mSv | "
+                       "Zones: <30% GO | 30-60% MONITOR | 60-80% CAUTION | >80% NO-GO",
+            "left": "center",
+            "textStyle": {"fontSize": 15, "fontWeight": "bold", "color": SCIENTIFIC_COLORS["text"]},
+            "subtextStyle": {"fontSize": 10, "color": "#7f8c8d"},
+        },
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "cross"},
+            "formatter": """function(params) {
+                var day = params[0].axisValue;
+                var result = '<b>' + day + '</b><br/>';
+                params.forEach(function(p) {
+                    if (p.seriesName && p.seriesName.indexOf('_') !== 0 && 
+                        p.seriesName.indexOf('Zone') === -1 &&
+                        p.value !== null && p.value !== undefined) {
+                        var val = typeof p.value === 'number' ? p.value.toFixed(2) : p.value;
+                        var unit = p.seriesName.indexOf('Limit') >= 0 ? '' : ' mSv';
+                        result += p.marker + ' ' + p.seriesName + ': <b>' + val + unit + '</b><br/>';
+                    }
+                });
+                return result;
+            }""",
+        },
+        "legend": {"data": legend_data, "bottom": 5, "textStyle": {"fontSize": 10}},
+        "grid": {
+            "left": "10%",
+            "right": "5%",
+            "top": "18%",
+            "bottom": "15%",
+            "containLabel": True,
+        },
+        "xAxis": {
+            "type": "category",
+            "data": day_labels,
+            "name": "Mission Day",
+            "nameLocation": "middle",
+            "nameGap": 30,
+            "axisLabel": {"rotate": 45, "fontSize": 9},
+        },
+        "yAxis": {
+            "type": "value",
+            "name": "Cumulative Dose (mSv)",
+            "nameLocation": "middle",
+            "nameGap": 55,
+            "nameTextStyle": {"fontSize": 12, "fontWeight": "bold"},
+            "min": rad_min,
+            "max": rad_max,
+            "splitLine": {"lineStyle": {"color": SCIENTIFIC_COLORS["grid"], "type": "dashed"}},
+        },
+        "series": series,
+        "dataZoom": [{"type": "inside", "start": 0, "end": 100}],
+    }
+
+
 def _build_sleep_duration_chart(
     dates: List[str],
     sleep_hours: Optional[List[float]] = None,
@@ -12910,17 +13178,29 @@ def _render_radiation_current_status(
         f"(legacy 1000 mSv: {legacy_pct:.1f}%)."
     )
     
-    # Line chart of dose vs mission day
+    # Publication-quality radiation dose chart
     if {"mission_day"}.issubset(history_df.columns):
         chart_df = history_df.dropna(subset=["mission_day", rad_col] if rad_col else ["mission_day"]).copy()
         if not chart_df.empty:
-            chart_df = chart_df.sort_values("mission_day").set_index("mission_day")
+            chart_df = chart_df.sort_values("mission_day")
             chart_df["radiation_dose_msv"] = pd.to_numeric(chart_df[rad_col], errors="coerce")
-            chart_df.rename(columns={"radiation_dose_msv": "Radiation (mSv)"}, inplace=True)
-            _render_profile_line_chart(
-                chart_df[["Radiation (mSv)"]],
-                title="Radiation Dose vs. Mission Day",
-                y_axis_label="mSv",
+            
+            # Extract data for publication-quality chart
+            mission_days_list = chart_df["mission_day"].astype(int).tolist()
+            radiation_values = chart_df["radiation_dose_msv"].tolist()
+            
+            rad_chart = _build_radiation_dose_chart(
+                mission_days=mission_days_list,
+                radiation_msv=radiation_values,
+                career_limit_msv=rad_limit,
+                title="Cumulative Radiation Dose vs. Mission Day",
+            )
+            render_echarts(rad_chart, height_px=380)
+            st.markdown(
+                "*Cumulative radiation dose tracked per mission day. NASA-STD-3001 Rev B (2022) "
+                "sets a 600 mSv career effective dose design limit. ALARA principle: maintain "
+                "exposure As Low As Reasonably Achievable.* "
+                "*(ICRP Publication 123, 2013; Cucinotta et al., 2017)*"
             )
 
 
