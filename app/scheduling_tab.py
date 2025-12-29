@@ -297,7 +297,7 @@ def _render_gantt_timeline(
         - https://echarts.apache.org/examples/en/editor.html?c=custom-gantt-flight
         - ECharts Custom Series documentation
     """
-    daily = engine.get_or_create_daily_schedule(schedule_date)
+    daily = engine.get_daily_schedule(schedule_date)
     crew_list = list(engine.crew_members.values())
     crew_names = [c.name for c in crew_list]
     
@@ -308,8 +308,9 @@ def _render_gantt_timeline(
     # Prepare activity data: [crew_index, start_hour, end_hour, activity_id, activity_name]
     gantt_data = []
     legend_items: Dict[str, str] = {}
+    activities = daily.activities if daily else []
     
-    for activity in daily.activities:
+    for activity in activities:
         crew = engine.crew_members.get(activity.crew_id)
         if not crew or crew.name not in crew_names:
             continue
@@ -514,14 +515,14 @@ def _render_timeline_chart(
     """Render a 24-hour timeline using the Gantt chart visualization."""
     st.markdown("### 📅 Daily Timeline")
     
-    daily = engine.get_or_create_daily_schedule(schedule_date)
+    daily = engine.get_daily_schedule(schedule_date)
     crew_list = list(engine.crew_members.values())
     
     if not crew_list:
         st.info("No crew members configured. Add crew members using the sidebar controls.")
         return
     
-    if not daily.activities:
+    if not daily or not daily.activities:
         st.info("No activities scheduled for this date. Use the scheduling controls below to add activities.")
         _render_empty_timeline([c.name for c in crew_list])
         return
@@ -639,11 +640,12 @@ def _render_weekly_overview(
     max_activities = 1
     
     for day_idx, day in enumerate(days):
-        daily = engine.get_or_create_daily_schedule(day)
+        daily = engine.get_daily_schedule(day)
+        activities = daily.activities if daily else []
         
         # Count activities per crew member
         crew_counts: Dict[str, int] = {c.crew_id: 0 for c in crew_list}
-        for activity in daily.activities:
+        for activity in activities:
             if activity.crew_id in crew_counts:
                 crew_counts[activity.crew_id] += 1
         
@@ -740,9 +742,9 @@ def _render_activity_list(
     """
     st.markdown("### 📋 Activity List")
     
-    daily = engine.get_or_create_daily_schedule(schedule_date)
+    daily = engine.get_daily_schedule(schedule_date)
     
-    if not daily.activities:
+    if not daily or not daily.activities:
         st.info("No activities scheduled for this date.")
         return
     
@@ -1089,9 +1091,9 @@ def _render_optimization_panel(
                 engine.generate_daily_template(schedule_date)
                 st.success("✅ Daily template generated!")
     
-    # Show current optimization score
-    daily = engine.get_or_create_daily_schedule(schedule_date)
-    if daily.is_optimized:
+    # Show current optimization score (read-only display)
+    daily = engine.get_daily_schedule(schedule_date)
+    if daily and daily.is_optimized:
         st.metric("Optimization Score", f"{daily.optimization_score:.1f}/100")
 
 
@@ -1436,7 +1438,11 @@ def _render_workload_balance(
     engine: SchedulingEngine,
     schedule_date: date,
 ) -> None:
-    """Render workload balance chart for all crew members."""
+    """Render workload balance chart for all crew members.
+    
+    Note: This is a display-only function that does NOT create schedules.
+    Uses read-only get_daily_schedule() to avoid side effects.
+    """
     st.markdown("### ⚖️ Workload Balance")
     
     if render_echarts is None:
@@ -1445,8 +1451,8 @@ def _render_workload_balance(
     
     crew_list = list(engine.crew_members.values())
     
-    # Get schedule for the day
-    schedule = engine.get_or_create_daily_schedule(schedule_date)
+    # Get schedule for the day (read-only, does not create if missing)
+    schedule = engine.get_daily_schedule(schedule_date)
     
     # Calculate workload for each crew member
     workload_data = []
