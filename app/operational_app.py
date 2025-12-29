@@ -151,6 +151,14 @@ def main() -> None:
         about_available = False
         render_about_tab = None  # type: ignore[assignment]
 
+    try:
+        from scheduling_tab import render_scheduling_tab, SCHEDULING_AVAILABLE  # noqa: PLC0415
+
+        scheduling_available = SCHEDULING_AVAILABLE
+    except ImportError:  # pragma: no cover
+        scheduling_available = False
+        render_scheduling_tab = None  # type: ignore[assignment]
+
     if "_app_session_ready" not in st.session_state:
         st.session_state["_app_session_ready"] = True
 
@@ -167,12 +175,23 @@ def main() -> None:
         st.title("🧬 Mission Control - Flight Surgeon")
 
     st.markdown("---")
+    
+    # Build navigation options dynamically based on available modules
+    nav_options = ["🗓️ Crew Scheduling", "👤 User Profile", "ℹ️ About"]
+    
     page = st.sidebar.radio(
         "Navigation",
-        options=["👤 User Profile", "ℹ️ About"],
+        options=nav_options,
         index=0,
         key="operational_nav",
     )
+
+    if page == "🗓️ Crew Scheduling":
+        if scheduling_available and render_scheduling_tab is not None:
+            render_scheduling_tab()  # type: ignore[misc]
+        else:
+            st.error("Scheduling module unavailable (`scheduling_tab.py`).")
+        return
 
     if page == "👤 User Profile":
         if not user_profile_available or render_user_profile_tab is None:
