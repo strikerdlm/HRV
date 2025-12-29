@@ -5,6 +5,86 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.86] - 2025-12-29
+
+### Fixed
+- **NaN Propagation in EWMA Smoothing** (`_ewma_smooth`): Fixed critical bug where NaN values 
+  from incomplete SDNN data (via LEFT merge) would propagate through the entire EWMA output array.
+  The function now properly skips NaN values and carries forward the last valid smoothed value,
+  ensuring trend lines remain visible even with sparse data.
+
+### Added - HRV Measurement History Publication-Quality Upgrade
+
+**Comprehensive Age-Stratified Normative Data System:**
+- `AGE_SDNN_NORMS`: SDNN reference values by age group (Task Force 1996, Umetani et al. 1998)
+- `AGE_LF_HF_NORMS`: LF/HF ratio norms reflecting age-related sympathovagal balance shifts
+- `AGE_HR_NORMS`: Resting heart rate reference ranges (Tanaka et al. 2001, AHA guidelines)
+- Helper functions: `_get_age_sdnn_norms()`, `_get_age_lf_hf_norms()`, `_get_age_hr_norms()`
+
+**Publication-Quality HRV History Visualizations (Nature/Science Guidelines):**
+- **Dual-Axis RMSSD/SDNN Chart** (`_build_hrv_history_dual_axis_chart`):
+  - Age-stratified 5th-95th percentile normal range bands
+  - Population mean reference lines
+  - EWMA smoothing trend (7-day span) for noise reduction
+  - 7-day rolling average for trend identification
+  - Interactive pan/zoom with data picker
+  - Colorblind-friendly Scientific Color Palette
+
+- **Heart Rate Trend Chart** (`_build_hr_trend_chart`):
+  - Physiological zone coloring (athletic/good/normal/elevated/high)
+  - Age-based normal range shading
+  - Population mean reference line
+  - Visual mapping: Green (<60 bpm) to Red (>90 bpm)
+
+- **LF/HF Ratio Trend Chart** (`_build_lf_hf_trend_chart`):
+  - Sympathovagal balance interpretation zones
+  - Balance line (ratio = 1.0) reference
+  - Age-adjusted typical range shading
+  - Color coding: Blue (parasympathetic) → Red (sympathetic dominant)
+
+- **Autonomic Indices Chart** (`_build_autonomic_indices_chart`):
+  - Baevsky Stress Index with >150 threshold marker
+  - Parasympathetic Index (PNS) on secondary axis
+  - HRV Score composite tracking
+  - Dual Y-axis for different scale metrics
+
+- **lnRMSSD Athletic Monitoring Chart**:
+  - Log-transformed RMSSD for recovery tracking
+  - Coefficient of Variation (CV) calculation
+  - Mean ± 1 SD band for baseline stability assessment
+  - CV < 10% indicator for stable baseline
+
+**Graduate-Level Physiological Interpretations (Expandable):**
+- **RMSSD**: Vagal efferent tone, muscarinic receptor activation, RSA correlation
+- **SDNN**: Total autonomic variability, cyclic components, mortality risk (Kleiger et al. 1987)
+- **LF/HF Ratio**: Sympathovagal balance debate, baroreflex vs sympathetic interpretation
+- **Heart Rate**: Intrinsic pacemaker rate, vagal brake, β-adrenergic modulation
+- **Stress-Recovery**: Polyvagal theory (Porges 2007), allostatic load, training adaptation
+
+**Summary Statistics with Clinical Interpretation:**
+- Percentile position calculation (5th, 25th, 50th, 75th, 95th)
+- Personal vs population mean comparison
+- % of measurements within normal range
+- Latest value interpretation ("below average", "above average", etc.)
+
+### Scientific References (Newly Integrated)
+- Umetani K et al. (1998). J Am Coll Cardiol 31(3):593-601 - Age-related HRV decline
+- Kleiger RE et al. (1987). Am J Cardiol 59(4):256-262 - HRV mortality prediction
+- Tanaka H et al. (2001). J Am Coll Cardiol 37(1):153-156 - Age-predicted max HR
+- Porges SW (2007). Biol Psychol 74(2):116-143 - Polyvagal theory
+- Thayer JF & Lane RD (2000). Neurosci Biobehav Rev 24(6):627-638 - Vagal tone model
+- Billman GE (2013). Front Physiol 4:26 - LF/HF ratio critique
+- Reyes del Paso GA et al. (2013). Biol Psychol 93(1):22-31 - LF component analysis
+- Plews DJ et al. (2013). Int J Sports Physiol Perform 8(6):688-691 - HRV in athletes
+
+### Design Principles Applied
+- Nature Research Figure Guide compliance
+- Colorblind-friendly palette (viridis-inspired)
+- Clean typography with adequate whitespace
+- Interactive exploration without compromising static readability
+- Responsive design for various screen sizes
+- SVG rendering support for publication export
+
 ## [1.8.85] - 2025-12-29
 
 ### Added
