@@ -1,0 +1,40 @@
+---
+alwaysApply: true
+---
+# Publication-Quality Chart Standards
+
+This project uses **Apache ECharts** for all visualizations following Nature Research publication guidelines.
+
+## Quick Reference
+
+**Library**: ECharts (via `render_echarts()`) | **Fallback**: Plotly
+**Colors**: Use `SCIENTIFIC_COLORS` palette from `user_profile_tab.py`
+**Style**: Age-stratified norms, reference zones, EWMA trends, scientific citations
+
+## Key Requirements
+
+1. **Every chart MUST have**: Title, subtitle (methodology), axis labels with units, legend, tooltip
+2. **Reference zones**: Shaded bands for normal ranges (using stacked area technique)
+3. **Trend lines**: 7-day EWMA smoothing for time series
+4. **Citations**: Evidence-based references below each chart
+5. **Export**: SVG, PDF, PNG (300+ DPI), HTML, CSV/JSON
+
+## Standard Heights
+
+| Type | Height |
+|------|--------|
+| Line/Bar | 380px |
+| Gauge | 280px |
+| Radar | 280px |
+
+## Color Semantics
+
+| Meaning | Color |
+|---------|-------|
+| Good/Low Risk | `#27ae60` (green) |
+| Normal | `#3498db` (blue) |
+| Caution | `#f39c12` (yellow) |
+| Poor/High Risk | `#e74c3c` (red) |
+| Trend | `#2c3e50` (dark gray) |
+
+📋 **Full specification**: See `.cursor/rules/plots/RULE.md`
