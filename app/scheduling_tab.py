@@ -264,73 +264,294 @@ def _render_crew_status_grid(engine: SchedulingEngine) -> None:
 # Timeline Visualization (Gantt Chart)
 # ---------------------------------------------------------------------------
 
+# Activity color palette (consistent with scientific standards)
+ACTIVITY_COLORS: Dict[str, str] = {
+    "briefing": "#3498db",    # Blue
+    "breakfast": "#f1c40f",   # Yellow
+    "lunch": "#f39c12",       # Orange
+    "dinner": "#e67e22",      # Dark orange
+    "exercise": "#27ae60",    # Green
+    "recreation": "#9b59b6",  # Purple
+    "hygiene": "#1abc9c",     # Teal
+    "sleep": "#34495e",       # Dark gray
+    "lab_work": "#2980b9",    # Blue
+    "eva": "#e74c3c",         # Red
+    "nap": "#5d6d7e",         # Gray-blue
+    "medical": "#e91e63",     # Pink
+    "communication": "#00bcd4",  # Cyan
+}
+
+
+def _render_gantt_timeline(
+    engine: SchedulingEngine,
+    schedule_date: date,
+    height_px: int = 420,
+) -> None:
+    """Render a true Gantt chart timeline using ECharts custom series.
+    
+    This function embeds the JavaScript renderItem function directly in the HTML
+    to bypass JSON serialization limitations. Based on the official ECharts
+    custom-gantt-flight example.
+    
+    References:
+        - https://echarts.apache.org/examples/en/editor.html?c=custom-gantt-flight
+        - ECharts Custom Series documentation
+    """
+    daily = engine.get_or_create_daily_schedule(schedule_date)
+    crew_list = list(engine.crew_members.values())
+    crew_names = [c.name for c in crew_list]
+    
+    if not crew_names:
+        st.info("No crew members configured. Add crew members in the sidebar.")
+        return
+    
+    # Prepare activity data: [crew_index, start_hour, end_hour, activity_id, activity_name]
+    gantt_data = []
+    legend_items: Dict[str, str] = {}
+    
+    for activity in daily.activities:
+        crew = engine.crew_members.get(activity.crew_id)
+        if not crew or crew.name not in crew_names:
+            continue
+        
+        crew_idx = crew_names.index(crew.name)
+        start_hour = activity.start_time.hour + activity.start_time.minute / 60
+        end_hour = activity.end_time.hour + activity.end_time.minute / 60
+        
+        # Handle midnight crossing
+        if end_hour <= start_hour:
+            end_hour += 24
+        
+        color = ACTIVITY_COLORS.get(activity.activity_id, "#7f8c8d")
+        activity_def = ALL_ACTIVITIES.get(activity.activity_id)
+        display_name = activity_def.name if activity_def else activity.activity_name
+        
+        gantt_data.append({
+            "value": [crew_idx, start_hour, end_hour],
+            "name": display_name,
+            "itemStyle": {"color": color},
+            "activity_id": activity.activity_id,
+            "start_str": activity.start_time.strftime("%H:%M"),
+            "end_str": activity.end_time.strftime("%H:%M"),
+            "duration": activity.duration_minutes,
+        })
+        
+        legend_items[display_name] = color
+    
+    # Convert data for JS
+    data_js = json.dumps(gantt_data, ensure_ascii=False)
+    crew_names_js = json.dumps(crew_names, ensure_ascii=False)
+    legend_data_js = json.dumps(list(legend_items.keys()), ensure_ascii=False)
+    title_text = f"Crew Schedule — {schedule_date.strftime('%A, %B %d, %Y')}"
+    
+    # Build complete HTML with embedded renderItem function
+    html_content = f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+        <style>
+            * {{ margin: 0; padding: 0; box-sizing: border-box; }}
+            body {{ background: transparent; font-family: system-ui, -apple-system, sans-serif; }}
+            #chart {{ width: 100%; height: {height_px}px; }}
+        </style>
+    </head>
+    <body>
+        <div id="chart"></div>
+        <script>
+        (function() {{
+            var chartDom = document.getElementById('chart');
+            var myChart = echarts.init(chartDom, null, {{ renderer: 'canvas' }});
+            
+            var crewNames = {crew_names_js};
+            var data = {data_js};
+            var legendData = {legend_data_js};
+            
+            // Custom render function for Gantt bars
+            function renderGanttItem(params, api) {{
+                var categoryIndex = api.value(0);
+                var startValue = api.value(1);
+                var endValue = api.value(2);
+                
+                var start = api.coord([startValue, categoryIndex]);
+                var end = api.coord([endValue, categoryIndex]);
+                var height = api.size([0, 1])[1] * 0.6;
+                
+                var rectShape = echarts.graphic.clipRectByRect(
+                    {{
+                        x: start[0],
+                        y: start[1] - height / 2,
+                        width: Math.max(end[0] - start[0], 4),
+                        height: height
+                    }},
+                    {{
+                        x: params.coordSys.x,
+                        y: params.coordSys.y,
+                        width: params.coordSys.width,
+                        height: params.coordSys.height
+                    }}
+                );
+                
+                return rectShape && {{
+                    type: 'rect',
+                    shape: rectShape,
+                    style: api.style(),
+                    emphasis: {{
+                        style: {{
+                            shadowBlur: 10,
+                            shadowColor: 'rgba(0,0,0,0.3)'
+                        }}
+                    }}
+                }};
+            }}
+            
+            var option = {{
+                backgroundColor: 'transparent',
+                title: {{
+                    text: '{title_text}',
+                    subtext: '24-hour timeline • Hover for details • Scroll to zoom',
+                    left: 'center',
+                    textStyle: {{ fontSize: 15, fontWeight: 'bold', color: '#ddd' }},
+                    subtextStyle: {{ fontSize: 11, color: '#888' }}
+                }},
+                tooltip: {{
+                    trigger: 'item',
+                    backgroundColor: 'rgba(30, 30, 50, 0.95)',
+                    borderColor: '#555',
+                    borderWidth: 1,
+                    textStyle: {{ color: '#fff', fontSize: 12 }},
+                    formatter: function(params) {{
+                        var d = params.data;
+                        return '<div style="font-weight:bold;margin-bottom:6px;color:#fff;">' + d.name + '</div>' +
+                               '<div style="color:#aaa;">Crew: ' + crewNames[d.value[0]] + '</div>' +
+                               '<div style="color:#aaa;">Time: ' + d.start_str + ' – ' + d.end_str + '</div>' +
+                               '<div style="color:#aaa;">Duration: ' + d.duration + ' min</div>';
+                    }}
+                }},
+                legend: {{
+                    data: legendData,
+                    bottom: 8,
+                    textStyle: {{ color: '#888', fontSize: 10 }},
+                    itemWidth: 14,
+                    itemHeight: 10
+                }},
+                grid: {{
+                    left: '12%',
+                    right: '5%',
+                    top: '15%',
+                    bottom: '18%',
+                    containLabel: true
+                }},
+                xAxis: {{
+                    type: 'value',
+                    name: 'Hour of Day',
+                    nameLocation: 'middle',
+                    nameGap: 30,
+                    nameTextStyle: {{ color: '#888', fontSize: 11 }},
+                    min: 0,
+                    max: 24,
+                    interval: 2,
+                    axisLabel: {{
+                        formatter: function(v) {{ return v + ':00'; }},
+                        color: '#888',
+                        fontSize: 10
+                    }},
+                    axisLine: {{ lineStyle: {{ color: '#444' }} }},
+                    splitLine: {{ lineStyle: {{ color: '#333', type: 'dashed' }} }}
+                }},
+                yAxis: {{
+                    type: 'category',
+                    data: crewNames,
+                    inverse: true,
+                    axisLabel: {{ color: '#ddd', fontSize: 11 }},
+                    axisLine: {{ lineStyle: {{ color: '#444' }} }},
+                    splitLine: {{ show: true, lineStyle: {{ color: '#333', type: 'dashed' }} }}
+                }},
+                dataZoom: [
+                    {{ type: 'inside', xAxisIndex: 0, filterMode: 'weakFilter' }},
+                    {{ type: 'slider', xAxisIndex: 0, height: 20, bottom: 35, filterMode: 'weakFilter',
+                       borderColor: '#444', backgroundColor: '#1a1a2e',
+                       fillerColor: 'rgba(52, 152, 219, 0.3)', handleStyle: {{ color: '#3498db' }} }}
+                ],
+                series: [{{
+                    type: 'custom',
+                    renderItem: renderGanttItem,
+                    encode: {{
+                        x: [1, 2],
+                        y: 0
+                    }},
+                    data: data
+                }}]
+            }};
+            
+            myChart.setOption(option);
+            
+            // Handle resize
+            window.addEventListener('resize', function() {{
+                myChart.resize();
+            }});
+            
+            // ResizeObserver for iframe resize
+            var ro = new ResizeObserver(function() {{
+                myChart.resize();
+            }});
+            ro.observe(chartDom);
+        }})();
+        </script>
+    </body>
+    </html>
+    '''
+    
+    # Render using Streamlit's HTML component
+    st.components.v1.html(html_content, height=height_px + 20, scrolling=False)
+
+
 def _render_timeline_chart(
     engine: SchedulingEngine,
     schedule_date: date,
 ) -> None:
-    """Render a 24-hour Gantt chart timeline using ECharts."""
+    """Render a 24-hour timeline using the Gantt chart visualization."""
     st.markdown("### 📅 Daily Timeline")
     
-    if render_echarts is None:
-        st.warning("ECharts component not available. Install with `pip install streamlit-echarts`")
+    daily = engine.get_or_create_daily_schedule(schedule_date)
+    crew_list = list(engine.crew_members.values())
+    
+    if not crew_list:
+        st.info("No crew members configured. Add crew members using the sidebar controls.")
         return
     
-    daily = engine.get_or_create_daily_schedule(schedule_date)
+    if not daily.activities:
+        st.info("No activities scheduled for this date. Use the scheduling controls below to add activities.")
+        _render_empty_timeline([c.name for c in crew_list])
+        return
     
-    # Prepare data for Gantt chart
-    crew_names = [c.name for c in engine.crew_members.values()]
-    categories = [{"name": name} for name in crew_names]
+    # Render the Gantt chart
+    _render_gantt_timeline(engine, schedule_date, height_px=420)
     
-    # Convert activities to series data
-    data = []
-    for activity in daily.activities:
-        crew = engine.crew_members.get(activity.crew_id)
-        if not crew:
-            continue
-        
-        crew_idx = crew_names.index(crew.name) if crew.name in crew_names else 0
-        
-        # Convert to hour-based values for the chart
-        start_hour = activity.start_time.hour + activity.start_time.minute / 60
-        end_hour = activity.end_time.hour + activity.end_time.minute / 60
-        if end_hour < start_hour:  # Crosses midnight
-            end_hour += 24
-        
-        # Color based on activity type
-        activity_colors = {
-            "briefing": "#3498db",
-            "breakfast": "#f1c40f",
-            "lunch": "#f39c12",
-            "dinner": "#e67e22",
-            "exercise": "#27ae60",
-            "recreation": "#9b59b6",
-            "hygiene": "#1abc9c",
-            "sleep": "#2c3e50",
-            "lab_work": "#2980b9",
-            "eva": "#c0392b",
-        }
-        color = activity_colors.get(activity.activity_id, "#7f8c8d")
-        
-        data.append({
-            "name": activity.activity_name,
-            "value": [crew_idx, start_hour, end_hour, activity.duration_minutes],
-            "itemStyle": {"normal": {"color": color}},
-        })
+    # Activity legend with colors
+    st.markdown("---")
+    _render_activity_legend()
+
+
+def _render_empty_timeline(crew_names: List[str]) -> None:
+    """Render an empty timeline placeholder."""
+    if render_echarts is None:
+        return
     
-    # ECharts option
     option = {
-        "backgroundColor": "transparent",
-        "tooltip": {
-            "formatter": """function(params) {
-                var start = Math.floor(params.value[1]) + ':' + String(Math.round((params.value[1] % 1) * 60)).padStart(2, '0');
-                var end = Math.floor(params.value[2] % 24) + ':' + String(Math.round((params.value[2] % 1) * 60)).padStart(2, '0');
-                return params.name + '<br/>Time: ' + start + ' - ' + end + '<br/>Duration: ' + params.value[3] + ' min';
-            }""",
+        "title": {
+            "text": "No Activities Scheduled",
+            "subtext": "Add activities using the controls below",
+            "left": "center",
+            "top": "40%",
+            "textStyle": {"fontSize": 16, "color": "#888"},
+            "subtextStyle": {"fontSize": 12, "color": "#666"},
         },
         "grid": {
-            "left": "15%",
+            "left": "12%",
             "right": "5%",
-            "top": "10%",
+            "top": "18%",
             "bottom": "15%",
         },
         "xAxis": {
@@ -338,73 +559,242 @@ def _render_timeline_chart(
             "min": 0,
             "max": 24,
             "interval": 2,
-            "axisLabel": {
-                "formatter": "{value}:00",
-                "color": "#888",
-            },
+            "axisLabel": {"formatter": "{value}:00", "color": "#666"},
             "axisLine": {"lineStyle": {"color": "#444"}},
             "splitLine": {"lineStyle": {"color": "#333", "type": "dashed"}},
         },
         "yAxis": {
             "type": "category",
             "data": crew_names,
-            "axisLabel": {"color": "#ddd"},
+            "inverse": True,
+            "axisLabel": {"color": "#888"},
             "axisLine": {"lineStyle": {"color": "#444"}},
         },
-        "series": [
-            {
-                "type": "custom",
-                "renderItem": """function(params, api) {
-                    var categoryIndex = api.value(0);
-                    var start = api.coord([api.value(1), categoryIndex]);
-                    var end = api.coord([api.value(2), categoryIndex]);
-                    var height = api.size([0, 1])[1] * 0.6;
-                    
-                    var rectShape = echarts.graphic.clipRectByRect({
-                        x: start[0],
-                        y: start[1] - height / 2,
-                        width: end[0] - start[0],
-                        height: height
-                    }, {
-                        x: params.coordSys.x,
-                        y: params.coordSys.y,
-                        width: params.coordSys.width,
-                        height: params.coordSys.height
-                    });
-                    
-                    return rectShape && {
-                        type: 'rect',
-                        shape: rectShape,
-                        style: api.style()
-                    };
-                }""",
-                "encode": {
-                    "x": [1, 2],
-                    "y": 0,
-                },
-                "data": data,
-            }
-        ],
+        "series": [],
+    }
+    render_echarts(option, height_px=280)
+
+
+def _render_activity_legend() -> None:
+    """Render a visual activity legend with color boxes."""
+    legend_items = [
+        ("Briefing", ACTIVITY_COLORS["briefing"]),
+        ("Breakfast", ACTIVITY_COLORS["breakfast"]),
+        ("Lunch", ACTIVITY_COLORS["lunch"]),
+        ("Dinner", ACTIVITY_COLORS["dinner"]),
+        ("Exercise", ACTIVITY_COLORS["exercise"]),
+        ("Recreation", ACTIVITY_COLORS["recreation"]),
+        ("Hygiene", ACTIVITY_COLORS["hygiene"]),
+        ("Sleep", ACTIVITY_COLORS["sleep"]),
+        ("Lab Work", ACTIVITY_COLORS["lab_work"]),
+        ("EVA", ACTIVITY_COLORS["eva"]),
+    ]
+    
+    st.markdown("**Activity Types:**")
+    cols = st.columns(5)
+    for idx, (name, color) in enumerate(legend_items):
+        with cols[idx % 5]:
+            st.markdown(
+                f'<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">'
+                f'<div style="width:16px;height:16px;background:{color};border-radius:3px;"></div>'
+                f'<span style="font-size:0.85em;color:#ccc;">{name}</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+
+# ---------------------------------------------------------------------------
+# Weekly Overview Calendar
+# ---------------------------------------------------------------------------
+
+def _render_weekly_overview(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render a weekly calendar heatmap showing activity density.
+    
+    Shows 7 days centered on the selected date, with color intensity
+    indicating activity count per crew member per day.
+    """
+    st.markdown("### 📆 Weekly Overview")
+    
+    if render_echarts is None:
+        st.warning("ECharts component not available")
+        return
+    
+    # Get 7 days centered on selected date
+    start_date = schedule_date - timedelta(days=3)
+    days = [start_date + timedelta(days=i) for i in range(7)]
+    day_labels = [d.strftime("%a\n%m/%d") for d in days]
+    
+    crew_list = list(engine.crew_members.values())
+    crew_names = [c.name for c in crew_list]
+    
+    if not crew_names:
+        st.info("No crew members configured.")
+        return
+    
+    # Build heatmap data: [day_index, crew_index, activity_count]
+    data = []
+    max_activities = 1
+    
+    for day_idx, day in enumerate(days):
+        daily = engine.get_or_create_daily_schedule(day)
+        
+        # Count activities per crew member
+        crew_counts: Dict[str, int] = {c.crew_id: 0 for c in crew_list}
+        for activity in daily.activities:
+            if activity.crew_id in crew_counts:
+                crew_counts[activity.crew_id] += 1
+        
+        for crew_idx, crew in enumerate(crew_list):
+            count = crew_counts.get(crew.crew_id, 0)
+            max_activities = max(max_activities, count)
+            data.append([day_idx, crew_idx, count])
+    
+    # Highlight current day
+    current_day_idx = days.index(schedule_date) if schedule_date in days else 3
+    
+    option = {
+        "title": {
+            "text": f"Activity Density — Week of {start_date.strftime('%B %d')}",
+            "left": "center",
+            "textStyle": {"fontSize": 14, "color": "#ddd"},
+        },
+        "tooltip": {
+            "position": "top",
+            "backgroundColor": "rgba(30, 30, 50, 0.95)",
+            "borderColor": "#444",
+            "textStyle": {"color": "#fff"},
+        },
+        "grid": {
+            "left": "15%",
+            "right": "8%",
+            "top": "15%",
+            "bottom": "10%",
+            "containLabel": True,
+        },
+        "xAxis": {
+            "type": "category",
+            "data": day_labels,
+            "axisLabel": {"color": "#888", "fontSize": 10},
+            "axisLine": {"lineStyle": {"color": "#444"}},
+            "splitArea": {"show": True, "areaStyle": {"color": ["rgba(0,0,0,0)", "rgba(255,255,255,0.02)"]}},
+        },
+        "yAxis": {
+            "type": "category",
+            "data": crew_names,
+            "axisLabel": {"color": "#ddd", "fontSize": 11},
+            "axisLine": {"lineStyle": {"color": "#444"}},
+        },
+        "visualMap": {
+            "min": 0,
+            "max": max(max_activities, 10),
+            "calculable": True,
+            "orient": "vertical",
+            "right": "2%",
+            "top": "center",
+            "itemHeight": 100,
+            "textStyle": {"color": "#888"},
+            "inRange": {
+                "color": ["#1a1a2e", "#2d4a3e", "#27ae60", "#f39c12", "#e74c3c"],
+            },
+        },
+        "series": [{
+            "name": "Activities",
+            "type": "heatmap",
+            "data": data,
+            "label": {
+                "show": True,
+                "color": "#fff",
+                "fontSize": 12,
+                "fontWeight": "bold",
+            },
+            "emphasis": {
+                "itemStyle": {"shadowBlur": 10, "shadowColor": "rgba(0,0,0,0.5)"},
+            },
+            "markLine": {
+                "silent": True,
+                "data": [{"xAxis": current_day_idx}],
+                "lineStyle": {"color": "#3498db", "width": 2, "type": "solid"},
+                "label": {"show": False},
+                "symbol": "none",
+            },
+        }],
     }
     
-    render_echarts(option, height_px=380)
+    render_echarts(option, height_px=250)
+
+
+# ---------------------------------------------------------------------------
+# Activity List View
+# ---------------------------------------------------------------------------
+
+def _render_activity_list(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render a tabular list of activities for the selected date.
     
-    # Activity legend
-    st.markdown(
-        """
-        <div style="display: flex; flex-wrap: wrap; gap: 12px; margin-top: 10px; font-size: 0.85em;">
-            <span>🔵 Briefing</span>
-            <span>🟡 Meals</span>
-            <span>🟢 Exercise</span>
-            <span>🟣 Recreation</span>
-            <span>🔷 Hygiene</span>
-            <span>⬛ Sleep</span>
-            <span>🔵 Lab Work</span>
-            <span>🔴 EVA</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    Provides an alternative view to the Gantt chart with edit/delete controls.
+    """
+    st.markdown("### 📋 Activity List")
+    
+    daily = engine.get_or_create_daily_schedule(schedule_date)
+    
+    if not daily.activities:
+        st.info("No activities scheduled for this date.")
+        return
+    
+    # Group activities by crew member
+    crew_activities: Dict[str, List[ScheduledActivity]] = {}
+    for activity in sorted(daily.activities, key=lambda a: a.start_time):
+        if activity.crew_id not in crew_activities:
+            crew_activities[activity.crew_id] = []
+        crew_activities[activity.crew_id].append(activity)
+    
+    # Display by crew member
+    for crew_id, activities in crew_activities.items():
+        crew = engine.crew_members.get(crew_id)
+        crew_name = crew.name if crew else crew_id
+        
+        with st.expander(f"👤 {crew_name} ({len(activities)} activities)", expanded=True):
+            for activity in activities:
+                color = ACTIVITY_COLORS.get(activity.activity_id, "#7f8c8d")
+                
+                col1, col2, col3, col4, col5 = st.columns([0.5, 2, 1.5, 1, 0.8])
+                
+                with col1:
+                    st.markdown(
+                        f'<div style="width:20px;height:20px;background:{color};border-radius:4px;margin-top:8px;"></div>',
+                        unsafe_allow_html=True,
+                    )
+                
+                with col2:
+                    st.markdown(f"**{activity.activity_name}**")
+                    if activity.notes:
+                        st.caption(activity.notes)
+                
+                with col3:
+                    st.markdown(
+                        f"🕐 {activity.start_time.strftime('%H:%M')} – {activity.end_time.strftime('%H:%M')}"
+                    )
+                
+                with col4:
+                    st.markdown(f"⏱️ {activity.duration_minutes} min")
+                
+                with col5:
+                    if st.button("🗑️", key=f"del_{activity.start_time}_{activity.activity_id}_{crew_id}"):
+                        # Remove activity from schedule
+                        daily.activities = [
+                            a for a in daily.activities
+                            if not (a.crew_id == crew_id and 
+                                   a.activity_id == activity.activity_id and
+                                   a.start_time == activity.start_time)
+                        ]
+                        st.rerun()
+                
+                st.markdown("---")
 
 
 # ---------------------------------------------------------------------------
@@ -1381,7 +1771,23 @@ def render_scheduling_tab() -> None:
         _render_alerts_panel(engine, schedule_date)
     
     with tab2:
-        _render_timeline_chart(engine, schedule_date)
+        # Sub-tabs for different views
+        view_mode = st.radio(
+            "View Mode",
+            options=["📊 Gantt Timeline", "📋 Activity List", "📆 Weekly Overview"],
+            horizontal=True,
+            key="timeline_view_mode",
+        )
+        
+        st.markdown("---")
+        
+        if view_mode == "📊 Gantt Timeline":
+            _render_timeline_chart(engine, schedule_date)
+        elif view_mode == "📋 Activity List":
+            _render_activity_list(engine, schedule_date)
+        else:  # Weekly Overview
+            _render_weekly_overview(engine, schedule_date)
+        
         st.markdown("---")
         _render_scheduling_controls(engine, schedule_date)
         st.markdown("---")
