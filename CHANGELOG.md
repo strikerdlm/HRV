@@ -5,6 +5,89 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.88] - 2025-12-29
+
+### Added - Publication-Quality Wearable Monitoring & Predictive Analytics Charts
+
+**Scientific Background:** These visualizations follow guidelines from Nature Research and incorporate 
+evidence-based reference ranges for clinical interpretation. Each metric provides insight into different 
+aspects of physiological function and recovery capacity.
+
+**New Publication-Quality Wearable Trend Charts:**
+
+1. **Activity & Movement** (`_build_activity_movement_chart`):
+   - Bar chart with 7-day EWMA trend line
+   - WHO target zone (8,000-10,000 steps/day) shaded
+   - 10k target line with dashed indicator
+   - Calorie overlay on secondary axis
+   - Reference: Tudor-Locke et al. (2011) Int J Behav Nutr Phys Act
+
+2. **Heart Rate & Stress** (`_build_hr_stress_chart`):
+   - Resting HR with athletic zone (<60 bpm) highlighted
+   - 7-day HR trend line
+   - Stress score bars with trend overlay
+   - Garmin stress scale zones (0-25 rest, 26-50 low, 51-75 med, 76-100 high)
+   - Reference: Shaffer & Ginsberg (2017)
+
+3. **Sleep & Recovery** (`_build_sleep_recovery_chart`):
+   - Sleep score and efficiency lines
+   - 85% clinical threshold indicator
+   - Sleep duration bars with optimal zone (7-9h) shaded
+   - Reference: Ohayon et al. (2017), NSF (2015)
+
+4. **Respiration & SpO₂** (`_build_respiration_spo2_chart`):
+   - SpO₂ line with 95% clinical threshold
+   - Normal respiration zone (12-20 rpm)
+   - Separate awake/sleep respiration tracking
+   - Reference: WHO Pulse Oximetry Training Manual (2011)
+
+5. **Body Battery** (`_build_body_battery_chart`):
+   - Energy zones color-coded (75-100 High, 50-74 Moderate, 25-49 Low, <25 Critical)
+   - 7-day trend line
+   - Charge/drain bars on secondary axis
+   - 25% threshold warning line
+   - Reference: Firstbeat Technologies (2014)
+
+**Enhanced Advanced Predictive Analytics:**
+
+1. **Body Battery Forecast** - Enhanced with:
+   - Styled metric cards for trend/accuracy/recovery
+   - Energy zones overlaid on forecast
+   - 95% confidence interval band
+   - Publication-quality axis labels and subtitles
+
+2. **Allostatic Load Index** - Enhanced with:
+   - Semi-circular gauge with 4 risk zones
+   - Radar chart for component scores
+   - Styled trend cards (7d/30d)
+   - Reference: McEwen (1998), Seeman et al. (2001)
+
+3. **Circadian Rhythm Profile** - New 24-hour polar chart:
+   - Cosine-based performance curve centered on acrophase
+   - Peak performance hours highlighted in green
+   - Chronotype-specific optimization tips
+   - Reference: Roenneberg et al. (2003)
+
+4. **Stress Prediction** - Enhanced with:
+   - Semi-circular stress gauge with 4 zones
+   - Styled contributing factors list
+   - Risk level card with icon
+   - Reference: Cohen et al. (1983), McEwen (2008)
+
+5. **Recovery Status** - Enhanced with:
+   - Recovery score gauge (0-100)
+   - Sleep debt and stress accumulation cards
+   - Days to recovery estimation
+   - Reference: Kellmann (2010), Meeusen et al. (2013)
+
+**UI Improvements:**
+- All trend charts now use expanders for better organization
+- Scientific citations added to each visualization
+- Consistent styling with SCIENTIFIC_COLORS palette
+- Interactive data zoom on all charts
+
+---
+
 ## [1.8.87] - 2025-12-29
 
 ### Added - EVA Clearance Semaphore & Space Weather Improvements
