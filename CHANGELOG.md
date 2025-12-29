@@ -5,6 +5,56 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.8.85] - 2025-12-29
+
+### Added
+- **Publication-Quality HRV Visualizations** (`app/user_profile_tab.py`): Scientific-grade ECharts plots for Q1 journal publication:
+  - **RMSSD Trend Visualization** with age-stratified normal ranges:
+    - 5th-95th percentile shading (population normal range)
+    - 25th-75th percentile markers (optimal range)
+    - Population mean reference line
+    - EWMA exponential smoothing trend
+    - 7-day rolling average
+    - Interactive pan/zoom with data picker
+    - Age group label and scientific references
+    - Summary statistics (% in normal range)
+  - **RR Tachogram** with scientific annotations:
+    - Color-coded RR intervals by physiological range (tachycardia/bradycardia)
+    - Mean ± 1 SD reference lines
+    - Statistical summary (mean, SD, HR, sample count)
+    - LTTB downsampling for large datasets
+    - Interactive crosshair tooltip
+  - **Power Spectral Density** with frequency band analysis:
+    - VLF (0.003-0.04 Hz), LF (0.04-0.15 Hz), HF (0.15-0.4 Hz) band shading
+    - Band power values in legend (ms²)
+    - LF/HF ratio and peak frequency annotations
+    - Frequency band boundary markers
+  - **RR Distribution Histogram** with statistical overlay:
+    - Normal distribution fit overlay
+    - Mean and median markers
+    - Skewness and kurtosis values
+    - Density normalization
+
+- **Age-Stratified Normative Data** (`AGE_RMSSD_NORMS`):
+  - Six age groups (18-25, 26-35, 36-45, 46-55, 56-65, 66+)
+  - Mean, SD, and percentile values (p5, p25, p50, p75, p95)
+  - Reference: Nunan et al. (2010), Shaffer & Ginsberg (2017), WHOOP population data
+
+- **Scientific Color Palette** (`SCIENTIFIC_COLORS`):
+  - Colorblind-friendly palette for accessibility
+  - Consistent styling across all HRV visualizations
+
+### Technical Details
+- EWMA smoothing with configurable span (default: 7 days)
+- Automatic age-based reference range lookup
+- Interactive ECharts with data zoom/pan
+- Responsive design for various screen sizes
+
+### Scientific References
+- Nunan D et al. (2010). PACE 33(11):1407-1417 - Short-term HRV normal values
+- Shaffer F & Ginsberg JP (2017). Front Public Health 5:258 - HRV metrics overview
+- Task Force (1996). Circulation 93(5):1043-65 - HRV measurement standards
+
 ## [1.8.84] - 2025-12-29
 
 ### Added
