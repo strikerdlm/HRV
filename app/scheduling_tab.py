@@ -2066,7 +2066,7 @@ def _render_eva_radiation_metrics_plot(
                 "label": {
                     "show": True,
                     "position": "right",
-                    "formatter": f"{{value}}% ({proton_flux:.2f} pfu, S{current_s_scale})",
+                    "formatter": f"{proton_normalized:.1f}% ({proton_flux:.2f} pfu, S{current_s_scale})",
                     "color": "#1a1a1a",
                     "fontSize": 10,
                 },
@@ -2082,7 +2082,7 @@ def _render_eva_radiation_metrics_plot(
                 "label": {
                     "show": True,
                     "position": "right",
-                    "formatter": f"{{value}}% ({kp_index:.1f}, G{current_g_scale})",
+                    "formatter": f"{kp_normalized:.1f}% ({kp_index:.1f}, G{current_g_scale})",
                     "color": "#1a1a1a",
                     "fontSize": 10,
                 },
@@ -2103,7 +2103,7 @@ def _render_eva_radiation_metrics_plot(
                 "label": {
                     "show": True,
                     "position": "right",
-                    "formatter": f"{{value}}% ({eva_rate_hr:.3f} mSv/hr)",
+                    "formatter": f"{eva_normalized:.1f}% ({eva_rate_hr:.3f} mSv/hr)",
                     "color": "#1a1a1a",
                     "fontSize": 10,
                 },
