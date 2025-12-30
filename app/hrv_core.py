@@ -820,11 +820,14 @@ def compute_geometric_metrics(rr_intervals: np.ndarray) -> Dict[str, float]:
 def compute_baevsky_stress_index(rr_intervals: np.ndarray, *, bin_width_ms: float = 50.0) -> float:
 	"""Calculate Baevsky Stress Index using proper 50ms bin width as per scientific literature.
 	
-	Formula: SI = (AMo × 100) / (2 × Mo × MxDMn)
+	Formula: SI = AMo / (2 × Mo × MxDMn)
 	Where:
-	- AMo = amplitude of mode (percentage of RR intervals in the mode bin)
-	- Mo = mode (most frequent RR interval) in seconds
-	- MxDMn = variation scope (difference between shortest and longest RR interval) in seconds
+	- AMo = amplitude of mode (fraction 0-1 of RR intervals in the mode bin)
+	- Mo = mode (most frequent RR interval) in milliseconds
+	- MxDMn = variation scope (difference between shortest and longest RR interval) in milliseconds
+	
+	This implementation uses 50ms bin width (per literature) but maintains the same units
+	as compute_geometric_metrics to ensure consistency with existing stored values.
 	
 	References:
 	- Baevsky RM, Chernikova AG (2017). Heart rate variability analysis: physiological foundations and main methods.
@@ -840,6 +843,7 @@ def compute_baevsky_stress_index(rr_intervals: np.ndarray, *, bin_width_ms: floa
 		
 	Returns:
 		Baevsky Stress Index (typically 0-500, higher = more stress)
+		Note: Values match compute_geometric_metrics implementation for consistency
 	"""
 	if rr_intervals.size < 10:
 		return 0.0
@@ -865,18 +869,23 @@ def compute_baevsky_stress_index(rr_intervals: np.ndarray, *, bin_width_ms: floa
 	# Find mode (most frequent RR interval)
 	mode_idx = int(np.argmax(hist))
 	mode_center_ms = float((edges[mode_idx] + edges[mode_idx + 1]) / 2.0)
-	Mo = mode_center_ms / 1000.0  # Convert to seconds
 	
-	# AMo = amplitude of mode (percentage of intervals in mode bin)
+	# AMo = amplitude of mode (fraction 0-1, NOT percentage)
+	# Per literature: AMo is the fraction of intervals in the mode bin
+	# This matches the original compute_geometric_metrics implementation
 	N = int(rr.size)
-	AMo_pct = float((hist[mode_idx] / N) * 100.0) if N > 0 else 0.0
+	AMo = float(hist[mode_idx] / N) if N > 0 else 0.0  # Fraction (0-1), not percentage
 	
-	# MxDMn = variation scope (range) in seconds
-	MxDMn = (max_v - min_v) / 1000.0  # Convert to seconds
+	# MxDMn = variation scope (range) in milliseconds
+	# Keep in milliseconds to match original implementation and existing stored values
+	MxDMn_ms = float(max_v - min_v)
 	
 	# Calculate Baevsky Stress Index
-	if Mo > 0 and MxDMn > 0:
-		si = (AMo_pct) / (2.0 * Mo * MxDMn)
+	# Formula: SI = AMo / (2 * Mo * MxDMn)
+	# Where AMo is fraction (0-1), Mo is in ms, MxDMn is in ms
+	# This matches the original compute_geometric_metrics implementation for consistency
+	if mode_center_ms > 0 and MxDMn_ms > 0:
+		si = AMo / (2.0 * mode_center_ms * MxDMn_ms)
 		return float(si)
 	
 	return 0.0
