@@ -351,14 +351,30 @@ def _render_gantt_timeline(
         activity_def = ALL_ACTIVITIES.get(activity.activity_id)
         display_name = activity_def.name if activity_def else activity.activity_name
         
+        # Visual distinction for fixed vs flexible activities (NASA Mission Control standard)
+        # Fixed activities: solid border, flexible: dashed border
+        is_fixed = activity.is_fixed or (activity_def and activity_def.id in FIXED_ACTIVITIES)
+        border_style = {
+            "width": 2,
+            "type": "solid" if is_fixed else "dashed",
+            "color": "#fff" if is_fixed else "#888",
+        }
+        
         gantt_data.append({
             "value": [crew_idx, start_hour, end_hour],
             "name": display_name,
-            "itemStyle": {"color": color},
+            "itemStyle": {
+                "color": color,
+                "borderColor": border_style["color"],
+                "borderWidth": border_style["width"],
+                "borderType": border_style["type"],
+            },
             "activity_id": activity.activity_id,
             "start_str": activity.start_time.strftime("%H:%M"),
             "end_str": activity.end_time.strftime("%H:%M"),
             "duration": activity.duration_minutes,
+            "is_fixed": is_fixed,
+            "priority": activity.priority,
         })
         
         legend_items[display_name] = color
@@ -448,10 +464,12 @@ def _render_gantt_timeline(
                     textStyle: {{ color: '#fff', fontSize: 13 }},
                     formatter: function(params) {{
                         var d = params.data;
-                        return '<div style="font-weight:bold;margin-bottom:6px;color:#fff;font-size:14px;">' + d.name + '</div>' +
+                        var fixedBadge = d.is_fixed ? '<span style="background:#e74c3c;padding:2px 6px;border-radius:3px;font-size:10px;margin-left:8px;">FIXED</span>' : '<span style="background:#3498db;padding:2px 6px;border-radius:3px;font-size:10px;margin-left:8px;">FLEXIBLE</span>';
+                        return '<div style="font-weight:bold;margin-bottom:6px;color:#fff;font-size:14px;">' + d.name + fixedBadge + '</div>' +
                                '<div style="color:#e0e0e0;">Crew: ' + crewNames[d.value[0]] + '</div>' +
                                '<div style="color:#e0e0e0;">Time: ' + d.start_str + ' – ' + d.end_str + '</div>' +
-                               '<div style="color:#e0e0e0;">Duration: ' + d.duration + ' min</div>';
+                               '<div style="color:#e0e0e0;">Duration: ' + d.duration + ' min</div>' +
+                               '<div style="color:#e0e0e0;">Priority: ' + (d.priority || 5) + '/10</div>';
                     }}
                 }},
                 legend: {{
@@ -556,9 +574,83 @@ def _render_timeline_chart(
     # Render the Gantt chart
     _render_gantt_timeline(engine, schedule_date, height_px=420)
     
-    # Activity legend with colors
+    # Activity legend with colors and fixed/flexible distinction
     st.markdown("---")
     _render_activity_legend()
+    
+    # Fixed vs Flexible legend
+    st.markdown("**Activity Constraints:**")
+    col_fixed, col_flex = st.columns(2)
+    with col_fixed:
+        st.markdown(
+            '<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">'
+            '<div style="width:20px;height:12px;background:#e74c3c;border:2px solid #fff;border-radius:2px;"></div>'
+            '<span style="font-size:0.85em;color:#ccc;">Fixed Time (Solid Border)</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    with col_flex:
+        st.markdown(
+            '<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">'
+            '<div style="width:20px;height:12px;background:#3498db;border:2px dashed #888;border-radius:2px;"></div>'
+            '<span style="font-size:0.85em;color:#ccc;">Flexible Time (Dashed Border)</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+
+
+def _render_3day_timeline(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render a 3-day timeline view (NASA Mission Control standard).
+    
+    Shows 3 consecutive days: yesterday, today, tomorrow for short-term planning.
+    """
+    st.markdown("### 📆 3-Day Planning Horizon")
+    
+    crew_list = list(engine.crew_members.values())
+    if not crew_list:
+        st.info("No crew members configured.")
+        return
+    
+    # Get 3 days: yesterday, today, tomorrow
+    days = [
+        schedule_date - timedelta(days=1),
+        schedule_date,
+        schedule_date + timedelta(days=1),
+    ]
+    day_labels = [d.strftime("%a %m/%d") for d in days]
+    
+    # Create tabs for each day
+    day_tabs = st.tabs([f"📅 {day_labels[0]}", f"📅 {day_labels[1]} (Today)", f"📅 {day_labels[2]}"])
+    
+    for idx, day_tab in enumerate(day_tabs):
+        with day_tab:
+            _render_timeline_chart(engine, days[idx])
+
+
+def _render_3day_activity_list(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render activity list for 3-day planning horizon."""
+    st.markdown("### 📋 3-Day Activity List")
+    
+    # Get 3 days
+    days = [
+        schedule_date - timedelta(days=1),
+        schedule_date,
+        schedule_date + timedelta(days=1),
+    ]
+    day_labels = [d.strftime("%a %m/%d") for d in days]
+    
+    # Create tabs for each day
+    day_tabs = st.tabs([f"📅 {day_labels[0]}", f"📅 {day_labels[1]} (Today)", f"📅 {day_labels[2]}"])
+    
+    for idx, day_tab in enumerate(day_tabs):
+        with day_tab:
+            _render_activity_list(engine, days[idx])
 
 
 def _render_empty_timeline(crew_names: List[str]) -> None:
@@ -789,17 +881,22 @@ def _render_activity_list(
         with st.expander(f"👤 {crew_name} ({len(activities)} activities)", expanded=True):
             for activity in activities:
                 color = ACTIVITY_COLORS.get(activity.activity_id, "#7f8c8d")
+                is_fixed = activity.is_fixed or (ALL_ACTIVITIES.get(activity.activity_id) and ALL_ACTIVITIES[activity.activity_id].id in FIXED_ACTIVITIES)
                 
-                col1, col2, col3, col4, col5 = st.columns([0.5, 2, 1.5, 1, 0.8])
+                col1, col2, col3, col4, col5, col6 = st.columns([0.5, 2, 1.5, 1, 1, 0.8])
                 
                 with col1:
+                    border_style = "2px solid #fff" if is_fixed else "2px dashed #888"
                     st.markdown(
-                        f'<div style="width:20px;height:20px;background:{color};border-radius:4px;margin-top:8px;"></div>',
+                        f'<div style="width:20px;height:20px;background:{color};border:{border_style};border-radius:4px;margin-top:8px;"></div>',
                         unsafe_allow_html=True,
                     )
                 
                 with col2:
-                    st.markdown(f"**{activity.activity_name}**")
+                    fixed_badge = "🔒 FIXED" if is_fixed else "🔄 FLEXIBLE"
+                    st.markdown(f"**{activity.activity_name}** {fixed_badge}")
+                    if activity.location:
+                        st.caption(f"📍 {activity.location}")
                     if activity.notes:
                         st.caption(activity.notes)
                 
@@ -812,14 +909,16 @@ def _render_activity_list(
                     st.markdown(f"⏱️ {activity.duration_minutes} min")
                 
                 with col5:
-                    if st.button("🗑️", key=f"del_{activity.start_time}_{activity.activity_id}_{crew_id}"):
+                    priority_color = "#e74c3c" if activity.priority >= 8 else "#f39c12" if activity.priority >= 5 else "#3498db"
+                    st.markdown(
+                        f'<span style="color:{priority_color};font-weight:bold;">🎯 P{activity.priority}</span>',
+                        unsafe_allow_html=True,
+                    )
+                
+                with col6:
+                    if st.button("🗑️", key=f"del_{activity.schedule_id}"):
                         # Remove activity from schedule
-                        daily.activities = [
-                            a for a in daily.activities
-                            if not (a.crew_id == crew_id and 
-                                   a.activity_id == activity.activity_id and
-                                   a.start_time == activity.start_time)
-                        ]
+                        daily.activities = [a for a in daily.activities if a.schedule_id != activity.schedule_id]
                         st.rerun()
                 
                 st.markdown("---")
@@ -1059,19 +1158,27 @@ def _render_scheduling_controls(
     
     with col5:
         priority = st.slider(
-            "Priority",
+            "Priority (1-10)",
             min_value=1,
             max_value=10,
             value=5,
             key="schedule_priority",
+            help="Higher priority = more important. Conflicts resolved based on priority (NASA Mission Control standard)",
         )
     
     with col6:
-        notes = st.text_input(
-            "Notes",
-            value="",
-            key="schedule_notes",
+        location = st.selectbox(
+            "Location (optional)",
+            options=["", "Lab Module", "Exercise Area", "Crew Quarters", "Command Module", "EVA Airlock", "Other"],
+            key="schedule_location",
+            help="Track activity location for spatial conflict detection (NASA Mission Control standard)",
         )
+    
+    notes = st.text_input(
+        "Notes",
+        value="",
+        key="schedule_notes",
+    )
     
     if st.button("📌 Schedule Activity", type="primary", key="schedule_btn"):
         start_datetime = datetime.combine(schedule_date, start_time)
@@ -1082,6 +1189,7 @@ def _render_scheduling_controls(
             duration_minutes=duration,
             priority=priority,
             notes=notes,
+            location=location if location else None,
         )
         
         if scheduled:
@@ -1135,6 +1243,247 @@ def _render_optimization_panel(
     daily = engine.get_daily_schedule(schedule_date)
     if daily and daily.is_optimized:
         st.metric("Optimization Score", f"{daily.optimization_score:.1f}/100")
+
+
+# ---------------------------------------------------------------------------
+# Activity Grouping Panel (NASA Playbook Standard)
+# ---------------------------------------------------------------------------
+
+def _render_activity_grouping_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render activity grouping panel for batch operations (NASA Playbook standard)."""
+    st.markdown("### 📦 Activity Grouping & Batch Operations")
+    st.caption("Group related activities together for batch scheduling (NASA Playbook feature)")
+    
+    daily = engine.get_daily_schedule(schedule_date)
+    if not daily or not daily.activities:
+        st.info("No activities scheduled. Create activities first to use grouping.")
+        return
+    
+    # Show existing groups
+    if engine.activity_groups:
+        st.markdown("#### Existing Groups")
+        for group_id, group in engine.activity_groups.items():
+            with st.expander(f"📦 {group.name} ({len(group.activity_ids)} activities)", expanded=False):
+                st.write(f"**Description:** {group.description or 'No description'}")
+                st.write(f"**Created:** {group.created_at.strftime('%Y-%m-%d %H:%M')}")
+                
+                # Show activities in group
+                group_activities = [a for a in daily.activities if a.schedule_id in group.activity_ids]
+                if group_activities:
+                    st.write("**Activities in group:**")
+                    for activity in sorted(group_activities, key=lambda a: a.start_time):
+                        crew = engine.crew_members.get(activity.crew_id)
+                        crew_name = crew.name if crew else activity.crew_id
+                        st.write(f"- {activity.activity_name} ({crew_name}) @ {activity.start_time.strftime('%H:%M')}")
+                    
+                    # Move group controls
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        time_offset = st.number_input(
+                            "Time offset (minutes)",
+                            min_value=-480,
+                            max_value=480,
+                            value=0,
+                            step=15,
+                            key=f"group_offset_{group_id}",
+                            help="Positive = later, Negative = earlier",
+                        )
+                    with col2:
+                        if st.button("🔄 Move Group", key=f"move_group_{group_id}"):
+                            success, conflicts = engine.move_activity_group(group_id, time_offset, schedule_date)
+                            if success:
+                                st.success(f"✅ Group moved by {time_offset} minutes")
+                                st.rerun()
+                            else:
+                                st.error(f"❌ Cannot move group: {len(conflicts)} conflicts")
+                                for conflict in conflicts:
+                                    st.warning(f"⚠️ {conflict.description}")
+                else:
+                    st.info("No activities found for this group on this date.")
+                
+                if st.button("🗑️ Delete Group", key=f"delete_group_{group_id}"):
+                    del engine.activity_groups[group_id]
+                    st.success("✅ Group deleted")
+                    st.rerun()
+    
+    st.markdown("---")
+    
+    # Create new group
+    st.markdown("#### Create New Group")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        group_name = st.text_input("Group Name", key="new_group_name", placeholder="e.g., Morning Routine, EVA Prep")
+        group_description = st.text_area("Description (optional)", key="new_group_desc", height=80)
+    
+    with col2:
+        # Activity selector
+        activity_options = {}
+        for activity in sorted(daily.activities, key=lambda a: a.start_time):
+            crew = engine.crew_members.get(activity.crew_id)
+            crew_name = crew.name if crew else activity.crew_id
+            label = f"{activity.activity_name} ({crew_name}) @ {activity.start_time.strftime('%H:%M')}"
+            activity_options[activity.schedule_id] = label
+        
+        selected_activities = st.multiselect(
+            "Select Activities",
+            options=list(activity_options.keys()),
+            format_func=lambda x: activity_options[x],
+            key="new_group_activities",
+        )
+    
+    if st.button("➕ Create Group", key="create_group_btn"):
+        if not group_name:
+            st.error("Please enter a group name")
+        elif not selected_activities:
+            st.error("Please select at least one activity")
+        else:
+            group = engine.create_activity_group(group_name, selected_activities, group_description)
+            st.success(f"✅ Group '{group.name}' created with {len(selected_activities)} activities")
+            st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Schedule Rollback Panel (NASA Playbook Standard)
+# ---------------------------------------------------------------------------
+
+def _render_schedule_rollback_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render schedule rollback panel for version control (NASA Playbook standard)."""
+    st.markdown("### ⏪ Schedule Rollback & Version Control")
+    st.caption("Undo schedule changes and restore previous versions (NASA Playbook feature)")
+    
+    daily = engine.get_daily_schedule(schedule_date)
+    if not daily:
+        st.info("No schedule exists for this date.")
+        return
+    
+    # Create snapshot button
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        snapshot_desc = st.text_input(
+            "Snapshot Description",
+            key="snapshot_desc",
+            placeholder="e.g., Before EVA scheduling, After optimization",
+        )
+    with col2:
+        if st.button("📸 Create Snapshot", key="create_snapshot_btn"):
+            snapshot = engine.create_schedule_snapshot(schedule_date, snapshot_desc, created_by="user")
+            if snapshot:
+                st.success(f"✅ Snapshot created: {snapshot.version_id[:8]}...")
+                st.rerun()
+            else:
+                st.error("❌ Failed to create snapshot")
+    
+    # Show version history
+    if daily.version_history:
+        st.markdown("#### Version History")
+        st.write(f"**Total versions:** {len(daily.version_history)}")
+        
+        # Show versions in reverse chronological order (newest first)
+        for idx, version in enumerate(reversed(daily.version_history[-5:])):  # Show last 5
+            with st.expander(
+                f"📅 Version {len(daily.version_history) - idx} - {version.created_at.strftime('%Y-%m-%d %H:%M:%S')}",
+                expanded=(idx == 0),
+            ):
+                st.write(f"**Description:** {version.description or 'No description'}")
+                st.write(f"**Created by:** {version.created_by}")
+                st.write(f"**Activities:** {len(version.activities)}")
+                
+                if st.button("⏪ Rollback to This Version", key=f"rollback_{version.version_id}"):
+                    if engine.rollback_schedule(schedule_date, version.version_id):
+                        st.success("✅ Schedule rolled back successfully")
+                        st.rerun()
+                    else:
+                        st.error("❌ Rollback failed")
+    else:
+        st.info("No version history. Create a snapshot to enable rollback.")
+
+
+# ---------------------------------------------------------------------------
+# Spatial Conflicts Panel (NASA Mission Control Standard)
+# ---------------------------------------------------------------------------
+
+def _render_spatial_conflicts_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render spatial conflict detection panel (NASA Mission Control standard)."""
+    st.markdown("### 📍 Spatial Planning & Location Conflicts")
+    st.caption("Detect and resolve location-based scheduling conflicts")
+    
+    daily = engine.get_daily_schedule(schedule_date)
+    if not daily or not daily.activities:
+        st.info("No activities scheduled. Add activities with locations to enable spatial conflict detection.")
+        return
+    
+    # Find spatial conflicts
+    spatial_conflicts: List[Tuple[ScheduledActivity, ScheduledActivity]] = []
+    activities_with_location = [a for a in daily.activities if a.location]
+    
+    for i, activity1 in enumerate(activities_with_location):
+        for activity2 in activities_with_location[i+1:]:
+            if (activity1.location == activity2.location and
+                activity1.start_time < activity2.end_time and
+                activity2.start_time < activity1.end_time):
+                spatial_conflicts.append((activity1, activity2))
+    
+    if spatial_conflicts:
+        st.warning(f"⚠️ **{len(spatial_conflicts)} spatial conflict(s) detected**")
+        
+        for idx, (act1, act2) in enumerate(spatial_conflicts):
+            crew1 = engine.crew_members.get(act1.crew_id)
+            crew2 = engine.crew_members.get(act2.crew_id)
+            crew1_name = crew1.name if crew1 else act1.crew_id
+            crew2_name = crew2.name if crew2 else act2.crew_id
+            
+            with st.expander(f"🔴 Conflict {idx+1}: {act1.location} @ {act1.start_time.strftime('%H:%M')}", expanded=True):
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown(f"**{act1.activity_name}**")
+                    st.write(f"👤 Crew: {crew1_name}")
+                    st.write(f"🕐 Time: {act1.start_time.strftime('%H:%M')} – {act1.end_time.strftime('%H:%M')}")
+                    st.write(f"🎯 Priority: {act1.priority}/10")
+                
+                with col2:
+                    st.markdown(f"**{act2.activity_name}**")
+                    st.write(f"👤 Crew: {crew2_name}")
+                    st.write(f"🕐 Time: {act2.start_time.strftime('%H:%M')} – {act2.end_time.strftime('%H:%M')}")
+                    st.write(f"🎯 Priority: {act2.priority}/10")
+                
+                # Resolution suggestion based on priority
+                if act1.priority > act2.priority:
+                    st.info(f"💡 **Suggestion:** Move '{act2.activity_name}' (lower priority) to a different time or location")
+                elif act2.priority > act1.priority:
+                    st.info(f"💡 **Suggestion:** Move '{act1.activity_name}' (lower priority) to a different time or location")
+                else:
+                    st.info(f"💡 **Suggestion:** Reschedule one activity or adjust priorities")
+    else:
+        st.success("✅ No spatial conflicts detected")
+    
+    # Location utilization summary
+    st.markdown("---")
+    st.markdown("#### 📊 Location Utilization Summary")
+    
+    location_usage: Dict[str, List[ScheduledActivity]] = {}
+    for activity in activities_with_location:
+        if activity.location not in location_usage:
+            location_usage[activity.location] = []
+        location_usage[activity.location].append(activity)
+    
+    if location_usage:
+        for location, activities in sorted(location_usage.items()):
+            total_hours = sum(a.duration_minutes for a in activities) / 60
+            st.metric(
+                f"📍 {location}",
+                f"{len(activities)} activities ({total_hours:.1f} hours)",
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -3388,6 +3737,17 @@ def render_scheduling_tab() -> None:
         _render_alerts_panel(engine, schedule_date)
     
     with tab2:
+        # Multi-horizon timeline planning (1, 3, 7 days) - NASA Mission Control standard
+        horizon_mode = st.radio(
+            "Planning Horizon",
+            options=["📅 1-Day View", "📆 3-Day View", "🗓️ 7-Day View"],
+            horizontal=True,
+            key="timeline_horizon_mode",
+            help="Select planning horizon: 1-day (detailed), 3-day (short-term), 7-day (weekly overview)",
+        )
+        
+        st.markdown("---")
+        
         # Sub-tabs for different views
         view_mode = st.radio(
             "View Mode",
@@ -3399,14 +3759,30 @@ def render_scheduling_tab() -> None:
         st.markdown("---")
         
         if view_mode == "📊 Gantt Timeline":
-            _render_timeline_chart(engine, schedule_date)
+            if horizon_mode == "📅 1-Day View":
+                _render_timeline_chart(engine, schedule_date)
+            elif horizon_mode == "📆 3-Day View":
+                _render_3day_timeline(engine, schedule_date)
+            else:  # 7-Day View
+                _render_weekly_overview(engine, schedule_date)
         elif view_mode == "📋 Activity List":
-            _render_activity_list(engine, schedule_date)
+            if horizon_mode == "📅 1-Day View":
+                _render_activity_list(engine, schedule_date)
+            elif horizon_mode == "📆 3-Day View":
+                _render_3day_activity_list(engine, schedule_date)
+            else:  # 7-Day View
+                _render_weekly_overview(engine, schedule_date)
         else:  # Weekly Overview
             _render_weekly_overview(engine, schedule_date)
         
         st.markdown("---")
         _render_scheduling_controls(engine, schedule_date)
+        st.markdown("---")
+        _render_activity_grouping_panel(engine, schedule_date)
+        st.markdown("---")
+        _render_schedule_rollback_panel(engine, schedule_date)
+        st.markdown("---")
+        _render_spatial_conflicts_panel(engine, schedule_date)
         st.markdown("---")
         _render_optimization_panel(engine, schedule_date)
     
