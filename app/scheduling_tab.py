@@ -56,6 +56,13 @@ try:
         analyze_what_if,
         compute_workload_balance,
         WorkloadMetrics,
+        # EVA Procedures
+        EVAChecklistItem,
+        ISLE_PROTOCOL_TIMELINE,
+        MCC_EVA_CHECKLIST,
+        EVA_OFFICER_CHECKLIST,
+        ANALOG_EVA_TIMELINE,
+        EXPERIMENT_IDS,
     )
     from scheduling_engine import (
         SchedulingEngine,
@@ -845,23 +852,32 @@ def _render_risk_heatmap(engine: SchedulingEngine) -> None:
             }""",
         },
         "grid": {
-            "left": "20%",
-            "right": "10%",
-            "top": "5%",
-            "bottom": "15%",
+            "left": "18%",
+            "right": "8%",
+            "top": "8%",
+            "bottom": "25%",
+            "containLabel": True,
         },
         "xAxis": {
             "type": "category",
             "data": dimensions,
-            "axisLabel": {"color": "#888", "rotate": 30},
-            "axisLine": {"lineStyle": {"color": "#444"}},
+            "axisLabel": {
+                "color": "#ccc",
+                "rotate": 0,
+                "fontSize": 12,
+                "fontWeight": "bold",
+            },
+            "axisLine": {"lineStyle": {"color": "#555"}},
             "splitArea": {"show": True},
         },
         "yAxis": {
             "type": "category",
             "data": crew_names,
-            "axisLabel": {"color": "#ddd"},
-            "axisLine": {"lineStyle": {"color": "#444"}},
+            "axisLabel": {
+                "color": "#ddd",
+                "fontSize": 11,
+            },
+            "axisLine": {"lineStyle": {"color": "#555"}},
             "splitArea": {"show": True},
         },
         "visualMap": {
@@ -870,11 +886,14 @@ def _render_risk_heatmap(engine: SchedulingEngine) -> None:
             "calculable": True,
             "orient": "horizontal",
             "left": "center",
-            "bottom": "0%",
+            "bottom": "2%",
+            "itemWidth": 20,
+            "itemHeight": 140,
             "inRange": {
                 "color": ["#e74c3c", "#f39c12", "#f1c40f", "#27ae60"],
             },
-            "textStyle": {"color": "#888"},
+            "textStyle": {"color": "#aaa", "fontSize": 11},
+            "text": ["100%", "0%"],
         },
         "series": [
             {
@@ -884,7 +903,8 @@ def _render_risk_heatmap(engine: SchedulingEngine) -> None:
                     "show": True,
                     "formatter": "{@[2]}%",
                     "color": "#fff",
-                    "fontSize": 10,
+                    "fontSize": 11,
+                    "fontWeight": "bold",
                 },
                 "emphasis": {
                     "itemStyle": {
@@ -896,7 +916,7 @@ def _render_risk_heatmap(engine: SchedulingEngine) -> None:
         ],
     }
     
-    render_echarts(option, height_px=280)
+    render_echarts(option, height_px=420)
 
 
 # ---------------------------------------------------------------------------
@@ -905,7 +925,7 @@ def _render_risk_heatmap(engine: SchedulingEngine) -> None:
 
 def _render_ihpi_gauge(
     crew: CrewMember,
-    height: int = 220,
+    height: int = 280,
 ) -> None:
     """Render an IHPI gauge for a crew member."""
     if render_echarts is None:
@@ -927,17 +947,17 @@ def _render_ihpi_gauge(
                 "endAngle": 0,
                 "min": 0,
                 "max": 100,
-                "center": ["50%", "75%"],
-                "radius": "90%",
+                "center": ["50%", "60%"],
+                "radius": "85%",
                 "progress": {
                     "show": True,
-                    "width": 18,
+                    "width": 20,
                     "itemStyle": {"color": gauge_color},
                 },
                 "pointer": {"show": False},
                 "axisLine": {
                     "lineStyle": {
-                        "width": 18,
+                        "width": 20,
                         "color": [[1, "#333"]],
                     },
                 },
@@ -945,16 +965,17 @@ def _render_ihpi_gauge(
                 "splitLine": {"show": False},
                 "axisLabel": {"show": False},
                 "title": {
-                    "offsetCenter": [0, "-10%"],
-                    "fontSize": 14,
-                    "color": "#888",
+                    "offsetCenter": [0, "35%"],
+                    "fontSize": 13,
+                    "color": "#aaa",
+                    "fontWeight": "500",
                 },
                 "detail": {
                     "valueAnimation": True,
                     "formatter": "{value}",
-                    "fontSize": 28,
+                    "fontSize": 32,
                     "fontWeight": "bold",
-                    "offsetCenter": [0, "20%"],
+                    "offsetCenter": [0, "0%"],
                     "color": gauge_color,
                 },
                 "data": [{"value": round(ihpi, 0), "name": crew.name}],
@@ -1718,6 +1739,429 @@ def _render_export_panel(
 
 
 # ---------------------------------------------------------------------------
+# EVA Procedures Panel
+# ---------------------------------------------------------------------------
+
+def _render_eva_procedures_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render EVA procedures, checklists, and scheduling panel.
+    
+    Includes:
+    - ISLE Protocol timeline with verification checkboxes
+    - Mission Control EVA checklist
+    - EVA Officer checklist
+    - Scientific references with verifiable links
+    """
+    st.markdown("### 🚀 EVA Procedures & Checklists")
+    
+    # EVA scheduling controls
+    st.markdown("#### Schedule EVA")
+    
+    col1, col2, col3 = st.columns([2, 2, 1])
+    
+    crew_list = list(engine.crew_members.values())
+    crew_options = {c.crew_id: f"{c.name} ({c.role})" for c in crew_list}
+    
+    with col1:
+        eva_crew_1 = st.selectbox(
+            "EV1 (Primary)",
+            options=list(crew_options.keys()),
+            format_func=lambda x: crew_options.get(x, x),
+            key="eva_crew_1_select",
+        )
+    
+    with col2:
+        remaining_crew = [k for k in crew_options.keys() if k != eva_crew_1]
+        eva_crew_2 = st.selectbox(
+            "EV2 (Secondary)",
+            options=remaining_crew,
+            format_func=lambda x: crew_options.get(x, x),
+            key="eva_crew_2_select",
+        )
+    
+    with col3:
+        if st.button("📋 Generate Full Schedule", key="gen_full_schedule_btn", type="primary"):
+            with st.spinner("Generating optimized schedule..."):
+                engine.generate_full_daily_schedule(
+                    schedule_date=schedule_date,
+                    eva_day=True,
+                    eva_crew_ids=[eva_crew_1, eva_crew_2],
+                )
+                st.success("✅ Full daily schedule generated with EVA!")
+                st.rerun()
+    
+    # Sub-tabs for different checklists
+    checklist_tab1, checklist_tab2, checklist_tab3, checklist_tab4 = st.tabs([
+        "⏱️ ISLE Protocol",
+        "🎛️ Mission Control",
+        "👨‍🚀 EVA Officer",
+        "📚 References",
+    ])
+    
+    with checklist_tab1:
+        _render_isle_protocol_checklist()
+    
+    with checklist_tab2:
+        _render_mcc_eva_checklist()
+    
+    with checklist_tab3:
+        _render_eva_officer_checklist()
+    
+    with checklist_tab4:
+        _render_eva_references()
+
+
+def _render_isle_protocol_checklist() -> None:
+    """Render the ISLE prebreathe protocol timeline with checkboxes."""
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #1a472a 0%, #2d5a3d 100%);
+        padding: 16px 20px;
+        border-radius: 10px;
+        margin-bottom: 16px;
+        border-left: 4px solid #4ade80;
+    ">
+        <h4 style="margin: 0 0 8px 0; color: #fff;">
+            ⏱️ In-Suit Light Exercise (ISLE) Prebreathe Protocol
+        </h4>
+        <p style="margin: 0; color: #a7f3d0; font-size: 0.9em;">
+            Total duration: ~100 minutes | Saves 2.5 kg O₂/EVA vs previous protocols<br/>
+            <em>Reference: NASA NTRS 20110007150</em>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Check if advanced features available
+    if not ADVANCED_FEATURES_AVAILABLE:
+        st.warning("EVA checklist data not available")
+        return
+    
+    # Initialize session state for checkboxes
+    if "isle_checklist_state" not in st.session_state:
+        st.session_state["isle_checklist_state"] = {}
+    
+    total_time = 0
+    for item in ISLE_PROTOCOL_TIMELINE:
+        total_time += item.duration_min
+        
+        # Checkbox for each item
+        col1, col2, col3 = st.columns([0.5, 3, 1])
+        
+        with col1:
+            checked = st.checkbox(
+                "",
+                key=f"isle_{item.id}",
+                value=st.session_state["isle_checklist_state"].get(item.id, False),
+            )
+            st.session_state["isle_checklist_state"][item.id] = checked
+        
+        with col2:
+            # Color based on critical status
+            bg_color = "rgba(239, 68, 68, 0.15)" if item.critical else "rgba(59, 130, 246, 0.1)"
+            border_color = "#ef4444" if item.critical else "#3b82f6"
+            text_decoration = "line-through" if checked else "none"
+            opacity = "0.6" if checked else "1"
+            
+            critical_badge = '<span style="background:#ef4444;color:#fff;padding:2px 6px;border-radius:4px;font-size:0.75em;margin-left:8px;">CRITICAL</span>' if item.critical else ''
+            verify_badge = '<span style="background:#f59e0b;color:#fff;padding:2px 6px;border-radius:4px;font-size:0.75em;margin-left:8px;">VERIFY</span>' if item.verification_required else ''
+            
+            st.markdown(f"""
+            <div style="
+                background: {bg_color};
+                border-left: 3px solid {border_color};
+                padding: 10px 14px;
+                border-radius: 0 8px 8px 0;
+                opacity: {opacity};
+            ">
+                <div style="text-decoration: {text_decoration}; font-weight: 500;">
+                    {item.description} {critical_badge} {verify_badge}
+                </div>
+                <div style="color: #888; font-size: 0.85em; margin-top: 4px;">
+                    <strong>Responsible:</strong> {item.responsible} | 
+                    <strong>Duration:</strong> {item.duration_min} min
+                    {f' | <em>{item.notes}</em>' if item.notes else ''}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        
+        with col3:
+            st.markdown(f"**T+{total_time} min**")
+    
+    # Progress indicator
+    completed = sum(1 for item in ISLE_PROTOCOL_TIMELINE if st.session_state["isle_checklist_state"].get(item.id, False))
+    total = len(ISLE_PROTOCOL_TIMELINE)
+    progress = completed / total if total > 0 else 0
+    
+    st.progress(progress, text=f"Protocol Progress: {completed}/{total} steps completed")
+
+
+def _render_mcc_eva_checklist() -> None:
+    """Render Mission Control Center EVA checklist."""
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #1e3a5f 0%, #2d4a6f 100%);
+        padding: 16px 20px;
+        border-radius: 10px;
+        margin-bottom: 16px;
+        border-left: 4px solid #60a5fa;
+    ">
+        <h4 style="margin: 0 0 8px 0; color: #fff;">
+            🎛️ Mission Control Center EVA Checklist
+        </h4>
+        <p style="margin: 0; color: #bfdbfe; font-size: 0.9em;">
+            Flight Director and Flight Surgeon responsibilities<br/>
+            <em>Based on NASA ISS EVA Operations procedures</em>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if not ADVANCED_FEATURES_AVAILABLE:
+        st.warning("EVA checklist data not available")
+        return
+    
+    # Initialize session state
+    if "mcc_checklist_state" not in st.session_state:
+        st.session_state["mcc_checklist_state"] = {}
+    
+    # Group by phase
+    phases = {
+        "T-24 Hours": ["mcc_01", "mcc_02", "mcc_03", "mcc_04"],
+        "T-2 Hours (GO/NO-GO)": ["mcc_05", "mcc_06", "mcc_07"],
+        "During EVA": ["mcc_08", "mcc_09", "mcc_10"],
+    }
+    
+    for phase_name, item_ids in phases.items():
+        with st.expander(f"📋 {phase_name}", expanded=True):
+            for item in MCC_EVA_CHECKLIST:
+                if item.id not in item_ids:
+                    continue
+                
+                col1, col2 = st.columns([0.5, 5])
+                
+                with col1:
+                    checked = st.checkbox(
+                        "",
+                        key=f"mcc_{item.id}",
+                        value=st.session_state["mcc_checklist_state"].get(item.id, False),
+                    )
+                    st.session_state["mcc_checklist_state"][item.id] = checked
+                
+                with col2:
+                    opacity = "0.5" if checked else "1"
+                    text_decoration = "line-through" if checked else "none"
+                    
+                    critical_badge = '🔴' if item.critical else ''
+                    verify_badge = '✅' if item.verification_required else ''
+                    
+                    st.markdown(f"""
+                    <div style="opacity: {opacity}; text-decoration: {text_decoration}; padding: 8px 0;">
+                        {critical_badge} {verify_badge} <strong>{item.description}</strong>
+                        <br/><span style="color: #888; font-size: 0.85em;">
+                        Duration: {item.duration_min} min {f'| {item.notes}' if item.notes else ''}
+                        </span>
+                    </div>
+                    """, unsafe_allow_html=True)
+    
+    # Progress
+    completed = sum(1 for item in MCC_EVA_CHECKLIST if st.session_state["mcc_checklist_state"].get(item.id, False))
+    total = len(MCC_EVA_CHECKLIST)
+    st.progress(completed / total if total > 0 else 0, text=f"MCC Checklist: {completed}/{total}")
+
+
+def _render_eva_officer_checklist() -> None:
+    """Render EVA Officer detailed procedures checklist."""
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #4a1d6e 0%, #5a2d7e 100%);
+        padding: 16px 20px;
+        border-radius: 10px;
+        margin-bottom: 16px;
+        border-left: 4px solid #c084fc;
+    ">
+        <h4 style="margin: 0 0 8px 0; color: #fff;">
+            👨‍🚀 EVA Officer Procedures Checklist
+        </h4>
+        <p style="margin: 0; color: #e9d5ff; font-size: 0.9em;">
+            Detailed EMU and airlock operations procedures<br/>
+            <em>Based on NASA NTRS 20140009556 & EMU Data Book</em>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if not ADVANCED_FEATURES_AVAILABLE:
+        st.warning("EVA checklist data not available")
+        return
+    
+    # Initialize session state
+    if "evo_checklist_state" not in st.session_state:
+        st.session_state["evo_checklist_state"] = {}
+    
+    # Group by phase
+    phases = {
+        "T-48 Hours (Pre-EVA)": ["evo_01", "evo_02", "evo_03", "evo_04"],
+        "T-4 Hours (Final Prep)": ["evo_05", "evo_06", "evo_07"],
+        "ISLE Protocol Support": ["evo_08", "evo_09", "evo_10", "evo_11"],
+        "EVA Egress": ["evo_12", "evo_13"],
+        "Post-EVA": ["evo_14", "evo_15", "evo_16", "evo_17"],
+    }
+    
+    for phase_name, item_ids in phases.items():
+        with st.expander(f"📋 {phase_name}", expanded=False):
+            for item in EVA_OFFICER_CHECKLIST:
+                if item.id not in item_ids:
+                    continue
+                
+                col1, col2 = st.columns([0.5, 5])
+                
+                with col1:
+                    checked = st.checkbox(
+                        "",
+                        key=f"evo_{item.id}",
+                        value=st.session_state["evo_checklist_state"].get(item.id, False),
+                    )
+                    st.session_state["evo_checklist_state"][item.id] = checked
+                
+                with col2:
+                    opacity = "0.5" if checked else "1"
+                    text_decoration = "line-through" if checked else "none"
+                    bg = "rgba(192, 132, 252, 0.1)" if item.critical else "transparent"
+                    
+                    critical_badge = '🔴 CRITICAL' if item.critical else ''
+                    verify_badge = '✅ VERIFY' if item.verification_required else ''
+                    
+                    st.markdown(f"""
+                    <div style="opacity: {opacity}; background: {bg}; padding: 10px; border-radius: 6px; margin: 4px 0;">
+                        <div style="text-decoration: {text_decoration}; font-weight: 500;">
+                            {item.description}
+                        </div>
+                        <div style="color: #888; font-size: 0.85em; margin-top: 4px;">
+                            {critical_badge} {verify_badge} | Duration: {item.duration_min} min
+                            {f'<br/><em>{item.notes}</em>' if item.notes else ''}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+    
+    # Progress
+    completed = sum(1 for item in EVA_OFFICER_CHECKLIST if st.session_state["evo_checklist_state"].get(item.id, False))
+    total = len(EVA_OFFICER_CHECKLIST)
+    st.progress(completed / total if total > 0 else 0, text=f"EVA Officer Checklist: {completed}/{total}")
+
+
+def _render_eva_references() -> None:
+    """Render scientific references for EVA procedures with verifiable links."""
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #1f2937 0%, #374151 100%);
+        padding: 16px 20px;
+        border-radius: 10px;
+        margin-bottom: 16px;
+        border-left: 4px solid #9ca3af;
+    ">
+        <h4 style="margin: 0 0 8px 0; color: #fff;">
+            📚 EVA Scientific & Technical References
+        </h4>
+        <p style="margin: 0; color: #d1d5db; font-size: 0.9em;">
+            Verified citations with links to original NASA and peer-reviewed sources
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if not ADVANCED_FEATURES_AVAILABLE:
+        st.warning("Reference data not available")
+        return
+    
+    # Display references from ANALOG_EVA_TIMELINE
+    references = ANALOG_EVA_TIMELINE.get("references", [])
+    
+    for ref in references:
+        citation = ref.get("citation", "")
+        url = ref.get("url", "")
+        key_finding = ref.get("key_finding", "")
+        
+        st.markdown(f"""
+        <div style="
+            background: rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #10b981;
+            padding: 14px 18px;
+            border-radius: 0 8px 8px 0;
+            margin: 12px 0;
+        ">
+            <div style="font-size: 0.95em; line-height: 1.5;">
+                {citation}
+            </div>
+            <div style="margin-top: 8px;">
+                <a href="{url}" target="_blank" style="color: #3b82f6; text-decoration: none;">
+                    🔗 {url}
+                </a>
+            </div>
+            <div style="
+                margin-top: 10px;
+                padding: 8px 12px;
+                background: rgba(16, 185, 129, 0.15);
+                border-radius: 6px;
+                font-size: 0.9em;
+            ">
+                <strong style="color: #10b981;">Key Finding:</strong>
+                <span style="color: #f5f5f5;"> {key_finding}</span>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    # Additional NASA technical resources
+    st.markdown("### 🔗 Additional Technical Resources")
+    
+    additional_refs = [
+        {
+            "title": "NASA EVA Technical Library",
+            "url": "https://eva.jsc.nasa.gov/",
+            "description": "Official NASA EVA documentation repository",
+        },
+        {
+            "title": "NASA-STD-3001 Technical Brief: Decompression Sickness",
+            "url": "https://www.nasa.gov/wp-content/uploads/2023/12/ochmo-tb-037-decompression-sickness.pdf",
+            "description": "NASA Human System Standard - DCS mitigation protocols",
+        },
+        {
+            "title": "Human System Integration Requirements (HSIR)",
+            "url": "https://msis.jsc.nasa.gov/sections/section14.htm",
+            "description": "Section 14: EVA anthropometry, physiology, and operations",
+        },
+        {
+            "title": "NTRS: EVA Hardware & Operations Overview",
+            "url": "https://ntrs.nasa.gov/citations/20140009556",
+            "description": "Comprehensive EMU, SAFER, and airlock documentation",
+        },
+        {
+            "title": "Springer: EVA Prebreathe Protocols",
+            "url": "https://link.springer.com/referenceworkentry/10.1007/978-3-319-09575-2_60-1",
+            "description": "Academic reference on prebreathe protocol evolution",
+        },
+    ]
+    
+    cols = st.columns(2)
+    for idx, ref in enumerate(additional_refs):
+        with cols[idx % 2]:
+            st.markdown(f"""
+            <div style="
+                background: rgba(59, 130, 246, 0.1);
+                padding: 12px;
+                border-radius: 8px;
+                margin: 6px 0;
+                border: 1px solid rgba(59, 130, 246, 0.3);
+            ">
+                <a href="{ref['url']}" target="_blank" style="color: #60a5fa; font-weight: 500; text-decoration: none;">
+                    📄 {ref['title']}
+                </a>
+                <div style="color: #9ca3af; font-size: 0.85em; margin-top: 4px;">
+                    {ref['description']}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+
+# ---------------------------------------------------------------------------
 # Main Tab Renderer
 # ---------------------------------------------------------------------------
 
@@ -1737,14 +2181,15 @@ def render_scheduling_tab() -> None:
     st.markdown(
         """
         <div style="
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            background: linear-gradient(135deg, #0d3b66 0%, #1d5a8a 50%, #2980b9 100%);
             padding: 20px 24px;
             border-radius: 12px;
             margin-bottom: 20px;
-            border: 1px solid #2a2a4a;
+            border: 1px solid #3498db;
+            box-shadow: 0 4px 15px rgba(52, 152, 219, 0.2);
         ">
             <h2 style="margin: 0; color: #fff;">🗓️ Crew Scheduling & Human Performance</h2>
-            <p style="margin: 8px 0 0 0; color: #888; font-size: 0.95em;">
+            <p style="margin: 8px 0 0 0; color: #bde0fe; font-size: 0.95em;">
                 Evidence-based scheduling with SAFTE-FAST integration • IHPI composite scoring • GO/NO-GO decision support
             </p>
         </div>
@@ -1763,11 +2208,12 @@ def render_scheduling_tab() -> None:
         st.session_state["selected_schedule_date"] = schedule_date
     
     # Main content tabs
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
         "👥 Status Dashboard",
         "📅 Timeline & Scheduling",
         "📈 Performance Forecast",
         "🎯 Risk Analysis",
+        "🚀 EVA Procedures",
         "📊 Summary & Export",
     ])
     
@@ -1811,15 +2257,34 @@ def render_scheduling_tab() -> None:
         _render_risk_heatmap(engine)
         st.markdown("---")
         
-        # Individual IHPI gauges
+        # Individual IHPI gauges - use 2 columns for better visibility
         st.markdown("### 📈 Individual Performance Indicators")
         crew_list = list(engine.crew_members.values())
-        gauge_cols = st.columns(3)
-        for idx, crew in enumerate(crew_list[:6]):
-            with gauge_cols[idx % 3]:
+        
+        # First row: 2 gauges
+        gauge_cols_1 = st.columns(2)
+        for idx, crew in enumerate(crew_list[:2]):
+            with gauge_cols_1[idx]:
                 _render_ihpi_gauge(crew)
+        
+        # Second row: 2 gauges
+        if len(crew_list) > 2:
+            gauge_cols_2 = st.columns(2)
+            for idx, crew in enumerate(crew_list[2:4]):
+                with gauge_cols_2[idx]:
+                    _render_ihpi_gauge(crew)
+        
+        # Third row: 2 gauges
+        if len(crew_list) > 4:
+            gauge_cols_3 = st.columns(2)
+            for idx, crew in enumerate(crew_list[4:6]):
+                with gauge_cols_3[idx]:
+                    _render_ihpi_gauge(crew)
     
     with tab5:
+        _render_eva_procedures_panel(engine, schedule_date)
+    
+    with tab6:
         _render_crew_summary_table(engine, schedule_date)
         st.markdown("---")
         _render_export_panel(engine, schedule_date)
@@ -2055,12 +2520,12 @@ def _render_citation_card(paper: dict, domain_color: str) -> None:
             <div style="
                 margin-top: 10px;
                 padding: 8px 12px;
-                background: rgba(0,0,0,0.2);
+                background: rgba(0,0,0,0.3);
                 border-radius: 6px;
                 font-size: 0.85em;
             ">
                 <strong style="color: {domain_color};">Key Finding:</strong>
-                <span style="color: #ccc;"> {paper['key_finding']}</span>
+                <span style="color: #f5f5f5;"> {paper['key_finding']}</span>
             </div>
             <div style="
                 margin-top: 6px;
@@ -2081,16 +2546,17 @@ def _render_scientific_foundation_panel() -> None:
     st.markdown(
         """
         <div style="
-            background: linear-gradient(135deg, #0f0f1a 0%, #1a1a2e 100%);
+            background: linear-gradient(135deg, #0d4d4d 0%, #1a6b6b 50%, #2d8a8a 100%);
             padding: 20px 24px;
             border-radius: 12px;
             margin: 20px 0;
-            border: 1px solid #2a2a4a;
+            border: 1px solid #3db9b9;
+            box-shadow: 0 4px 15px rgba(61, 185, 185, 0.2);
         ">
             <h3 style="margin: 0 0 8px 0; color: #fff;">
                 📚 Scientific Foundation
             </h3>
-            <p style="margin: 0; color: #888; font-size: 0.9em;">
+            <p style="margin: 0; color: #b8e6e6; font-size: 0.9em;">
                 This scheduling system is built on peer-reviewed research and validated standards from 
                 space agencies, sports science, and aviation medicine. All thresholds and scoring 
                 functions are evidence-based with verifiable citations.
