@@ -11622,7 +11622,7 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
         if st.button(
             "📡 Autofill sleep from Garmin",
             key=f"garmin_autofill_tools_{user.user_id}",
-            help="Pull latest Garmin Vivosmart sleep to fill SAFTE inputs (sleep hours, quality, hours awake, RMSSD, resting HR).",
+            help="Pull latest Garmin Vivosmart sleep to fill SAFTE inputs (sleep hours, quality, hours awake, RMSSD, resting HR). Note: Chronotype is NOT changed by Garmin autofill - it is saved to your profile and persists across sessions.",
         ):
             with st.spinner("Fetching Garmin sleep..."):
                 payload = _get_latest_garmin_sleep_payload(user, current_dt)
@@ -11636,10 +11636,26 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
                     st.session_state[f"tools_rmssd_{user.user_id}"] = payload["rmssd_ms"]
                 if "resting_hr" in payload:
                     st.session_state[f"tools_resting_hr_{user.user_id}"] = payload["resting_hr"]
-                st.success(
-                    f"Garmin sleep synced: {payload['sleep_hours']:.2f}h, "
-                    f"quality {payload['sleep_quality']:.2f}, hours awake {payload['hours_awake']:.1f}"
-                )
+                
+                # Persist to user profile
+                try:
+                    db = get_database()
+                    if "resting_hr" in payload:
+                        db.update_user_sleep_chronotype(
+                            user.user_id,
+                            resting_hr_bpm=float(payload["resting_hr"]),
+                        )
+                        user.resting_hr_bpm = float(payload["resting_hr"])
+                    st.success(
+                        f"Garmin sleep synced and saved to profile: {payload['sleep_hours']:.2f}h, "
+                        f"quality {payload['sleep_quality']:.2f}, hours awake {payload['hours_awake']:.1f}"
+                    )
+                except Exception as exc:
+                    _LOGGER.warning("Failed to persist Garmin autofill to profile: %s", exc)
+                    st.success(
+                        f"Garmin sleep synced (session only): {payload['sleep_hours']:.2f}h, "
+                        f"quality {payload['sleep_quality']:.2f}, hours awake {payload['hours_awake']:.1f}"
+                    )
     
     if show_parameters:
         col1, col2, col3 = st.columns(3)
@@ -11671,6 +11687,28 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
                 step=0.5,
                 key=f"tools_hours_awake_{user.user_id}",
             )
+            # Chronotype offset loaded from user profile (persistent)
+            # Map user profile chronotype_offset_hours to selectbox index
+            # Handle case where attribute might not exist (older UserProfile instances)
+            profile_chrono_offset = _safe_float(getattr(user, 'chronotype_offset_hours', None)) or 0.0
+            chrono_index = 2  # Default to "Neutral (0h)"
+            if profile_chrono_offset <= -1.5:
+                chrono_index = 0  # "Morning (-2h)"
+            elif profile_chrono_offset <= -0.5:
+                chrono_index = 1  # "Slight morning (-1h)"
+            elif profile_chrono_offset >= 1.5:
+                chrono_index = 4  # "Evening (+2h)"
+            elif profile_chrono_offset >= 0.5:
+                chrono_index = 3  # "Slight evening (+1h)"
+            # Use session state if set, otherwise use profile value
+            if f"tools_chronotype_{user.user_id}" not in st.session_state:
+                st.session_state[f"tools_chronotype_{user.user_id}"] = [
+                    "Morning (-2h)",
+                    "Slight morning (-1h)",
+                    "Neutral (0h)",
+                    "Slight evening (+1h)",
+                    "Evening (+2h)",
+                ][chrono_index]
             _ = st.selectbox(  # widget persists to session_state via key
                 "Chronotype",
                 options=[
@@ -11680,8 +11718,9 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
                     "Slight evening (+1h)",
                     "Evening (+2h)",
                 ],
-                index=2,
+                index=chrono_index,
                 key=f"tools_chronotype_{user.user_id}",
+                help="Chronotype is saved to your profile and persists across sessions. Garmin autofill does not change this.",
             )
 
         with col3:
@@ -11715,7 +11754,12 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
     hours_awake = float(hours_awake_raw) if hours_awake_raw is not None else hours_awake_default
 
     chronotype = str(st.session_state.get(f"tools_chronotype_{user.user_id}") or "Neutral (0h)")
-    chronotype_offset_override = _safe_float(st.session_state.get(f"tools_chronotype_offset_{user.user_id}"))
+    # Load chronotype from user profile (persistent) first, then session state, then from chronotype selectbox
+    # Handle case where attribute might not exist (older UserProfile instances)
+    chronotype_offset_override = (
+        _safe_float(getattr(user, 'chronotype_offset_hours', None)) or
+        _safe_float(st.session_state.get(f"tools_chronotype_offset_{user.user_id}"))
+    )
     chronotype_offset = (
         float(chronotype_offset_override)
         if chronotype_offset_override is not None
@@ -12457,8 +12501,10 @@ def _render_personalized_health_metrics(user: UserProfile) -> None:
                 diabetes = latest_med.get("diabetes_type") is not None
                 hypertension = latest_med.get("hypertension", False)
                 family_history_cvd = latest_med.get("family_heart_disease", False)
-                snoring = latest_med.get("snoring")
-                observed_apnea = latest_med.get("sleep_apnea")
+                # STOP-BANG components (correct field names)
+                snoring = latest_med.get("snoring")  # S: Loud snoring
+                tiredness = latest_med.get("tiredness")  # T: Daytime tiredness
+                observed_apnea = latest_med.get("observed_apnea")  # O: Witnessed apnea (NOT sleep_apnea diagnosis!)
     except Exception:
         pass
     
@@ -12896,7 +12942,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         if st.button(
             "📡 Autofill from Garmin",
             key=f"garmin_autofill_sleep_section_{user.user_id}",
-            help="Pull latest Garmin Vivosmart sleep to fill sleep/chronotype inputs.",
+            help="Pull latest Garmin Vivosmart sleep to fill sleep inputs (sleep hours, quality, hours awake, RMSSD, resting HR). Note: Chronotype is NOT changed by Garmin autofill - it is saved to your profile and persists across sessions.",
         ):
             with st.spinner("Fetching Garmin sleep..."):
                 payload = _get_latest_garmin_sleep_payload(user, datetime.now(tz=_get_bogota_tz()))
@@ -12910,10 +12956,28 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                     st.session_state[rmssd_key] = payload["rmssd_ms"]
                 if "resting_hr" in payload:
                     st.session_state[resting_hr_key] = payload["resting_hr"]
-                st.success(
-                    f"Garmin sleep synced: {payload['sleep_hours']:.2f}h, "
-                    f"quality {payload['sleep_quality']:.2f}, hours awake {payload['hours_awake']:.1f}"
-                )
+                
+                # Persist to user profile
+                try:
+                    db = get_database()
+                    if "resting_hr" in payload:
+                        db.update_user_sleep_chronotype(
+                            user.user_id,
+                            resting_hr_bpm=float(payload["resting_hr"]),
+                        )
+                    # Update user profile resting_hr_bpm if available
+                    if "resting_hr" in payload:
+                        user.resting_hr_bpm = float(payload["resting_hr"])
+                    st.success(
+                        f"Garmin sleep synced and saved to profile: {payload['sleep_hours']:.2f}h, "
+                        f"quality {payload['sleep_quality']:.2f}, hours awake {payload['hours_awake']:.1f}"
+                    )
+                except Exception as exc:
+                    _LOGGER.warning("Failed to persist Garmin autofill to profile: %s", exc)
+                    st.success(
+                        f"Garmin sleep synced (session only): {payload['sleep_hours']:.2f}h, "
+                        f"quality {payload['sleep_quality']:.2f}, hours awake {payload['hours_awake']:.1f}"
+                    )
     
     sleep_col1, sleep_col2, sleep_col3 = st.columns(3)
     
@@ -13145,6 +13209,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         )
 
         # Defaults pulled from shared session keys so UI stays consistent
+        # Chronotype is loaded from user profile (persistent), not from session state
         sleep_key = f"tools_sleep_hours_{user.user_id}"
         sleep_quality_key = f"tools_sleep_quality_{user.user_id}"
         hours_awake_key = f"tools_hours_awake_{user.user_id}"
@@ -13156,7 +13221,13 @@ def _render_nasa_calculator(user: UserProfile) -> None:
         sleep_hours_val = float(_safe_float(st.session_state.get(sleep_key)) or 7.0)
         sleep_quality_val = float(_safe_float(st.session_state.get(sleep_quality_key)) or 0.7)
         hours_awake_val = float(_safe_float(st.session_state.get(hours_awake_key)) or 12.0)
-        chronotype_offset_val = float(_safe_float(st.session_state.get(chrono_key)) or 0.0)
+        # Load chronotype from user profile (persistent), fallback to session state, then default to 0.0
+        # Handle case where attribute might not exist (older UserProfile instances)
+        chronotype_offset_val = float(
+            _safe_float(getattr(user, 'chronotype_offset_hours', None)) or
+            _safe_float(st.session_state.get(chrono_key)) or
+            0.0
+        )
         rmssd_val = float(_safe_float(st.session_state.get(rmssd_key)) or 35.0)
         resting_hr_val = float(_safe_float(st.session_state.get(resting_hr_key)) or (user.resting_hr_bpm or 65))
         vo2_val = float(_safe_float(st.session_state.get(vo2_key)) or (user.vo2max_ml_kg_min or 38.0))
@@ -13230,7 +13301,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
             if st.button(
                 "🔄 Sync to Profile Tools Engine",
                 key=f"sync_sleep_to_tools_{user.user_id}",
-                help="Push these sleep/chronotype/HRV values into the Profile Tools Engine (SAFTE + Operational Performance).",
+                help="Push these sleep/chronotype/HRV values into the Profile Tools Engine (SAFTE + Operational Performance) and save to profile.",
             ):
                 st.session_state[sleep_key] = float(sleep_hours_val)
                 st.session_state[sleep_quality_key] = float(sleep_quality_val)
@@ -13239,7 +13310,23 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                 st.session_state[rmssd_key] = float(rmssd_val)
                 st.session_state[resting_hr_key] = float(resting_hr_val)
                 st.session_state[vo2_key] = float(vo2_val)
-                st.success("Synced sleep/chronotype/HRV inputs to Profile Tools Engine.")
+                
+                # Persist to user profile
+                try:
+                    db = get_database()
+                    db.update_user_sleep_chronotype(
+                        user.user_id,
+                        resting_hr_bpm=float(resting_hr_val),
+                        chronotype_offset_hours=float(chronotype_offset_val),
+                    )
+                    # Update user profile object
+                    user.resting_hr_bpm = float(resting_hr_val)
+                    # Set chronotype_offset_hours (use setattr to handle cases where attribute might not exist yet)
+                    setattr(user, 'chronotype_offset_hours', float(chronotype_offset_val))
+                    st.success("Synced sleep/chronotype/HRV inputs to Profile Tools Engine and saved to profile.")
+                except Exception as exc:
+                    _LOGGER.warning("Failed to persist sync to profile: %s", exc)
+                    st.success("Synced sleep/chronotype/HRV inputs to Profile Tools Engine (session only).")
         
     except Exception as exc:
         st.error(f"Calculation error: {exc}")
@@ -14248,15 +14335,44 @@ def _render_radiation_timeline(
             key="rad_timeline_eva",
         )
     
-    # Solar cycle phase
-    solar_phase = st.radio(
-        "Solar cycle phase",
-        ["minimum", "ascending", "maximum", "declining"],
-        index=3,  # Default to declining
-        horizontal=True,
-        key="rad_timeline_solar",
-        help="Solar minimum = higher GCR dose; Solar maximum = lower GCR but more SPE risk",
+    # Auto-detect solar cycle phase from NOAA
+    from radiation_exposure import detect_solar_cycle_phase_from_noaa
+    
+    auto_detected_phase = detect_solar_cycle_phase_from_noaa(target_date=date.today())
+    phase_index_map = {"minimum": 0, "ascending": 1, "maximum": 2, "declining": 3}
+    default_phase_idx = phase_index_map.get(auto_detected_phase, 2)  # Default to maximum
+    
+    st.info(f"🌞 **Auto-detected Solar Cycle Phase:** {auto_detected_phase.upper()} (from NOAA F10.7 data)")
+    
+    # Allow manual override if needed
+    use_auto_detect = st.checkbox(
+        "Use auto-detected solar cycle phase",
+        value=True,
+        key="rad_timeline_auto_solar",
+        help="Automatically detect from NOAA F10.7 flux data. Uncheck to manually select.",
     )
+    
+    if use_auto_detect:
+        solar_phase = auto_detected_phase
+    else:
+        solar_phase = st.radio(
+            "Solar cycle phase (manual)",
+            ["minimum", "ascending", "maximum", "declining"],
+            index=default_phase_idx,
+            horizontal=True,
+            key="rad_timeline_solar_manual",
+            help="Solar minimum = higher GCR dose; Solar maximum = lower GCR but more SPE risk",
+        )
+    
+    # Career limit selector (NASA vs ESA)
+    career_limit_standard = st.selectbox(
+        "Career limit standard",
+        ["NASA (600 mSv)", "ESA (1000 mSv)"],
+        index=0,
+        key="rad_timeline_career_standard",
+        help="NASA STD-3001 Vol 1 Rev B (2022): 600 mSv. ESA/ICRP: 1000 mSv.",
+    )
+    actual_career_limit = 600.0 if "NASA" in career_limit_standard else 1000.0
     
     # Build timeline
     start_date = date.today() - timedelta(days=current_mission_day - 1)
@@ -14272,14 +14388,23 @@ def _render_radiation_timeline(
             if eva_date <= end_date:
                 eva_schedule[eva_date] = min(eva_per_day, 8.0)  # Max 8h EVA per day
     
+    # Use real space weather data
+    use_real_sw = st.checkbox(
+        "Use real NOAA space weather data",
+        value=True,
+        key="rad_timeline_real_sw",
+        help="Apply daily adjustments based on real Kp index and proton flux from NOAA",
+    )
+    
     timeline = build_radiation_timeline(
         start_date=start_date,
         end_date=end_date,
         environment=selected_env,
         initial_cumulative_msv=0.0,
         eva_schedule=eva_schedule,
-        solar_cycle_phase=str(solar_phase),
-        career_limit_msv=career_limit_msv,
+        solar_cycle_phase=str(solar_phase) if not use_auto_detect else None,  # Auto-detect if using auto
+        career_limit_msv=actual_career_limit,
+        use_real_space_weather=use_real_sw,
     )
     
     if not timeline:
@@ -14289,89 +14414,214 @@ def _render_radiation_timeline(
     # Convert to DataFrame
     timeline_df = timeline_to_dataframe(timeline)
     
-    # Plot cumulative dose over time
-    st.markdown("##### Cumulative Dose Projection")
+    # Plot cumulative dose over time with proper zones
+    st.markdown("##### Radiation Exposure Projection")
     
-    # Add limit line data
-    timeline_df["career_limit"] = career_limit_msv
-    timeline_df["warning_30pct"] = career_limit_msv * 0.30
-    timeline_df["caution_60pct"] = career_limit_msv * 0.60
-    timeline_df["nogo_80pct"] = career_limit_msv * 0.80
+    # Calculate thresholds per NASA/ESA standards
+    threshold_30 = actual_career_limit * 0.30  # MONITOR zone start
+    threshold_60 = actual_career_limit * 0.60  # CAUTION zone start
+    threshold_80 = actual_career_limit * 0.80  # NO-GO zone start
     
-    # ECharts multi-series line chart
+    # ECharts multi-series chart with shaded zones
     x_labels = [d.strftime("%Y-%m-%d") for d in timeline_df["date"]]
     cumulative_values = timeline_df["cumulative_dose_msv"].tolist()
     
+    # Dynamic axis bounds
+    rad_min, rad_max = _auto_axis_bounds(
+        cumulative_values,
+        padding_pct=0.15,
+        min_floor=0,
+    )
+    # Ensure career limit is visible
+    rad_max = max(rad_max, actual_career_limit * 1.1)
+    
+    # Build series with shaded zones using stacked areas
+    series_list = []
+    
+    # Zone 1: GO (0-30%) - Green (stacked from 0 to threshold_30)
+    series_list.append({
+        "name": "GO Zone (0-30%)",
+        "type": "line",
+        "data": [threshold_30] * len(x_labels),
+        "lineStyle": {"width": 0},
+        "stack": "zones",
+        "areaStyle": {"color": "rgba(39, 174, 96, 0.15)"},  # Green
+        "symbol": "none",
+        "silent": True,
+    })
+    
+    # Zone 2: MONITOR (30-60%) - Yellow (stacked from threshold_30 to threshold_60)
+    series_list.append({
+        "name": "MONITOR Zone (30-60%)",
+        "type": "line",
+        "data": [threshold_60 - threshold_30] * len(x_labels),
+        "lineStyle": {"width": 0},
+        "stack": "zones",
+        "areaStyle": {"color": "rgba(255, 193, 7, 0.15)"},  # Yellow
+        "symbol": "none",
+        "silent": True,
+    })
+    
+    # Zone 3: CAUTION (60-80%) - Orange (stacked from threshold_60 to threshold_80)
+    series_list.append({
+        "name": "CAUTION Zone (60-80%)",
+        "type": "line",
+        "data": [threshold_80 - threshold_60] * len(x_labels),
+        "lineStyle": {"width": 0},
+        "stack": "zones",
+        "areaStyle": {"color": "rgba(253, 126, 20, 0.15)"},  # Orange
+        "symbol": "none",
+        "silent": True,
+    })
+    
+    # Zone 4: NO-GO (80-100%) - Red (stacked from threshold_80 to career_limit)
+    series_list.append({
+        "name": "NO-GO Zone (80-100%)",
+        "type": "line",
+        "data": [actual_career_limit - threshold_80] * len(x_labels),
+        "lineStyle": {"width": 0},
+        "stack": "zones",
+        "areaStyle": {"color": "rgba(220, 53, 69, 0.15)"},  # Red
+        "symbol": "none",
+        "silent": True,
+    })
+    
+    # Actual cumulative dose line
+    series_list.append({
+        "name": "Cumulative Dose",
+        "type": "line",
+        "data": cumulative_values,
+        "smooth": True,
+        "lineStyle": {"width": 3, "color": "#1a1a1a"},
+        "symbol": "circle",
+        "symbolSize": 4,
+        "z": 10,  # Above zones
+    })
+    
+    # Career limit line
+    series_list.append({
+        "name": f"Career Limit ({actual_career_limit:.0f} mSv)",
+        "type": "line",
+        "data": [actual_career_limit] * len(x_labels),
+        "lineStyle": {"type": "dashed", "color": "#2c3e50", "width": 2},
+        "symbol": "none",
+        "z": 5,
+    })
+    
+    # Threshold lines
+    series_list.append({
+        "name": "MONITOR (30%)",
+        "type": "line",
+        "data": [threshold_30] * len(x_labels),
+        "lineStyle": {"type": "dotted", "color": "#ffc107", "width": 1},
+        "symbol": "none",
+        "z": 5,
+    })
+    
+    series_list.append({
+        "name": "CAUTION (60%)",
+        "type": "line",
+        "data": [threshold_60] * len(x_labels),
+        "lineStyle": {"type": "dotted", "color": "#fd7e14", "width": 1},
+        "symbol": "none",
+        "z": 5,
+    })
+    
+    series_list.append({
+        "name": "NO-GO (80%)",
+        "type": "line",
+        "data": [threshold_80] * len(x_labels),
+        "lineStyle": {"type": "dotted", "color": "#dc3545", "width": 1},
+        "symbol": "none",
+        "z": 5,
+    })
+    
     chart_option = {
-        "title": {"text": f"Radiation Exposure Projection ({selected_env_label})", "left": "center"},
-        "tooltip": {"trigger": "axis", "axisPointer": {"type": "cross"}},
-        "legend": {"data": ["Cumulative Dose", "Career Limit (600 mSv)", "MONITOR (30%)", "CAUTION (60%)", "NO-GO (80%)"], "top": 30},
-        "grid": {"left": 60, "right": 40, "top": 80, "bottom": 60},
+        "title": {
+            "text": f"Radiation Exposure Projection ({selected_env_label})",
+            "left": "center",
+            "textStyle": {"color": "#1a1a1a", "fontWeight": "bold"},
+        },
+        "subtitle": {
+            "text": f"Career Limit: {actual_career_limit:.0f} mSv ({career_limit_standard}) | Solar Cycle: {solar_phase.upper()}",
+            "left": "center",
+            "top": 35,
+            "textStyle": {"color": "#2c3e50", "fontSize": 12},
+        },
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "cross"},
+            "formatter": "{b}<br/>{a0}: {c0} mSv<br/>{a1}: {c1} mSv",
+        },
+        "legend": {
+            "data": ["Cumulative Dose", f"Career Limit ({actual_career_limit:.0f} mSv)", "MONITOR (30%)", "CAUTION (60%)", "NO-GO (80%)"],
+            "top": 50,
+            "textStyle": {"color": "#1a1a1a"},
+        },
+        "grid": {"left": 60, "right": 40, "top": 120, "bottom": 60},
         "xAxis": {
             "type": "category",
             "data": x_labels,
             "boundaryGap": False,
-            "axisLabel": {"rotate": 45, "interval": max(1, len(x_labels) // 10)},
+            "axisLabel": {"rotate": 45, "interval": max(1, len(x_labels) // 10), "color": "#1a1a1a"},
+            "axisLine": {"lineStyle": {"color": "#2c3e50"}},
         },
-        "yAxis": {"type": "value", "name": "Dose (mSv)", "min": 0},
+        "yAxis": {
+            "type": "value",
+            "name": "Cumulative Dose (mSv)",
+            "min": rad_min,
+            "max": rad_max,
+            "nameTextStyle": {"color": "#1a1a1a"},
+            "axisLabel": {"color": "#1a1a1a"},
+            "axisLine": {"lineStyle": {"color": "#2c3e50"}},
+            "splitLine": {"lineStyle": {"color": "#ecf0f1"}},
+        },
         "dataZoom": [{"type": "inside"}, {"type": "slider", "bottom": 10}],
-        "series": [
-            {
-                "name": "Cumulative Dose",
-                "type": "line",
-                "data": cumulative_values,
-                "smooth": True,
-                "lineStyle": {"width": 3, "color": "#dc3545"},
-                "areaStyle": {"color": "rgba(220,53,69,0.1)"},
-                "symbol": "none",
-            },
-            {
-                "name": "Career Limit (600 mSv)",
-                "type": "line",
-                "data": [career_limit_msv] * len(x_labels),
-                "lineStyle": {"type": "dashed", "color": "#6c757d", "width": 2},
-                "symbol": "none",
-            },
-            {
-                "name": "MONITOR (30%)",
-                "type": "line",
-                "data": [career_limit_msv * 0.30] * len(x_labels),
-                "lineStyle": {"type": "dotted", "color": "#ffc107", "width": 1},
-                "symbol": "none",
-            },
-            {
-                "name": "CAUTION (60%)",
-                "type": "line",
-                "data": [career_limit_msv * 0.60] * len(x_labels),
-                "lineStyle": {"type": "dotted", "color": "#fd7e14", "width": 1},
-                "symbol": "none",
-            },
-            {
-                "name": "NO-GO (80%)",
-                "type": "line",
-                "data": [career_limit_msv * 0.80] * len(x_labels),
-                "lineStyle": {"type": "dotted", "color": "#dc3545", "width": 1},
-                "symbol": "none",
-            },
-        ],
+        "series": series_list,
     }
     render_echarts(chart_option, height_px=400)
+    
+    # Add reference note
+    st.caption(
+        "📚 **References**: NASA-STD-3001 Vol 1 Rev B (2022) - Career effective dose limit: 600 mSv. "
+        "ESA/ICRP Publication 123 (2013) - Career limit: 1000 mSv. "
+        "Zones: GO (<30%), MONITOR (30-60%), CAUTION (60-80%), NO-GO (>80%). "
+        "Data from NOAA SWPC space weather feeds."
+    )
     
     # Summary metrics
     final_dose = timeline[-1].cumulative_dose_msv
     final_pct = timeline[-1].career_pct_used
     days_to_30pct = next((t.mission_day for t in timeline if t.career_pct_used >= 30.0), None)
+    days_to_60pct = next((t.mission_day for t in timeline if t.career_pct_used >= 60.0), None)
+    days_to_80pct = next((t.mission_day for t in timeline if t.career_pct_used >= 80.0), None)
     days_to_limit = next((t.mission_day for t in timeline if t.career_pct_used >= 100.0), None)
     
-    col_s1, col_s2, col_s3, col_s4 = st.columns(4)
+    # Determine current zone
+    if final_pct < 30:
+        current_zone = "GO"
+        zone_color = "#27ae60"
+    elif final_pct < 60:
+        current_zone = "MONITOR"
+        zone_color = "#ffc107"
+    elif final_pct < 80:
+        current_zone = "CAUTION"
+        zone_color = "#fd7e14"
+    else:
+        current_zone = "NO-GO"
+        zone_color = "#dc3545"
+    
+    col_s1, col_s2, col_s3, col_s4, col_s5 = st.columns(5)
     with col_s1:
         st.metric("Final dose", f"{final_dose:.1f} mSv")
     with col_s2:
         st.metric("Career % used", f"{final_pct:.1f}%")
     with col_s3:
-        st.metric("Days to 30% (MONITOR)", f"{days_to_30pct or '> projection'}")
+        st.markdown(f"**Current Zone:** <span style='color: {zone_color}; font-weight: bold;'>{current_zone}</span>", unsafe_allow_html=True)
     with col_s4:
-        st.metric("Days to 100% (LIMIT)", f"{days_to_limit or '> projection'}")
+        st.metric("Days to MONITOR (30%)", f"{days_to_30pct or '> projection'}")
+    with col_s5:
+        st.metric("Days to LIMIT (100%)", f"{days_to_limit or '> projection'}")
     
     # Show dose rate info
     dose_info = get_dose_rate_info(selected_env)
@@ -15287,6 +15537,8 @@ def _render_medical_record_form(user: UserProfile) -> None:
                         else:
                             _LOGGER.info("Space weather data refreshed for user %s", user.user_id)
                             st.success("✅ Space weather data updated from NOAA SWPC")
+                        # Mark that space weather was refreshed so metrics recompute
+                        st.session_state[f"_sw_refreshed_{user.user_id}"] = True
                         st.rerun()
                     except Exception as exc:
                         _LOGGER.warning("Space weather refresh failed: %s", exc)
@@ -15382,6 +15634,13 @@ def _render_medical_record_form(user: UserProfile) -> None:
         # Section 2: Radiation & Space Weather (ExMC risk domain)
         # ─────────────────────────────────────────────────────────────────────
         st.markdown("##### ☢️ Radiation & Space Weather")
+        # Check if space weather was just refreshed - if so, ensure cache is cleared
+        if st.session_state.get(f"_sw_refreshed_{user.user_id}", False):
+            # Clear cache to force fresh computation with newly fetched data
+            _load_noaa_profile_bundles.clear()
+            # Reset flag after clearing
+            st.session_state[f"_sw_refreshed_{user.user_id}"] = False
+        # Compute space weather summary (will use fresh data if cache was cleared)
         space_summary = _space_weather_summary_for_date(record_date)
         dose_rate_msv_day, dose_rate_ref = _estimate_baseline_radiation_msv_per_day(
             mission_profile=str(mission_profile),
@@ -15499,6 +15758,32 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 behavioral_flags,
             ),
         )
+        
+        # STOP-BANG Sleep Apnea Screening Components
+        st.markdown("**😴 STOP-BANG Sleep Apnea Screening**")
+        st.caption(
+            "STOP-BANG components for sleep apnea risk assessment. "
+            "Reference: Chung F et al. Anesthesiology 2008;108:812-21"
+        )
+        col_stop1, col_stop2, col_stop3 = st.columns(3)
+        with col_stop1:
+            snoring = st.checkbox(
+                "S: Loud snoring (heard through closed doors)",
+                value=bool(latest.get("snoring", False)),
+                help="STOP-BANG 'S' component: Loud snoring",
+            )
+        with col_stop2:
+            tiredness = st.checkbox(
+                "T: Daytime tiredness/fatigue",
+                value=bool(latest.get("tiredness", False)),
+                help="STOP-BANG 'T' component: Daytime tiredness or sleepiness",
+            )
+        with col_stop3:
+            observed_apnea = st.checkbox(
+                "O: Observed apnea (witnessed breathing stops)",
+                value=bool(latest.get("observed_apnea", False)),
+                help="STOP-BANG 'O' component: Has someone witnessed you stop breathing during sleep?",
+            )
 
         # Objective context (HRV + Garmin) aligned to the selected log date.
         target_day = pd.Timestamp(record_date).normalize()
@@ -15695,6 +15980,10 @@ def _render_medical_record_form(user: UserProfile) -> None:
                 "chronic_conditions": chronic_conditions,
                 "acute_symptoms": acute_symptoms,
                 "behavioral_flags": behavioral_state,
+                # STOP-BANG Sleep Apnea Screening Components
+                "snoring": snoring,
+                "tiredness": tiredness,
+                "observed_apnea": observed_apnea,
                 "confinement_stress": confinement_stress,
                 "confinement_stress_source": stress_source,
                 "confinement_stress_obj": int(stress_scale_obj) if stress_scale_obj is not None else None,
