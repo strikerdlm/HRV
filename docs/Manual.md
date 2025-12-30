@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.9.0  
-**Last Updated:** 2025-12-29
+**Version:** 1.9.1  
+**Last Updated:** 2025-12-30
 
 ---
 
@@ -5298,6 +5298,127 @@ All scoring functions, thresholds, and decision logic are derived from peer-revi
 5. **Hydration Tracking**: Daily body mass measurements + USG when available
 6. **Circadian Alignment**: Optimize sleep timing to individual chronotype
 
+### Space Weather & EVA Radiation Dashboards
+
+*Added in v1.9.1*
+
+The Crew Scheduling module includes comprehensive real-time space weather monitoring and EVA radiation assessment dashboards designed for mission control operations.
+
+#### EVA Radiation Metrics Dashboard
+
+**Location:** Crew Scheduling → EVA Procedures & Checklists → ☢️ Radiation → Space Radiation Assessment for EVA
+
+**Purpose:** Provides real-time visualization of the three most critical radiation parameters used by Mission Control for EVA decision-making.
+
+**Visualization Features:**
+
+- **Multi-Metric Horizontal Bar Chart**: Displays Proton Flux (>10 MeV), Kp Index, and EVA Dose Rate
+- **Normalized Display**: All metrics shown as percentage of critical threshold (0-200%) for visual comparison
+- **Color-Coded Risk Zones**: 
+  - Green: Low risk (<50% of threshold)
+  - Yellow/Orange: Moderate risk (50-100% of threshold)
+  - Red: High risk (>100% of threshold)
+- **Critical Threshold Reference**: Red dashed line at 100% indicating operational critical threshold
+- **Dynamic Axis Scaling**: Uses `_auto_axis_bounds()` to ensure all data points are visible
+- **Real-Time Data Integration**: Fetches live space weather data from NOAA SWPC and SpaceWeatherLive APIs
+
+**Metrics Displayed:**
+
+1. **Proton Flux (>10 MeV, pfu)**
+   - Indicates solar particle event (SPE) activity
+   - S-Scale classification (S0-S5)
+   - Color coding based on current S-scale level
+
+2. **Kp Index**
+   - Geomagnetic activity indicator
+   - G-Scale classification (G0-G5)
+   - Color coding based on current G-scale level
+
+3. **EVA Dose Rate (mSv/hr)**
+   - Estimated radiation exposure during planned EVA
+   - Based on selected mission environment and space weather conditions
+   - Thresholds: Normal (<0.8 mSv/hr), Caution (2.0 mSv/hr), Warning (5.0 mSv/hr), NO-GO (10.0 mSv/hr)
+
+**Interpretation:**
+
+- Values <100%: Below critical threshold, operations may proceed with standard protocols
+- Values ≥100%: At or above critical threshold, enhanced monitoring or mission modification required
+- Color coding provides immediate visual risk assessment
+
+#### Space Weather Real-Time Dashboard
+
+**Location:** Crew Scheduling → EVA Procedures & Checklists → ☢️ Radiation → Additional Real-Time Data
+
+**Purpose:** Beautiful gauge-based visualization of real-time space weather parameters for operational monitoring.
+
+**Layout:**
+
+- **Top Row (3 gauges)**: Flare probability gauges
+  - C-Class Flare Probability (0-100%)
+  - M-Class Flare Probability (0-100%)
+  - X-Class Flare Probability (0-100%)
+
+- **Bottom Row (2 gauges)**: Space environment metrics
+  - F10.7 Flux (50-300 sfu) with historic average and projected trend
+  - Active CMEs (0-10 count)
+
+**Gauge Features:**
+
+- **Modern Two-Ring Style**: Animated progress indicators with color-coded zones
+- **Color Semantics**:
+  - Green: Low risk/normal conditions
+  - Yellow/Orange: Moderate risk/caution
+  - Red: High risk/warning
+- **Real-Time Updates**: Data source and timestamp displayed in subtitle
+- **Large Display**: 380px height for improved visibility in mission control environments
+
+**F10.7 Flux Gauge:**
+
+- **Range**: 50-300 sfu (typical solar cycle range)
+- **Historic Average**: Displays typical solar cycle average (150 sfu)
+- **Projected Trend**: Shows estimated future value based on current trend
+- **Color Zones**: 
+  - Green (50-100 sfu): Low solar activity
+  - Yellow (100-200 sfu): Moderate solar activity
+  - Red (200-300 sfu): High solar activity
+
+**Active CMEs Gauge:**
+
+- **Range**: 0-10 CMEs
+- **Color Zones**:
+  - Green (0-2 CMEs): Low activity
+  - Yellow (2-5 CMEs): Moderate activity
+  - Red (5+ CMEs): High activity
+
+**Flare Probability Gauges:**
+
+- **C-Class**: Minor flares, typically low impact
+  - Color zones: Green (<30%), Yellow (30-60%), Red (>60%)
+- **M-Class**: Moderate flares, can affect communications
+  - Color zones: Blue (<20%), Yellow (20-40%), Red (>40%)
+- **X-Class**: Extreme flares, significant operational impact
+  - Color zones: Yellow (<5%), Orange (5-15%), Red (>15%)
+
+**Data Sources:**
+
+- NOAA Space Weather Prediction Center (SWPC)
+- SpaceWeatherLive API
+- NASA Space Radiation Analysis Group (SRAG)
+
+**Operational Use:**
+
+1. **Pre-EVA Assessment**: Review all gauges before EVA planning
+2. **Real-Time Monitoring**: Monitor space weather conditions during mission operations
+3. **Risk Communication**: Use color-coded zones for quick risk assessment in mission briefings
+4. **Trend Analysis**: F10.7 Flux projection helps anticipate future space weather conditions
+
+#### Scientific References
+
+- NOAA Space Weather Prediction Center. (n.d.). *Space Weather Scales* (R, S, G). Retrieved from https://www.swpc.noaa.gov/noaa-scales-explanation
+- NASA-STD-3001 Vol 1 Rev B. (2022). *Crew Health Standard*. NASA Johnson Space Center.
+- Space Weather Prediction Center. (n.d.). *Operational Thresholds*. Retrieved from https://www.swpc.noaa.gov/
+- SpaceWeatherLive. (n.d.). *API Documentation*. Retrieved from https://www.spaceweatherlive.com/
+
 ---
 
 ## Pending Developments and Roadmap
@@ -5306,6 +5427,7 @@ This section outlines completed features and remaining planned enhancements for 
 
 ### Completed Features (Q4 2025)
 
+✅ **Enhanced Space Weather & EVA Radiation Dashboards (v1.9.1)** - Real-time gauge-based space weather visualization, EVA radiation metrics dashboard with normalized threshold display, verified technical resource links  
 ✅ **Crew Scheduling & Human Performance (v1.9.0)** - IHPI composite scoring, EVA GO/NO-GO matrix, constraint-based optimization, real-time risk assessment  
 ✅ **Radiation Exposure Module (v1.8.80)** - Evidence-based dose models for 10 environments, day-by-day tracking, EVA Go/No-Go matrix  
 ✅ **Advanced Wearable Analytics (v1.8.81)** - Body Battery forecasting, Allostatic Load Index, Circadian Rhythm Analysis, Stress Prediction  
