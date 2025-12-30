@@ -650,6 +650,9 @@ class UserProfile:
     alcohol_use: Optional[str] = None  # none, occasional, moderate, heavy
     caffeine_intake_mg: Optional[float] = None
     
+    # Chronotype
+    chronotype_offset_hours: Optional[float] = None  # Phase shift for circadian model (-2.5 to +2.5 hours)
+    
     # Medical
     medical_conditions: List[str] = field(default_factory=list)
     medications: List[str] = field(default_factory=list)
@@ -2072,6 +2075,14 @@ class UserDatabase:
         except (KeyError, IndexError):
             language = "en"
         
+        # Safely get chronotype_offset_hours with fallback
+        try:
+            chronotype_offset_hours = row["chronotype_offset_hours"]
+            if chronotype_offset_hours is not None:
+                chronotype_offset_hours = float(chronotype_offset_hours)
+        except (KeyError, IndexError, (ValueError, TypeError)):
+            chronotype_offset_hours = None
+        
         return UserProfile(
             user_id=row["user_id"],
             username=row["username"],
@@ -2089,6 +2100,7 @@ class UserDatabase:
             smoking_status=row["smoking_status"],
             alcohol_use=row["alcohol_use"],
             caffeine_intake_mg=row["caffeine_intake_mg"],
+            chronotype_offset_hours=chronotype_offset_hours,
             medical_conditions=medical_conditions,
             medications=medications,
             language=language,
