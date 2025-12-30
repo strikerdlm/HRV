@@ -234,13 +234,17 @@ class Experiment:
     # Description
     description: str
     objectives: List[str]
-    hypothesis: str = ""
-    expected_outcomes: str = ""
     
-    # Workload assessment
+    # Workload assessment (required fields)
     cognitive_load: CognitiveLoad
     physical_load: PhysicalLoad
     total_duration_minutes: int
+    
+    # Optional description fields
+    hypothesis: str = ""
+    expected_outcomes: str = ""
+    
+    # Optional workload fields
     min_crew_required: int = 1
     max_crew_allowed: int = 2
     
