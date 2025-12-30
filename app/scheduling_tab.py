@@ -2578,7 +2578,7 @@ def _render_nasa_scheduling_guidelines() -> None:
     
     # Scheduling constraints
     st.markdown("---")
-    st.markdown("#### 📋 ISS Scheduling Constraints")
+    st.markdown("#### 📋 Habitat Constraints")
     
     col1, col2, col3 = st.columns(3)
     
@@ -2588,19 +2588,55 @@ def _render_nasa_scheduling_guidelines() -> None:
             if constraint.constraint_type == "temporal":
                 value_str = ""
                 if constraint.min_value is not None and constraint.max_value is not None:
-                    value_str = f"{constraint.min_value}-{constraint.max_value}"
+                    value_str = f"{constraint.min_value:.0f}-{constraint.max_value:.0f}"
                 elif constraint.min_value is not None:
-                    value_str = f"≥{constraint.min_value}"
+                    value_str = f"≥{constraint.min_value:.0f}"
                 elif constraint.max_value is not None:
-                    value_str = f"≤{constraint.max_value}"
-                st.markdown(f"- **{constraint.name}**: {value_str}")
+                    value_str = f"≤{constraint.max_value:.0f}"
+                st.markdown(
+                    f"""
+                    <div style="
+                        background: linear-gradient(135deg, #2c3e5022, #34495e11);
+                        border-left: 3px solid #3498db;
+                        border-radius: 4px;
+                        padding: 10px 12px;
+                        margin: 6px 0;
+                    ">
+                        <div style="font-weight: 600; color: #1a1a1a; font-size: 0.95em; margin-bottom: 4px;">
+                            {constraint.name}
+                        </div>
+                        <div style="font-size: 1.1em; font-weight: 700; color: #2c3e50;">
+                            {value_str}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
     
     with col2:
         st.markdown("##### 🔧 Resource")
         for constraint in ISS_SCHEDULING_CONSTRAINTS:
             if constraint.constraint_type == "resource":
                 value_str = f"max {constraint.max_value:.0f}" if constraint.max_value else ""
-                st.markdown(f"- **{constraint.name}**: {value_str}")
+                st.markdown(
+                    f"""
+                    <div style="
+                        background: linear-gradient(135deg, #f39c1222, #e67e2211);
+                        border-left: 3px solid #f39c12;
+                        border-radius: 4px;
+                        padding: 10px 12px;
+                        margin: 6px 0;
+                    ">
+                        <div style="font-weight: 600; color: #1a1a1a; font-size: 0.95em; margin-bottom: 4px;">
+                            {constraint.name}
+                        </div>
+                        <div style="font-size: 1.1em; font-weight: 700; color: #2c3e50;">
+                            {value_str}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
     
     with col3:
         st.markdown("##### 👥 Crew")
@@ -2613,7 +2649,25 @@ def _render_nasa_scheduling_guidelines() -> None:
                     value_str = f"≥{constraint.min_value:.0f}"
                 elif constraint.max_value is not None:
                     value_str = f"≤{constraint.max_value:.0f}"
-                st.markdown(f"- **{constraint.name}**: {value_str}")
+                st.markdown(
+                    f"""
+                    <div style="
+                        background: linear-gradient(135deg, #27ae6022, #22995411);
+                        border-left: 3px solid #27ae60;
+                        border-radius: 4px;
+                        padding: 10px 12px;
+                        margin: 6px 0;
+                    ">
+                        <div style="font-weight: 600; color: #1a1a1a; font-size: 0.95em; margin-bottom: 4px;">
+                            {constraint.name}
+                        </div>
+                        <div style="font-size: 1.1em; font-weight: 700; color: #2c3e50;">
+                            {value_str}
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
     
     # Task categories
     st.markdown("---")
@@ -2869,9 +2923,9 @@ def _render_citation_card(paper: dict, domain_color: str) -> None:
         doi_link = f"https://pubmed.ncbi.nlm.nih.gov/{pmid}/"
         doi_display = f'<a href="{doi_link}" target="_blank" style="color: #3498db;">{doi}</a>'
     elif doi.startswith("NASA") or doi.startswith("ICAO") or doi.startswith("AFMAN"):
-        doi_display = f'<span style="color: #888;">{doi}</span>'
+        doi_display = f'<span style="color: #2c3e50;">{doi}</span>'
     else:
-        doi_display = f'<span style="color: #888;">{doi}</span>'
+        doi_display = f'<span style="color: #2c3e50;">{doi}</span>'
     
     st.markdown(
         f"""
@@ -2884,7 +2938,7 @@ def _render_citation_card(paper: dict, domain_color: str) -> None:
         ">
             <div style="font-size: 0.9em; line-height: 1.5;">
                 {paper['citation']}
-                <br/><span style="color: #888;">{paper['journal']}, {paper['volume']}</span>
+                <br/><span style="color: #2c3e50;">{paper['journal']}, {paper['volume']}</span>
                 <br/>{doi_display}
             </div>
             <div style="
@@ -2900,7 +2954,7 @@ def _render_citation_card(paper: dict, domain_color: str) -> None:
             <div style="
                 margin-top: 6px;
                 font-size: 0.8em;
-                color: #888;
+                color: #2c3e50;
             ">
                 <strong>Used in app:</strong> {paper['used_for']}
             </div>
@@ -2973,10 +3027,10 @@ def _render_scientific_foundation_panel() -> None:
                     <div style="font-weight: 600; color: {color}; font-size: 0.95em;">
                         {title}
                     </div>
-                    <div style="color: #888; font-size: 0.8em; margin: 4px 0;">
+                    <div style="color: #1a1a1a; font-size: 0.8em; margin: 4px 0; font-weight: 600;">
                         {weight}
                     </div>
-                    <div style="color: #aaa; font-size: 0.85em; margin-top: 8px;">
+                    <div style="color: #2c3e50; font-size: 0.85em; margin-top: 8px;">
                         {desc}
                     </div>
                 </div>
