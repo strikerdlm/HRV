@@ -2076,11 +2076,14 @@ class UserDatabase:
             language = "en"
         
         # Safely get chronotype_offset_hours with fallback
+        # Handle case where column doesn't exist in older database schemas
+        chronotype_offset_hours = None
         try:
-            chronotype_offset_hours = row["chronotype_offset_hours"]
-            if chronotype_offset_hours is not None:
-                chronotype_offset_hours = float(chronotype_offset_hours)
-        except (KeyError, IndexError, (ValueError, TypeError)):
+            if "chronotype_offset_hours" in row.keys():
+                chronotype_offset_hours = row["chronotype_offset_hours"]
+                if chronotype_offset_hours is not None:
+                    chronotype_offset_hours = float(chronotype_offset_hours)
+        except (KeyError, IndexError, ValueError, TypeError):
             chronotype_offset_hours = None
         
         return UserProfile(
