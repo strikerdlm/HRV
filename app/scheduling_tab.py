@@ -881,7 +881,7 @@ def _render_risk_heatmap(engine: SchedulingEngine) -> None:
             "type": "category",
             "data": dimensions,
             "axisLabel": {
-                "color": "#ccc",
+                "color": "#1a1a1a",
                 "rotate": 0,
                 "fontSize": 12,
                 "fontWeight": "bold",
@@ -893,7 +893,7 @@ def _render_risk_heatmap(engine: SchedulingEngine) -> None:
             "type": "category",
             "data": crew_names,
             "axisLabel": {
-                "color": "#ddd",
+                "color": "#1a1a1a",
                 "fontSize": 11,
             },
             "axisLine": {"lineStyle": {"color": "#555"}},
@@ -911,7 +911,7 @@ def _render_risk_heatmap(engine: SchedulingEngine) -> None:
             "inRange": {
                 "color": ["#e74c3c", "#f39c12", "#f1c40f", "#27ae60"],
             },
-            "textStyle": {"color": "#aaa", "fontSize": 11},
+            "textStyle": {"color": "#1a1a1a", "fontSize": 11},
             "text": ["100%", "0%"],
         },
         "series": [
@@ -986,7 +986,7 @@ def _render_ihpi_gauge(
                 "title": {
                     "offsetCenter": [0, "35%"],
                     "fontSize": 13,
-                    "color": "#aaa",
+                    "color": "#1a1a1a",
                     "fontWeight": "500",
                 },
                 "detail": {
