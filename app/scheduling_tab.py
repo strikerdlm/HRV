@@ -1572,7 +1572,7 @@ def _render_workload_balance(
         "xAxis": {
             "type": "category",
             "data": crew_names,
-            "axisLabel": {"color": "#888", "rotate": 30},
+            "axisLabel": {"color": "#1a1a1a", "rotate": 0},
             "axisLine": {"lineStyle": {"color": "#444"}},
         },
         "yAxis": {
