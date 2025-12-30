@@ -2607,11 +2607,13 @@ def _render_nasa_scheduling_guidelines() -> None:
         for constraint in ISS_SCHEDULING_CONSTRAINTS:
             if constraint.constraint_type == "crew":
                 value_str = ""
-                if constraint.min_value is not None:
-                    value_str = f"≥{constraint.min_value}"
-                if constraint.max_value is not None:
-                    value_str += f" max {constraint.max_value:.0f}"
-                st.markdown(f"- **{constraint.name}**: {value_str.strip()}")
+                if constraint.min_value is not None and constraint.max_value is not None:
+                    value_str = f"{constraint.min_value:.0f}-{constraint.max_value:.0f}"
+                elif constraint.min_value is not None:
+                    value_str = f"≥{constraint.min_value:.0f}"
+                elif constraint.max_value is not None:
+                    value_str = f"≤{constraint.max_value:.0f}"
+                st.markdown(f"- **{constraint.name}**: {value_str}")
     
     # Task categories
     st.markdown("---")
