@@ -243,7 +243,13 @@ except ImportError:
     PROFILE_MODULE_AVAILABLE = False
 
 from user_data_manager import create_user_manager, get_user_data_path, parse_filename_date
-from hrv_core import build_readiness_baseline, load_rr_intervals_from_text, readiness_from_pns
+from hrv_core import (
+    build_readiness_baseline,
+    load_rr_intervals_from_text,
+    readiness_from_pns,
+    compute_baevsky_stress_index,
+    compute_parasympathetic_index,
+)
 
 # Polar H10 BLE Recorder
 try:
@@ -13964,33 +13970,104 @@ def _space_weather_summary_for_date(target_date: date) -> Dict[str, Any]:
 
 @st.cache_data(ttl=30, max_entries=128, show_spinner=False)
 def _load_hrv_daily_objective(uid: str) -> pd.DataFrame:
-    """Load daily-median objective HRV indices (stress/PNS) for a user."""
+    """Load daily-median objective HRV indices (stress/PNS) for a user.
+    
+    CRITICAL: Only uses Polar device measurements (device_name contains 'Polar' or 'polar').
+    Calculates indices from RR-intervals if stored measurements are unavailable.
+    
+    References:
+    - Baevsky RM, Chernikova AG (2017). Heart rate variability analysis: physiological foundations.
+      Cardiometry 10:66-76.
+    - Nunan D, Sandercock GR, Brodie DA (2010). A quantitative systematic review of normal values.
+      Pacing Clin Electrophysiol 33(11):1407-1417.
+    """
     if not uid:
         return pd.DataFrame()
     db = get_database()
+    
+    # Load HRV data with device_name and source_file to filter for Polar only
     df = db.get_hrv_dataframe(
         uid,
         limit=500,
-        include_rr=False,
+        include_rr=True,  # Need RR intervals to recalculate if needed
         columns=(
             "measurement_date",
+            "device_name",
+            "source_file",
             "stress_index",
             "parasympathetic_index",
             "hrv_score",
             "mean_hr_bpm",
             "rmssd_ms",
             "sdnn_ms",
+            "pnn50_pct",
+            "rr_intervals_json",
         ),
     )
     if df.empty or "measurement_date" not in df.columns:
         return pd.DataFrame()
-    tmp = df.copy()
+    
+    # Filter to only Polar devices
+    # Polar devices typically have device_name containing "Polar" or source_file containing "polar"
+    polar_mask = (
+        df["device_name"].astype(str).str.contains("Polar|polar", case=False, na=False) |
+        df["source_file"].astype(str).str.contains("polar|Polar", case=False, na=False)
+    )
+    df_polar = df[polar_mask].copy()
+    
+    if df_polar.empty:
+        return pd.DataFrame()
+    
+    # Get user age for parasympathetic index calculation
+    user = _get_current_user()
+    age = None
+    if user and user.date_of_birth:
+        age = _calculate_age(user.date_of_birth)
+    
+    # CRITICAL: Always recalculate indices from RR-intervals for Polar measurements
+    # This ensures accuracy and uses the proper scientific formulas
+    import json
+    
+    for idx, row in df_polar.iterrows():
+        rr_json = row.get("rr_intervals_json")
+        if not rr_json:
+            continue  # Skip if no RR intervals available
+        
+        try:
+            rr_data = json.loads(rr_json) if isinstance(rr_json, str) else rr_json
+            if not isinstance(rr_data, list) or len(rr_data) < 10:
+                continue
+            
+            rr_array = np.array(rr_data, dtype=float)
+            
+            # Always recalculate Baevsky Stress Index from RR-intervals
+            # Using proper 50ms bin width per scientific literature
+            stress_idx = compute_baevsky_stress_index(rr_array, bin_width_ms=50.0)
+            df_polar.at[idx, "stress_index"] = stress_idx
+            
+            # Always recalculate Parasympathetic Index from RR-intervals
+            # Using age-adjusted norms (Nunan et al. 2010, Shaffer & Ginsberg 2017)
+            if age is not None:
+                rmssd = row.get("rmssd_ms")
+                pnn50 = row.get("pnn50_pct")
+                pns_idx = compute_parasympathetic_index(
+                    rr_array,
+                    age,
+                    rmssd_ms=float(rmssd) if pd.notna(rmssd) and rmssd > 0 else None,
+                    pnn50_pct=float(pnn50) if pd.notna(pnn50) and pnn50 > 0 else None,
+                )
+                df_polar.at[idx, "parasympathetic_index"] = pns_idx
+        except (json.JSONDecodeError, ValueError, TypeError, KeyError) as exc:
+            _LOGGER.debug("Failed to recalculate HRV indices from RR-intervals: %s", exc)
+            continue
+    
+    tmp = df_polar.copy()
     tmp["measurement_date"] = pd.to_datetime(tmp["measurement_date"], errors="coerce")
     tmp = tmp.dropna(subset=["measurement_date"])
     if tmp.empty:
         return pd.DataFrame()
     tmp["day"] = tmp["measurement_date"].dt.normalize()
-    cols = [c for c in tmp.columns if c not in {"measurement_date"}]
+    cols = [c for c in tmp.columns if c not in {"measurement_date", "device_name", "source_file", "rr_intervals_json"}]
     numeric_cols = [c for c in cols if c in tmp.columns and pd.api.types.is_numeric_dtype(tmp[c])]
     if not numeric_cols:
         return pd.DataFrame()
@@ -15284,9 +15361,12 @@ def _render_exploration_medical_analytics(user: UserProfile) -> None:
             )
             render_echarts(stress_pns_chart, height_px=380)
             st.markdown(
+                "**📊 Data Source:** Only Polar device measurements (RR-intervals) are used for these calculations. "
+                "Garmin data is excluded to ensure accuracy.\n\n"
                 "*Stress Index (Baevsky) reflects sympathetic activation; elevated values "
                 "(>100) indicate sustained stress. PNS Index measures parasympathetic "
                 "(vagal) activity; values >1.0 suggest good recovery capacity.* "
+                "**References:** Baevsky & Chernikova (2017), Nunan et al. (2010), Shaffer & Ginsberg (2017)."
                 "*(Baevsky et al., 2002; Shaffer & Ginsberg, 2017)*"
             )
     
