@@ -333,6 +333,11 @@ class MedicalHistory:
     sleep_apnea: bool = False
     sleep_apnea_treated: Optional[bool] = None
     
+    # STOP-BANG Sleep Apnea Screening Components
+    snoring: Optional[bool] = None  # S: Loud snoring (heard through closed doors)
+    tiredness: Optional[bool] = None  # T: Daytime tiredness/fatigue
+    observed_apnea: Optional[bool] = None  # O: Witnessed apnea (breathing stops during sleep)
+    
     # Metabolic/Endocrine
     diabetes_type: Optional[str] = None  # None, Type1, Type2, Gestational
     diabetes_controlled: Optional[bool] = None
