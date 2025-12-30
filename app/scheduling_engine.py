@@ -96,6 +96,9 @@ class ScheduledActivity:
     is_fixed: bool = False
     priority: int = 5  # 1-10, higher = more important
     
+    # Spatial planning (NASA Mission Control standard)
+    location: Optional[str] = None  # e.g., "Lab Module", "Exercise Area", "Crew Quarters"
+    
     # Notes
     notes: str = ""
     
@@ -120,8 +123,31 @@ class ScheduledActivity:
             "risk_level": self.risk_level.value,
             "is_fixed": self.is_fixed,
             "priority": self.priority,
+            "location": self.location,
             "notes": self.notes,
         }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> ScheduledActivity:
+        """Reconstruct ScheduledActivity from dictionary."""
+        from scheduling_core import RiskLevel
+        
+        return cls(
+            schedule_id=data["schedule_id"],
+            crew_id=data["crew_id"],
+            activity_id=data["activity_id"],
+            activity_name=data["activity_name"],
+            start_time=datetime.fromisoformat(data["start_time"]),
+            end_time=datetime.fromisoformat(data["end_time"]),
+            status=ScheduleStatus(data.get("status", "scheduled")),
+            met_value=data.get("met_value", 1.0),
+            estimated_kcal=data.get("estimated_kcal", 0.0),
+            risk_level=RiskLevel(data.get("risk_level", "low")),
+            is_fixed=data.get("is_fixed", False),
+            priority=data.get("priority", 5),
+            location=data.get("location"),
+            notes=data.get("notes", ""),
+        )
 
 
 @dataclass
@@ -137,6 +163,48 @@ class ScheduleConflict:
 
 
 @dataclass
+class ActivityGroup:
+    """A group of related activities that can be moved together (NASA Playbook standard)."""
+    group_id: str
+    name: str
+    activity_ids: List[str] = field(default_factory=list)
+    description: str = ""
+    created_at: datetime = field(default_factory=lambda: datetime.now())
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "group_id": self.group_id,
+            "name": self.name,
+            "activity_ids": self.activity_ids,
+            "description": self.description,
+            "created_at": self.created_at.isoformat(),
+        }
+
+
+@dataclass
+class ScheduleVersion:
+    """A version snapshot of a schedule for rollback functionality (NASA Playbook standard)."""
+    version_id: str
+    schedule_date: date
+    activities: List[ScheduledActivity] = field(default_factory=list)
+    created_at: datetime = field(default_factory=lambda: datetime.now())
+    created_by: str = "system"
+    description: str = ""
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert to dictionary for serialization."""
+        return {
+            "version_id": self.version_id,
+            "schedule_date": self.schedule_date.isoformat(),
+            "activities": [a.to_dict() for a in self.activities],
+            "created_at": self.created_at.isoformat(),
+            "created_by": self.created_by,
+            "description": self.description,
+        }
+
+
+@dataclass
 class DailySchedule:
     """A day's schedule for all crew members."""
     schedule_date: date
@@ -144,6 +212,7 @@ class DailySchedule:
     conflicts: List[ScheduleConflict] = field(default_factory=list)
     is_optimized: bool = False
     optimization_score: float = 0.0
+    version_history: List[ScheduleVersion] = field(default_factory=list)  # For rollback
     
     def get_crew_activities(self, crew_id: str) -> List[ScheduledActivity]:
         """Get all activities for a specific crew member."""
@@ -307,6 +376,7 @@ class SchedulingEngine:
         self.crew_members: Dict[str, CrewMember] = {}
         self.schedules: Dict[date, DailySchedule] = {}
         self.crew_states: Dict[str, CrewScheduleState] = {}
+        self.activity_groups: Dict[str, ActivityGroup] = {}  # Activity grouping (NASA Playbook)
         
         if crew_members:
             for crew in crew_members:
@@ -367,6 +437,7 @@ class SchedulingEngine:
         duration_minutes: Optional[int] = None,
         priority: int = 5,
         notes: str = "",
+        location: Optional[str] = None,
     ) -> Tuple[Optional[ScheduledActivity], List[ScheduleConflict]]:
         """
         Schedule an activity for a crew member.
@@ -434,6 +505,7 @@ class SchedulingEngine:
             risk_level=risk_level,
             is_fixed=activity_def.category == ActivityCategory.FIXED,
             priority=priority,
+            location=location,
             notes=notes,
         )
         
@@ -459,6 +531,26 @@ class SchedulingEngine:
         schedule_date = activity.start_time.date()
         daily_schedule = self.get_or_create_daily_schedule(schedule_date)
         
+        # Check spatial conflicts (NASA Mission Control standard)
+        if activity.location:
+            for existing in daily_schedule.activities:
+                if existing.schedule_id == activity.schedule_id:
+                    continue
+                # Check if same location at same time (spatial conflict)
+                if (existing.location and 
+                    existing.location == activity.location and
+                    activity.start_time < existing.end_time and
+                    activity.end_time > existing.start_time):
+                    conflicts.append(ScheduleConflict(
+                        conflict_id=str(uuid.uuid4()),
+                        conflict_type="spatial",
+                        affected_activities=(activity.schedule_id, existing.schedule_id),
+                        affected_crew=(activity.crew_id, existing.crew_id),
+                        severity="warning",
+                        description=f"Spatial conflict: Multiple crew in '{activity.location}' at same time",
+                        suggested_resolution=f"Reschedule one activity or use different location",
+                    ))
+        
         # Check overlap with existing activities for same crew
         for existing in daily_schedule.activities:
             if existing.crew_id != activity.crew_id:
@@ -466,17 +558,31 @@ class SchedulingEngine:
             if existing.schedule_id == activity.schedule_id:
                 continue
             
-            # Check time overlap
+            # Check time overlap with priority-based resolution (NASA Mission Control standard)
             if (activity.start_time < existing.end_time and
                 activity.end_time > existing.start_time):
+                # Priority-based conflict resolution
+                if activity.priority > existing.priority:
+                    # New activity has higher priority - suggest moving existing
+                    resolution = f"Move lower-priority activity '{existing.activity_name}' (priority {existing.priority}) to accommodate '{activity.activity_name}' (priority {activity.priority})"
+                    severity = "warning"
+                elif activity.priority < existing.priority:
+                    # Existing activity has higher priority - suggest moving new
+                    resolution = f"Reschedule '{activity.activity_name}' (priority {activity.priority}) - conflicts with higher-priority '{existing.activity_name}' (priority {existing.priority})"
+                    severity = "error"
+                else:
+                    # Same priority - suggest negotiation
+                    resolution = f"Priority conflict: Both activities have priority {activity.priority}. Reschedule one or adjust priorities."
+                    severity = "warning"
+                
                 conflicts.append(ScheduleConflict(
                     conflict_id=str(uuid.uuid4()),
                     conflict_type="overlap",
                     affected_activities=(activity.schedule_id, existing.schedule_id),
                     affected_crew=(activity.crew_id,),
-                    severity="error",
-                    description=f"Activity overlaps with {existing.activity_name}",
-                    suggested_resolution=f"Reschedule to avoid {existing.start_time.strftime('%H:%M')}-{existing.end_time.strftime('%H:%M')}",
+                    severity=severity,
+                    description=f"Activity overlaps with {existing.activity_name} (Priority: {existing.priority} vs {activity.priority})",
+                    suggested_resolution=resolution,
                 ))
         
         # Check resource constraints (e.g., exercise/hygiene capacity)
@@ -564,6 +670,180 @@ class SchedulingEngine:
             state.exercise_completed = True
         if activity.activity_id in ("breakfast", "lunch", "dinner"):
             state.meals_completed.add(activity.activity_id)
+    
+    def create_schedule_snapshot(self, schedule_date: date, description: str = "", created_by: str = "system") -> Optional[ScheduleVersion]:
+        """Create a version snapshot of the current schedule for rollback (NASA Playbook standard).
+        
+        Args:
+            schedule_date: Date of the schedule to snapshot
+            description: Optional description of the snapshot
+            created_by: User/system identifier
+            
+        Returns:
+            ScheduleVersion if successful, None if schedule doesn't exist
+        """
+        daily = self.get_daily_schedule(schedule_date)
+        if not daily:
+            return None
+        
+        # Create snapshot with copy of activities
+        snapshot = ScheduleVersion(
+            version_id=str(uuid.uuid4()),
+            schedule_date=schedule_date,
+            activities=[ScheduledActivity.from_dict(a.to_dict()) for a in daily.activities],  # Deep copy
+            created_at=datetime.now(),
+            created_by=created_by,
+            description=description,
+        )
+        
+        # Add to version history
+        daily.version_history.append(snapshot)
+        
+        # Keep only last 10 versions to prevent memory bloat
+        if len(daily.version_history) > 10:
+            daily.version_history = daily.version_history[-10:]
+        
+        return snapshot
+    
+    def rollback_schedule(self, schedule_date: date, version_id: Optional[str] = None) -> bool:
+        """Rollback schedule to a previous version (NASA Playbook standard).
+        
+        Args:
+            schedule_date: Date of the schedule to rollback
+            version_id: Specific version to rollback to (uses latest if None)
+            
+        Returns:
+            True if rollback successful, False otherwise
+        """
+        daily = self.get_daily_schedule(schedule_date)
+        if not daily or not daily.version_history:
+            return False
+        
+        # Find version to rollback to
+        if version_id:
+            target_version = next((v for v in daily.version_history if v.version_id == version_id), None)
+        else:
+            # Use second-to-last version (last is current)
+            if len(daily.version_history) < 2:
+                return False
+            target_version = daily.version_history[-2]
+        
+        if not target_version:
+            return False
+        
+        # Create snapshot of current state before rollback
+        self.create_schedule_snapshot(schedule_date, description="Pre-rollback snapshot", created_by="system")
+        
+        # Restore activities from version
+        daily.activities = [ScheduledActivity.from_dict(a.to_dict()) for a in target_version.activities]
+        
+        return True
+    
+    def create_activity_group(self, name: str, activity_ids: List[str], description: str = "") -> ActivityGroup:
+        """Create an activity group for batch operations (NASA Playbook standard).
+        
+        Args:
+            name: Group name (e.g., "Morning Routine", "EVA Prep")
+            activity_ids: List of schedule_ids to include in group
+            description: Optional description
+            
+        Returns:
+            Created ActivityGroup
+        """
+        group = ActivityGroup(
+            group_id=str(uuid.uuid4()),
+            name=name,
+            activity_ids=activity_ids,
+            description=description,
+            created_at=datetime.now(),
+        )
+        self.activity_groups[group.group_id] = group
+        return group
+    
+    def get_activity_group(self, group_id: str) -> Optional[ActivityGroup]:
+        """Get an activity group by ID."""
+        return self.activity_groups.get(group_id)
+    
+    def move_activity_group(self, group_id: str, time_offset_minutes: int, schedule_date: date) -> Tuple[bool, List[ScheduleConflict]]:
+        """Move an entire activity group by time offset (NASA Playbook standard).
+        
+        Args:
+            group_id: Activity group ID
+            time_offset_minutes: Minutes to shift (positive = later, negative = earlier)
+            schedule_date: Date of the schedule
+            
+        Returns:
+            Tuple of (success, list of conflicts)
+        """
+        group = self.get_activity_group(group_id)
+        if not group:
+            return False, []
+        
+        daily = self.get_or_create_daily_schedule(schedule_date)
+        all_conflicts: List[ScheduleConflict] = []
+        
+        # Find and move all activities in group
+        for activity_id in group.activity_ids:
+            activity = next((a for a in daily.activities if a.schedule_id == activity_id), None)
+            if not activity:
+                continue
+            
+            # Skip fixed activities
+            if activity.is_fixed:
+                all_conflicts.append(ScheduleConflict(
+                    conflict_id=str(uuid.uuid4()),
+                    conflict_type="constraint",
+                    affected_activities=(activity.schedule_id,),
+                    affected_crew=(activity.crew_id,),
+                    severity="warning",
+                    description=f"Cannot move fixed activity: {activity.activity_name}",
+                    suggested_resolution="Fixed activities cannot be moved",
+                ))
+                continue
+            
+            # Move activity
+            new_start = activity.start_time + timedelta(minutes=time_offset_minutes)
+            new_end = activity.end_time + timedelta(minutes=time_offset_minutes)
+            
+            # Check for conflicts
+            conflicts = self._check_time_conflicts(schedule_date, activity.crew_id, new_start, new_end, activity.schedule_id)
+            if conflicts:
+                all_conflicts.extend(conflicts)
+                continue
+            
+            # Apply move
+            activity.start_time = new_start
+            activity.end_time = new_end
+        
+        return len(all_conflicts) == 0, all_conflicts
+    
+    def _check_time_conflicts(self, schedule_date: date, crew_id: str, start_time: datetime, end_time: datetime, exclude_activity_id: Optional[str] = None) -> List[ScheduleConflict]:
+        """Check for time conflicts with existing activities."""
+        daily = self.get_daily_schedule(schedule_date)
+        if not daily:
+            return []
+        
+        conflicts: List[ScheduleConflict] = []
+        
+        for activity in daily.activities:
+            if activity.schedule_id == exclude_activity_id:
+                continue
+            if activity.crew_id != crew_id:
+                continue
+            
+            # Check for overlap
+            if not (end_time <= activity.start_time or start_time >= activity.end_time):
+                conflicts.append(ScheduleConflict(
+                    conflict_id=str(uuid.uuid4()),
+                    conflict_type="overlap",
+                    affected_activities=(activity.schedule_id,),
+                    affected_crew=(crew_id,),
+                    severity="error",
+                    description=f"Time conflict with {activity.activity_name}",
+                    suggested_resolution="Reschedule one of the conflicting activities",
+                ))
+        
+        return conflicts
     
     def generate_daily_template(
         self,
@@ -1285,6 +1565,8 @@ __all__ = [
     "DailySchedule",
     "CrewScheduleState",
     "Constraint",
+    "ActivityGroup",
+    "ScheduleVersion",
     # Constraints
     "HARD_CONSTRAINTS",
     "SOFT_CONSTRAINTS",
