@@ -47,7 +47,11 @@ except Exception:  # pragma: no cover - optional dependency
     GarthHTTPError = Exception  # type: ignore
     GARMIN_LIB_AVAILABLE = False
 
-from user_database import GarminDailyMetrics
+try:
+    # Package import
+    from app.user_database import GarminDailyMetrics
+except ImportError:  # pragma: no cover - fallback for direct/script imports
+    from user_database import GarminDailyMetrics
 
 
 # -----------------------------------------------------------------------------
@@ -59,11 +63,38 @@ class GarminAuthError(RuntimeError):
     """Raised when Garmin authentication is unavailable or fails."""
 
 
-def _env_credentials() -> Tuple[str, str]:
-    email = os.getenv("GARMIN_EMAIL")
-    password = os.getenv("GARMIN_PASSWORD")
+def _env_credentials(*, tokenstore_path: str | None = None) -> Tuple[str, str]:
+    """Return Garmin credentials from environment (optionally after loading .env).
+
+    Args:
+        tokenstore_path: Optional path to the token directory, used only for error
+            messaging when creds are missing.
+
+    Raises:
+        GarminAuthError: If credentials are not present in the environment.
+    """
+
+    # Best-effort load of .env in case this module is used standalone.
+    try:
+        try:
+            # Package import (tests, package mode)
+            from app.env_loader import load_env_file  # type: ignore
+        except ImportError:
+            # Script import (Streamlit adds app/ to sys.path)
+            from env_loader import load_env_file  # type: ignore
+
+        load_env_file()
+    except ImportError:
+        pass
+
+    email = os.getenv("GARMIN_EMAIL", "").strip()
+    password = os.getenv("GARMIN_PASSWORD", "").strip()
     if not email or not password:
-        raise GarminAuthError("GARMIN_EMAIL/GARMIN_PASSWORD not configured (set in .env).")
+        token_hint = f" Saved tokens directory: {tokenstore_path}" if tokenstore_path else ""
+        raise GarminAuthError(
+            "GARMIN_EMAIL/GARMIN_PASSWORD not configured (set in .env or environment)."
+            f"{token_hint}"
+        )
     return email, password
 
 
@@ -144,17 +175,16 @@ class GarminConnectClient:
     def __enter__(self) -> Garmin:
         if not GARMIN_LIB_AVAILABLE:
             raise GarminAuthError("python-garminconnect is not installed (see requirements.txt).")
-        email, password = _env_credentials()
-        
+
         # Token storage path (matches garminconnect default: ~/.garminconnect)
         tokenstore_path = str(self._tokenstore_dir)
-        
-        # First try to login with stored tokens (following official repository pattern)
-        # This avoids MFA prompts on subsequent logins
+
+        # First try to login with stored tokens (avoids MFA prompts on subsequent logins).
+        # IMPORTANT: Do this BEFORE requiring GARMIN_EMAIL/GARMIN_PASSWORD.
         try:
             _LOGGER.info("Attempting to use saved authentication tokens...")
             self.client = Garmin()  # type: ignore[arg-type]
-            # login() can take tokenstore path - it will try to load from there first
+            # login() can take a tokenstore path - it will try to load from there first
             self.client.login(tokenstore_path)  # type: ignore[arg-type]
             _LOGGER.info("Successfully logged in using saved tokens")
             return self.client
@@ -171,6 +201,9 @@ class GarminConnectClient:
             # Other errors during token restore - log and continue to fresh login
             _LOGGER.info(f"Token restore failed: {exc}. Attempting fresh login.")
         
+        # Token restore failed or no tokens; fall back to password login.
+        email, password = _env_credentials(tokenstore_path=tokenstore_path)
+
         # Fresh login flow (with MFA support if needed)
         # Following official repository pattern from example.py
         # Note: In non-interactive environments (like Streamlit), MFA cannot be handled automatically
