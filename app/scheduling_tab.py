@@ -63,6 +63,23 @@ try:
         EVA_OFFICER_CHECKLIST,
         ANALOG_EVA_TIMELINE,
         EXPERIMENT_IDS,
+        # Radiation Assessment
+        RadiationRiskLevel,
+        RadiationAssessment,
+        assess_radiation_for_eva,
+        NASA_CAREER_DOSE_LIMIT_MSV,
+        SPE_ALERT_THRESHOLD_PFU,
+        SPE_WARNING_THRESHOLD_PFU,
+        # NASA Scheduling Factors
+        NOMINAL_WORKDAY_HOURS,
+        MAX_WORKDAY_HOURS,
+        MAX_CONTINUOUS_WORK_HOURS,
+        COGNITIVE_WORKLOAD_LOW,
+        COGNITIVE_WORKLOAD_MEDIUM,
+        COGNITIVE_WORKLOAD_HIGH,
+        PHYSICAL_WORKLOAD_TARGET,
+        ISS_SCHEDULING_CONSTRAINTS,
+        TASK_CATEGORIES,
     )
     from scheduling_engine import (
         SchedulingEngine,
@@ -420,67 +437,69 @@ def _render_gantt_timeline(
                     text: '{title_text}',
                     subtext: '24-hour timeline • Hover for details • Scroll to zoom',
                     left: 'center',
-                    textStyle: {{ fontSize: 15, fontWeight: 'bold', color: '#ddd' }},
-                    subtextStyle: {{ fontSize: 11, color: '#888' }}
+                    textStyle: {{ fontSize: 16, fontWeight: 'bold', color: '#f0f0f0' }},
+                    subtextStyle: {{ fontSize: 12, color: '#b0b0b0' }}
                 }},
                 tooltip: {{
                     trigger: 'item',
-                    backgroundColor: 'rgba(30, 30, 50, 0.95)',
-                    borderColor: '#555',
+                    backgroundColor: 'rgba(20, 40, 70, 0.95)',
+                    borderColor: '#3498db',
                     borderWidth: 1,
-                    textStyle: {{ color: '#fff', fontSize: 12 }},
+                    textStyle: {{ color: '#fff', fontSize: 13 }},
                     formatter: function(params) {{
                         var d = params.data;
-                        return '<div style="font-weight:bold;margin-bottom:6px;color:#fff;">' + d.name + '</div>' +
-                               '<div style="color:#aaa;">Crew: ' + crewNames[d.value[0]] + '</div>' +
-                               '<div style="color:#aaa;">Time: ' + d.start_str + ' – ' + d.end_str + '</div>' +
-                               '<div style="color:#aaa;">Duration: ' + d.duration + ' min</div>';
+                        return '<div style="font-weight:bold;margin-bottom:6px;color:#fff;font-size:14px;">' + d.name + '</div>' +
+                               '<div style="color:#e0e0e0;">Crew: ' + crewNames[d.value[0]] + '</div>' +
+                               '<div style="color:#e0e0e0;">Time: ' + d.start_str + ' – ' + d.end_str + '</div>' +
+                               '<div style="color:#e0e0e0;">Duration: ' + d.duration + ' min</div>';
                     }}
                 }},
                 legend: {{
                     data: legendData,
                     bottom: 8,
-                    textStyle: {{ color: '#888', fontSize: 10 }},
-                    itemWidth: 14,
-                    itemHeight: 10
+                    textStyle: {{ color: '#d0d0d0', fontSize: 11, fontWeight: '500' }},
+                    itemWidth: 16,
+                    itemHeight: 12
                 }},
                 grid: {{
-                    left: '12%',
+                    left: '14%',
                     right: '5%',
                     top: '15%',
-                    bottom: '18%',
+                    bottom: '20%',
                     containLabel: true
                 }},
                 xAxis: {{
                     type: 'value',
                     name: 'Hour of Day',
                     nameLocation: 'middle',
-                    nameGap: 30,
-                    nameTextStyle: {{ color: '#888', fontSize: 11 }},
+                    nameGap: 32,
+                    nameTextStyle: {{ color: '#c0c0c0', fontSize: 13, fontWeight: 'bold' }},
                     min: 0,
                     max: 24,
                     interval: 2,
                     axisLabel: {{
                         formatter: function(v) {{ return v + ':00'; }},
-                        color: '#888',
-                        fontSize: 10
+                        color: '#d0d0d0',
+                        fontSize: 11,
+                        fontWeight: '500'
                     }},
-                    axisLine: {{ lineStyle: {{ color: '#444' }} }},
-                    splitLine: {{ lineStyle: {{ color: '#333', type: 'dashed' }} }}
+                    axisLine: {{ lineStyle: {{ color: '#5a5a7a', width: 2 }} }},
+                    splitLine: {{ lineStyle: {{ color: '#3a3a5a', type: 'dashed' }} }}
                 }},
                 yAxis: {{
                     type: 'category',
                     data: crewNames,
                     inverse: true,
-                    axisLabel: {{ color: '#ddd', fontSize: 11 }},
-                    axisLine: {{ lineStyle: {{ color: '#444' }} }},
-                    splitLine: {{ show: true, lineStyle: {{ color: '#333', type: 'dashed' }} }}
+                    axisLabel: {{ color: '#f0f0f0', fontSize: 12, fontWeight: '500' }},
+                    axisLine: {{ lineStyle: {{ color: '#5a5a7a', width: 2 }} }},
+                    splitLine: {{ show: true, lineStyle: {{ color: '#3a3a5a', type: 'dashed' }} }}
                 }},
                 dataZoom: [
                     {{ type: 'inside', xAxisIndex: 0, filterMode: 'weakFilter' }},
-                    {{ type: 'slider', xAxisIndex: 0, height: 20, bottom: 35, filterMode: 'weakFilter',
-                       borderColor: '#444', backgroundColor: '#1a1a2e',
-                       fillerColor: 'rgba(52, 152, 219, 0.3)', handleStyle: {{ color: '#3498db' }} }}
+                    {{ type: 'slider', xAxisIndex: 0, height: 22, bottom: 38, filterMode: 'weakFilter',
+                       borderColor: '#5a5a7a', backgroundColor: '#1e2a3a',
+                       fillerColor: 'rgba(52, 152, 219, 0.4)', handleStyle: {{ color: '#3498db' }},
+                       textStyle: {{ color: '#d0d0d0' }} }}
                 ],
                 series: [{{
                     type: 'custom',
@@ -1793,7 +1812,8 @@ def _render_eva_procedures_panel(
                 st.rerun()
     
     # Sub-tabs for different checklists
-    checklist_tab1, checklist_tab2, checklist_tab3, checklist_tab4 = st.tabs([
+    checklist_tab1, checklist_tab2, checklist_tab3, checklist_tab4, checklist_tab5 = st.tabs([
+        "☢️ Radiation",
         "⏱️ ISLE Protocol",
         "🎛️ Mission Control",
         "👨‍🚀 EVA Officer",
@@ -1801,16 +1821,189 @@ def _render_eva_procedures_panel(
     ])
     
     with checklist_tab1:
-        _render_isle_protocol_checklist()
+        _render_radiation_assessment_panel()
     
     with checklist_tab2:
-        _render_mcc_eva_checklist()
+        _render_isle_protocol_checklist()
     
     with checklist_tab3:
-        _render_eva_officer_checklist()
+        _render_mcc_eva_checklist()
     
     with checklist_tab4:
+        _render_eva_officer_checklist()
+    
+    with checklist_tab5:
         _render_eva_references()
+
+
+def _render_radiation_assessment_panel() -> None:
+    """Render radiation environment assessment for EVA GO/NO-GO decision.
+    
+    Displays space weather data, radiation risk level, and recommendations
+    based on NOAA data and NASA-STD-3001 radiation protection requirements.
+    
+    References:
+        - NASA-STD-3001 Vol 1 Rev B (2022): Radiation Protection
+        - NOAA SWPC: https://www.swpc.noaa.gov/
+        - NASA SRAG: https://srag.jsc.nasa.gov/
+    """
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #4a1942 0%, #6b2960 50%, #8b3a7a 100%);
+        padding: 16px 20px;
+        border-radius: 10px;
+        margin-bottom: 16px;
+        border-left: 4px solid #e879f9;
+    ">
+        <h4 style="margin: 0 0 8px 0; color: #fff;">
+            ☢️ Space Radiation Assessment for EVA
+        </h4>
+        <p style="margin: 0; color: #f0abfc; font-size: 0.9em;">
+            Real-time radiation environment evaluation per NASA-STD-3001 requirements<br/>
+            <em>Data sources: NOAA SWPC, NASA SRAG</em>
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Controls for radiation parameters
+    st.markdown("##### 📡 Space Weather Input")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        proton_flux = st.number_input(
+            "Proton Flux (>10 MeV pfu)",
+            min_value=0.1,
+            max_value=10000.0,
+            value=1.0,
+            step=0.5,
+            help="Solar proton flux in particle flux units. Normal: <1, Alert: >10, Warning: >100, Storm: >1000",
+            key="radiation_proton_flux",
+        )
+    
+    with col2:
+        kp_index = st.slider(
+            "Kp Index (Geomagnetic)",
+            min_value=0.0,
+            max_value=9.0,
+            value=2.0,
+            step=0.5,
+            help="Planetary K-index. Quiet: 0-2, Unsettled: 3-4, Storm: 5+",
+            key="radiation_kp_index",
+        )
+    
+    with col3:
+        solar_phase = st.selectbox(
+            "Solar Cycle Phase",
+            options=["minimum", "ascending", "maximum", "descending"],
+            index=1,  # ascending (current ~2024-2025)
+            help="Solar cycle phase affects GCR levels. Maximum = lower GCR, Minimum = higher GCR",
+            key="radiation_solar_phase",
+        )
+    
+    # Perform radiation assessment
+    assessment = assess_radiation_for_eva(
+        proton_flux_pfu=proton_flux,
+        kp_index=kp_index,
+        solar_cycle_phase=solar_phase,
+    )
+    
+    # Display risk level indicator
+    risk_colors = {
+        RadiationRiskLevel.LOW: ("#22c55e", "#166534", "✅ LOW RISK"),
+        RadiationRiskLevel.MODERATE: ("#eab308", "#854d0e", "⚠️ MODERATE RISK"),
+        RadiationRiskLevel.HIGH: ("#f97316", "#9a3412", "🔶 HIGH RISK"),
+        RadiationRiskLevel.CRITICAL: ("#ef4444", "#991b1b", "🚨 CRITICAL"),
+    }
+    
+    color, bg_dark, label = risk_colors.get(
+        assessment.risk_level,
+        ("#6b7280", "#374151", "UNKNOWN"),
+    )
+    
+    st.markdown(f"""
+    <div style="
+        background: linear-gradient(135deg, {bg_dark} 0%, {color}30 100%);
+        border: 2px solid {color};
+        border-radius: 12px;
+        padding: 20px;
+        margin: 16px 0;
+        text-align: center;
+    ">
+        <div style="font-size: 1.8em; font-weight: bold; color: {color}; margin-bottom: 8px;">
+            {label}
+        </div>
+        <div style="color: #f0f0f0; font-size: 1.1em; font-weight: 500;">
+            {assessment.eva_recommendation}
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Metrics row
+    col1, col2, col3, col4 = st.columns(4)
+    
+    with col1:
+        st.metric(
+            "Est. Dose Rate",
+            f"{assessment.estimated_dose_msv_hr:.3f} mSv/hr",
+            delta=None,
+            help="Estimated radiation dose rate during EVA",
+        )
+    
+    with col2:
+        st.metric(
+            "SPE Activity",
+            "ACTIVE" if assessment.spe_active else "Quiet",
+            delta="⚠️ Alert" if assessment.spe_active else None,
+            delta_color="inverse" if assessment.spe_active else "normal",
+        )
+    
+    with col3:
+        st.metric(
+            "GCR Level",
+            assessment.gcr_level.upper(),
+            help="Galactic Cosmic Ray flux level (varies with solar cycle)",
+        )
+    
+    with col4:
+        st.metric(
+            "Kp Index",
+            f"{assessment.kp_index:.1f}",
+            delta="Storm" if assessment.kp_index >= 5 else None,
+            delta_color="inverse" if assessment.kp_index >= 5 else "normal",
+        )
+    
+    # Reasons and details
+    st.markdown("##### 📋 Assessment Details")
+    
+    for reason in assessment.reasons:
+        icon = "⚠️" if "WARNING" in reason or "ALERT" in reason or "CRITICAL" in reason else "ℹ️"
+        st.markdown(f"{icon} {reason}")
+    
+    # Dose limits reference
+    with st.expander("📊 NASA Radiation Dose Limits Reference", expanded=False):
+        st.markdown(f"""
+        | Limit Type | Value | Notes |
+        |----|----|-----|
+        | **Career Limit** | {NASA_CAREER_DOSE_LIMIT_MSV:.0f} mSv | NASA-STD-3001 Vol 1 Rev B (2022) |
+        | **30-Day BFO** | 250 mGy-Eq | Blood-forming organs |
+        | **Annual Limit** | 50 mSv | Occupational standard |
+        | **EVA Typical** | 0.3-0.8 mSv/hr | LEO, normal conditions |
+        | **SPE Alert** | >{SPE_ALERT_THRESHOLD_PFU:.0f} pfu | Enhanced proton activity |
+        | **SPE Warning** | >{SPE_WARNING_THRESHOLD_PFU:.0f} pfu | Significant event |
+        
+        **Sources:**
+        - [NASA-STD-3001 Radiation Technical Brief](https://www.nasa.gov/wp-content/uploads/2023/03/radiation-protection-technical-brief-ochmo.pdf)
+        - [NOAA Space Weather Prediction Center](https://www.swpc.noaa.gov/)
+        - [NASA Space Radiation Analysis Group](https://srag.jsc.nasa.gov/)
+        """)
+    
+    # ALARA principle note
+    st.info("""
+    **ALARA Principle**: All radiation exposures should be kept As Low As Reasonably Achievable. 
+    Mission planners should schedule EVAs during periods of low solar activity and avoid 
+    operations during Solar Particle Events (SPEs).
+    """)
 
 
 def _render_isle_protocol_checklist() -> None:
@@ -1851,9 +2044,10 @@ def _render_isle_protocol_checklist() -> None:
         
         with col1:
             checked = st.checkbox(
-                "",
+                "Complete",
                 key=f"isle_{item.id}",
                 value=st.session_state["isle_checklist_state"].get(item.id, False),
+                label_visibility="collapsed",
             )
             st.session_state["isle_checklist_state"][item.id] = checked
         
@@ -2208,12 +2402,13 @@ def render_scheduling_tab() -> None:
         st.session_state["selected_schedule_date"] = schedule_date
     
     # Main content tabs
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
         "👥 Status Dashboard",
         "📅 Timeline & Scheduling",
         "📈 Performance Forecast",
         "🎯 Risk Analysis",
         "🚀 EVA Procedures",
+        "📘 NASA Guidelines",
         "📊 Summary & Export",
     ])
     
@@ -2285,12 +2480,183 @@ def render_scheduling_tab() -> None:
         _render_eva_procedures_panel(engine, schedule_date)
     
     with tab6:
+        _render_nasa_scheduling_guidelines()
+    
+    with tab7:
         _render_crew_summary_table(engine, schedule_date)
         st.markdown("---")
         _render_export_panel(engine, schedule_date)
     
     # Scientific foundation panel
     _render_scientific_foundation_panel()
+
+
+# ---------------------------------------------------------------------------
+# NASA Scheduling Guidelines Panel
+# ---------------------------------------------------------------------------
+
+def _render_nasa_scheduling_guidelines() -> None:
+    """Render NASA scheduling guidelines and constraints reference panel.
+    
+    Based on NASA-STD-3001, SPIFe/Playbook tools, and ISS operations procedures.
+    """
+    st.markdown("""
+    <div style="
+        background: linear-gradient(135deg, #1a365d 0%, #234e82 50%, #2c5aa0 100%);
+        padding: 20px 24px;
+        border-radius: 12px;
+        margin-bottom: 20px;
+        border: 1px solid #4299e1;
+        box-shadow: 0 4px 15px rgba(66, 153, 225, 0.3);
+    ">
+        <h3 style="margin: 0 0 8px 0; color: #fff;">
+            📘 NASA Scheduling Guidelines & Constraints
+        </h3>
+        <p style="margin: 0; color: #bee3f8; font-size: 0.95em;">
+            Evidence-based scheduling parameters from NASA-STD-3001, SPIFe/Playbook tools, and ISS Operations
+        </p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Workday limits section
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### ⏰ Workday Limits")
+        st.markdown(f"""
+        | Parameter | Value | Source |
+        |----|----|-----|
+        | **Nominal Duty Hours** | {NOMINAL_WORKDAY_HOURS} hr/day | ISS Operations |
+        | **Maximum Duty Hours** | {MAX_WORKDAY_HOURS} hr/day | NASA-STD-3001 |
+        | **Max Continuous Work** | {MAX_CONTINUOUS_WORK_HOURS} hr | Before break |
+        | **Minimum Sleep** | 6.0 hr | Hard requirement |
+        | **Optimal Sleep** | 8.0 hr | Recommended |
+        | **Rest Between Shifts** | 8.0 hr | Minimum |
+        """)
+        
+        st.markdown("#### 🧠 Cognitive Workload (Bedford Scale)")
+        st.markdown(f"""
+        | Level | Rating | Description |
+        |----|----|-----|
+        | **Low** | 1-{COGNITIVE_WORKLOAD_LOW:.0f} | Routine tasks, monitoring |
+        | **Medium** | {COGNITIVE_WORKLOAD_LOW:.0f}-{COGNITIVE_WORKLOAD_MEDIUM:.0f} | Complex science, nominal ops |
+        | **High** | {COGNITIVE_WORKLOAD_MEDIUM:.0f}-{COGNITIVE_WORKLOAD_HIGH:.0f} | EVA, emergencies |
+        | **Overload** | {COGNITIVE_WORKLOAD_HIGH:.0f}-9 | Task restructuring required |
+        
+        *Bedford Scale: 1-3 satisfactory, 4-6 tolerable, 7-9 unacceptable*
+        """)
+    
+    with col2:
+        st.markdown("#### 💪 Physical Workload (Borg CR-10)")
+        st.markdown(f"""
+        | Rating | Descriptor | Example |
+        |----|----|-----|
+        | **0** | Nothing | Rest |
+        | **2** | Weak | Light tasks |
+        | **{PHYSICAL_WORKLOAD_TARGET:.0f}** | Somewhat Strong | Target (3001 limit) |
+        | **6** | Strong | Exercise |
+        | **10** | Maximal | Emergency |
+        
+        *NASA-STD-3001: RPE ≤ 4 for crew interfaces*
+        """)
+        
+        st.markdown("#### 🎯 Activity Priority Levels")
+        st.markdown("""
+        | Priority | Level | Examples |
+        |----|-----|-----|
+        | **1** | Emergency | Life-threatening |
+        | **2** | Safety-Critical | Safety procedures |
+        | **3** | Mission-Critical | EVA, key experiments |
+        | **4** | Health Maintenance | Exercise, medical |
+        | **5** | Routine Ops | Nominal activities |
+        | **6** | Discretionary | Crew preference |
+        
+        *Based on ISS Flight Rules*
+        """)
+    
+    # Scheduling constraints
+    st.markdown("---")
+    st.markdown("#### 📋 ISS Scheduling Constraints")
+    
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.markdown("##### ⏱️ Temporal")
+        for constraint in ISS_SCHEDULING_CONSTRAINTS:
+            if constraint.constraint_type == "temporal":
+                value_str = ""
+                if constraint.min_value is not None and constraint.max_value is not None:
+                    value_str = f"{constraint.min_value}-{constraint.max_value}"
+                elif constraint.min_value is not None:
+                    value_str = f"≥{constraint.min_value}"
+                elif constraint.max_value is not None:
+                    value_str = f"≤{constraint.max_value}"
+                st.markdown(f"- **{constraint.name}**: {value_str}")
+    
+    with col2:
+        st.markdown("##### 🔧 Resource")
+        for constraint in ISS_SCHEDULING_CONSTRAINTS:
+            if constraint.constraint_type == "resource":
+                value_str = f"max {constraint.max_value:.0f}" if constraint.max_value else ""
+                st.markdown(f"- **{constraint.name}**: {value_str}")
+    
+    with col3:
+        st.markdown("##### 👥 Crew")
+        for constraint in ISS_SCHEDULING_CONSTRAINTS:
+            if constraint.constraint_type == "crew":
+                value_str = ""
+                if constraint.min_value is not None:
+                    value_str = f"≥{constraint.min_value}"
+                if constraint.max_value is not None:
+                    value_str += f" max {constraint.max_value:.0f}"
+                st.markdown(f"- **{constraint.name}**: {value_str.strip()}")
+    
+    # Task categories
+    st.markdown("---")
+    st.markdown("#### 📊 Task Categories and Workload")
+    
+    task_data = []
+    for task_id, task in TASK_CATEGORIES.items():
+        task_data.append({
+            "Task": task.name,
+            "Cognitive (Bedford)": task.cognitive_load,
+            "Physical (Borg)": task.physical_load,
+            "Proficiency": task.min_crew_proficiency.title(),
+            "Parallel OK": "✅" if task.parallel_allowed else "❌",
+        })
+    
+    import pandas as pd
+    df = pd.DataFrame(task_data)
+    st.dataframe(df, use_container_width=True, hide_index=True)
+    
+    # References
+    with st.expander("📚 Scientific References", expanded=False):
+        st.markdown("""
+        **NASA Standards and Technical Documentation:**
+        
+        1. **NASA-STD-3001 Volume 2 Rev D** - Human Factors, Habitability, and Environmental Health
+           - [NASA Standards Portal](https://standards.nasa.gov/standard/NASA/NASA-STD-3001_VOL_2)
+        
+        2. **OCHMO Cognitive Workload Technical Brief (2023)**
+           - [PDF Download](https://www.nasa.gov/wp-content/uploads/2023/12/ochmo-tb-032-cognitive-workload.pdf)
+        
+        3. **SPIFe/Playbook Planning Tools**
+           - [NASA Ames HCI Group](https://hci.arc.nasa.gov/work/playbook.html)
+           - [OpenSPIFe on GitHub](https://github.com/nasa/OpenSPIFe)
+        
+        4. **ISS Crew Autonomous Scheduling Test (CAST)**
+           - [NASA NTRS 20190027148](https://ntrs.nasa.gov/citations/20190027148)
+        
+        5. **Crew Scheduling Tools Research**
+           - [Human Research Roadmap Task 820](https://humanresearchroadmap.nasa.gov/tasks/?i=820)
+        
+        **Key Findings:**
+        - NASA nominal workday: 8.5 hours, max 10 hours (12 hours for critical ops only)
+        - Maximum continuous work without break: 2 hours
+        - Bedford workload scale 1-9: target ≤6 for nominal operations
+        - Borg CR-10 physical workload: target ≤4 for crew interfaces
+        - ISS uses "job jar" system for crew task selection within constraints
+        """)
 
 
 # ---------------------------------------------------------------------------
