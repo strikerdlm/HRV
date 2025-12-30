@@ -259,10 +259,24 @@ def load_credentials_from_env() -> GarminCredentials | None:
     """Load Garmin Connect credentials from environment variables.
 
     Expects GARMIN_EMAIL and GARMIN_PASSWORD to be set.
+    Automatically loads .env file from project root if available.
 
     Returns:
         GarminCredentials if both variables are set, None otherwise.
     """
+    try:
+        try:
+            # Package import (tests, package mode)
+            from app.env_loader import load_env_file  # type: ignore
+        except ImportError:
+            # Script import (Streamlit adds app/ to sys.path)
+            from env_loader import load_env_file  # type: ignore
+
+        load_env_file()
+    except ImportError:
+        # env_loader and/or python-dotenv not available; fall back to existing env
+        pass
+
     email = os.environ.get("GARMIN_EMAIL", "").strip()
     password = os.environ.get("GARMIN_PASSWORD", "").strip()
     if not email or not password:
