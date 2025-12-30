@@ -1174,7 +1174,7 @@ def create_sample_crew() -> List[CrewMember]:
     crew = [
         CrewMember(
             crew_id="crew_1",
-            name="Crew Alpha",
+            name="Crew Alfa",
             role="Commander (Comandante)",
             age_years=45,
             sex="male",
@@ -1185,7 +1185,7 @@ def create_sample_crew() -> List[CrewMember]:
         ),
         CrewMember(
             crew_id="crew_2",
-            name="Crew Beta",
+            name="Crew Bravo",
             role="Data Officer (Oficial de Datos)",
             age_years=38,
             sex="female",
@@ -1196,7 +1196,7 @@ def create_sample_crew() -> List[CrewMember]:
         ),
         CrewMember(
             crew_id="crew_3",
-            name="Crew Gamma",
+            name="Crew Charlie",
             role="Biomedical Engineer (Ingeniero Biomédico)",
             age_years=42,
             sex="male",
@@ -1218,7 +1218,7 @@ def create_sample_crew() -> List[CrewMember]:
         ),
         CrewMember(
             crew_id="crew_5",
-            name="Crew Epsilon",
+            name="Crew Echo",
             role="Flight Engineer (Ingeniero de Vuelo)",
             age_years=40,
             sex="male",
@@ -1229,7 +1229,7 @@ def create_sample_crew() -> List[CrewMember]:
         ),
         CrewMember(
             crew_id="crew_6",
-            name="Crew Zeta",
+            name="Crew Foxtrot",
             role="Communications Officer (Oficial de Comunicaciones)",
             age_years=32,
             sex="female",
