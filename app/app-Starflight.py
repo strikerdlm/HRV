@@ -523,7 +523,6 @@ def _ensure_ml_libs() -> None:
         SHAP_AVAILABLE = False
 
     _ML_LIBS_LOADED = True
-from dotenv import load_dotenv
 from pathlib import Path
 from pandas.api.types import is_datetime64_any_dtype
 from user_database import FatigueProfileSettings, HRVMeasurement, StudyGroup, get_database
@@ -580,8 +579,26 @@ def _guest_user_context() -> Dict[str, Any]:
         "is_guest": True,
     }
 
-# Load .env variables early (e.g., NASA_API_KEY, ACCUWEATHER_API_KEY)
-load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env")
+# Load .env variables early using portable env_loader (works across computers)
+try:
+    try:
+        # Package import (tests, package mode)
+        from app.env_loader import load_env_file  # type: ignore
+    except ImportError:
+        # Script import (Streamlit adds app/ to sys.path)
+        from env_loader import load_env_file  # type: ignore
+
+    load_env_file()
+except ImportError:
+    # Optional dependency not available; fall back to python-dotenv if installed.
+    try:
+        from dotenv import load_dotenv  # type: ignore
+    except ImportError:
+        load_dotenv = None  # type: ignore[assignment]
+
+    if load_dotenv is not None:
+        load_dotenv(dotenv_path=Path(__file__).resolve().parents[1] / ".env", override=False)
+
 _LOGGER = get_logger(__name__)
 NASA_API_KEY = os.getenv("NASA_API_KEY", "")
 ACCUWEATHER_API_KEY = os.getenv("ACCUWEATHER_API_KEY", "")
