@@ -47,10 +47,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### References
 
-- NOAA Space Weather Prediction Center Operational Thresholds
-- NASA-STD-3001 Vol 1 Rev B (2022): Radiation Protection
-- Space Weather Prediction Center (SWPC) Operational Thresholds
-- SpaceWeatherLive API Documentation
+- NOAA Space Weather Prediction Center. (n.d.). *Space Weather Scales* (R, S, G). Retrieved from https://www.swpc.noaa.gov/noaa-scales-explanation
+- NASA-STD-3001 Vol 1 Rev B. (2022). *Crew Health Standard*. NASA Johnson Space Center.
+- Space Weather Prediction Center. (n.d.). *Operational Thresholds*. Retrieved from https://www.swpc.noaa.gov/
+- SpaceWeatherLive. (n.d.). *API Documentation*. Retrieved from https://www.spaceweatherlive.com/
 
 ## [1.9.0] - 2025-12-29
 
