@@ -479,10 +479,10 @@ class SchedulingEngine:
                     suggested_resolution=f"Reschedule to avoid {existing.start_time.strftime('%H:%M')}-{existing.end_time.strftime('%H:%M')}",
                 ))
         
-        # Check resource constraints (e.g., exercise capacity)
+        # Check resource constraints (e.g., exercise/hygiene capacity)
         activity_def = ALL_ACTIVITIES.get(activity.activity_id)
-        if activity_def and "resource_limited_2" in activity_def.constraints:
-            # Check concurrent usage
+        if activity_def and "resource_limited_1" in activity_def.constraints:
+            # Check concurrent usage - resource_limited_1 means max 1 person at a time
             concurrent = sum(
                 1 for a in daily_schedule.activities
                 if a.activity_id == activity.activity_id
@@ -497,7 +497,7 @@ class SchedulingEngine:
                     affected_activities=(activity.schedule_id,),
                     affected_crew=(activity.crew_id,),
                     severity="critical",
-                    description=f"Exercise facility at capacity ({MAX_CONCURRENT_EXERCISE} max concurrent)",
+                    description=f"Resource at capacity ({MAX_CONCURRENT_EXERCISE} max concurrent for {activity.activity_name})",
                     suggested_resolution="Choose a different time slot",
                 ))
         
@@ -744,6 +744,7 @@ class SchedulingEngine:
         # ---------------------------------------------------------------------------
         # Phase 2: Experiments (6 experiments, 1 hour each)
         # Each crew member does 1-2 experiments
+        # EVA crew are excluded on EVA days (their experiments go to other crew)
         # ---------------------------------------------------------------------------
         experiment_ids = [
             "exp_physio_monitoring",
@@ -754,14 +755,20 @@ class SchedulingEngine:
             "exp_matb_workload",
         ]
         
-        # Distribute experiments: crew 1-6 each get 1 experiment
-        # Start experiments at 09:00, staggered by 15 min to avoid cognitive overload
+        # Determine available crew for experiments (exclude EVA crew on EVA day)
+        # EVA prep starts at 10:00, so experiments after 09:00 would conflict
+        eva_crew_set = set(eva_crew_ids[:2]) if eva_day and eva_crew_ids else set()
+        available_for_experiments = [cid for cid in crew_ids if cid not in eva_crew_set]
+        
+        # Distribute experiments among available crew
+        # Start experiments at 09:00, staggered by 30 min to avoid cognitive overload
         experiment_base_hour = 9
         for exp_idx, exp_id in enumerate(experiment_ids):
-            crew_idx = exp_idx % len(crew_ids)
-            crew_id = crew_ids[crew_idx]
+            # Round-robin among available crew (those not doing EVA)
+            crew_idx = exp_idx % len(available_for_experiments)
+            crew_id = available_for_experiments[crew_idx]
             
-            # Stagger start times
+            # Stagger start times: 09:00, 09:30, 10:00, 10:30, 11:00, 11:30
             exp_start = datetime.combine(
                 schedule_date,
                 datetime.min.time().replace(
