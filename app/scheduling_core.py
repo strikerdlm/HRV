@@ -2176,9 +2176,11 @@ __all__ = [
     "TaskCategory",
     "TASK_CATEGORIES",
     "PRIORITY_EMERGENCY",
+    "PRIORITY_SAFETY_CRITICAL",
     "PRIORITY_MISSION_CRITICAL",
     "PRIORITY_HEALTH_MAINTENANCE",
     "PRIORITY_ROUTINE_OPS",
+    "PRIORITY_DISCRETIONARY",
     # Enums
     "ActivityCategory",
     "RiskLevel",
