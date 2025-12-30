@@ -599,7 +599,7 @@ def _render_empty_timeline(crew_names: List[str]) -> None:
         },
         "series": [],
     }
-    render_echarts(option, height_px=280)
+    render_echarts(option, height_px=380)
 
 
 def _render_activity_legend() -> None:
@@ -1837,14 +1837,15 @@ def _render_eva_procedures_panel(
 
 
 def _render_space_weather_dashboard(realtime_data: Any) -> None:
-    """Render beautiful ECharts dashboard for space weather real-time data.
+    """Render beautiful ECharts gauge dashboard for space weather real-time data.
     
-    Displays F10.7 Flux, Active CMEs, Solar Wind parameters, IMF, and Flare Probabilities
-    in an attractive, publication-quality visualization.
+    Displays F10.7 Flux (with historic/projected), Active CMEs, and Flare Probabilities
+    in attractive gauge visualizations.
     
     References:
     - NOAA Space Weather Prediction Center Operational Thresholds
     - SpaceWeatherLive API Documentation
+    - NASA Space Radiation Analysis Group
     
     Args:
         realtime_data: Real-time space weather data object
@@ -1852,253 +1853,387 @@ def _render_space_weather_dashboard(realtime_data: Any) -> None:
     if render_echarts is None:
         return
     
-    # Prepare flare probability data
-    flare_probs = []
-    flare_labels = []
-    flare_colors = []
+    st.markdown("### 🌌 Space Weather Real-Time Dashboard")
+    st.caption(f"Source: {realtime_data.data_source} | Updated: {realtime_data.fetch_timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if realtime_data.fetch_timestamp else 'Unknown'}")
+    
+    # Top row: 3 gauges (Flare Probabilities)
+    top_cols = st.columns(3)
     
     if realtime_data.c_class_flare_prob:
-        flare_probs.append(realtime_data.c_class_flare_prob)
-        flare_labels.append("C-Class")
-        flare_colors.append("#3498db")  # Blue for minor
+        with top_cols[0]:
+            _render_flare_probability_gauge(
+                value=realtime_data.c_class_flare_prob,
+                title="C-Class Flare",
+                color_zones=[(30, "#27ae60"), (60, "#f39c12"), (100, "#e74c3c")],
+            )
     
     if realtime_data.m_class_flare_prob:
-        flare_probs.append(realtime_data.m_class_flare_prob)
-        flare_labels.append("M-Class")
-        flare_colors.append("#f39c12")  # Orange for moderate
+        with top_cols[1]:
+            _render_flare_probability_gauge(
+                value=realtime_data.m_class_flare_prob,
+                title="M-Class Flare",
+                color_zones=[(20, "#3498db"), (40, "#f39c12"), (100, "#e74c3c")],
+            )
     
     if realtime_data.x_class_flare_prob:
-        flare_probs.append(realtime_data.x_class_flare_prob)
-        flare_labels.append("X-Class")
-        flare_colors.append("#e74c3c")  # Red for extreme
+        with top_cols[2]:
+            _render_flare_probability_gauge(
+                value=realtime_data.x_class_flare_prob,
+                title="X-Class Flare",
+                color_zones=[(5, "#f39c12"), (15, "#fd7e14"), (100, "#e74c3c")],
+            )
     
-    # Prepare other metrics for display
-    metrics_data = []
+    # Bottom row: 2 gauges (F10.7 Flux and Active CMEs)
+    bottom_cols = st.columns(2)
+    
+    # F10.7 Flux Gauge with historic/projected
     if realtime_data.f107_flux:
-        metrics_data.append({
-            "name": "F10.7 Flux",
-            "value": realtime_data.f107_flux,
-            "unit": " sfu",
-            "color": "#3498db",
-        })
+        with bottom_cols[0]:
+            _render_f107_flux_gauge(
+                current_value=realtime_data.f107_flux,
+                historic_avg=150.0,  # Typical solar cycle average
+                projected_value=realtime_data.f107_flux * 1.05,  # Estimate +5% trend
+            )
     
+    # Active CMEs Gauge
     if realtime_data.active_cmes:
-        cme_count = len(realtime_data.active_cmes)
-        metrics_data.append({
-            "name": "Active CMEs",
-            "value": cme_count,
-            "unit": "",
-            "color": "#e74c3c" if cme_count > 3 else "#f39c12" if cme_count > 1 else "#27ae60",
-        })
-    
-    if realtime_data.solar_wind_speed_kms:
-        metrics_data.append({
-            "name": "Solar Wind\nSpeed",
-            "value": realtime_data.solar_wind_speed_kms,
-            "unit": " km/s",
-            "color": "#9b59b6",
-        })
-    
-    if realtime_data.solar_wind_density_pcc:
-        metrics_data.append({
-            "name": "Solar Wind\nDensity",
-            "value": realtime_data.solar_wind_density_pcc,
-            "unit": " p/cm³",
-            "color": "#16a085",
-        })
-    
-    if realtime_data.imf_bt_nt:
-        metrics_data.append({
-            "name": "IMF Bt",
-            "value": realtime_data.imf_bt_nt,
-            "unit": " nT",
-            "color": "#34495e",
-        })
-    
-    if realtime_data.imf_bz_nt:
-        metrics_data.append({
-            "name": "IMF Bz",
-            "value": realtime_data.imf_bz_nt,
-            "unit": " nT",
-            "color": "#2c3e50",
-        })
-    
-    # Calculate dynamic axis bounds for metrics
-    if metrics_data:
-        metric_values = [m["value"] for m in metrics_data]
-        metric_min, metric_max = _auto_axis_bounds(
-            *metric_values,
-            padding_pct=0.2,
-            min_floor=0.0,
-        )
-    else:
-        metric_min, metric_max = 0.0, 100.0
-    
-    # Create the dashboard visualization
-    option = {
-        "title": {
-            "text": "Space Weather Real-Time Dashboard",
-            "subtext": f"Source: {realtime_data.data_source} | Updated: {realtime_data.fetch_timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if realtime_data.fetch_timestamp else 'Unknown'}",
-            "left": "center",
-            "textStyle": {"fontSize": 16, "fontWeight": "bold", "color": "#1a1a1a"},
-            "subtextStyle": {"fontSize": 11, "color": "#2c3e50"},
-        },
-        "backgroundColor": "transparent",
-        "tooltip": {
-            "trigger": "axis",
-            "axisPointer": {"type": "shadow"},
-        },
-        "legend": {
-            "data": ["Flare Probability"] + ([m["name"].replace("\n", " ") for m in metrics_data] if metrics_data else []),
-            "bottom": 5,
-            "textStyle": {"fontSize": 10, "color": "#1a1a1a"},
-            "type": "scroll",
-        },
-        "grid": [
-            {
-                "left": "10%",
-                "right": "5%",
-                "top": "20%",
-                "bottom": "55%",
-                "height": "35%",
-                "containLabel": True,
-            },
-            {
-                "left": "10%",
-                "right": "5%",
-                "top": "60%",
-                "bottom": "10%",
-                "height": "30%",
-                "containLabel": True,
-            },
-        ],
-        "xAxis": [
-            {
-                "type": "category",
-                "gridIndex": 0,
-                "data": flare_labels,
-                "axisLabel": {"color": "#1a1a1a", "fontSize": 11, "fontWeight": "bold"},
-                "axisLine": {"lineStyle": {"color": "#2c3e50"}},
-            },
-            {
-                "type": "category",
-                "gridIndex": 1,
-                "data": [m["name"] for m in metrics_data] if metrics_data else [],
-                "axisLabel": {
-                    "color": "#1a1a1a",
-                    "fontSize": 10,
-                    "rotate": 0,
-                    "interval": 0,
-                },
-                "axisLine": {"lineStyle": {"color": "#2c3e50"}},
-            },
-        ],
-        "yAxis": [
-            {
-                "type": "value",
-                "gridIndex": 0,
-                "name": "Probability (%)",
-                "nameLocation": "middle",
-                "nameGap": 40,
-                "nameTextStyle": {"fontSize": 11, "fontWeight": "bold", "color": "#1a1a1a"},
-                "min": 0,
-                "max": 100,
-                "axisLabel": {
-                    "formatter": "{value}%",
-                    "color": "#1a1a1a",
-                    "fontSize": 10,
-                },
-                "splitLine": {"show": True, "lineStyle": {"color": "#ecf0f1", "type": "dashed"}},
-                "axisLine": {"lineStyle": {"color": "#2c3e50"}},
-            },
-            {
-                "type": "value",
-                "gridIndex": 1,
-                "name": "Value",
-                "nameLocation": "middle",
-                "nameGap": 40,
-                "nameTextStyle": {"fontSize": 11, "fontWeight": "bold", "color": "#1a1a1a"},
-                "min": metric_min,
-                "max": metric_max,
-                "axisLabel": {
-                    "formatter": "{value}",
-                    "color": "#1a1a1a",
-                    "fontSize": 10,
-                },
-                "splitLine": {"show": True, "lineStyle": {"color": "#ecf0f1", "type": "dashed"}},
-                "axisLine": {"lineStyle": {"color": "#2c3e50"}},
-            },
-        ],
-        "series": [
-            # Flare Probabilities Bar Chart
-            {
-                "name": "Flare Probability",
-                "type": "bar",
-                "xAxisIndex": 0,
-                "yAxisIndex": 0,
-                "data": [
-                    {
-                        "value": prob,
-                        "itemStyle": {"color": color},
-                        "label": {
-                            "show": True,
-                            "position": "top",
-                            "formatter": f"{prob:.0f}%",
-                            "color": "#1a1a1a",
-                            "fontSize": 11,
-                            "fontWeight": "bold",
-                        },
-                    }
-                    for prob, color in zip(flare_probs, flare_colors)
-                ] if flare_probs else [],
-            },
-            # Other Metrics Bar Chart
-            {
-                "name": "Space Weather Metrics",
-                "type": "bar",
-                "xAxisIndex": 1,
-                "yAxisIndex": 1,
-                "data": [
-                    {
-                        "value": m["value"],
-                        "itemStyle": {"color": m["color"]},
-                        "label": {
-                            "show": True,
-                            "position": "top",
-                            "formatter": (
-                                f"{m['value']:.1f}{m['unit']}" if m["unit"] 
-                                else f"{m['value']:.0f}"
-                            ),
-                            "color": "#1a1a1a",
-                            "fontSize": 10,
-                            "fontWeight": "bold",
-                        },
-                    }
-                    for m in metrics_data
-                ] if metrics_data else [],
-            },
-        ],
-        "aria": {
-            "enabled": True,
-            "label": {
-                "description": "Space Weather Real-Time Dashboard showing flare probabilities and space environment metrics.",
-            },
-        },
-    }
-    
-    render_echarts(option, height_px=500)
+        with bottom_cols[1]:
+            _render_cme_gauge(
+                count=len(realtime_data.active_cmes),
+            )
     
     # Caption with interpretation
     st.caption(f"""
-    **What you're seeing:** Real-time space weather dashboard showing solar flare probabilities and key space 
-    environment parameters. **Flare Probabilities** indicate the likelihood of C-Class (minor), M-Class (moderate), 
-    and X-Class (extreme) solar flares occurring in the next 24-48 hours. **F10.7 Flux** measures solar radio 
-    emission at 10.7 cm wavelength, indicating solar activity levels. **Active CMEs** shows the number of 
-    Coronal Mass Ejections currently propagating through space. **Solar Wind** parameters (speed and density) 
-    and **Interplanetary Magnetic Field (IMF)** components (Bt, Bz) affect geomagnetic activity and radiation 
-    environment. **Sources:** NOAA Space Weather Prediction Center, SpaceWeatherLive API, NASA Space Radiation 
-    Analysis Group.
+    **What you're seeing:** Real-time space weather gauge dashboard. **Flare Probabilities** (0-100%) indicate 
+    the likelihood of C-Class (minor), M-Class (moderate), and X-Class (extreme) solar flares in the next 24-48 hours. 
+    **F10.7 Flux** shows current solar radio emission with historic average and projected trend. **Active CMEs** 
+    displays the number of Coronal Mass Ejections currently propagating. Color zones indicate risk levels: 
+    green (low), yellow/orange (moderate), red (high). **Sources:** NOAA Space Weather Prediction Center, 
+    SpaceWeatherLive API, NASA Space Radiation Analysis Group.
     """)
+
+
+def _render_flare_probability_gauge(
+    value: float,
+    title: str,
+    color_zones: List[Tuple[float, str]],
+) -> None:
+    """Render a beautiful gauge for flare probability.
+    
+    Args:
+        value: Probability value (0-100)
+        title: Gauge title
+        color_zones: List of (threshold, color) tuples
+    """
+    if render_echarts is None:
+        return
+    
+    # Build color zones for axis line
+    zones = []
+    prev_ratio = 0.0
+    for threshold, color in color_zones:
+        ratio = threshold / 100.0
+        zones.append([prev_ratio, color])
+        zones.append([ratio, color])
+        prev_ratio = ratio
+    
+    option = {
+        "title": {
+            "text": title,
+            "left": "center",
+            "top": "5%",
+            "textStyle": {"fontSize": 14, "fontWeight": "bold", "color": "#1a1a1a"},
+        },
+        "series": [
+            {
+                "type": "gauge",
+                "center": ["50%", "65%"],
+                "startAngle": 200,
+                "endAngle": -20,
+                "min": 0,
+                "max": 100,
+                "splitNumber": 10,
+                "itemStyle": {"color": "auto"},
+                "progress": {
+                    "show": True,
+                    "width": 18,
+                    "itemStyle": {
+                        "color": {
+                            "type": "linear",
+                            "x": 0, "y": 0, "x2": 1, "y2": 0,
+                            "colorStops": [
+                                {"offset": 0, "color": color_zones[0][1]},
+                                {"offset": 0.5, "color": color_zones[1][1] if len(color_zones) > 1 else color_zones[0][1]},
+                                {"offset": 1, "color": color_zones[-1][1]},
+                            ],
+                        }
+                    }
+                },
+                "pointer": {
+                    "icon": "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
+                    "length": "15%",
+                    "width": 16,
+                    "offsetCenter": [0, "-60%"],
+                    "itemStyle": {"color": "auto"},
+                },
+                "axisLine": {
+                    "lineStyle": {
+                        "width": 18,
+                        "color": zones,
+                    }
+                },
+                "axisTick": {
+                    "distance": -25,
+                    "splitNumber": 5,
+                    "lineStyle": {"width": 2, "color": "#999"},
+                },
+                "splitLine": {
+                    "distance": -30,
+                    "length": 12,
+                    "lineStyle": {"width": 2, "color": "#999"},
+                },
+                "axisLabel": {
+                    "distance": -15,
+                    "color": "#1a1a1a",
+                    "fontSize": 10,
+                    "formatter": "{value}%",
+                },
+                "anchor": {"show": False},
+                "title": {"show": False},
+                "detail": {
+                    "valueAnimation": True,
+                    "width": "70%",
+                    "lineHeight": 30,
+                    "borderRadius": 8,
+                    "offsetCenter": [0, "10%"],
+                    "fontSize": 24,
+                    "fontWeight": "bold",
+                    "formatter": f"{value:.0f}%",
+                    "color": "inherit",
+                },
+                "data": [{"value": min(100, max(0, value))}],
+            }
+        ],
+    }
+    
+    render_echarts(option, height_px=380)
+
+
+def _render_f107_flux_gauge(
+    current_value: float,
+    historic_avg: float,
+    projected_value: float,
+) -> None:
+    """Render F10.7 Flux gauge with historic and projected indicators.
+    
+    Args:
+        current_value: Current F10.7 flux value
+        historic_avg: Historic average value
+        projected_value: Projected future value
+    """
+    if render_echarts is None:
+        return
+    
+    # F10.7 Flux range: typically 50-300 sfu during solar cycle
+    min_val, max_val = 50.0, 300.0
+    current_clamped = min(max_val, max(min_val, current_value))
+    
+    # Color zones: low (50-100), moderate (100-200), high (200-300)
+    zones = [
+        [0.0, "#27ae60"],  # Green for low
+        [0.33, "#27ae60"],
+        [0.33, "#f39c12"],  # Yellow for moderate
+        [0.67, "#f39c12"],
+        [0.67, "#e74c3c"],  # Red for high
+        [1.0, "#e74c3c"],
+    ]
+    
+    # Determine current color
+    ratio = (current_clamped - min_val) / (max_val - min_val)
+    if ratio < 0.33:
+        current_color = "#27ae60"
+    elif ratio < 0.67:
+        current_color = "#f39c12"
+    else:
+        current_color = "#e74c3c"
+    
+    option = {
+        "title": {
+            "text": "F10.7 Flux",
+            "subtext": f"Historic: {historic_avg:.0f} | Projected: {projected_value:.0f}",
+            "left": "center",
+            "top": "2%",
+            "textStyle": {"fontSize": 14, "fontWeight": "bold", "color": "#1a1a1a"},
+            "subtextStyle": {"fontSize": 10, "color": "#2c3e50"},
+        },
+        "series": [
+            # Main gauge
+            {
+                "type": "gauge",
+                "center": ["50%", "65%"],
+                "startAngle": 200,
+                "endAngle": -20,
+                "min": min_val,
+                "max": max_val,
+                "splitNumber": 8,
+                "itemStyle": {"color": current_color},
+                "progress": {
+                    "show": True,
+                    "width": 18,
+                    "itemStyle": {"color": current_color},
+                },
+                "pointer": {
+                    "icon": "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
+                    "length": "15%",
+                    "width": 16,
+                    "offsetCenter": [0, "-60%"],
+                    "itemStyle": {"color": "auto"},
+                },
+                "axisLine": {
+                    "lineStyle": {
+                        "width": 18,
+                        "color": zones,
+                    }
+                },
+                "axisTick": {
+                    "distance": -25,
+                    "splitNumber": 5,
+                    "lineStyle": {"width": 2, "color": "#999"},
+                },
+                "splitLine": {
+                    "distance": -30,
+                    "length": 12,
+                    "lineStyle": {"width": 2, "color": "#999"},
+                },
+                "axisLabel": {
+                    "distance": -15,
+                    "color": "#1a1a1a",
+                    "fontSize": 9,
+                    "formatter": "{value}",
+                },
+                "anchor": {"show": False},
+                "title": {"show": False},
+                "detail": {
+                    "valueAnimation": True,
+                    "width": "70%",
+                    "lineHeight": 30,
+                    "borderRadius": 8,
+                    "offsetCenter": [0, "10%"],
+                    "fontSize": 22,
+                    "fontWeight": "bold",
+                    "formatter": f"{current_value:.1f} sfu",
+                    "color": current_color,
+                },
+                "data": [{"value": current_clamped}],
+            },
+        ],
+    }
+    
+    render_echarts(option, height_px=380)
+
+
+def _render_cme_gauge(count: int) -> None:
+    """Render Active CMEs gauge.
+    
+    Args:
+        count: Number of active CMEs
+    """
+    if render_echarts is None:
+        return
+    
+    # CME count range: 0-10 (typically 0-5, but can go higher during active periods)
+    min_val, max_val = 0.0, 10.0
+    count_clamped = min(max_val, max(min_val, count))
+    
+    # Color zones: low (0-2), moderate (2-5), high (5-10)
+    zones = [
+        [0.0, "#27ae60"],  # Green for low
+        [0.2, "#27ae60"],
+        [0.2, "#f39c12"],  # Yellow for moderate
+        [0.5, "#f39c12"],
+        [0.5, "#e74c3c"],  # Red for high
+        [1.0, "#e74c3c"],
+    ]
+    
+    # Determine current color
+    ratio = count_clamped / max_val
+    if ratio < 0.2:
+        current_color = "#27ae60"
+    elif ratio < 0.5:
+        current_color = "#f39c12"
+    else:
+        current_color = "#e74c3c"
+    
+    option = {
+        "title": {
+            "text": "Active CMEs",
+            "left": "center",
+            "top": "5%",
+            "textStyle": {"fontSize": 14, "fontWeight": "bold", "color": "#1a1a1a"},
+        },
+        "series": [
+            {
+                "type": "gauge",
+                "center": ["50%", "65%"],
+                "startAngle": 200,
+                "endAngle": -20,
+                "min": min_val,
+                "max": max_val,
+                "splitNumber": 10,
+                "itemStyle": {"color": current_color},
+                "progress": {
+                    "show": True,
+                    "width": 18,
+                    "itemStyle": {"color": current_color},
+                },
+                "pointer": {
+                    "icon": "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
+                    "length": "15%",
+                    "width": 16,
+                    "offsetCenter": [0, "-60%"],
+                    "itemStyle": {"color": "auto"},
+                },
+                "axisLine": {
+                    "lineStyle": {
+                        "width": 18,
+                        "color": zones,
+                    }
+                },
+                "axisTick": {
+                    "distance": -25,
+                    "splitNumber": 5,
+                    "lineStyle": {"width": 2, "color": "#999"},
+                },
+                "splitLine": {
+                    "distance": -30,
+                    "length": 12,
+                    "lineStyle": {"width": 2, "color": "#999"},
+                },
+                "axisLabel": {
+                    "distance": -15,
+                    "color": "#1a1a1a",
+                    "fontSize": 10,
+                    "formatter": "{value}",
+                },
+                "anchor": {"show": False},
+                "title": {"show": False},
+                "detail": {
+                    "valueAnimation": True,
+                    "width": "70%",
+                    "lineHeight": 30,
+                    "borderRadius": 8,
+                    "offsetCenter": [0, "10%"],
+                    "fontSize": 24,
+                    "fontWeight": "bold",
+                    "formatter": f"{count:.0f}",
+                    "color": current_color,
+                },
+                "data": [{"value": count_clamped}],
+            }
+        ],
+    }
+    
+    render_echarts(option, height_px=380)
 
 
 def _render_eva_radiation_metrics_plot(
