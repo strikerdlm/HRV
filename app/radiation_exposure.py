@@ -58,6 +58,7 @@ class RadiationEnvironment(Enum):
     
     # Cislunar
     LUNAR_GATEWAY = "lunar_gateway"
+    TRANSLUNAR_INJECTION = "translunar_injection"  # TLI - Earth to Moon transit
     LUNAR_TRANSIT = "lunar_transit"
     
     # Lunar Surface
@@ -65,7 +66,9 @@ class RadiationEnvironment(Enum):
     LUNAR_SURFACE_SPE = "lunar_surface_spe"  # Solar Particle Event
     
     # Mars
+    TRANS_MARTIAN_INJECTION = "trans_martian_injection"  # TMI - Earth to Mars transit
     MARS_TRANSIT = "mars_transit"
+    MARS_ORBIT = "mars_orbit"  # Orbiting Mars
     MARS_SURFACE = "mars_surface"
 
 
@@ -170,6 +173,21 @@ DOSE_RATE_DATABASE: Dict[RadiationEnvironment, RadiationDoseRate] = {
     ),
     
     # -------------------------------------------------------------------------
+    # Translunar Injection (TLI - Earth to Moon transit, ~1.3-1.8 mSv/day)
+    # Source: Apollo TLI phase, modern projections
+    # -------------------------------------------------------------------------
+    RadiationEnvironment.TRANSLUNAR_INJECTION: RadiationDoseRate(
+        environment=RadiationEnvironment.TRANSLUNAR_INJECTION,
+        nominal_msv_per_day=1.50,  # Similar to lunar transit
+        range_low_msv_per_day=1.00,  # Solar max
+        range_high_msv_per_day=2.00,  # Solar min
+        reference="ICRP 123; Apollo TLI phase; Simonsen (2025)",
+        notes="Free-space transit from Earth to Moon. No magnetospheric protection.",
+        solar_cycle_dependent=True,
+        eva_multiplier=2.0,
+    ),
+    
+    # -------------------------------------------------------------------------
     # Lunar Transit (~1.3-1.8 mSv/day)
     # Source: Apollo dosimetry, modern projections
     # -------------------------------------------------------------------------
@@ -215,6 +233,21 @@ DOSE_RATE_DATABASE: Dict[RadiationEnvironment, RadiationDoseRate] = {
     ),
     
     # -------------------------------------------------------------------------
+    # Trans-Martian Injection (TMI - Earth to Mars transit, ~1.8-2.5 mSv/day)
+    # Source: MSL RAD early cruise, modern projections
+    # -------------------------------------------------------------------------
+    RadiationEnvironment.TRANS_MARTIAN_INJECTION: RadiationDoseRate(
+        environment=RadiationEnvironment.TRANS_MARTIAN_INJECTION,
+        nominal_msv_per_day=1.90,  # Similar to Mars transit, slightly higher
+        range_low_msv_per_day=1.30,  # Solar max
+        range_high_msv_per_day=2.50,  # Solar min
+        reference="Zeitlin et al. (2013); MSL RAD early cruise; ICRP 123",
+        notes="Initial phase of Earth-Mars transit. Free-space, no planetary shielding.",
+        solar_cycle_dependent=True,
+        eva_multiplier=2.0,
+    ),
+    
+    # -------------------------------------------------------------------------
     # Mars Transit (~1.3-1.8 mSv/day)
     # Source: MSL RAD cruise phase
     # -------------------------------------------------------------------------
@@ -227,6 +260,21 @@ DOSE_RATE_DATABASE: Dict[RadiationEnvironment, RadiationDoseRate] = {
         notes="~331 mSv for 180-day cruise. GCR dominates.",
         solar_cycle_dependent=True,
         eva_multiplier=2.0,
+    ),
+    
+    # -------------------------------------------------------------------------
+    # Mars Orbit (~0.7-1.0 mSv/day)
+    # Source: MSL RAD approach phase, orbital modeling
+    # -------------------------------------------------------------------------
+    RadiationEnvironment.MARS_ORBIT: RadiationDoseRate(
+        environment=RadiationEnvironment.MARS_ORBIT,
+        nominal_msv_per_day=0.85,  # Between transit and surface
+        range_low_msv_per_day=0.60,  # Solar max
+        range_high_msv_per_day=1.20,  # Solar min
+        reference="Zeitlin et al. (2013); MSL RAD approach; orbital modeling",
+        notes="Mars orbital environment. Some planetary shielding from Mars.",
+        solar_cycle_dependent=True,
+        eva_multiplier=1.8,
     ),
     
     # -------------------------------------------------------------------------
@@ -662,4 +710,261 @@ def cumulative_to_status(
         return EVARadiationStatus.CAUTION, "#fd7e14", "CAUTION"
     else:
         return EVARadiationStatus.NO_GO, "#dc3545", "NO-GO"
+
+
+# =============================================================================
+# REAL-TIME SPACE WEATHER DATA FETCHING
+# =============================================================================
+
+@dataclass(slots=True)
+class RealTimeSpaceWeatherData:
+    """Real-time space weather data from NOAA/NASA sources."""
+    
+    # Data source indicators
+    data_source: str  # "NOAA", "SpaceWeatherLive", "DONKI", "Manual"
+    fetch_timestamp: Optional[datetime] = None
+    is_real_time: bool = True
+    
+    # Space weather parameters
+    kp_index: Optional[float] = None
+    kp_forecast: List[Dict[str, Any]] = field(default_factory=list)
+    proton_flux_pfu: Optional[float] = None  # >10 MeV proton flux
+    solar_wind_speed_kms: Optional[float] = None
+    solar_wind_density_pcc: Optional[float] = None
+    imf_bt_nt: Optional[float] = None
+    imf_bz_nt: Optional[float] = None
+    
+    # NOAA scales
+    s_scale: int = 0  # Radiation storm scale (0-5)
+    g_scale: int = 0  # Geomagnetic storm scale (0-5)
+    
+    # Flare probabilities
+    c_class_flare_prob: Optional[float] = None
+    m_class_flare_prob: Optional[float] = None
+    x_class_flare_prob: Optional[float] = None
+    
+    # CME information
+    active_cmes: List[Dict[str, Any]] = field(default_factory=list)
+    
+    # Solar activity
+    sunspot_number: Optional[int] = None
+    f107_flux: Optional[float] = None
+    
+    # Error information
+    fetch_error: Optional[str] = None
+    is_stale: bool = False
+
+
+def fetch_realtime_space_weather(
+    environment: RadiationEnvironment,
+    use_noaa: bool = True,
+    use_spaceweatherlive: bool = True,
+    timeout_seconds: float = 10.0,
+) -> RealTimeSpaceWeatherData:
+    """
+    Fetch real-time space weather data for a specific mission environment.
+    
+    Args:
+        environment: Mission radiation environment
+        use_noaa: Attempt to fetch from NOAA SWPC
+        use_spaceweatherlive: Attempt to fetch from SpaceWeatherLive
+        timeout_seconds: Request timeout
+        
+    Returns:
+        RealTimeSpaceWeatherData with fetched or default values
+    """
+    data = RealTimeSpaceWeatherData(
+        data_source="Manual",
+        is_real_time=False,
+        fetch_timestamp=datetime.now(timezone.utc),
+    )
+    
+    # Try NOAA first (best for ISS/LEO)
+    if use_noaa:
+        try:
+            from noaa_space import load_noaa_space_cache
+            
+            bundles, errors = load_noaa_space_cache()
+            
+            # Extract Kp index
+            if "kp_1min" in bundles:
+                kp_df = bundles["kp_1min"]
+                if not kp_df.empty and "kp" in kp_df.columns:
+                    latest_kp = kp_df["kp"].iloc[-1]
+                    if pd.notna(latest_kp):
+                        data.kp_index = float(latest_kp)
+                        data.data_source = "NOAA"
+                        data.is_real_time = True
+            
+            # Extract proton flux
+            if "proton_integral" in bundles:
+                proton_df = bundles["proton_integral"]
+                if not proton_df.empty:
+                    # Look for >10 MeV protons
+                    for col in proton_df.columns:
+                        if "10mev" in col.lower() or "10_mev" in col.lower():
+                            latest_flux = proton_df[col].iloc[-1]
+                            if pd.notna(latest_flux) and latest_flux > 0:
+                                data.proton_flux_pfu = float(latest_flux)
+                                break
+                    
+                    # Calculate S-scale from proton flux
+                    if data.proton_flux_pfu is not None:
+                        if data.proton_flux_pfu >= 10000:
+                            data.s_scale = 5
+                        elif data.proton_flux_pfu >= 1000:
+                            data.s_scale = 4
+                        elif data.proton_flux_pfu >= 100:
+                            data.s_scale = 3
+                        elif data.proton_flux_pfu >= 10:
+                            data.s_scale = 2
+                        elif data.proton_flux_pfu >= 1:
+                            data.s_scale = 1
+                        else:
+                            data.s_scale = 0
+            
+            # Calculate G-scale from Kp
+            if data.kp_index is not None:
+                if data.kp_index >= 9.0:
+                    data.g_scale = 5
+                elif data.kp_index >= 8.0:
+                    data.g_scale = 4
+                elif data.kp_index >= 7.0:
+                    data.g_scale = 3
+                elif data.kp_index >= 6.0:
+                    data.g_scale = 2
+                elif data.kp_index >= 5.0:
+                    data.g_scale = 1
+                else:
+                    data.g_scale = 0
+            
+        except Exception as e:
+            data.fetch_error = f"NOAA fetch error: {str(e)}"
+    
+    # Try SpaceWeatherLive for additional data (works for all environments)
+    if use_spaceweatherlive:
+        try:
+            from spaceweatherlive_client import fetch_spaceweatherlive_snapshot
+            
+            snapshot = fetch_spaceweatherlive_snapshot(timeout_s=timeout_seconds)
+            
+            # Update with SpaceWeatherLive data (prefer if NOAA unavailable)
+            if data.data_source == "Manual" or data.kp_index is None:
+                # Use Kp forecast if available
+                if snapshot.kp_forecast:
+                    latest_forecast = snapshot.kp_forecast[0]
+                    if latest_forecast.max_kp is not None:
+                        data.kp_index = latest_forecast.max_kp
+                        data.data_source = "SpaceWeatherLive"
+                        data.is_real_time = True
+                
+                # Update G-scale from Kp
+                if data.kp_index is not None:
+                    if data.kp_index >= 9.0:
+                        data.g_scale = 5
+                    elif data.kp_index >= 8.0:
+                        data.g_scale = 4
+                    elif data.kp_index >= 7.0:
+                        data.g_scale = 3
+                    elif data.kp_index >= 6.0:
+                        data.g_scale = 2
+                    elif data.kp_index >= 5.0:
+                        data.g_scale = 1
+                    else:
+                        data.g_scale = 0
+            
+            # Solar wind parameters
+            if snapshot.solar_wind_speed_kms is not None:
+                data.solar_wind_speed_kms = snapshot.solar_wind_speed_kms
+            if snapshot.solar_wind_density_pcc is not None:
+                data.solar_wind_density_pcc = snapshot.solar_wind_density_pcc
+            if snapshot.imf_bt_nt is not None:
+                data.imf_bt_nt = snapshot.imf_bt_nt
+            if snapshot.imf_bz_nt is not None:
+                data.imf_bz_nt = snapshot.imf_bz_nt
+            
+            # Flare probabilities
+            if snapshot.flare_probabilities.c_class_pct is not None:
+                data.c_class_flare_prob = snapshot.flare_probabilities.c_class_pct
+            if snapshot.flare_probabilities.m_class_pct is not None:
+                data.m_class_flare_prob = snapshot.flare_probabilities.m_class_pct
+            if snapshot.flare_probabilities.x_class_pct is not None:
+                data.x_class_flare_prob = snapshot.flare_probabilities.x_class_pct
+            
+            # Solar activity
+            if snapshot.sunspot_number is not None:
+                data.sunspot_number = snapshot.sunspot_number
+            if snapshot.f107_flux is not None:
+                data.f107_flux = snapshot.f107_flux
+            
+            # CME records
+            if snapshot.cme_records:
+                data.active_cmes = [
+                    {
+                        "cactus_id": cme.cactus_id,
+                        "onset_time": cme.onset_time_utc.isoformat() if cme.onset_time_utc else None,
+                        "velocity_kms": cme.velocity_kms,
+                        "halo": cme.halo_class,
+                    }
+                    for cme in snapshot.cme_records[:5]  # Top 5 most recent
+                ]
+            
+            # Kp forecast
+            if snapshot.kp_forecast:
+                data.kp_forecast = [
+                    {"day": k.day_label, "min_kp": k.min_kp, "max_kp": k.max_kp}
+                    for k in snapshot.kp_forecast
+                ]
+            
+        except Exception as e:
+            if data.fetch_error:
+                data.fetch_error += f"; SpaceWeatherLive error: {str(e)}"
+            else:
+                data.fetch_error = f"SpaceWeatherLive fetch error: {str(e)}"
+    
+    # Set fetch timestamp
+    data.fetch_timestamp = datetime.now(timezone.utc)
+    
+    return data
+
+
+def get_environment_display_name(environment: RadiationEnvironment) -> str:
+    """Get human-readable display name for radiation environment."""
+    names = {
+        RadiationEnvironment.LEO_ISS: "Low Earth Orbit (ISS)",
+        RadiationEnvironment.TRANSLUNAR_INJECTION: "Translunar Injection (TLI)",
+        RadiationEnvironment.LUNAR_GATEWAY: "Lunar Gateway",
+        RadiationEnvironment.LUNAR_SURFACE_NOMINAL: "Lunar Surface",
+        RadiationEnvironment.TRANS_MARTIAN_INJECTION: "Trans-Martian Injection (TMI)",
+        RadiationEnvironment.MARS_ORBIT: "Martian Orbit",
+        RadiationEnvironment.MARS_SURFACE: "Martian Surface",
+    }
+    return names.get(environment, environment.value.replace("_", " ").title())
+
+
+# =============================================================================
+# MODULE EXPORTS
+# =============================================================================
+
+__all__ = [
+    "RadiationEnvironment",
+    "RadiationDoseRate",
+    "DOSE_RATE_DATABASE",
+    "RadiationLimits",
+    "NASA_RADIATION_LIMITS",
+    "EVARadiationStatus",
+    "EVARadiationAssessment",
+    "assess_eva_radiation_risk",
+    "DailyRadiationExposure",
+    "build_radiation_timeline",
+    "timeline_to_dataframe",
+    "compare_environments",
+    "get_environment_by_name",
+    "get_dose_rate_info",
+    "get_radiation_gauge_thresholds",
+    "cumulative_to_status",
+    "RealTimeSpaceWeatherData",
+    "fetch_realtime_space_weather",
+    "get_environment_display_name",
+]
 
