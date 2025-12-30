@@ -3438,6 +3438,26 @@ Solutions:
 
 32. NOAA Space Weather Prediction Center. (n.d.). *Solar radiation storms (S-scale).* https://www.swpc.noaa.gov/phenomena/solar-radiation-storm
 
+33. National Academies of Sciences, Engineering, and Medicine. (2021). *Space Radiation and Astronaut Health: Managing and Communicating Cancer Risks*. The National Academies Press. https://nap.nationalacademies.org/read/26155/chapter/5
+
+34. Cucinotta, F. A. (2014). *Radiation risk acceptability and limitations*. NASA Johnson Space Center. https://three.jsc.nasa.gov/articles/astronautradlimitsfc.pdf
+
+35. Cucinotta, F. A., Kim, M.-H. Y., & Chappell, L. J. (2013). Space radiation cancer risk projections and uncertainties – 2012. *Reports on Progress in Physics, 76*(5), 056701. https://doi.org/10.1088/0034-4885/76/5/056701
+
+### Crew Scheduling & Workload Management
+
+36. National Aeronautics and Space Administration. (2022). *NASA Space Flight Human-System Standard, Volume 2: Human Factors, Habitability, and Environmental Health* (NASA-STD-3001, Rev. D). NASA. https://standards.nasa.gov/standard/NASA/NASA-STD-3001_VOL_2
+
+37. NASA Office of the Chief Health and Medical Officer. (2023). *Cognitive Workload Technical Brief* (NASA-STD-3001 Technical Brief TB-032). NASA. https://www.nasa.gov/wp-content/uploads/2023/12/ochmo-tb-032-cognitive-workload.pdf
+
+38. NASA Ames Research Center. (2024). *Playbook: Next-generation planning, scheduling, and execution tools*. Human-Computer Interaction Group. https://hci.arc.nasa.gov/work/playbook.html
+
+39. NASA. (2024). *OpenSPIFe: Open Scheduling and Planning Interface for Exploration*. GitHub Repository. https://github.com/nasa/OpenSPIFe
+
+40. Silva-Martinez, J., Marquez, J. J., Hillenius, S., & Kanefsky, B. (2019). Lessons learned from International Space Station Crew Autonomous Scheduling Test. *NASA Technical Reports Server* (NTRS 20190027148). https://ntrs.nasa.gov/citations/20190027148
+
+41. NASA Human Research Program. (2024). *Crew Scheduling Tools Research Task* (Task 820). Human Research Roadmap. https://humanresearchroadmap.nasa.gov/tasks/?i=820
+
 ### API Integrations
 
 33. Polar Electro. (2024). *Polar AccessLink API Documentation.* https://www.polar.com/accesslink-api/
