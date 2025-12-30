@@ -1840,12 +1840,13 @@ def _render_radiation_assessment_panel() -> None:
     """Render radiation environment assessment for EVA GO/NO-GO decision.
     
     Displays space weather data, radiation risk level, and recommendations
-    based on NOAA data and NASA-STD-3001 radiation protection requirements.
+    based on real-time NOAA/NASA data and NASA-STD-3001 radiation protection requirements.
     
     References:
         - NASA-STD-3001 Vol 1 Rev B (2022): Radiation Protection
         - NOAA SWPC: https://www.swpc.noaa.gov/
         - NASA SRAG: https://srag.jsc.nasa.gov/
+        - SpaceWeatherLive: https://www.spaceweatherlive.com/
     """
     st.markdown("""
     <div style="
@@ -1860,38 +1861,124 @@ def _render_radiation_assessment_panel() -> None:
         </h4>
         <p style="margin: 0; color: #f0abfc; font-size: 0.9em;">
             Real-time radiation environment evaluation per NASA-STD-3001 requirements<br/>
-            <em>Data sources: NOAA SWPC, NASA SRAG</em>
+            <em>Data sources: NOAA SWPC, SpaceWeatherLive, NASA SRAG</em>
         </p>
     </div>
     """, unsafe_allow_html=True)
     
-    # Controls for radiation parameters
-    st.markdown("##### 📡 Space Weather Input")
+    # Import required modules
+    try:
+        from radiation_exposure import (
+            RadiationEnvironment,
+            assess_eva_radiation_risk,
+            fetch_realtime_space_weather,
+            get_environment_display_name,
+            EVARadiationStatus,
+        )
+        RADIATION_AVAILABLE = True
+    except ImportError:
+        RADIATION_AVAILABLE = False
+        st.error("Radiation exposure module not available.")
+        return
+    
+    # Mission environment selection
+    st.markdown("##### 🌍 Mission Environment")
+    
+    env_options = [
+        (RadiationEnvironment.LEO_ISS, "Low Earth Orbit (ISS)"),
+        (RadiationEnvironment.TRANSLUNAR_INJECTION, "Translunar Injection (TLI)"),
+        (RadiationEnvironment.LUNAR_GATEWAY, "Lunar Gateway"),
+        (RadiationEnvironment.LUNAR_SURFACE_NOMINAL, "Lunar Surface"),
+        (RadiationEnvironment.TRANS_MARTIAN_INJECTION, "Trans-Martian Injection (TMI)"),
+        (RadiationEnvironment.MARS_ORBIT, "Martian Orbit"),
+        (RadiationEnvironment.MARS_SURFACE, "Martian Surface"),
+    ]
+    
+    env_labels = [e[1] for e in env_options]
+    selected_env_idx = st.selectbox(
+        "Mission Environment",
+        options=range(len(env_options)),
+        format_func=lambda x: env_labels[x],
+        index=0,
+        key="eva_radiation_env",
+        help="Select the current mission environment for accurate dose rate calculation",
+    )
+    selected_env = env_options[selected_env_idx][0]
+    
+    # Real-time data fetching
+    st.markdown("---")
+    st.markdown("##### 📡 Real-Time Space Weather Data")
+    
+    col_fetch1, col_fetch2 = st.columns([3, 1])
+    
+    with col_fetch1:
+        auto_fetch = st.checkbox(
+            "🛰️ Fetch Real-Time Data",
+            value=True,
+            key="eva_radiation_auto_fetch",
+            help="Automatically fetch current space weather conditions from NOAA SWPC and SpaceWeatherLive",
+        )
+    
+    with col_fetch2:
+        if st.button("🔄 Refresh", key="eva_radiation_refresh"):
+            st.cache_data.clear()
+            st.rerun()
+    
+    # Fetch real-time data
+    realtime_data = None
+    if auto_fetch:
+        with st.spinner("Fetching real-time space weather data..."):
+            try:
+                realtime_data = fetch_realtime_space_weather(
+                    environment=selected_env,
+                    use_noaa=True,
+                    use_spaceweatherlive=True,
+                    timeout_seconds=10.0,
+                )
+            except Exception as e:
+                st.warning(f"⚠️ Real-time data fetch failed: {str(e)}. Using manual input.")
+                realtime_data = None
+    
+    # Space weather input controls (with real-time defaults)
+    st.markdown("##### 📊 Space Weather Parameters")
     
     col1, col2, col3 = st.columns(3)
     
+    # Proton flux
+    default_proton = realtime_data.proton_flux_pfu if realtime_data and realtime_data.proton_flux_pfu else 1.0
     with col1:
         proton_flux = st.number_input(
             "Proton Flux (>10 MeV pfu)",
             min_value=0.1,
             max_value=10000.0,
-            value=1.0,
+            value=float(default_proton),
             step=0.5,
             help="Solar proton flux in particle flux units. Normal: <1, Alert: >10, Warning: >100, Storm: >1000",
             key="radiation_proton_flux",
         )
+        if realtime_data and realtime_data.proton_flux_pfu:
+            st.caption(f"🛰️ Real-time: {realtime_data.proton_flux_pfu:.1f} pfu ({realtime_data.data_source})")
+        else:
+            st.caption("📝 Manual input")
     
+    # Kp index
+    default_kp = realtime_data.kp_index if realtime_data and realtime_data.kp_index else 2.0
     with col2:
         kp_index = st.slider(
             "Kp Index (Geomagnetic)",
             min_value=0.0,
             max_value=9.0,
-            value=2.0,
+            value=float(default_kp),
             step=0.5,
             help="Planetary K-index. Quiet: 0-2, Unsettled: 3-4, Storm: 5+",
             key="radiation_kp_index",
         )
+        if realtime_data and realtime_data.kp_index:
+            st.caption(f"🛰️ Real-time: {realtime_data.kp_index:.1f} ({realtime_data.data_source})")
+        else:
+            st.caption("📝 Manual input")
     
+    # Solar cycle phase (not real-time, but can be inferred from sunspot number)
     with col3:
         solar_phase = st.selectbox(
             "Solar Cycle Phase",
@@ -1900,25 +1987,157 @@ def _render_radiation_assessment_panel() -> None:
             help="Solar cycle phase affects GCR levels. Maximum = lower GCR, Minimum = higher GCR",
             key="radiation_solar_phase",
         )
+        if realtime_data and realtime_data.sunspot_number:
+            # Infer solar cycle phase from sunspot number
+            if realtime_data.sunspot_number < 20:
+                inferred_phase = "minimum"
+            elif realtime_data.sunspot_number < 100:
+                inferred_phase = "ascending"
+            elif realtime_data.sunspot_number > 150:
+                inferred_phase = "maximum"
+            else:
+                inferred_phase = "descending"
+            st.caption(f"🛰️ Sunspot #: {realtime_data.sunspot_number} (suggests {inferred_phase})")
+        else:
+            st.caption("📝 Manual input")
     
-    # Perform radiation assessment
-    assessment = assess_radiation_for_eva(
-        proton_flux_pfu=proton_flux,
-        kp_index=kp_index,
-        solar_cycle_phase=solar_phase,
+    # Calculate S-scale and G-scale from real-time data or manual input
+    # S-scale from proton flux
+    if realtime_data and realtime_data.s_scale > 0:
+        default_s_scale = realtime_data.s_scale
+    else:
+        # Calculate from proton flux
+        if proton_flux >= 10000:
+            default_s_scale = 5
+        elif proton_flux >= 1000:
+            default_s_scale = 4
+        elif proton_flux >= 100:
+            default_s_scale = 3
+        elif proton_flux >= 10:
+            default_s_scale = 2
+        elif proton_flux >= 1:
+            default_s_scale = 1
+        else:
+            default_s_scale = 0
+    
+    # G-scale from Kp
+    if realtime_data and realtime_data.g_scale > 0:
+        default_g_scale = realtime_data.g_scale
+    else:
+        # Calculate from Kp
+        if kp_index >= 9.0:
+            default_g_scale = 5
+        elif kp_index >= 8.0:
+            default_g_scale = 4
+        elif kp_index >= 7.0:
+            default_g_scale = 3
+        elif kp_index >= 6.0:
+            default_g_scale = 2
+        elif kp_index >= 5.0:
+            default_g_scale = 1
+        else:
+            default_g_scale = 0
+    
+    # Allow manual override
+    st.markdown("---")
+    st.markdown("##### 🎯 NOAA Space Weather Scales")
+    
+    col_s1, col_s2 = st.columns(2)
+    
+    with col_s1:
+        s_scale = st.selectbox(
+            "NOAA S-Scale (Radiation Storm)",
+            options=[0, 1, 2, 3, 4, 5],
+            index=default_s_scale,
+            format_func=lambda x: f"S{x}" + (" - None" if x == 0 else f" - {['', 'Minor', 'Moderate', 'Strong', 'Severe', 'Extreme'][x]}"),
+            key="eva_radiation_s_scale",
+            help="Radiation storm scale. Can override real-time calculation.",
+        )
+        if realtime_data and realtime_data.s_scale > 0 and s_scale != realtime_data.s_scale:
+            st.caption(f"⚠️ Override: Real-time was S{realtime_data.s_scale}")
+        elif realtime_data and realtime_data.s_scale > 0:
+            st.caption(f"🛰️ Real-time: S{realtime_data.s_scale} ({realtime_data.data_source})")
+        else:
+            st.caption(f"📝 Calculated from proton flux: S{default_s_scale}")
+    
+    with col_s2:
+        g_scale = st.selectbox(
+            "NOAA G-Scale (Geomagnetic Storm)",
+            options=[0, 1, 2, 3, 4, 5],
+            index=default_g_scale,
+            format_func=lambda x: f"G{x}" + (" - None" if x == 0 else f" - {['', 'Minor', 'Moderate', 'Strong', 'Severe', 'Extreme'][x]}"),
+            key="eva_radiation_g_scale",
+            help="Geomagnetic storm scale. Can override real-time calculation.",
+        )
+        if realtime_data and realtime_data.g_scale > 0 and g_scale != realtime_data.g_scale:
+            st.caption(f"⚠️ Override: Real-time was G{realtime_data.g_scale}")
+        elif realtime_data and realtime_data.g_scale > 0:
+            st.caption(f"🛰️ Real-time: G{realtime_data.g_scale} ({realtime_data.data_source})")
+        else:
+            st.caption(f"📝 Calculated from Kp: G{default_g_scale}")
+    
+    # Data source indicator
+    if realtime_data and realtime_data.is_real_time:
+        kp_display = f"{realtime_data.kp_index:.1f}" if realtime_data.kp_index else "N/A"
+        proton_display = f"{realtime_data.proton_flux_pfu:.1f} pfu" if realtime_data.proton_flux_pfu else "N/A"
+        timestamp_display = realtime_data.fetch_timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if realtime_data.fetch_timestamp else 'Unknown'
+        
+        st.info(f"""
+        ✅ **Real-Time Data Active**
+        - Source: {realtime_data.data_source}
+        - Fetched: {timestamp_display}
+        - Kp: {kp_display} | Proton Flux: {proton_display}
+        """)
+    else:
+        st.warning("⚠️ **Manual Input Mode** - Using manually entered values. Enable real-time fetch for live data.")
+    
+    # EVA duration input
+    st.markdown("---")
+    st.markdown("##### ⏱️ EVA Parameters")
+    
+    col_eva1, col_eva2 = st.columns(2)
+    
+    with col_eva1:
+        eva_duration = st.number_input(
+            "Planned EVA Duration (hours)",
+            min_value=0.5,
+            max_value=12.0,
+            value=6.0,
+            step=0.5,
+            key="eva_radiation_duration",
+        )
+    
+    with col_eva2:
+        cumulative_dose = st.number_input(
+            "Cumulative Career Dose (mSv)",
+            min_value=0.0,
+            max_value=1000.0,
+            value=0.0,
+            step=10.0,
+            key="eva_radiation_cumulative",
+            help="Current cumulative career radiation dose",
+        )
+    
+    # Perform radiation assessment using assess_eva_radiation_risk (more comprehensive)
+    assessment = assess_eva_radiation_risk(
+        cumulative_dose_msv=cumulative_dose,
+        environment=selected_env,
+        eva_duration_hours=eva_duration,
+        space_weather_s_scale=s_scale,
+        space_weather_g_scale=g_scale,
     )
     
-    # Display risk level indicator
-    risk_colors = {
-        RadiationRiskLevel.LOW: ("#22c55e", "#166534", "✅ LOW RISK"),
-        RadiationRiskLevel.MODERATE: ("#eab308", "#854d0e", "⚠️ MODERATE RISK"),
-        RadiationRiskLevel.HIGH: ("#f97316", "#9a3412", "🔶 HIGH RISK"),
-        RadiationRiskLevel.CRITICAL: ("#ef4444", "#991b1b", "🚨 CRITICAL"),
+    # Display EVA Go/No-Go status
+    status_colors = {
+        EVARadiationStatus.GO: ("#28a745", "#155724", "✅ GO"),
+        EVARadiationStatus.GO_WITH_MONITORING: ("#ffc107", "#856404", "⚠️ GO WITH MONITORING"),
+        EVARadiationStatus.CAUTION: ("#fd7e14", "#7c2d12", "🔶 CAUTION"),
+        EVARadiationStatus.NO_GO: ("#dc3545", "#721c24", "🚫 NO-GO"),
     }
     
-    color, bg_dark, label = risk_colors.get(
-        assessment.risk_level,
-        ("#6b7280", "#374151", "UNKNOWN"),
+    color, bg_dark, label = status_colors.get(
+        assessment.status,
+        ("#6c757d", "#343a40", "UNKNOWN"),
     )
     
     st.markdown(f"""
@@ -1934,7 +2153,7 @@ def _render_radiation_assessment_panel() -> None:
             {label}
         </div>
         <div style="color: #f0f0f0; font-size: 1.1em; font-weight: 500;">
-            {assessment.eva_recommendation}
+            {assessment.rationale}
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -1943,42 +2162,100 @@ def _render_radiation_assessment_panel() -> None:
     col1, col2, col3, col4 = st.columns(4)
     
     with col1:
+        # Calculate EVA dose rate
+        from radiation_exposure import DOSE_RATE_DATABASE
+        dose_rate = DOSE_RATE_DATABASE.get(selected_env)
+        if dose_rate:
+            eva_rate_hr = (dose_rate.nominal_msv_per_day * dose_rate.eva_multiplier) / 24.0
+            # Adjust for space weather
+            if s_scale >= 3:
+                eva_rate_hr *= (2.0 + s_scale)
+            elif s_scale >= 1:
+                eva_rate_hr *= (1.5 + 0.3 * s_scale)
+        else:
+            eva_rate_hr = 0.0
+        
         st.metric(
-            "Est. Dose Rate",
-            f"{assessment.estimated_dose_msv_hr:.3f} mSv/hr",
+            "Est. EVA Dose Rate",
+            f"{eva_rate_hr:.3f} mSv/hr",
             delta=None,
-            help="Estimated radiation dose rate during EVA",
+            help="Estimated radiation dose rate during EVA in this environment",
         )
     
     with col2:
+        projected_dose = assessment.cumulative_dose_msv - cumulative_dose
         st.metric(
-            "SPE Activity",
-            "ACTIVE" if assessment.spe_active else "Quiet",
-            delta="⚠️ Alert" if assessment.spe_active else None,
-            delta_color="inverse" if assessment.spe_active else "normal",
+            "Projected EVA Dose",
+            f"{projected_dose:.2f} mSv",
+            delta=f"{assessment.career_pct_used:.1f}% of limit",
+            help="Projected dose from this EVA",
         )
     
     with col3:
         st.metric(
-            "GCR Level",
-            assessment.gcr_level.upper(),
-            help="Galactic Cosmic Ray flux level (varies with solar cycle)",
+            "Career Dose Used",
+            f"{assessment.career_pct_used:.1f}%",
+            delta=f"{assessment.remaining_career_msv:.1f} mSv remaining",
+            help="Percentage of career limit used after this EVA",
         )
     
     with col4:
+        space_alert_display = assessment.space_weather_alert if assessment.space_weather_alert != "None" else "None"
         st.metric(
-            "Kp Index",
-            f"{assessment.kp_index:.1f}",
-            delta="Storm" if assessment.kp_index >= 5 else None,
-            delta_color="inverse" if assessment.kp_index >= 5 else "normal",
+            "Space Weather",
+            space_alert_display,
+            delta="Active" if s_scale > 0 or g_scale > 0 else None,
+            delta_color="inverse" if s_scale > 0 or g_scale > 0 else "normal",
         )
     
-    # Reasons and details
-    st.markdown("##### 📋 Assessment Details")
+    # Recommendations
+    st.markdown("---")
+    st.markdown("##### 📋 Recommendations")
     
-    for reason in assessment.reasons:
-        icon = "⚠️" if "WARNING" in reason or "ALERT" in reason or "CRITICAL" in reason else "ℹ️"
-        st.markdown(f"{icon} {reason}")
+    if assessment.recommendations:
+        for rec in assessment.recommendations:
+            st.markdown(f"• {rec}")
+    else:
+        st.info("No specific recommendations. Standard EVA protocols apply.")
+    
+    # Additional real-time data display
+    if realtime_data and realtime_data.is_real_time:
+        st.markdown("---")
+        st.markdown("##### 📡 Additional Real-Time Data")
+        
+        col_rt1, col_rt2, col_rt3 = st.columns(3)
+        
+        with col_rt1:
+            if realtime_data.solar_wind_speed_kms:
+                st.metric("Solar Wind Speed", f"{realtime_data.solar_wind_speed_kms:.0f} km/s")
+            if realtime_data.solar_wind_density_pcc:
+                st.metric("Solar Wind Density", f"{realtime_data.solar_wind_density_pcc:.1f} p/cm³")
+        
+        with col_rt2:
+            if realtime_data.imf_bt_nt:
+                st.metric("IMF Bt", f"{realtime_data.imf_bt_nt:.1f} nT")
+            if realtime_data.imf_bz_nt:
+                st.metric("IMF Bz", f"{realtime_data.imf_bz_nt:.1f} nT")
+        
+        with col_rt3:
+            if realtime_data.f107_flux:
+                st.metric("F10.7 Flux", f"{realtime_data.f107_flux:.1f} sfu")
+            if realtime_data.active_cmes:
+                st.metric("Active CMEs", len(realtime_data.active_cmes))
+        
+        # Flare probabilities
+        if any([realtime_data.c_class_flare_prob, realtime_data.m_class_flare_prob, realtime_data.x_class_flare_prob]):
+            st.markdown("**Flare Probabilities:**")
+            flare_cols = st.columns(3)
+            with flare_cols[0]:
+                if realtime_data.c_class_flare_prob:
+                    st.metric("C-Class", f"{realtime_data.c_class_flare_prob:.0f}%")
+            with flare_cols[1]:
+                if realtime_data.m_class_flare_prob:
+                    st.metric("M-Class", f"{realtime_data.m_class_flare_prob:.0f}%")
+            with flare_cols[2]:
+                if realtime_data.x_class_flare_prob:
+                    st.metric("X-Class", f"{realtime_data.x_class_flare_prob:.0f}%")
     
     # Dose limits reference
     with st.expander("📊 NASA Radiation Dose Limits Reference", expanded=False):
