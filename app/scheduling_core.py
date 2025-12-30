@@ -135,6 +135,197 @@ KSS_NORMAL_MAX: Final[int] = 5
 KSS_CAUTION_MAX: Final[int] = 7
 KSS_NOGO_MIN: Final[int] = 8
 
+# ---------------------------------------------------------------------------
+# Space Radiation Exposure Limits (NASA-STD-3001 Vol 1 Rev B)
+# References:
+#   - NASA-STD-3001 Vol 1 Rev B (2022): Human Spaceflight Occupant Safety
+#     https://www.nasa.gov/wp-content/uploads/2023/03/radiation-protection-technical-brief-ochmo.pdf
+#   - National Academies (2021): Space Radiation and Astronaut Health
+#     https://nap.nationalacademies.org/read/26155/chapter/5
+#   - Cucinotta FA (2014): Space Radiation Cancer Risk Projections
+#     https://three.jsc.nasa.gov/articles/astronautradlimitsfc.pdf
+# ---------------------------------------------------------------------------
+
+# Career dose limit (effective dose, mSv) - NASA-STD-3001 Vol 1 Rev B
+NASA_CAREER_DOSE_LIMIT_MSV: Final[float] = 600.0  # 600 mSv career limit (2022 update)
+
+# Annual dose limit for radiation workers
+ANNUAL_DOSE_LIMIT_MSV: Final[float] = 50.0  # 50 mSv/year occupational limit
+
+# 30-day dose limit (blood-forming organs)
+THIRTY_DAY_BFO_LIMIT_MSV: Final[float] = 250.0  # Gray-equivalent
+
+# EVA-specific limits (short-term exposure)
+EVA_DOSE_LIMIT_MSV_PER_HOUR: Final[float] = 0.5  # ~0.5 mSv/hr in LEO EVA
+
+# Solar Particle Event (SPE) alert thresholds
+SPE_ALERT_THRESHOLD_PFU: Final[float] = 10.0  # >10 pfu = enhanced radiation
+SPE_WARNING_THRESHOLD_PFU: Final[float] = 100.0  # >100 pfu = significant event
+SPE_STORM_THRESHOLD_PFU: Final[float] = 1000.0  # >1000 pfu = major storm
+
+# Galactic Cosmic Ray (GCR) baseline dose rate (mSv/day in LEO)
+GCR_BASELINE_DOSE_RATE_MSV_DAY: Final[float] = 0.5  # ~0.5 mSv/day average
+
+# Radiation risk levels for EVA GO/NO-GO
+class RadiationRiskLevel(str, Enum):
+    """Radiation risk level for EVA scheduling."""
+    LOW = "low"  # Normal GCR, no SPE activity
+    MODERATE = "moderate"  # Elevated GCR or minor SPE
+    HIGH = "high"  # Active SPE, avoid EVA
+    CRITICAL = "critical"  # Major SPE/storm, shelter required
+
+
+# ---------------------------------------------------------------------------
+# NASA Scheduling Factors and Constraints
+# Based on: NASA-STD-3001 Vol 1/2, SPIFe/Playbook Planning Tools, ISS Operations
+# References:
+#   - NASA-STD-3001 Vol 2 Rev D: Human Factors, Habitability, Environmental Health
+#     https://standards.nasa.gov/standard/NASA/NASA-STD-3001_VOL_2
+#   - NASA OCHMO Cognitive Workload Technical Brief (2023)
+#     https://www.nasa.gov/wp-content/uploads/2023/12/ochmo-tb-032-cognitive-workload.pdf
+#   - NASA NTRS 20190027148: ISS Crew Autonomous Scheduling Test
+#     https://ntrs.nasa.gov/citations/20190027148
+#   - Playbook/SPIFe Planning Tools: https://hci.arc.nasa.gov/work/playbook.html
+# ---------------------------------------------------------------------------
+
+# Workday limits (NASA-STD-3001, ISS Operations)
+NOMINAL_WORKDAY_HOURS: Final[float] = 8.5  # Nominal duty hours
+MAX_WORKDAY_HOURS: Final[float] = 10.0  # Maximum recommended
+EXTENDED_WORKDAY_HOURS: Final[float] = 12.0  # Only for critical ops
+
+# Rest requirements
+MIN_REST_BETWEEN_WORKDAYS_HOURS: Final[float] = 8.0  # Minimum rest
+RECOMMENDED_SLEEP_HOURS: Final[float] = 8.0  # Optimal sleep
+MIN_SLEEP_HOURS: Final[float] = 6.0  # Absolute minimum
+
+# Task scheduling constraints (SPIFe/Playbook derived)
+MAX_CONTINUOUS_WORK_HOURS: Final[float] = 2.0  # Before mandatory break
+MANDATORY_BREAK_MINUTES: Final[int] = 15  # After continuous work
+MEAL_DURATION_MINUTES: Final[int] = 45  # Protected meal time
+BRIEFING_DURATION_MINUTES: Final[int] = 60  # Daily planning conference
+
+# Cognitive workload factors (NASA-STD-3001 Vol 2, Bedford Scale)
+# Bedford Scale: 1-3 = satisfactory, 4-6 = tolerable, 7-9 = unacceptable
+COGNITIVE_WORKLOAD_LOW: Final[float] = 3.0  # Routine tasks
+COGNITIVE_WORKLOAD_MEDIUM: Final[float] = 5.0  # Complex science/ops
+COGNITIVE_WORKLOAD_HIGH: Final[float] = 7.0  # EVA, emergency procedures
+
+# Physical workload factors (Borg CR-10 Scale)
+# Borg CR-10: 0 = nothing, 4 = somewhat strong, 10 = maximal
+PHYSICAL_WORKLOAD_TARGET: Final[float] = 4.0  # NASA-STD-3001 requirement
+
+# Activity scheduling rules (ISS Operations)
+@dataclass(frozen=True, slots=True)
+class SchedulingConstraint:
+    """Constraint definition for activity scheduling."""
+    name: str
+    description: str
+    constraint_type: str  # "temporal", "resource", "spatial", "crew"
+    min_value: Optional[float] = None
+    max_value: Optional[float] = None
+    required: bool = True
+
+# Standard ISS scheduling constraints
+ISS_SCHEDULING_CONSTRAINTS: Tuple[SchedulingConstraint, ...] = (
+    # Temporal constraints
+    SchedulingConstraint(
+        name="workday_hours",
+        description="Total duty hours per day",
+        constraint_type="temporal",
+        min_value=6.0,
+        max_value=10.0,
+        required=True,
+    ),
+    SchedulingConstraint(
+        name="continuous_work",
+        description="Maximum continuous work before break",
+        constraint_type="temporal",
+        max_value=2.0,
+        required=True,
+    ),
+    SchedulingConstraint(
+        name="sleep_period",
+        description="Minimum sleep period hours",
+        constraint_type="temporal",
+        min_value=6.0,
+        required=True,
+    ),
+    SchedulingConstraint(
+        name="meal_window",
+        description="Protected meal time minutes",
+        constraint_type="temporal",
+        min_value=30.0,
+        max_value=60.0,
+        required=True,
+    ),
+    # Resource constraints
+    SchedulingConstraint(
+        name="exercise_equipment",
+        description="Exercise equipment capacity",
+        constraint_type="resource",
+        max_value=1.0,
+        required=True,
+    ),
+    SchedulingConstraint(
+        name="hygiene_module",
+        description="Hygiene module capacity",
+        constraint_type="resource",
+        max_value=1.0,
+        required=True,
+    ),
+    # Crew constraints
+    SchedulingConstraint(
+        name="eva_crew",
+        description="Maximum crew on EVA simultaneously",
+        constraint_type="crew",
+        max_value=2.0,
+        required=True,
+    ),
+    SchedulingConstraint(
+        name="eva_recovery",
+        description="Hours between EVAs for same crew",
+        constraint_type="crew",
+        min_value=24.0,
+        required=True,
+    ),
+)
+
+# Activity priority levels (ISS Flight Rules derived)
+# Lower number = higher priority
+PRIORITY_EMERGENCY: Final[int] = 1  # Life-threatening situations
+PRIORITY_SAFETY_CRITICAL: Final[int] = 2  # Safety-related activities
+PRIORITY_MISSION_CRITICAL: Final[int] = 3  # EVA, critical experiments
+PRIORITY_HEALTH_MAINTENANCE: Final[int] = 4  # Exercise, medical
+PRIORITY_ROUTINE_OPS: Final[int] = 5  # Nominal operations
+PRIORITY_DISCRETIONARY: Final[int] = 6  # Crew preference activities
+
+# Task categorization for workload balancing
+# Based on NASA Flight Planning Branch procedures
+@dataclass(frozen=True, slots=True)
+class TaskCategory:
+    """Task category for workload distribution."""
+    name: str
+    cognitive_load: float  # 1-9 Bedford scale
+    physical_load: float  # 0-10 Borg CR-10
+    min_crew_proficiency: str  # "basic", "trained", "expert"
+    parallel_allowed: bool  # Can be done alongside other tasks
+
+
+TASK_CATEGORIES: Dict[str, TaskCategory] = {
+    "briefing": TaskCategory("Morning Briefing", 3.0, 1.0, "basic", False),
+    "meal": TaskCategory("Meal", 1.0, 1.5, "basic", True),
+    "exercise": TaskCategory("Physical Exercise", 2.0, 6.0, "trained", False),
+    "hygiene": TaskCategory("Personal Hygiene", 1.0, 2.0, "basic", False),
+    "sleep": TaskCategory("Sleep", 1.0, 1.0, "basic", False),
+    "science_routine": TaskCategory("Routine Science", 4.0, 2.0, "trained", True),
+    "science_complex": TaskCategory("Complex Science", 6.0, 2.5, "expert", False),
+    "eva_prep": TaskCategory("EVA Preparation", 6.0, 4.0, "expert", False),
+    "eva": TaskCategory("EVA Operations", 8.0, 7.0, "expert", False),
+    "maintenance": TaskCategory("Station Maintenance", 5.0, 4.0, "trained", True),
+    "recreation": TaskCategory("Recreation", 2.0, 2.0, "basic", True),
+    "emergency": TaskCategory("Emergency Procedures", 9.0, 6.0, "trained", False),
+}
+
 
 class ActivityCategory(str, Enum):
     """Activity categories for scheduling."""
@@ -622,6 +813,122 @@ def eva_go_nogo(
         ihpi_value=ihpi_value,
         safte_effectiveness=safte_eff,
         all_gates_passed=True,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Radiation Assessment for EVA Scheduling
+# ---------------------------------------------------------------------------
+# Scientific References:
+#   - NASA-STD-3001 Vol 1 Rev B (2022): Radiation Protection Technical Brief
+#     https://www.nasa.gov/wp-content/uploads/2023/03/radiation-protection-technical-brief-ochmo.pdf
+#   - NOAA Space Weather Prediction Center: Solar Proton Events
+#     https://www.swpc.noaa.gov/products/solar-proton-events
+#   - Cucinotta FA et al. (2013): Space Radiation Cancer Risks and Uncertainties
+#     DOI: 10.1088/0034-4885/76/5/056701
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class RadiationAssessment:
+    """Radiation environment assessment for EVA scheduling."""
+    risk_level: RadiationRiskLevel
+    estimated_dose_msv_hr: float
+    spe_active: bool
+    gcr_level: str  # "low", "moderate", "high"
+    kp_index: float  # Geomagnetic activity index (0-9)
+    eva_recommendation: str
+    reasons: Tuple[str, ...]
+
+
+def assess_radiation_for_eva(
+    proton_flux_pfu: float = 1.0,
+    kp_index: float = 2.0,
+    solar_cycle_phase: str = "moderate",
+) -> RadiationAssessment:
+    """
+    Assess radiation environment for EVA GO/NO-GO decision.
+    
+    This function evaluates space weather conditions using NOAA data
+    to determine if radiation levels are safe for EVA operations.
+    
+    Args:
+        proton_flux_pfu: >10 MeV proton flux in particle flux units (pfu)
+                         Normal: <1, Alert: >10, Warning: >100, Storm: >1000
+        kp_index: Geomagnetic activity index (0-9 scale)
+                  Quiet: 0-2, Unsettled: 3-4, Storm: 5-6, Severe: 7-9
+        solar_cycle_phase: "minimum", "ascending", "maximum", "descending"
+        
+    Returns:
+        RadiationAssessment with risk level and recommendations
+        
+    References:
+        - NOAA SWPC: https://www.swpc.noaa.gov/
+        - NASA SRAG: https://srag.jsc.nasa.gov/
+    """
+    reasons: List[str] = []
+    spe_active = False
+    
+    # Determine GCR level based on solar cycle
+    gcr_levels = {
+        "minimum": "high",  # Solar minimum = higher GCR
+        "ascending": "moderate",
+        "maximum": "low",  # Solar maximum = lower GCR
+        "descending": "moderate",
+    }
+    gcr_level = gcr_levels.get(solar_cycle_phase, "moderate")
+    
+    # Base dose rate from GCR
+    gcr_dose_multipliers = {"low": 0.7, "moderate": 1.0, "high": 1.4}
+    base_dose = GCR_BASELINE_DOSE_RATE_MSV_DAY / 24.0  # mSv/hr
+    gcr_dose = base_dose * gcr_dose_multipliers.get(gcr_level, 1.0)
+    
+    # Check for Solar Particle Event activity
+    if proton_flux_pfu >= SPE_STORM_THRESHOLD_PFU:
+        spe_active = True
+        risk_level = RadiationRiskLevel.CRITICAL
+        estimated_dose = gcr_dose + 5.0  # Major SPE adds significant dose
+        reasons.append(f"CRITICAL: Major SPE in progress ({proton_flux_pfu:.0f} pfu)")
+        reasons.append("Immediate shelter required - NO EVA")
+        recommendation = "NO-GO: Shelter in place. Do not conduct EVA."
+    elif proton_flux_pfu >= SPE_WARNING_THRESHOLD_PFU:
+        spe_active = True
+        risk_level = RadiationRiskLevel.HIGH
+        estimated_dose = gcr_dose + 1.5  # Significant SPE
+        reasons.append(f"WARNING: Significant SPE activity ({proton_flux_pfu:.0f} pfu)")
+        reasons.append("EVA should be postponed until radiation subsides")
+        recommendation = "NO-GO: Postpone EVA until proton flux < 100 pfu"
+    elif proton_flux_pfu >= SPE_ALERT_THRESHOLD_PFU:
+        spe_active = True
+        risk_level = RadiationRiskLevel.MODERATE
+        estimated_dose = gcr_dose + 0.3  # Minor SPE
+        reasons.append(f"ALERT: Enhanced proton activity ({proton_flux_pfu:.0f} pfu)")
+        reasons.append("Shorten EVA duration, monitor conditions")
+        recommendation = "CAUTION: Limit EVA to 2 hours, continuous monitoring"
+    else:
+        # Normal conditions
+        estimated_dose = gcr_dose
+        if kp_index >= 7:
+            risk_level = RadiationRiskLevel.HIGH
+            reasons.append(f"Severe geomagnetic storm (Kp={kp_index})")
+            recommendation = "CAUTION: Possible enhanced radiation, limit EVA"
+        elif kp_index >= 5:
+            risk_level = RadiationRiskLevel.MODERATE
+            reasons.append(f"Geomagnetic storm conditions (Kp={kp_index})")
+            recommendation = "GO with monitoring: Watch for radiation alerts"
+        else:
+            risk_level = RadiationRiskLevel.LOW
+            reasons.append(f"Quiet geomagnetic conditions (Kp={kp_index})")
+            reasons.append(f"GCR level: {gcr_level} (solar {solar_cycle_phase})")
+            recommendation = "GO: Normal radiation environment"
+    
+    return RadiationAssessment(
+        risk_level=risk_level,
+        estimated_dose_msv_hr=estimated_dose,
+        spe_active=spe_active,
+        gcr_level=gcr_level,
+        kp_index=kp_index,
+        eva_recommendation=recommendation,
+        reasons=tuple(reasons),
     )
 
 
@@ -1855,6 +2162,23 @@ __all__ = [
     "SAFTE_CAUTION_MIN",
     "SAFTE_HIGH_RISK_MIN",
     "SAFTE_CRITICAL_THRESHOLD",
+    # NASA Scheduling Factors
+    "NOMINAL_WORKDAY_HOURS",
+    "MAX_WORKDAY_HOURS",
+    "EXTENDED_WORKDAY_HOURS",
+    "MAX_CONTINUOUS_WORK_HOURS",
+    "COGNITIVE_WORKLOAD_LOW",
+    "COGNITIVE_WORKLOAD_MEDIUM",
+    "COGNITIVE_WORKLOAD_HIGH",
+    "PHYSICAL_WORKLOAD_TARGET",
+    "SchedulingConstraint",
+    "ISS_SCHEDULING_CONSTRAINTS",
+    "TaskCategory",
+    "TASK_CATEGORIES",
+    "PRIORITY_EMERGENCY",
+    "PRIORITY_MISSION_CRITICAL",
+    "PRIORITY_HEALTH_MAINTENANCE",
+    "PRIORITY_ROUTINE_OPS",
     # Enums
     "ActivityCategory",
     "RiskLevel",
@@ -1880,6 +2204,14 @@ __all__ = [
     # GO/NO-GO
     "EVAGONOGOResult",
     "eva_go_nogo",
+    # Radiation Assessment
+    "RadiationRiskLevel",
+    "RadiationAssessment",
+    "assess_radiation_for_eva",
+    "NASA_CAREER_DOSE_LIMIT_MSV",
+    "SPE_ALERT_THRESHOLD_PFU",
+    "SPE_WARNING_THRESHOLD_PFU",
+    "SPE_STORM_THRESHOLD_PFU",
     # Activities
     "ActivityDefinition",
     "FIXED_ACTIVITIES",
