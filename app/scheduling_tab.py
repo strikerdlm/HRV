@@ -3272,7 +3272,7 @@ def _render_eva_references() -> None:
                 border-radius: 6px;
                 font-size: 0.9em;
             ">
-                <strong style="color: #10b981;">Key Finding:</strong>
+                <strong style="color: #1e40af;">Key Finding:</strong>
                 <span style="color: #f5f5f5;"> {key_finding}</span>
             </div>
         </div>
@@ -3291,11 +3291,6 @@ def _render_eva_references() -> None:
             "title": "NASA-STD-3001 Technical Brief: Decompression Sickness",
             "url": "https://www.nasa.gov/wp-content/uploads/2023/12/ochmo-tb-037-decompression-sickness.pdf",
             "description": "NASA Human System Standard - DCS mitigation protocols",
-        },
-        {
-            "title": "Human System Integration Requirements (HSIR)",
-            "url": "https://msis.jsc.nasa.gov/sections/section14.htm",
-            "description": "Section 14: EVA anthropometry, physiology, and operations",
         },
         {
             "title": "NTRS: EVA Hardware & Operations Overview",
@@ -3663,6 +3658,7 @@ def _render_nasa_scheduling_guidelines() -> None:
     # References
     with st.expander("📚 Scientific References", expanded=False):
         st.markdown("""
+        <div style="color: #1e40af;">
         **NASA Standards and Technical Documentation:**
         
         1. **NASA-STD-3001 Volume 2 Rev D** - Human Factors, Habitability, and Environmental Health
@@ -3687,7 +3683,8 @@ def _render_nasa_scheduling_guidelines() -> None:
         - Bedford workload scale 1-9: target ≤6 for nominal operations
         - Borg CR-10 physical workload: target ≤4 for crew interfaces
         - ISS uses "job jar" system for crew task selection within constraints
-        """)
+        </div>
+        """, unsafe_allow_html=True)
 
 
 # ---------------------------------------------------------------------------
