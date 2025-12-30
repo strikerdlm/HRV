@@ -1975,6 +1975,46 @@ class UserDatabase:
                 profile.user_id
             ))
     
+    def update_user_sleep_chronotype(
+        self,
+        user_id: str,
+        *,
+        resting_hr_bpm: Optional[float] = None,
+        chronotype_offset_hours: Optional[float] = None,
+    ) -> None:
+        """Update user profile with sleep/chronotype data from Garmin autofill or manual sync.
+        
+        Args:
+            user_id: User identifier
+            resting_hr_bpm: Resting heart rate to update (optional)
+            chronotype_offset_hours: Chronotype offset in hours (optional)
+        """
+        updates: List[str] = []
+        values: List[Any] = []
+        
+        if resting_hr_bpm is not None:
+            updates.append("resting_heart_rate_bpm = ?")
+            values.append(resting_hr_bpm)
+        
+        if chronotype_offset_hours is not None:
+            updates.append("chronotype_offset_hours = ?")
+            values.append(chronotype_offset_hours)
+        
+        if not updates:
+            return  # Nothing to update
+        
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                f"""
+                UPDATE users SET
+                    {', '.join(updates)},
+                    updated_at = ?
+                WHERE user_id = ?
+                """,
+                (*values, datetime.now(timezone.utc).isoformat(), user_id),
+            )
+    
     def delete_user(self, user_id: str) -> None:
         """Delete user and all associated data."""
         with self._get_connection() as conn:
