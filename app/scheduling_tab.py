@@ -2304,18 +2304,14 @@ def _render_eva_radiation_metrics_plot(
         "yAxis": {
             "type": "category",
             "data": [
-                f"Proton Flux (>10 MeV, pfu)<br/><span style='font-size:10px;color:#666;'>Current: {proton_flux:.2f} pfu | S{current_s_scale}</span>",
-                f"Kp Index<br/><span style='font-size:10px;color:#666;'>Current: {kp_index:.1f} | G{current_g_scale}</span>",
-                f"EVA Dose Rate (mSv/hr)<br/><span style='font-size:10px;color:#666;'>Current: {eva_rate_hr:.3f} mSv/hr</span>",
+                "Proton Flux (>10 MeV, pfu)",
+                "Kp Index",
+                "EVA Dose Rate (mSv/hr)",
             ],
             "axisLabel": {
                 "color": "#1a1a1a",
                 "fontSize": 11,
                 "fontWeight": "bold",
-                "rich": {
-                    "normal": {"fontSize": 11, "fontWeight": "bold", "color": "#1a1a1a"},
-                    "sub": {"fontSize": 10, "color": "#666"},
-                },
             },
             "axisLine": {"lineStyle": {"color": "#2c3e50"}},
         },
