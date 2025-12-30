@@ -687,13 +687,13 @@ def _render_weekly_overview(
         "title": {
             "text": f"Activity Density — Week of {start_date.strftime('%B %d')}",
             "left": "center",
-            "textStyle": {"fontSize": 14, "color": "#ddd"},
+            "textStyle": {"fontSize": 14, "color": "#1a1a1a", "fontWeight": "bold"},
         },
         "tooltip": {
             "position": "top",
-            "backgroundColor": "rgba(30, 30, 50, 0.95)",
-            "borderColor": "#444",
-            "textStyle": {"color": "#fff"},
+            "backgroundColor": "rgba(255, 255, 255, 0.95)",
+            "borderColor": "#2c3e50",
+            "textStyle": {"color": "#1a1a1a"},
         },
         "grid": {
             "left": "15%",
@@ -707,7 +707,7 @@ def _render_weekly_overview(
             "data": day_labels,
             "axisLabel": {"color": "#888", "fontSize": 10},
             "axisLine": {"lineStyle": {"color": "#444"}},
-            "splitArea": {"show": True, "areaStyle": {"color": ["rgba(0,0,0,0)", "rgba(255,255,255,0.02)"]}},
+            "splitArea": {"show": True, "areaStyle": {"color": ["rgba(0,0,0,0)", "rgba(236,240,241,0.1)"]}},
         },
         "yAxis": {
             "type": "category",
@@ -725,7 +725,7 @@ def _render_weekly_overview(
             "itemHeight": 100,
             "textStyle": {"color": "#888"},
             "inRange": {
-                "color": ["#1a1a2e", "#2d4a3e", "#27ae60", "#f39c12", "#e74c3c"],
+                "color": ["#ecf0f1", "#d5dbdb", "#27ae60", "#f39c12", "#e74c3c"],
             },
         },
         "series": [{
@@ -734,12 +734,12 @@ def _render_weekly_overview(
             "data": data,
             "label": {
                 "show": True,
-                "color": "#fff",
+                "color": "#1a1a1a",
                 "fontSize": 12,
                 "fontWeight": "bold",
             },
             "emphasis": {
-                "itemStyle": {"shadowBlur": 10, "shadowColor": "rgba(0,0,0,0.5)"},
+                "itemStyle": {"shadowBlur": 10, "shadowColor": "rgba(52, 152, 219, 0.3)"},
             },
             "markLine": {
                 "silent": True,
