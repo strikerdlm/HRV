@@ -427,7 +427,39 @@ The app accepts text files with one RR interval per line in **milliseconds**:
   ```
 * **Export JSON (unzipped)**: You can also upload individual Garmin export `.json` files (e.g., `UDSFile_*.json`, `*_sleepData.json`) in **User Profile → Data → Wrist Monitoring (Vivosmart 5)**.
 * **FIT Files**: Export individual activities from Garmin Connect web
-* **API Access**: Configure `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env`
+* **API Access**: Configure `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env` (see Configuration below)
+
+### Environment Configuration
+
+The application uses a **portable environment loader** (`app/env_loader.py`) that automatically finds and loads your `.env` file from the project root, regardless of computer username or absolute path.
+
+**Supported variables** (create `.env` in project root):
+```env
+GARMIN_EMAIL=your_email@example.com
+GARMIN_PASSWORD=your_password
+NASA_API_KEY=your_nasa_api_key
+ACCUWEATHER_API_KEY=your_accuweather_key
+OPENAI_API_KEY=sk-proj-...
+```
+
+**How it works:**
+- Searches upward from `app/` for marker files (`.env`, `README.md`, `.git`, etc.)
+- Loads environment variables without hardcoded paths
+- Works across different computers and directory structures
+- Falls back gracefully if `.env` is not found
+
+**Manual usage** (optional):
+```python
+from env_loader import load_env_file, get_env_variable
+
+# Method 1: Automatic loading
+load_env_file(verbose=True)
+
+# Method 2: Get specific variables with validation
+api_key = get_env_variable("NASA_API_KEY", required=True)
+```
+
+See `app/env_loader_example.py` for complete examples.
 
 ### ActiGraph GT3X Files
 
