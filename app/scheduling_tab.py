@@ -3272,7 +3272,7 @@ def _render_eva_references() -> None:
                 border-radius: 6px;
                 font-size: 0.9em;
             ">
-                <strong style="color: #1e40af;">Key Finding:</strong>
+                <strong style="color: #1e40af !important; font-weight: bold;">Key Finding:</strong>
                 <span style="color: #f5f5f5;"> {key_finding}</span>
             </div>
         </div>
