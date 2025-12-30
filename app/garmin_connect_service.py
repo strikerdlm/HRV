@@ -13,6 +13,7 @@ import logging
 import os
 from dataclasses import asdict
 from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from typing import Any, Dict, Final, Iterable, List, Optional, Tuple
 
 import pandas as pd
@@ -34,6 +35,7 @@ try:
         GarminConnectConnectionError,
         GarminConnectTooManyRequestsError,
     )
+    from garth.exc import GarthException, GarthHTTPError  # type: ignore
 
     GARMIN_LIB_AVAILABLE = True
 except Exception:  # pragma: no cover - optional dependency
@@ -41,6 +43,8 @@ except Exception:  # pragma: no cover - optional dependency
     GarminConnectAuthenticationError = Exception  # type: ignore
     GarminConnectConnectionError = Exception  # type: ignore
     GarminConnectTooManyRequestsError = Exception  # type: ignore
+    GarthException = Exception  # type: ignore
+    GarthHTTPError = Exception  # type: ignore
     GARMIN_LIB_AVAILABLE = False
 
 from user_database import GarminDailyMetrics
@@ -129,27 +133,124 @@ def _record_has_any_metric(record: GarminDailyMetrics) -> bool:
 
 
 class GarminConnectClient:
-    """Context-managed Garmin client with defensive login."""
+    """Context-managed Garmin client with defensive login and session persistence."""
 
     def __init__(self) -> None:
         self.client: Optional[Garmin] = None
+        # Token storage directory (matches garminconnect default: ~/.garminconnect)
+        self._tokenstore_dir = Path.home() / ".garminconnect"
+        self._tokenstore_dir.mkdir(exist_ok=True)
 
     def __enter__(self) -> Garmin:
         if not GARMIN_LIB_AVAILABLE:
             raise GarminAuthError("python-garminconnect is not installed (see requirements.txt).")
         email, password = _env_credentials()
+        
+        # Token storage path (matches garminconnect default: ~/.garminconnect)
+        tokenstore_path = str(self._tokenstore_dir)
+        
+        # First try to login with stored tokens (following official repository pattern)
+        # This avoids MFA prompts on subsequent logins
         try:
-            # Note: Do NOT use return_on_mfa=True as it prevents full login
-            # and leaves display_name=None, causing 403 errors on stats endpoints
-            self.client = Garmin(email=email, password=password, is_cn=False)  # type: ignore[arg-type]
-            self.client.login()
+            _LOGGER.info("Attempting to use saved authentication tokens...")
+            self.client = Garmin()  # type: ignore[arg-type]
+            # login() can take tokenstore path - it will try to load from there first
+            self.client.login(tokenstore_path)  # type: ignore[arg-type]
+            _LOGGER.info("Successfully logged in using saved tokens")
+            return self.client
+        except (
+            FileNotFoundError,
+            GarthHTTPError,
+            GarminConnectAuthenticationError,
+            GarminConnectConnectionError,
+        ):
+            # No valid tokens found or tokens expired - need fresh login
+            _LOGGER.info("No valid tokens found. Requesting fresh login credentials.")
+            # Continue to fresh login below
+        except Exception as exc:
+            # Other errors during token restore - log and continue to fresh login
+            _LOGGER.info(f"Token restore failed: {exc}. Attempting fresh login.")
+        
+        # Fresh login flow (with MFA support if needed)
+        # Following official repository pattern from example.py
+        # Note: In non-interactive environments (like Streamlit), MFA cannot be handled automatically
+        # Users must either disable MFA or pre-generate tokens using example.py
+        try:
+            # Use return_on_mfa=True to detect MFA requirement (following repository pattern)
+            self.client = Garmin(
+                email=email, password=password, is_cn=False, return_on_mfa=True  # type: ignore[arg-type]
+            )
+            result1, result2 = self.client.login()  # type: ignore[assignment]
+            
+            # Check if MFA is required (following repository pattern)
+            if result1 == "needs_mfa":
+                raise GarminAuthError(
+                    "Garmin account requires Multi-Factor Authentication (MFA/2FA). "
+                    "MFA cannot be handled automatically in this non-interactive environment. "
+                    "\n\nTo resolve this issue, you have two options: "
+                    "\n\nOption 1 (Recommended): Pre-generate authentication tokens "
+                    "\n  1. Run the official example.py script from python-garminconnect: "
+                    "\n     python -c \"from garminconnect import Garmin; import os; "
+                    "g = Garmin(os.getenv('GARMIN_EMAIL'), os.getenv('GARMIN_PASSWORD'), return_on_mfa=True); "
+                    "r1, r2 = g.login(); "
+                    "g.resume_login(r2, input('MFA code: ')) if r1 == 'needs_mfa' else None; "
+                    "g.garth.dump('~/.garminconnect')\" "
+                    "\n  2. This will prompt for MFA once and save tokens for future use "
+                    "\n  3. The saved tokens will be used automatically on subsequent runs "
+                    "\n\nOption 2: Temporarily disable MFA/2FA in your Garmin account settings "
+                    "\n  (Not recommended for security reasons) "
+                    f"\n\nToken storage location: {tokenstore_path}"
+                )
+            
+            # Save tokens for future use (reduces MFA prompts)
+            # Following official repository pattern: garmin.garth.dump(tokenstore_path)
+            try:
+                if hasattr(self.client, 'garth'):
+                    self.client.garth.dump(tokenstore_path)  # type: ignore[attr-defined]
+                    _LOGGER.info(f"Authentication tokens saved to: {tokenstore_path}")
+            except Exception:
+                # Token save failed, but login succeeded so continue
+                # Note: garminconnect may have already saved tokens automatically
+                _LOGGER.debug("Could not explicitly save Garmin tokens (may be auto-saved)")
         except GarminConnectAuthenticationError as exc:
+            error_msg = str(exc)
+            if "GARMIN Authentication Application" in error_msg or "Unexpected title" in error_msg:
+                raise GarminAuthError(
+                    "Garmin authentication requires additional verification (MFA/2FA). "
+                    "The 'GARMIN Authentication Application' error indicates your account requires "
+                    "multi-factor authentication that cannot be automated. "
+                    "\n\nPossible solutions: "
+                    "1) Temporarily disable MFA/2FA in your Garmin account settings, "
+                    "2) Use an app-specific password if available, "
+                    "3) Verify your GARMIN_EMAIL and GARMIN_PASSWORD in .env are correct. "
+                    f"\n\nOriginal error: {exc}"
+                ) from exc
             raise GarminAuthError(f"Garmin authentication failed: {exc}") from exc
         except GarminConnectConnectionError as exc:
+            error_msg = str(exc)
+            if "GARMIN Authentication Application" in error_msg or "Unexpected title" in error_msg:
+                raise GarminAuthError(
+                    "Garmin SSO authentication error: 'GARMIN Authentication Application'. "
+                    "This typically means: "
+                    "1) Your account requires MFA/2FA that cannot be automated, "
+                    "2) Garmin has changed their authentication flow (library may need update), or "
+                    "3) Your credentials are incorrect. "
+                    "\n\nPlease verify your GARMIN_EMAIL and GARMIN_PASSWORD in .env. "
+                    "If MFA is enabled, you may need to disable it temporarily or use a different authentication method. "
+                    f"\n\nOriginal error: {exc}"
+                ) from exc
             raise GarminAuthError(f"Garmin connection error: {exc}") from exc
         except GarminConnectTooManyRequestsError as exc:
             raise GarminAuthError(f"Garmin rate limit reached: {exc}") from exc
         except Exception as exc:  # pragma: no cover - defensive
+            error_msg = str(exc)
+            if "GARMIN Authentication Application" in error_msg or "Unexpected title" in error_msg:
+                raise GarminAuthError(
+                    "Garmin authentication error: 'GARMIN Authentication Application'. "
+                    "Your account likely requires MFA/2FA that cannot be automated. "
+                    "Please check your .env credentials and consider temporarily disabling MFA. "
+                    f"\n\nOriginal error: {exc}"
+                ) from exc
             raise GarminAuthError(f"Garmin login failed: {exc}") from exc
         return self.client
 
