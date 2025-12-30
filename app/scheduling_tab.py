@@ -1836,6 +1836,326 @@ def _render_eva_procedures_panel(
         _render_eva_references()
 
 
+def _render_eva_radiation_metrics_plot(
+    realtime_data: Any,
+    selected_env: Any,
+    eva_duration_hours: float,
+    s_scale: int,
+    g_scale: int,
+) -> None:
+    """Render comprehensive EVA radiation metrics plot for Mission Control.
+    
+    Displays the most critical radiation metrics used by Mission Control for EVA
+    decision-making: Proton Flux (S-scale zones), Kp Index (G-scale zones), and
+    estimated EVA dose rate with threshold references.
+    
+    References:
+    - NOAA Space Weather Scales: S-Scale (Solar Radiation Storms) and G-Scale (Geomagnetic Storms)
+    - NASA-STD-3001 Vol 1 Rev B (2022). Crew Health Standard.
+    - Space Weather Prediction Center (SWPC) Operational Thresholds
+    
+    Args:
+        realtime_data: Real-time space weather data object
+        selected_env: Selected radiation environment
+        eva_duration_hours: Planned EVA duration
+        s_scale: NOAA S-scale value (0-5)
+        g_scale: NOAA G-scale value (0-5)
+    """
+    if render_echarts is None:
+        return
+    
+    # Extract current values
+    proton_flux = realtime_data.proton_flux_pfu if realtime_data.proton_flux_pfu else 0.1
+    kp_index = realtime_data.kp_index if realtime_data.kp_index else 2.0
+    
+    # Calculate estimated EVA dose rate
+    from radiation_exposure import DOSE_RATE_DATABASE, get_environment_display_name
+    dose_rate = DOSE_RATE_DATABASE.get(selected_env)
+    if dose_rate:
+        eva_rate_hr = (dose_rate.nominal_msv_per_day * dose_rate.eva_multiplier) / 24.0
+        # Adjust for space weather
+        if s_scale >= 3:
+            eva_rate_hr *= (2.0 + s_scale)
+        elif s_scale >= 1:
+            eva_rate_hr *= (1.5 + 0.3 * s_scale)
+    else:
+        eva_rate_hr = 0.5  # Default LEO estimate
+    
+    # S-Scale thresholds (Proton Flux >10 MeV, pfu)
+    s_scale_thresholds = [0.1, 10, 100, 1000, 10000, 100000]  # S0-S5
+    s_scale_labels = ["S0", "S1", "S2", "S3", "S4", "S5"]
+    s_scale_colors = ["#27ae60", "#3498db", "#f39c12", "#fd7e14", "#e74c3c", "#8b0000"]
+    
+    # G-Scale thresholds (Kp index)
+    g_scale_thresholds = [0, 5, 6, 7, 8, 9]  # G0-G5
+    g_scale_labels = ["G0", "G1", "G2", "G3", "G4", "G5"]
+    g_scale_colors = ["#27ae60", "#3498db", "#f39c12", "#fd7e14", "#e74c3c", "#8b0000"]
+    
+    # EVA dose rate thresholds (mSv/hr)
+    eva_normal_max = 0.8  # Normal LEO EVA
+    eva_caution = 2.0      # Caution threshold
+    eva_warning = 5.0      # Warning threshold
+    eva_no_go = 10.0       # NO-GO threshold
+    
+    # Calculate dynamic axis bounds
+    # Proton flux axis (log scale)
+    proton_min, proton_max = _auto_axis_bounds(
+        proton_flux,
+        *s_scale_thresholds[1:],
+        padding_pct=0.2,
+        min_floor=0.01,
+    )
+    # Use log scale, so convert to linear for display
+    proton_max = max(proton_max, proton_flux * 2, 1000)
+    
+    # Kp index axis
+    kp_min, kp_max = _auto_axis_bounds(
+        kp_index,
+        *g_scale_thresholds,
+        padding_pct=0.15,
+        min_floor=0.0,
+        max_ceil=9.0,
+    )
+    
+    # EVA dose rate axis
+    eva_min, eva_max = _auto_axis_bounds(
+        eva_rate_hr,
+        eva_normal_max,
+        eva_caution,
+        eva_warning,
+        eva_no_go,
+        padding_pct=0.2,
+        min_floor=0.0,
+    )
+    
+    # Build S-scale zones (stacked areas for visual reference)
+    s_zone_data = []
+    for i in range(len(s_scale_thresholds) - 1):
+        zone_min = s_scale_thresholds[i]
+        zone_max = s_scale_thresholds[i + 1]
+        # Create a small range for visualization
+        s_zone_data.append({
+            "name": s_scale_labels[i],
+            "value": [zone_min, zone_max],
+            "itemStyle": {"color": s_scale_colors[i] + "40"},  # 40 = 25% opacity
+        })
+    
+    # Build G-scale zones
+    g_zone_data = []
+    for i in range(len(g_scale_thresholds) - 1):
+        zone_min = g_scale_thresholds[i]
+        zone_max = g_scale_thresholds[i + 1]
+        g_zone_data.append({
+            "name": g_scale_labels[i],
+            "value": [zone_min, zone_max],
+            "itemStyle": {"color": g_scale_colors[i] + "40"},
+        })
+    
+    # Determine current S-scale and G-scale levels
+    current_s_scale = 0
+    for i, threshold in enumerate(s_scale_thresholds[1:], start=1):
+        if proton_flux >= threshold:
+            current_s_scale = i
+        else:
+            break
+    
+    current_g_scale = 0
+    for i, threshold in enumerate(g_scale_thresholds[1:], start=1):
+        if kp_index >= threshold:
+            current_g_scale = i
+        else:
+            break
+    
+    # Create a multi-metric bar chart with proper scaling
+    # Use separate x-axis scales for each metric by using a grouped approach
+    # For Mission Control, show current values with threshold reference lines
+    
+    # Normalize values to percentage of critical threshold for visual comparison
+    # Proton flux: normalize to S3 threshold (1000 pfu) as critical
+    proton_normalized = min((proton_flux / 1000.0) * 100, 200)  # Cap at 200% for display
+    
+    # Kp index: normalize to G3 threshold (7.0) as critical  
+    kp_normalized = min((kp_index / 7.0) * 100, 150)  # Cap at 150% for display
+    
+    # EVA dose rate: normalize to NO-GO threshold (10.0 mSv/hr) as critical
+    eva_normalized = min((eva_rate_hr / eva_no_go) * 100, 150)  # Cap at 150% for display
+    
+    option = {
+        "title": {
+            "text": "EVA Radiation Metrics Dashboard",
+            "subtext": f"Real-time monitoring | Environment: {get_environment_display_name(selected_env)} | EVA Duration: {eva_duration_hours:.1f} hr",
+            "left": "center",
+            "textStyle": {"fontSize": 16, "fontWeight": "bold", "color": "#1a1a1a"},
+            "subtextStyle": {"fontSize": 11, "color": "#2c3e50"},
+        },
+        "backgroundColor": "transparent",
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "shadow"},
+            "formatter": (
+                f"function(params) {{"
+                f"  let result = '';"
+                f"  params.forEach(function(item) {{"
+                f"    if (item.seriesName === 'Proton Flux') {{"
+                f"      result += item.marker + ' Proton Flux (>10 MeV): ' + {proton_flux:.2f} + ' pfu (S{current_s_scale})<br/>';"
+                f"    }} else if (item.seriesName === 'Kp Index') {{"
+                f"      result += item.marker + ' Kp Index: ' + {kp_index:.1f} + ' (G{current_g_scale})<br/>';"
+                f"    }} else if (item.seriesName === 'EVA Dose Rate') {{"
+                f"      result += item.marker + ' EVA Dose Rate: ' + {eva_rate_hr:.3f} + ' mSv/hr<br/>';"
+                f"    }}"
+                f"  }});"
+                f"  return result;"
+                f"}}"
+            ),
+        },
+        "legend": {
+            "data": ["Proton Flux (>10 MeV)", "Kp Index", "EVA Dose Rate", "Critical Threshold"],
+            "bottom": 5,
+            "textStyle": {"fontSize": 10, "color": "#1a1a1a"},
+        },
+        "grid": {
+            "left": "15%",
+            "right": "10%",
+            "top": "20%",
+            "bottom": "20%",
+            "containLabel": True,
+        },
+        "xAxis": {
+            "type": "value",
+            "name": "Normalized Value (% of Critical Threshold)",
+            "nameLocation": "middle",
+            "nameGap": 30,
+            "nameTextStyle": {"fontSize": 11, "fontWeight": "bold", "color": "#1a1a1a"},
+            "min": 0,
+            "max": 200,
+            "axisLabel": {
+                "formatter": "{value}%",
+                "color": "#1a1a1a",
+                "fontSize": 10,
+            },
+            "axisLine": {"lineStyle": {"color": "#2c3e50"}},
+            "splitLine": {"show": True, "lineStyle": {"color": "#ecf0f1", "type": "dashed"}},
+        },
+        "yAxis": {
+            "type": "category",
+            "data": [
+                f"Proton Flux (>10 MeV, pfu)<br/><span style='font-size:10px;color:#666;'>Current: {proton_flux:.2f} pfu | S{current_s_scale}</span>",
+                f"Kp Index<br/><span style='font-size:10px;color:#666;'>Current: {kp_index:.1f} | G{current_g_scale}</span>",
+                f"EVA Dose Rate (mSv/hr)<br/><span style='font-size:10px;color:#666;'>Current: {eva_rate_hr:.3f} mSv/hr</span>",
+            ],
+            "axisLabel": {
+                "color": "#1a1a1a",
+                "fontSize": 11,
+                "fontWeight": "bold",
+                "rich": {
+                    "normal": {"fontSize": 11, "fontWeight": "bold", "color": "#1a1a1a"},
+                    "sub": {"fontSize": 10, "color": "#666"},
+                },
+            },
+            "axisLine": {"lineStyle": {"color": "#2c3e50"}},
+        },
+        "series": [
+            # Proton Flux bar
+            {
+                "name": "Proton Flux (>10 MeV)",
+                "type": "bar",
+                "data": [proton_normalized, None, None],
+                "itemStyle": {
+                    "color": s_scale_colors[min(current_s_scale, 5)],
+                },
+                "label": {
+                    "show": True,
+                    "position": "right",
+                    "formatter": f"{{value}}% ({proton_flux:.2f} pfu, S{current_s_scale})",
+                    "color": "#1a1a1a",
+                    "fontSize": 10,
+                },
+            },
+            # Kp Index bar
+            {
+                "name": "Kp Index",
+                "type": "bar",
+                "data": [None, kp_normalized, None],
+                "itemStyle": {
+                    "color": g_scale_colors[min(current_g_scale, 5)],
+                },
+                "label": {
+                    "show": True,
+                    "position": "right",
+                    "formatter": f"{{value}}% ({kp_index:.1f}, G{current_g_scale})",
+                    "color": "#1a1a1a",
+                    "fontSize": 10,
+                },
+            },
+            # EVA Dose Rate bar
+            {
+                "name": "EVA Dose Rate",
+                "type": "bar",
+                "data": [None, None, eva_normalized],
+                "itemStyle": {
+                    "color": (
+                        "#e74c3c" if eva_rate_hr >= eva_no_go 
+                        else "#fd7e14" if eva_rate_hr >= eva_warning 
+                        else "#f39c12" if eva_rate_hr >= eva_caution 
+                        else "#27ae60"
+                    ),
+                },
+                "label": {
+                    "show": True,
+                    "position": "right",
+                    "formatter": f"{{value}}% ({eva_rate_hr:.3f} mSv/hr)",
+                    "color": "#1a1a1a",
+                    "fontSize": 10,
+                },
+            },
+            # Critical threshold reference line (100%)
+            {
+                "name": "Critical Threshold",
+                "type": "line",
+                "data": [100, 100, 100],
+                "lineStyle": {"type": "dashed", "color": "#e74c3c", "width": 2},
+                "markLine": {
+                    "silent": True,
+                    "label": {
+                        "show": True,
+                        "formatter": "Critical (100%)",
+                        "position": "end",
+                        "color": "#e74c3c",
+                        "fontSize": 9,
+                        "fontWeight": "bold",
+                    },
+                    "lineStyle": {"type": "dashed", "color": "#e74c3c", "width": 2},
+                    "data": [{"xAxis": 100}],
+                },
+            },
+        ],
+        "aria": {
+            "enabled": True,
+            "label": {
+                "description": (
+                    f"EVA Radiation Metrics Dashboard. "
+                    f"Proton Flux: {proton_flux:.2f} pfu (S{current_s_scale} scale). "
+                    f"Kp Index: {kp_index:.1f} (G{current_g_scale} scale). "
+                    f"EVA Dose Rate: {eva_rate_hr:.3f} mSv/hr."
+                ),
+            },
+        },
+    }
+    
+    render_echarts(option, height_px=380)
+    
+    # Caption with interpretation
+    st.caption(f"""
+    **What you're seeing:** Real-time EVA radiation metrics dashboard showing the three most critical parameters 
+    used by Mission Control for EVA decision-making. Values are normalized to percentage of critical threshold 
+    for visual comparison. **Proton Flux (>10 MeV)** indicates solar particle event activity (S{current_s_scale} scale: 
+    {s_scale_labels[min(current_s_scale, 5)]}). **Kp Index** reflects geomagnetic storm conditions (G{current_g_scale} scale: 
+    {g_scale_labels[min(current_g_scale, 5)]}). **EVA Dose Rate** shows estimated radiation exposure during the planned EVA. 
+    The red dashed line at 100% indicates the critical threshold for each metric. **Sources:** NOAA Space Weather 
+    Prediction Center, NASA-STD-3001 Vol 1 Rev B (2022), Space Weather Prediction Center Operational Thresholds.
+    """)
+
+
 def _render_radiation_assessment_panel() -> None:
     """Render radiation environment assessment for EVA GO/NO-GO decision.
     
@@ -2222,6 +2542,16 @@ def _render_radiation_assessment_panel() -> None:
     if realtime_data and realtime_data.is_real_time:
         st.markdown("---")
         st.markdown("##### 📡 Additional Real-Time Data")
+        
+        # Render comprehensive radiation metrics plot
+        if render_echarts is not None:
+            _render_eva_radiation_metrics_plot(
+                realtime_data=realtime_data,
+                selected_env=selected_env,
+                eva_duration_hours=eva_duration,
+                s_scale=s_scale,
+                g_scale=g_scale,
+            )
         
         col_rt1, col_rt2, col_rt3 = st.columns(3)
         
