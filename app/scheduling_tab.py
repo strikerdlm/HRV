@@ -1836,6 +1836,271 @@ def _render_eva_procedures_panel(
         _render_eva_references()
 
 
+def _render_space_weather_dashboard(realtime_data: Any) -> None:
+    """Render beautiful ECharts dashboard for space weather real-time data.
+    
+    Displays F10.7 Flux, Active CMEs, Solar Wind parameters, IMF, and Flare Probabilities
+    in an attractive, publication-quality visualization.
+    
+    References:
+    - NOAA Space Weather Prediction Center Operational Thresholds
+    - SpaceWeatherLive API Documentation
+    
+    Args:
+        realtime_data: Real-time space weather data object
+    """
+    if render_echarts is None:
+        return
+    
+    # Prepare flare probability data
+    flare_probs = []
+    flare_labels = []
+    flare_colors = []
+    
+    if realtime_data.c_class_flare_prob:
+        flare_probs.append(realtime_data.c_class_flare_prob)
+        flare_labels.append("C-Class")
+        flare_colors.append("#3498db")  # Blue for minor
+    
+    if realtime_data.m_class_flare_prob:
+        flare_probs.append(realtime_data.m_class_flare_prob)
+        flare_labels.append("M-Class")
+        flare_colors.append("#f39c12")  # Orange for moderate
+    
+    if realtime_data.x_class_flare_prob:
+        flare_probs.append(realtime_data.x_class_flare_prob)
+        flare_labels.append("X-Class")
+        flare_colors.append("#e74c3c")  # Red for extreme
+    
+    # Prepare other metrics for display
+    metrics_data = []
+    if realtime_data.f107_flux:
+        metrics_data.append({
+            "name": "F10.7 Flux",
+            "value": realtime_data.f107_flux,
+            "unit": " sfu",
+            "color": "#3498db",
+        })
+    
+    if realtime_data.active_cmes:
+        cme_count = len(realtime_data.active_cmes)
+        metrics_data.append({
+            "name": "Active CMEs",
+            "value": cme_count,
+            "unit": "",
+            "color": "#e74c3c" if cme_count > 3 else "#f39c12" if cme_count > 1 else "#27ae60",
+        })
+    
+    if realtime_data.solar_wind_speed_kms:
+        metrics_data.append({
+            "name": "Solar Wind\nSpeed",
+            "value": realtime_data.solar_wind_speed_kms,
+            "unit": " km/s",
+            "color": "#9b59b6",
+        })
+    
+    if realtime_data.solar_wind_density_pcc:
+        metrics_data.append({
+            "name": "Solar Wind\nDensity",
+            "value": realtime_data.solar_wind_density_pcc,
+            "unit": " p/cm³",
+            "color": "#16a085",
+        })
+    
+    if realtime_data.imf_bt_nt:
+        metrics_data.append({
+            "name": "IMF Bt",
+            "value": realtime_data.imf_bt_nt,
+            "unit": " nT",
+            "color": "#34495e",
+        })
+    
+    if realtime_data.imf_bz_nt:
+        metrics_data.append({
+            "name": "IMF Bz",
+            "value": realtime_data.imf_bz_nt,
+            "unit": " nT",
+            "color": "#2c3e50",
+        })
+    
+    # Calculate dynamic axis bounds for metrics
+    if metrics_data:
+        metric_values = [m["value"] for m in metrics_data]
+        metric_min, metric_max = _auto_axis_bounds(
+            *metric_values,
+            padding_pct=0.2,
+            min_floor=0.0,
+        )
+    else:
+        metric_min, metric_max = 0.0, 100.0
+    
+    # Create the dashboard visualization
+    option = {
+        "title": {
+            "text": "Space Weather Real-Time Dashboard",
+            "subtext": f"Source: {realtime_data.data_source} | Updated: {realtime_data.fetch_timestamp.strftime('%Y-%m-%d %H:%M:%S UTC') if realtime_data.fetch_timestamp else 'Unknown'}",
+            "left": "center",
+            "textStyle": {"fontSize": 16, "fontWeight": "bold", "color": "#1a1a1a"},
+            "subtextStyle": {"fontSize": 11, "color": "#2c3e50"},
+        },
+        "backgroundColor": "transparent",
+        "tooltip": {
+            "trigger": "axis",
+            "axisPointer": {"type": "shadow"},
+        },
+        "legend": {
+            "data": ["Flare Probability"] + ([m["name"].replace("\n", " ") for m in metrics_data] if metrics_data else []),
+            "bottom": 5,
+            "textStyle": {"fontSize": 10, "color": "#1a1a1a"},
+            "type": "scroll",
+        },
+        "grid": [
+            {
+                "left": "10%",
+                "right": "5%",
+                "top": "20%",
+                "bottom": "55%",
+                "height": "35%",
+                "containLabel": True,
+            },
+            {
+                "left": "10%",
+                "right": "5%",
+                "top": "60%",
+                "bottom": "10%",
+                "height": "30%",
+                "containLabel": True,
+            },
+        ],
+        "xAxis": [
+            {
+                "type": "category",
+                "gridIndex": 0,
+                "data": flare_labels,
+                "axisLabel": {"color": "#1a1a1a", "fontSize": 11, "fontWeight": "bold"},
+                "axisLine": {"lineStyle": {"color": "#2c3e50"}},
+            },
+            {
+                "type": "category",
+                "gridIndex": 1,
+                "data": [m["name"] for m in metrics_data] if metrics_data else [],
+                "axisLabel": {
+                    "color": "#1a1a1a",
+                    "fontSize": 10,
+                    "rotate": 0,
+                    "interval": 0,
+                },
+                "axisLine": {"lineStyle": {"color": "#2c3e50"}},
+            },
+        ],
+        "yAxis": [
+            {
+                "type": "value",
+                "gridIndex": 0,
+                "name": "Probability (%)",
+                "nameLocation": "middle",
+                "nameGap": 40,
+                "nameTextStyle": {"fontSize": 11, "fontWeight": "bold", "color": "#1a1a1a"},
+                "min": 0,
+                "max": 100,
+                "axisLabel": {
+                    "formatter": "{value}%",
+                    "color": "#1a1a1a",
+                    "fontSize": 10,
+                },
+                "splitLine": {"show": True, "lineStyle": {"color": "#ecf0f1", "type": "dashed"}},
+                "axisLine": {"lineStyle": {"color": "#2c3e50"}},
+            },
+            {
+                "type": "value",
+                "gridIndex": 1,
+                "name": "Value",
+                "nameLocation": "middle",
+                "nameGap": 40,
+                "nameTextStyle": {"fontSize": 11, "fontWeight": "bold", "color": "#1a1a1a"},
+                "min": metric_min,
+                "max": metric_max,
+                "axisLabel": {
+                    "formatter": "{value}",
+                    "color": "#1a1a1a",
+                    "fontSize": 10,
+                },
+                "splitLine": {"show": True, "lineStyle": {"color": "#ecf0f1", "type": "dashed"}},
+                "axisLine": {"lineStyle": {"color": "#2c3e50"}},
+            },
+        ],
+        "series": [
+            # Flare Probabilities Bar Chart
+            {
+                "name": "Flare Probability",
+                "type": "bar",
+                "xAxisIndex": 0,
+                "yAxisIndex": 0,
+                "data": [
+                    {
+                        "value": prob,
+                        "itemStyle": {"color": color},
+                        "label": {
+                            "show": True,
+                            "position": "top",
+                            "formatter": f"{prob:.0f}%",
+                            "color": "#1a1a1a",
+                            "fontSize": 11,
+                            "fontWeight": "bold",
+                        },
+                    }
+                    for prob, color in zip(flare_probs, flare_colors)
+                ] if flare_probs else [],
+            },
+            # Other Metrics Bar Chart
+            {
+                "name": "Space Weather Metrics",
+                "type": "bar",
+                "xAxisIndex": 1,
+                "yAxisIndex": 1,
+                "data": [
+                    {
+                        "value": m["value"],
+                        "itemStyle": {"color": m["color"]},
+                        "label": {
+                            "show": True,
+                            "position": "top",
+                            "formatter": (
+                                f"{m['value']:.1f}{m['unit']}" if m["unit"] 
+                                else f"{m['value']:.0f}"
+                            ),
+                            "color": "#1a1a1a",
+                            "fontSize": 10,
+                            "fontWeight": "bold",
+                        },
+                    }
+                    for m in metrics_data
+                ] if metrics_data else [],
+            },
+        ],
+        "aria": {
+            "enabled": True,
+            "label": {
+                "description": "Space Weather Real-Time Dashboard showing flare probabilities and space environment metrics.",
+            },
+        },
+    }
+    
+    render_echarts(option, height_px=500)
+    
+    # Caption with interpretation
+    st.caption(f"""
+    **What you're seeing:** Real-time space weather dashboard showing solar flare probabilities and key space 
+    environment parameters. **Flare Probabilities** indicate the likelihood of C-Class (minor), M-Class (moderate), 
+    and X-Class (extreme) solar flares occurring in the next 24-48 hours. **F10.7 Flux** measures solar radio 
+    emission at 10.7 cm wavelength, indicating solar activity levels. **Active CMEs** shows the number of 
+    Coronal Mass Ejections currently propagating through space. **Solar Wind** parameters (speed and density) 
+    and **Interplanetary Magnetic Field (IMF)** components (Bt, Bz) affect geomagnetic activity and radiation 
+    environment. **Sources:** NOAA Space Weather Prediction Center, SpaceWeatherLive API, NASA Space Radiation 
+    Analysis Group.
+    """)
+
+
 def _render_eva_radiation_metrics_plot(
     realtime_data: Any,
     selected_env: Any,
@@ -2553,39 +2818,9 @@ def _render_radiation_assessment_panel() -> None:
                 g_scale=g_scale,
             )
         
-        col_rt1, col_rt2, col_rt3 = st.columns(3)
-        
-        with col_rt1:
-            if realtime_data.solar_wind_speed_kms:
-                st.metric("Solar Wind Speed", f"{realtime_data.solar_wind_speed_kms:.0f} km/s")
-            if realtime_data.solar_wind_density_pcc:
-                st.metric("Solar Wind Density", f"{realtime_data.solar_wind_density_pcc:.1f} p/cm³")
-        
-        with col_rt2:
-            if realtime_data.imf_bt_nt:
-                st.metric("IMF Bt", f"{realtime_data.imf_bt_nt:.1f} nT")
-            if realtime_data.imf_bz_nt:
-                st.metric("IMF Bz", f"{realtime_data.imf_bz_nt:.1f} nT")
-        
-        with col_rt3:
-            if realtime_data.f107_flux:
-                st.metric("F10.7 Flux", f"{realtime_data.f107_flux:.1f} sfu")
-            if realtime_data.active_cmes:
-                st.metric("Active CMEs", len(realtime_data.active_cmes))
-        
-        # Flare probabilities
-        if any([realtime_data.c_class_flare_prob, realtime_data.m_class_flare_prob, realtime_data.x_class_flare_prob]):
-            st.markdown("**Flare Probabilities:**")
-            flare_cols = st.columns(3)
-            with flare_cols[0]:
-                if realtime_data.c_class_flare_prob:
-                    st.metric("C-Class", f"{realtime_data.c_class_flare_prob:.0f}%")
-            with flare_cols[1]:
-                if realtime_data.m_class_flare_prob:
-                    st.metric("M-Class", f"{realtime_data.m_class_flare_prob:.0f}%")
-            with flare_cols[2]:
-                if realtime_data.x_class_flare_prob:
-                    st.metric("X-Class", f"{realtime_data.x_class_flare_prob:.0f}%")
+        # Render beautiful space weather dashboard
+        if render_echarts is not None:
+            _render_space_weather_dashboard(realtime_data)
     
     # Dose limits reference
     with st.expander("📊 NASA Radiation Dose Limits Reference", expanded=False):
