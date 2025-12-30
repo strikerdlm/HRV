@@ -1487,6 +1487,492 @@ def _render_spatial_conflicts_panel(
 
 
 # ---------------------------------------------------------------------------
+# Circadian Rhythm Optimization Panel (NASA Mission Control Standard)
+# ---------------------------------------------------------------------------
+
+def _render_circadian_optimization_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render circadian rhythm optimization panel (NASA Mission Control standard)."""
+    st.markdown("### 🌅 Circadian Rhythm Optimization")
+    st.caption("Get optimal activity times based on individual chronotypes")
+    
+    crew_list = list(engine.crew_members.values())
+    if not crew_list:
+        st.info("No crew members configured.")
+        return
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        selected_crew_name = st.selectbox(
+            "Select Crew Member",
+            options=[c.name for c in crew_list],
+            key="circadian_crew_select",
+        )
+        selected_crew = next((c for c in crew_list if c.name == selected_crew_name), None)
+    
+    with col2:
+        activity_options = {aid: adef.name for aid, adef in ALL_ACTIVITIES.items() if adef.id not in FIXED_ACTIVITIES}
+        selected_activity_id = st.selectbox(
+            "Select Activity",
+            options=list(activity_options.keys()),
+            format_func=lambda x: activity_options[x],
+            key="circadian_activity_select",
+        )
+    
+    if selected_crew and selected_activity_id:
+        activity_def = ALL_ACTIVITIES.get(selected_activity_id)
+        if activity_def:
+            duration = st.number_input(
+                "Duration (minutes)",
+                min_value=15,
+                max_value=480,
+                value=activity_def.duration_min,
+                step=15,
+                key="circadian_duration",
+            )
+            
+            if st.button("🔍 Find Optimal Times", key="circadian_optimize_btn"):
+                suggestions = engine.suggest_optimal_times(
+                    crew_id=selected_crew.crew_id,
+                    activity_id=selected_activity_id,
+                    schedule_date=schedule_date,
+                    duration_minutes=duration,
+                )
+                
+                if suggestions:
+                    st.success(f"✅ Found {len(suggestions)} optimal time slots")
+                    
+                    # Display top suggestions
+                    st.markdown("#### 🎯 Top Recommendations")
+                    for idx, (start_time, score) in enumerate(suggestions[:5], 1):
+                        score_pct = score * 100
+                        score_color = "#27ae60" if score_pct >= 80 else "#f39c12" if score_pct >= 60 else "#e74c3c"
+                        
+                        col_time, col_score, col_action = st.columns([2, 1, 1])
+                        with col_time:
+                            st.markdown(f"**{idx}. {start_time.strftime('%H:%M')}**")
+                        with col_score:
+                            st.markdown(
+                                f'<span style="color:{score_color};font-weight:bold;">{score_pct:.0f}%</span>',
+                                unsafe_allow_html=True,
+                            )
+                        with col_action:
+                            if st.button("📌 Schedule", key=f"circadian_schedule_{idx}"):
+                                scheduled, conflicts = engine.schedule_activity(
+                                    crew_id=selected_crew.crew_id,
+                                    activity_id=selected_activity_id,
+                                    start_time=start_time,
+                                    duration_minutes=duration,
+                                )
+                                if scheduled:
+                                    st.success(f"✅ Scheduled at {start_time.strftime('%H:%M')}")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ Scheduling failed: {len(conflicts)} conflicts")
+                    
+                    # Show chronotype info
+                    chronotype_map = {
+                        "early": "🌅 Early Bird (optimal: morning)",
+                        "intermediate": "🌞 Intermediate (optimal: mid-day)",
+                        "late": "🌙 Night Owl (optimal: afternoon/evening)",
+                    }
+                    chronotype_info = chronotype_map.get(selected_crew.chronotype, "Unknown")
+                    st.info(f"**Chronotype:** {chronotype_info}")
+                else:
+                    st.warning("⚠️ No optimal times found. All time slots have conflicts.")
+
+
+# ---------------------------------------------------------------------------
+# Workload Balancing Panel (NASA Mission Control Standard)
+# ---------------------------------------------------------------------------
+
+def _render_workload_balancing_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render workload balancing panel with redistribution suggestions (NASA Mission Control standard)."""
+    st.markdown("### ⚖️ Workload Balancing & Redistribution")
+    st.caption("Balance workload across crew members")
+    
+    daily = engine.get_daily_schedule(schedule_date)
+    if not daily or not daily.activities:
+        st.info("No activities scheduled. Create a schedule first.")
+        return
+    
+    from scheduling_core import compute_workload_balance
+    
+    # Calculate workload for each crew member
+    crew_workloads: Dict[str, Any] = {}
+    crew_activities: Dict[str, List[ScheduledActivity]] = {}
+    
+    for activity in daily.activities:
+        if activity.crew_id not in crew_activities:
+            crew_activities[activity.crew_id] = []
+        crew_activities[activity.crew_id].append(activity)
+    
+    for crew_id, activities in crew_activities.items():
+        crew = engine.crew_members.get(crew_id)
+        if not crew:
+            continue
+        workload = compute_workload_balance(activities, crew.weight_kg)
+        workload.crew_id = crew_id
+        crew_workloads[crew_id] = {
+            "metrics": workload,
+            "crew": crew,
+            "activities": activities,
+        }
+    
+    if not crew_workloads:
+        st.info("No crew workload data available.")
+        return
+    
+    # Display workload summary
+    st.markdown("#### 📊 Current Workload Distribution")
+    workload_cols = st.columns(len(crew_workloads))
+    
+    for idx, (crew_id, data) in enumerate(crew_workloads.items()):
+        with workload_cols[idx]:
+            metrics = data["metrics"]
+            crew = data["crew"]
+            
+            work_hours = metrics.total_work_minutes / 60
+            rest_hours = metrics.total_rest_minutes / 60
+            
+            # Color based on workload
+            if work_hours > 10:
+                color = "#e74c3c"  # Red - too high
+            elif work_hours > 8:
+                color = "#f39c12"  # Yellow - high
+            else:
+                color = "#27ae60"  # Green - good
+            
+            st.metric(
+                crew.name,
+                f"{work_hours:.1f}h work",
+                delta=f"{rest_hours:.1f}h rest",
+                delta_color="normal",
+            )
+            st.markdown(
+                f'<div style="background:{color};height:8px;border-radius:4px;margin-top:4px;"></div>',
+                unsafe_allow_html=True,
+            )
+            st.caption(f"Recovery: {metrics.recovery_score:.0f}%")
+    
+    # Get redistribution suggestions
+    if st.button("🔄 Get Redistribution Suggestions", key="workload_redistribute_btn"):
+        suggestions = engine.suggest_workload_redistribution(schedule_date)
+        
+        if suggestions:
+            st.markdown("#### 💡 Redistribution Suggestions")
+            for idx, suggestion in enumerate(suggestions, 1):
+                with st.expander(
+                    f"**{idx}. {suggestion['activity_name']}** - Move {suggestion['workload_reduction']} min",
+                    expanded=(idx == 1),
+                ):
+                    from_crew = engine.crew_members.get(suggestion["from_crew_id"])
+                    to_crew = engine.crew_members.get(suggestion["to_crew_id"])
+                    
+                    st.write(f"**From:** {from_crew.name if from_crew else suggestion['from_crew_id']}")
+                    st.write(f"**To:** {to_crew.name if to_crew else suggestion['to_crew_id']}")
+                    st.write(f"**Current Time:** {suggestion['current_time'].strftime('%H:%M')}")
+                    st.write(f"**Reason:** {suggestion['reason']}")
+                    
+                    if st.button("✅ Apply Redistribution", key=f"apply_redist_{idx}"):
+                        # Move activity to new crew
+                        activity = next(
+                            (a for a in daily.activities if a.schedule_id == suggestion["schedule_id"]),
+                            None,
+                        )
+                        if activity:
+                            activity.crew_id = suggestion["to_crew_id"]
+                            st.success("✅ Activity redistributed")
+                            st.rerun()
+                        else:
+                            st.error("❌ Activity not found")
+        else:
+            st.success("✅ Workload is well balanced across crew members")
+
+
+# ---------------------------------------------------------------------------
+# Constraint Satisfaction Panel (NASA Mission Control Standard)
+# ---------------------------------------------------------------------------
+
+def _render_constraint_satisfaction_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render constraint satisfaction panel with violation checking (NASA Mission Control standard)."""
+    st.markdown("### ✅ Constraint Satisfaction & Violation Detection")
+    st.caption("Check all scheduling constraints and resolve violations")
+    
+    daily = engine.get_daily_schedule(schedule_date)
+    if not daily:
+        st.info("No schedule exists for this date.")
+        return
+    
+    if st.button("🔍 Check All Constraints", key="check_constraints_btn"):
+        violations = engine.check_all_constraints(schedule_date)
+        
+        if violations:
+            # Group by severity
+            hard_violations = [v for v in violations if v["constraint_type"] == "hard"]
+            soft_violations = [v for v in violations if v["constraint_type"] == "soft"]
+            
+            if hard_violations:
+                st.error(f"❌ **{len(hard_violations)} Hard Constraint Violation(s)**")
+                for violation in hard_violations:
+                    with st.expander(
+                        f"🔴 {violation['constraint_id']}: {violation['description']}",
+                        expanded=True,
+                    ):
+                        st.write(f"**Type:** {violation['constraint_type']}")
+                        st.write(f"**Severity:** {violation['severity']}")
+                        st.write(f"**Resolution:** {violation['suggested_resolution']}")
+                        st.write(f"**Affected Activities:** {len(violation['affected_activities'])}")
+            
+            if soft_violations:
+                st.warning(f"⚠️ **{len(soft_violations)} Soft Constraint Violation(s)**")
+                for violation in soft_violations:
+                    with st.expander(
+                        f"🟡 {violation['constraint_id']}: {violation['description']}",
+                        expanded=False,
+                    ):
+                        st.write(f"**Type:** {violation['constraint_type']}")
+                        st.write(f"**Severity:** {violation['severity']}")
+                        st.write(f"**Resolution:** {violation['suggested_resolution']}")
+                        st.write(f"**Affected Activities:** {len(violation['affected_activities'])}")
+        else:
+            st.success("✅ **All constraints satisfied!**")
+    
+    # Show constraint definitions
+    st.markdown("---")
+    st.markdown("#### 📋 Constraint Definitions")
+    
+    with st.expander("Hard Constraints (Cannot be violated)", expanded=False):
+        st.write("""
+        - **Briefing Sync**: All crew must attend briefing at the same time
+        - **Sleep Block**: Each crew member must have continuous 8-hour sleep block
+        - **Resource Limits**: Exercise equipment limited to 2 concurrent users
+        """)
+    
+    with st.expander("Soft Constraints (Optimized but can be relaxed)", expanded=False):
+        st.write("""
+        - **Work-Rest Ratio**: Target ratio < 2.5 (work:rest)
+        - **Recovery Score**: Target > 70% for optimal recovery
+        - **Max Work Hours**: Target < 10 hours per day
+        - **Circadian Alignment**: Activities scheduled during optimal circadian phase
+        """)
+
+
+# ---------------------------------------------------------------------------
+# Real-Time Schedule Updates Panel (NASA Mission Control Standard)
+# ---------------------------------------------------------------------------
+
+def _render_realtime_updates_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render real-time schedule updates panel (NASA Mission Control standard)."""
+    st.markdown("### 🔄 Real-Time Schedule Updates & Change Tracking")
+    st.caption("Track and view recent schedule changes")
+    
+    # Initialize session state for change tracking
+    if "last_change_check" not in st.session_state:
+        st.session_state["last_change_check"] = datetime.now()
+    
+    # Auto-refresh toggle (note: Streamlit doesn't support true auto-refresh without user interaction)
+    # Users can manually refresh or the app will refresh on any user interaction
+    st.info("💡 **Tip:** Schedule changes are tracked automatically. Use 'Refresh Now' to see latest changes.")
+    
+    # Get recent changes
+    since = st.session_state.get("last_change_check")
+    # Check if method exists (defensive check for module caching issues)
+    if hasattr(engine, 'get_recent_changes'):
+        recent_changes = engine.get_recent_changes(since=since, limit=20)
+    else:
+        # Fallback: use schedule_changes directly if method not available
+        if hasattr(engine, 'schedule_changes'):
+            all_changes = engine.schedule_changes
+            if since:
+                recent_changes = [
+                    c for c in all_changes
+                    if datetime.fromisoformat(c["timestamp"]) >= since
+                ][-20:]
+            else:
+                recent_changes = all_changes[-20:]
+        else:
+            recent_changes = []
+    
+    if recent_changes:
+        st.success(f"📊 **{len(recent_changes)} recent change(s)** since last check")
+        
+        # Group changes by type
+        change_types = {}
+        for change in recent_changes:
+            change_type = change["change_type"]
+            if change_type not in change_types:
+                change_types[change_type] = []
+            change_types[change_type].append(change)
+        
+        # Display changes
+        for change_type, changes in change_types.items():
+            with st.expander(
+                f"**{change_type.replace('_', ' ').title()}** ({len(changes)} changes)",
+                expanded=(change_type == "activity_added"),
+            ):
+                for change in reversed(changes):  # Most recent first
+                    change_time = datetime.fromisoformat(change["timestamp"])
+                    time_str = change_time.strftime("%H:%M:%S")
+                    
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.write(f"**{time_str}** - {change['activity_id'][:8]}...")
+                        if change["details"]:
+                            details_str = ", ".join(f"{k}: {v}" for k, v in change["details"].items() if k != "activity_id")
+                            if details_str:
+                                st.caption(details_str)
+                    with col2:
+                        st.caption(f"{change['change_id'][:8]}...")
+        
+        # Update last check time
+        if st.button("✅ Mark as Read", key="mark_changes_read"):
+            st.session_state["last_change_check"] = datetime.now()
+            st.rerun()
+    else:
+        st.info("✅ No new changes since last check")
+    
+    # Manual refresh button
+    if st.button("🔄 Refresh Now", key="manual_refresh"):
+        st.session_state["last_change_check"] = datetime.now()
+        st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Procedure Integration Panel (NASA Mission Control Standard)
+# ---------------------------------------------------------------------------
+
+def _render_procedure_integration_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render procedure integration panel for linking procedures to activities (NASA Mission Control standard)."""
+    st.markdown("### 📋 Procedure Integration & Checklist Linking")
+    st.caption("Link procedures and checklists to scheduled activities")
+    
+    daily = engine.get_daily_schedule(schedule_date)
+    if not daily or not daily.activities:
+        st.info("No activities scheduled. Create activities first to link procedures.")
+        return
+    
+    # Activity selector
+    activity_options = {}
+    for activity in sorted(daily.activities, key=lambda a: a.start_time):
+        crew = engine.crew_members.get(activity.crew_id)
+        crew_name = crew.name if crew else activity.crew_id
+        label = f"{activity.activity_name} ({crew_name}) @ {activity.start_time.strftime('%H:%M')}"
+        activity_options[activity.schedule_id] = label
+    
+    selected_schedule_id = st.selectbox(
+        "Select Activity",
+        options=list(activity_options.keys()),
+        format_func=lambda x: activity_options[x],
+        key="procedure_activity_select",
+    )
+    
+    if selected_schedule_id:
+        selected_activity = next((a for a in daily.activities if a.schedule_id == selected_schedule_id), None)
+        if selected_activity:
+            st.markdown("---")
+            st.markdown(f"**Selected:** {selected_activity.activity_name}")
+            st.write(f"**Time:** {selected_activity.start_time.strftime('%H:%M')} – {selected_activity.end_time.strftime('%H:%M')}")
+            
+            # Procedure selector
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Available procedures (EVA checklists, etc.)
+                procedure_options = {
+                    "eva_mcc": "EVA - Mission Control Checklist",
+                    "eva_officer": "EVA - Officer Checklist",
+                    "isle_protocol": "ISLE Protocol",
+                    "custom": "Custom Procedure",
+                }
+                
+                selected_procedure = st.selectbox(
+                    "Select Procedure",
+                    options=list(procedure_options.keys()),
+                    format_func=lambda x: procedure_options[x],
+                    key="procedure_select",
+                    index=0 if selected_activity.activity_id == "eva" else None,
+                )
+            
+            with col2:
+                # Show current procedure if linked
+                if selected_activity.procedure_id:
+                    st.info(f"**Current:** {selected_activity.procedure_id}")
+                else:
+                    st.info("**No procedure linked**")
+            
+            # Link procedure
+            if st.button("🔗 Link Procedure", key="link_procedure_btn"):
+                checklist_items = []
+                
+                # Get checklist items based on procedure type
+                if selected_procedure == "eva_mcc" and ADVANCED_FEATURES_AVAILABLE:
+                    checklist_items = [item.id for item in MCC_EVA_CHECKLIST[:10]]  # First 10 items
+                elif selected_procedure == "eva_officer" and ADVANCED_FEATURES_AVAILABLE:
+                    checklist_items = [item.id for item in EVA_OFFICER_CHECKLIST[:10]]
+                elif selected_procedure == "isle_protocol" and ADVANCED_FEATURES_AVAILABLE:
+                    checklist_items = list(ISLE_PROTOCOL_TIMELINE.keys())[:10]
+                
+                success = engine.link_procedure_to_activity(
+                    schedule_id=selected_schedule_id,
+                    procedure_id=selected_procedure,
+                    checklist_items=checklist_items,
+                )
+                
+                if success:
+                    st.success(f"✅ Procedure '{procedure_options[selected_procedure]}' linked to activity")
+                    st.rerun()
+                else:
+                    st.error("❌ Failed to link procedure")
+            
+            # Show checklist items if procedure is linked
+            if selected_activity.procedure_id and selected_activity.checklist_items:
+                st.markdown("---")
+                st.markdown("#### ✅ Checklist Items")
+                
+                # Load checklist items based on procedure type
+                if selected_activity.procedure_id == "eva_mcc" and ADVANCED_FEATURES_AVAILABLE:
+                    checklist_data = MCC_EVA_CHECKLIST
+                elif selected_activity.procedure_id == "eva_officer" and ADVANCED_FEATURES_AVAILABLE:
+                    checklist_data = EVA_OFFICER_CHECKLIST
+                else:
+                    checklist_data = []
+                
+                if checklist_data:
+                    for item_id in selected_activity.checklist_items:
+                        item = next((i for i in checklist_data if i.id == item_id), None)
+                        if item:
+                            st.checkbox(
+                                item.description or item.id,
+                                value=False,
+                                key=f"checklist_{item_id}_{selected_schedule_id}",
+                            )
+                else:
+                    # Generic checklist display
+                    for item_id in selected_activity.checklist_items:
+                        st.checkbox(
+                            item_id,
+                            value=False,
+                            key=f"checklist_{item_id}_{selected_schedule_id}",
+                        )
+
+
+# ---------------------------------------------------------------------------
 # Performance Forecast Chart (Advanced)
 # ---------------------------------------------------------------------------
 
@@ -3783,6 +4269,16 @@ def render_scheduling_tab() -> None:
         _render_schedule_rollback_panel(engine, schedule_date)
         st.markdown("---")
         _render_spatial_conflicts_panel(engine, schedule_date)
+        st.markdown("---")
+        _render_circadian_optimization_panel(engine, schedule_date)
+        st.markdown("---")
+        _render_workload_balancing_panel(engine, schedule_date)
+        st.markdown("---")
+        _render_constraint_satisfaction_panel(engine, schedule_date)
+        st.markdown("---")
+        _render_realtime_updates_panel(engine, schedule_date)
+        st.markdown("---")
+        _render_procedure_integration_panel(engine, schedule_date)
         st.markdown("---")
         _render_optimization_panel(engine, schedule_date)
     
