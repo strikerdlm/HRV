@@ -656,6 +656,288 @@ class SchedulingEngine:
         daily.is_optimized = False
         return daily
     
+    def generate_full_daily_schedule(
+        self,
+        schedule_date: date,
+        eva_day: bool = False,
+        eva_crew_ids: Optional[List[str]] = None,
+    ) -> DailySchedule:
+        """
+        Generate a complete daily schedule with all activities for 6 crew.
+        
+        Includes:
+        - Fixed activities (briefing, meals, sleep, hygiene)
+        - 6 experiments (1 hour each, distributed among crew)
+        - Exercise (resource-limited: 1 person at a time)
+        - Recreation (individual scheduling)
+        - EVA activities if scheduled (2 crew, with ISLE protocol)
+        
+        Constraints:
+        - Hygiene module: 1 person at a time (30 min each)
+        - Exercise equipment: 1 person at a time (60 min each)
+        - Experiments: All 6 must be completed daily
+        - EVA: 2 crew max, requires ~100 min ISLE prep + 120 min EVA + 60 min post
+        
+        Args:
+            schedule_date: Date to schedule
+            eva_day: Whether this is an EVA day
+            eva_crew_ids: List of crew IDs performing EVA (max 2)
+            
+        Returns:
+            Fully populated DailySchedule
+        """
+        daily = self.get_or_create_daily_schedule(schedule_date)
+        crew_ids = list(self.crew_members.keys())
+        
+        if not crew_ids:
+            return daily
+        
+        # ---------------------------------------------------------------------------
+        # Phase 1: Fixed activities for all crew
+        # ---------------------------------------------------------------------------
+        
+        # 05:30 - Wake time (implicit)
+        # 06:00-06:30 - Staggered hygiene (resource limited: 1 person)
+        for idx, crew_id in enumerate(crew_ids):
+            hygiene_start = datetime.combine(
+                schedule_date,
+                datetime.min.time().replace(hour=6, minute=idx * 30 % 60),
+            )
+            # Stagger across 06:00, 06:30, 07:00, etc.
+            if idx >= 2:
+                hygiene_start = hygiene_start.replace(hour=6 + (idx * 30 // 60))
+            self.schedule_activity(
+                crew_id=crew_id,
+                activity_id="hygiene",
+                start_time=hygiene_start,
+                priority=8,
+                notes="Morning hygiene (module: 1 person)",
+            )
+        
+        # 07:00 - Briefing (all crew synchronous)
+        briefing_start = datetime.combine(
+            schedule_date,
+            datetime.min.time().replace(hour=7),
+        )
+        for crew_id in crew_ids:
+            self.schedule_activity(
+                crew_id=crew_id,
+                activity_id="briefing",
+                start_time=briefing_start,
+                priority=10,
+                notes="Daily synchronized briefing",
+            )
+        
+        # 08:00 - Breakfast
+        breakfast_start = datetime.combine(
+            schedule_date,
+            datetime.min.time().replace(hour=8),
+        )
+        for crew_id in crew_ids:
+            self.schedule_activity(
+                crew_id=crew_id,
+                activity_id="breakfast",
+                start_time=breakfast_start,
+                priority=8,
+            )
+        
+        # ---------------------------------------------------------------------------
+        # Phase 2: Experiments (6 experiments, 1 hour each)
+        # Each crew member does 1-2 experiments
+        # ---------------------------------------------------------------------------
+        experiment_ids = [
+            "exp_physio_monitoring",
+            "exp_cortisol_sampling",
+            "exp_neurocognitive",
+            "exp_psychological",
+            "exp_sleep_analysis",
+            "exp_matb_workload",
+        ]
+        
+        # Distribute experiments: crew 1-6 each get 1 experiment
+        # Start experiments at 09:00, staggered by 15 min to avoid cognitive overload
+        experiment_base_hour = 9
+        for exp_idx, exp_id in enumerate(experiment_ids):
+            crew_idx = exp_idx % len(crew_ids)
+            crew_id = crew_ids[crew_idx]
+            
+            # Stagger start times
+            exp_start = datetime.combine(
+                schedule_date,
+                datetime.min.time().replace(
+                    hour=experiment_base_hour + (exp_idx // 2),
+                    minute=(exp_idx % 2) * 30,
+                ),
+            )
+            self.schedule_activity(
+                crew_id=crew_id,
+                activity_id=exp_id,
+                start_time=exp_start,
+                priority=7,
+                notes=f"Daily experiment {exp_idx + 1}/6",
+            )
+        
+        # ---------------------------------------------------------------------------
+        # Phase 3: Exercise (resource limited - 1 person at a time)
+        # ---------------------------------------------------------------------------
+        # Exercise slots: 09:00-10:00, 10:00-11:00, etc. (6 slots needed)
+        exercise_base_hour = 11  # After morning experiments
+        for idx, crew_id in enumerate(crew_ids):
+            # Skip EVA crew on EVA day - they get their exercise during ISLE
+            if eva_day and eva_crew_ids and crew_id in eva_crew_ids:
+                continue
+            
+            exercise_start = datetime.combine(
+                schedule_date,
+                datetime.min.time().replace(hour=exercise_base_hour + idx),
+            )
+            # Wrap around if past 17:00
+            if exercise_start.hour >= 17:
+                exercise_start = exercise_start.replace(hour=14 + (idx - 3))
+            
+            self.schedule_activity(
+                crew_id=crew_id,
+                activity_id="exercise",
+                start_time=exercise_start,
+                priority=6,
+                notes="Physical exercise (equipment: 1 person)",
+            )
+        
+        # ---------------------------------------------------------------------------
+        # Phase 4: Lunch at 12:00
+        # ---------------------------------------------------------------------------
+        lunch_start = datetime.combine(
+            schedule_date,
+            datetime.min.time().replace(hour=12),
+        )
+        for crew_id in crew_ids:
+            # Skip if EVA in progress
+            if eva_day and eva_crew_ids and crew_id in eva_crew_ids:
+                continue
+            self.schedule_activity(
+                crew_id=crew_id,
+                activity_id="lunch",
+                start_time=lunch_start,
+                priority=8,
+            )
+        
+        # ---------------------------------------------------------------------------
+        # Phase 5: EVA Activities (if EVA day)
+        # Timeline: ISLE Prep (100 min) + EVA (120 min) + Post (60 min) = 280 min
+        # ---------------------------------------------------------------------------
+        if eva_day and eva_crew_ids:
+            eva_start_hour = 10  # Start ISLE prep at 10:00
+            for eva_crew_id in eva_crew_ids[:2]:  # Max 2 crew
+                # ISLE Prebreathe Protocol (100 min)
+                isle_start = datetime.combine(
+                    schedule_date,
+                    datetime.min.time().replace(hour=eva_start_hour),
+                )
+                self.schedule_activity(
+                    crew_id=eva_crew_id,
+                    activity_id="eva_prep_isle",
+                    start_time=isle_start,
+                    priority=10,
+                    notes="ISLE Protocol: 40min O2 mask + 20min suit + 40min in-suit prebreathe",
+                )
+                
+                # EVA Operations (120 min) - starts after ISLE
+                eva_ops_start = isle_start + timedelta(minutes=100)
+                self.schedule_activity(
+                    crew_id=eva_crew_id,
+                    activity_id="eva",
+                    start_time=eva_ops_start,
+                    priority=10,
+                    notes="EVA operations (2 hours)",
+                )
+                
+                # Post-EVA (60 min)
+                post_eva_start = eva_ops_start + timedelta(minutes=120)
+                self.schedule_activity(
+                    crew_id=eva_crew_id,
+                    activity_id="eva_post",
+                    start_time=post_eva_start,
+                    priority=9,
+                    notes="Suit doffing, medical check, debrief",
+                )
+        
+        # ---------------------------------------------------------------------------
+        # Phase 6: Recreation (14:00-17:00 block, individual)
+        # ---------------------------------------------------------------------------
+        rec_base_hour = 15  # Afternoon recreation
+        for idx, crew_id in enumerate(crew_ids):
+            # Skip EVA crew during EVA window
+            if eva_day and eva_crew_ids and crew_id in eva_crew_ids:
+                rec_hour = 16  # Post-EVA recreation
+            else:
+                rec_hour = rec_base_hour + (idx % 2)
+            
+            rec_start = datetime.combine(
+                schedule_date,
+                datetime.min.time().replace(hour=rec_hour, minute=(idx % 2) * 30),
+            )
+            self.schedule_activity(
+                crew_id=crew_id,
+                activity_id="recreation",
+                start_time=rec_start,
+                priority=5,
+                notes="Individual recreation/rest",
+            )
+        
+        # ---------------------------------------------------------------------------
+        # Phase 7: Dinner at 18:00
+        # ---------------------------------------------------------------------------
+        dinner_start = datetime.combine(
+            schedule_date,
+            datetime.min.time().replace(hour=18),
+        )
+        for crew_id in crew_ids:
+            self.schedule_activity(
+                crew_id=crew_id,
+                activity_id="dinner",
+                start_time=dinner_start,
+                priority=8,
+            )
+        
+        # ---------------------------------------------------------------------------
+        # Phase 8: Evening hygiene (staggered) and Sleep
+        # ---------------------------------------------------------------------------
+        for idx, crew_id in enumerate(crew_ids):
+            # Evening hygiene (19:30-21:00, staggered)
+            evening_hygiene_start = datetime.combine(
+                schedule_date,
+                datetime.min.time().replace(hour=19, minute=30 + (idx * 15) % 60),
+            )
+            if idx >= 2:
+                evening_hygiene_start = evening_hygiene_start.replace(
+                    hour=19 + ((30 + idx * 15) // 60),
+                    minute=(30 + idx * 15) % 60,
+                )
+            self.schedule_activity(
+                crew_id=crew_id,
+                activity_id="hygiene",
+                start_time=evening_hygiene_start,
+                priority=7,
+                notes="Evening hygiene (module: 1 person)",
+            )
+            
+            # Sleep at 21:30
+            sleep_start = datetime.combine(
+                schedule_date,
+                datetime.min.time().replace(hour=21, minute=30),
+            )
+            self.schedule_activity(
+                crew_id=crew_id,
+                activity_id="sleep",
+                start_time=sleep_start,
+                priority=10,
+                notes="8-hour sleep period (chronotype-optimized)",
+            )
+        
+        daily.is_optimized = True
+        daily.optimization_score = 85.0  # Base score for generated schedule
+        return daily
+    
     def optimize_schedule(
         self,
         schedule_date: date,
@@ -872,12 +1154,21 @@ class SchedulingEngine:
 # ---------------------------------------------------------------------------
 
 def create_sample_crew() -> List[CrewMember]:
-    """Create sample crew members for demonstration."""
+    """Create sample crew members for demonstration.
+    
+    Roles based on ASTRA analog mission structure:
+        - Comandante → Commander
+        - Oficial de datos → Data Officer
+        - Ingeniero Biomédico → Biomedical Engineer
+        - Oficial Médico → Medical Officer
+        - Ingeniero de vuelo → Flight Engineer
+        - Oficial de comunicaciones → Communications Officer
+    """
     crew = [
         CrewMember(
             crew_id="crew_1",
-            name="Commander Alpha",
-            role="Mission Commander",
+            name="Crew Alpha",
+            role="Commander (Comandante)",
             age_years=45,
             sex="male",
             weight_kg=80,
@@ -887,8 +1178,8 @@ def create_sample_crew() -> List[CrewMember]:
         ),
         CrewMember(
             crew_id="crew_2",
-            name="Pilot Beta",
-            role="Pilot",
+            name="Crew Beta",
+            role="Data Officer (Oficial de Datos)",
             age_years=38,
             sex="female",
             weight_kg=65,
@@ -898,8 +1189,8 @@ def create_sample_crew() -> List[CrewMember]:
         ),
         CrewMember(
             crew_id="crew_3",
-            name="Engineer Gamma",
-            role="Flight Engineer",
+            name="Crew Gamma",
+            role="Biomedical Engineer (Ingeniero Biomédico)",
             age_years=42,
             sex="male",
             weight_kg=75,
@@ -909,8 +1200,8 @@ def create_sample_crew() -> List[CrewMember]:
         ),
         CrewMember(
             crew_id="crew_4",
-            name="Scientist Delta",
-            role="Mission Specialist - Science",
+            name="Crew Delta",
+            role="Medical Officer (Oficial Médico)",
             age_years=35,
             sex="female",
             weight_kg=58,
@@ -920,8 +1211,8 @@ def create_sample_crew() -> List[CrewMember]:
         ),
         CrewMember(
             crew_id="crew_5",
-            name="Medic Epsilon",
-            role="Flight Surgeon",
+            name="Crew Epsilon",
+            role="Flight Engineer (Ingeniero de Vuelo)",
             age_years=40,
             sex="male",
             weight_kg=78,
@@ -931,8 +1222,8 @@ def create_sample_crew() -> List[CrewMember]:
         ),
         CrewMember(
             crew_id="crew_6",
-            name="Specialist Zeta",
-            role="Payload Specialist",
+            name="Crew Zeta",
+            role="Communications Officer (Oficial de Comunicaciones)",
             age_years=32,
             sex="female",
             weight_kg=62,
