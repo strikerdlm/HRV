@@ -478,7 +478,98 @@ class DailyRadiationExposure:
     career_pct_used: float
     space_weather_s_scale: int = 0
     space_weather_g_scale: int = 0
+    space_weather_kp_max: Optional[float] = None
+    space_weather_proton_max_pfu: Optional[float] = None
     notes: str = ""
+
+
+def detect_solar_cycle_phase_from_noaa(
+    target_date: Optional[date] = None,
+    *,
+    f107_flux: Optional[float] = None,
+    sunspot_number: Optional[int] = None,
+) -> str:
+    """Automatically detect solar cycle phase from NOAA F10.7 flux or sunspot number.
+    
+    Args:
+        target_date: Date to check (defaults to today)
+        f107_flux: F10.7 cm flux in sfu (if provided, used directly)
+        sunspot_number: Sunspot number (if provided, used as fallback)
+        
+    Returns:
+        Solar cycle phase: "minimum", "ascending", "maximum", or "declining"
+        
+    References:
+        - NOAA SWPC Solar Cycle Progression
+        - F10.7 typically ranges: 50-70 sfu (minimum), 100-150 sfu (moderate), 150-300 sfu (maximum)
+        - Sunspot number: <20 (minimum), 20-100 (ascending), 100-150 (maximum), <100 (declining)
+    """
+    if target_date is None:
+        target_date = date.today()
+    
+    # Try to fetch F10.7 from NOAA if not provided
+    if f107_flux is None:
+        try:
+            from noaa_space import load_noaa_space_cache
+            
+            bundles, _ = load_noaa_space_cache(
+                keys=("f107_smoothed", "f107_flux"),
+                allow_stale_cache=True,
+            )
+            
+            # Try smoothed F10.7 first (more stable)
+            f107_bundle = bundles.get("f107_smoothed") or bundles.get("f107_flux")
+            if f107_bundle and hasattr(f107_bundle, "frame"):
+                df = f107_bundle.frame
+                time_col = f107_bundle.time_column
+                if df is not None and not df.empty and time_col in df.columns:
+                    df[time_col] = pd.to_datetime(df[time_col], errors="coerce", utc=True)
+                    # Get most recent value
+                    df = df.dropna(subset=[time_col]).sort_values(time_col, ascending=False)
+                    if not df.empty:
+                        # Try smoothed_f10.7 first, then f10.7
+                        for col in ["smoothed_f10.7", "f10.7", "flux"]:
+                            if col in df.columns:
+                                val = pd.to_numeric(df.iloc[0][col], errors="coerce")
+                                if pd.notna(val) and val > 0:
+                                    f107_flux = float(val)
+                                    break
+        except Exception as exc:
+            _LOGGER.debug("Could not fetch F10.7 from NOAA: %s", exc)
+    
+    # Classify based on F10.7 flux
+    if f107_flux is not None:
+        if f107_flux < 75:
+            return "minimum"
+        elif f107_flux < 120:
+            return "ascending"
+        elif f107_flux > 180:
+            return "maximum"
+        else:
+            # 120-180: could be ascending, maximum, or declining
+            # Use trend if available, otherwise assume maximum (current cycle 25 is near max)
+            return "maximum"  # Conservative: assume we're near maximum (2024-2026)
+    
+    # Fallback to sunspot number
+    if sunspot_number is not None:
+        if sunspot_number < 20:
+            return "minimum"
+        elif sunspot_number < 100:
+            return "ascending"
+        elif sunspot_number > 150:
+            return "maximum"
+        else:
+            return "declining"
+    
+    # Default: assume we're in maximum phase (Solar Cycle 25, 2024-2026)
+    # Based on NOAA predictions: peak between Nov 2024 - Mar 2026
+    current_year = target_date.year
+    if 2024 <= current_year <= 2026:
+        return "maximum"
+    elif current_year < 2024:
+        return "ascending"
+    else:
+        return "declining"
 
 
 def build_radiation_timeline(
@@ -488,10 +579,11 @@ def build_radiation_timeline(
     environment: RadiationEnvironment,
     initial_cumulative_msv: float = 0.0,
     eva_schedule: Optional[Dict[date, float]] = None,  # date -> EVA hours
-    solar_cycle_phase: str = "declining",  # "minimum", "ascending", "maximum", "declining"
+    solar_cycle_phase: Optional[str] = None,  # Auto-detect if None
     career_limit_msv: float = 600.0,
+    use_real_space_weather: bool = True,  # Use real NOAA data for daily adjustments
 ) -> List[DailyRadiationExposure]:
-    """Build a day-by-day radiation exposure timeline.
+    """Build a day-by-day radiation exposure timeline using real NOAA space weather data.
     
     Args:
         start_date: Mission start date.
@@ -499,8 +591,9 @@ def build_radiation_timeline(
         environment: Primary radiation environment.
         initial_cumulative_msv: Pre-mission cumulative dose.
         eva_schedule: Optional dict mapping dates to planned EVA hours.
-        solar_cycle_phase: Current phase for dose rate adjustment.
+        solar_cycle_phase: Current phase for dose rate adjustment (auto-detected if None).
         career_limit_msv: Career limit for percentage calculation.
+        use_real_space_weather: If True, use real NOAA Kp/proton flux for daily adjustments.
         
     Returns:
         List of DailyRadiationExposure records.
@@ -509,7 +602,12 @@ def build_radiation_timeline(
     if dose_rate is None:
         dose_rate = DOSE_RATE_DATABASE[RadiationEnvironment.LEO_ISS]
     
-    # Adjust dose rate for solar cycle
+    # Auto-detect solar cycle phase if not provided
+    if solar_cycle_phase is None:
+        solar_cycle_phase = detect_solar_cycle_phase_from_noaa(target_date=start_date)
+        _LOGGER.info("Auto-detected solar cycle phase: %s", solar_cycle_phase)
+    
+    # Adjust base dose rate for solar cycle
     cycle_multiplier = {
         "minimum": 1.20,  # Solar min = higher GCR
         "ascending": 1.05,
@@ -520,6 +618,50 @@ def build_radiation_timeline(
     base_rate = dose_rate.nominal_msv_per_day * cycle_multiplier
     eva_rate_per_hour = (base_rate * dose_rate.eva_multiplier) / 24.0
     
+    # Load real space weather data if requested
+    kp_data: Optional[pd.DataFrame] = None
+    proton_data: Optional[pd.DataFrame] = None
+    
+    if use_real_space_weather:
+        try:
+            from noaa_space import load_noaa_space_cache
+            
+            bundles, _ = load_noaa_space_cache(
+                keys=("planetary_k_index_1m", "goes_integral_protons"),
+                allow_stale_cache=True,
+            )
+            
+            # Load Kp index data
+            kp_bundle = bundles.get("planetary_k_index_1m")
+            if kp_bundle and hasattr(kp_bundle, "frame") and kp_bundle.frame is not None:
+                kp_data = kp_bundle.frame.copy()
+                time_col = kp_bundle.time_column
+                if time_col in kp_data.columns:
+                    kp_data[time_col] = pd.to_datetime(kp_data[time_col], errors="coerce", utc=True)
+                    kp_data = kp_data.dropna(subset=[time_col])
+                    if "kp_index" in kp_data.columns:
+                        kp_data["kp_index"] = pd.to_numeric(kp_data["kp_index"], errors="coerce")
+            
+            # Load proton flux data
+            proton_bundle = bundles.get("goes_integral_protons")
+            if proton_bundle and hasattr(proton_bundle, "frame") and proton_bundle.frame is not None:
+                proton_data = proton_bundle.frame.copy()
+                time_col = proton_bundle.time_column
+                if time_col in proton_data.columns:
+                    proton_data[time_col] = pd.to_datetime(proton_data[time_col], errors="coerce", utc=True)
+                    proton_data = proton_data.dropna(subset=[time_col])
+                    # Find >10 MeV column
+                    value_cols = proton_bundle.value_columns or ()
+                    for col in value_cols:
+                        col_lower = str(col).lower()
+                        if ("10" in col_lower and "mev" in col_lower) or "ge_10" in col_lower:
+                            if col in proton_data.columns:
+                                proton_data["proton_flux"] = pd.to_numeric(proton_data[col], errors="coerce")
+                                break
+        except Exception as exc:
+            _LOGGER.warning("Could not load real space weather data: %s", exc)
+            use_real_space_weather = False
+    
     eva_schedule = eva_schedule or {}
     timeline: List[DailyRadiationExposure] = []
     cumulative = initial_cumulative_msv
@@ -528,9 +670,56 @@ def build_radiation_timeline(
     
     while current_date <= end_date:
         mission_day += 1
+        
+        # Get daily space weather adjustments if real data available
+        daily_multiplier = 1.0
+        kp_max = None
+        proton_max = None
+        g_scale = 0
+        s_scale = 0
+        
+        if use_real_space_weather and kp_data is not None:
+            # Get Kp for this date
+            date_mask = kp_data[kp_bundle.time_column].dt.date == current_date
+            if date_mask.any():
+                kp_values = kp_data.loc[date_mask, "kp_index"].dropna()
+                if not kp_values.empty:
+                    kp_max = float(kp_values.max())
+                    # G-scale adjustment: higher Kp = slightly higher dose during storms
+                    if kp_max >= 5.0:  # G1 or higher
+                        g_scale = min(5, int((kp_max - 5.0) / 1.0) + 1)
+                        daily_multiplier *= (1.0 + g_scale * 0.05)  # Up to 25% increase during G5
+        
+        if use_real_space_weather and proton_data is not None and "proton_flux" in proton_data.columns:
+            # Get proton flux for this date
+            date_mask = proton_data[proton_bundle.time_column].dt.date == current_date
+            if date_mask.any():
+                proton_values = proton_data.loc[date_mask, "proton_flux"].dropna()
+                if not proton_values.empty:
+                    proton_max = float(proton_values.max())
+                    # S-scale adjustment: high proton flux = significant dose increase
+                    if proton_max > 10.0:  # S1 or higher (>10 pfu)
+                        if proton_max >= 10000:  # S5
+                            s_scale = 5
+                            daily_multiplier *= 2.0  # 2x during extreme SPE
+                        elif proton_max >= 1000:  # S4
+                            s_scale = 4
+                            daily_multiplier *= 1.5
+                        elif proton_max >= 100:  # S3
+                            s_scale = 3
+                            daily_multiplier *= 1.3
+                        elif proton_max >= 10:  # S2
+                            s_scale = 2
+                            daily_multiplier *= 1.1
+                        else:  # S1
+                            s_scale = 1
+                            daily_multiplier *= 1.05
+        
+        # Apply daily adjustments
+        adjusted_base_rate = base_rate * daily_multiplier
         eva_hours = eva_schedule.get(current_date, 0.0)
-        eva_dose = eva_hours * eva_rate_per_hour
-        daily_dose = base_rate + eva_dose
+        eva_dose = eva_hours * (adjusted_base_rate * dose_rate.eva_multiplier) / 24.0
+        daily_dose = adjusted_base_rate + eva_dose
         cumulative += daily_dose
         career_pct = (cumulative / career_limit_msv) * 100.0
         
@@ -538,12 +727,16 @@ def build_radiation_timeline(
             date=current_date,
             mission_day=mission_day,
             environment=environment,
-            daily_dose_msv=base_rate,
+            daily_dose_msv=adjusted_base_rate,
             eva_hours=eva_hours,
             eva_dose_msv=eva_dose,
             total_dose_msv=daily_dose,
             cumulative_dose_msv=cumulative,
             career_pct_used=career_pct,
+            space_weather_kp_max=kp_max,
+            space_weather_proton_max_pfu=proton_max,
+            space_weather_g_scale=g_scale,
+            space_weather_s_scale=s_scale,
         )
         timeline.append(record)
         current_date += timedelta(days=1)
