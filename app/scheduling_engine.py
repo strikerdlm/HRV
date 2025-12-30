@@ -43,6 +43,8 @@ from scheduling_core import (
     check_activity_suitability,
     SAFTE_LOW_RISK_MIN,
     SAFTE_CAUTION_MIN,
+    WorkloadMetrics,
+    compute_workload_balance,
 )
 
 
@@ -99,6 +101,10 @@ class ScheduledActivity:
     # Spatial planning (NASA Mission Control standard)
     location: Optional[str] = None  # e.g., "Lab Module", "Exercise Area", "Crew Quarters"
     
+    # Procedure integration (NASA Mission Control standard)
+    procedure_id: Optional[str] = None  # Link to procedure/checklist
+    checklist_items: List[str] = field(default_factory=list)  # Checklist item IDs
+    
     # Notes
     notes: str = ""
     
@@ -124,6 +130,8 @@ class ScheduledActivity:
             "is_fixed": self.is_fixed,
             "priority": self.priority,
             "location": self.location,
+            "procedure_id": self.procedure_id,
+            "checklist_items": self.checklist_items,
             "notes": self.notes,
         }
     
@@ -146,6 +154,8 @@ class ScheduledActivity:
             is_fixed=data.get("is_fixed", False),
             priority=data.get("priority", 5),
             location=data.get("location"),
+            procedure_id=data.get("procedure_id"),
+            checklist_items=data.get("checklist_items", []),
             notes=data.get("notes", ""),
         )
 
@@ -377,6 +387,7 @@ class SchedulingEngine:
         self.schedules: Dict[date, DailySchedule] = {}
         self.crew_states: Dict[str, CrewScheduleState] = {}
         self.activity_groups: Dict[str, ActivityGroup] = {}  # Activity grouping (NASA Playbook)
+        self.schedule_changes: List[Dict[str, Any]] = []  # Real-time change tracking
         
         if crew_members:
             for crew in crew_members:
@@ -438,6 +449,8 @@ class SchedulingEngine:
         priority: int = 5,
         notes: str = "",
         location: Optional[str] = None,
+        procedure_id: Optional[str] = None,
+        checklist_items: Optional[List[str]] = None,
     ) -> Tuple[Optional[ScheduledActivity], List[ScheduleConflict]]:
         """
         Schedule an activity for a crew member.
@@ -506,6 +519,8 @@ class SchedulingEngine:
             is_fixed=activity_def.category == ActivityCategory.FIXED,
             priority=priority,
             location=location,
+            procedure_id=procedure_id,
+            checklist_items=checklist_items or [],
             notes=notes,
         )
         
@@ -519,8 +534,67 @@ class SchedulingEngine:
             daily_schedule.activities.append(scheduled)
             daily_schedule.conflicts.extend(conflicts)
             self._update_crew_state(crew_id, scheduled)
+            # Track change for real-time updates
+            self._track_schedule_change("activity_added", scheduled.schedule_id, {
+                "crew_id": crew_id,
+                "activity_id": activity_id,
+                "start_time": start_time.isoformat(),
+            })
         
         return scheduled if not critical_conflicts else None, conflicts
+    
+    def _track_schedule_change(
+        self,
+        change_type: str,
+        activity_id: str,
+        details: Dict[str, Any],
+    ) -> None:
+        """Track schedule changes for real-time updates (NASA Mission Control standard)."""
+        change = {
+            "change_id": str(uuid.uuid4()),
+            "timestamp": datetime.now().isoformat(),
+            "change_type": change_type,  # "activity_added", "activity_updated", "activity_deleted", "schedule_rolled_back"
+            "activity_id": activity_id,
+            "details": details,
+        }
+        self.schedule_changes.append(change)
+        # Keep only last 100 changes to prevent memory bloat
+        if len(self.schedule_changes) > 100:
+            self.schedule_changes = self.schedule_changes[-100:]
+    
+    def get_recent_changes(
+        self,
+        since: Optional[datetime] = None,
+        limit: int = 20,
+    ) -> List[Dict[str, Any]]:
+        """Get recent schedule changes for real-time updates (NASA Mission Control standard)."""
+        if since:
+            return [
+                c for c in self.schedule_changes
+                if datetime.fromisoformat(c["timestamp"]) >= since
+            ][-limit:]
+        return self.schedule_changes[-limit:]
+    
+    def link_procedure_to_activity(
+        self,
+        schedule_id: str,
+        procedure_id: str,
+        checklist_items: Optional[List[str]] = None,
+    ) -> bool:
+        """Link a procedure/checklist to a scheduled activity (NASA Mission Control standard)."""
+        # Find activity across all schedules
+        for daily in self.schedules.values():
+            activity = next((a for a in daily.activities if a.schedule_id == schedule_id), None)
+            if activity:
+                activity.procedure_id = procedure_id
+                if checklist_items:
+                    activity.checklist_items = checklist_items
+                self._track_schedule_change("activity_updated", schedule_id, {
+                    "procedure_id": procedure_id,
+                    "checklist_items": checklist_items or [],
+                })
+                return True
+        return False
     
     def _check_conflicts(
         self,
@@ -844,6 +918,296 @@ class SchedulingEngine:
                 ))
         
         return conflicts
+    
+    def suggest_optimal_times(
+        self,
+        crew_id: str,
+        activity_id: str,
+        schedule_date: date,
+        duration_minutes: int,
+        preferred_start: Optional[datetime] = None,
+    ) -> List[Tuple[datetime, float]]:
+        """
+        Suggest optimal activity times based on circadian rhythm (NASA Mission Control standard).
+        
+        Args:
+            crew_id: Crew member ID
+            activity_id: Activity to schedule
+            schedule_date: Target date
+            duration_minutes: Activity duration
+            preferred_start: Preferred start time (optional)
+            
+        Returns:
+            List of (start_time, score) tuples sorted by score (highest first)
+            Score indicates circadian alignment (0-1, higher = better)
+        """
+        import math
+        from scheduling_core import ALL_ACTIVITIES
+        
+        crew = self.crew_members.get(crew_id)
+        if not crew:
+            return []
+        
+        activity_def = ALL_ACTIVITIES.get(activity_id)
+        if not activity_def:
+            return []
+        
+        # Get chronotype offset (convert string to hours)
+        chronotype_map = {
+            "early": -2.0,
+            "intermediate": 0.0,
+            "late": 2.0,
+        }
+        chronotype_offset = chronotype_map.get(crew.chronotype, 0.0)
+        
+        # Circadian nadir at ~4 AM (adjusted for chronotype)
+        nadir_hour = 4.0 + chronotype_offset
+        circadian_period = 24.0
+        circadian_amplitude = 15.0  # 15% modulation
+        
+        suggestions: List[Tuple[datetime, float]] = []
+        
+        # Generate suggestions for each hour of the day
+        for hour in range(24):
+            for minute in [0, 15, 30, 45]:
+                start_time = datetime.combine(schedule_date, datetime.min.time().replace(hour=hour, minute=minute))
+                end_time = start_time + timedelta(minutes=duration_minutes)
+                
+                # Skip if extends past midnight
+                if end_time.date() > schedule_date:
+                    continue
+                
+                # Check for conflicts
+                conflicts = self._check_time_conflicts(schedule_date, crew_id, start_time, end_time)
+                if conflicts:
+                    continue
+                
+                # Calculate circadian score
+                hour_of_day = hour + minute / 60.0
+                phase = 2 * math.pi * ((hour_of_day - nadir_hour) / circadian_period)
+                circadian_factor = 1.0 - (circadian_amplitude / 100.0) * (1 - math.cos(phase)) / 2
+                
+                # Activity-specific adjustments
+                # High cognitive tasks: prefer morning (circadian peak)
+                # Physical tasks: prefer afternoon (body temperature peak)
+                # Low cognitive tasks: flexible
+                if activity_def.cognitive_load == "high":
+                    # Peak performance typically 2-4 hours after wake (~10 AM for early, ~12 PM for intermediate, ~2 PM for late)
+                    optimal_hour = 10.0 + chronotype_offset
+                    hour_diff = abs(hour_of_day - optimal_hour)
+                    if hour_diff > 12:
+                        hour_diff = 24 - hour_diff
+                    cognitive_bonus = max(0, 1.0 - hour_diff / 6.0)  # Bonus within 6 hours
+                    score = circadian_factor * 0.7 + cognitive_bonus * 0.3
+                elif activity_def.cognitive_load == "moderate":
+                    score = circadian_factor
+                else:  # low cognitive load
+                    # Physical tasks benefit from afternoon (body temp peak ~2-4 PM)
+                    if activity_def.met_value > 3.0:
+                        optimal_hour = 14.0 + chronotype_offset
+                        hour_diff = abs(hour_of_day - optimal_hour)
+                        if hour_diff > 12:
+                            hour_diff = 24 - hour_diff
+                        physical_bonus = max(0, 1.0 - hour_diff / 4.0)  # Bonus within 4 hours
+                        score = circadian_factor * 0.6 + physical_bonus * 0.4
+                    else:
+                        score = circadian_factor
+                
+                # Prefer times closer to preferred_start if provided
+                if preferred_start:
+                    time_diff_hours = abs((start_time - preferred_start).total_seconds() / 3600)
+                    if time_diff_hours > 12:
+                        time_diff_hours = 24 - time_diff_hours
+                    preference_bonus = max(0, 1.0 - time_diff_hours / 6.0)
+                    score = score * 0.8 + preference_bonus * 0.2
+                
+                suggestions.append((start_time, score))
+        
+        # Sort by score (highest first) and return top 10
+        suggestions.sort(key=lambda x: x[1], reverse=True)
+        return suggestions[:10]
+    
+    def suggest_workload_redistribution(
+        self,
+        schedule_date: date,
+    ) -> List[Dict[str, Any]]:
+        """
+        Suggest workload redistribution to balance crew workload (NASA Mission Control standard).
+        
+        Args:
+            schedule_date: Date to analyze
+            
+        Returns:
+            List of redistribution suggestions with crew_id, activity_id, suggested_time, reason
+        """
+        daily = self.get_daily_schedule(schedule_date)
+        if not daily or not daily.activities:
+            return []
+        
+        # Calculate workload for each crew member
+        crew_workloads: Dict[str, WorkloadMetrics] = {}
+        crew_activities: Dict[str, List[ScheduledActivity]] = {}
+        
+        for activity in daily.activities:
+            if activity.crew_id not in crew_activities:
+                crew_activities[activity.crew_id] = []
+            crew_activities[activity.crew_id].append(activity)
+        
+        for crew_id, activities in crew_activities.items():
+            crew = self.crew_members.get(crew_id)
+            if not crew:
+                continue
+            workload = compute_workload_balance(activities, crew.weight_kg)
+            workload.crew_id = crew_id
+            crew_workloads[crew_id] = workload
+        
+        if len(crew_workloads) < 2:
+            return []  # Need at least 2 crew members for redistribution
+        
+        # Find crew with highest and lowest workload
+        sorted_crew = sorted(crew_workloads.items(), key=lambda x: x[1].total_work_minutes, reverse=True)
+        max_crew_id, max_workload = sorted_crew[0]
+        min_crew_id, min_workload = sorted_crew[-1]
+        
+        # Calculate workload difference
+        workload_diff = max_workload.total_work_minutes - min_workload.total_work_minutes
+        
+        # Only suggest if difference is significant (>60 minutes)
+        if workload_diff < 60:
+            return []
+        
+        suggestions: List[Dict[str, Any]] = []
+        
+        # Find activities from high-workload crew that could be moved to low-workload crew
+        max_crew_activities = crew_activities[max_crew_id]
+        for activity in sorted(max_crew_activities, key=lambda a: a.duration_minutes, reverse=True):
+            # Skip fixed activities
+            if activity.is_fixed:
+                continue
+            
+            # Skip if activity requires specific crew (e.g., EVA for specific role)
+            activity_def = ALL_ACTIVITIES.get(activity.activity_id)
+            if activity_def and "crew_specific" in activity_def.constraints:
+                continue
+            
+            # Check if activity can be moved to low-workload crew
+            # (In real implementation, would check crew roles, qualifications, etc.)
+            suggestions.append({
+                "from_crew_id": max_crew_id,
+                "to_crew_id": min_crew_id,
+                "activity_id": activity.activity_id,
+                "activity_name": activity.activity_name,
+                "schedule_id": activity.schedule_id,
+                "current_time": activity.start_time,
+                "workload_reduction": activity.duration_minutes,
+                "reason": f"Redistribute {activity.duration_minutes} min from {max_crew_id} (high workload) to {min_crew_id} (low workload)",
+            })
+            
+            # Limit to top 5 suggestions
+            if len(suggestions) >= 5:
+                break
+        
+        return suggestions
+    
+    def check_all_constraints(
+        self,
+        schedule_date: date,
+    ) -> List[Dict[str, Any]]:
+        """
+        Check all constraints for a schedule and return violations (NASA Mission Control standard).
+        
+        Args:
+            schedule_date: Date to check
+            
+        Returns:
+            List of constraint violations with details
+        """
+        daily = self.get_daily_schedule(schedule_date)
+        if not daily or not daily.activities:
+            return []
+        
+        violations: List[Dict[str, Any]] = []
+        
+        # Check hard constraints
+        for constraint in HARD_CONSTRAINTS:
+            if constraint.constraint_id == "briefing_sync":
+                # All crew must have briefing at same time
+                briefing_times = set()
+                for activity in daily.activities:
+                    if activity.activity_id == "briefing":
+                        briefing_times.add(activity.start_time)
+                
+                if len(briefing_times) > 1:
+                    violations.append({
+                        "constraint_id": constraint.constraint_id,
+                        "constraint_type": "hard",
+                        "severity": "error",
+                        "description": "Briefing times not synchronized across crew",
+                        "affected_activities": [a.schedule_id for a in daily.activities if a.activity_id == "briefing"],
+                        "suggested_resolution": "Synchronize all briefing times to same hour",
+                    })
+            
+            elif constraint.constraint_id == "sleep_block":
+                # Sleep must be continuous 8-hour block
+                for crew_id in self.crew_members.keys():
+                    sleep_activities = [a for a in daily.activities if a.crew_id == crew_id and a.activity_id == "sleep"]
+                    if sleep_activities:
+                        total_sleep = sum(a.duration_minutes for a in sleep_activities)
+                        if total_sleep < 480:  # Less than 8 hours
+                            violations.append({
+                                "constraint_id": constraint.constraint_id,
+                                "constraint_type": "hard",
+                                "severity": "error",
+                                "description": f"Crew {crew_id}: Sleep duration < 8 hours ({total_sleep} min)",
+                                "affected_activities": [a.schedule_id for a in sleep_activities],
+                                "suggested_resolution": "Ensure continuous 8-hour sleep block",
+                            })
+        
+        # Check soft constraints (workload, recovery, etc.)
+        from scheduling_core import compute_workload_balance
+        
+        for crew_id, crew in self.crew_members.items():
+            crew_activities = [a for a in daily.activities if a.crew_id == crew_id]
+            if not crew_activities:
+                continue
+            
+            workload = compute_workload_balance(crew_activities, crew.weight_kg)
+            
+            # Check work-rest ratio
+            if workload.work_rest_ratio > 2.5:
+                violations.append({
+                    "constraint_id": "work_rest_ratio",
+                    "constraint_type": "soft",
+                    "severity": "warning",
+                    "description": f"Crew {crew.name}: Work-rest ratio too high ({workload.work_rest_ratio:.2f})",
+                    "affected_activities": [a.schedule_id for a in crew_activities],
+                    "suggested_resolution": "Add more rest periods or reduce work duration",
+                })
+            
+            # Check recovery score
+            if workload.recovery_score < 70:
+                violations.append({
+                    "constraint_id": "recovery_score",
+                    "constraint_type": "soft",
+                    "severity": "warning",
+                    "description": f"Crew {crew.name}: Low recovery score ({workload.recovery_score:.0f}%)",
+                    "affected_activities": [a.schedule_id for a in crew_activities],
+                    "suggested_resolution": "Reduce high-intensity activities or increase rest",
+                })
+            
+            # Check total work hours
+            work_hours = workload.total_work_minutes / 60
+            if work_hours > 10:
+                violations.append({
+                    "constraint_id": "max_work_hours",
+                    "constraint_type": "soft",
+                    "severity": "warning",
+                    "description": f"Crew {crew.name}: Work hours exceed 10h ({work_hours:.1f}h)",
+                    "affected_activities": [a.schedule_id for a in crew_activities],
+                    "suggested_resolution": "Redistribute workload or reduce scheduled activities",
+                })
+        
+        return violations
     
     def generate_daily_template(
         self,
