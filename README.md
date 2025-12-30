@@ -427,7 +427,8 @@ The app accepts text files with one RR interval per line in **milliseconds**:
   ```
 * **Export JSON (unzipped)**: You can also upload individual Garmin export `.json` files (e.g., `UDSFile_*.json`, `*_sleepData.json`) in **User Profile → Data → Wrist Monitoring (Vivosmart 5)**.
 * **FIT Files**: Export individual activities from Garmin Connect web
-* **API Access**: Configure `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env` (see Configuration below)
+* **API Access**: Configure `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env` (see Configuration below).
+  - **Recommended**: use token-based login via `~/.garminconnect` (see “Garmin Connect token authentication” below).
 
 ### Environment Configuration
 
@@ -460,6 +461,26 @@ api_key = get_env_variable("NASA_API_KEY", required=True)
 ```
 
 See `app/env_loader_example.py` for complete examples.
+
+#### Garmin Connect token authentication (recommended)
+Garmin logins can require MFA/extra verification and may fail in non-interactive environments.
+This project supports **token-based auth**:
+- The app will **try saved tokens first**, before falling back to `GARMIN_EMAIL` / `GARMIN_PASSWORD`.
+- Tokens are stored under your home directory at `~/.garminconnect/`.
+
+**Generate tokens (one-time interactive step):**
+1. Ensure `.env` contains `GARMIN_EMAIL` and `GARMIN_PASSWORD`.
+   - If your password contains characters like `#` or spaces, wrap it in quotes.
+2. Run:
+   ```
+   python tests/test_garmin_email.py
+   ```
+3. Follow prompts (including MFA if required). Tokens will be saved to `~/.garminconnect/`.
+
+**Move to a new computer:**
+- Copy the entire `~/.garminconnect/` directory to the new machine under the new user’s home directory.
+
+**Security note:** Treat `~/.garminconnect/` like a password/API key (do not commit it to git).
 
 ### ActiGraph GT3X Files
 
