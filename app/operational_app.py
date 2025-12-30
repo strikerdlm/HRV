@@ -159,6 +159,14 @@ def main() -> None:
         scheduling_available = False
         render_scheduling_tab = None  # type: ignore[assignment]
 
+    try:
+        from experiments_tab import render_experiments_tab, EXPERIMENTS_TAB_AVAILABLE  # noqa: PLC0415
+
+        experiments_available = EXPERIMENTS_TAB_AVAILABLE
+    except ImportError:  # pragma: no cover
+        experiments_available = False
+        render_experiments_tab = None  # type: ignore[assignment]
+
     if "_app_session_ready" not in st.session_state:
         st.session_state["_app_session_ready"] = True
 
@@ -180,6 +188,8 @@ def main() -> None:
     nav_options: list[str] = []
     if scheduling_available:
         nav_options.append("🗓️ Crew Scheduling")
+    if experiments_available:
+        nav_options.append("🔬 Experiments")
     if user_profile_available:
         nav_options.append("👤 User Profile")
     if about_available:
@@ -202,6 +212,13 @@ def main() -> None:
             render_scheduling_tab()  # type: ignore[misc]
         else:
             st.error("Scheduling module unavailable (`scheduling_tab.py`).")
+        return
+
+    if page == "🔬 Experiments":
+        if experiments_available and render_experiments_tab is not None:
+            render_experiments_tab()  # type: ignore[misc]
+        else:
+            st.error("Experiments module unavailable (`experiments_tab.py`).")
         return
 
     if page == "👤 User Profile":
