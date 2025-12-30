@@ -693,7 +693,7 @@ FIXED_ACTIVITIES: Tuple[ActivityDefinition, ...] = (
         met_value=7.0,
         met_source="2024 Adult Compendium - stationary cycling, moderate effort",
         cognitive_load="low",
-        constraints=("resource_limited_2",),  # Max 2 concurrent
+        constraints=("resource_limited_1",),  # Max 1 concurrent (equipment constraint)
     ),
     ActivityDefinition(
         id="recreation",
@@ -708,12 +708,12 @@ FIXED_ACTIVITIES: Tuple[ActivityDefinition, ...] = (
     ActivityDefinition(
         id="hygiene",
         name="Hygiene/Prep",
-        category=ActivityCategory.FIXED,
+        category=ActivityCategory.RESOURCE_LIMITED,
         duration_min=30,
         met_value=2.4,
         met_source="2024 Adult Compendium - personal hygiene average",
         cognitive_load="low",
-        constraints=("pre_duty_mandatory",),
+        constraints=("resource_limited_1", "pre_duty_mandatory"),  # Hygiene module: 1 person
     ),
     ActivityDefinition(
         id="sleep",
@@ -740,21 +740,112 @@ VARIABLE_ACTIVITIES: Tuple[ActivityDefinition, ...] = (
         constraints=("variable_duration",),
         recovery_time_min=15,  # 15 min per hour
     ),
+    # ---------------------------------------------------------------------------
+    # Experiments (6 daily experiments, 1 hour each)
+    # ---------------------------------------------------------------------------
+    ActivityDefinition(
+        id="exp_physio_monitoring",
+        name="EXP-1: Physiological Monitoring",
+        category=ActivityCategory.VARIABLE,
+        duration_min=60,
+        met_value=1.5,
+        met_source="2024 Adult Compendium - sitting, data collection",
+        cognitive_load="moderate",
+        constraints=("daily_required", "equipment_available"),
+    ),
+    ActivityDefinition(
+        id="exp_cortisol_sampling",
+        name="EXP-2: Cortisol Salival Sampling",
+        category=ActivityCategory.VARIABLE,
+        duration_min=60,
+        met_value=1.3,
+        met_source="2024 Adult Compendium - sample collection, light",
+        cognitive_load="low",
+        constraints=("daily_required", "time_sensitive"),
+    ),
+    ActivityDefinition(
+        id="exp_neurocognitive",
+        name="EXP-3: Neurocognitive Battery",
+        category=ActivityCategory.VARIABLE,
+        duration_min=60,
+        met_value=1.5,
+        met_source="2024 Adult Compendium - cognitive testing",
+        cognitive_load="high",
+        constraints=("daily_required", "quiet_environment"),
+    ),
+    ActivityDefinition(
+        id="exp_psychological",
+        name="EXP-4: Psychological Assessment",
+        category=ActivityCategory.VARIABLE,
+        duration_min=60,
+        met_value=1.3,
+        met_source="2024 Adult Compendium - questionnaire completion",
+        cognitive_load="moderate",
+        constraints=("daily_required",),
+    ),
+    ActivityDefinition(
+        id="exp_sleep_analysis",
+        name="EXP-5: Sleep/Actigraphy Analysis",
+        category=ActivityCategory.VARIABLE,
+        duration_min=60,
+        met_value=1.5,
+        met_source="2024 Adult Compendium - data review, light",
+        cognitive_load="moderate",
+        constraints=("daily_required", "morning_preferred"),
+    ),
+    ActivityDefinition(
+        id="exp_matb_workload",
+        name="EXP-6: MATB-II Workload Assessment",
+        category=ActivityCategory.VARIABLE,
+        duration_min=60,
+        met_value=1.8,
+        met_source="2024 Adult Compendium - multi-tasking cognitive",
+        cognitive_load="high",
+        constraints=("daily_required", "computer_station"),
+    ),
+    # ---------------------------------------------------------------------------
+    # EVA Activities with ISLE Protocol
+    # References:
+    #   - NTRS 20110007150: ISLE Prebreathe Protocol Peer Review Assessment
+    #   - NASA-STD-3001 Vol 2 Rev B: Decompression Sickness Technical Brief
+    #   - Gernhardt & Dervay (2013): EVA Operations Chapter 5.4
+    # ---------------------------------------------------------------------------
+    ActivityDefinition(
+        id="eva_prep_isle",
+        name="EVA Prep - ISLE Protocol",
+        category=ActivityCategory.VARIABLE,
+        duration_min=100,  # 40 min mask O2 + 20 min suit + 40 min in-suit prebreathe
+        met_value=2.5,
+        met_source="NASA PRP studies - light exercise in-suit (5.8 mL·kg⁻¹·min⁻¹)",
+        cognitive_load="moderate",
+        constraints=("eva_crew_only", "medical_clearance", "suit_checkout_complete"),
+    ),
     ActivityDefinition(
         id="eva",
         name="Extravehicular Activity (EVA)",
         category=ActivityCategory.VARIABLE,
-        duration_min=360,  # Typically 5-7+ hours
+        duration_min=120,  # 2 hours for analog mission simulation
         met_value=4.5,
-        met_source="NASA measured EVA metabolic rate (194-238 kcal/hr range, ~4.5 MET for 70kg)",
+        met_source="NASA EVA metabolic rate: 194 kcal/hr (Waligora & Kumar 1995, PMID:11540993)",
         cognitive_load="high",
         constraints=(
             "medical_clearance",
-            "prebreathe_protocol",
+            "prebreathe_complete",
             "min_recovery_48h",
             "vo2max_32.9",
+            "max_crew_2",
         ),
-        recovery_time_min=2880,  # 48 hours minimum
+        recovery_time_min=2880,  # 48 hours minimum (NASA-STD-3001)
+    ),
+    ActivityDefinition(
+        id="eva_post",
+        name="EVA Post - Suit Doffing & Debrief",
+        category=ActivityCategory.VARIABLE,
+        duration_min=60,
+        met_value=2.0,
+        met_source="NASA EMU doffing operations",
+        cognitive_load="moderate",
+        constraints=("eva_crew_only",),
     ),
 )
 
@@ -1361,6 +1452,399 @@ def compute_workload_balance(
 
 
 # ---------------------------------------------------------------------------
+# EVA Procedures and Checklists
+# ---------------------------------------------------------------------------
+# Scientific References (verified):
+#   - NTRS 20110007150: In-Suit Light Exercise (ISLE) Prebreathe Protocol Peer Review
+#     https://ntrs.nasa.gov/citations/20110007150
+#   - NASA-STD-3001 Vol 2 Rev B: Human Factors, Habitability, and Environmental Health
+#     https://www.nasa.gov/wp-content/uploads/2023/12/ochmo-tb-037-decompression-sickness.pdf
+#   - Gernhardt ML, Dervay JP (2013). Chapter 5.4 Extravehicular Activities.
+#     https://www.nasa.gov/wp-content/uploads/2023/03/gernhardt-eva-ops-chp-5.4-2013.pdf
+#   - NTRS 20000110097: Design and Testing of a 2-Hour O2 Prebreathe Protocol
+#     https://ntrs.nasa.gov/citations/20000110097
+#   - Katuntsev VP et al. (2004). EVA medical support on Mir. Acta Astronautica 54(8):577-587
+#     PMID: 14740657
+# ---------------------------------------------------------------------------
+
+@dataclass(frozen=True, slots=True)
+class EVAChecklistItem:
+    """Single item in an EVA checklist."""
+    id: str
+    description: str
+    responsible: str  # "EV1", "EV2", "IV", "MCC", "EVA_OFFICER"
+    duration_min: int
+    critical: bool = False
+    verification_required: bool = False
+    notes: str = ""
+
+
+# ISLE Protocol Timeline (from NASA NTRS 20110007150 & NASA-STD-3001)
+ISLE_PROTOCOL_TIMELINE: Tuple[EVAChecklistItem, ...] = (
+    EVAChecklistItem(
+        id="isle_01",
+        description="Crew medical status check - vital signs, hydration, fatigue assessment",
+        responsible="MCC",
+        duration_min=10,
+        critical=True,
+        verification_required=True,
+        notes="Flight Surgeon approval required for EVA GO",
+    ),
+    EVAChecklistItem(
+        id="isle_02",
+        description="Equipment Lock (EL) ingress and EMU power-up",
+        responsible="EV1",
+        duration_min=15,
+        verification_required=True,
+    ),
+    EVAChecklistItem(
+        id="isle_03",
+        description="Begin 100% O2 mask prebreathe (40 minutes)",
+        responsible="EV1",
+        duration_min=40,
+        critical=True,
+        notes="Prebreathe at 14.7 psia cabin pressure",
+    ),
+    EVAChecklistItem(
+        id="isle_04",
+        description="EMU suit donning and checkout",
+        responsible="EV1",
+        duration_min=20,
+        verification_required=True,
+        notes="IV crew assists with suit integrity checks",
+    ),
+    EVAChecklistItem(
+        id="isle_05",
+        description="Airlock depressurization to 10.2 psia",
+        responsible="IV",
+        duration_min=5,
+        critical=True,
+    ),
+    EVAChecklistItem(
+        id="isle_06",
+        description="In-suit light exercise prebreathe (40 min at 10.2 psia)",
+        responsible="EV1",
+        duration_min=40,
+        critical=True,
+        notes="Light arm/leg movements, ~5.8 mL·kg⁻¹·min⁻¹ O2 consumption",
+    ),
+    EVAChecklistItem(
+        id="isle_07",
+        description="Final suit leak check and systems verification",
+        responsible="EV1",
+        duration_min=10,
+        critical=True,
+        verification_required=True,
+    ),
+    EVAChecklistItem(
+        id="isle_08",
+        description="Crew Lock depressurization to vacuum (4.3 psia suit)",
+        responsible="IV",
+        duration_min=10,
+        critical=True,
+        notes="Depress to <0.5 psia for hatch opening",
+    ),
+)
+
+
+# MCC EVA Checklist (Mission Control responsibilities)
+MCC_EVA_CHECKLIST: Tuple[EVAChecklistItem, ...] = (
+    # T-24 hours
+    EVAChecklistItem(
+        id="mcc_01",
+        description="EVA weather/environment assessment",
+        responsible="MCC",
+        duration_min=30,
+        notes="Solar activity, thermal conditions, lighting",
+    ),
+    EVAChecklistItem(
+        id="mcc_02",
+        description="Crew physiological status review (SAFTE, HRV, sleep)",
+        responsible="MCC",
+        duration_min=20,
+        critical=True,
+        verification_required=True,
+        notes="Verify IHPI ≥75, SAFTE ≥85%, lnRMSSD z-score > -1",
+    ),
+    EVAChecklistItem(
+        id="mcc_03",
+        description="EVA timeline review and task prioritization",
+        responsible="MCC",
+        duration_min=30,
+        verification_required=True,
+    ),
+    EVAChecklistItem(
+        id="mcc_04",
+        description="Communication systems check - primary and backup",
+        responsible="MCC",
+        duration_min=15,
+        critical=True,
+    ),
+    # T-2 hours
+    EVAChecklistItem(
+        id="mcc_05",
+        description="Flight Surgeon GO/NO-GO poll",
+        responsible="MCC",
+        duration_min=10,
+        critical=True,
+        verification_required=True,
+        notes="Medical clearance for each EV crew member",
+    ),
+    EVAChecklistItem(
+        id="mcc_06",
+        description="EVA Officer GO/NO-GO poll",
+        responsible="MCC",
+        duration_min=10,
+        critical=True,
+        verification_required=True,
+    ),
+    EVAChecklistItem(
+        id="mcc_07",
+        description="Final GO/NO-GO poll - all stations",
+        responsible="MCC",
+        duration_min=15,
+        critical=True,
+        verification_required=True,
+    ),
+    # During EVA
+    EVAChecklistItem(
+        id="mcc_08",
+        description="Continuous metabolic rate monitoring",
+        responsible="MCC",
+        duration_min=0,  # Continuous
+        notes="Alert if sustained >300 kcal/hr",
+    ),
+    EVAChecklistItem(
+        id="mcc_09",
+        description="Suit consumables monitoring (O2, battery, CO2)",
+        responsible="MCC",
+        duration_min=0,  # Continuous
+        critical=True,
+    ),
+    EVAChecklistItem(
+        id="mcc_10",
+        description="30-minute status checks with EV crew",
+        responsible="MCC",
+        duration_min=5,
+        notes="Fatigue assessment, task progress",
+    ),
+)
+
+
+# EVA Officer Checklist (detailed procedures)
+EVA_OFFICER_CHECKLIST: Tuple[EVAChecklistItem, ...] = (
+    # Pre-EVA (T-48 hours)
+    EVAChecklistItem(
+        id="evo_01",
+        description="EMU inspection and servicing verification",
+        responsible="EVA_OFFICER",
+        duration_min=60,
+        critical=True,
+        verification_required=True,
+        notes="Check suit hours, last maintenance, consumable levels",
+    ),
+    EVAChecklistItem(
+        id="evo_02",
+        description="Tool kit audit and configuration",
+        responsible="EVA_OFFICER",
+        duration_min=30,
+        verification_required=True,
+    ),
+    EVAChecklistItem(
+        id="evo_03",
+        description="Crew EVA readiness certification check",
+        responsible="EVA_OFFICER",
+        duration_min=20,
+        critical=True,
+        notes="Verify VO₂max ≥32.9 mL/kg/min, training currency",
+    ),
+    EVAChecklistItem(
+        id="evo_04",
+        description="Airlock systems verification",
+        responsible="EVA_OFFICER",
+        duration_min=45,
+        critical=True,
+        verification_required=True,
+    ),
+    # Pre-EVA (T-4 hours)
+    EVAChecklistItem(
+        id="evo_05",
+        description="EMU battery installation and checkout",
+        responsible="EVA_OFFICER",
+        duration_min=30,
+        verification_required=True,
+    ),
+    EVAChecklistItem(
+        id="evo_06",
+        description="O2 and H2O recharge verification",
+        responsible="EVA_OFFICER",
+        duration_min=20,
+        critical=True,
+        notes="Verify consumables for planned EVA duration + 30 min reserve",
+    ),
+    EVAChecklistItem(
+        id="evo_07",
+        description="Comm check with MCC on all frequencies",
+        responsible="EVA_OFFICER",
+        duration_min=15,
+        critical=True,
+    ),
+    # ISLE Protocol support
+    EVAChecklistItem(
+        id="evo_08",
+        description="O2 mask prebreathe initiation and monitoring",
+        responsible="EVA_OFFICER",
+        duration_min=40,
+        critical=True,
+        notes="Start time logged, verify 100% O2 flow",
+    ),
+    EVAChecklistItem(
+        id="evo_09",
+        description="Supervise EMU donning and assist with suit-up",
+        responsible="EVA_OFFICER",
+        duration_min=30,
+        verification_required=True,
+    ),
+    EVAChecklistItem(
+        id="evo_10",
+        description="Suit integrity leak check (press to 4.3 psi delta-P)",
+        responsible="EVA_OFFICER",
+        duration_min=15,
+        critical=True,
+        verification_required=True,
+        notes="Max allowable leak rate: 100 sccm",
+    ),
+    EVAChecklistItem(
+        id="evo_11",
+        description="In-suit prebreathe monitoring (40 min ISLE)",
+        responsible="EVA_OFFICER",
+        duration_min=40,
+        critical=True,
+        notes="Monitor crew comfort, suit parameters, light exercise compliance",
+    ),
+    # EVA Egress
+    EVAChecklistItem(
+        id="evo_12",
+        description="Final hatch seal verification",
+        responsible="EVA_OFFICER",
+        duration_min=5,
+        critical=True,
+    ),
+    EVAChecklistItem(
+        id="evo_13",
+        description="Crew Lock depress and hatch opening clearance",
+        responsible="EVA_OFFICER",
+        duration_min=10,
+        critical=True,
+        verification_required=True,
+    ),
+    # Post-EVA
+    EVAChecklistItem(
+        id="evo_14",
+        description="Hatch close and Crew Lock repress verification",
+        responsible="EVA_OFFICER",
+        duration_min=15,
+        critical=True,
+    ),
+    EVAChecklistItem(
+        id="evo_15",
+        description="Post-EVA crew medical assessment",
+        responsible="EVA_OFFICER",
+        duration_min=20,
+        critical=True,
+        notes="DCS symptom check, fatigue assessment, hydration status",
+    ),
+    EVAChecklistItem(
+        id="evo_16",
+        description="EMU doffing and post-EVA servicing",
+        responsible="EVA_OFFICER",
+        duration_min=45,
+        verification_required=True,
+    ),
+    EVAChecklistItem(
+        id="evo_17",
+        description="EVA debrief and lessons learned documentation",
+        responsible="EVA_OFFICER",
+        duration_min=30,
+    ),
+)
+
+
+# Complete EVA procedure timeline for analog missions (2-hour EVA)
+ANALOG_EVA_TIMELINE: Dict[str, Any] = {
+    "total_duration_min": 280,  # ~4.5 hours total
+    "phases": {
+        "pre_eva": {
+            "duration_min": 100,
+            "activities": [
+                "Medical clearance (10 min)",
+                "O2 mask prebreathe - 40 min at 14.7 psia",
+                "EMU donning - 20 min",
+                "Depress to 10.2 psia - 5 min",
+                "In-suit ISLE prebreathe - 40 min",
+                "Final checks - 10 min",
+                "Depress to vacuum - 10 min",
+            ],
+        },
+        "eva_operations": {
+            "duration_min": 120,  # 2-hour EVA
+            "activities": [
+                "Hatch opening and egress (10 min)",
+                "Translation to worksite (15 min)",
+                "Primary tasks (60 min)",
+                "Secondary tasks (20 min)",
+                "Translation back (10 min)",
+                "Hatch ingress (5 min)",
+            ],
+        },
+        "post_eva": {
+            "duration_min": 60,
+            "activities": [
+                "Repress to 14.7 psia (15 min)",
+                "Hatch opening and helmet removal (10 min)",
+                "EMU doffing (20 min)",
+                "Medical assessment (10 min)",
+                "Debrief (5 min)",
+            ],
+        },
+    },
+    "references": [
+        {
+            "citation": "NASA NTRS 20110007150: In-Suit Light Exercise (ISLE) Prebreathe Protocol Peer Review Assessment",
+            "url": "https://ntrs.nasa.gov/citations/20110007150",
+            "key_finding": "ISLE saves 2.5 kg O2/EVA vs previous protocols; 40-min mask + 40-min in-suit prebreathe",
+        },
+        {
+            "citation": "NASA-STD-3001 Technical Brief: Decompression Sickness",
+            "url": "https://www.nasa.gov/wp-content/uploads/2023/12/ochmo-tb-037-decompression-sickness.pdf",
+            "key_finding": "ISLE protocol: 40 min O2 by mask → 20 min depress to 10.2 psia → 40 min in-suit light exercise",
+        },
+        {
+            "citation": "Gernhardt ML, Dervay JP (2013). EVA Operations Chapter 5.4",
+            "url": "https://www.nasa.gov/wp-content/uploads/2023/03/gernhardt-eva-ops-chp-5.4-2013.pdf",
+            "key_finding": "Light exercise at 5.8 mL·kg⁻¹·min⁻¹ O2 enhances nitrogen washout",
+        },
+        {
+            "citation": "Katuntsev VP et al. (2004). Mir EVA medical support. PMID:14740657",
+            "url": "https://pubmed.ncbi.nlm.nih.gov/14740657/",
+            "key_finding": "30-min prebreathe with 40 kPa suit pressure - zero DCS incidents in 78 EVAs",
+        },
+    ],
+}
+
+
+# Experiment IDs for scheduling
+EXPERIMENT_IDS: Tuple[str, ...] = (
+    "exp_physio_monitoring",
+    "exp_cortisol_sampling",
+    "exp_neurocognitive",
+    "exp_psychological",
+    "exp_sleep_analysis",
+    "exp_matb_workload",
+)
+
+
+# ---------------------------------------------------------------------------
 # Module Exports
 # ---------------------------------------------------------------------------
 
@@ -1417,5 +1901,12 @@ __all__ = [
     "WorkloadMetrics",
     "compute_workload_balance",
     "check_activity_suitability",
+    # EVA Procedures and Checklists
+    "EVAChecklistItem",
+    "ISLE_PROTOCOL_TIMELINE",
+    "MCC_EVA_CHECKLIST",
+    "EVA_OFFICER_CHECKLIST",
+    "ANALOG_EVA_TIMELINE",
+    "EXPERIMENT_IDS",
 ]
 
