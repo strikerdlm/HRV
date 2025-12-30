@@ -2136,9 +2136,10 @@ def _render_mcc_eva_checklist() -> None:
                 
                 with col1:
                     checked = st.checkbox(
-                        "",
+                        "Complete",
                         key=f"mcc_{item.id}",
                         value=st.session_state["mcc_checklist_state"].get(item.id, False),
+                        label_visibility="collapsed",
                     )
                     st.session_state["mcc_checklist_state"][item.id] = checked
                 
@@ -2211,9 +2212,10 @@ def _render_eva_officer_checklist() -> None:
                 
                 with col1:
                     checked = st.checkbox(
-                        "",
+                        "Complete",
                         key=f"evo_{item.id}",
                         value=st.session_state["evo_checklist_state"].get(item.id, False),
+                        label_visibility="collapsed",
                     )
                     st.session_state["evo_checklist_state"][item.id] = checked
                 
