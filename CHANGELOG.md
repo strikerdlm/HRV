@@ -5,6 +5,53 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.1] - 2025-12-30
+
+### Added - Enhanced Space Weather & EVA Radiation Dashboards
+
+#### New Visualizations
+
+1. **EVA Radiation Metrics Dashboard** — Comprehensive real-time radiation monitoring plot:
+   - Multi-metric horizontal bar chart showing Proton Flux (>10 MeV), Kp Index, and EVA Dose Rate
+   - Values normalized to percentage of critical threshold for visual comparison
+   - Color-coded risk zones (green/yellow/red) based on S-scale and G-scale classifications
+   - Critical threshold reference line at 100% for operational decision-making
+   - Dynamic axis bounds ensuring all data points are visible
+   - Publication-quality ECharts visualization following Nature Research guidelines
+
+2. **Space Weather Real-Time Dashboard** — Beautiful gauge-based visualization:
+   - **Top Row (3 gauges)**: Flare probability gauges for C-Class, M-Class, and X-Class solar flares
+   - **Bottom Row (2 gauges)**: F10.7 Flux gauge (with historic average and projected trend) and Active CMEs gauge
+   - Modern two-ring gauge style with animated progress indicators
+   - Color-coded zones for quick risk assessment (green=low, yellow=moderate, red=high)
+   - Real-time data source and timestamp display
+   - Larger gauge size (380px height) for improved visibility
+
+#### UI Improvements
+
+- **Dark Blue Font Colors**: Updated "Key Finding" text in EVA Scientific & Technical References section to dark blue (#1e40af) for better readability
+- **References Section**: Updated font color in schedule EVA references section to dark blue
+- **Link Verification**: Verified and validated all Additional Technical Resources links:
+  - ✅ NASA EVA Technical Library (https://eva.jsc.nasa.gov/)
+  - ✅ NASA-STD-3001 Technical Brief: Decompression Sickness (PDF)
+  - ✅ NTRS: EVA Hardware & Operations Overview
+  - ✅ Springer: EVA Prebreathe Protocols
+  - Removed inaccessible HSIR link (https://msis.jsc.nasa.gov/sections/section14.htm)
+
+#### Technical Details
+
+- **EVA Radiation Metrics Plot**: Uses `_auto_axis_bounds()` helper for dynamic scaling
+- **Space Weather Gauges**: Implements modern gauge visualization with color zones and progress rings
+- **Real-Time Data Integration**: Fetches live space weather data from NOAA SWPC and SpaceWeatherLive APIs
+- **Mission Control Ready**: Designed for operational use in mission control environments
+
+### References
+
+- NOAA Space Weather Prediction Center Operational Thresholds
+- NASA-STD-3001 Vol 1 Rev B (2022): Radiation Protection
+- Space Weather Prediction Center (SWPC) Operational Thresholds
+- SpaceWeatherLive API Documentation
+
 ## [1.9.0] - 2025-12-29
 
 ### Added - Crew Scheduling & Human Performance Management System
