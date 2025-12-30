@@ -40,20 +40,55 @@ hr_min, hr_max = _auto_axis_bounds(
 
 ## Standard Heights
 
-| Type | Height |
-|------|--------|
-| Line/Bar | 380px |
-| Gauge | 280px |
-| Radar | 280px |
+| Type     | Height |
+|----------|--------|
+| Line/Bar | 380px  |
+| Gauge    | 280px  |
+| Radar    | 280px  |
 
 ## Color Semantics
 
-| Meaning | Color |
-|---------|-------|
-| Good/Low Risk | `#27ae60` (green) |
-| Normal | `#3498db` (blue) |
-| Caution | `#f39c12` (yellow) |
-| Poor/High Risk | `#e74c3c` (red) |
-| Trend | `#2c3e50` (dark gray) |
+| Meaning        | Color                        |
+|----------------|------------------------------|
+| Good/Low Risk  | `#27ae60` (green)            |
+| Normal         | `#3498db` (blue)             |
+| Caution        | `#f39c12` (yellow)           |
+| Poor/High Risk | `#e74c3c` (red)              |
+| Trend          | `#2c3e50` (dark blue-gray)   |
+
+## ⚠️ CRITICAL Font and Text Colors
+
+**NEVER use gray or light colors for fonts or text elements!**
+
+### Font Color Requirements
+
+- **All text MUST use dark colors**: `#1a1a1a` (black) or `#2c3e50` (dark blue-gray)
+- **Forbidden colors**: `#888`, `#aaa`, `#ccc`, `#ddd`, `#eee`, `#f0f0f0`, or any light gray
+- **Title text**: `#1a1a1a` with `fontWeight: "bold"`
+- **Axis labels**: `#1a1a1a` (black)
+- **Legend text**: `#1a1a1a` (black)
+- **Tooltip text**: `#1a1a1a` (black) on light background
+- **Data labels**: `#1a1a1a` (black) or contrasting color based on background
+
+### Plot Element Colors
+
+- **Axis lines**: `#2c3e50` (dark blue-gray) or `#34495e` (darker blue-gray) - NOT light gray
+- **Grid lines**: `#ecf0f1` (very light gray) is acceptable for subtle grid, but prefer `rgba(44, 62, 80, 0.1)` (dark blue-gray with opacity)
+- **Background**: White or very light neutral - avoid gray backgrounds
+- **Borders**: `#2c3e50` or darker - never light gray
+
+### Examples
+
+```python
+# ✅ CORRECT - Dark font colors
+"title": {"textStyle": {"color": "#1a1a1a", "fontWeight": "bold"}}
+"xAxis": {"axisLabel": {"color": "#1a1a1a"}}
+"yAxis": {"axisLabel": {"color": "#1a1a1a"}}
+"legend": {"textStyle": {"color": "#1a1a1a"}}
+
+# ❌ WRONG - Light/gray font colors
+"title": {"textStyle": {"color": "#888"}}  # Too light!
+"xAxis": {"axisLabel": {"color": "#ccc"}}  # Too light!
+```
 
 📋 **Full specification**: See `.cursor/rules/plots/RULE.md`
