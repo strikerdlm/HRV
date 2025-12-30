@@ -9,15 +9,17 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.8.82-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.9.1-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2025--12--28-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2025--12--30-blue)](CHANGELOG.md)
 
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.9.1**: **Enhanced Space Weather & EVA Radiation Dashboards** — Beautiful real-time space weather visualization with gauge-based dashboard showing flare probabilities (C/M/X-Class), F10.7 Flux with historic/projected trends, and Active CMEs. New EVA Radiation Metrics Dashboard provides comprehensive radiation monitoring with normalized threshold visualization. All gauges use modern two-ring style with color-coded risk zones. UI improvements include dark blue font colors for better readability and verified/validated technical resource links.
 
 **NEW in v1.8.82**: **Advanced HRV Analytics Platform** — State-of-the-art statistical analysis, ML pattern recognition, and clinical decision support with 5-tab interface (Clinical Decision, Statistical Tests, Trends & Forecast, Anomalies & Patterns, HRV + Garmin Integration). Features Shapiro-Wilk normality tests, age-stratified t-tests with Cohen's d effect sizes, 7-day forecasting with 95% CI, anomaly detection (Z-score/IQR), autonomic balance assessment, and semaphored risk recommendations (Green/Yellow/Orange/Red). All p-values displayed to 4 decimal places with scientific citations (Task Force 1996, Nunan 2010, Shaffer 2017).
 
