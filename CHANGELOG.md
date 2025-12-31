@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 - Git metadata lookup now backs off for 10 minutes after a timeout and skips probing when the `.git` folder is absent, reducing noisy Streamlit errors on slow or locked filesystems.
 - Crew Scheduling SAFTE 24-hour forecast chart now uses explicit local-time x-axis labels and hourly interpolation, fixing misaligned hour-of-day effectiveness points (e.g., 01:00–06:00) in the operational app.
+- Crew Scheduling Garmin sleep fetch now correctly auto-populates sleep duration/quality inputs by writing to Streamlit widget session state keys, and avoids swallowing Streamlit rerun signals (no more confusing `RerunException` errors).
 
 ## [1.9.1] - 2025-12-30
 
