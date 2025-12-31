@@ -1504,9 +1504,12 @@ def simulate_safte_24h(
     # Since build_enhanced_schedules() works with integer hours only, we round waketime to the
     # next hour boundary to ensure the full duration is captured in the hourly boolean map
     waketime_hour = sleep_end_hour
-    if sleep_end_minute > 0 or (planned_sleep_duration_hours % 1.0) > 0:
-        # If there are fractional minutes or fractional hours, round up to next hour
-        # This ensures the full duration is captured when converted to hourly boolean map
+    # Only round up if sleep ends at a fractional minute (e.g., 6:30)
+    # Do NOT round based on duration being fractional, as a fractional start time
+    # can cancel out a fractional duration (e.g., 22:45 + 7.25h = 6:00 exactly)
+    if sleep_end_minute > 0:
+        # Sleep ends at fractional minutes, round up to next hour
+        # This ensures the full duration is captured in the hourly boolean map
         waketime_hour = (sleep_end_hour + 1) % 24
     
     sleep_schedule = SleepScheduleInput(
@@ -1549,45 +1552,46 @@ def simulate_safte_24h(
     # result.performances are effectiveness percentages
     # The simulation starts at current time (now)
     
-    # Group by resolution_minutes intervals
-    interval_data: Dict[int, List[float]] = {}
-    for time_min, effectiveness in zip(result.time_points, result.performances):
-        # Convert minutes since start to datetime
-        t_dt = now + timedelta(minutes=int(time_min))
-        
-        # Calculate interval start time (round down to resolution)
-        minutes_since_start = int((t_dt - now).total_seconds() / 60)
-        interval_minutes = (minutes_since_start // resolution_minutes) * resolution_minutes
-        interval_key = interval_minutes
-        
-        if interval_key not in interval_data:
-            interval_data[interval_key] = []
-        interval_data[interval_key].append(effectiveness)
+    # Create forecast points by sampling the SAFTE model output
+    # at resolution_minutes intervals to preserve circadian rhythm
+    # result.time_points are in minutes since simulation start
+    # result.performances are effectiveness percentages
     
-    # Create forecast points from intervals
-    for interval_minutes in sorted(interval_data.keys()):
-        interval_start = now + timedelta(minutes=interval_minutes)
-        effectivenesses = interval_data[interval_minutes]
-        avg_eff = sum(effectivenesses) / len(effectivenesses) if effectivenesses else 50.0
+    # Create a sorted list of all time points for efficient lookup
+    time_eff_pairs = sorted(zip(result.time_points, result.performances))
+    
+    # Sample at resolution_minutes intervals (default 15 minutes)
+    # This preserves the circadian pattern while reducing data density
+    total_minutes = 24 * 60
+    last_sampled_minutes = -resolution_minutes
+    
+    for time_min, effectiveness in time_eff_pairs:
+        if time_min > total_minutes:
+            break
         
-        # Determine risk level
-        if avg_eff >= SAFTE_LOW_RISK_MIN:
-            risk = RiskLevel.LOW
-        elif avg_eff >= SAFTE_CAUTION_MIN:
-            risk = RiskLevel.MODERATE
-        elif avg_eff >= SAFTE_HIGH_RISK_MIN:
-            risk = RiskLevel.HIGH
-        else:
-            risk = RiskLevel.VERY_HIGH
-        
-        forecast_points.append(SAFTEForecastPoint(
-            timestamp=interval_start,
-            effectiveness=avg_eff,
-            sleep_reservoir=0.0,  # Not directly available from model output
-            circadian_phase=0.0,  # Can calculate if needed
-            sleep_inertia=0.0,  # Not directly available
-            risk_level=risk,
-        ))
+        # Sample at resolution_minutes intervals
+        if time_min >= last_sampled_minutes + resolution_minutes:
+            interval_start = now + timedelta(minutes=time_min)
+            
+            # Determine risk level
+            if effectiveness >= SAFTE_LOW_RISK_MIN:
+                risk = RiskLevel.LOW
+            elif effectiveness >= SAFTE_CAUTION_MIN:
+                risk = RiskLevel.MODERATE
+            elif effectiveness >= SAFTE_HIGH_RISK_MIN:
+                risk = RiskLevel.HIGH
+            else:
+                risk = RiskLevel.VERY_HIGH
+            
+            forecast_points.append(SAFTEForecastPoint(
+                timestamp=interval_start,
+                effectiveness=effectiveness,
+                sleep_reservoir=0.0,  # Not directly available
+                circadian_phase=0.0,  # Can calculate if needed
+                sleep_inertia=0.0,  # Not directly available
+                risk_level=risk,
+            ))
+            last_sampled_minutes = time_min
     
     # Calculate summary statistics
     effectivenesses = [p.effectiveness for p in forecast_points]
