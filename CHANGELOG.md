@@ -5,6 +5,11 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.2] - 2025-12-31
+
+### Fixed
+- Git metadata lookup now backs off for 10 minutes after a timeout and skips probing when the `.git` folder is absent, reducing noisy Streamlit errors on slow or locked filesystems.
+
 ## [1.9.1] - 2025-12-30
 
 ### Added - Enhanced Space Weather & EVA Radiation Dashboards
