@@ -2205,6 +2205,11 @@ def _render_performance_forecast(
     hours: List[int] = []
     vals: List[float] = []
     
+    # Check if forecast points exist before processing
+    if not forecast.forecast_points:
+        st.warning("No forecast data available. Please check your inputs and try again.")
+        return
+    
     for h in range(25):  # 0 to 24 hours
         target_time = forecast_start + timedelta(hours=h)
         
@@ -2348,14 +2353,24 @@ def _render_performance_forecast(
                         # Auto-populate sleep inputs from latest data
                         if len(sleep_df) > 0:
                             latest = sleep_df.iloc[-1]
+                            populated_fields = []
+                            
                             if pd.notna(latest.get("total_sleep_seconds")):
                                 sleep_hours = latest["total_sleep_seconds"] / 3600.0
                                 st.session_state["forecast_sleep_duration"] = sleep_hours
+                                populated_fields.append("sleep duration")
+                            
                             if pd.notna(latest.get("sleep_score")):
                                 sleep_quality = latest["sleep_score"] / 100.0
                                 st.session_state["forecast_sleep_quality"] = sleep_quality
+                                populated_fields.append("sleep quality")
                             
-                            st.info("💡 Sleep duration and quality have been auto-populated from latest Garmin data")
+                            # Only show message if at least one field was populated
+                            if populated_fields:
+                                fields_text = " and ".join(populated_fields)
+                                st.info(f"💡 {fields_text.capitalize()} have been auto-populated from latest Garmin data")
+                            else:
+                                st.warning("⚠️ No valid sleep data found in latest record (missing duration and quality scores)")
                     else:
                         st.warning("No sleep data found for the selected date range")
                         
