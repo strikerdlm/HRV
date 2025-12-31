@@ -1829,11 +1829,19 @@ def _render_realtime_updates_panel(
                     
                     col1, col2 = st.columns([3, 1])
                     with col1:
-                        # Use schedule_id instead of activity_id (fixed naming)
-                        schedule_id = change.get("schedule_id", change.get("activity_id", "unknown"))[:8]
+                        # Get schedule_id (top level) or fallback to activity_id from details
+                        schedule_id = change.get("schedule_id")
+                        if not schedule_id and change.get("details"):
+                            # Fallback: activity_id is stored in details, not top level
+                            schedule_id = change["details"].get("activity_id", "unknown")
+                        schedule_id = str(schedule_id)[:8] if schedule_id else "unknown"
                         st.write(f"**{time_str}** - {schedule_id}...")
                         if change.get("details"):
-                            details_str = ", ".join(f"{k}: {v}" for k, v in change["details"].items())
+                            # Exclude activity_id from details to avoid duplication (it's shown in main line)
+                            details_str = ", ".join(
+                                f"{k}: {v}" for k, v in change["details"].items()
+                                if k != "activity_id"
+                            )
                             if details_str:
                                 st.caption(details_str)
                     with col2:
