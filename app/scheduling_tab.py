@@ -2194,59 +2194,61 @@ def _render_performance_forecast(
         st.exception(e)
         return
     
-    # Build chart data - convert to hours format like research app
-    # Calculate hours since forecast start for each point
-    forecast_start = forecast.forecast_start
-    hours_data: List[float] = []
-    effectivenesses: List[float] = []
+    # Build chart data - convert to hourly format exactly like research app
+    # The research app uses integer hours (0-24) representing hours from now
+    # We need to aggregate forecast points into hourly averages
     
+    forecast_start = forecast.forecast_start
+    
+    # Group forecast points by hour (0-24)
+    hourly_data: Dict[int, List[float]] = {}
     for p in forecast.forecast_points:
         hours_since_start = (p.timestamp - forecast_start).total_seconds() / 3600.0
-        hours_data.append(round(hours_since_start, 1))
-        effectivenesses.append(p.effectiveness)
+        hour_index = int(hours_since_start)  # Integer hour (0, 1, 2, ..., 24)
+        if hour_index <= 24:  # Only include up to 24 hours
+            if hour_index not in hourly_data:
+                hourly_data[hour_index] = []
+            hourly_data[hour_index].append(p.effectiveness)
     
-    # Markers for key time points (Now, 4h, 8h, 24h)
+    # Create hourly averages (matching research app format)
+    hours: List[int] = []
+    vals: List[float] = []
+    for h in range(25):  # 0 to 24 hours
+        if h in hourly_data:
+            avg_eff = sum(hourly_data[h]) / len(hourly_data[h])
+            hours.append(h)
+            vals.append(round(avg_eff, 1))
+        elif h == 0:
+            # Always include hour 0 (now) even if no data
+            if forecast.forecast_points:
+                hours.append(0)
+                vals.append(forecast.forecast_points[0].effectiveness)
+    
+    # Markers for key time points (Now, 4h, 8h, 24h) - exactly like research app
     markers: List[Dict[str, Any]] = []
     key_points = {0: "Now", 4: "4h", 8: "8h", 24: "24h"}
     for h, label in key_points.items():
-        # Find closest hour in data
-        if hours_data:
-            closest_hour = min(hours_data, key=lambda x: abs(x - h))
-            if abs(closest_hour - h) <= 1.0:  # Within 1 hour
-                idx = hours_data.index(closest_hour)
-                markers.append({
-                    "name": label,
-                    "coord": [closest_hour, effectivenesses[idx]],
-                    "value": f"{effectivenesses[idx]:.0f}%"
-                })
+        if h in hours:
+            idx = hours.index(h)
+            markers.append({
+                "name": label,
+                "coord": [hours[idx], vals[idx]],
+                "value": f"{vals[idx]:.0f}%"
+            })
     
-    # Build chart options matching research app style
-    option = {
+    # Build chart options exactly matching research app
+    options = {
         "tooltip": {"trigger": "axis", "formatter": "{b}h : {c}%"},
-        "xAxis": {
-            "type": "category",
-            "data": [f"{h:.1f}" for h in hours_data],
-            "name": "Hour",
-            "boundaryGap": False,
-            "axisLabel": {"color": "#1a1a1a"},
-            "nameTextStyle": {"color": "#1a1a1a"},
-        },
-        "yAxis": {
-            "type": "value",
-            "min": 40,
-            "max": 100,
-            "name": "Effectiveness (%)",
-            "axisLabel": {"color": "#1a1a1a", "formatter": "{value}%"},
-            "nameTextStyle": {"color": "#1a1a1a"},
-        },
+        "xAxis": {"type": "category", "data": hours, "name": "Hour", "boundaryGap": False},
+        "yAxis": {"type": "value", "min": 40, "max": 100, "name": "Effectiveness (%)"},
         "series": [
             {
                 "name": "Effectiveness",
                 "type": "line",
                 "smooth": True,
-                "data": effectivenesses,
+                "data": vals,
                 "areaStyle": {"opacity": 0.15},
-                "lineStyle": {"width": 3, "color": "#3498db"},
+                "lineStyle": {"width": 3},
                 "markLine": {
                     "symbol": "none",
                     "data": [
@@ -2254,8 +2256,7 @@ def _render_performance_forecast(
                         {"yAxis": 70, "name": "Monitor"},
                         {"yAxis": 55, "name": "Caution"},
                     ],
-                    "label": {"formatter": "{b}", "color": "#1a1a1a"},
-                    "lineStyle": {"color": "#2c3e50"},
+                    "label": {"formatter": "{b}"},
                 },
                 "markPoint": {"data": markers},
             }
@@ -2264,7 +2265,11 @@ def _render_performance_forecast(
         "grid": {"left": "10%", "right": "8%", "bottom": "12%", "top": "8%"},
     }
     
-    render_echarts(option, height_px=380)
+    # Use same render function as research app
+    if render_echarts is None:
+        st.warning("ECharts component not available")
+        return
+    render_echarts(options, height_px=320)
     
     # Add Garmin Connect data fetching section
     st.markdown("---")
