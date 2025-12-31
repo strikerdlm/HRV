@@ -85,6 +85,7 @@ try:
         SchedulingEngine,
         ScheduledActivity,
         DailySchedule,
+        ScheduleStatus,
         create_sample_crew,
         MAX_CREW_SIZE,
     )
@@ -4291,6 +4292,12 @@ def render_scheduling_tab() -> None:
         _render_procedure_integration_panel(engine, schedule_date)
         st.markdown("---")
         _render_optimization_panel(engine, schedule_date)
+        st.markdown("---")
+        _render_activity_status_tracking_panel(engine, schedule_date)
+        st.markdown("---")
+        _render_shift_based_review_panel(engine, schedule_date)
+        st.markdown("---")
+        _render_resource_inventory_panel(engine, schedule_date)
     
     with tab3:
         # Performance Forecast (Advanced)
@@ -4341,6 +4348,361 @@ def render_scheduling_tab() -> None:
     
     # Scientific foundation panel
     _render_scientific_foundation_panel()
+
+
+# ---------------------------------------------------------------------------
+# Activity Status Tracking Panel (ISS Operations Planning - Section 4.2)
+# ---------------------------------------------------------------------------
+
+def _render_activity_status_tracking_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render activity status tracking panel (ISS Operations Planning standard)."""
+    st.markdown("### 📊 Activity Status Tracking")
+    st.markdown(
+        """
+        <div style="
+            background: linear-gradient(135deg, #1a365d 0%, #234e82 50%, #2c5aa0 100%);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #4299e1;
+        ">
+            <p style="margin: 0; color: #bee3f8; font-size: 0.9em;">
+                Real-time activity status tracking with automatic updates and status history (ISS Operations Planning standard)
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    
+    # Auto-update statuses
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        if st.button("🔄 Auto-Update Activity Statuses", key="auto_update_statuses"):
+            current_time = datetime.now()
+            updated_count = engine.auto_update_activity_statuses(current_time)
+            if updated_count > 0:
+                st.success(f"Updated {updated_count} activity status(es) based on current time")
+            else:
+                st.info("No activities needed status updates")
+    
+    st.markdown("---")
+    
+    # Get all activities for the schedule date
+    daily = engine.get_daily_schedule(schedule_date)
+    if not daily or not daily.activities:
+        st.info("No activities scheduled for this date")
+        return
+    
+    # Status filter
+    status_filter = st.multiselect(
+        "Filter by Status",
+        options=["scheduled", "in_progress", "completed", "cancelled", "conflicted"],
+        default=["scheduled", "in_progress"],
+        key="status_filter",
+    )
+    
+    # Group activities by status
+    activities_by_status: Dict[str, List[ScheduledActivity]] = {}
+    for activity in daily.activities:
+        status_key = activity.status.value
+        if status_key in status_filter:
+            if status_key not in activities_by_status:
+                activities_by_status[status_key] = []
+            activities_by_status[status_key].append(activity)
+    
+    # Display activities by status
+    for status_key, activities in sorted(activities_by_status.items()):
+        status_display = status_key.replace("_", " ").title()
+        status_color = {
+            "Scheduled": "#3498db",
+            "In Progress": "#f39c12",
+            "Completed": "#27ae60",
+            "Cancelled": "#95a5a6",
+            "Conflicted": "#e74c3c",
+        }.get(status_display, "#2c3e50")
+        
+        with st.expander(f"{status_display} ({len(activities)})", expanded=status_key in ["scheduled", "in_progress"]):
+            for activity in sorted(activities, key=lambda a: a.start_time):
+                col1, col2, col3, col4 = st.columns([3, 2, 2, 2])
+                
+                with col1:
+                    crew = engine.crew_members.get(activity.crew_id)
+                    crew_name = crew.name if crew else activity.crew_id
+                    st.markdown(f"**{activity.activity_name}**")
+                    st.caption(f"{crew_name} • {activity.start_time.strftime('%H:%M')} - {activity.end_time.strftime('%H:%M')}")
+                
+                with col2:
+                    st.markdown(f"**Status:** {activity.status.value.replace('_', ' ').title()}")
+                    if activity.location:
+                        st.caption(f"📍 {activity.location}")
+                
+                with col3:
+                    # Status update dropdown
+                    new_status = st.selectbox(
+                        "Update Status",
+                        options=["scheduled", "in_progress", "completed", "cancelled"],
+                        index=["scheduled", "in_progress", "completed", "cancelled"].index(activity.status.value) if activity.status.value in ["scheduled", "in_progress", "completed", "cancelled"] else 0,
+                        key=f"status_select_{activity.schedule_id}",
+                    )
+                    
+                    if new_status != activity.status.value:
+                        status_enum = ScheduleStatus(new_status)
+                        notes = st.text_input(
+                            "Notes (optional)",
+                            key=f"status_notes_{activity.schedule_id}",
+                        )
+                        if st.button("Update", key=f"update_status_{activity.schedule_id}"):
+                            success, updated = engine.update_activity_status(
+                                activity.schedule_id,
+                                status_enum,
+                                notes,
+                            )
+                            if success:
+                                st.success("Status updated")
+                                st.rerun()
+                            else:
+                                st.error("Failed to update status")
+                
+                with col4:
+                    # Status history
+                    if st.button("📜 History", key=f"history_{activity.schedule_id}"):
+                        history = engine.get_activity_status_history(activity.schedule_id)
+                        if history:
+                            st.json(history)
+                        else:
+                            st.info("No status history available")
+                
+                st.markdown("---")
+
+
+# ---------------------------------------------------------------------------
+# Shift-Based Schedule Review Panel (ISS Mission Control - Section 4.1)
+# ---------------------------------------------------------------------------
+
+def _render_shift_based_review_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render shift-based schedule review panel (ISS Mission Control standard)."""
+    st.markdown("### 🕐 Shift-Based Schedule Review")
+    st.markdown(
+        """
+        <div style="
+            background: linear-gradient(135deg, #1a365d 0%, #234e82 50%, #2c5aa0 100%);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #4299e1;
+        ">
+            <p style="margin: 0; color: #bee3f8; font-size: 0.9em;">
+                Three-shift schedule review (morning, afternoon, night) with workload distribution (ISS Mission Control standard)
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    
+    # Shift selector
+    shift_tabs = st.tabs(["🌅 Morning (06:00-14:00)", "🌆 Afternoon (14:00-22:00)", "🌙 Night (22:00-06:00)"])
+    
+    shifts = ["morning", "afternoon", "night"]
+    
+    for idx, (shift_tab, shift_name) in enumerate(zip(shift_tabs, shifts)):
+        with shift_tab:
+            # Get shift workload
+            workload = engine.get_shift_workload(schedule_date, shift_name)
+            activities = engine.get_shift_activities(schedule_date, shift_name)
+            
+            # Workload summary
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Activities", workload["activity_count"])
+            with col2:
+                st.metric("Total Minutes", f"{workload['total_minutes']}")
+            with col3:
+                st.metric("Total kcal", f"{workload['total_kcal']:.0f}")
+            with col4:
+                st.metric("Crew Involved", workload["crew_count"])
+            
+            st.markdown("---")
+            
+            # Activities list
+            if activities:
+                st.markdown(f"**Activities in {shift_name.title()} Shift:**")
+                for activity in activities:
+                    crew = engine.crew_members.get(activity.crew_id)
+                    crew_name = crew.name if crew else activity.crew_id
+                    
+                    col1, col2, col3 = st.columns([3, 2, 2])
+                    with col1:
+                        st.markdown(f"**{activity.activity_name}**")
+                        st.caption(f"{crew_name} • {activity.start_time.strftime('%H:%M')} - {activity.end_time.strftime('%H:%M')}")
+                    with col2:
+                        st.markdown(f"**Status:** {activity.status.value.replace('_', ' ').title()}")
+                        if activity.location:
+                            st.caption(f"📍 {activity.location}")
+                    with col3:
+                        st.markdown(f"**Duration:** {activity.duration_minutes} min")
+                        st.caption(f"Priority: {activity.priority}/10")
+                    
+                    st.markdown("---")
+            else:
+                st.info(f"No activities scheduled for {shift_name} shift")
+            
+            # Handover notes (placeholder for future implementation)
+            st.markdown("---")
+            with st.expander("📝 Shift Handover Notes"):
+                handover_key = f"handover_{shift_name}_{schedule_date}"
+                handover_notes = st.text_area(
+                    "Handover Notes",
+                    value=st.session_state.get(handover_key, ""),
+                    key=handover_key,
+                    help="Notes for the next shift",
+                )
+                if handover_notes:
+                    st.session_state[handover_key] = handover_notes
+
+
+# ---------------------------------------------------------------------------
+# Resource Inventory Integration Panel (ISS Mission Control - Section 4.3)
+# ---------------------------------------------------------------------------
+
+def _render_resource_inventory_panel(
+    engine: SchedulingEngine,
+    schedule_date: date,
+) -> None:
+    """Render resource inventory integration panel (ISS Mission Control standard)."""
+    st.markdown("### 🔧 Resource Inventory & Equipment Management")
+    st.markdown(
+        """
+        <div style="
+            background: linear-gradient(135deg, #1a365d 0%, #234e82 50%, #2c5aa0 100%);
+            padding: 15px 20px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            border: 1px solid #4299e1;
+        ">
+            <p style="margin: 0; color: #bee3f8; font-size: 0.9em;">
+                Track equipment location, availability, and reservations (ISS Mission Control Schedule and Inventory console standard)
+            </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    
+    # Equipment inventory table
+    st.markdown("#### 📋 Equipment Inventory")
+    
+    equipment_data = []
+    for eq_id, eq_info in engine.equipment_inventory.items():
+        # Check current reservations
+        reservations = engine.equipment_reservations.get(eq_id, [])
+        current_time = datetime.now()
+        active_reservations = [
+            r for r in reservations
+            if r["start_time"] <= current_time < r["end_time"]
+        ]
+        
+        equipment_data.append({
+            "Equipment ID": eq_id,
+            "Name": eq_info["name"],
+            "Location": eq_info["location"],
+            "Available": "✅ Yes" if eq_info["available"] else "❌ No",
+            "Active Reservations": len(active_reservations),
+            "Total Reservations": len(reservations),
+        })
+    
+    if equipment_data:
+        df_equipment = pd.DataFrame(equipment_data)
+        st.dataframe(df_equipment, use_container_width=True, hide_index=True)
+    
+    st.markdown("---")
+    
+    # Equipment reservations
+    st.markdown("#### 📅 Equipment Reservations")
+    
+    # Get all activities for the schedule date
+    daily = engine.get_daily_schedule(schedule_date)
+    if daily and daily.activities:
+        # Show reservations for scheduled activities
+        reservation_data = []
+        for activity in daily.activities:
+            # Check if activity requires equipment (simplified - would need activity definitions)
+            if activity.location and "Exercise" in activity.location:
+                # Try to find equipment reservation
+                for eq_id, reservations in engine.equipment_reservations.items():
+                    for res in reservations:
+                        if res["activity_id"] == activity.schedule_id:
+                            crew = engine.crew_members.get(activity.crew_id)
+                            crew_name = crew.name if crew else activity.crew_id
+                            reservation_data.append({
+                                "Equipment": engine.equipment_inventory[eq_id]["name"],
+                                "Crew": crew_name,
+                                "Activity": activity.activity_name,
+                                "Start": res["start_time"].strftime("%H:%M"),
+                                "End": res["end_time"].strftime("%H:%M"),
+                            })
+        
+        if reservation_data:
+            df_reservations = pd.DataFrame(reservation_data)
+            st.dataframe(df_reservations, use_container_width=True, hide_index=True)
+        else:
+            st.info("No equipment reservations found for this date")
+    else:
+        st.info("No activities scheduled for this date")
+    
+    st.markdown("---")
+    
+    # Manual equipment reservation
+    with st.expander("➕ Create Equipment Reservation"):
+        col1, col2 = st.columns(2)
+        with col1:
+            equipment_id = st.selectbox(
+                "Equipment",
+                options=list(engine.equipment_inventory.keys()),
+                format_func=lambda x: engine.equipment_inventory[x]["name"],
+                key="reserve_equipment_id",
+            )
+            activity_id = st.selectbox(
+                "Activity",
+                options=[a.schedule_id for a in (daily.activities if daily else [])],
+                format_func=lambda x: next((a.activity_name for a in (daily.activities if daily else []) if a.schedule_id == x), x),
+                key="reserve_activity_id",
+            )
+        with col2:
+            reserve_start = st.time_input(
+                "Start Time",
+                value=datetime.now().time(),
+                key="reserve_start_time",
+            )
+            reserve_end = st.time_input(
+                "End Time",
+                value=(datetime.now() + timedelta(hours=1)).time(),
+                key="reserve_end_time",
+            )
+        
+        if activity_id:
+            activity = next((a for a in (daily.activities if daily else []) if a.schedule_id == activity_id), None)
+            if activity:
+                reserve_start_dt = datetime.combine(schedule_date, reserve_start)
+                reserve_end_dt = datetime.combine(schedule_date, reserve_end)
+                
+                if st.button("Reserve Equipment", key="reserve_equipment_btn"):
+                    success, message = engine.reserve_equipment(
+                        equipment_id,
+                        reserve_start_dt,
+                        reserve_end_dt,
+                        activity_id,
+                        activity.crew_id,
+                    )
+                    if success:
+                        st.success(message)
+                        st.rerun()
+                    else:
+                        st.error(message)
 
 
 # ---------------------------------------------------------------------------
