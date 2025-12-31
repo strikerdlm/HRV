@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 import sys
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -58,6 +59,10 @@ from scheduling_core import (
     CrewPhysiologicalStatus,
     CrewMember,
     RiskLevel,
+    # Forecast helpers
+    SAFTEForecastPoint,
+    PerformanceForecast,
+    build_hourly_safte_series,
 )
 
 
@@ -233,6 +238,58 @@ class TestEnergyAvailabilityScoring:
         """Test EA score at intermediate level."""
         # 37.5 should be midpoint = 0.5
         assert abs(score_energy_availability(37.5) - 0.5) < 0.01
+
+
+class TestSAFTEPlotHelpers:
+    """Tests for deterministic SAFTE plotting helpers (timebase correctness)."""
+
+    def test_build_hourly_safte_series_aligns_to_next_hour(self) -> None:
+        """Samples should start at the next whole-hour boundary after forecast_start."""
+        start = datetime(2025, 1, 1, 12, 34, 0)
+        p0 = SAFTEForecastPoint(
+            timestamp=start,
+            effectiveness=90.0,
+            sleep_reservoir=0.0,
+            circadian_phase=0.0,
+            sleep_inertia=0.0,
+            risk_level=RiskLevel.LOW,
+        )
+        p1 = SAFTEForecastPoint(
+            timestamp=start + timedelta(hours=1),
+            effectiveness=80.0,
+            sleep_reservoir=0.0,
+            circadian_phase=0.0,
+            sleep_inertia=0.0,
+            risk_level=RiskLevel.MODERATE,
+        )
+        p2 = SAFTEForecastPoint(
+            timestamp=start + timedelta(hours=2),
+            effectiveness=70.0,
+            sleep_reservoir=0.0,
+            circadian_phase=0.0,
+            sleep_inertia=0.0,
+            risk_level=RiskLevel.HIGH,
+        )
+        forecast = PerformanceForecast(
+            crew_id="crew-x",
+            forecast_start=start,
+            forecast_points=[p0, p1, p2],
+        )
+
+        x_labels, y_vals, timestamps = build_hourly_safte_series(
+            forecast,
+            horizon_hours=2,
+            align_to_next_hour=True,
+            time_label_format="%Y-%m-%d %H:%M",
+        )
+
+        assert timestamps == [
+            datetime(2025, 1, 1, 13, 0, 0),
+            datetime(2025, 1, 1, 14, 0, 0),
+        ]
+        assert x_labels == ["2025-01-01 13:00", "2025-01-01 14:00"]
+        # Interpolated at +26 minutes into each hour: expected 85.7 then 75.7
+        assert y_vals == [85.7, 75.7]
 
 
 class TestCircadianAlignment:
