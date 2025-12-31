@@ -2029,10 +2029,6 @@ class SchedulingEngine:
         Returns:
             List of activities in the shift
         """
-        daily = self.get_daily_schedule(schedule_date)
-        if not daily:
-            return []
-        
         # Define shift time windows (ISS standard)
         shift_windows = {
             "morning": (6, 14),      # 06:00 - 14:00
@@ -2046,16 +2042,38 @@ class SchedulingEngine:
         start_hour, end_hour = shift_windows[shift_name]
         shift_activities = []
         
-        for activity in daily.activities:
-            activity_hour = activity.start_time.hour
+        if shift_name == "night":
+            # Night shift spans midnight: 22:00 on schedule_date to 06:00 on schedule_date + 1 day
+            # Get activities from schedule_date (22:00-23:59)
+            daily = self.get_daily_schedule(schedule_date)
+            if daily:
+                for activity in daily.activities:
+                    activity_date = activity.start_time.date()
+                    activity_hour = activity.start_time.hour
+                    # Include activities from schedule_date starting at 22:00 or later
+                    if activity_date == schedule_date and activity_hour >= start_hour:
+                        shift_activities.append(activity)
             
-            if shift_name == "night":
-                # Night shift spans midnight
-                if activity_hour >= start_hour or activity_hour < end_hour:
-                    shift_activities.append(activity)
-            else:
-                if start_hour <= activity_hour < end_hour:
-                    shift_activities.append(activity)
+            # Get activities from schedule_date + 1 day (00:00-05:59)
+            next_date = schedule_date + timedelta(days=1)
+            daily_next = self.get_daily_schedule(next_date)
+            if daily_next:
+                for activity in daily_next.activities:
+                    activity_date = activity.start_time.date()
+                    activity_hour = activity.start_time.hour
+                    # Include activities from next day starting before 06:00
+                    if activity_date == next_date and activity_hour < end_hour:
+                        shift_activities.append(activity)
+        else:
+            # Morning and afternoon shifts are within a single day
+            daily = self.get_daily_schedule(schedule_date)
+            if daily:
+                for activity in daily.activities:
+                    activity_date = activity.start_time.date()
+                    activity_hour = activity.start_time.hour
+                    # Include activities from schedule_date within the shift window
+                    if activity_date == schedule_date and start_hour <= activity_hour < end_hour:
+                        shift_activities.append(activity)
         
         return sorted(shift_activities, key=lambda a: a.start_time)
     
