@@ -2057,21 +2057,35 @@ def _render_performance_forecast(
                 key="forecast_sleep_hour",
                 help="Bedtime hour (0-23)",
             )
+            # Check for Garmin values in temporary session state (set before widget creation)
+            default_duration = st.session_state.get("forecast_sleep_duration", 8.0)
+            if "_garmin_sleep_duration" in st.session_state:
+                default_duration = st.session_state["_garmin_sleep_duration"]
+                # Clear temporary key after using it
+                del st.session_state["_garmin_sleep_duration"]
+            
             sleep_duration = st.number_input(
                 "Sleep Duration (hours)",
                 min_value=4.0,
                 max_value=12.0,
-                value=8.0,
+                value=default_duration,
                 step=0.5,
                 key="forecast_sleep_duration",
                 help="Planned sleep duration",
             )
         with col_s2:
+            # Check for Garmin values in temporary session state (set before widget creation)
+            default_quality = st.session_state.get("forecast_sleep_quality", 0.8)
+            if "_garmin_sleep_quality" in st.session_state:
+                default_quality = st.session_state["_garmin_sleep_quality"]
+                # Clear temporary key after using it
+                del st.session_state["_garmin_sleep_quality"]
+            
             sleep_quality = st.slider(
                 "Sleep Quality (0-1)",
                 min_value=0.0,
                 max_value=1.0,
-                value=0.8,
+                value=default_quality,
                 step=0.1,
                 key="forecast_sleep_quality",
                 help="Sleep quality scale: 0.0 (poor) to 1.0 (excellent)",
@@ -2351,24 +2365,30 @@ def _render_performance_forecast(
                             )
                         
                         # Auto-populate sleep inputs from latest data
+                        # Note: We cannot modify session state for widget keys after widgets are created.
+                        # Instead, we'll use a different approach: store values in temporary session state
+                        # and let the widgets read from there on the next rerun.
                         if len(sleep_df) > 0:
                             latest = sleep_df.iloc[-1]
                             populated_fields = []
                             
+                            # Store values in temporary keys that widgets can read
+                            # We'll use a flag to indicate values should be applied
                             if pd.notna(latest.get("total_sleep_seconds")):
                                 sleep_hours = latest["total_sleep_seconds"] / 3600.0
-                                st.session_state["forecast_sleep_duration"] = sleep_hours
+                                st.session_state["_garmin_sleep_duration"] = sleep_hours
                                 populated_fields.append("sleep duration")
                             
                             if pd.notna(latest.get("sleep_score")):
                                 sleep_quality = latest["sleep_score"] / 100.0
-                                st.session_state["forecast_sleep_quality"] = sleep_quality
+                                st.session_state["_garmin_sleep_quality"] = sleep_quality
                                 populated_fields.append("sleep quality")
                             
-                            # Only show message if at least one field was populated
+                            # Trigger rerun to apply values (widgets will read from temporary keys)
                             if populated_fields:
                                 fields_text = " and ".join(populated_fields)
-                                st.info(f"💡 {fields_text.capitalize()} have been auto-populated from latest Garmin data")
+                                st.success(f"✅ {fields_text.capitalize()} fetched from Garmin. Refreshing to apply...")
+                                st.rerun()
                             else:
                                 st.warning("⚠️ No valid sleep data found in latest record (missing duration and quality scores)")
                     else:
