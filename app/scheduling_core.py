@@ -1521,7 +1521,7 @@ def simulate_safte_24h(
             timestamp=t,
             effectiveness=effectiveness,
             sleep_reservoir=sleep_reservoir,
-            circadian_phase=phase,
+            circadian_phase=phase_rad,
             sleep_inertia=inertia,
             risk_level=risk,
         ))
