@@ -472,20 +472,65 @@ def cognitive_performance_with_workload(t, Rt, Ct, It, Wt, Wc):
 from .safte_model import SAFTEModel as AdvancedSAFTEModel
 from .safte_model import SleepEpisode, PhaseShift
 
-def _episodes_from_schedule(hours: int, is_asleep_by_hour: dict, efficiency: float) -> list[SleepEpisode]:
+def _episodes_from_schedule(hours: int, is_asleep_by_hour: dict, efficiency: float, sleep_duration: float | None = None) -> list[SleepEpisode]:
+    """
+    Convert hourly sleep state map to SleepEpisode objects.
+    
+    Args:
+        hours: Total hours to simulate
+        is_asleep_by_hour: Dict mapping hour index (0..hours-1) to sleep state (bool)
+        efficiency: Sleep efficiency (0-1)
+        sleep_duration: Optional actual sleep duration in hours (for fractional hours).
+                       If provided, the episode end time will be adjusted to match this duration.
+    
+    Returns:
+        List of SleepEpisode objects with precise start/end times
+    """
     episodes: list[SleepEpisode] = []
     asleep_prev = bool(is_asleep_by_hour.get(0, False))
     start: float | None = 0.0 if asleep_prev else None
+    
     for h in range(1, hours + 1):
         asleep_now = bool(is_asleep_by_hour.get(h, False)) if h < hours else False
         if not asleep_prev and asleep_now:
             # wake -> sleep
             start = float(h)
         elif asleep_prev and not asleep_now and start is not None:
-            # sleep -> wake
-            episodes.append(SleepEpisode(start=float(start), end=float(h), efficiency=float(efficiency)))
+            # sleep -> wake transition detected
+            episode_end = float(h)
+            
+            # If sleep_duration is provided, adjust the end time to match the actual fractional duration
+            # This fixes the issue where fractional durations (e.g., 8.5 hours) are truncated
+            # when converted to integer hour boundaries in build_enhanced_schedules()
+            # Example: Sleep 22:00 to 6:30 (8.5 hours)
+            # - Hourly map marks hours 22, 23, 0, 1, 2, 3, 4, 5, 6 as sleep (9 hours in map)
+            # - But actual duration is 8.5 hours
+            # - We adjust episode end from 7.0 to 6.5 to match the actual duration
+            if sleep_duration is not None:
+                # Calculate actual end time based on duration from start
+                calculated_end = start + sleep_duration
+                # Use the calculated end if it's within or at the current hour boundary
+                # This ensures fractional hours are preserved in the SleepEpisode
+                if calculated_end <= float(h):
+                    episode_end = calculated_end
+                # If calculated_end > h, it means the duration would extend into the next hour,
+                # but the hourly map marked h as awake (waketime was rounded up to include fractional part).
+                # In this case, we still use the calculated_end to preserve the exact duration.
+                elif calculated_end > float(h):
+                    episode_end = calculated_end
+            
+            episodes.append(SleepEpisode(start=float(start), end=episode_end, efficiency=float(efficiency)))
             start = None
         asleep_prev = asleep_now
+    
+    # Handle case where sleep continues to the end
+    if start is not None:
+        episode_end = float(hours)
+        if sleep_duration is not None and len(episodes) == 0:
+            episode_end = start + sleep_duration
+            episode_end = min(episode_end, float(hours))
+        episodes.append(SleepEpisode(start=float(start), end=episode_end, efficiency=float(efficiency)))
+    
     return episodes
 
 def enhanced_simulate_cognitive_performance(hours, sleep_schedule, work_schedule, 
@@ -511,9 +556,16 @@ def enhanced_simulate_cognitive_performance(hours, sleep_schedule, work_schedule
 
     chronotype_offset = float(individual_profile.get('chronotype_offset', 0.0))
     sleep_efficiency = float(sleep_schedule.get('quality', 1.0))
+    
+    # Get actual sleep duration (may be fractional) from schedule
+    # The "quantity" field preserves the fractional duration from SleepScheduleInput
+    sleep_duration = sleep_schedule.get('quantity', None)
+    if sleep_duration is not None:
+        sleep_duration = float(sleep_duration)
 
     # Convert to advanced SAFTE schedule
-    episodes = _episodes_from_schedule(hours, is_asleep_by_hour, sleep_efficiency)
+    # Pass sleep_duration to preserve fractional hours in SleepEpisode end time
+    episodes = _episodes_from_schedule(hours, is_asleep_by_hour, sleep_efficiency, sleep_duration=sleep_duration)
 
     # Phase shift at t=0 to reflect chronotype offset (internal - local)
     shifts: list[PhaseShift] = []
