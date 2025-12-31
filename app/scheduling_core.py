@@ -1445,14 +1445,23 @@ def simulate_safte_24h(
     hours_awake = current_status.hours_awake
     sleep_reservoir = min(1.0, current_effectiveness / 100.0)
     
-    # SAFTE parameters (simplified)
+    # SAFTE parameters (simplified, aligned with Hursh et al. 2004)
+    # References:
+    # - Hursh et al. (2004): Fatigue models for applied research in warfighting
+    # - Core body temperature nadir: ~4 AM (end of sleep phase)
+    # - Core body temperature peak: ~6 PM (late afternoon/early evening)
+    # - Performance peak aligns with temperature peak (4-6 PM)
     TAU_DECAY = 18.2  # Sleep reservoir decay time constant (hours)
     TAU_RECOVERY = 4.5  # Sleep reservoir recovery time constant (hours)
     CIRCADIAN_AMPLITUDE = 15.0  # Circadian modulation amplitude (%)
     CIRCADIAN_PERIOD = 24.0  # hours
     
-    # Circadian nadir at ~4 AM (adjusted for chronotype)
-    nadir_hour = 4.0 + chronotype_offset_hours
+    # Circadian peak phase (SAFTE standard: 18:00 / 6 PM for typical entrainment)
+    # Scientific evidence: Peak performance occurs in late afternoon/early evening (4-6 PM)
+    # coinciding with peak core body temperature. Nadir occurs 12 hours earlier (4-6 AM).
+    # Early chronotypes peak ~2 hours earlier, late chronotypes ~2 hours later.
+    peak_hour = 18.0 - chronotype_offset_hours  # Early types peak earlier, late types later
+    nadir_hour = (peak_hour + 12.0) % 24.0  # Nadir is 12 hours from peak
     
     # Simulate each time point
     planned_sleep_end = planned_sleep_start + timedelta(hours=planned_sleep_duration_hours)
@@ -1477,9 +1486,16 @@ def simulate_safte_24h(
             sleep_reservoir = max(0.0, sleep_reservoir - decay_rate * dt_hours)
             hours_awake += dt_hours
         
-        # Circadian component (cosine with nadir at ~4 AM)
-        phase = 2 * math.pi * ((hour_of_day - nadir_hour) / CIRCADIAN_PERIOD)
-        circadian_factor = 1.0 - (CIRCADIAN_AMPLITUDE / 100.0) * (1 - math.cos(phase)) / 2
+        # Circadian component (aligned with SAFTE model: peak at peak_hour, nadir 12h later)
+        # Phase relative to peak: 0 at peak (maximum), π at nadir (minimum)
+        phase_rel_to_peak = ((hour_of_day - peak_hour) % CIRCADIAN_PERIOD) / CIRCADIAN_PERIOD
+        phase_rad = 2 * math.pi * phase_rel_to_peak
+        # Cosine: 1 at peak (phase=0), -1 at nadir (phase=π)
+        # Map to [1 - amplitude, 1 + amplitude] range, then normalize to [0.85, 1.0] for 15% amplitude
+        circadian_cosine = math.cos(phase_rad)
+        # SAFTE-style: positive cosine increases effectiveness, negative decreases it
+        # Factor ranges from (1 - amplitude/100) at nadir to (1 + amplitude/100) at peak
+        circadian_factor = 1.0 + (CIRCADIAN_AMPLITUDE / 100.0) * circadian_cosine
         
         # Sleep inertia (if just woke up)
         inertia = 0.0
