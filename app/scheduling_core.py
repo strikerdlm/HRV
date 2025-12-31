@@ -1483,14 +1483,37 @@ def simulate_safte_24h(
     )
     
     # Build sleep schedule input
+    # Calculate precise sleep end time using fractional duration
     sleep_start_hour = planned_sleep_start.hour
-    sleep_end_hour = (sleep_start_hour + int(planned_sleep_duration_hours)) % 24
+    sleep_start_minute = planned_sleep_start.minute
+    
+    # Calculate sleep end time with fractional hours preserved
+    sleep_end_datetime = planned_sleep_start + timedelta(hours=planned_sleep_duration_hours)
+    sleep_end_hour = sleep_end_datetime.hour
+    sleep_end_minute = sleep_end_datetime.minute
+    
+    # For SleepScheduleInput, we need integer hours for bedtime/waketime
+    # However, the duration field preserves fractional hours
+    # IMPORTANT: The build_enhanced_schedules() function uses integer hours to mark sleep states,
+    # which causes fractional durations to be truncated. To fix this, we need to ensure
+    # the waketime hour includes the fractional part. For example:
+    # - Sleep 22:00 to 6:30 (8.5 hours) should mark hours 22, 23, 0, 1, 2, 3, 4, 5, 6 as sleep
+    # - But we only want 8.5 hours, not 9 hours
+    # The solution: Use the actual fractional end time to determine which hour to mark as awake
+    # If sleep ends at 6:30, hour 6 should be partially sleep (0.5 hours), hour 7 should be awake
+    # Since build_enhanced_schedules() works with integer hours only, we round waketime to the
+    # next hour boundary to ensure the full duration is captured in the hourly boolean map
+    waketime_hour = sleep_end_hour
+    if sleep_end_minute > 0 or (planned_sleep_duration_hours % 1.0) > 0:
+        # If there are fractional minutes or fractional hours, round up to next hour
+        # This ensures the full duration is captured when converted to hourly boolean map
+        waketime_hour = (sleep_end_hour + 1) % 24
     
     sleep_schedule = SleepScheduleInput(
         quality=sleep_quality,
-        duration=planned_sleep_duration_hours,
+        duration=planned_sleep_duration_hours,  # Preserves fractional hours
         bedtime=sleep_start_hour,
-        waketime=sleep_end_hour,
+        waketime=waketime_hour,  # Adjusted to capture fractional hours
         total_sleep_debt=sleep_debt_hours,
     )
     
