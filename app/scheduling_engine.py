@@ -976,8 +976,11 @@ class SchedulingEngine:
         }
         chronotype_offset = chronotype_map.get(crew.chronotype, 0.0)
         
-        # Circadian nadir at ~4 AM (adjusted for chronotype)
-        nadir_hour = 4.0 + chronotype_offset
+        # Circadian peak phase (SAFTE standard: 18:00 / 6 PM for typical entrainment)
+        # Peak performance occurs in late afternoon/early evening (4-6 PM)
+        # Nadir occurs 12 hours from peak (6 AM for standard, adjusted for chronotype)
+        peak_hour = 18.0 - chronotype_offset  # Early types peak earlier, late types later
+        nadir_hour = (peak_hour + 12.0) % 24.0  # Nadir is 12 hours from peak
         circadian_period = 24.0
         circadian_amplitude = 15.0  # 15% modulation
         
@@ -998,10 +1001,15 @@ class SchedulingEngine:
                 if conflicts:
                     continue
                 
-                # Calculate circadian score
+                # Calculate circadian score (aligned with SAFTE model)
                 hour_of_day = hour + minute / 60.0
-                phase = 2 * math.pi * ((hour_of_day - nadir_hour) / circadian_period)
-                circadian_factor = 1.0 - (circadian_amplitude / 100.0) * (1 - math.cos(phase)) / 2
+                # Phase relative to peak: 0 at peak (maximum), π at nadir (minimum)
+                phase_rel_to_peak = ((hour_of_day - peak_hour) % circadian_period) / circadian_period
+                phase_rad = 2 * math.pi * phase_rel_to_peak
+                # Cosine: 1 at peak (phase=0), -1 at nadir (phase=π)
+                # Factor ranges from (1 - amplitude/100) at nadir to (1 + amplitude/100) at peak
+                circadian_cosine = math.cos(phase_rad)
+                circadian_factor = 1.0 + (circadian_amplitude / 100.0) * circadian_cosine
                 
                 # Activity-specific adjustments
                 # High cognitive tasks: prefer morning (circadian peak)
