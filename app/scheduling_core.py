@@ -1412,126 +1412,173 @@ class PerformanceForecast:
 
 
 def simulate_safte_24h(
-    current_status: CrewPhysiologicalStatus,
+    crew_member: CrewMember,
     planned_sleep_start: datetime,
     planned_sleep_duration_hours: float = 8.0,
-    chronotype_offset_hours: float = 0.0,
+    sleep_quality: float = 0.8,
+    sleep_debt_hours: float = 0.0,
+    work_schedule: Optional[Dict[str, Any]] = None,
     resolution_minutes: int = 15,
 ) -> PerformanceForecast:
     """
-    Simulate 24-hour SAFTE effectiveness forecast.
+    Simulate 24-hour SAFTE effectiveness forecast using the full SAFTE model.
     
-    This is a simplified SAFTE model implementation for scheduling.
-    For full SAFTE simulation, use fatigue_calculator/safte_model.py.
+    Uses the validated SAFTE model from fatigue_integration.py (same as research app)
+    with all features: age, sex, chronotype, sleep quality, sleep debt, work schedule.
     
     Args:
-        current_status: Current crew physiological status
+        crew_member: Crew member with profile data (age, sex, chronotype)
         planned_sleep_start: Planned sleep start time
         planned_sleep_duration_hours: Planned sleep duration
-        chronotype_offset_hours: Chronotype adjustment (early=-2, late=+2)
+        sleep_quality: Sleep quality (0-1 scale)
+        sleep_debt_hours: Cumulative sleep debt in hours
+        work_schedule: Optional work schedule dict with keys:
+            - has_work: bool
+            - work_start: int (hour 0-23)
+            - work_end: int (hour 0-23)
+            - work_hours: int
+            - cognitive_load: int (0-3 scale)
         resolution_minutes: Forecast resolution in minutes
         
     Returns:
         24-hour performance forecast
     """
-    from datetime import timezone
+    try:
+        from fatigue_integration import (
+            UserProfile,
+            SleepScheduleInput,
+            WorkScheduleInput,
+            run_integrated_fatigue_analysis,
+        )
+    except ImportError:
+        try:
+            from app.fatigue_integration import (
+                UserProfile,
+                SleepScheduleInput,
+                WorkScheduleInput,
+                run_integrated_fatigue_analysis,
+            )
+        except ImportError:
+            raise ImportError(
+                "Fatigue integration module not found. Ensure fatigue_integration.py is available."
+            )
     
     # Initialize forecast
     now = datetime.now()
     forecast_points: List[SAFTEForecastPoint] = []
     
-    # Current state
-    current_effectiveness = current_status.safte_effectiveness
-    hours_awake = current_status.hours_awake
-    sleep_reservoir = min(1.0, current_effectiveness / 100.0)
+    # Convert crew member to UserProfile
+    chronotype_map = {
+        "early": -2.0,
+        "intermediate": 0.0,
+        "late": 2.0,
+    }
+    chronotype_offset = chronotype_map.get(crew_member.chronotype, 0.0)
     
-    # SAFTE parameters (simplified, aligned with Hursh et al. 2004)
-    # References:
-    # - Hursh et al. (2004): Fatigue models for applied research in warfighting
-    # - Core body temperature nadir: ~4 AM (end of sleep phase)
-    # - Core body temperature peak: ~6 PM (late afternoon/early evening)
-    # - Performance peak aligns with temperature peak (4-6 PM)
-    TAU_DECAY = 18.2  # Sleep reservoir decay time constant (hours)
-    TAU_RECOVERY = 4.5  # Sleep reservoir recovery time constant (hours)
-    CIRCADIAN_AMPLITUDE = 15.0  # Circadian modulation amplitude (%)
-    CIRCADIAN_PERIOD = 24.0  # hours
+    user_profile = UserProfile(
+        age=crew_member.age_years,
+        sex=crew_member.sex.lower() if crew_member.sex else "other",
+        chronotype_offset=chronotype_offset,
+        genetic_profile=tuple(),
+    )
     
-    # Circadian peak phase (SAFTE standard: 18:00 / 6 PM for typical entrainment)
-    # Scientific evidence: Peak performance occurs in late afternoon/early evening (4-6 PM)
-    # coinciding with peak core body temperature. Nadir occurs 12 hours earlier (4-6 AM).
-    # Early chronotypes peak ~2 hours earlier, late chronotypes ~2 hours later.
-    peak_hour = 18.0 - chronotype_offset_hours  # Early types peak earlier, late types later
-    nadir_hour = (peak_hour + 12.0) % 24.0  # Nadir is 12 hours from peak
+    # Build sleep schedule input
+    sleep_start_hour = planned_sleep_start.hour
+    sleep_end_hour = (sleep_start_hour + int(planned_sleep_duration_hours)) % 24
     
-    # Simulate each time point
-    planned_sleep_end = planned_sleep_start + timedelta(hours=planned_sleep_duration_hours)
+    sleep_schedule = SleepScheduleInput(
+        quality=sleep_quality,
+        duration=planned_sleep_duration_hours,
+        bedtime=sleep_start_hour,
+        waketime=sleep_end_hour,
+        total_sleep_debt=sleep_debt_hours,
+    )
     
-    for i in range(int(24 * 60 / resolution_minutes) + 1):
-        t = now + timedelta(minutes=i * resolution_minutes)
-        hour_of_day = t.hour + t.minute / 60.0
+    # Build work schedule input
+    if work_schedule is None:
+        work_schedule = WorkScheduleInput(
+            has_work=False,
+            work_start=9,
+            work_end=17,
+            work_hours=8,
+            cognitive_load=1,
+        )
+    else:
+        work_schedule = WorkScheduleInput(
+            has_work=work_schedule.get("has_work", False),
+            work_start=work_schedule.get("work_start", 9),
+            work_end=work_schedule.get("work_end", 17),
+            work_hours=work_schedule.get("work_hours", 8),
+            cognitive_load=work_schedule.get("cognitive_load", 1),
+        )
+    
+    # Run integrated fatigue analysis (1 day prediction)
+    result = run_integrated_fatigue_analysis(
+        user_profile=user_profile,
+        sleep_schedule=sleep_schedule,
+        work_schedule=work_schedule,
+        prediction_days=1,
+        model_type="advanced",
+    )
+    
+    # Convert results to forecast points at requested resolution
+    # result.time_points are in minutes since simulation start (0-based)
+    # result.performances are effectiveness percentages
+    # The simulation starts at current time (now)
+    
+    # Group by resolution_minutes intervals
+    interval_data: Dict[int, List[float]] = {}
+    for time_min, effectiveness in zip(result.time_points, result.performances):
+        # Convert minutes since start to datetime
+        t_dt = now + timedelta(minutes=int(time_min))
         
-        # Check if sleeping
-        is_sleeping = planned_sleep_start <= t < planned_sleep_end
+        # Calculate interval start time (round down to resolution)
+        minutes_since_start = int((t_dt - now).total_seconds() / 60)
+        interval_minutes = (minutes_since_start // resolution_minutes) * resolution_minutes
+        interval_key = interval_minutes
         
-        # Update sleep reservoir
-        dt_hours = resolution_minutes / 60.0
-        if is_sleeping:
-            # Recovery during sleep
-            recovery_rate = (1.0 - sleep_reservoir) / TAU_RECOVERY
-            sleep_reservoir = min(1.0, sleep_reservoir + recovery_rate * dt_hours)
-            hours_awake = 0.0
-        else:
-            # Decay while awake
-            decay_rate = sleep_reservoir / TAU_DECAY
-            sleep_reservoir = max(0.0, sleep_reservoir - decay_rate * dt_hours)
-            hours_awake += dt_hours
-        
-        # Circadian component (aligned with SAFTE model: peak at peak_hour, nadir 12h later)
-        # Phase relative to peak: 0 at peak (maximum), π at nadir (minimum)
-        phase_rel_to_peak = ((hour_of_day - peak_hour) % CIRCADIAN_PERIOD) / CIRCADIAN_PERIOD
-        phase_rad = 2 * math.pi * phase_rel_to_peak
-        # Cosine: 1 at peak (phase=0), -1 at nadir (phase=π)
-        # Map to [1 - amplitude, 1 + amplitude] range, then normalize to [0.85, 1.0] for 15% amplitude
-        circadian_cosine = math.cos(phase_rad)
-        # SAFTE-style: positive cosine increases effectiveness, negative decreases it
-        # Factor ranges from (1 - amplitude/100) at nadir to (1 + amplitude/100) at peak
-        circadian_factor = 1.0 + (CIRCADIAN_AMPLITUDE / 100.0) * circadian_cosine
-        
-        # Sleep inertia (if just woke up)
-        inertia = 0.0
-        if not is_sleeping and planned_sleep_end <= t < planned_sleep_end + timedelta(minutes=30):
-            minutes_since_wake = (t - planned_sleep_end).total_seconds() / 60
-            inertia = max(0, 0.15 * (1 - minutes_since_wake / 30))  # 15% reduction for 30 min
-        
-        # Combined effectiveness
-        effectiveness = 100.0 * sleep_reservoir * circadian_factor * (1 - inertia)
-        effectiveness = clamp(effectiveness, 0.0, 100.0)
+        if interval_key not in interval_data:
+            interval_data[interval_key] = []
+        interval_data[interval_key].append(effectiveness)
+    
+    # Create forecast points from intervals
+    for interval_minutes in sorted(interval_data.keys()):
+        interval_start = now + timedelta(minutes=interval_minutes)
+        effectivenesses = interval_data[interval_minutes]
+        avg_eff = sum(effectivenesses) / len(effectivenesses) if effectivenesses else 50.0
         
         # Determine risk level
-        if effectiveness >= SAFTE_LOW_RISK_MIN:
+        if avg_eff >= SAFTE_LOW_RISK_MIN:
             risk = RiskLevel.LOW
-        elif effectiveness >= SAFTE_CAUTION_MIN:
+        elif avg_eff >= SAFTE_CAUTION_MIN:
             risk = RiskLevel.MODERATE
-        elif effectiveness >= SAFTE_HIGH_RISK_MIN:
+        elif avg_eff >= SAFTE_HIGH_RISK_MIN:
             risk = RiskLevel.HIGH
         else:
             risk = RiskLevel.VERY_HIGH
         
         forecast_points.append(SAFTEForecastPoint(
-            timestamp=t,
-            effectiveness=effectiveness,
-            sleep_reservoir=sleep_reservoir,
-            circadian_phase=phase_rad,
-            sleep_inertia=inertia,
+            timestamp=interval_start,
+            effectiveness=avg_eff,
+            sleep_reservoir=0.0,  # Not directly available from model output
+            circadian_phase=0.0,  # Can calculate if needed
+            sleep_inertia=0.0,  # Not directly available
             risk_level=risk,
         ))
     
     # Calculate summary statistics
     effectivenesses = [p.effectiveness for p in forecast_points]
-    min_eff = min(effectivenesses)
-    avg_eff = sum(effectivenesses) / len(effectivenesses)
-    time_below_90 = sum(1 for p in forecast_points if p.effectiveness < 90) * resolution_minutes
-    time_below_70 = sum(1 for p in forecast_points if p.effectiveness < 70) * resolution_minutes
+    if not effectivenesses:
+        # Fallback if no points generated
+        min_eff = 50.0
+        avg_eff = 75.0
+        time_below_90 = 0
+        time_below_70 = 0
+    else:
+        min_eff = min(effectivenesses)
+        avg_eff = sum(effectivenesses) / len(effectivenesses)
+        time_below_90 = sum(1 for p in forecast_points if p.effectiveness < 90) * resolution_minutes
+        time_below_70 = sum(1 for p in forecast_points if p.effectiveness < 70) * resolution_minutes
     
     # Find optimal work windows (effectiveness >= 90)
     optimal_windows: List[Tuple[datetime, datetime]] = []
@@ -1547,6 +1594,7 @@ def simulate_safte_24h(
     
     # Find recommended nap windows (effectiveness < 80, not sleeping)
     nap_windows: List[Tuple[datetime, datetime]] = []
+    planned_sleep_end = planned_sleep_start + timedelta(hours=planned_sleep_duration_hours)
     for p in forecast_points:
         if p.effectiveness < 80:
             # Simple 15-30 min nap recommendation
@@ -1563,7 +1611,7 @@ def simulate_safte_24h(
             last_nap_hour = start.hour
     
     return PerformanceForecast(
-        crew_id=current_status.crew_id if hasattr(current_status, 'crew_id') else "unknown",
+        crew_id=crew_member.crew_id,
         forecast_start=now,
         forecast_points=forecast_points,
         min_effectiveness=min_eff,
