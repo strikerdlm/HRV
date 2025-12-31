@@ -546,16 +546,22 @@ class SchedulingEngine:
     def _track_schedule_change(
         self,
         change_type: str,
-        activity_id: str,
+        schedule_id: str,
         details: Dict[str, Any],
     ) -> None:
-        """Track schedule changes for real-time updates (NASA Mission Control standard)."""
+        """Track schedule changes for real-time updates (NASA Mission Control standard).
+        
+        Args:
+            change_type: Type of change ("activity_added", "activity_updated", "activity_deleted", "schedule_rolled_back")
+            schedule_id: Schedule instance ID (UUID), not activity definition ID
+            details: Additional change details (may include activity_id for activity definition)
+        """
         change = {
             "change_id": str(uuid.uuid4()),
             "timestamp": datetime.now().isoformat(),
-            "change_type": change_type,  # "activity_added", "activity_updated", "activity_deleted", "schedule_rolled_back"
-            "activity_id": activity_id,
-            "details": details,
+            "change_type": change_type,
+            "schedule_id": schedule_id,  # Schedule instance UUID
+            "details": details,  # May contain activity_id (activity definition) and other metadata
         }
         self.schedule_changes.append(change)
         # Keep only last 100 changes to prevent memory bloat
@@ -1162,6 +1168,128 @@ class SchedulingEngine:
                                 "affected_activities": [a.schedule_id for a in sleep_activities],
                                 "suggested_resolution": "Ensure continuous 8-hour sleep block",
                             })
+            
+            elif constraint.constraint_id == "exercise_capacity":
+                # Max 2 crew exercising concurrently
+                exercise_activities = [a for a in daily.activities if a.activity_id == "exercise"]
+                # Check for concurrent exercise periods
+                for i, activity1 in enumerate(exercise_activities):
+                    concurrent_count = 1  # Count activity1 itself
+                    overlapping_activities = [activity1.schedule_id]
+                    
+                    for activity2 in exercise_activities[i+1:]:
+                        # Check if activities overlap in time
+                        if (activity1.start_time < activity2.end_time and
+                            activity2.start_time < activity1.end_time):
+                            concurrent_count += 1
+                            overlapping_activities.append(activity2.schedule_id)
+                    
+                    if concurrent_count > MAX_CONCURRENT_EXERCISE:
+                        crew_names = []
+                        for schedule_id in overlapping_activities:
+                            activity = next((a for a in daily.activities if a.schedule_id == schedule_id), None)
+                            if activity:
+                                crew = self.crew_members.get(activity.crew_id)
+                                crew_names.append(crew.name if crew else activity.crew_id)
+                        violations.append({
+                            "constraint_id": constraint.constraint_id,
+                            "constraint_type": "hard",
+                            "severity": "error",
+                            "description": f"Exercise capacity exceeded: {concurrent_count} crew exercising concurrently (max {MAX_CONCURRENT_EXERCISE})",
+                            "affected_activities": overlapping_activities,
+                            "suggested_resolution": f"Reschedule exercise for: {', '.join(crew_names)}",
+                        })
+                        break  # Only report once per violation
+            
+            elif constraint.constraint_id == "medical_clearance":
+                # EVA requires medical clearance (GO/NO-GO check)
+                eva_activities = [a for a in daily.activities if a.activity_id == "eva"]
+                for eva_activity in eva_activities:
+                    crew = self.crew_members.get(eva_activity.crew_id)
+                    if crew and crew.status:
+                        eva_result = crew.status.eva_go_nogo()
+                        if not eva_result.all_gates_passed or eva_result.status != GONOGOStatus.GO:
+                            violations.append({
+                                "constraint_id": constraint.constraint_id,
+                                "constraint_type": "hard",
+                                "severity": "error",
+                                "description": f"Crew {crew.name}: EVA medical clearance failed - {eva_result.status.value}",
+                                "affected_activities": [eva_activity.schedule_id],
+                                "suggested_resolution": f"Medical clearance required. Status: {eva_result.status.value}. Reasons: {', '.join(eva_result.reasons[:3])}",
+                            })
+                    else:
+                        # No status data - assume clearance required
+                        violations.append({
+                            "constraint_id": constraint.constraint_id,
+                            "constraint_type": "hard",
+                            "severity": "error",
+                            "description": f"Crew {eva_activity.crew_id}: EVA scheduled but no medical status available",
+                            "affected_activities": [eva_activity.schedule_id],
+                            "suggested_resolution": "Obtain medical clearance before scheduling EVA",
+                        })
+            
+            elif constraint.constraint_id == "eva_recovery":
+                # Minimum 48h between EVAs for same crew
+                eva_activities = [a for a in daily.activities if a.activity_id == "eva"]
+                # Check all schedules (not just current day) for previous EVAs
+                for eva_activity in eva_activities:
+                    crew_id = eva_activity.crew_id
+                    eva_start = eva_activity.start_time
+                    
+                    # Check previous EVAs in all schedules
+                    for schedule_date_check, schedule_check in self.schedules.items():
+                        if schedule_date_check >= schedule_date:
+                            continue  # Only check past schedules
+                        
+                        for past_activity in schedule_check.activities:
+                            if (past_activity.crew_id == crew_id and
+                                past_activity.activity_id == "eva"):
+                                hours_since_last_eva = (eva_start - past_activity.end_time).total_seconds() / 3600
+                                if hours_since_last_eva < 48:
+                                    crew = self.crew_members.get(crew_id)
+                                    crew_name = crew.name if crew else crew_id
+                                    violations.append({
+                                        "constraint_id": constraint.constraint_id,
+                                        "constraint_type": "hard",
+                                        "severity": "error",
+                                        "description": f"Crew {crew_name}: EVA scheduled {hours_since_last_eva:.1f}h after previous EVA (minimum 48h required)",
+                                        "affected_activities": [eva_activity.schedule_id],
+                                        "suggested_resolution": f"Reschedule EVA to allow at least 48h recovery period",
+                                    })
+                                    break
+            
+            elif constraint.constraint_id == "safety_gates":
+                # All safety gates must pass for high-risk activities
+                high_risk_activities = [a for a in daily.activities if a.risk_level in (RiskLevel.HIGH, RiskLevel.VERY_HIGH)]
+                for activity in high_risk_activities:
+                    if activity.activity_id == "eva":
+                        # Use EVA GO/NO-GO check
+                        crew = self.crew_members.get(activity.crew_id)
+                        if crew and crew.status:
+                            eva_result = crew.status.eva_go_nogo()
+                            if not eva_result.all_gates_passed:
+                                violations.append({
+                                    "constraint_id": constraint.constraint_id,
+                                    "constraint_type": "hard",
+                                    "severity": "error",
+                                    "description": f"Crew {crew.name}: Safety gates failed for {activity.activity_name}",
+                                    "affected_activities": [activity.schedule_id],
+                                    "suggested_resolution": f"All safety gates must pass. Failed gates: {', '.join(eva_result.reasons[:3])}",
+                                })
+                    else:
+                        # For other high-risk activities, check IHPI threshold
+                        crew = self.crew_members.get(activity.crew_id)
+                        if crew:
+                            ihpi = crew.get_ihpi()
+                            if ihpi < 75:  # IHPI threshold for high-risk activities
+                                violations.append({
+                                    "constraint_id": constraint.constraint_id,
+                                    "constraint_type": "hard",
+                                    "severity": "error",
+                                    "description": f"Crew {crew.name}: IHPI {ihpi:.0f} below threshold (75) for {activity.activity_name}",
+                                    "affected_activities": [activity.schedule_id],
+                                    "suggested_resolution": "Improve crew readiness or reschedule activity",
+                                })
         
         # Check soft constraints (workload, recovery, etc.)
         from scheduling_core import compute_workload_balance
