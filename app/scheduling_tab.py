@@ -2196,43 +2196,44 @@ def _render_performance_forecast(
     
     # Build chart data - convert to hourly format exactly like research app
     # The research app uses integer hours (0-24) representing hours from now
-    # We need to aggregate forecast points into hourly averages
+    # We need to sample the forecast at each hour boundary, not average
     
     forecast_start = forecast.forecast_start
     
-    # Group forecast points by hour (0-24)
-    hourly_data: Dict[int, List[float]] = {}
-    for p in forecast.forecast_points:
-        hours_since_start = (p.timestamp - forecast_start).total_seconds() / 3600.0
-        hour_index = int(hours_since_start)  # Integer hour (0, 1, 2, ..., 24)
-        if hour_index <= 24:  # Only include up to 24 hours
-            if hour_index not in hourly_data:
-                hourly_data[hour_index] = []
-            hourly_data[hour_index].append(p.effectiveness)
-    
-    # Create hourly averages (matching research app format)
+    # Sample effectiveness at each hour boundary (0, 1, 2, ..., 24)
+    # This matches the research app's approach of generating hourly predictions
     hours: List[int] = []
     vals: List[float] = []
+    
     for h in range(25):  # 0 to 24 hours
-        if h in hourly_data:
-            avg_eff = sum(hourly_data[h]) / len(hourly_data[h])
+        target_time = forecast_start + timedelta(hours=h)
+        
+        # Find the forecast point closest to this hour boundary
+        closest_point = min(
+            forecast.forecast_points,
+            key=lambda p: abs((p.timestamp - target_time).total_seconds())
+        )
+        
+        # Only use if within 30 minutes of the target hour
+        time_diff_minutes = abs((closest_point.timestamp - target_time).total_seconds() / 60.0)
+        if time_diff_minutes <= 30 or h == 0:
             hours.append(h)
-            vals.append(round(avg_eff, 1))
-        elif h == 0:
-            # Always include hour 0 (now) even if no data
-            if forecast.forecast_points:
-                hours.append(0)
-                vals.append(forecast.forecast_points[0].effectiveness)
+            vals.append(round(closest_point.effectiveness, 1))
     
     # Markers for key time points (Now, 4h, 8h, 24h) - exactly like research app
+    # Note: For category axes, coord x-value must match the category value exactly
+    # Since xAxis uses integer hours as categories, we use the integer value directly
     markers: List[Dict[str, Any]] = []
     key_points = {0: "Now", 4: "4h", 8: "8h", 24: "24h"}
     for h, label in key_points.items():
         if h in hours:
             idx = hours.index(h)
+            # Use the category value (integer hour) directly for x-coordinate
+            # ECharts category axis matches numeric coords to category values by value, not index
+            # So coord: [4, ...] matches category 4 in the data array [0, 1, 2, 3, 4, ...]
             markers.append({
                 "name": label,
-                "coord": [hours[idx], vals[idx]],
+                "coord": [h, vals[idx]],  # Use h (the category value) directly
                 "value": f"{vals[idx]:.0f}%"
             })
     
