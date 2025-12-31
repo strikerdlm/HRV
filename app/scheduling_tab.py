@@ -1829,9 +1829,11 @@ def _render_realtime_updates_panel(
                     
                     col1, col2 = st.columns([3, 1])
                     with col1:
-                        st.write(f"**{time_str}** - {change['activity_id'][:8]}...")
-                        if change["details"]:
-                            details_str = ", ".join(f"{k}: {v}" for k, v in change["details"].items() if k != "activity_id")
+                        # Use schedule_id instead of activity_id (fixed naming)
+                        schedule_id = change.get("schedule_id", change.get("activity_id", "unknown"))[:8]
+                        st.write(f"**{time_str}** - {schedule_id}...")
+                        if change.get("details"):
+                            details_str = ", ".join(f"{k}: {v}" for k, v in change["details"].items())
                             if details_str:
                                 st.caption(details_str)
                     with col2:
