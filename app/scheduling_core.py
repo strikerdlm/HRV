@@ -1651,6 +1651,79 @@ def simulate_safte_24h(
 
 
 # ---------------------------------------------------------------------------
+# SAFTE Plotting Helpers (UI-safe, deterministic)
+# ---------------------------------------------------------------------------
+
+def build_hourly_safte_series(
+    forecast: PerformanceForecast,
+    *,
+    horizon_hours: int = 24,
+    align_to_next_hour: bool = True,
+    time_label_format: str = "%Y-%m-%d %H:%M",
+) -> tuple[list[str], list[float], list[datetime]]:
+    """Build an hourly SAFTE effectiveness time series for plotting.
+
+    This helper exists to prevent ambiguous x-axes (e.g., "Hour 1, Hour 2") that
+    users may misinterpret as clock-hours (01:00, 02:00...). It returns explicit
+    local-time labels aligned to hour boundaries and values interpolated from the
+    forecast using :meth:`PerformanceForecast.get_effectiveness_at`.
+
+    Args:
+        forecast: A :class:`PerformanceForecast` instance.
+        horizon_hours: Hours ahead from ``forecast.forecast_start`` (1-48).
+        align_to_next_hour: If True, sample starting at the next whole-hour
+            boundary after ``forecast.forecast_start`` (or the same instant if
+            already aligned). If False, sampling starts at ``forecast_start``.
+        time_label_format: ``datetime.strftime`` format used for x-axis labels.
+
+    Returns:
+        (x_labels, y_values, timestamps)
+        - x_labels: local-time strings for x-axis categories
+        - y_values: effectiveness percentages (0-100), rounded to 1 decimal
+        - timestamps: the underlying datetime objects (local time)
+
+    Raises:
+        TypeError: If input types are invalid.
+        ValueError: If ``horizon_hours`` is out of range or format is empty.
+    """
+    if not isinstance(forecast, PerformanceForecast):
+        raise TypeError("forecast must be a PerformanceForecast")
+    if not isinstance(horizon_hours, int):
+        raise TypeError("horizon_hours must be an int")
+    if horizon_hours < 1 or horizon_hours > 48:
+        raise ValueError("horizon_hours must be between 1 and 48")
+    if not isinstance(align_to_next_hour, bool):
+        raise TypeError("align_to_next_hour must be a bool")
+    if not isinstance(time_label_format, str):
+        raise TypeError("time_label_format must be a str")
+    if not time_label_format.strip():
+        raise ValueError("time_label_format must be a non-empty string")
+
+    forecast_start = forecast.forecast_start
+    end_time = forecast_start + timedelta(hours=horizon_hours)
+
+    if align_to_next_hour:
+        start_time = forecast_start.replace(minute=0, second=0, microsecond=0)
+        if start_time < forecast_start:
+            start_time = start_time + timedelta(hours=1)
+    else:
+        start_time = forecast_start
+
+    timestamps: list[datetime] = []
+    current = start_time
+    max_points = horizon_hours + 1  # inclusive end, bounded
+    for _ in range(max_points):
+        if current > end_time:
+            break
+        timestamps.append(current)
+        current = current + timedelta(hours=1)
+
+    x_labels: list[str] = [ts.strftime(time_label_format) for ts in timestamps]
+    y_values: list[float] = [round(float(forecast.get_effectiveness_at(ts)), 1) for ts in timestamps]
+    return x_labels, y_values, timestamps
+
+
+# ---------------------------------------------------------------------------
 # What-If Analysis
 # ---------------------------------------------------------------------------
 
@@ -2319,6 +2392,7 @@ __all__ = [
     "SAFTEForecastPoint",
     "PerformanceForecast",
     "simulate_safte_24h",
+    "build_hourly_safte_series",
     # Advanced - What-If Analysis
     "WhatIfScenario",
     "analyze_what_if",
