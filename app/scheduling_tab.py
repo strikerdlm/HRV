@@ -2034,18 +2034,131 @@ def _render_performance_forecast(
         )
     
     selected_crew = next((c for c in crew_list if c.name == selected_crew_name), None)
-    if not selected_crew or not selected_crew.status:
-        st.info("No status data available for selected crew member")
+    if not selected_crew:
+        st.info("No crew member selected")
         return
     
-    with col2:
-        sleep_start_hour = st.number_input(
-            "Planned Sleep Start (hour)",
-            min_value=18,
-            max_value=24,
-            value=22,
-            key="forecast_sleep_hour",
-        )
+    # SAFTE Model Inputs Section
+    st.markdown("### 📊 SAFTE Model Parameters")
+    st.caption(
+        "Configure all parameters for accurate fatigue prediction. "
+        "These inputs match the research app's SAFTE implementation."
+    )
+    
+    # Create expandable sections for different input categories
+    with st.expander("😴 Sleep Schedule", expanded=True):
+        col_s1, col_s2, col_s3 = st.columns(3)
+        with col_s1:
+            sleep_start_hour = st.number_input(
+                "Sleep Start (hour)",
+                min_value=0,
+                max_value=23,
+                value=22,
+                key="forecast_sleep_hour",
+                help="Bedtime hour (0-23)",
+            )
+            sleep_duration = st.number_input(
+                "Sleep Duration (hours)",
+                min_value=4.0,
+                max_value=12.0,
+                value=8.0,
+                step=0.5,
+                key="forecast_sleep_duration",
+                help="Planned sleep duration",
+            )
+        with col_s2:
+            sleep_quality = st.slider(
+                "Sleep Quality (0-1)",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.8,
+                step=0.1,
+                key="forecast_sleep_quality",
+                help="Sleep quality scale: 0.0 (poor) to 1.0 (excellent)",
+            )
+            sleep_debt = st.number_input(
+                "Sleep Debt (hours)",
+                min_value=0.0,
+                max_value=24.0,
+                value=0.0,
+                step=0.5,
+                key="forecast_sleep_debt",
+                help="Cumulative sleep debt from previous days",
+            )
+        with col_s3:
+            st.markdown("**Sleep Info**")
+            st.caption(f"**Bedtime:** {sleep_start_hour:02d}:00")
+            sleep_end_hour = (sleep_start_hour + int(sleep_duration)) % 24
+            st.caption(f"**Wake time:** {sleep_end_hour:02d}:00")
+            st.caption(f"**Duration:** {sleep_duration:.1f} hours")
+            st.caption(f"**Quality:** {sleep_quality:.1f}")
+            if sleep_debt > 0:
+                st.warning(f"⚠️ Sleep debt: {sleep_debt:.1f} hours")
+    
+    with st.expander("💼 Work Schedule", expanded=False):
+        col_w1, col_w2, col_w3 = st.columns(3)
+        with col_w1:
+            has_work = st.checkbox(
+                "Has Work Schedule",
+                value=True,
+                key="forecast_has_work",
+                help="Enable work schedule for fatigue modeling",
+            )
+            if has_work:
+                work_start = st.number_input(
+                    "Work Start (hour)",
+                    min_value=0,
+                    max_value=23,
+                    value=9,
+                    key="forecast_work_start",
+                )
+        with col_w2:
+            if has_work:
+                work_end = st.number_input(
+                    "Work End (hour)",
+                    min_value=0,
+                    max_value=23,
+                    value=17,
+                    key="forecast_work_end",
+                )
+                if work_end <= work_start:
+                    work_hours = (24 - work_start) + work_end
+                else:
+                    work_hours = work_end - work_start
+                st.caption(f"**Work hours:** {work_hours}")
+        with col_w3:
+            if has_work:
+                cognitive_load = st.selectbox(
+                    "Cognitive Load",
+                    options=["Low", "Medium", "High", "Critical"],
+                    index=1,
+                    key="forecast_cognitive_load",
+                    help="Workload intensity (0-3 scale)",
+                )
+                load_map = {"Low": 0, "Medium": 1, "High": 2, "Critical": 3}
+                cognitive_load_value = load_map.get(cognitive_load, 1)
+            else:
+                work_start = 9
+                work_end = 17
+                work_hours = 8
+                cognitive_load_value = 1
+    
+    with st.expander("👤 Crew Member Profile", expanded=False):
+        col_p1, col_p2 = st.columns(2)
+        with col_p1:
+            st.markdown("**Profile Data**")
+            st.caption(f"**Name:** {selected_crew.name}")
+            st.caption(f"**Age:** {selected_crew.age_years} years")
+            st.caption(f"**Sex:** {selected_crew.sex}")
+            st.caption(f"**Chronotype:** {selected_crew.chronotype}")
+        with col_p2:
+            st.markdown("**Current Status**")
+            if selected_crew.status:
+                st.caption(f"**SAFTE Effectiveness:** {selected_crew.status.safte_effectiveness:.1f}%")
+                st.caption(f"**Hours Awake:** {selected_crew.status.hours_awake:.1f}h")
+                st.caption(f"**Sleep Last 24h:** {selected_crew.status.sleep_last_24h:.1f}h")
+            else:
+                st.info("No status data available")
     
     # Generate forecast
     from datetime import datetime, timedelta
@@ -2054,13 +2167,32 @@ def _render_performance_forecast(
         datetime.min.time().replace(hour=sleep_start_hour),
     )
     
-    forecast = simulate_safte_24h(
-        current_status=selected_crew.status,
-        planned_sleep_start=sleep_start,
-        planned_sleep_duration_hours=8.0,
-        chronotype_offset_hours=0.0,
-        resolution_minutes=15,
-    )
+    # Build work schedule dict
+    work_schedule_dict = None
+    if has_work:
+        work_schedule_dict = {
+            "has_work": True,
+            "work_start": work_start,
+            "work_end": work_end,
+            "work_hours": work_hours,
+            "cognitive_load": cognitive_load_value,
+        }
+    
+    # Generate forecast using full SAFTE model
+    try:
+        forecast = simulate_safte_24h(
+            crew_member=selected_crew,
+            planned_sleep_start=sleep_start,
+            planned_sleep_duration_hours=sleep_duration,
+            sleep_quality=sleep_quality,
+            sleep_debt_hours=sleep_debt,
+            work_schedule=work_schedule_dict,
+            resolution_minutes=15,
+        )
+    except Exception as e:
+        st.error(f"Error generating SAFTE forecast: {str(e)}")
+        st.exception(e)
+        return
     
     # Build chart data
     times = [p.timestamp.strftime("%H:%M") for p in forecast.forecast_points]
