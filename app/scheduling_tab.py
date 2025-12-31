@@ -140,7 +140,26 @@ GONOGO_COLORS = {
 
 def _init_scheduling_session_state() -> None:
     """Initialize scheduling-related session state."""
-    if "scheduling_engine" not in st.session_state:
+    # Check if engine exists and has all required methods (for compatibility after code updates)
+    engine_needs_recreation = False
+    if "scheduling_engine" in st.session_state:
+        engine = st.session_state["scheduling_engine"]
+        # Check for new methods added in recent updates
+        required_methods = [
+            "get_shift_activities",
+            "get_shift_workload",
+            "update_activity_status",
+            "get_activity_status_history",
+            "auto_update_activity_statuses",
+            "reserve_equipment",
+            "get_equipment_availability",
+        ]
+        for method_name in required_methods:
+            if not hasattr(engine, method_name):
+                engine_needs_recreation = True
+                break
+    
+    if "scheduling_engine" not in st.session_state or engine_needs_recreation:
         crew = create_sample_crew()
         engine = SchedulingEngine(crew_members=crew)
         st.session_state["scheduling_engine"] = engine
