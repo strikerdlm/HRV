@@ -2194,97 +2194,170 @@ def _render_performance_forecast(
         st.exception(e)
         return
     
-    # Build chart data
-    times = [p.timestamp.strftime("%H:%M") for p in forecast.forecast_points]
-    effectivenesses = [p.effectiveness for p in forecast.forecast_points]
+    # Build chart data - convert to hours format like research app
+    # Calculate hours since forecast start for each point
+    forecast_start = forecast.forecast_start
+    hours_data: List[float] = []
+    effectivenesses: List[float] = []
     
-    # Zone boundaries
-    zone_90 = [90.0] * len(times)
-    zone_80 = [80.0] * len(times)
-    zone_70 = [70.0] * len(times)
+    for p in forecast.forecast_points:
+        hours_since_start = (p.timestamp - forecast_start).total_seconds() / 3600.0
+        hours_data.append(round(hours_since_start, 1))
+        effectivenesses.append(p.effectiveness)
     
+    # Markers for key time points (Now, 4h, 8h, 24h)
+    markers: List[Dict[str, Any]] = []
+    key_points = {0: "Now", 4: "4h", 8: "8h", 24: "24h"}
+    for h, label in key_points.items():
+        # Find closest hour in data
+        if hours_data:
+            closest_hour = min(hours_data, key=lambda x: abs(x - h))
+            if abs(closest_hour - h) <= 1.0:  # Within 1 hour
+                idx = hours_data.index(closest_hour)
+                markers.append({
+                    "name": label,
+                    "coord": [closest_hour, effectivenesses[idx]],
+                    "value": f"{effectivenesses[idx]:.0f}%"
+                })
+    
+    # Build chart options matching research app style
     option = {
-        "backgroundColor": "transparent",
-        "title": {
-            "text": f"SAFTE Effectiveness Forecast: {selected_crew_name}",
-            "subtext": f"Min: {forecast.min_effectiveness:.1f}% | Avg: {forecast.avg_effectiveness:.1f}% | Below 90: {forecast.time_below_90_minutes}min",
-            "left": "center",
-            "textStyle": {"color": "#ddd", "fontSize": 14},
-            "subtextStyle": {"color": "#888", "fontSize": 11},
-        },
-        "tooltip": {
-            "trigger": "axis",
-            "axisPointer": {"type": "cross"},
-        },
-        "legend": {
-            "data": ["Effectiveness", "Low Risk (90%)", "Caution (80%)", "High Risk (70%)"],
-            "bottom": 10,
-            "textStyle": {"color": "#888"},
-        },
-        "grid": {
-            "left": "10%",
-            "right": "5%",
-            "top": "20%",
-            "bottom": "15%",
-        },
+        "tooltip": {"trigger": "axis", "formatter": "{b}h : {c}%"},
         "xAxis": {
             "type": "category",
-            "data": times,
-            "axisLabel": {"color": "#888", "interval": 7},
-            "axisLine": {"lineStyle": {"color": "#444"}},
+            "data": [f"{h:.1f}" for h in hours_data],
+            "name": "Hour",
+            "boundaryGap": False,
+            "axisLabel": {"color": "#1a1a1a"},
+            "nameTextStyle": {"color": "#1a1a1a"},
         },
         "yAxis": {
             "type": "value",
-            "min": 50,
-            "max": 105,
-            "axisLabel": {"color": "#888", "formatter": "{value}%"},
-            "axisLine": {"lineStyle": {"color": "#444"}},
-            "splitLine": {"lineStyle": {"color": "#333"}},
+            "min": 40,
+            "max": 100,
+            "name": "Effectiveness (%)",
+            "axisLabel": {"color": "#1a1a1a", "formatter": "{value}%"},
+            "nameTextStyle": {"color": "#1a1a1a"},
         },
         "series": [
             {
                 "name": "Effectiveness",
                 "type": "line",
-                "data": effectivenesses,
                 "smooth": True,
+                "data": effectivenesses,
+                "areaStyle": {"opacity": 0.15},
                 "lineStyle": {"width": 3, "color": "#3498db"},
-                "areaStyle": {
-                    "color": {
-                        "type": "linear",
-                        "x": 0, "y": 0, "x2": 0, "y2": 1,
-                        "colorStops": [
-                            {"offset": 0, "color": "rgba(52, 152, 219, 0.4)"},
-                            {"offset": 1, "color": "rgba(52, 152, 219, 0.05)"},
-                        ],
-                    },
+                "markLine": {
+                    "symbol": "none",
+                    "data": [
+                        {"yAxis": 85, "name": "GO"},
+                        {"yAxis": 70, "name": "Monitor"},
+                        {"yAxis": 55, "name": "Caution"},
+                    ],
+                    "label": {"formatter": "{b}", "color": "#1a1a1a"},
+                    "lineStyle": {"color": "#2c3e50"},
                 },
-                "symbol": "none",
-            },
-            {
-                "name": "Low Risk (90%)",
-                "type": "line",
-                "data": zone_90,
-                "lineStyle": {"type": "dashed", "color": "#27ae60", "width": 1},
-                "symbol": "none",
-            },
-            {
-                "name": "Caution (80%)",
-                "type": "line",
-                "data": zone_80,
-                "lineStyle": {"type": "dashed", "color": "#f39c12", "width": 1},
-                "symbol": "none",
-            },
-            {
-                "name": "High Risk (70%)",
-                "type": "line",
-                "data": zone_70,
-                "lineStyle": {"type": "dashed", "color": "#e74c3c", "width": 1},
-                "symbol": "none",
-            },
+                "markPoint": {"data": markers},
+            }
         ],
+        "legend": {"show": False},
+        "grid": {"left": "10%", "right": "8%", "bottom": "12%", "top": "8%"},
     }
     
     render_echarts(option, height_px=380)
+    
+    # Add Garmin Connect data fetching section
+    st.markdown("---")
+    with st.expander("📱 Fetch Data from Garmin Connect", expanded=False):
+        st.caption("Import sleep and activity data from your Garmin device")
+        
+        col_g1, col_g2 = st.columns(2)
+        with col_g1:
+            garmin_email = st.text_input(
+                "Garmin Email",
+                key="garmin_email_input",
+                type="default",
+                help="Your Garmin Connect account email",
+            )
+        with col_g2:
+            garmin_password = st.text_input(
+                "Garmin Password",
+                key="garmin_password_input",
+                type="password",
+                help="Your Garmin Connect account password",
+            )
+        
+        col_g3, col_g4 = st.columns(2)
+        with col_g3:
+            days_back = st.number_input(
+                "Days to Fetch",
+                min_value=1,
+                max_value=30,
+                value=7,
+                key="garmin_days",
+                help="Number of days of historical data to fetch",
+            )
+        with col_g4:
+            fetch_button = st.button("📥 Fetch from Garmin", key="fetch_garmin_btn")
+        
+        if fetch_button and garmin_email and garmin_password:
+            with st.spinner("Fetching data from Garmin Connect..."):
+                try:
+                    from garmin_import import (
+                        GarminCredentials,
+                        fetch_garmin_sleep,
+                        load_credentials_from_env,
+                    )
+                    from datetime import date, timedelta
+                    
+                    # Create credentials
+                    credentials = GarminCredentials(
+                        email=garmin_email,
+                        password=garmin_password,
+                    )
+                    
+                    # Fetch sleep data
+                    end_date = date.today()
+                    start_date = end_date - timedelta(days=days_back - 1)
+                    
+                    sleep_df = fetch_garmin_sleep(credentials, start_date, end_date)
+                    
+                    if not sleep_df.empty:
+                        st.success(f"✅ Fetched {len(sleep_df)} days of sleep data")
+                        
+                        # Display summary
+                        st.markdown("##### Sleep Data Summary")
+                        summary_df = sleep_df.copy()
+                        summary_df["total_sleep_hours"] = summary_df["total_sleep_seconds"] / 3600.0
+                        summary_df["date"] = pd.to_datetime(summary_df["date"]).dt.strftime("%Y-%m-%d")
+                        
+                        display_cols = ["date", "total_sleep_hours", "sleep_score"]
+                        if "sleep_score" in summary_df.columns:
+                            st.dataframe(
+                                summary_df[display_cols].round(2),
+                                use_container_width=True,
+                                hide_index=True,
+                            )
+                        
+                        # Auto-populate sleep inputs from latest data
+                        if len(sleep_df) > 0:
+                            latest = sleep_df.iloc[-1]
+                            if pd.notna(latest.get("total_sleep_seconds")):
+                                sleep_hours = latest["total_sleep_seconds"] / 3600.0
+                                st.session_state["forecast_sleep_duration"] = sleep_hours
+                            if pd.notna(latest.get("sleep_score")):
+                                sleep_quality = latest["sleep_score"] / 100.0
+                                st.session_state["forecast_sleep_quality"] = sleep_quality
+                            
+                            st.info("💡 Sleep duration and quality have been auto-populated from latest Garmin data")
+                    else:
+                        st.warning("No sleep data found for the selected date range")
+                        
+                except ImportError as e:
+                    st.error(f"Garmin import module not available: {e}")
+                except Exception as e:
+                    st.error(f"Error fetching Garmin data: {str(e)}")
+                    st.exception(e)
     
     # Summary cards
     col1, col2, col3, col4 = st.columns(4)
