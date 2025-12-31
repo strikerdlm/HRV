@@ -51,6 +51,7 @@ try:
         NASA_EVA_VO2MAX_MIN_ML_KG_MIN,
         # Advanced features
         simulate_safte_24h,
+        build_hourly_safte_series,
         PerformanceForecast,
         WhatIfScenario,
         analyze_what_if,
@@ -96,10 +97,12 @@ except ImportError:
     ADVANCED_FEATURES_AVAILABLE = False
 
 try:
-    from logging_config import get_logger
+    from logging_config import get_logger, log_exception
 except ImportError:
     import logging
     get_logger = logging.getLogger
+    def log_exception(logger: Any, message: str, exc: BaseException) -> None:  # type: ignore[no-redef]
+        logger.exception("%s: %s", message, exc)
 
 _LOGGER = get_logger(__name__)
 
@@ -2057,35 +2060,41 @@ def _render_performance_forecast(
                 key="forecast_sleep_hour",
                 help="Bedtime hour (0-23)",
             )
-            # Check for Garmin values in temporary session state (set before widget creation)
-            default_duration = st.session_state.get("forecast_sleep_duration", 8.0)
+            # Apply Garmin auto-populated values BEFORE widget creation.
+            # Streamlit widgets ignore the `value=` parameter once the `key` exists in session_state,
+            # so we must write to the widget's session_state key directly.
             if "_garmin_sleep_duration" in st.session_state:
-                default_duration = st.session_state["_garmin_sleep_duration"]
-                # Clear temporary key after using it
-                del st.session_state["_garmin_sleep_duration"]
+                try:
+                    _raw_duration = float(st.session_state.pop("_garmin_sleep_duration"))
+                    _duration = max(4.0, min(12.0, _raw_duration))
+                    st.session_state["forecast_sleep_duration"] = _duration
+                except (TypeError, ValueError) as exc:
+                    log_exception(_LOGGER, "Invalid _garmin_sleep_duration value; ignoring", exc)
             
             sleep_duration = st.number_input(
                 "Sleep Duration (hours)",
                 min_value=4.0,
                 max_value=12.0,
-                value=default_duration,
+                value=float(st.session_state.get("forecast_sleep_duration", 8.0)),
                 step=0.5,
                 key="forecast_sleep_duration",
                 help="Planned sleep duration",
             )
         with col_s2:
-            # Check for Garmin values in temporary session state (set before widget creation)
-            default_quality = st.session_state.get("forecast_sleep_quality", 0.8)
+            # Apply Garmin auto-populated values BEFORE widget creation.
             if "_garmin_sleep_quality" in st.session_state:
-                default_quality = st.session_state["_garmin_sleep_quality"]
-                # Clear temporary key after using it
-                del st.session_state["_garmin_sleep_quality"]
+                try:
+                    _raw_quality = float(st.session_state.pop("_garmin_sleep_quality"))
+                    _quality = max(0.0, min(1.0, _raw_quality))
+                    st.session_state["forecast_sleep_quality"] = _quality
+                except (TypeError, ValueError) as exc:
+                    log_exception(_LOGGER, "Invalid _garmin_sleep_quality value; ignoring", exc)
             
             sleep_quality = st.slider(
                 "Sleep Quality (0-1)",
                 min_value=0.0,
                 max_value=1.0,
-                value=default_quality,
+                value=float(st.session_state.get("forecast_sleep_quality", 0.8)),
                 step=0.1,
                 key="forecast_sleep_quality",
                 help="Sleep quality scale: 0.0 (poor) to 1.0 (excellent)",
@@ -2203,86 +2212,79 @@ def _render_performance_forecast(
             work_schedule=work_schedule_dict,
             resolution_minutes=15,
         )
-    except Exception as e:
-        st.error(f"Error generating SAFTE forecast: {str(e)}")
-        st.exception(e)
+    except Exception as exc:
+        st.error(f"Error generating SAFTE forecast: {exc}")
+        log_exception(_LOGGER, "SAFTE forecast generation failed", exc)
         return
     
-    # Build chart data - convert to hourly format exactly like research app
-    # The research app uses integer hours (0-24) representing hours from now
-    # We need to sample the forecast at each hour boundary, not average
-    
-    forecast_start = forecast.forecast_start
-    
-    # Sample effectiveness at each hour boundary (0, 1, 2, ..., 24)
-    # This matches the research app's approach of generating hourly predictions
-    hours: List[int] = []
-    vals: List[float] = []
-    
-    # Check if forecast points exist before processing
-    if not forecast.forecast_points:
+    # Build chart data: hourly samples with explicit local-time labels.
+    # This matches the research app's "Cognitive Performance Prediction" plot style and
+    # prevents misinterpretation of "Hour 1..6" as "01:00..06:00".
+    x_labels, y_vals, _timestamps = build_hourly_safte_series(
+        forecast,
+        horizon_hours=24,
+        align_to_next_hour=True,
+        time_label_format="%Y-%m-%d %H:%M",
+    )
+    if not x_labels:
         st.warning("No forecast data available. Please check your inputs and try again.")
         return
-    
-    for h in range(25):  # 0 to 24 hours
-        target_time = forecast_start + timedelta(hours=h)
-        
-        # Find the forecast point closest to this hour boundary
-        closest_point = min(
-            forecast.forecast_points,
-            key=lambda p: abs((p.timestamp - target_time).total_seconds())
-        )
-        
-        # Only use if within 30 minutes of the target hour
-        time_diff_minutes = abs((closest_point.timestamp - target_time).total_seconds() / 60.0)
-        if time_diff_minutes <= 30 or h == 0:
-            hours.append(h)
-            vals.append(round(closest_point.effectiveness, 1))
-    
-    # Markers for key time points (Now, 4h, 8h, 24h) - exactly like research app
-    # Note: For category axes, coord x-value must match the category value exactly
-    # Since xAxis uses integer hours as categories, we use the integer value directly
-    markers: List[Dict[str, Any]] = []
-    key_points = {0: "Now", 4: "4h", 8: "8h", 24: "24h"}
-    for h, label in key_points.items():
-        if h in hours:
-            idx = hours.index(h)
-            # Use the category value (integer hour) directly for x-coordinate
-            # ECharts category axis matches numeric coords to category values by value, not index
-            # So coord: [4, ...] matches category 4 in the data array [0, 1, 2, 3, 4, ...]
-            markers.append({
-                "name": label,
-                "coord": [h, vals[idx]],  # Use h (the category value) directly
-                "value": f"{vals[idx]:.0f}%"
-            })
-    
-    # Build chart options exactly matching research app
+
+    # Build chart options aligned with the research app plot conventions.
     options = {
-        "tooltip": {"trigger": "axis", "formatter": "{b}h : {c}%"},
-        "xAxis": {"type": "category", "data": hours, "name": "Hour", "boundaryGap": False},
-        "yAxis": {"type": "value", "min": 40, "max": 100, "name": "Effectiveness (%)"},
+        "tooltip": {"trigger": "axis", "formatter": "{b}<br/>Effectiveness: {c}%"},
+        "xAxis": {
+            "type": "category",
+            "data": x_labels,
+            "name": "Local time",
+            "nameLocation": "middle",
+            "nameGap": 35,
+            "boundaryGap": False,
+            "axisLabel": {"rotate": 45, "fontSize": 10, "color": "#1a1a1a"},
+            "axisLine": {"lineStyle": {"color": "#2c3e50"}},
+        },
+        "yAxis": {
+            "type": "value",
+            "min": 0,
+            "max": 100,
+            "name": "Effectiveness (%)",
+            "axisLabel": {"formatter": "{value}%", "color": "#1a1a1a"},
+            "nameTextStyle": {"color": "#1a1a1a"},
+            "axisLine": {"lineStyle": {"color": "#2c3e50"}},
+            "splitLine": {"lineStyle": {"color": "rgba(44, 62, 80, 0.1)"}},
+        },
+        "visualMap": {
+            "show": False,
+            "pieces": [
+                {"gte": SAFTE_LOW_RISK_MIN, "lte": 100, "color": COLORS["good"]},
+                {"gt": SAFTE_CAUTION_MIN, "lt": SAFTE_LOW_RISK_MIN, "color": COLORS["caution"]},
+                {"gt": SAFTE_HIGH_RISK_MIN, "lte": SAFTE_CAUTION_MIN, "color": "#fd7e14"},
+                {"lte": SAFTE_HIGH_RISK_MIN, "color": COLORS["poor"]},
+            ],
+        },
         "series": [
             {
                 "name": "Effectiveness",
                 "type": "line",
                 "smooth": True,
-                "data": vals,
-                "areaStyle": {"opacity": 0.15},
+                "data": y_vals,
                 "lineStyle": {"width": 3},
+                "areaStyle": {"opacity": 0.25},
                 "markLine": {
                     "symbol": "none",
                     "data": [
-                        {"yAxis": 85, "name": "GO"},
-                        {"yAxis": 70, "name": "Monitor"},
-                        {"yAxis": 55, "name": "Caution"},
+                        {"yAxis": SAFTE_LOW_RISK_MIN, "name": f"Low risk (≥{SAFTE_LOW_RISK_MIN:.0f}%)"},
+                        {"yAxis": SAFTE_CAUTION_MIN, "name": f"Caution (≥{SAFTE_CAUTION_MIN:.0f}%)"},
+                        {"yAxis": SAFTE_HIGH_RISK_MIN, "name": f"High risk (≤{SAFTE_HIGH_RISK_MIN:.0f}%)"},
                     ],
-                    "label": {"formatter": "{b}"},
+                    "label": {"formatter": "{b}", "color": "#1a1a1a"},
+                    "lineStyle": {"type": "dashed", "width": 2},
                 },
-                "markPoint": {"data": markers},
             }
         ],
         "legend": {"show": False},
-        "grid": {"left": "10%", "right": "8%", "bottom": "12%", "top": "8%"},
+        "grid": {"left": "10%", "right": "5%", "bottom": "15%", "top": "10%"},
+        "dataZoom": [{"type": "inside"}, {"type": "slider"}],
     }
     
     # Use same render function as research app
@@ -2327,6 +2329,7 @@ def _render_performance_forecast(
         
         if fetch_button and garmin_email and garmin_password:
             with st.spinner("Fetching data from Garmin Connect..."):
+                request_rerun = False
                 try:
                     from garmin_import import (
                         GarminCredentials,
@@ -2365,9 +2368,10 @@ def _render_performance_forecast(
                             )
                         
                         # Auto-populate sleep inputs from latest data
-                        # Note: We cannot modify session state for widget keys after widgets are created.
-                        # Instead, we'll use a different approach: store values in temporary session state
-                        # and let the widgets read from there on the next rerun.
+                        # NOTE: We cannot modify session state for widget keys after widgets are created
+                        # in the same run. We therefore store values in temporary session state keys and
+                        # apply them BEFORE widget creation at the top of the Sleep Schedule section
+                        # on the next rerun.
                         if len(sleep_df) > 0:
                             latest = sleep_df.iloc[-1]
                             populated_fields = []
@@ -2388,7 +2392,7 @@ def _render_performance_forecast(
                             if populated_fields:
                                 fields_text = " and ".join(populated_fields)
                                 st.success(f"✅ {fields_text.capitalize()} fetched from Garmin. Refreshing to apply...")
-                                st.rerun()
+                                request_rerun = True
                             else:
                                 st.warning("⚠️ No valid sleep data found in latest record (missing duration and quality scores)")
                     else:
@@ -2399,6 +2403,8 @@ def _render_performance_forecast(
                 except Exception as e:
                     st.error(f"Error fetching Garmin data: {str(e)}")
                     st.exception(e)
+                if request_rerun:
+                    st.rerun()
     
     # Summary cards
     col1, col2, col3, col4 = st.columns(4)
