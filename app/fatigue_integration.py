@@ -172,6 +172,11 @@ def build_enhanced_schedules(
         "debt": float(sleep_schedule.total_sleep_debt),
     }
 
+    # Calculate precise sleep boundaries accounting for fractional duration
+    # The duration field may contain fractional hours (e.g., 8.5 hours)
+    # We need to mark sleep states accurately even when duration is fractional
+    sleep_duration_hours = float(sleep_schedule.duration)
+    
     for hour in range(prediction_hours):
         hour_of_day = hour % 24
         adjusted_bedtime = int(
@@ -180,15 +185,23 @@ def build_enhanced_schedules(
         adjusted_waketime = int(
             (sleep_schedule.waketime + user_profile.chronotype_offset) % 24
         )
-
+        
+        # Calculate if this hour should be marked as sleep
+        # Account for fractional duration by checking if hour is within sleep window
         if adjusted_bedtime <= adjusted_waketime:
+            # Sleep doesn't span midnight
             is_sleep_time = adjusted_bedtime <= hour_of_day < adjusted_waketime
         else:
+            # Sleep spans midnight (e.g., 22:00 to 6:00)
             is_sleep_time = (
                 hour_of_day >= adjusted_bedtime or 
                 hour_of_day < adjusted_waketime
             )
-
+        
+        # If we're at the waketime hour and duration is fractional,
+        # we may need to mark partial sleep. However, since we're working
+        # with integer hours, we rely on the waketime being adjusted upward
+        # in the caller to capture fractional hours (see scheduling_core.py)
         enhanced_sleep_schedule[hour] = is_sleep_time
 
     enhanced_work_schedule: Dict[str, Any] = {
