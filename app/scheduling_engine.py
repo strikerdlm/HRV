@@ -389,6 +389,16 @@ class SchedulingEngine:
         self.activity_groups: Dict[str, ActivityGroup] = {}  # Activity grouping (NASA Playbook)
         self.schedule_changes: List[Dict[str, Any]] = []  # Real-time change tracking
         
+        # Resource inventory (ISS Mission Control standard - Section 4.3)
+        self.equipment_inventory: Dict[str, Dict[str, Any]] = {
+            "treadmill": {"name": "Treadmill", "location": "Exercise Area", "available": True, "maintenance_scheduled": None},
+            "cycle_ergometer": {"name": "Cycle Ergometer", "location": "Exercise Area", "available": True, "maintenance_scheduled": None},
+            "ares": {"name": "ARED", "location": "Exercise Area", "available": True, "maintenance_scheduled": None},
+            "workstation_1": {"name": "Workstation 1", "location": "Lab Module", "available": True, "maintenance_scheduled": None},
+            "workstation_2": {"name": "Workstation 2", "location": "Lab Module", "available": True, "maintenance_scheduled": None},
+        }
+        self.equipment_reservations: Dict[str, List[Dict[str, Any]]] = {}  # equipment_id -> list of reservations
+        
         if crew_members:
             for crew in crew_members:
                 self.add_crew_member(crew)
@@ -1897,6 +1907,267 @@ class SchedulingEngine:
             summaries.append(summary)
         
         return summaries
+    
+    # ---------------------------------------------------------------------------
+    # Activity Status Tracking (ISS Operations Planning - Section 4.2)
+    # ---------------------------------------------------------------------------
+    
+    def update_activity_status(
+        self,
+        schedule_id: str,
+        new_status: ScheduleStatus,
+        notes: str = "",
+    ) -> Tuple[bool, Optional[ScheduledActivity]]:
+        """
+        Update the status of a scheduled activity.
+        
+        Args:
+            schedule_id: Activity schedule ID
+            new_status: New status (SCHEDULED, IN_PROGRESS, COMPLETED, CANCELLED, CONFLICTED)
+            notes: Optional notes about the status change
+            
+        Returns:
+            Tuple of (success, updated ScheduledActivity)
+        """
+        for schedule_date, daily in self.schedules.items():
+            for activity in daily.activities:
+                if activity.schedule_id == schedule_id:
+                    old_status = activity.status
+                    activity.status = new_status
+                    if notes:
+                        activity.notes = f"{activity.notes}\n[{new_status.value}] {notes}".strip()
+                    
+                    # Track status change
+                    self._track_schedule_change("status_updated", schedule_id, {
+                        "old_status": old_status.value,
+                        "new_status": new_status.value,
+                        "notes": notes,
+                    })
+                    
+                    return True, activity
+        
+        return False, None
+    
+    def get_activity_status_history(
+        self,
+        schedule_id: str,
+    ) -> List[Dict[str, Any]]:
+        """
+        Get status change history for an activity.
+        
+        Args:
+            schedule_id: Activity schedule ID
+            
+        Returns:
+            List of status change records
+        """
+        history = []
+        for change in self.schedule_changes:
+            if change.get("schedule_id") == schedule_id and change.get("change_type") == "status_updated":
+                history.append(change)
+        return sorted(history, key=lambda x: x.get("timestamp", ""), reverse=True)
+    
+    def auto_update_activity_statuses(self, current_time: datetime) -> int:
+        """
+        Automatically update activity statuses based on current time.
+        
+        Args:
+            current_time: Current datetime
+            
+        Returns:
+            Number of activities updated
+        """
+        updated_count = 0
+        
+        for schedule_date, daily in self.schedules.items():
+            for activity in daily.activities:
+                if activity.status == ScheduleStatus.SCHEDULED:
+                    if current_time >= activity.start_time and current_time < activity.end_time:
+                        activity.status = ScheduleStatus.IN_PROGRESS
+                        self._track_schedule_change("status_auto_updated", activity.schedule_id, {
+                            "old_status": "scheduled",
+                            "new_status": "in_progress",
+                            "reason": "automatic_time_based",
+                        })
+                        updated_count += 1
+                    elif current_time >= activity.end_time:
+                        activity.status = ScheduleStatus.COMPLETED
+                        self._track_schedule_change("status_auto_updated", activity.schedule_id, {
+                            "old_status": "scheduled",
+                            "new_status": "completed",
+                            "reason": "automatic_time_based",
+                        })
+                        updated_count += 1
+                elif activity.status == ScheduleStatus.IN_PROGRESS:
+                    if current_time >= activity.end_time:
+                        activity.status = ScheduleStatus.COMPLETED
+                        self._track_schedule_change("status_auto_updated", activity.schedule_id, {
+                            "old_status": "in_progress",
+                            "new_status": "completed",
+                            "reason": "automatic_time_based",
+                        })
+                        updated_count += 1
+        
+        return updated_count
+    
+    # ---------------------------------------------------------------------------
+    # Shift-Based Schedule Review (ISS Mission Control - Section 4.1)
+    # ---------------------------------------------------------------------------
+    
+    def get_shift_activities(
+        self,
+        schedule_date: date,
+        shift_name: str,
+    ) -> List[ScheduledActivity]:
+        """
+        Get activities for a specific shift.
+        
+        Args:
+            schedule_date: Schedule date
+            shift_name: Shift name ("morning", "afternoon", "night")
+            
+        Returns:
+            List of activities in the shift
+        """
+        daily = self.get_daily_schedule(schedule_date)
+        if not daily:
+            return []
+        
+        # Define shift time windows (ISS standard)
+        shift_windows = {
+            "morning": (6, 14),      # 06:00 - 14:00
+            "afternoon": (14, 22),   # 14:00 - 22:00
+            "night": (22, 6),         # 22:00 - 06:00 (next day)
+        }
+        
+        if shift_name not in shift_windows:
+            return []
+        
+        start_hour, end_hour = shift_windows[shift_name]
+        shift_activities = []
+        
+        for activity in daily.activities:
+            activity_hour = activity.start_time.hour
+            
+            if shift_name == "night":
+                # Night shift spans midnight
+                if activity_hour >= start_hour or activity_hour < end_hour:
+                    shift_activities.append(activity)
+            else:
+                if start_hour <= activity_hour < end_hour:
+                    shift_activities.append(activity)
+        
+        return sorted(shift_activities, key=lambda a: a.start_time)
+    
+    def get_shift_workload(
+        self,
+        schedule_date: date,
+        shift_name: str,
+    ) -> Dict[str, Any]:
+        """
+        Get workload metrics for a specific shift.
+        
+        Args:
+            schedule_date: Schedule date
+            shift_name: Shift name
+            
+        Returns:
+            Dictionary with shift workload metrics
+        """
+        activities = self.get_shift_activities(schedule_date, shift_name)
+        
+        total_minutes = sum(a.duration_minutes for a in activities)
+        total_kcal = sum(a.estimated_kcal for a in activities)
+        crew_involved = set(a.crew_id for a in activities)
+        
+        return {
+            "shift_name": shift_name,
+            "activity_count": len(activities),
+            "total_minutes": total_minutes,
+            "total_kcal": total_kcal,
+            "crew_count": len(crew_involved),
+            "crew_ids": list(crew_involved),
+        }
+    
+    def reserve_equipment(
+        self,
+        equipment_id: str,
+        start_time: datetime,
+        end_time: datetime,
+        activity_id: str,
+        crew_id: str,
+    ) -> Tuple[bool, str]:
+        """
+        Reserve equipment for an activity.
+        
+        Args:
+            equipment_id: Equipment identifier
+            start_time: Reservation start time
+            end_time: Reservation end time
+            activity_id: Associated activity ID
+            crew_id: Crew member using equipment
+            
+        Returns:
+            Tuple of (success, message)
+        """
+        if equipment_id not in self.equipment_inventory:
+            return False, f"Equipment {equipment_id} not found"
+        
+        equipment = self.equipment_inventory[equipment_id]
+        if not equipment["available"]:
+            return False, f"Equipment {equipment_id} is not available"
+        
+        # Check for conflicts
+        reservations = self.equipment_reservations.get(equipment_id, [])
+        for res in reservations:
+            if not (end_time <= res["start_time"] or start_time >= res["end_time"]):
+                return False, f"Equipment {equipment_id} already reserved during this time"
+        
+        # Add reservation
+        if equipment_id not in self.equipment_reservations:
+            self.equipment_reservations[equipment_id] = []
+        
+        reservation = {
+            "reservation_id": str(uuid.uuid4()),
+            "equipment_id": equipment_id,
+            "start_time": start_time,
+            "end_time": end_time,
+            "activity_id": activity_id,
+            "crew_id": crew_id,
+        }
+        self.equipment_reservations[equipment_id].append(reservation)
+        
+        return True, f"Equipment {equipment_id} reserved successfully"
+    
+    def get_equipment_availability(
+        self,
+        equipment_id: str,
+        time: datetime,
+    ) -> Tuple[bool, Optional[str]]:
+        """
+        Check equipment availability at a specific time.
+        
+        Args:
+            equipment_id: Equipment identifier
+            time: Time to check
+            
+        Returns:
+            Tuple of (is_available, reason_if_not_available)
+        """
+        if equipment_id not in self.equipment_inventory:
+            return False, "Equipment not found"
+        
+        equipment = self.equipment_inventory[equipment_id]
+        if not equipment["available"]:
+            return False, "Equipment is marked as unavailable"
+        
+        # Check reservations
+        reservations = self.equipment_reservations.get(equipment_id, [])
+        for res in reservations:
+            if res["start_time"] <= time < res["end_time"]:
+                return False, f"Reserved by {res['crew_id']} for activity {res['activity_id']}"
+        
+        return True, None
     
     def export_schedule_json(
         self,
