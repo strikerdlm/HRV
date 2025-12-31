@@ -4,6 +4,7 @@ Utilities for keeping application metadata in sync with the changelog.
 The helpers derive the current version and release date from the top entry
 in `CHANGELOG.md` so UI surfaces automatically reflect the latest release.
 """
+# Author: Dr Diego Malpica MD
 
 from __future__ import annotations
 
@@ -30,6 +31,10 @@ _VERSION_SOURCE_MTIME: Optional[int] = None
 _GIT_METADATA_CACHE: Optional["GitMetadata"] = None
 _GIT_METADATA_EXPIRY_NS = 0
 _GIT_METADATA_TTL_NS = 60 * 1_000_000_000  # 60 seconds
+_GIT_FAILURE_BACKOFF_NS = 10 * 60 * 1_000_000_000  # 10 minutes
+_GIT_CMD_TIMEOUT_SEC = 10
+_GIT_DISABLED_UNTIL_NS = 0
+_GIT_DIR = _REPO_ROOT / ".git"
 
 
 @dataclass(frozen=True)
@@ -157,6 +162,17 @@ def _collect_git_metadata() -> GitMetadata:
 
 def _run_git_command(args: list[str]) -> Optional[str]:
     """Run a git command in the repository root and return stripped stdout."""
+    global _GIT_DISABLED_UNTIL_NS
+
+    now = time.monotonic_ns()
+    if now < _GIT_DISABLED_UNTIL_NS:
+        return None
+
+    if not _GIT_DIR.exists():
+        _GIT_DISABLED_UNTIL_NS = now + _GIT_FAILURE_BACKOFF_NS
+        _LOGGER.info("Git metadata lookup skipped; missing .git at %s", _GIT_DIR)
+        return None
+
     try:
         result = subprocess.run(
             ["git", *args],
@@ -165,15 +181,27 @@ def _run_git_command(args: list[str]) -> Optional[str]:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=5,
+            timeout=_GIT_CMD_TIMEOUT_SEC,
         )
+    except subprocess.TimeoutExpired as exc:
+        joined_args = " ".join(args)
+        backoff_seconds = _GIT_FAILURE_BACKOFF_NS // 1_000_000_000
+        _GIT_DISABLED_UNTIL_NS = now + _GIT_FAILURE_BACKOFF_NS
+        message = (
+            f"Git metadata lookup timed out for command: git {joined_args}; "
+            f"backing off git probes for {backoff_seconds} seconds"
+        )
+        log_exception(_LOGGER, message, exc)
+        return None
     except (OSError, subprocess.SubprocessError) as exc:
         joined_args = " ".join(args)
-        log_exception(
-            _LOGGER,
-            f"Git metadata lookup failed for command: git {joined_args}",
-            exc,
+        backoff_seconds = _GIT_FAILURE_BACKOFF_NS // 1_000_000_000
+        _GIT_DISABLED_UNTIL_NS = now + _GIT_FAILURE_BACKOFF_NS
+        message = (
+            f"Git metadata lookup failed for command: git {joined_args}; "
+            f"backing off git probes for {backoff_seconds} seconds"
         )
+        log_exception(_LOGGER, message, exc)
         return None
 
     return result.stdout.strip()
