@@ -18,6 +18,7 @@ Version: 1.0.0
 
 from __future__ import annotations
 
+import math
 import json
 from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
@@ -2402,6 +2403,20 @@ def _render_performance_forecast(
         x_data = [dt.strftime("%Y-%m-%d %H:%M") for dt in perf_data["DateTime"]]
         y_data = [round(float(p), 1) for p in perf_data["Performance"]]
 
+        # Enhanced view: zoom Y-axis to 60–100% for better curve detail.
+        # Safety: never clip data; if values fall below 60 or exceed 100, extend bounds.
+        y_min_data = float(min(y_data)) if y_data else 0.0
+        y_max_data = float(max(y_data)) if y_data else 100.0
+        focus_floor = 60.0
+        if y_min_data >= focus_floor:
+            y_axis_min = focus_floor
+        else:
+            y_axis_min = max(0.0, math.floor((y_min_data - 1.0) / 5.0) * 5.0)
+        if y_max_data <= 100.0:
+            y_axis_max = 100.0
+        else:
+            y_axis_max = math.ceil((y_max_data + 1.0) / 5.0) * 5.0
+
         perf_chart_config = {
             "tooltip": {"trigger": "axis", "formatter": "{b}<br/>Performance: {c}%"},
             "toolbox": {
@@ -2419,14 +2434,19 @@ def _render_performance_forecast(
                 "name": "Local time",
                 "nameLocation": "middle",
                 "nameGap": 35,
-                "axisLabel": {"rotate": 45, "fontSize": 10},
+                "axisLabel": {"rotate": 45, "fontSize": 10, "color": "#1a1a1a"},
+                "axisLine": {"lineStyle": {"color": "#2c3e50"}},
             },
             "yAxis": {
                 "type": "value",
-                "min": 0,
-                "max": 100,
+                "min": y_axis_min,
+                "max": y_axis_max,
+                "splitNumber": 8,
                 "name": "Effectiveness (%)",
-                "axisLabel": {"formatter": "{value}%"},
+                "axisLabel": {"formatter": "{value}%", "color": "#1a1a1a"},
+                "nameTextStyle": {"color": "#1a1a1a"},
+                "axisLine": {"lineStyle": {"color": "#2c3e50"}},
+                "splitLine": {"lineStyle": {"color": "rgba(44, 62, 80, 0.12)"}},
             },
             "visualMap": {
                 "show": False,
@@ -2442,6 +2462,7 @@ def _render_performance_forecast(
                     "type": "line",
                     "data": y_data,
                     "smooth": True,
+                    "showSymbol": False,
                     "lineStyle": {"width": 3},
                     "areaStyle": {"opacity": 0.3},
                     "markLine": {
@@ -2466,7 +2487,10 @@ def _render_performance_forecast(
                 }
             ],
             "grid": {"left": "10%", "right": "5%", "bottom": "15%", "top": "10%"},
-            "dataZoom": [{"type": "inside"}, {"type": "slider"}],
+            "dataZoom": [
+                {"type": "inside", "xAxisIndex": [0]},
+                {"type": "slider", "xAxisIndex": [0]},
+            ],
         }
 
         if render_echarts is None:
@@ -2475,7 +2499,7 @@ def _render_performance_forecast(
 
         render_echarts(
             perf_chart_config,
-            height_px=400,
+            height_px=520,
             config=EChartsConfig() if EChartsConfig is not None else None,
             export_basename=f"safte_cognitive_prediction_{selected_crew.crew_id}",
             caption=f"Source: {source_label} • Model: SAFTE (advanced) • Horizon: {prediction_days} day(s)",
