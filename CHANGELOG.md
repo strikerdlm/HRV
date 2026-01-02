@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Crew Scheduling Garmin sleep fetch now correctly auto-populates sleep duration/quality inputs by writing to Streamlit widget session state keys, and avoids swallowing Streamlit rerun signals (no more confusing `RerunException` errors).
 - Crew Scheduling SAFTE prediction chart now uses the same multi-day cognitive performance pipeline and thresholds as the Research app (90/77/70), so circadian troughs (02:00–06:00) are visible and comparable across UIs.
 - Crew Scheduling now automatically reuses Garmin daily metrics already imported for the active profile (stored in the mission DB), so you don’t need to re-enter Garmin credentials to generate SAFTE predictions.
+- Crew Scheduling Cognitive Performance Prediction (SAFTE) chart now defaults to a zoomed Y-axis view (60–100%) with enhanced axis styling and a taller canvas for easier inspection of curve details (never clips values below 60 or above 100).
 
 ## [1.9.1] - 2025-12-30
 
