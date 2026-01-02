@@ -27,9 +27,10 @@ import pandas as pd
 import streamlit as st
 
 try:
-    from echarts_component import render_echarts
+    from echarts_component import EChartsConfig, render_echarts
 except ImportError:
     render_echarts = None  # type: ignore[assignment]
+    EChartsConfig = None  # type: ignore[assignment]
 
 try:
     from scheduling_core import (
@@ -2182,6 +2183,27 @@ def _render_performance_forecast(
                 st.caption(f"**Sleep Last 24h:** {selected_crew.status.sleep_last_24h:.1f}h")
             else:
                 st.info("No status data available")
+
+    # Prediction settings (match research app behavior)
+    st.markdown("### 🧠 Cognitive Performance Prediction (SAFTE)")
+    col_pred1, col_pred2 = st.columns([1, 2])
+    with col_pred1:
+        prediction_days = st.slider(
+            "Prediction horizon (days)",
+            min_value=1,
+            max_value=7,
+            value=5,
+            step=1,
+            key="forecast_prediction_days",
+            help="Research app default is typically 5 days to reveal multi-day circadian troughs (02:00–06:00).",
+        )
+    with col_pred2:
+        use_garmin_history = st.checkbox(
+            "Use Garmin-derived sleep history (if fetched below)",
+            value=True,
+            key="forecast_use_garmin_history",
+            help="When Garmin sleep history is available, derive bedtime/waketime/quality/debt from it to match the research pipeline.",
+        )
     
     # Generate forecast
     from datetime import datetime, timedelta
@@ -2201,97 +2223,219 @@ def _render_performance_forecast(
             "cognitive_load": cognitive_load_value,
         }
     
-    # Generate forecast using full SAFTE model
+    # Generate prediction using the same fatigue pipeline as the research app.
     try:
-        forecast = simulate_safte_24h(
-            crew_member=selected_crew,
-            planned_sleep_start=sleep_start,
-            planned_sleep_duration_hours=sleep_duration,
-            sleep_quality=sleep_quality,
-            sleep_debt_hours=sleep_debt,
-            work_schedule=work_schedule_dict,
-            resolution_minutes=15,
-        )
-    except Exception as exc:
-        st.error(f"Error generating SAFTE forecast: {exc}")
-        log_exception(_LOGGER, "SAFTE forecast generation failed", exc)
-        return
-    
-    # Build chart data: hourly samples with explicit local-time labels.
-    # This matches the research app's "Cognitive Performance Prediction" plot style and
-    # prevents misinterpretation of "Hour 1..6" as "01:00..06:00".
-    x_labels, y_vals, _timestamps = build_hourly_safte_series(
-        forecast,
-        horizon_hours=24,
-        align_to_next_hour=True,
-        time_label_format="%Y-%m-%d %H:%M",
-    )
-    if not x_labels:
-        st.warning("No forecast data available. Please check your inputs and try again.")
-        return
+        try:
+            from fatigue_integration import (  # noqa: PLC0415
+                SleepScheduleInput,
+                UserProfile,
+                WorkScheduleInput,
+                build_fatigue_dataframe,
+                run_integrated_fatigue_analysis,
+            )
+        except ImportError:  # pragma: no cover
+            from app.fatigue_integration import (  # type: ignore[import-not-found]  # noqa: PLC0415
+                SleepScheduleInput,
+                UserProfile,
+                WorkScheduleInput,
+                build_fatigue_dataframe,
+                run_integrated_fatigue_analysis,
+            )
 
-    # Build chart options aligned with the research app plot conventions.
-    options = {
-        "tooltip": {"trigger": "axis", "formatter": "{b}<br/>Effectiveness: {c}%"},
-        "xAxis": {
-            "type": "category",
-            "data": x_labels,
-            "name": "Local time",
-            "nameLocation": "middle",
-            "nameGap": 35,
-            "boundaryGap": False,
-            "axisLabel": {"rotate": 45, "fontSize": 10, "color": "#1a1a1a"},
-            "axisLine": {"lineStyle": {"color": "#2c3e50"}},
-        },
-        "yAxis": {
-            "type": "value",
-            "min": 0,
-            "max": 100,
-            "name": "Effectiveness (%)",
-            "axisLabel": {"formatter": "{value}%", "color": "#1a1a1a"},
-            "nameTextStyle": {"color": "#1a1a1a"},
-            "axisLine": {"lineStyle": {"color": "#2c3e50"}},
-            "splitLine": {"lineStyle": {"color": "rgba(44, 62, 80, 0.1)"}},
-        },
-        "visualMap": {
-            "show": False,
-            "pieces": [
-                {"gte": SAFTE_LOW_RISK_MIN, "lte": 100, "color": COLORS["good"]},
-                {"gt": SAFTE_CAUTION_MIN, "lt": SAFTE_LOW_RISK_MIN, "color": COLORS["caution"]},
-                {"gt": SAFTE_HIGH_RISK_MIN, "lte": SAFTE_CAUTION_MIN, "color": "#fd7e14"},
-                {"lte": SAFTE_HIGH_RISK_MIN, "color": COLORS["poor"]},
-            ],
-        },
-        "series": [
-            {
-                "name": "Effectiveness",
-                "type": "line",
-                "smooth": True,
-                "data": y_vals,
-                "lineStyle": {"width": 3},
-                "areaStyle": {"opacity": 0.25},
-                "markLine": {
-                    "symbol": "none",
-                    "data": [
-                        {"yAxis": SAFTE_LOW_RISK_MIN, "name": f"Low risk (≥{SAFTE_LOW_RISK_MIN:.0f}%)"},
-                        {"yAxis": SAFTE_CAUTION_MIN, "name": f"Caution (≥{SAFTE_CAUTION_MIN:.0f}%)"},
-                        {"yAxis": SAFTE_HIGH_RISK_MIN, "name": f"High risk (≤{SAFTE_HIGH_RISK_MIN:.0f}%)"},
-                    ],
-                    "label": {"formatter": "{b}", "color": "#1a1a1a"},
-                    "lineStyle": {"type": "dashed", "width": 2},
+        chronotype_map = {"early": -2.0, "intermediate": 0.0, "late": 2.0}
+        user_profile = UserProfile(
+            age=int(selected_crew.age_years),
+            sex=str(selected_crew.sex or "other").lower(),
+            chronotype_offset=float(chronotype_map.get(selected_crew.chronotype, 0.0)),
+            genetic_profile=tuple(),
+        )
+
+        garmin_sleep_df = st.session_state.get("forecast_garmin_sleep_df")
+        use_garmin = (
+            use_garmin_history
+            and isinstance(garmin_sleep_df, pd.DataFrame)
+            and not garmin_sleep_df.empty
+        )
+
+        if use_garmin:
+            result = run_integrated_fatigue_analysis(
+                garmin_sleep_df=garmin_sleep_df,
+                garmin_stress_df=None,
+                garmin_activity_df=None,
+                user_profile=user_profile,
+                sleep_schedule=None,  # derive from Garmin sleep history
+                work_schedule=None,   # default workload model
+                prediction_days=int(prediction_days),
+                model_type="advanced",
+            )
+            source_label = "Garmin-derived sleep history"
+        else:
+            sleep_end_datetime = sleep_start + timedelta(hours=float(sleep_duration))
+            waketime_hour = int(sleep_end_datetime.hour)
+            if int(sleep_end_datetime.minute) > 0:
+                waketime_hour = int((waketime_hour + 1) % 24)
+
+            sleep_schedule = SleepScheduleInput(
+                quality=float(max(0.0, min(1.0, float(sleep_quality)))),
+                duration=float(sleep_duration),
+                bedtime=int(sleep_start_hour),
+                waketime=int(waketime_hour),
+                total_sleep_debt=float(max(0.0, float(sleep_debt))),
+            )
+
+            if has_work:
+                work_schedule = WorkScheduleInput(
+                    has_work=True,
+                    work_start=int(work_start),
+                    work_end=int(work_end),
+                    work_hours=int(work_hours),
+                    cognitive_load=int(cognitive_load_value),
+                )
+            else:
+                work_schedule = WorkScheduleInput(has_work=False)
+
+            result = run_integrated_fatigue_analysis(
+                garmin_sleep_df=None,
+                garmin_stress_df=None,
+                garmin_activity_df=None,
+                user_profile=user_profile,
+                sleep_schedule=sleep_schedule,
+                work_schedule=work_schedule,
+                prediction_days=int(prediction_days),
+                model_type="advanced",
+            )
+            source_label = "Manual schedule inputs"
+
+        df_fatigue = build_fatigue_dataframe(
+            result.time_points,
+            result.performances,
+            result.circadian_values,
+        )
+        perf_data = df_fatigue[["DateTime", "Performance"]].dropna()
+        if perf_data.empty:
+            st.warning("No performance data available for plotting.")
+            return
+
+        x_data = [dt.strftime("%Y-%m-%d %H:%M") for dt in perf_data["DateTime"]]
+        y_data = [round(float(p), 1) for p in perf_data["Performance"]]
+
+        perf_chart_config = {
+            "tooltip": {"trigger": "axis", "formatter": "{b}<br/>Performance: {c}%"},
+            "toolbox": {
+                "show": True,
+                "right": 10,
+                "feature": {
+                    "saveAsImage": {"show": True, "title": "Save (PNG)", "pixelRatio": 4},
+                    "restore": {"show": True, "title": "Reset"},
+                    "dataZoom": {"show": True, "title": {"zoom": "Zoom", "back": "Reset zoom"}},
                 },
-            }
-        ],
-        "legend": {"show": False},
-        "grid": {"left": "10%", "right": "5%", "bottom": "15%", "top": "10%"},
-        "dataZoom": [{"type": "inside"}, {"type": "slider"}],
-    }
-    
-    # Use same render function as research app
-    if render_echarts is None:
-        st.warning("ECharts component not available")
+            },
+            "xAxis": {
+                "type": "category",
+                "data": x_data,
+                "name": "Local time",
+                "nameLocation": "middle",
+                "nameGap": 35,
+                "axisLabel": {"rotate": 45, "fontSize": 10},
+            },
+            "yAxis": {
+                "type": "value",
+                "min": 0,
+                "max": 100,
+                "name": "Effectiveness (%)",
+                "axisLabel": {"formatter": "{value}%"},
+            },
+            "visualMap": {
+                "show": False,
+                "pieces": [
+                    {"gte": 90, "lte": 100, "color": "#28a745"},
+                    {"gt": 77, "lt": 90, "color": "#ffc107"},
+                    {"gt": 70, "lte": 77, "color": "#fd7e14"},
+                    {"lte": 70, "color": "#dc3545"},
+                ],
+            },
+            "series": [
+                {
+                    "type": "line",
+                    "data": y_data,
+                    "smooth": True,
+                    "lineStyle": {"width": 3},
+                    "areaStyle": {"opacity": 0.3},
+                    "markLine": {
+                        "data": [
+                            {"yAxis": 90, "name": "Low risk (≥90%)", "lineStyle": {"color": "#28a745", "type": "dashed"}},
+                            {"yAxis": 77, "name": "High risk (>70–≤77%)", "lineStyle": {"color": "#fd7e14", "type": "dashed"}},
+                            {"yAxis": 70, "name": "Severe (≤70%)", "lineStyle": {"color": "#dc3545", "type": "dashed"}},
+                        ]
+                    },
+                }
+            ],
+            "grid": {"left": "10%", "right": "5%", "bottom": "15%", "top": "10%"},
+            "dataZoom": [{"type": "inside"}, {"type": "slider"}],
+        }
+
+        if render_echarts is None:
+            st.warning("ECharts component not available")
+            return
+        render_echarts(
+            perf_chart_config,
+            height_px=400,
+            config=EChartsConfig() if EChartsConfig is not None else None,
+            export_basename=f"safte_cognitive_prediction_{selected_crew.crew_id}",
+            caption=f"Source: {source_label} • Model: SAFTE (advanced) • Horizon: {prediction_days} day(s)",
+        )
+
+        # Summary cards (match research analysis semantics)
+        analysis = result.analysis
+        zones = analysis.get("zones", [0, 0, 0, 0])
+        low_risk_hours = int(zones[0]) if len(zones) > 0 else 0
+        caution_hours = int(zones[1]) if len(zones) > 1 else 0
+        high_risk_hours = int(zones[2]) if len(zones) > 2 else 0
+        severe_hours = int(zones[3]) if len(zones) > 3 else 0
+
+        st.markdown("---")
+        col1, col2, col3, col4 = st.columns(4)
+        with col1:
+            st.metric("Min Effectiveness", f"{float(analysis.get('min', 0.0)):.1f}%")
+        with col2:
+            st.metric("Avg Effectiveness", f"{float(analysis.get('avg', 0.0)):.1f}%")
+        with col3:
+            st.metric("Time Below 90%", f"{(caution_hours + high_risk_hours + severe_hours) * 60} min")
+        with col4:
+            st.metric("Time Below 70%", f"{severe_hours * 60} min")
+
+        # Optional windows (keep operational utility similar to previous forecast)
+        # - Optimal work windows: contiguous awake hours with effectiveness >= 90
+        if len(x_data) == len(y_data):
+            optimal_windows: list[tuple[datetime, datetime]] = []
+            window_start: datetime | None = None
+            last_dt: datetime | None = None
+            for dt_str, val in zip(x_data, y_data):
+                dt_val = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+                # Ensure monotonic hourly stepping; if not, reset window tracking.
+                if last_dt is not None and (dt_val - last_dt) > timedelta(hours=2):
+                    window_start = None
+                if val >= 90 and window_start is None:
+                    window_start = dt_val
+                if val < 90 and window_start is not None:
+                    optimal_windows.append((window_start, dt_val))
+                    window_start = None
+                last_dt = dt_val
+            if window_start is not None and last_dt is not None:
+                optimal_windows.append((window_start, last_dt + timedelta(hours=1)))
+
+            if optimal_windows:
+                st.markdown("**🟢 Optimal Work Windows:**")
+                windows = ", ".join(
+                    f"{start.strftime('%H:%M')}-{end.strftime('%H:%M')}"
+                    for start, end in optimal_windows[:3]
+                )
+                st.markdown(windows)
+
+    except Exception as exc:
+        st.error(f"Error generating cognitive performance prediction: {exc}")
+        log_exception(_LOGGER, "Cognitive performance prediction failed", exc)
         return
-    render_echarts(options, height_px=320)
     
     # Add Garmin Connect data fetching section
     st.markdown("---")
@@ -2366,6 +2510,10 @@ def _render_performance_forecast(
                                 use_container_width=True,
                                 hide_index=True,
                             )
+
+                        # Store the fetched sleep history for the SAFTE prediction pipeline.
+                        # This enables multi-day forecasts derived from real sleep timing/quality/debt.
+                        st.session_state["forecast_garmin_sleep_df"] = sleep_df.copy()
                         
                         # Auto-populate sleep inputs from latest data
                         # NOTE: We cannot modify session state for widget keys after widgets are created
@@ -2406,25 +2554,7 @@ def _render_performance_forecast(
                 if request_rerun:
                     st.rerun()
     
-    # Summary cards
-    col1, col2, col3, col4 = st.columns(4)
-    with col1:
-        st.metric("Min Effectiveness", f"{forecast.min_effectiveness:.1f}%")
-    with col2:
-        st.metric("Avg Effectiveness", f"{forecast.avg_effectiveness:.1f}%")
-    with col3:
-        st.metric("Time Below 90%", f"{forecast.time_below_90_minutes} min")
-    with col4:
-        st.metric("Time Below 70%", f"{forecast.time_below_70_minutes} min")
-    
-    # Optimal windows
-    if forecast.optimal_work_windows:
-        st.markdown("**🟢 Optimal Work Windows:**")
-        windows = ", ".join([
-            f"{start.strftime('%H:%M')}-{end.strftime('%H:%M')}"
-            for start, end in forecast.optimal_work_windows[:3]
-        ])
-        st.markdown(windows)
+    # (Summary + windows are now rendered from the research-style fatigue analysis result above.)
 
 
 # ---------------------------------------------------------------------------
