@@ -2437,18 +2437,30 @@ def _render_performance_forecast(
                     {"lte": 70, "color": "#dc3545"},
                 ],
             },
-        "series": [
-            {
-                "type": "line",
+            "series": [
+                {
+                    "type": "line",
                     "data": y_data,
-                "smooth": True,
-                "lineStyle": {"width": 3},
+                    "smooth": True,
+                    "lineStyle": {"width": 3},
                     "areaStyle": {"opacity": 0.3},
-                "markLine": {
-                    "data": [
-                            {"yAxis": 90, "name": "Low risk (≥90%)", "lineStyle": {"color": "#28a745", "type": "dashed"}},
-                            {"yAxis": 77, "name": "High risk (>70–≤77%)", "lineStyle": {"color": "#fd7e14", "type": "dashed"}},
-                            {"yAxis": 70, "name": "Severe (≤70%)", "lineStyle": {"color": "#dc3545", "type": "dashed"}},
+                    "markLine": {
+                        "data": [
+                            {
+                                "yAxis": 90,
+                                "name": "Low risk (≥90%)",
+                                "lineStyle": {"color": "#28a745", "type": "dashed"},
+                            },
+                            {
+                                "yAxis": 77,
+                                "name": "High risk (>70–≤77%)",
+                                "lineStyle": {"color": "#fd7e14", "type": "dashed"},
+                            },
+                            {
+                                "yAxis": 70,
+                                "name": "Severe (≤70%)",
+                                "lineStyle": {"color": "#dc3545", "type": "dashed"},
+                            },
                         ]
                     },
                 }
@@ -2457,9 +2469,10 @@ def _render_performance_forecast(
             "dataZoom": [{"type": "inside"}, {"type": "slider"}],
         }
 
-    if render_echarts is None:
-        st.warning("ECharts component not available")
-        return
+        if render_echarts is None:
+            st.warning("ECharts component not available")
+            return
+
         render_echarts(
             perf_chart_config,
             height_px=400,
