@@ -2231,6 +2231,7 @@ def _render_performance_forecast(
                 UserProfile,
                 WorkScheduleInput,
                 build_fatigue_dataframe,
+                run_assessment_fatigue_prediction,
                 run_integrated_fatigue_analysis,
             )
         except ImportError:  # pragma: no cover
@@ -2239,6 +2240,7 @@ def _render_performance_forecast(
                 UserProfile,
                 WorkScheduleInput,
                 build_fatigue_dataframe,
+                run_assessment_fatigue_prediction,
                 run_integrated_fatigue_analysis,
             )
 
@@ -2250,6 +2252,75 @@ def _render_performance_forecast(
             genetic_profile=tuple(),
         )
 
+        # ------------------------------------------------------------------
+        # Prefer "active profile" Garmin data (already stored in the mission DB)
+        # so Crew Scheduling does NOT require re-entering Garmin credentials.
+        # ------------------------------------------------------------------
+        active_user_context: Dict[str, Any] | None = None
+        active_user_id: str | None = None
+        active_profile_label: str | None = None
+        try:
+            from user_profile_tab import get_active_user_context  # noqa: PLC0415
+
+            active_user_context = get_active_user_context()
+            if isinstance(active_user_context, dict):
+                active_user_id = active_user_context.get("user_id")
+                if active_user_context.get("has_user"):
+                    active_profile_label = (
+                        str(active_user_context.get("full_name") or active_user_context.get("username") or "")
+                        .strip()
+                        or None
+                    )
+        except Exception as exc:
+            # If the profile module isn't available, proceed with manual/Garmin sleep DF inputs.
+            log_exception(_LOGGER, "Active profile context unavailable for scheduling", exc)
+            active_user_context = None
+            active_user_id = None
+            active_profile_label = None
+
+        wrist_df_available = False
+        if active_user_context and active_user_context.get("has_user") and active_user_id:
+            try:
+                from user_database import get_database  # noqa: PLC0415
+
+                db = get_database()
+                wrist_df = db.get_garmin_daily_dataframe(active_user_id, limit=30)
+                wrist_df_available = isinstance(wrist_df, pd.DataFrame) and not wrist_df.empty
+                if wrist_df_available:
+                    # Persist for reuse in the UI (no repeated Garmin credential prompts).
+                    st.session_state["forecast_garmin_daily_df"] = wrist_df.copy()
+            except Exception as exc:
+                wrist_df_available = False
+                log_exception(_LOGGER, "Failed to load Garmin daily metrics for active profile", exc)
+
+        def _normalize_name(raw: str) -> str:
+            return raw.lower().strip().replace("crew ", "").replace("_", " ").replace("-", " ")
+
+        active_matches_selected = False
+        if active_profile_label:
+            active_matches_selected = (
+                _normalize_name(active_profile_label) == _normalize_name(selected_crew.name)
+                or _normalize_name(selected_crew.name) in _normalize_name(active_profile_label)
+                or _normalize_name(active_profile_label) in _normalize_name(selected_crew.name)
+            )
+
+        use_active_profile_garmin = False
+        if wrist_df_available:
+            use_active_profile_garmin = st.checkbox(
+                "Use active profile Garmin history (no credentials required)",
+                value=bool(active_matches_selected),
+                key="forecast_use_active_profile_garmin",
+                help=(
+                    "Uses Garmin daily metrics already stored for the active profile in the mission database "
+                    "(same data the Research app uses for wrist monitoring / fatigue automation)."
+                ),
+            )
+            if use_active_profile_garmin and not active_matches_selected and active_profile_label:
+                st.warning(
+                    f"Active profile '{active_profile_label}' does not match selected crew '{selected_crew.name}'. "
+                    "Using active profile Garmin history anyway."
+                )
+
         garmin_sleep_df = st.session_state.get("forecast_garmin_sleep_df")
         use_garmin = (
             use_garmin_history
@@ -2257,7 +2328,19 @@ def _render_performance_forecast(
             and not garmin_sleep_df.empty
         )
 
-        if use_garmin:
+        if use_active_profile_garmin and active_user_context and active_user_id:
+            # Run the exact research priority pipeline:
+            # wrist monitoring (garmin_daily_metrics) → clinical → Garmin Connect (if configured) → defaults.
+            result, src, wrist_df_out = run_assessment_fatigue_prediction(
+                user_context=active_user_context,
+                user_id=active_user_id,
+                prediction_days=int(prediction_days),
+                model_type="advanced",
+            )
+            source_label = f"Active profile ({active_profile_label or 'user'}) • {src.replace('_', ' ')}"
+            if wrist_df_out is not None and isinstance(wrist_df_out, pd.DataFrame) and not wrist_df_out.empty:
+                st.session_state["forecast_garmin_daily_df"] = wrist_df_out.copy()
+        elif use_garmin:
             result = run_integrated_fatigue_analysis(
                 garmin_sleep_df=garmin_sleep_df,
                 garmin_stress_df=None,
@@ -2354,15 +2437,15 @@ def _render_performance_forecast(
                     {"lte": 70, "color": "#dc3545"},
                 ],
             },
-            "series": [
-                {
-                    "type": "line",
+        "series": [
+            {
+                "type": "line",
                     "data": y_data,
-                    "smooth": True,
-                    "lineStyle": {"width": 3},
+                "smooth": True,
+                "lineStyle": {"width": 3},
                     "areaStyle": {"opacity": 0.3},
-                    "markLine": {
-                        "data": [
+                "markLine": {
+                    "data": [
                             {"yAxis": 90, "name": "Low risk (≥90%)", "lineStyle": {"color": "#28a745", "type": "dashed"}},
                             {"yAxis": 77, "name": "High risk (>70–≤77%)", "lineStyle": {"color": "#fd7e14", "type": "dashed"}},
                             {"yAxis": 70, "name": "Severe (≤70%)", "lineStyle": {"color": "#dc3545", "type": "dashed"}},
@@ -2374,9 +2457,9 @@ def _render_performance_forecast(
             "dataZoom": [{"type": "inside"}, {"type": "slider"}],
         }
 
-        if render_echarts is None:
-            st.warning("ECharts component not available")
-            return
+    if render_echarts is None:
+        st.warning("ECharts component not available")
+        return
         render_echarts(
             perf_chart_config,
             height_px=400,
@@ -2437,56 +2520,69 @@ def _render_performance_forecast(
         log_exception(_LOGGER, "Cognitive performance prediction failed", exc)
         return
     
-    # Add Garmin Connect data fetching section
+    # Garmin section (prefer stored mission DB data; optional Connect refresh via .env)
     st.markdown("---")
-    with st.expander("📱 Fetch Data from Garmin Connect", expanded=False):
-        st.caption("Import sleep and activity data from your Garmin device")
-        
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            garmin_email = st.text_input(
-                "Garmin Email",
-                key="garmin_email_input",
-                type="default",
-                help="Your Garmin Connect account email",
+    with st.expander("📱 Garmin data (active profile / optional Connect refresh)", expanded=False):
+        st.caption(
+            "If the active profile has Garmin daily metrics already imported, Crew Scheduling will reuse them automatically "
+            "(no credential prompts). Optionally refresh raw sleep history from Garmin Connect using `.env` credentials."
+        )
+
+        daily_df = st.session_state.get("forecast_garmin_daily_df")
+        if isinstance(daily_df, pd.DataFrame) and not daily_df.empty:
+            st.success("✅ Garmin daily metrics available from the active profile (stored in mission database).")
+            preview_cols = [
+                c
+                for c in (
+                    "metric_date",
+                    "sleep_score",
+                    "sleep_duration_hours",
+                    "stress_score",
+                    "avg_hr_bpm",
+                    "avg_spo2",
+                )
+                if c in daily_df.columns
+            ]
+            if preview_cols:
+                st.dataframe(
+                    daily_df.sort_values("metric_date", ascending=False)[preview_cols].head(14),
+                    use_container_width=True,
+                    hide_index=True,
+                )
+        else:
+            st.info(
+                "No stored Garmin daily metrics detected for the active profile. "
+                "If you imported Garmin data in the User Profile tab, ensure that profile is active here."
             )
-        with col_g2:
-            garmin_password = st.text_input(
-                "Garmin Password",
-                key="garmin_password_input",
-                type="password",
-                help="Your Garmin Connect account password",
-            )
         
+        st.markdown("##### Optional: Refresh raw sleep history from Garmin Connect")
         col_g3, col_g4 = st.columns(2)
         with col_g3:
             days_back = st.number_input(
-                "Days to Fetch",
+                "Days to Fetch (raw sleep history)",
                 min_value=1,
                 max_value=30,
                 value=7,
                 key="garmin_days",
-                help="Number of days of historical data to fetch",
+                help="Uses `GARMIN_EMAIL`/`GARMIN_PASSWORD` from `.env` if configured.",
             )
         with col_g4:
-            fetch_button = st.button("📥 Fetch from Garmin", key="fetch_garmin_btn")
+            fetch_button = st.button("📥 Refresh from Garmin Connect (.env)", key="fetch_garmin_btn")
         
-        if fetch_button and garmin_email and garmin_password:
+        if fetch_button:
             with st.spinner("Fetching data from Garmin Connect..."):
                 request_rerun = False
                 try:
                     from garmin_import import (
-                        GarminCredentials,
                         fetch_garmin_sleep,
                         load_credentials_from_env,
                     )
                     from datetime import date, timedelta
                     
-                    # Create credentials
-                    credentials = GarminCredentials(
-                        email=garmin_email,
-                        password=garmin_password,
-                    )
+                    credentials = load_credentials_from_env()
+                    if credentials is None:
+                        st.info("Set `GARMIN_EMAIL` and `GARMIN_PASSWORD` in your `.env` to enable Garmin Connect refresh.")
+                        return
                     
                     # Fetch sleep data
                     end_date = date.today()
