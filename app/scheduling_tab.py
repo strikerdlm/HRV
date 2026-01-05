@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import math
 import json
+import datetime as dt
 from datetime import datetime, date, timedelta
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -2042,7 +2043,134 @@ def _render_performance_forecast(
     if not selected_crew:
         st.info("No crew member selected")
         return
-    
+
+    # Ensure we always have a mutable status object to update with risk inputs.
+    if selected_crew.status is None:
+        selected_crew.status = CrewPhysiologicalStatus(
+            crew_id=selected_crew.crew_id,
+            timestamp=dt.datetime.now(),
+            chronotype=str(selected_crew.chronotype or "intermediate"),
+            vo2max=float(selected_crew.vo2max_ml_kg_min),
+        )
+
+    # ------------------------------------------------------------------
+    # Persist forecast + risk inputs per crew member.
+    # Streamlit widget keys are shared across crew selection, so we manually
+    # save/restore the widget state when the crew selector changes.
+    # ------------------------------------------------------------------
+    _forecast_cfg_keys = (
+        # SAFTE model inputs
+        "forecast_sleep_hour",
+        "forecast_sleep_duration",
+        "forecast_sleep_quality",
+        "forecast_sleep_debt",
+        "forecast_has_work",
+        "forecast_work_start",
+        "forecast_work_end",
+        "forecast_cognitive_load",
+        # Prediction options
+        "forecast_prediction_days",
+        "forecast_use_garmin_history",
+        "forecast_use_active_profile_garmin",
+        # Risk analysis inputs (IHPI / GO-NOGO)
+        "forecast_hours_awake",
+        "forecast_sleep_last_24h",
+        "forecast_kss_score",
+        "forecast_samn_perelli_score",
+        "forecast_lnrmssd_current",
+        "forecast_lnrmssd_baseline_mean",
+        "forecast_lnrmssd_baseline_sd",
+        "forecast_body_mass_change_pct",
+        "forecast_usg_enabled",
+        "forecast_usg",
+        "forecast_energy_availability",
+        "forecast_pvt_lapses_3min",
+        "forecast_phase_offset_hours",
+        "forecast_vo2max",
+        "forecast_hours_since_last_eva",
+    )
+
+    cfg_by_crew = st.session_state.setdefault("_forecast_cfg_by_crew", {})
+    prev_crew_id = st.session_state.get("_forecast_prev_crew_id")
+    if prev_crew_id != selected_crew.crew_id:
+        # Save previous crew's widget state.
+        if prev_crew_id:
+            cfg_by_crew[str(prev_crew_id)] = {
+                k: st.session_state.get(k)
+                for k in _forecast_cfg_keys
+                if k in st.session_state
+            }
+
+        loaded = cfg_by_crew.get(str(selected_crew.crew_id))
+        if isinstance(loaded, dict):
+            for k, v in loaded.items():
+                st.session_state[k] = v
+        else:
+            # Seed defaults (do not inherit another crew's values).
+            status = selected_crew.status
+
+            # SAFTE model input defaults (independent per crew unless previously saved).
+            st.session_state["forecast_sleep_hour"] = 22
+            st.session_state["forecast_sleep_duration"] = float(
+                max(4.0, min(12.0, float(getattr(status, "sleep_last_24h", 8.0) or 8.0)))
+            )
+            st.session_state["forecast_sleep_quality"] = 0.8
+            st.session_state["forecast_sleep_debt"] = 0.0
+
+            st.session_state["forecast_has_work"] = True
+            st.session_state["forecast_work_start"] = 9
+            st.session_state["forecast_work_end"] = 17
+            st.session_state["forecast_cognitive_load"] = "Medium"
+
+            st.session_state["forecast_prediction_days"] = 5
+            st.session_state["forecast_use_garmin_history"] = True
+            st.session_state["forecast_use_active_profile_garmin"] = False
+
+            # Risk inputs default to current crew status.
+            st.session_state["forecast_hours_awake"] = float(getattr(status, "hours_awake", 8.0) or 8.0)
+            st.session_state["forecast_sleep_last_24h"] = float(getattr(status, "sleep_last_24h", 8.0) or 8.0)
+            st.session_state["forecast_kss_score"] = int(round(float(getattr(status, "kss_score", 3.0) or 3.0)))
+            st.session_state["forecast_samn_perelli_score"] = int(round(float(getattr(status, "samn_perelli_score", 3.0) or 3.0)))
+            st.session_state["forecast_lnrmssd_current"] = float(getattr(status, "lnrmssd_current", 3.5) or 3.5)
+            st.session_state["forecast_lnrmssd_baseline_mean"] = float(getattr(status, "lnrmssd_baseline_mean", 3.5) or 3.5)
+            st.session_state["forecast_lnrmssd_baseline_sd"] = float(getattr(status, "lnrmssd_baseline_sd", 0.3) or 0.3)
+            st.session_state["forecast_body_mass_change_pct"] = float(getattr(status, "body_mass_change_pct", 0.0) or 0.0)
+            st.session_state["forecast_usg_enabled"] = bool(getattr(status, "usg", None) is not None)
+            st.session_state["forecast_usg"] = float(getattr(status, "usg", 1.020) or 1.020)
+            st.session_state["forecast_energy_availability"] = float(getattr(status, "energy_availability", 45.0) or 45.0)
+            st.session_state["forecast_pvt_lapses_3min"] = int(getattr(status, "pvt_lapses_3min", 5) or 5)
+            st.session_state["forecast_phase_offset_hours"] = float(getattr(status, "phase_offset_hours", 0.0) or 0.0)
+            st.session_state["forecast_vo2max"] = float(getattr(status, "vo2max", float(selected_crew.vo2max_ml_kg_min)) or float(selected_crew.vo2max_ml_kg_min))
+            st.session_state["forecast_hours_since_last_eva"] = float(getattr(status, "hours_since_last_eva", 100.0) or 100.0)
+
+        st.session_state["_forecast_prev_crew_id"] = str(selected_crew.crew_id)
+
+    # Normalize widget state types (older session values may have different types).
+    try:
+        st.session_state["forecast_kss_score"] = int(
+            max(1, min(9, int(round(float(st.session_state.get("forecast_kss_score", 3))))))
+        )
+    except Exception:
+        st.session_state["forecast_kss_score"] = 3
+
+    try:
+        st.session_state["forecast_samn_perelli_score"] = int(
+            max(1, min(7, int(round(float(st.session_state.get("forecast_samn_perelli_score", 3))))))
+        )
+    except Exception:
+        st.session_state["forecast_samn_perelli_score"] = 3
+
+    try:
+        _raw_pvt = st.session_state.get("forecast_pvt_lapses_3min", 5)
+        st.session_state["forecast_pvt_lapses_3min"] = max(0, int(round(float(_raw_pvt))))
+    except Exception:
+        st.session_state["forecast_pvt_lapses_3min"] = 5
+
+    try:
+        st.session_state["forecast_usg_enabled"] = bool(st.session_state.get("forecast_usg_enabled", False))
+    except Exception:
+        st.session_state["forecast_usg_enabled"] = False
+
     # SAFTE Model Inputs Section
     st.markdown("### 📊 SAFTE Model Parameters")
     st.caption(
@@ -2185,6 +2313,210 @@ def _render_performance_forecast(
             else:
                 st.info("No status data available")
 
+    # ------------------------------------------------------------------
+    # Risk analysis inputs (feed the Risk Matrix + GO/NO-GO logic).
+    # ------------------------------------------------------------------
+    st.markdown("### 🎯 Risk Analysis Parameters (IHPI / EVA gates)")
+    st.caption(
+        "Configure the crew physiological inputs used by IHPI subscores and EVA GO/NO-GO gates. "
+        "These values are stored per-crew for this session and should update the Risk Matrix immediately."
+    )
+
+    status = selected_crew.status
+    if status is None:
+        st.warning("No crew status object available.")
+    else:
+        with st.expander("⚙️ Configure Risk Inputs", expanded=False):
+            col_r1, col_r2, col_r3 = st.columns(3)
+
+            with col_r1:
+                hours_awake = st.number_input(
+                    "Hours awake (h)",
+                    min_value=0.0,
+                    max_value=24.0,
+                    value=float(st.session_state.get("forecast_hours_awake", status.hours_awake)),
+                    step=0.5,
+                    key="forecast_hours_awake",
+                    help="Hard EVA gate: ≥21h indicates very high risk.",
+                )
+                sleep_last_24h = st.number_input(
+                    "Sleep in last 24h (h)",
+                    min_value=0.0,
+                    max_value=12.0,
+                    value=float(st.session_state.get("forecast_sleep_last_24h", status.sleep_last_24h)),
+                    step=0.5,
+                    key="forecast_sleep_last_24h",
+                    help="Hard EVA gate: <6h sleep in the last 24h is NO-GO.",
+                )
+
+            with col_r2:
+                kss_score = st.slider(
+                    "Karolinska Sleepiness Scale (KSS)",
+                    min_value=1,
+                    max_value=9,
+                    value=int(st.session_state.get("forecast_kss_score", int(round(status.kss_score)))),
+                    step=1,
+                    key="forecast_kss_score",
+                    help="KSS ≥8 indicates severe sleepiness (NO-GO).",
+                )
+                samn_score = st.slider(
+                    "Samn-Perelli fatigue scale (1-7)",
+                    min_value=1,
+                    max_value=7,
+                    value=int(st.session_state.get("forecast_samn_perelli_score", int(round(status.samn_perelli_score)))),
+                    step=1,
+                    key="forecast_samn_perelli_score",
+                )
+
+            with col_r3:
+                pvt_lapses = st.number_input(
+                    "PVT lapses (3-min)",
+                    min_value=0,
+                    max_value=50,
+                    value=int(st.session_state.get("forecast_pvt_lapses_3min", status.pvt_lapses_3min)),
+                    step=1,
+                    key="forecast_pvt_lapses_3min",
+                    help="Hard gate: ≥20 lapses indicates vigilance failure.",
+                )
+                phase_offset = st.slider(
+                    "Circadian phase offset (h)",
+                    min_value=-12.0,
+                    max_value=12.0,
+                    value=float(st.session_state.get("forecast_phase_offset_hours", status.phase_offset_hours)),
+                    step=0.5,
+                    key="forecast_phase_offset_hours",
+                    help="Misalignment >6h is considered severe (ICAO FRMS guidance).",
+                )
+
+            st.markdown("##### Physiological state inputs")
+            col_p1, col_p2, col_p3 = st.columns(3)
+
+            with col_p1:
+                lnrmssd_current = st.number_input(
+                    "lnRMSSD (current)",
+                    min_value=1.0,
+                    max_value=6.0,
+                    value=float(st.session_state.get("forecast_lnrmssd_current", status.lnrmssd_current)),
+                    step=0.05,
+                    key="forecast_lnrmssd_current",
+                )
+                lnrmssd_mean = st.number_input(
+                    "lnRMSSD baseline mean",
+                    min_value=1.0,
+                    max_value=6.0,
+                    value=float(st.session_state.get("forecast_lnrmssd_baseline_mean", status.lnrmssd_baseline_mean)),
+                    step=0.05,
+                    key="forecast_lnrmssd_baseline_mean",
+                )
+                lnrmssd_sd = st.number_input(
+                    "lnRMSSD baseline SD",
+                    min_value=0.05,
+                    max_value=1.0,
+                    value=float(st.session_state.get("forecast_lnrmssd_baseline_sd", status.lnrmssd_baseline_sd)),
+                    step=0.01,
+                    key="forecast_lnrmssd_baseline_sd",
+                )
+
+            with col_p2:
+                body_mass_change_pct = st.slider(
+                    "Body mass change (%)",
+                    min_value=-5.0,
+                    max_value=2.0,
+                    value=float(st.session_state.get("forecast_body_mass_change_pct", status.body_mass_change_pct)),
+                    step=0.1,
+                    key="forecast_body_mass_change_pct",
+                    help="Negative = loss. Cognitive impairment risk increases above ~2% loss.",
+                )
+                usg_enabled = st.checkbox(
+                    "Use USG (urine specific gravity)",
+                    value=bool(st.session_state.get("forecast_usg_enabled", status.usg is not None)),
+                    key="forecast_usg_enabled",
+                )
+                usg_value = st.number_input(
+                    "USG",
+                    min_value=1.000,
+                    max_value=1.060,
+                    value=float(
+                        st.session_state.get(
+                            "forecast_usg",
+                            (status.usg if status.usg is not None else 1.020) or 1.020,
+                        )
+                    ),
+                    step=0.001,
+                    format="%.3f",
+                    key="forecast_usg",
+                    disabled=not usg_enabled,
+                    help="USG ≥1.030 indicates significant hypohydration.",
+                )
+
+            with col_p3:
+                energy_availability = st.number_input(
+                    "Energy availability (kcal/kg FFM/day)",
+                    min_value=15.0,
+                    max_value=60.0,
+                    value=float(st.session_state.get("forecast_energy_availability", status.energy_availability)),
+                    step=0.5,
+                    key="forecast_energy_availability",
+                    help="IOC: ≥45 optimal; <30 low EA.",
+                )
+                vo2max = st.number_input(
+                    "VO₂max (ml/kg/min)",
+                    min_value=20.0,
+                    max_value=80.0,
+                    value=float(st.session_state.get("forecast_vo2max", status.vo2max)),
+                    step=0.5,
+                    key="forecast_vo2max",
+                    help="NASA EVA minimum: 32.9 ml/kg/min.",
+                )
+                hours_since_last_eva = st.number_input(
+                    "Hours since last EVA",
+                    min_value=0.0,
+                    max_value=500.0,
+                    value=float(st.session_state.get("forecast_hours_since_last_eva", status.hours_since_last_eva)),
+                    step=1.0,
+                    key="forecast_hours_since_last_eva",
+                    help="Hard gate: <24h since last EVA.",
+                )
+
+        # Apply the latest risk inputs to crew status (so Risk Matrix uses them).
+        status.hours_awake = float(hours_awake)
+        status.sleep_last_24h = float(sleep_last_24h)
+        status.kss_score = float(kss_score)
+        status.samn_perelli_score = float(samn_score)
+        status.pvt_lapses_3min = int(pvt_lapses)
+        status.phase_offset_hours = float(phase_offset)
+        status.lnrmssd_current = float(lnrmssd_current)
+        status.lnrmssd_baseline_mean = float(lnrmssd_mean)
+        status.lnrmssd_baseline_sd = float(lnrmssd_sd)
+        status.body_mass_change_pct = float(body_mass_change_pct)
+        status.usg = float(usg_value) if usg_enabled else None
+        status.energy_availability = float(energy_availability)
+        status.vo2max = float(vo2max)
+        status.hours_since_last_eva = float(hours_since_last_eva)
+        status.timestamp = dt.datetime.now()
+
+        # Keep crew profile VO2max consistent with status for downstream checks.
+        selected_crew.vo2max_ml_kg_min = float(vo2max)
+
+        # Persist current crew configuration snapshot.
+        cfg_by_crew[str(selected_crew.crew_id)] = {
+            k: st.session_state.get(k)
+            for k in _forecast_cfg_keys
+            if k in st.session_state
+        }
+
+        # Quick preview of derived outputs (helps validate parameter settings).
+        ihpi_preview = status.compute_ihpi()
+        eva_preview = status.eva_go_nogo()
+        col_out1, col_out2, col_out3 = st.columns(3)
+        col_out1.metric("IHPI (with current inputs)", f"{ihpi_preview:.1f}")
+        col_out2.metric("Risk level", selected_crew.get_risk_level().value.upper())
+        eva_color = GONOGO_COLORS.get(eva_preview.status, "#888")
+        col_out3.markdown(
+            f"**EVA GO/NO-GO:** <span style='color: {eva_color}; font-weight: bold;'>{eva_preview.status.value.upper()}</span>",
+            unsafe_allow_html=True,
+        )
+
     # Prediction settings (match research app behavior)
     st.markdown("### 🧠 Cognitive Performance Prediction (SAFTE)")
     col_pred1, col_pred2 = st.columns([1, 2])
@@ -2207,10 +2539,9 @@ def _render_performance_forecast(
         )
     
     # Generate forecast
-    from datetime import datetime, timedelta
-    sleep_start = datetime.combine(
+    sleep_start = dt.datetime.combine(
         schedule_date,
-        datetime.min.time().replace(hour=sleep_start_hour),
+        dt.datetime.min.time().replace(hour=sleep_start_hour),
     )
     
     # Build work schedule dict
@@ -2354,7 +2685,7 @@ def _render_performance_forecast(
             )
             source_label = "Garmin-derived sleep history"
         else:
-            sleep_end_datetime = sleep_start + timedelta(hours=float(sleep_duration))
+            sleep_end_datetime = sleep_start + dt.timedelta(hours=float(sleep_duration))
             waketime_hour = int(sleep_end_datetime.hour)
             if int(sleep_end_datetime.minute) > 0:
                 waketime_hour = int((waketime_hour + 1) % 24)
@@ -2402,6 +2733,24 @@ def _render_performance_forecast(
 
         x_data = [dt.strftime("%Y-%m-%d %H:%M") for dt in perf_data["DateTime"]]
         y_data = [round(float(p), 1) for p in perf_data["Performance"]]
+
+        # Feed the forecast back into the scheduling risk model.
+        # We use the t0 effectiveness (first sample; `build_fatigue_dataframe` anchors at now).
+        if selected_crew.status is not None:
+            try:
+                current_eff = float(perf_data["Performance"].iloc[0])
+            except Exception:
+                current_eff = None
+            if current_eff is not None and np.isfinite(current_eff):
+                selected_crew.status.safte_effectiveness = float(current_eff)
+                selected_crew.status.timestamp = dt.datetime.now()
+                st.caption(
+                    f"✅ Risk Matrix updated: SAFTE effectiveness set to {current_eff:.1f}% (t0 from forecast)."
+                )
+                st.caption(
+                    f"IHPI (with updated SAFTE): {selected_crew.get_ihpi():.1f} | "
+                    f"Risk level: {selected_crew.get_risk_level().value.upper()}"
+                )
 
         # Enhanced view: zoom Y-axis to 60–100% for better curve detail.
         # Safety: never clip data; if values fall below 60 or exceed 100, extend bounds.
@@ -2531,9 +2880,9 @@ def _render_performance_forecast(
             window_start: datetime | None = None
             last_dt: datetime | None = None
             for dt_str, val in zip(x_data, y_data):
-                dt_val = datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
+                dt_val = dt.datetime.strptime(dt_str, "%Y-%m-%d %H:%M")
                 # Ensure monotonic hourly stepping; if not, reset window tracking.
-                if last_dt is not None and (dt_val - last_dt) > timedelta(hours=2):
+                if last_dt is not None and (dt_val - last_dt) > dt.timedelta(hours=2):
                     window_start = None
                 if val >= 90 and window_start is None:
                     window_start = dt_val
@@ -2542,7 +2891,7 @@ def _render_performance_forecast(
                     window_start = None
                 last_dt = dt_val
             if window_start is not None and last_dt is not None:
-                optimal_windows.append((window_start, last_dt + timedelta(hours=1)))
+                optimal_windows.append((window_start, last_dt + dt.timedelta(hours=1)))
 
             if optimal_windows:
                 st.markdown("**🟢 Optimal Work Windows:**")
@@ -2614,7 +2963,6 @@ def _render_performance_forecast(
                         fetch_garmin_sleep,
                         load_credentials_from_env,
                     )
-                    from datetime import date, timedelta
                     
                     credentials = load_credentials_from_env()
                     if credentials is None:
@@ -2623,7 +2971,7 @@ def _render_performance_forecast(
                     
                     # Fetch sleep data
                     end_date = date.today()
-                    start_date = end_date - timedelta(days=days_back - 1)
+                    start_date = end_date - dt.timedelta(days=days_back - 1)
                     
                     sleep_df = fetch_garmin_sleep(credentials, start_date, end_date)
                     
