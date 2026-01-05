@@ -19162,7 +19162,14 @@ space weather events, maintained by the Community Coordinated Modeling Center (C
                                 snap.sidc_report.bulletin_excerpt
                                 or snap.sidc_report.cme_highlights
                             ):
-                                with st.expander("SIDC Ursigram highlights (CME context)"):
+                                # Streamlit does not allow nested expanders.
+                                # Use a checkbox to toggle this subsection inside the parent expander.
+                                show_sidc = st.checkbox(
+                                    "Show SIDC Ursigram highlights (CME context)",
+                                    value=False,
+                                    key="swl_show_sidc_ursigram",
+                                )
+                                if show_sidc:
                                     if snap.sidc_report.issued_utc:
                                         st.caption(
                                             f"Issued: {snap.sidc_report.issued_utc.strftime('%Y-%m-%d %H:%M UTC')}"
