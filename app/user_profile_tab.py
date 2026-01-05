@@ -12229,7 +12229,9 @@ def _render_fatigue_prediction_tool(
             "legend": {"show": False},
             "grid": {"left": "10%", "right": "8%", "bottom": "12%", "top": "8%"},
         }
-        render_echarts(EChartsConfig(options=options, height="320px"))
+        # `EChartsConfig` controls how ECharts is loaded (CDN/local/inline), not chart options.
+        # Pass the ECharts option dict directly and set chart height via `height_px`.
+        render_echarts(options, height_px=320)
     
     # Recommendations
     if fatigue.recommendations:
