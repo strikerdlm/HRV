@@ -2295,15 +2295,77 @@ def _render_performance_forecast(
                 work_end = 17
                 work_hours = 8
                 cognitive_load_value = 1
-    
+
+    # ------------------------------------------------------------------
+    # Active user profile (demographics) for SAFTE parameters.
+    # IMPORTANT: do NOT use placeholder defaults when no profile is active.
+    # ------------------------------------------------------------------
+    active_user_profile: Dict[str, Any] | None = None
+    active_user_context: Dict[str, Any] | None = None
+    active_user_id: str | None = None
+    active_profile_label: str | None = None
+
+    try:
+        from user_profile_tab import (  # noqa: PLC0415
+            get_active_user_context,
+            get_current_user_data,
+        )
+
+        active_user_profile = get_current_user_data()
+        _ctx = get_active_user_context()
+        if isinstance(_ctx, dict) and bool(_ctx.get("has_user")):
+            active_user_context = _ctx
+            active_user_id = str(_ctx.get("user_id") or "").strip() or None
+            active_profile_label = (
+                str(_ctx.get("full_name") or _ctx.get("username") or "").strip()
+                or None
+            )
+    except Exception as exc:
+        # Proceed with manual inputs; do not inject default profile values.
+        log_exception(_LOGGER, "Active user profile context unavailable for forecasting", exc)
+        active_user_profile = None
+        active_user_context = None
+        active_user_id = None
+        active_profile_label = None
+
+    # Pre-compute profile values used by the fatigue model (fallback to crew config only
+    # when user profile data is missing).
+    profile_age_years: int | None = None
+    profile_sex: str | None = None
+
+    if isinstance(active_user_profile, dict):
+        try:
+            _age_raw = active_user_profile.get("age_years")
+            profile_age_years = int(_age_raw) if _age_raw is not None else None
+        except Exception:
+            profile_age_years = None
+        profile_sex = str(active_user_profile.get("sex") or "").strip() or None
+
+    # SAFTE demographic inputs (age/sex) should come from the user profile when available.
+    safte_age_years = int(profile_age_years) if profile_age_years is not None else int(selected_crew.age_years)
+    safte_sex = str(profile_sex or selected_crew.sex or "other").lower()
+
     with st.expander("👤 Crew Member Profile", expanded=False):
         col_p1, col_p2 = st.columns(2)
         with col_p1:
-            st.markdown("**Profile Data**")
+            st.markdown("**Crew Scheduling Profile**")
             st.caption(f"**Name:** {selected_crew.name}")
-            st.caption(f"**Age:** {selected_crew.age_years} years")
-            st.caption(f"**Sex:** {selected_crew.sex}")
-            st.caption(f"**Chronotype:** {selected_crew.chronotype}")
+            st.caption(f"**Age (SAFTE inputs):** {safte_age_years} years")
+            st.caption(f"**Sex (SAFTE inputs):** {safte_sex}")
+            st.caption(f"**Chronotype (crew):** {selected_crew.chronotype}")
+
+            st.markdown("---")
+            st.markdown("**User Profile (active)**")
+            if active_user_profile is None:
+                st.info("No data from the user profile.")
+            else:
+                st.caption(f"**Profile:** {active_user_profile.get('full_name') or active_user_profile.get('username') or 'User'}")
+                if profile_age_years is None:
+                    st.caption("**Age:** (not set in user profile)")
+                else:
+                    st.caption(f"**Age:** {profile_age_years} years")
+                st.caption(f"**Sex:** {active_user_profile.get('sex')}")
+
         with col_p2:
             st.markdown("**Current Status**")
             if selected_crew.status:
@@ -2577,10 +2639,29 @@ def _render_performance_forecast(
             )
 
         chronotype_map = {"early": -2.0, "intermediate": 0.0, "late": 2.0}
+
+        # Use user-profile demographics when available; otherwise fall back to crew defaults.
+        # (Computed earlier as `safte_age_years`/`safte_sex` for consistency with the UI.)
+        user_age = int(safte_age_years)
+        user_sex = str(safte_sex)
+
+        if active_user_context is not None:
+            try:
+                user_chronotype_offset = float(
+                    active_user_context.get(
+                        "chronotype_offset",
+                        chronotype_map.get(selected_crew.chronotype, 0.0),
+                    )
+                )
+            except Exception:
+                user_chronotype_offset = float(chronotype_map.get(selected_crew.chronotype, 0.0))
+        else:
+            user_chronotype_offset = float(chronotype_map.get(selected_crew.chronotype, 0.0))
+
         user_profile = UserProfile(
-            age=int(selected_crew.age_years),
-            sex=str(selected_crew.sex or "other").lower(),
-            chronotype_offset=float(chronotype_map.get(selected_crew.chronotype, 0.0)),
+            age=user_age,
+            sex=user_sex,
+            chronotype_offset=user_chronotype_offset,
             genetic_profile=tuple(),
         )
 
@@ -2588,30 +2669,9 @@ def _render_performance_forecast(
         # Prefer "active profile" Garmin data (already stored in the mission DB)
         # so Crew Scheduling does NOT require re-entering Garmin credentials.
         # ------------------------------------------------------------------
-        active_user_context: Dict[str, Any] | None = None
-        active_user_id: str | None = None
-        active_profile_label: str | None = None
-        try:
-            from user_profile_tab import get_active_user_context  # noqa: PLC0415
-
-            active_user_context = get_active_user_context()
-            if isinstance(active_user_context, dict):
-                active_user_id = active_user_context.get("user_id")
-                if active_user_context.get("has_user"):
-                    active_profile_label = (
-                        str(active_user_context.get("full_name") or active_user_context.get("username") or "")
-                        .strip()
-                        or None
-                    )
-        except Exception as exc:
-            # If the profile module isn't available, proceed with manual/Garmin sleep DF inputs.
-            log_exception(_LOGGER, "Active profile context unavailable for scheduling", exc)
-            active_user_context = None
-            active_user_id = None
-            active_profile_label = None
 
         wrist_df_available = False
-        if active_user_context and active_user_context.get("has_user") and active_user_id:
+        if active_user_context is not None and active_user_id:
             try:
                 from user_database import get_database  # noqa: PLC0415
 
@@ -2663,8 +2723,15 @@ def _render_performance_forecast(
         if use_active_profile_garmin and active_user_context and active_user_id:
             # Run the exact research priority pipeline:
             # wrist monitoring (garmin_daily_metrics) → clinical → Garmin Connect (if configured) → defaults.
+            forecast_user_context: Dict[str, Any] = {
+                "age_years": int(user_age),
+                "sex": str(user_sex),
+                "chronotype_offset": float(user_chronotype_offset),
+                "genetic_profile": tuple(),
+            }
+
             result, src, wrist_df_out = run_assessment_fatigue_prediction(
-                user_context=active_user_context,
+                user_context=forecast_user_context,
                 user_id=active_user_id,
                 prediction_days=int(prediction_days),
                 model_type="advanced",
