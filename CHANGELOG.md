@@ -5,6 +5,15 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.3] - 2026-01-06
+
+### Changed
+- Crew Scheduling (Operational): Risk Analysis Parameters (IHPI / EVA gates) now update IHPI/risk/EVA gates only on **Calculate** (with optional Auto-calculate toggle), reducing unnecessary recomputation during parameter tuning.
+- Crew Scheduling (Operational): 24-Hour Performance Forecast (SAFTE) now runs only when **Calculate performance forecast** is pressed; the last computed forecast is cached per crew member and persists across reruns.
+
+### Fixed
+- Crew Scheduling (Operational): Garmin-derived sleep history is disabled by default and is only fetched/used for forecasting when explicitly enabled.
+
 ## [1.9.2] - 2025-12-31
 
 ### Fixed
