@@ -1,0 +1,141 @@
+---
+description: when the user asks for research or scientific based answers
+alwaysApply: false
+---
+# MCP Scientific Evidence Search Protocol
+
+**Version**: 1.0.0 | **Last Updated**: 2025-01-06
+
+When a user requests scientific evidence, research papers, or peer-reviewed literature, agents MUST use MCP tools in the following priority order:
+
+## Search Order (MANDATORY)
+
+1. **mcp paper-search** — Academic paper databases (arXiv, PubMed, bioRxiv, medRxiv, IACR, Semantic Scholar, CrossRef)
+2. **mcp firecrawl** — Web scraping for scientific content from research websites
+3. **mcp perplexity** — AI-powered research synthesis (perplexity-research)
+4. **mcp brave** — General web search as fallback and as last resort
+
+## Usage Protocol
+
+### Step 1: Paper-Search (Primary)
+Always start with paper-search MCP tools for peer-reviewed sources:
+
+```python
+# Search academic databases
+- mcp_paper-search_search_arxiv(query, max_results=10)
+- mcp_paper-search_search_pubmed(query, max_results=10)
+- mcp_paper-search_search_semantic(query, max_results=10)
+- mcp_paper-search_search_crossref(query, max_results=10)
+```
+
+**When to use**: User requests scientific evidence, research papers, peer-reviewed studies, citations, or literature review.
+
+### Step 2: Firecrawl (Secondary)
+If paper-search doesn't yield sufficient results, use firecrawl to scrape scientific content:
+
+```python
+# Search and scrape scientific websites
+- mcp_firecrawl_firecrawl_search(query, limit=5, sources=["web"])
+- mcp_firecrawl_firecrawl_scrape(url, formats=["markdown"])
+```
+
+**When to use**: Need to extract content from research websites, journals, or scientific blogs.
+
+### Step 3: Perplexity (Tertiary)
+Use perplexity for AI-powered research synthesis and comprehensive answers:
+
+```python
+# AI-powered research synthesis
+- mcp_perplexity-research (query for scientific evidence)
+```
+
+**When to use**: Need synthesized answers, multiple perspectives, or when paper-search and firecrawl haven't provided comprehensive coverage.
+
+### Step 4: Brave (Fallback)
+Use Brave as final fallback for general web search:
+
+```python
+# General web search
+- mcp_brave_brave_web_search(query, count=10)
+```
+
+**When to use**: When all other sources have been exhausted or for general scientific information.
+
+## Decision Tree
+
+```
+User requests scientific evidence
+    │
+    ├─> Is it about academic papers/research?
+    │   └─> YES → Use paper-search (Step 1)
+    │       │
+    │       └─> Results sufficient?
+    │           ├─> YES → Stop, cite sources
+    │           └─> NO → Continue to Step 2
+    │
+    ├─> Need to scrape specific scientific websites?
+    │   └─> YES → Use firecrawl (Step 2)
+    │       │
+    │       └─> Results sufficient?
+    │           ├─> YES → Stop, cite sources
+    │           └─> NO → Continue to Step 3
+    │
+    ├─> Need synthesized/comprehensive answer?
+    │   └─> YES → Use perplexity (Step 3)
+    │       │
+    │       └─> Results sufficient?
+    │           ├─> YES → Stop, cite sources
+    │           └─> NO → Continue to Step 4
+    │
+    └─> General scientific information needed?
+        └─> YES → Use brave (Step 4)
+```
+
+## Citation Requirements
+
+All scientific evidence MUST include:
+1. **Source**: Database/journal name
+2. **Authors**: Full author list (if available)
+3. **Title**: Paper/article title
+4. **Year**: Publication year
+5. **DOI/URL**: Verifiable link
+6. **APA Format**: All citations in APA format
+
+## Examples
+
+### Example 1: HRV Research
+```
+User: "Find scientific evidence on HRV and spaceflight"
+
+Agent actions:
+1. mcp_paper-search_search_pubmed("HRV spaceflight", max_results=10)
+2. mcp_paper-search_search_arxiv("heart rate variability space", max_results=10)
+3. If needed: mcp_firecrawl_firecrawl_search("HRV spaceflight research", limit=5)
+4. If needed: mcp_perplexity-ask (synthesis query)
+5. If needed: mcp_brave_brave_web_search("HRV spaceflight", count=10)
+```
+
+### Example 2: Reference Verification
+```
+User: "Verify the citation for Task Force 1996 HRV standards"
+
+Agent actions:
+1. mcp_paper-search_search_crossref("Task Force 1996 HRV", max_results=5)
+2. mcp_paper-search_search_pubmed("Task Force HRV 1996", max_results=5)
+3. If needed: mcp_firecrawl_firecrawl_search("Task Force 1996 HRV", limit=3)
+```
+
+## Important Notes
+
+- **Never skip steps**: Always attempt paper-search first before moving to other tools
+- **Parallel execution**: Steps 1-2 can be executed in parallel for efficiency
+- **Documentation**: All findings must be documented in `docs/Manual.md` with proper citations
+- **Verification**: Use MCP tools to verify all references before including them
+- **APA Format**: All citations must follow APA format and be verifiable
+
+## Integration with Project Rules
+
+This protocol integrates with:
+- **Scientific Standards** (Rule 2): Evidence-based changes require peer-reviewed sources
+- **Documentation** (Rule 3): Citations must be added to `docs/Manual.md`
+- **Agentic Best Practices** (Rule 4): Research phase before implementation
