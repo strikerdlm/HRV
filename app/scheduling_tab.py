@@ -2012,6 +2012,45 @@ def _render_procedure_integration_panel(
 # Performance Forecast Chart (Advanced)
 # ---------------------------------------------------------------------------
 
+class _SkipForecastComputation(Exception):
+    """Internal control flow to skip SAFTE forecast computation on normal reruns."""
+
+
+def _apply_risk_inputs_to_status(
+    status: "CrewPhysiologicalStatus",
+    risk_inputs: Dict[str, Any],
+) -> None:
+    """Apply Risk Analysis Parameters (IHPI/EVA gates) from UI inputs to a status object.
+
+    This is intentionally explicit so callers can gate expensive downstream work
+    behind a Calculate button (or an explicit auto-calc toggle).
+    """
+
+    if status is None:
+        raise ValueError("status must not be None")
+    if not isinstance(risk_inputs, dict):
+        raise TypeError("risk_inputs must be a dict")
+
+    status.hours_awake = float(risk_inputs["hours_awake"])
+    status.sleep_last_24h = float(risk_inputs["sleep_last_24h"])
+    status.kss_score = float(risk_inputs["kss_score"])
+    status.samn_perelli_score = float(risk_inputs["samn_perelli_score"])
+    status.pvt_lapses_3min = int(risk_inputs["pvt_lapses_3min"])
+    status.phase_offset_hours = float(risk_inputs["phase_offset_hours"])
+    status.lnrmssd_current = float(risk_inputs["lnrmssd_current"])
+    status.lnrmssd_baseline_mean = float(risk_inputs["lnrmssd_baseline_mean"])
+    status.lnrmssd_baseline_sd = float(risk_inputs["lnrmssd_baseline_sd"])
+    status.body_mass_change_pct = float(risk_inputs["body_mass_change_pct"])
+
+    usg_enabled = bool(risk_inputs["usg_enabled"])
+    usg_value = float(risk_inputs["usg"])
+    status.usg = usg_value if usg_enabled else None
+
+    status.energy_availability = float(risk_inputs["energy_availability"])
+    status.vo2max = float(risk_inputs["vo2max"])
+    status.hours_since_last_eva = float(risk_inputs["hours_since_last_eva"])
+    status.timestamp = dt.datetime.now()
+
 def _render_performance_forecast(
     engine: SchedulingEngine,
     schedule_date: date,
@@ -2088,6 +2127,8 @@ def _render_performance_forecast(
         "forecast_phase_offset_hours",
         "forecast_vo2max",
         "forecast_hours_since_last_eva",
+        # Controls
+        "forecast_auto_calc_ihpi",
     )
 
     cfg_by_crew = st.session_state.setdefault("_forecast_cfg_by_crew", {})
@@ -2123,8 +2164,10 @@ def _render_performance_forecast(
             st.session_state["forecast_cognitive_load"] = "Medium"
 
             st.session_state["forecast_prediction_days"] = 5
-            st.session_state["forecast_use_garmin_history"] = True
+            # Disabled by default: only pull/use Garmin data when the user explicitly opts in.
+            st.session_state["forecast_use_garmin_history"] = False
             st.session_state["forecast_use_active_profile_garmin"] = False
+            st.session_state["forecast_auto_calc_ihpi"] = False
 
             # Risk inputs default to current crew status.
             st.session_state["forecast_hours_awake"] = float(getattr(status, "hours_awake", 8.0) or 8.0)
@@ -2381,13 +2424,32 @@ def _render_performance_forecast(
     st.markdown("### 🎯 Risk Analysis Parameters (IHPI / EVA gates)")
     st.caption(
         "Configure the crew physiological inputs used by IHPI subscores and EVA GO/NO-GO gates. "
-        "These values are stored per-crew for this session and should update the Risk Matrix immediately."
+        "These values are stored per-crew for this session. "
+        "To avoid heavy recomputation on every widget change, IHPI/risk/EVA gates update only when you press Calculate "
+        "(or enable Auto-calculate)."
     )
 
     status = selected_crew.status
     if status is None:
         st.warning("No crew status object available.")
     else:
+        col_ctl1, col_ctl2 = st.columns([1, 1])
+        with col_ctl1:
+            auto_calc_ihpi = st.checkbox(
+                "Auto-calculate IHPI / EVA gates",
+                value=bool(st.session_state.get("forecast_auto_calc_ihpi", False)),
+                key="forecast_auto_calc_ihpi",
+                help=(
+                    "When enabled, Risk Analysis Parameters automatically apply to the selected crew member and update "
+                    "IHPI/risk/EVA gates. Disabled by default."
+                ),
+            )
+        with col_ctl2:
+            apply_risk_now = st.button(
+                "🧮 Calculate IHPI / Apply to Risk Matrix",
+                key=f"forecast_apply_risk_btn_{selected_crew.crew_id}",
+            )
+
         with st.expander("⚙️ Configure Risk Inputs", expanded=False):
             col_r1, col_r2, col_r3 = st.columns(3)
 
@@ -2540,44 +2602,53 @@ def _render_performance_forecast(
                     help="Hard gate: <24h since last EVA.",
                 )
 
-        # Apply the latest risk inputs to crew status (so Risk Matrix uses them).
-        status.hours_awake = float(hours_awake)
-        status.sleep_last_24h = float(sleep_last_24h)
-        status.kss_score = float(kss_score)
-        status.samn_perelli_score = float(samn_score)
-        status.pvt_lapses_3min = int(pvt_lapses)
-        status.phase_offset_hours = float(phase_offset)
-        status.lnrmssd_current = float(lnrmssd_current)
-        status.lnrmssd_baseline_mean = float(lnrmssd_mean)
-        status.lnrmssd_baseline_sd = float(lnrmssd_sd)
-        status.body_mass_change_pct = float(body_mass_change_pct)
-        status.usg = float(usg_value) if usg_enabled else None
-        status.energy_availability = float(energy_availability)
-        status.vo2max = float(vo2max)
-        status.hours_since_last_eva = float(hours_since_last_eva)
-        status.timestamp = dt.datetime.now()
-
-        # Keep crew profile VO2max consistent with status for downstream checks.
-        selected_crew.vo2max_ml_kg_min = float(vo2max)
-
-        # Persist current crew configuration snapshot.
+        # Persist current crew configuration snapshot (draft inputs per crew).
         cfg_by_crew[str(selected_crew.crew_id)] = {
             k: st.session_state.get(k)
             for k in _forecast_cfg_keys
             if k in st.session_state
         }
 
-        # Quick preview of derived outputs (helps validate parameter settings).
-        ihpi_preview = status.compute_ihpi()
-        eva_preview = status.eva_go_nogo()
-        col_out1, col_out2, col_out3 = st.columns(3)
-        col_out1.metric("IHPI (with current inputs)", f"{ihpi_preview:.1f}")
-        col_out2.metric("Risk level", selected_crew.get_risk_level().value.upper())
-        eva_color = GONOGO_COLORS.get(eva_preview.status, "#888")
-        col_out3.markdown(
-            f"**EVA GO/NO-GO:** <span style='color: {eva_color}; font-weight: bold;'>{eva_preview.status.value.upper()}</span>",
-            unsafe_allow_html=True,
-        )
+        risk_inputs: Dict[str, Any] = {
+            "hours_awake": hours_awake,
+            "sleep_last_24h": sleep_last_24h,
+            "kss_score": kss_score,
+            "samn_perelli_score": samn_score,
+            "pvt_lapses_3min": pvt_lapses,
+            "phase_offset_hours": phase_offset,
+            "lnrmssd_current": lnrmssd_current,
+            "lnrmssd_baseline_mean": lnrmssd_mean,
+            "lnrmssd_baseline_sd": lnrmssd_sd,
+            "body_mass_change_pct": body_mass_change_pct,
+            "usg_enabled": usg_enabled,
+            "usg": usg_value,
+            "energy_availability": energy_availability,
+            "vo2max": vo2max,
+            "hours_since_last_eva": hours_since_last_eva,
+        }
+
+        should_apply_risk = bool(auto_calc_ihpi) or bool(apply_risk_now)
+        if should_apply_risk:
+            _apply_risk_inputs_to_status(status, risk_inputs)
+            # Keep crew profile VO2max consistent with status for downstream checks.
+            selected_crew.vo2max_ml_kg_min = float(risk_inputs["vo2max"])
+
+            # Quick preview of derived outputs (helps validate parameter settings).
+            ihpi_preview = status.compute_ihpi()
+            eva_preview = status.eva_go_nogo()
+            col_out1, col_out2, col_out3 = st.columns(3)
+            col_out1.metric("IHPI (applied)", f"{ihpi_preview:.1f}")
+            col_out2.metric("Risk level", selected_crew.get_risk_level().value.upper())
+            eva_color = GONOGO_COLORS.get(eva_preview.status, "#888")
+            col_out3.markdown(
+                f"**EVA GO/NO-GO:** <span style='color: {eva_color}; font-weight: bold;'>{eva_preview.status.value.upper()}</span>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.info(
+                "Inputs are staged but not applied. Press **Calculate IHPI / Apply to Risk Matrix** to update "
+                "IHPI/risk/EVA gates."
+            )
 
     # Prediction settings (match research app behavior)
     st.markdown("### 🧠 Cognitive Performance Prediction (SAFTE)")
@@ -2594,8 +2665,8 @@ def _render_performance_forecast(
         )
     with col_pred2:
         use_garmin_history = st.checkbox(
-            "Use Garmin-derived sleep history (if fetched below)",
-            value=True,
+            "Use Garmin-derived sleep history (disabled by default)",
+            value=False,
             key="forecast_use_garmin_history",
             help="When Garmin sleep history is available, derive bedtime/waketime/quality/debt from it to match the research pipeline.",
         )
@@ -2617,8 +2688,75 @@ def _render_performance_forecast(
             "cognitive_load": cognitive_load_value,
         }
     
+    # ------------------------------------------------------------------
+    # Manual compute control (prevents expensive recomputation on every tweak)
+    # ------------------------------------------------------------------
+    forecast_cache = st.session_state.setdefault("_forecast_cache_by_crew", {})
+    crew_key = str(selected_crew.crew_id)
+
+    col_run1, col_run2 = st.columns([1, 2])
+    with col_run1:
+        run_forecast_now = st.button(
+            "📈 Calculate performance forecast",
+            key=f"forecast_run_btn_{crew_key}",
+            help="Runs the SAFTE forecast using the current parameters.",
+        )
+    with col_run2:
+        st.caption(
+            "Performance forecast is **not** recalculated automatically by default. "
+            "This keeps the operational UI responsive when adjusting inputs."
+        )
+
+    if run_forecast_now and status is not None:
+        # Apply staged IHPI/EVA inputs so forecast-triggered Risk Matrix updates
+        # reflect the current parameter set.
+        try:
+            if "risk_inputs" in locals():
+                _apply_risk_inputs_to_status(status, risk_inputs)  # type: ignore[arg-type]
+                selected_crew.vo2max_ml_kg_min = float(risk_inputs["vo2max"])  # type: ignore[index]
+        except Exception as exc:
+            log_exception(_LOGGER, "Failed to apply staged risk inputs before forecast run", exc)
+
+    if not run_forecast_now:
+        stored = forecast_cache.get(crew_key)
+        if isinstance(stored, dict) and stored.get("perf_chart_config") is not None:
+            if stored.get("risk_update_note"):
+                st.caption(str(stored["risk_update_note"]))
+
+            if render_echarts is not None:
+                render_echarts(
+                    stored["perf_chart_config"],
+                    height_px=520,
+                    config=EChartsConfig() if EChartsConfig is not None else None,
+                    export_basename=str(stored.get("export_basename") or f"safte_cognitive_prediction_{crew_key}"),
+                    caption=str(stored.get("caption") or ""),
+                )
+
+            st.markdown("---")
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                st.metric("Min Effectiveness", f"{float(stored.get('min_eff', 0.0)):.1f}%")
+            with col2:
+                st.metric("Avg Effectiveness", f"{float(stored.get('avg_eff', 0.0)):.1f}%")
+            with col3:
+                st.metric("Time Below 90%", f"{int(stored.get('below_90_min', 0))} min")
+            with col4:
+                st.metric("Time Below 70%", f"{int(stored.get('below_70_min', 0))} min")
+
+            if str(stored.get("optimal_windows") or "").strip():
+                st.markdown("**🟢 Optimal Work Windows:**")
+                st.markdown(str(stored["optimal_windows"]))
+        else:
+            st.info("Press **Calculate performance forecast** to run SAFTE and generate the forecast chart.")
+
+        # Continue rendering the rest of the tab; SAFTE computation is skipped below via _SkipForecastComputation.
+        pass
+
     # Generate prediction using the same fatigue pipeline as the research app.
     try:
+        if not run_forecast_now:
+            raise _SkipForecastComputation()
+
         try:
             from fatigue_integration import (  # noqa: PLC0415
                 SleepScheduleInput,
@@ -2671,7 +2809,7 @@ def _render_performance_forecast(
         # ------------------------------------------------------------------
 
         wrist_df_available = False
-        if active_user_context is not None and active_user_id:
+        if use_garmin_history and active_user_context is not None and active_user_id:
             try:
                 from user_database import get_database  # noqa: PLC0415
 
@@ -2803,6 +2941,7 @@ def _render_performance_forecast(
 
         # Feed the forecast back into the scheduling risk model.
         # We use the t0 effectiveness (first sample; `build_fatigue_dataframe` anchors at now).
+        risk_update_note = ""
         if selected_crew.status is not None:
             try:
                 current_eff = float(perf_data["Performance"].iloc[0])
@@ -2811,6 +2950,11 @@ def _render_performance_forecast(
             if current_eff is not None and np.isfinite(current_eff):
                 selected_crew.status.safte_effectiveness = float(current_eff)
                 selected_crew.status.timestamp = dt.datetime.now()
+                risk_update_note = (
+                    f"✅ Risk Matrix updated: SAFTE effectiveness set to {current_eff:.1f}% (t0 from forecast). "
+                    f"IHPI (with updated SAFTE): {selected_crew.get_ihpi():.1f} | "
+                    f"Risk level: {selected_crew.get_risk_level().value.upper()}"
+                )
                 st.caption(
                     f"✅ Risk Matrix updated: SAFTE effectiveness set to {current_eff:.1f}% (t0 from forecast)."
                 )
@@ -2942,6 +3086,7 @@ def _render_performance_forecast(
 
         # Optional windows (keep operational utility similar to previous forecast)
         # - Optimal work windows: contiguous awake hours with effectiveness >= 90
+        windows = ""
         if len(x_data) == len(y_data):
             optimal_windows: list[tuple[datetime, datetime]] = []
             window_start: datetime | None = None
@@ -2968,6 +3113,25 @@ def _render_performance_forecast(
                 )
                 st.markdown(windows)
 
+        # Cache the latest computed forecast per crew member so the chart persists across reruns.
+        try:
+            forecast_cache[crew_key] = {
+                "perf_chart_config": perf_chart_config,
+                "export_basename": f"safte_cognitive_prediction_{selected_crew.crew_id}",
+                "caption": f"Source: {source_label} • Model: SAFTE (advanced) • Horizon: {prediction_days} day(s)",
+                "risk_update_note": str(risk_update_note),
+                "min_eff": float(analysis.get("min", 0.0) or 0.0),
+                "avg_eff": float(analysis.get("avg", 0.0) or 0.0),
+                "below_90_min": int((caution_hours + high_risk_hours + severe_hours) * 60),
+                "below_70_min": int(severe_hours * 60),
+                "optimal_windows": str(windows),
+            }
+        except Exception as exc:
+            log_exception(_LOGGER, "Failed to cache forecast results", exc)
+
+    except _SkipForecastComputation:
+        # Expected during normal UI tweaks when manual compute is not requested.
+        pass
     except Exception as exc:
         st.error(f"Error generating cognitive performance prediction: {exc}")
         log_exception(_LOGGER, "Cognitive performance prediction failed", exc)
@@ -2975,132 +3139,126 @@ def _render_performance_forecast(
     
     # Garmin section (prefer stored mission DB data; optional Connect refresh via .env)
     st.markdown("---")
-    with st.expander("📱 Garmin data (active profile / optional Connect refresh)", expanded=False):
+    if not use_garmin_history:
         st.caption(
-            "If the active profile has Garmin daily metrics already imported, Crew Scheduling will reuse them automatically "
-            "(no credential prompts). Optionally refresh raw sleep history from Garmin Connect using `.env` credentials."
+            "Garmin-derived sleep history is disabled. Enable it above to view/fetch Garmin data for forecasting."
         )
+    else:
+        with st.expander("📱 Garmin data (active profile / optional Connect refresh)", expanded=False):
+            st.caption(
+                "If the active profile has Garmin daily metrics already imported, Crew Scheduling will reuse them automatically "
+                "(no credential prompts). Optionally refresh raw sleep history from Garmin Connect using `.env` credentials."
+            )
 
-        daily_df = st.session_state.get("forecast_garmin_daily_df")
-        if isinstance(daily_df, pd.DataFrame) and not daily_df.empty:
-            st.success("✅ Garmin daily metrics available from the active profile (stored in mission database).")
-            preview_cols = [
-                c
-                for c in (
-                    "metric_date",
-                    "sleep_score",
-                    "sleep_duration_hours",
-                    "stress_score",
-                    "avg_hr_bpm",
-                    "avg_spo2",
-                )
-                if c in daily_df.columns
-            ]
-            if preview_cols:
-                st.dataframe(
-                    daily_df.sort_values("metric_date", ascending=False)[preview_cols].head(14),
-                    use_container_width=True,
-                    hide_index=True,
-                )
-        else:
-            st.info(
-                "No stored Garmin daily metrics detected for the active profile. "
-                "If you imported Garmin data in the User Profile tab, ensure that profile is active here."
-            )
-        
-        st.markdown("##### Optional: Refresh raw sleep history from Garmin Connect")
-        col_g3, col_g4 = st.columns(2)
-        with col_g3:
-            days_back = st.number_input(
-                "Days to Fetch (raw sleep history)",
-                min_value=1,
-                max_value=30,
-                value=7,
-                key="garmin_days",
-                help="Uses `GARMIN_EMAIL`/`GARMIN_PASSWORD` from `.env` if configured.",
-            )
-        with col_g4:
-            fetch_button = st.button("📥 Refresh from Garmin Connect (.env)", key="fetch_garmin_btn")
-        
-        if fetch_button:
-            with st.spinner("Fetching data from Garmin Connect..."):
-                request_rerun = False
-                try:
-                    from garmin_import import (
-                        fetch_garmin_sleep,
-                        load_credentials_from_env,
+            daily_df = st.session_state.get("forecast_garmin_daily_df")
+            if isinstance(daily_df, pd.DataFrame) and not daily_df.empty:
+                st.success("✅ Garmin daily metrics available from the active profile (stored in mission database).")
+                preview_cols = [
+                    c
+                    for c in (
+                        "metric_date",
+                        "sleep_score",
+                        "sleep_duration_hours",
+                        "stress_score",
+                        "avg_hr_bpm",
+                        "avg_spo2",
                     )
-                    
-                    credentials = load_credentials_from_env()
-                    if credentials is None:
-                        st.info("Set `GARMIN_EMAIL` and `GARMIN_PASSWORD` in your `.env` to enable Garmin Connect refresh.")
-                        return
-                    
-                    # Fetch sleep data
-                    end_date = date.today()
-                    start_date = end_date - dt.timedelta(days=days_back - 1)
-                    
-                    sleep_df = fetch_garmin_sleep(credentials, start_date, end_date)
-                    
-                    if not sleep_df.empty:
-                        st.success(f"✅ Fetched {len(sleep_df)} days of sleep data")
-                        
-                        # Display summary
-                        st.markdown("##### Sleep Data Summary")
-                        summary_df = sleep_df.copy()
-                        summary_df["total_sleep_hours"] = summary_df["total_sleep_seconds"] / 3600.0
-                        summary_df["date"] = pd.to_datetime(summary_df["date"]).dt.strftime("%Y-%m-%d")
-                        
-                        display_cols = ["date", "total_sleep_hours", "sleep_score"]
-                        if "sleep_score" in summary_df.columns:
-                            st.dataframe(
-                                summary_df[display_cols].round(2),
-                                use_container_width=True,
-                                hide_index=True,
-                            )
+                    if c in daily_df.columns
+                ]
+                if preview_cols:
+                    st.dataframe(
+                        daily_df.sort_values("metric_date", ascending=False)[preview_cols].head(14),
+                        use_container_width=True,
+                        hide_index=True,
+                    )
+            else:
+                st.info(
+                    "No stored Garmin daily metrics detected for the active profile. "
+                    "If you imported Garmin data in the User Profile tab, ensure that profile is active here."
+                )
 
-                        # Store the fetched sleep history for the SAFTE prediction pipeline.
-                        # This enables multi-day forecasts derived from real sleep timing/quality/debt.
-                        st.session_state["forecast_garmin_sleep_df"] = sleep_df.copy()
-                        
-                        # Auto-populate sleep inputs from latest data
-                        # NOTE: We cannot modify session state for widget keys after widgets are created
-                        # in the same run. We therefore store values in temporary session state keys and
-                        # apply them BEFORE widget creation at the top of the Sleep Schedule section
-                        # on the next rerun.
-                        if len(sleep_df) > 0:
-                            latest = sleep_df.iloc[-1]
-                            populated_fields = []
-                            
-                            # Store values in temporary keys that widgets can read
-                            # We'll use a flag to indicate values should be applied
-                            if pd.notna(latest.get("total_sleep_seconds")):
-                                sleep_hours = latest["total_sleep_seconds"] / 3600.0
-                                st.session_state["_garmin_sleep_duration"] = sleep_hours
-                                populated_fields.append("sleep duration")
-                            
-                            if pd.notna(latest.get("sleep_score")):
-                                sleep_quality = latest["sleep_score"] / 100.0
-                                st.session_state["_garmin_sleep_quality"] = sleep_quality
-                                populated_fields.append("sleep quality")
-                            
-                            # Trigger rerun to apply values (widgets will read from temporary keys)
-                            if populated_fields:
-                                fields_text = " and ".join(populated_fields)
-                                st.success(f"✅ {fields_text.capitalize()} fetched from Garmin. Refreshing to apply...")
-                                request_rerun = True
+            st.markdown("##### Optional: Refresh raw sleep history from Garmin Connect")
+            col_g3, col_g4 = st.columns(2)
+            with col_g3:
+                days_back = st.number_input(
+                    "Days to Fetch (raw sleep history)",
+                    min_value=1,
+                    max_value=30,
+                    value=7,
+                    key="garmin_days",
+                    help="Uses `GARMIN_EMAIL`/`GARMIN_PASSWORD` from `.env` if configured.",
+                )
+            with col_g4:
+                fetch_button = st.button("📥 Refresh from Garmin Connect (.env)", key="fetch_garmin_btn")
+
+            if fetch_button:
+                with st.spinner("Fetching data from Garmin Connect..."):
+                    request_rerun = False
+                    try:
+                        from garmin_import import fetch_garmin_sleep, load_credentials_from_env  # noqa: PLC0415
+
+                        credentials = load_credentials_from_env()
+                        if credentials is None:
+                            st.info(
+                                "Set `GARMIN_EMAIL` and `GARMIN_PASSWORD` in your `.env` to enable Garmin Connect refresh."
+                            )
+                        else:
+                            end_date = date.today()
+                            start_date = end_date - dt.timedelta(days=int(days_back) - 1)
+                            sleep_df = fetch_garmin_sleep(credentials, start_date, end_date)
+
+                            if isinstance(sleep_df, pd.DataFrame) and not sleep_df.empty:
+                                st.success(f"✅ Fetched {len(sleep_df)} days of sleep data")
+
+                                st.markdown("##### Sleep Data Summary")
+                                summary_df = sleep_df.copy()
+                                summary_df["total_sleep_hours"] = summary_df["total_sleep_seconds"] / 3600.0
+                                summary_df["date"] = pd.to_datetime(summary_df["date"]).dt.strftime("%Y-%m-%d")
+
+                                display_cols = ["date", "total_sleep_hours", "sleep_score"]
+                                display_cols = [c for c in display_cols if c in summary_df.columns]
+                                if display_cols:
+                                    st.dataframe(
+                                        summary_df[display_cols].round(2),
+                                        use_container_width=True,
+                                        hide_index=True,
+                                    )
+
+                                # Store fetched sleep history for the SAFTE prediction pipeline.
+                                st.session_state["forecast_garmin_sleep_df"] = sleep_df.copy()
+
+                                # Auto-populate sleep inputs on the next rerun.
+                                latest = sleep_df.iloc[-1]
+                                populated_fields: list[str] = []
+
+                                if pd.notna(latest.get("total_sleep_seconds")):
+                                    sleep_hours = float(latest["total_sleep_seconds"]) / 3600.0
+                                    st.session_state["_garmin_sleep_duration"] = sleep_hours
+                                    populated_fields.append("sleep duration")
+
+                                if pd.notna(latest.get("sleep_score")):
+                                    sleep_quality = float(latest["sleep_score"]) / 100.0
+                                    st.session_state["_garmin_sleep_quality"] = sleep_quality
+                                    populated_fields.append("sleep quality")
+
+                                if populated_fields:
+                                    fields_text = " and ".join(populated_fields)
+                                    st.success(f"✅ {fields_text.capitalize()} fetched from Garmin. Refreshing to apply...")
+                                    request_rerun = True
+                                else:
+                                    st.warning(
+                                        "⚠️ No valid sleep data found in latest record (missing duration and quality scores)"
+                                    )
                             else:
-                                st.warning("⚠️ No valid sleep data found in latest record (missing duration and quality scores)")
-                    else:
-                        st.warning("No sleep data found for the selected date range")
-                        
-                except ImportError as e:
-                    st.error(f"Garmin import module not available: {e}")
-                except Exception as e:
-                    st.error(f"Error fetching Garmin data: {str(e)}")
-                    st.exception(e)
-                if request_rerun:
-                    st.rerun()
+                                st.warning("No sleep data found for the selected date range")
+                    except ImportError as exc:
+                        st.error(f"Garmin import module not available: {exc}")
+                        log_exception(_LOGGER, "Garmin import module not available", exc)
+                    except Exception as exc:
+                        st.error(f"Error fetching Garmin data: {exc}")
+                        log_exception(_LOGGER, "Error fetching Garmin data", exc)
+                    if request_rerun:
+                        st.rerun()
     
     # (Summary + windows are now rendered from the research-style fatigue analysis result above.)
 
