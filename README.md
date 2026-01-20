@@ -616,7 +616,7 @@ project/
 ### NOAA Space Tab
 
 - Comprehensive NOAA SWPC data feeds
-- Auto-fetches with cache-first fallback so feeds stay available even offline; manual refresh is still available
+- Manual fetch by default (cache-first); optional auto-fetch toggle in Processing Mode; manual refresh available
 - Interactive gauges for all space weather metrics
 - Batch correlation analysis across multiple parameters
 - Feature matrix builder for predictive modeling
@@ -699,6 +699,8 @@ ACCUWEATHER_API_KEY=your_key
 | **Max deviation** | 0.2              | Artifact threshold (20% deviation)            |
 | **Median window** | 11               | Rolling median window for QC                  |
 | **PSD method**    | Welch            | Spectral estimation method                    |
+| **Processing Mode** | Manual-only     | Disable auto-run requests; optional space-data auto-fetch when enabled |
+| **Manual tab rendering** | On        | Require explicit **Load** per tab before running computations/plots (Processing Mode) |
 
 ---
 
