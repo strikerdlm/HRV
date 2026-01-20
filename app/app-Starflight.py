@@ -1935,6 +1935,12 @@ def _auto_fetch_space_weather_if_needed(state: Dict[str, Any]) -> None:
     Respects performance settings - disabled on low-end systems or when
     downloads are disabled to conserve bandwidth/resources.
     """
+    if not bool(st.session_state.get("allow_space_auto_fetch", False)):
+        if not state.get("auto_fetch_blocked"):
+            _LOGGER.info("Space Weather: auto-fetch disabled (manual-only mode)")
+            state["auto_fetch_blocked"] = True
+        state["auto_disabled"] = True
+        return
     # Check if downloads are enabled in performance settings
     if not is_download_enabled("space_weather_live"):
         state["auto_attempted"] = True
@@ -1969,6 +1975,12 @@ def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
     
     Respects performance settings - disabled when NOAA downloads are disabled.
     """
+    if not bool(st.session_state.get("allow_space_auto_fetch", False)):
+        if not state.get("auto_fetch_blocked"):
+            _LOGGER.info("NOAA: auto-preload disabled (manual-only mode)")
+            state["auto_fetch_blocked"] = True
+        state["auto_disabled"] = True
+        return
     # Check if NOAA downloads are enabled in performance settings
     if not is_download_enabled("noaa_space"):
         state["auto_attempted"] = True
@@ -2309,6 +2321,8 @@ def _check_and_trigger_auto_refresh() -> bool:
     Returns True if a refresh was triggered.
     This is called on each page load to ensure data stays current.
     """
+    if not bool(st.session_state.get("allow_space_auto_fetch", False)):
+        return False
     if _is_bg_fetch_stale():
         return _start_background_fetch(force=False)
     return False
@@ -2321,6 +2335,8 @@ def _ensure_background_fetch_for_space_tabs() -> None:
     This avoids any startup delay on the welcome page while keeping data fresh
     once the relevant tabs are opened. It also triggers auto-refresh if stale.
     """
+    if not bool(st.session_state.get("allow_space_auto_fetch", False)):
+        return
     if "_bg_fetch_started" not in st.session_state:
         started = _start_background_fetch()
         st.session_state["_bg_fetch_started"] = True
@@ -3929,6 +3945,7 @@ def _render_library_loader() -> Dict[str, UploadedRR]:
         Dictionary of loaded RR data from library files.
     """
     out: Dict[str, UploadedRR] = {}
+    manual_processing_only = bool(st.session_state.get("manual_processing_only", True))
     
     # Pre-check if library has files (avoid rendering expander if empty)
     library_files = _list_library_rr_files()
@@ -4010,6 +4027,12 @@ def _render_library_loader() -> Dict[str, UploadedRR]:
                 key="library_load_run_btn",
                 type="primary",
                 use_container_width=True,
+                disabled=manual_processing_only,
+                help=(
+                    "Enable auto-run in Processing Mode to use this button."
+                    if manual_processing_only
+                    else "Loads files and starts HRV analysis."
+                ),
             )
         
         if load_clicked or load_run_clicked:
@@ -7317,6 +7340,29 @@ def main() -> None:
             gpu_config = render_gpu_settings_sidebar()
         else:
             gpu_config = None
+
+        # Processing mode settings (manual-only analysis + auto space-data fetch)
+        st.session_state.setdefault("manual_processing_only", True)
+        st.session_state.setdefault("allow_space_auto_fetch", False)
+        with st.sidebar.expander("🧭 Processing Mode", expanded=False):
+            st.checkbox(
+                "Manual-only processing (disable auto-run)",
+                value=bool(st.session_state.get("manual_processing_only", True)),
+                key="manual_processing_only",
+                help=(
+                    "When enabled, actions like 'Load + Analyze' will only load data. "
+                    "Use the Run HRV Analysis button to start processing."
+                ),
+            )
+            st.checkbox(
+                "Allow background space-data auto-fetch",
+                value=bool(st.session_state.get("allow_space_auto_fetch", False)),
+                key="allow_space_auto_fetch",
+                help=(
+                    "If enabled, SWPC/NOAA/DONKI data can auto-fetch on tab open. "
+                    "Leave off to keep all space-data fetches manual."
+                ),
+            )
         
         # Show exploration callout in sidebar
         st.sidebar.markdown("---")
@@ -7345,7 +7391,11 @@ def main() -> None:
     meta_rows_for_context: List[Dict[str, Any]] = []
 
     # Require explicit user action to run HRV analysis
+    manual_processing_only = bool(st.session_state.get("manual_processing_only", True))
     auto_run_requested = bool(st.session_state.pop("auto_run_hrv_analysis", False))
+    if manual_processing_only and auto_run_requested:
+        st.session_state["auto_run_hrv_blocked"] = True
+        auto_run_requested = False
     hrv_analysis_ready = st.session_state.get("hrv_analysis_ready", False)
     hrv_complete_sig = st.session_state.get("hrv_analysis_complete_signature")
     upload_signature = tuple(sorted(uploads.keys())) if has_hrv_data_uploaded else tuple()
@@ -7415,6 +7465,11 @@ def main() -> None:
     # Always show the button when data is uploaded, regardless of analysis state
     # This prevents the button from blanking out and ensures it's always accessible
     if has_hrv_data_uploaded:
+        if st.session_state.pop("auto_run_hrv_blocked", False):
+            st.warning(
+                "Manual-only processing is enabled. Auto-run request ignored—"
+                "click **Run HRV Analysis** to start processing."
+            )
         if not hrv_analysis_ready:
             if analysis_already_completed:
                 st.info(
