@@ -2418,6 +2418,7 @@ The **🔬 Space Analytics** tab is the on-demand workspace for **correlations +
 
 - **Space Data remains data-only**: use **🌐 Space Data** to fetch and inspect SWPC/NOAA/DONKI datasets.
 - **Analytics is button-driven**: nothing auto-runs; you must click the relevant **Run** buttons for correlation scans and ML training.
+- **Manual-only processing (default)**: auto-run requests are blocked; disable **Manual-only processing** in **Processing Mode** to allow load-and-run shortcuts.
 - **Targets supported**: standard HRV metrics (e.g., RMSSD/SDNN/HF) and heart-rate fragmentation (HRF) metrics (e.g., PIP/W3) when present in windowed outputs.
 - **GPT export integration**: when you generate the Export report + **GPT‑5.2 high‑reasoning interpretation**, any Space Analytics results from the current session are included automatically.
 
@@ -2480,6 +2481,7 @@ Space Analytics now includes a **🧭 Event-aligned analysis (prototype)** secti
 | Proton flux | Radiation storm levels | 5-min |
 
 Use **⚡ Load cached NOAA** to view the last snapshot without network calls, then **📥 Fetch NOAA feeds** / **🔄 Force refresh** to update. If NOAA is unreachable, the dashboard shows the last cached snapshot and posts a warning.
+Background auto-fetch is off by default; enable **Allow background space-data auto-fetch** in **Processing Mode** if you want automatic fetches on tab open.
 
 **HRV-timeline alignment (recommended):**
 - If you have uploaded RR/HRV data, enable the **RR timeline sync** toggles for SWPC/NOAA/DONKI.
