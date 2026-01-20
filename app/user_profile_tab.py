@@ -9260,6 +9260,7 @@ def _render_profile_rr_library(user: UserProfile) -> None:
         "Load RR interval recordings already saved under this profile into the main analysis workspace "
         "(no re-upload needed)."
     )
+    manual_processing_only = bool(st.session_state.get("manual_processing_only", True))
 
     # Mission-scoped storage (default): crew/<Mission>/subjects/<user_id>/rr_intervals
     primary_user_path = get_user_data_path(user.user_id, base_path=None)
@@ -9346,6 +9347,12 @@ def _render_profile_rr_library(user: UserProfile) -> None:
             key=f"profile_rr_library_load_run_{user.user_id}",
             type="primary",
             use_container_width=True,
+            disabled=manual_processing_only,
+            help=(
+                "Enable auto-run in Processing Mode to use this button."
+                if manual_processing_only
+                else "Loads recordings and starts HRV analysis."
+            ),
         ):
             st.session_state["queued_rr_filepaths"] = _build_queue_payload()
             st.session_state["auto_run_hrv_analysis"] = True
