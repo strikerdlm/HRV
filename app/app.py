@@ -2190,6 +2190,12 @@ def _auto_fetch_space_weather_if_needed(state: Dict[str, Any]) -> None:
     Respects performance settings - disabled on low-end systems or when
     downloads are disabled to conserve bandwidth/resources.
     """
+    if not bool(st.session_state.get("allow_space_auto_fetch", False)):
+        if not state.get("auto_fetch_blocked"):
+            _LOGGER.info("Space Weather: auto-fetch disabled (manual-only mode)")
+            state["auto_fetch_blocked"] = True
+        state["auto_disabled"] = True
+        return
     # Check if downloads are enabled in performance settings
     if not is_download_enabled("space_weather_live"):
         _LOGGER.info("Space Weather: auto-fetch skipped (downloads disabled)")
@@ -2239,6 +2245,12 @@ def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
     
     Respects performance settings - disabled when NOAA downloads are disabled.
     """
+    if not bool(st.session_state.get("allow_space_auto_fetch", False)):
+        if not state.get("auto_fetch_blocked"):
+            _LOGGER.info("NOAA: auto-preload disabled (manual-only mode)")
+            state["auto_fetch_blocked"] = True
+        state["auto_disabled"] = True
+        return
     # Check if NOAA downloads are enabled in performance settings
     if not is_download_enabled("noaa_space"):
         _LOGGER.info("NOAA: auto-preload skipped (downloads disabled)")
@@ -2620,6 +2632,8 @@ def _check_and_trigger_auto_refresh() -> bool:
     Returns True if a refresh was triggered.
     This is called on each page load to ensure data stays current.
     """
+    if not bool(st.session_state.get("allow_space_auto_fetch", False)):
+        return False
     if _is_bg_fetch_stale():
         return _start_background_fetch(force=False)
     return False
@@ -2632,6 +2646,8 @@ def _ensure_background_fetch_for_space_tabs() -> None:
     This avoids any startup delay on the welcome page while keeping data fresh
     once the relevant tabs are opened. It also triggers auto-refresh if stale.
     """
+    if not bool(st.session_state.get("allow_space_auto_fetch", False)):
+        return
     if "_bg_fetch_started" not in st.session_state:
         started = _start_background_fetch()
         st.session_state["_bg_fetch_started"] = True
@@ -4437,6 +4453,83 @@ def _list_library_rr_files() -> Dict[str, List[Dict[str, Any]]]:
     return result
 
 
+def _clear_tab_load_state(prefix: str = "_tab_loaded_") -> int:
+    """Remove per-tab load flags from session state and return count removed."""
+    if not isinstance(prefix, str):
+        raise TypeError("prefix must be a string.")
+    if not prefix:
+        raise ValueError("prefix cannot be empty.")
+    removed = 0
+    for key in list(st.session_state.keys()):
+        if isinstance(key, str) and key.startswith(prefix):
+            st.session_state.pop(key, None)
+            removed += 1
+    return removed
+
+def _enforce_manual_processing_on_profile_change(profile_token: str) -> bool:
+    """Force manual-only processing when the active profile changes.
+
+    Returns True if a profile change was detected and manual guards were applied.
+    """
+    if not isinstance(profile_token, str):
+        raise TypeError("profile_token must be a string.")
+    prev_token = st.session_state.get("_active_profile_token")
+    if prev_token == profile_token:
+        return False
+    st.session_state["_active_profile_token"] = profile_token
+    st.session_state["manual_processing_only"] = True
+    st.session_state["manual_tab_rendering"] = True
+    st.session_state["allow_space_auto_fetch"] = False
+    st.session_state.pop("auto_run_hrv_analysis", None)
+    st.session_state["hrv_analysis_ready"] = False
+    st.session_state.pop("_bg_fetch_started", None)
+    _clear_tab_load_state()
+    return True
+
+
+def _render_processing_mode_sidebar() -> None:
+    """Render Processing Mode controls in the sidebar."""
+    st.session_state.setdefault("manual_processing_only", True)
+    st.session_state.setdefault("allow_space_auto_fetch", False)
+    st.session_state.setdefault("manual_tab_rendering", True)
+    with st.sidebar.expander("🧭 Processing Mode", expanded=False):
+        st.checkbox(
+            "Manual-only processing (disable auto-run)",
+            value=bool(st.session_state.get("manual_processing_only", True)),
+            key="manual_processing_only",
+            help=(
+                "When enabled, actions like 'Load + Analyze' will only load data. "
+                "Use the Run HRV Analysis button to start processing."
+            ),
+        )
+        st.checkbox(
+            "Manual tab rendering (load tabs on demand)",
+            value=bool(st.session_state.get("manual_tab_rendering", True)),
+            key="manual_tab_rendering",
+            help=(
+                "When enabled, each tab requires an explicit Load click before "
+                "its computations and charts render."
+            ),
+        )
+        st.checkbox(
+            "Allow background space-data auto-fetch",
+            value=bool(st.session_state.get("allow_space_auto_fetch", False)),
+            key="allow_space_auto_fetch",
+            help=(
+                "If enabled, SWPC/NOAA/DONKI data can auto-fetch on tab open. "
+                "Leave off to keep all space-data fetches manual."
+            ),
+        )
+        if st.button(
+            "Reset tab load state",
+            key="reset_tab_load_state",
+            use_container_width=True,
+            help="Clears per-tab load flags so tabs prompt again before rendering.",
+        ):
+            removed = _clear_tab_load_state()
+            st.success(f"Cleared {removed} tab load flag(s).")
+
+
 def _render_library_loader() -> Dict[str, UploadedRR]:
     """Render the 'Load from Library' expander in the sidebar.
     
@@ -4444,6 +4537,7 @@ def _render_library_loader() -> Dict[str, UploadedRR]:
         Dictionary of loaded RR data from library files.
     """
     out: Dict[str, UploadedRR] = {}
+    manual_processing_only = bool(st.session_state.get("manual_processing_only", True))
     
     # Pre-check if library has files (avoid rendering expander if empty)
     library_files = _list_library_rr_files()
@@ -4525,6 +4619,12 @@ def _render_library_loader() -> Dict[str, UploadedRR]:
                 key="library_load_run_btn",
                 type="primary",
                 use_container_width=True,
+                disabled=manual_processing_only,
+                help=(
+                    "Enable auto-run in Processing Mode to use this button."
+                    if manual_processing_only
+                    else "Loads files and starts HRV analysis."
+                ),
             )
         
         if load_clicked or load_run_clicked:
@@ -5193,6 +5293,52 @@ def _select_rr_files_for_tab(
     if not active_names:
         return {}
     return {name: datasets[name] for name in active_names}
+
+def _should_render_tab(
+    tab_id: str,
+    label: str,
+    *,
+    default_loaded: bool = False,
+) -> bool:
+    """Return True if tab content should render; otherwise show a manual-load prompt."""
+    if not isinstance(tab_id, str):
+        raise TypeError("tab_id must be a string.")
+    if not tab_id.strip():
+        raise ValueError("tab_id must be a non-empty string.")
+    if not isinstance(label, str):
+        raise TypeError("label must be a string.")
+    if not label.strip():
+        raise ValueError("label must be a non-empty string.")
+
+    manual_rendering = bool(st.session_state.get("manual_tab_rendering", True))
+    if not manual_rendering:
+        return True
+
+    state_key = f"_tab_loaded_{tab_id}"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = bool(default_loaded)
+    if bool(st.session_state.get(state_key, False)):
+        return True
+
+    st.info(
+        f"**{label}** is paused to prevent automatic processing. "
+        "Click **Load tab** to render its content."
+    )
+    col_load, col_hint = st.columns([1, 3])
+    with col_load:
+        if st.button(
+            f"▶️ Load {label}",
+            key=f"{state_key}_load",
+            use_container_width=True,
+        ):
+            st.session_state[state_key] = True
+            st.rerun()
+    with col_hint:
+        st.caption(
+            "Manual tab rendering is enabled in **Processing Mode** (sidebar). "
+            "Disable it to auto-load tabs."
+        )
+    return False
 
 
 def _plot_rr_timeseries(
@@ -7499,6 +7645,8 @@ def main() -> None:
 
     active_profile = _resolve_active_profile(logger)
     active_user_id, active_display_name = _get_user_identity(active_profile)
+    profile_token = str(active_user_id) if active_user_id else "guest"
+    _enforce_manual_processing_on_profile_change(profile_token)
     st.markdown(
         f"""
         <div class="hrv-palette-card" style="margin-bottom:12px;">
@@ -7815,6 +7963,8 @@ def main() -> None:
             gpu_config = render_gpu_settings_sidebar()
         else:
             gpu_config = None
+        # Processing mode settings (manual-only analysis + manual tab rendering + space-data fetch)
+        _render_processing_mode_sidebar()
 
         st.sidebar.markdown("---")
         st.sidebar.subheader("Patient profile (covariate adjustment)")
@@ -8043,6 +8193,9 @@ def main() -> None:
             gpu_config = render_gpu_settings_sidebar()
         else:
             gpu_config = None
+
+        # Processing mode settings (manual-only analysis + manual tab rendering + space-data fetch)
+        _render_processing_mode_sidebar()
         
         # Show exploration callout in sidebar
         st.sidebar.markdown("---")
@@ -8071,7 +8224,11 @@ def main() -> None:
     meta_rows_for_context: List[Dict[str, Any]] = []
 
     # Require explicit user action to run HRV analysis
+    manual_processing_only = bool(st.session_state.get("manual_processing_only", True))
     auto_run_requested = bool(st.session_state.pop("auto_run_hrv_analysis", False))
+    if manual_processing_only and auto_run_requested:
+        st.session_state["auto_run_hrv_blocked"] = True
+        auto_run_requested = False
     hrv_analysis_ready = st.session_state.get("hrv_analysis_ready", False)
     hrv_complete_sig = st.session_state.get("hrv_analysis_complete_signature")
     upload_signature = tuple(sorted(uploads.keys())) if has_hrv_data_uploaded else tuple()
@@ -8141,6 +8298,11 @@ def main() -> None:
     # Always show the button when data is uploaded, regardless of analysis state
     # This prevents the button from blanking out and ensures it's always accessible
     if has_hrv_data_uploaded:
+        if st.session_state.pop("auto_run_hrv_blocked", False):
+            st.warning(
+                "Manual-only processing is enabled. Auto-run request ignored—"
+                "click **Run HRV Analysis** to start processing."
+            )
         if not hrv_analysis_ready:
             if analysis_already_completed:
                 st.info(
@@ -9171,9 +9333,11 @@ def main() -> None:
     _render_start_time = time.perf_counter()
     
     def _log_tab(name: str, phase: str = "start") -> None:
-        """Unconditionally log tab render progress with elapsed time."""
+        """Log tab render progress with elapsed time (debug only)."""
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            return
         elapsed = (time.perf_counter() - _render_start_time) * 1000
-        _LOGGER.info("UI: render_%s:%s | elapsed=%.0fms", name, phase, elapsed)
+        _LOGGER.debug("UI: render_%s:%s | elapsed=%.0fms", name, phase, elapsed)
     
     _LOGGER.info(
         "UI: main_tabs_created | has_hrv_data=%s | uploads=%d | profile=%s",
@@ -9288,28 +9452,29 @@ def main() -> None:
     # =========================================================================
     with tab_user_profile:
         _log_tab("user_profile", "start")
-        if USER_PROFILE_TAB_AVAILABLE:
-            try:
-                render_user_profile_tab()
-            except Exception as exc:  # pragma: no cover - UI safety net
-                log_exception(_LOGGER, "User Profile tab crashed (skipping)", exc)
-                st.error(
-                    "User Profile encountered an error and was skipped so the rest of the app can continue. "
-                    "Check `logs/errors.log` for details."
+        if _should_render_tab("user_profile", "User Profile"):
+            if USER_PROFILE_TAB_AVAILABLE:
+                try:
+                    render_user_profile_tab()
+                except Exception as exc:  # pragma: no cover - UI safety net
+                    log_exception(_LOGGER, "User Profile tab crashed (skipping)", exc)
+                    st.error(
+                        "User Profile encountered an error and was skipped so the rest of the app can continue. "
+                        "Check `logs/errors.log` for details."
+                    )
+                    with st.expander("Error details", expanded=False):
+                        st.code(str(exc))
+            else:
+                st.markdown("### 👤 User Profile")
+                st.warning(
+                    "User Profile module not available.\n\n"
+                    "This tab provides:\n"
+                    "- **Personal data management** (age, weight, height, BMI)\n"
+                    "- **Clinical scales** (ESS, Samn-Perelli, KSS, PSQI)\n"
+                    "- **Assessment history** with timestamps\n"
+                    "- **HRV measurement tracking**\n\n"
+                    "Please ensure `user_profile_tab.py` is in the app directory."
                 )
-                with st.expander("Error details", expanded=False):
-                    st.code(str(exc))
-        else:
-            st.markdown("### 👤 User Profile")
-            st.warning(
-                "User Profile module not available.\n\n"
-                "This tab provides:\n"
-                "- **Personal data management** (age, weight, height, BMI)\n"
-                "- **Clinical scales** (ESS, Samn-Perelli, KSS, PSQI)\n"
-                "- **Assessment history** with timestamps\n"
-                "- **HRV measurement tracking**\n\n"
-                "Please ensure `user_profile_tab.py` is in the app directory."
-            )
         _log_tab("user_profile", "end")
     
     with tab_ts:
@@ -9336,7 +9501,7 @@ def main() -> None:
                 Mean HR: ~70 bpm | RMSSD: ~45 ms | SDNN: ~55 ms
                 ```
                 """)
-        else:
+        elif _should_render_tab("time_series", "Time Series"):
             ts_datasets = _select_rr_files_for_tab(
                 datasets, tab_key="tab_ts", label="Time Series Analysis"
             )
@@ -9837,7 +10002,7 @@ alcohol all support vagal tone (Christensen et al., 1999).
                 """)
         elif skip_freq:
             st.info("Frequency overlay disabled (Performance & display).")
-        else:
+        elif _should_render_tab("frequency", "Frequency"):
             freq_datasets = _select_rr_files_for_tab(
                 datasets, tab_key="tab_freq", label="Frequency Domain"
             )
@@ -10418,7 +10583,7 @@ If your HF power is below age-matched norms or you have elevated sympathetic mar
                 """)
         elif skip_poincare:
             st.info("Poincaré plot disabled (Performance & display).")
-        else:
+        elif _should_render_tab("nonlinear", "Nonlinear"):
             nl_datasets = _select_rr_files_for_tab(
                 datasets, tab_key="tab_nl", label="Nonlinear Dynamics"
             )
@@ -11004,7 +11169,7 @@ Quick protocol to try now (safe for healthy users):
             )
         elif skip_spectrogram:
             st.info("Spectrogram disabled (Performance & display).")
-        else:
+        elif _should_render_tab("spectrogram", "Spectrogram"):
             st.markdown("### 📉 Spectrogram (Time-Frequency)")
             _render_dataset_info_header(datasets, title="Recordings Analyzed")
             with st.expander(
@@ -11276,7 +11441,11 @@ HRV deviated from baseline. Episodes include:
 
 </small>
 """, unsafe_allow_html=True)
-        if has_hrv_data and not windowed_df.empty:
+        if (
+            has_hrv_data
+            and not windowed_df.empty
+            and _should_render_tab("windowed", "Windowed")
+        ):
             # Use performance settings for row limit
             max_display_rows = 50
             if PERFORMANCE_UTILS_AVAILABLE:
@@ -11310,6 +11479,8 @@ HRV deviated from baseline. Episodes include:
                         "ML-assisted deviation clusters (unsupervised k-means):"
                     )
                     st.dataframe(ml_summary_df)
+        elif has_hrv_data and not windowed_df.empty:
+            pass
         else:
             st.info("No windowed metrics to display.")
         _log_tab("windowed", "end")
@@ -11342,7 +11513,7 @@ HRV deviated from baseline. Episodes include:
                 
                 *Values from Shaffer & Ginsberg (2017), Task Force (1996)*
                 """)
-        elif not multi_results_df.empty:
+        elif not multi_results_df.empty and _should_render_tab("metrics", "Metrics"):
             st.dataframe(multi_results_df)
             novel_columns = [
                 "hrf_pip_pct",
@@ -11392,6 +11563,8 @@ HRV deviated from baseline. Episodes include:
                     if c in multi_results_df.columns:
                         cols_to_show.append(c)
                 st.dataframe(multi_results_df[cols_to_show])
+        elif not multi_results_df.empty:
+            pass
         else:
             st.info("No metrics to display.")
         _log_tab("metrics", "end")
@@ -11413,7 +11586,7 @@ HRV deviated from baseline. Episodes include:
                 )
             else:
                 st.info("Upload HRV RR data to compute HRF/HRV metrics and correlations.")
-        else:
+        elif _should_render_tab("hrf_hrv", "HRF ↔ HRV"):
             # Prefer in-memory analysis outputs; fall back to session-cached frames.
             base_results = (
                 multi_results_df
@@ -12099,7 +12272,7 @@ HRV deviated from baseline. Episodes include:
             "Windows specified in seconds as `start end` (e.g., `15 25`).*")
         if not datasets:
             st.info("Upload a dataset to compute autonomic function metrics.")
-        else:
+        elif _should_render_tab("ans", "ANS Function Tests"):
             names = list(datasets.keys())
             selected_dataset_name = st.selectbox("Dataset", names, index=0)
             selected_dataset = datasets[selected_dataset_name]
@@ -13089,7 +13262,7 @@ the next morning predicts recovery status:
             )
         elif skip_gauges:
             st.info("Gauges disabled (Performance & display).")
-        else:
+        elif _should_render_tab("gauges", "Gauges"):
             _render_dataset_info_header(datasets, title="Recordings Available")
             _render_normogram_gauges(multi_results_df)
         
@@ -14233,7 +14406,7 @@ elite endurance athletes. *Medicine & Science in Sports & Exercise*, 45(9), 1721
         
         if not POPULATION_NORMS_AVAILABLE:
             st.error("Population norms module not available. Please check installation.")
-        else:
+        elif _should_render_tab("pop_norms", "Population Norms"):
             # Explanation section
             with st.expander("📖 **Understanding Population Norms**", expanded=False):
                 st.markdown("""
@@ -14610,7 +14783,7 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
             st.warning(
                 "⚠️ Real-time HRV module not available. Install dependencies: `pip install bleak`"
             )
-        else:
+        elif _should_render_tab("biofeedback", "Biofeedback"):
             st.markdown("---")
             
             # Session settings
@@ -15058,7 +15231,7 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 "⚠️ Fatigue module not available. Please ensure `fatigue_integration.py` "
                 "and the `fatigue_calculator` package are properly installed."
             )
-        else:
+        elif _should_render_tab("fatigue", "SAFTE/Fatigue"):
             tab_settings_manager = get_tab_settings_manager()
             cross_tab_broker = get_cross_tab_broker()
             fatigue_user_id = (
@@ -16899,95 +17072,96 @@ that predicts cognitive performance based on:
 
     with tab_science:
         _log_tab("science", "start")
-        st.markdown("## 📚 Science (fast)")
-        st.caption(
-            "This tab is intentionally **lightweight** so switching tabs stays responsive. "
-            "Pick one section to render at a time. Full citations live in **📚 References**."
-        )
+        if _should_render_tab("science", "Science"):
+            st.markdown("## 📚 Science (fast)")
+            st.caption(
+                "This tab is intentionally **lightweight** so switching tabs stays responsive. "
+                "Pick one section to render at a time. Full citations live in **📚 References**."
+            )
 
-        science_sections: Dict[str, str] = {
-            "Overview": (
-                "**What you’ll find here**\n"
-                "- Concise definitions and interpretation tips for key HRV/HRF metrics\n"
-                "- Practical clinical cautions (e.g., LF/HF limitations)\n"
-                "- A brief space-weather physiology framing\n\n"
-                "**Tip:** Use the tabs **📚 References** (APA 7) and `docs/Manual.md` for the full manual."
-            ),
-            "Time-Domain HRV": (
-                "| Metric | Definition | Physiology | Interpretation |\n"
-                "|---|---|---|---|\n"
-                "| **SDNN** | Std dev of NN intervals | Total variability | ↓ with age/stress/disease |\n"
-                "| **RMSSD** | RMS of successive differences | Vagal modulation | Best short-term vagal marker |\n"
-                "| **pNN50** | % successive diffs > 50 ms | Vagal activity | Artifact-sensitive |\n"
-                "| **Mean HR** | Avg HR (bpm) | Net autonomic balance | Context-dependent |\n"
-                "\n**Key insight:** RMSSD is typically the most reliable short-term recovery metric."
-            ),
-            "Frequency-Domain HRV": (
-                "| Metric | Band | Interpretation |\n"
-                "|---|---:|---|\n"
-                "| **HF** | 0.15–0.40 Hz | Respiratory sinus arrhythmia (vagal) |\n"
-                "| **LF** | 0.04–0.15 Hz | Baroreflex + mixed influences |\n"
-                "| **LF/HF** | — | ⚠️ Breathing-dependent; not a pure stress index |\n"
-                "\n**Caution:** Slow breathing can inflate LF without sympathetic activation."
-            ),
-            "Nonlinear / Complexity": (
-                "| Metric | Meaning | Interpretation |\n"
-                "|---|---|---|\n"
-                "| **SD1/SD2** | Poincaré ratio | Short vs long dynamics |\n"
-                "| **DFA α1** | Short-range fractal scaling | Near ~1.0 often healthy; extremes can reflect dysregulation |\n"
-                "| **SampEn** | Irregularity/complexity | ↓ = more regular/rigid control |\n"
-            ),
-            "Heart Rate Fragmentation (HRF)": (
-                "**What HRF is**  \n"
-                "Heart Rate Fragmentation (HRF) describes frequent beat‑to‑beat direction changes in RR‑interval dynamics "
-                "(acceleration ↔ deceleration) — a pattern sometimes described as *sinoatrial instability* that can occur even when "
-                "the ECG appears sinus rhythm (Costa et al., 2017; Hayano et al., 2020).  \n\n"
-                "**Why it matters**  \n"
-                "- HRF captures a component of short‑term variability that may not reflect pure vagal modulation, and can therefore "
-                "confound interpretation of HF/RMSSD‑driven “high HRV” in some cases (Costa et al., 2017; Hayano et al., 2020).  \n"
-                "- HRF markers have been studied in older cohorts for long‑term incident atrial fibrillation prediction (Guichard et al., 2025).  \n\n"
-                "**Operational note**  \n"
-                "If HRF is high, first verify recording quality (motion/contact/ectopy). If quality is good and HRF is persistently "
-                "elevated versus your baseline, treat it as a *rhythm stability* flag and interpret alongside mean HR, RMSSD/HF, sleep, and symptoms.  \n\n"
-                "| Metric | Meaning |\n"
-                "|---|---|\n"
-                "| **PIP** | % inflection points (direction changes) |\n"
-                "| **IALS** | Inverse avg segment length (run interruption) |\n"
-                "| **W0–W3** | 4-beat “word” patterns by inflection count |\n"
-                "\n**Use:** HRF can reflect rhythm fragmentation beyond classic HRV magnitude measures."
-            ),
-            "Autonomic Function Tests": (
-                "| Test | Normal-ish | Notes |\n"
-                "|---|---:|---|\n"
-                "| **Valsalva ratio** | ≥ ~1.2 | Age-dependent |\n"
-                "| **Deep breathing E:I** | Higher in youth | Declines with age |\n"
-                "| **30:15 ratio** | ≥ ~1.04 | Baroreflex screening |\n"
-            ),
-            "Solar Activity & HRV (overview)": (
-                "| Solar metric | Concept | Typical analysis |\n"
-                "|---|---|---|\n"
-                "| **Kp / Dst** | Geomagnetic disturbance | Lagged correlations (hours–days) |\n"
-                "| **F10.7** | Solar-cycle proxy | Long-horizon / confounded |\n"
-                "\n**Caution:** Effects are often small; control for time-of-day, season, and behavior."
-            ),
-            "Reference Values (5-min norms)": (
-                "| Metric | Typical reference |\n"
-                "|---|---|\n"
-                "| **SDNN** | ~50 ± 16 ms |\n"
-                "| **RMSSD** | ~42 ± 15 ms |\n"
-                "\n**Important:** Population norms vary; within-subject baselines are usually more actionable."
-            ),
-        }
+            science_sections: Dict[str, str] = {
+                "Overview": (
+                    "**What you’ll find here**\n"
+                    "- Concise definitions and interpretation tips for key HRV/HRF metrics\n"
+                    "- Practical clinical cautions (e.g., LF/HF limitations)\n"
+                    "- A brief space-weather physiology framing\n\n"
+                    "**Tip:** Use the tabs **📚 References** (APA 7) and `docs/Manual.md` for the full manual."
+                ),
+                "Time-Domain HRV": (
+                    "| Metric | Definition | Physiology | Interpretation |\n"
+                    "|---|---|---|---|\n"
+                    "| **SDNN** | Std dev of NN intervals | Total variability | ↓ with age/stress/disease |\n"
+                    "| **RMSSD** | RMS of successive differences | Vagal modulation | Best short-term vagal marker |\n"
+                    "| **pNN50** | % successive diffs > 50 ms | Vagal activity | Artifact-sensitive |\n"
+                    "| **Mean HR** | Avg HR (bpm) | Net autonomic balance | Context-dependent |\n"
+                    "\n**Key insight:** RMSSD is typically the most reliable short-term recovery metric."
+                ),
+                "Frequency-Domain HRV": (
+                    "| Metric | Band | Interpretation |\n"
+                    "|---|---:|---|\n"
+                    "| **HF** | 0.15–0.40 Hz | Respiratory sinus arrhythmia (vagal) |\n"
+                    "| **LF** | 0.04–0.15 Hz | Baroreflex + mixed influences |\n"
+                    "| **LF/HF** | — | ⚠️ Breathing-dependent; not a pure stress index |\n"
+                    "\n**Caution:** Slow breathing can inflate LF without sympathetic activation."
+                ),
+                "Nonlinear / Complexity": (
+                    "| Metric | Meaning | Interpretation |\n"
+                    "|---|---|---|\n"
+                    "| **SD1/SD2** | Poincaré ratio | Short vs long dynamics |\n"
+                    "| **DFA α1** | Short-range fractal scaling | Near ~1.0 often healthy; extremes can reflect dysregulation |\n"
+                    "| **SampEn** | Irregularity/complexity | ↓ = more regular/rigid control |\n"
+                ),
+                "Heart Rate Fragmentation (HRF)": (
+                    "**What HRF is**  \n"
+                    "Heart Rate Fragmentation (HRF) describes frequent beat‑to‑beat direction changes in RR‑interval dynamics "
+                    "(acceleration ↔ deceleration) — a pattern sometimes described as *sinoatrial instability* that can occur even when "
+                    "the ECG appears sinus rhythm (Costa et al., 2017; Hayano et al., 2020).  \n\n"
+                    "**Why it matters**  \n"
+                    "- HRF captures a component of short‑term variability that may not reflect pure vagal modulation, and can therefore "
+                    "confound interpretation of HF/RMSSD‑driven “high HRV” in some cases (Costa et al., 2017; Hayano et al., 2020).  \n"
+                    "- HRF markers have been studied in older cohorts for long‑term incident atrial fibrillation prediction (Guichard et al., 2025).  \n\n"
+                    "**Operational note**  \n"
+                    "If HRF is high, first verify recording quality (motion/contact/ectopy). If quality is good and HRF is persistently "
+                    "elevated versus your baseline, treat it as a *rhythm stability* flag and interpret alongside mean HR, RMSSD/HF, sleep, and symptoms.  \n\n"
+                    "| Metric | Meaning |\n"
+                    "|---|---|\n"
+                    "| **PIP** | % inflection points (direction changes) |\n"
+                    "| **IALS** | Inverse avg segment length (run interruption) |\n"
+                    "| **W0–W3** | 4-beat “word” patterns by inflection count |\n"
+                    "\n**Use:** HRF can reflect rhythm fragmentation beyond classic HRV magnitude measures."
+                ),
+                "Autonomic Function Tests": (
+                    "| Test | Normal-ish | Notes |\n"
+                    "|---|---:|---|\n"
+                    "| **Valsalva ratio** | ≥ ~1.2 | Age-dependent |\n"
+                    "| **Deep breathing E:I** | Higher in youth | Declines with age |\n"
+                    "| **30:15 ratio** | ≥ ~1.04 | Baroreflex screening |\n"
+                ),
+                "Solar Activity & HRV (overview)": (
+                    "| Solar metric | Concept | Typical analysis |\n"
+                    "|---|---|---|\n"
+                    "| **Kp / Dst** | Geomagnetic disturbance | Lagged correlations (hours–days) |\n"
+                    "| **F10.7** | Solar-cycle proxy | Long-horizon / confounded |\n"
+                    "\n**Caution:** Effects are often small; control for time-of-day, season, and behavior."
+                ),
+                "Reference Values (5-min norms)": (
+                    "| Metric | Typical reference |\n"
+                    "|---|---|\n"
+                    "| **SDNN** | ~50 ± 16 ms |\n"
+                    "| **RMSSD** | ~42 ± 15 ms |\n"
+                    "\n**Important:** Population norms vary; within-subject baselines are usually more actionable."
+                ),
+            }
 
-        selected_section = st.selectbox(
-            "Section",
-            options=list(science_sections.keys()),
-            index=0,
-            key="science_section_select",
-        )
-        st.markdown(science_sections.get(selected_section, science_sections["Overview"]))
-        st.markdown("---")
-        st.info("References are consolidated in the **📚 References** tab (APA 7 format).")
+            selected_section = st.selectbox(
+                "Section",
+                options=list(science_sections.keys()),
+                index=0,
+                key="science_section_select",
+            )
+            st.markdown(science_sections.get(selected_section, science_sections["Overview"]))
+            st.markdown("---")
+            st.info("References are consolidated in the **📚 References** tab (APA 7 format).")
         _log_tab("science", "end")
 
     # ==================== CIRCADIAN PHYSIOLOGY TAB ====================
@@ -17000,60 +17174,61 @@ that predicts cognitive performance based on:
                 "🌙 **Circadian tab is temporarily disabled** for troubleshooting.\n\n"
                 "To re-enable, uncheck *'Skip Circadian tab'* in **Developer Tools** (sidebar)."
             )
-        elif CIRCADIAN_TAB_AVAILABLE:
-            # Pass user profile if available for personalized simulations
-            try:
-                _LOGGER.info("CIRCADIAN: preparing to call render_circadian_tab")
-                user_profile_data = None
-                if "current_user_id" in st.session_state:
-                    user_profile_data = {"user_id": st.session_state.get("current_user_id")}
-                _LOGGER.info("CIRCADIAN: calling render_circadian_tab (user_profile=%s)", user_profile_data)
-                render_circadian_tab(
-                    user_profile=user_profile_data,
-                    user_context=active_user_context,
-                )
-                _LOGGER.info("CIRCADIAN: render_circadian_tab completed successfully")
-            except Exception as circadian_exc:
-                log_exception(_LOGGER, "CIRCADIAN TAB CRASH", circadian_exc)
-                st.error(f"Circadian tab encountered an error: {circadian_exc}")
-        else:
-            st.markdown("""
-            <div style="
-                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-                border-radius: 16px;
-                padding: 2rem;
-                text-align: center;
-                border: 1px solid rgba(102, 126, 234, 0.2);
-            ">
-                <h2 style="color: #667eea; margin-bottom: 1rem;">🌙 Circadian Physiology</h2>
-                <p style="color: #a0a0a0;">
-                    The Circadian Physiology module provides simulation and visualization of
-                    circadian rhythm dynamics using validated mathematical models.
-                </p>
-                <p style="color: #888; margin-top: 1rem;">
-                    ⚠️ Module not available. Please ensure <code>app/circadian/</code> package is installed.
-                </p>
-            </div>
-            """, unsafe_allow_html=True)
-            
-            # Show brief documentation even if module unavailable
-            with st.expander("📖 About Circadian Models"):
+        elif _should_render_tab("circadian", "Circadian"):
+            if CIRCADIAN_TAB_AVAILABLE:
+                # Pass user profile if available for personalized simulations
+                try:
+                    _LOGGER.info("CIRCADIAN: preparing to call render_circadian_tab")
+                    user_profile_data = None
+                    if "current_user_id" in st.session_state:
+                        user_profile_data = {"user_id": st.session_state.get("current_user_id")}
+                    _LOGGER.info("CIRCADIAN: calling render_circadian_tab (user_profile=%s)", user_profile_data)
+                    render_circadian_tab(
+                        user_profile=user_profile_data,
+                        user_context=active_user_context,
+                    )
+                    _LOGGER.info("CIRCADIAN: render_circadian_tab completed successfully")
+                except Exception as circadian_exc:
+                    log_exception(_LOGGER, "CIRCADIAN TAB CRASH", circadian_exc)
+                    st.error(f"Circadian tab encountered an error: {circadian_exc}")
+            else:
                 st.markdown("""
-                **Available Models:**
-                - **Forger99**: 3-state limit cycle pacemaker (Forger et al., 1999)
-                - **Jewett99**: Revised limit cycle oscillator (Kronauer et al., 1999)
-                - **Hannay19**: Macroscopic amplitude-phase model (Hannay et al., 2019)
-                - **Hannay19TP**: Two-population SCN model
+                <div style="
+                    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+                    border-radius: 16px;
+                    padding: 2rem;
+                    text-align: center;
+                    border: 1px solid rgba(102, 126, 234, 0.2);
+                ">
+                    <h2 style="color: #667eea; margin-bottom: 1rem;">🌙 Circadian Physiology</h2>
+                    <p style="color: #a0a0a0;">
+                        The Circadian Physiology module provides simulation and visualization of
+                        circadian rhythm dynamics using validated mathematical models.
+                    </p>
+                    <p style="color: #888; margin-top: 1rem;">
+                        ⚠️ Module not available. Please ensure <code>app/circadian/</code> package is installed.
+                    </p>
+                </div>
+                """, unsafe_allow_html=True)
                 
-                **Features:**
-                - Light schedule simulation (Regular, ShiftWork, SlamShift, SocialJetlag)
-                - Phase response curve analysis
-                - DLMO and CBT marker prediction
-                - ESRI (Entrainment Signal Regularity Index) computation
-                - Double-plotted actogram visualization
-                
-                **Original Package:** [Arcascope/circadian](https://github.com/Arcascope/circadian)
-                """)
+                # Show brief documentation even if module unavailable
+                with st.expander("📖 About Circadian Models"):
+                    st.markdown("""
+                    **Available Models:**
+                    - **Forger99**: 3-state limit cycle pacemaker (Forger et al., 1999)
+                    - **Jewett99**: Revised limit cycle oscillator (Kronauer et al., 1999)
+                    - **Hannay19**: Macroscopic amplitude-phase model (Hannay et al., 2019)
+                    - **Hannay19TP**: Two-population SCN model
+                    
+                    **Features:**
+                    - Light schedule simulation (Regular, ShiftWork, SlamShift, SocialJetlag)
+                    - Phase response curve analysis
+                    - DLMO and CBT marker prediction
+                    - ESRI (Entrainment Signal Regularity Index) computation
+                    - Double-plotted actogram visualization
+                    
+                    **Original Package:** [Arcascope/circadian](https://github.com/Arcascope/circadian)
+                    """)
         _log_tab("circadian", "end")
 
     with tab_space_data:
@@ -19346,9 +19521,15 @@ space weather events, maintained by the Community Coordinated Modeling Center (C
                     if not has_hrv_data_uploaded:
                         st.warning("Upload HRV data first, then run the HRV analysis.")
                     else:
-                        st.session_state["auto_run_hrv_analysis"] = True
-                        st.session_state.pop("hrv_analysis_complete_signature", None)
-                        st.rerun()
+                        if bool(st.session_state.get("manual_processing_only", True)):
+                            st.warning(
+                                "Manual-only processing is enabled. Open the HRV tab and click "
+                                "**Run HRV Analysis** to start processing."
+                            )
+                        else:
+                            st.session_state["auto_run_hrv_analysis"] = True
+                            st.session_state.pop("hrv_analysis_complete_signature", None)
+                            st.rerun()
             elif "start" not in corr_windowed_df.columns:
                 st.info("Windowed HRV data does not include start timestamps.")
             elif not corr_metric_list:
@@ -22161,9 +22342,15 @@ shifts the predictor time series backward in time:
                 if not has_hrv_data_uploaded:
                     st.warning("Upload HRV data first, then run the HRV analysis.")
                 else:
-                    st.session_state["auto_run_hrv_analysis"] = True
-                    st.session_state.pop("hrv_analysis_complete_signature", None)
-                    st.rerun()
+                    if bool(st.session_state.get("manual_processing_only", True)):
+                        st.warning(
+                            "Manual-only processing is enabled. Open the HRV tab and click "
+                            "**Run HRV Analysis** to start processing."
+                        )
+                    else:
+                        st.session_state["auto_run_hrv_analysis"] = True
+                        st.session_state.pop("hrv_analysis_complete_signature", None)
+                        st.rerun()
         elif not has_noaa:
             st.info("Load cached NOAA or fetch NOAA feeds above to enable correlations.")
         else:
