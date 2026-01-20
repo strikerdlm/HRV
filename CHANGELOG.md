@@ -5,6 +5,13 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [1.9.4] - 2026-01-20
+
+### Changed
+- Research UI: Added a **Processing Mode** sidebar with **Manual-only processing** (default) to prevent auto-run requests from triggering HRV analysis without explicit user action.
+- Space Data: Added an **Allow background space-data auto-fetch** toggle (default off) so SWPC/NOAA/DONKI data is fetched only on demand unless explicitly enabled.
+
 ## [1.9.3] - 2026-01-06
 
 ### Changed
