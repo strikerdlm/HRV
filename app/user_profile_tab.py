@@ -14105,6 +14105,47 @@ def _load_garmin_daily_objective(uid: str) -> pd.DataFrame:
     tmp = tmp.drop_duplicates(subset=["day"], keep="last").set_index("day")
     return tmp
 
+def _should_render_profile_section(section_id: str, label: str) -> bool:
+    """Return True if a profile sub-section should render in manual-only mode."""
+    if not isinstance(section_id, str):
+        raise TypeError("section_id must be a string.")
+    if not section_id.strip():
+        raise ValueError("section_id must be a non-empty string.")
+    if not isinstance(label, str):
+        raise TypeError("label must be a string.")
+    if not label.strip():
+        raise ValueError("label must be a non-empty string.")
+
+    manual_only = bool(st.session_state.get("manual_processing_only", True))
+    if not manual_only:
+        return True
+
+    state_key = f"_profile_section_loaded_{section_id.strip()}"
+    if state_key not in st.session_state:
+        st.session_state[state_key] = False
+    if bool(st.session_state.get(state_key, False)):
+        return True
+
+    st.info(
+        f"**{label}** is paused to prevent automatic processing. "
+        "Click **Load section** to render it."
+    )
+    col_load, col_hint = st.columns([1, 3])
+    with col_load:
+        if st.button(
+            f"▶️ Load {label}",
+            key=f"{state_key}_load",
+            use_container_width=True,
+        ):
+            st.session_state[state_key] = True
+            st.rerun()
+    with col_hint:
+        st.caption(
+            "Manual-only processing is enabled in **Processing Mode** (sidebar). "
+            "Disable it to auto-load sections."
+        )
+    return False
+
 
 def _render_radiation_exposure_section(
     user: UserProfile,
@@ -14165,13 +14206,16 @@ def _render_radiation_exposure_section(
         )
     
     with rad_tab2:
-        _render_radiation_timeline(user, current_env, mission_day, rad_limit)
+        if _should_render_profile_section("radiation_timeline", "Radiation Timeline"):
+            _render_radiation_timeline(user, current_env, mission_day, rad_limit)
     
     with rad_tab3:
-        _render_radiation_environment_comparison(mission_day)
+        if _should_render_profile_section("radiation_environment_compare", "Environment Comparison"):
+            _render_radiation_environment_comparison(mission_day)
     
     with rad_tab4:
-        _render_radiation_eva_matrix(user, history_df, latest_entry, current_env)
+        if _should_render_profile_section("radiation_eva_matrix", "EVA Go/No-Go Matrix"):
+            _render_radiation_eva_matrix(user, history_df, latest_entry, current_env)
 
 
 def _render_radiation_current_status(
@@ -14373,6 +14417,8 @@ def _render_radiation_timeline(
         st.warning("Radiation exposure module not available.")
         return
     
+    manual_only = bool(st.session_state.get("manual_processing_only", True))
+    
     # Environment selector for projection
     env_options = [
         ("Earth Surface", RadiationEnvironment.EARTH_SURFACE),
@@ -14421,24 +14467,56 @@ def _render_radiation_timeline(
             key="rad_timeline_eva",
         )
     
-    # Auto-detect solar cycle phase from NOAA
+    # Auto-detect solar cycle phase from NOAA (manual-only aware)
     from radiation_exposure import detect_solar_cycle_phase_from_noaa
     
-    auto_detected_phase = detect_solar_cycle_phase_from_noaa(target_date=date.today())
+    user_key = str(getattr(user, "user_id", "") or "guest")
+    auto_phase_key = f"rad_timeline_auto_phase_{user_key}"
+    auto_detected_phase = st.session_state.get(auto_phase_key)
+    
+    if manual_only:
+        if st.button(
+            "🔍 Detect solar cycle phase from NOAA",
+            key=f"rad_timeline_detect_phase_{user_key}",
+            help="Explicitly fetch the latest NOAA F10.7-derived solar cycle phase.",
+            use_container_width=True,
+        ):
+            try:
+                auto_detected_phase = detect_solar_cycle_phase_from_noaa(target_date=date.today())
+                st.session_state[auto_phase_key] = auto_detected_phase
+            except Exception as exc:
+                _LOGGER.warning("Solar cycle auto-detect failed: %s", exc)
+                st.warning(f"Auto-detect failed: {exc}")
+    else:
+        if auto_detected_phase is None:
+            try:
+                auto_detected_phase = detect_solar_cycle_phase_from_noaa(target_date=date.today())
+                st.session_state[auto_phase_key] = auto_detected_phase
+            except Exception as exc:
+                _LOGGER.debug("Solar cycle auto-detect failed: %s", exc)
+    
     phase_index_map = {"minimum": 0, "ascending": 1, "maximum": 2, "declining": 3}
     default_phase_idx = phase_index_map.get(auto_detected_phase, 2)  # Default to maximum
     
-    st.info(f"🌞 **Auto-detected Solar Cycle Phase:** {auto_detected_phase.upper()} (from NOAA F10.7 data)")
+    if auto_detected_phase:
+        st.info(f"🌞 **Auto-detected Solar Cycle Phase:** {auto_detected_phase.upper()} (from NOAA F10.7 data)")
+    elif manual_only:
+        st.caption("Auto-detect is disabled in manual-only mode. Click the button above to fetch it.")
     
     # Allow manual override if needed
+    auto_toggle_key = f"rad_timeline_auto_solar_{user_key}"
+    if auto_toggle_key not in st.session_state:
+        st.session_state[auto_toggle_key] = bool(auto_detected_phase) and not manual_only
+    if auto_detected_phase is None:
+        st.session_state[auto_toggle_key] = False
     use_auto_detect = st.checkbox(
         "Use auto-detected solar cycle phase",
-        value=True,
-        key="rad_timeline_auto_solar",
+        key=auto_toggle_key,
+        disabled=auto_detected_phase is None,
         help="Automatically detect from NOAA F10.7 flux data. Uncheck to manually select.",
     )
     
-    if use_auto_detect:
+    if use_auto_detect and auto_detected_phase:
         solar_phase = auto_detected_phase
     else:
         solar_phase = st.radio(
@@ -14475,23 +14553,43 @@ def _render_radiation_timeline(
                 eva_schedule[eva_date] = min(eva_per_day, 8.0)  # Max 8h EVA per day
     
     # Use real space weather data
+    real_sw_key = "rad_timeline_real_sw"
+    if real_sw_key not in st.session_state:
+        st.session_state[real_sw_key] = not manual_only
     use_real_sw = st.checkbox(
         "Use real NOAA space weather data",
-        value=True,
-        key="rad_timeline_real_sw",
+        key=real_sw_key,
         help="Apply daily adjustments based on real Kp index and proton flux from NOAA",
     )
     
-    timeline = build_radiation_timeline(
-        start_date=start_date,
-        end_date=end_date,
-        environment=selected_env,
-        initial_cumulative_msv=0.0,
-        eva_schedule=eva_schedule,
-        solar_cycle_phase=str(solar_phase) if not use_auto_detect else None,  # Auto-detect if using auto
-        career_limit_msv=actual_career_limit,
-        use_real_space_weather=use_real_sw,
-    )
+    env_value = selected_env.value if hasattr(selected_env, "value") else str(selected_env)
+    phase_to_use = str(solar_phase)
+    eva_items = tuple(sorted((d.isoformat(), float(h)) for d, h in eva_schedule.items()))
+    cache_key = f"_rad_timeline_cache_{user_key}"
+    cache_sig = {
+        "start": start_date.isoformat(),
+        "end": end_date.isoformat(),
+        "env": env_value,
+        "eva": eva_items,
+        "phase": phase_to_use,
+        "career": float(actual_career_limit),
+        "real_sw": bool(use_real_sw),
+    }
+    cached = st.session_state.get(cache_key)
+    if isinstance(cached, dict) and cached.get("sig") == cache_sig:
+        timeline = cached.get("timeline", [])
+    else:
+        timeline = build_radiation_timeline(
+            start_date=start_date,
+            end_date=end_date,
+            environment=selected_env,
+            initial_cumulative_msv=0.0,
+            eva_schedule=eva_schedule,
+            solar_cycle_phase=phase_to_use,
+            career_limit_msv=actual_career_limit,
+            use_real_space_weather=use_real_sw,
+        )
+        st.session_state[cache_key] = {"sig": cache_sig, "timeline": timeline}
     
     if not timeline:
         st.warning("Unable to build radiation timeline.")
@@ -14875,13 +14973,17 @@ def _render_radiation_eva_matrix(
     # Space Weather Conditions with Auto-Fetch Option
     st.markdown("##### 🌞 Space Weather Conditions")
     
+    manual_only = bool(st.session_state.get("manual_processing_only", True))
+    
     # Auto-fetch toggle and button
     col_auto, col_fetch = st.columns([2, 1])
     with col_auto:
+        auto_fetch_key = f"eva_auto_fetch_sw_{user.user_id}"
+        if auto_fetch_key not in st.session_state:
+            st.session_state[auto_fetch_key] = not manual_only
         auto_fetch_sw = st.checkbox(
             "🛰️ Auto-fetch from NOAA SWPC",
-            value=True,
-            key=f"eva_auto_fetch_sw_{user.user_id}",
+            key=auto_fetch_key,
             help=(
                 "Automatically retrieve current space weather conditions from NOAA Space Weather "
                 "Prediction Center. S-Scale (Solar Radiation Storm) is based on >10 MeV proton flux. "
