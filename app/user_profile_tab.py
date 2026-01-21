@@ -17,6 +17,7 @@ Version: 1.1.0
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 import uuid
@@ -9460,6 +9461,92 @@ def _render_sqlite_corruption_recovery_ui(*, context_label: str, user_id: str, e
 # Advanced HRV Analytics UI
 # =============================================================================
 
+_ADV_HRV_CACHE_TTL_SECONDS: Final[int] = 3600
+_ADV_HRV_MAX_HASH_ROWS: Final[int] = 2000
+_ADV_HRV_HASH_COLUMNS: Final[tuple[str, ...]] = (
+    "measurement_date",
+    "rmssd_ms",
+    "sdnn_ms",
+    "mean_hr_bpm",
+    "lf_hf_ratio",
+    "stress_index",
+    "pnn50_pct",
+    "hf_power_ms2",
+    "lf_power_ms2",
+)
+
+
+def _hash_dataframe_for_advanced_hrv(
+    df: pd.DataFrame,
+    *,
+    columns: Sequence[str] | None = None,
+    max_rows: int = _ADV_HRV_MAX_HASH_ROWS,
+) -> str:
+    """Return a stable hash for advanced HRV inputs (bounded, deterministic)."""
+    if df is None or df.empty:
+        return "empty"
+    working = df
+    if columns:
+        existing = [col for col in columns if col in working.columns]
+        if existing:
+            working = working[existing]
+    if max_rows <= 0:
+        max_rows = _ADV_HRV_MAX_HASH_ROWS
+    if len(working) > max_rows:
+        working = working.tail(int(max_rows))
+    try:
+        working = working.copy()
+    except Exception:
+        # If copy fails, fall back to the original object.
+        pass
+    try:
+        working = working.sort_index(axis=1)
+    except Exception:
+        pass
+    try:
+        hashes = pd.util.hash_pandas_object(working, index=True)
+        return hashlib.sha256(hashes.values.tobytes()).hexdigest()
+    except Exception:
+        # Defensive fallback for unexpected dtypes
+        payload = working.to_json(orient="table", date_format="iso", default_handler=str)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _advanced_hrv_signature(
+    *,
+    hrv_df: pd.DataFrame,
+    garmin_df: Optional[pd.DataFrame],
+    user_age: int,
+    user_sex: str,
+) -> str:
+    """Build a deterministic signature for advanced HRV analysis inputs."""
+    hrv_hash = _hash_dataframe_for_advanced_hrv(
+        hrv_df, columns=_ADV_HRV_HASH_COLUMNS
+    )
+    garmin_hash = (
+        _hash_dataframe_for_advanced_hrv(garmin_df) if garmin_df is not None else "none"
+    )
+    seed = f"age={int(user_age)}|sex={str(user_sex)}|hrv={hrv_hash}|garmin={garmin_hash}"
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+@st.cache_data(ttl=_ADV_HRV_CACHE_TTL_SECONDS, max_entries=16, show_spinner=False)
+def _cached_advanced_hrv_analysis(
+    signature: str,
+    hrv_df: pd.DataFrame,
+    garmin_df: Optional[pd.DataFrame],
+    user_age: int,
+    user_sex: str,
+) -> "AdvancedHRVAnalysisResult":
+    """Cache wrapper for advanced HRV analysis (signature-guarded)."""
+    _ = signature  # part of cache key; do not remove
+    return run_advanced_hrv_analysis(
+        hrv_df=hrv_df,
+        garmin_df=garmin_df,
+        user_age=user_age,
+        user_sex=user_sex,
+    )
+
 
 def _render_advanced_hrv_analytics(
     user: UserProfile, hrv_df: pd.DataFrame, garmin_df: Optional[pd.DataFrame] = None
@@ -9521,17 +9608,57 @@ def _render_advanced_hrv_analytics(
     user_age = _calculate_age(user.date_of_birth) or 40
     user_sex = user.sex if user.sex else "unknown"
     
-    try:
-        with st.spinner("Running advanced analysis..."):
-            result = run_advanced_hrv_analysis(
-                hrv_df=hrv_df,
-                garmin_df=garmin_df,
-                user_age=user_age,
-                user_sex=user_sex,
-            )
-    except Exception as exc:
-        st.error(f"Analysis failed: {exc}")
-        _LOGGER.error("Advanced HRV analysis failed: %s", exc)
+    signature = _advanced_hrv_signature(
+        hrv_df=hrv_df,
+        garmin_df=garmin_df,
+        user_age=user_age,
+        user_sex=user_sex,
+    )
+    state_key = f"_advanced_hrv_state_{user.user_id}"
+    state = st.session_state.setdefault(
+        state_key,
+        {"signature": "", "result": None, "last_error": ""},
+    )
+    if state.get("signature") != signature:
+        state["signature"] = signature
+        state["result"] = None
+        state["last_error"] = ""
+
+    st.info(
+        "Advanced analytics are paused by default to prevent repeated recomputation. "
+        "Click **Run advanced analysis** to execute once for the current data."
+    )
+    run_label = (
+        "🚀 Run advanced analysis"
+        if state.get("result") is None
+        else "🔄 Recompute advanced analysis"
+    )
+    if st.button(run_label, key=f"adv_hrv_run_{user.user_id}", use_container_width=True):
+        try:
+            with st.spinner("Running advanced analysis..."):
+                result = _cached_advanced_hrv_analysis(
+                    signature,
+                    hrv_df,
+                    garmin_df,
+                    int(user_age),
+                    str(user_sex),
+                )
+        except Exception as exc:
+            state["last_error"] = str(exc)
+            state["result"] = None
+            st.error(f"Analysis failed: {exc}")
+            _LOGGER.error("Advanced HRV analysis failed: %s", exc)
+            return
+        else:
+            state["result"] = result
+            state["last_error"] = ""
+
+    result = state.get("result")
+    if result is None:
+        if state.get("last_error"):
+            st.warning("Advanced analysis is unavailable due to the last error above.")
+        else:
+            st.caption("No advanced analysis computed yet for this dataset.")
         return
     
     # Create tabs for different analysis sections
