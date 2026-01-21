@@ -23,7 +23,7 @@ import time
 import uuid
 import io
 import os
-from dataclasses import asdict, is_dataclass
+from dataclasses import asdict, is_dataclass, replace
 from collections import Counter
 from datetime import datetime, date, timezone, timedelta, tzinfo
 from zoneinfo import ZoneInfo
@@ -220,8 +220,40 @@ except ImportError:
     ADVANCED_HRV_ANALYTICS_AVAILABLE = False
 
 # Visualization helpers
-from echarts_component import EChartsConfig, render_echarts
+from echarts_component import EChartsConfig, render_echarts as _render_echarts_base
 from gauge_builder import GaugeThresholds, build_two_ring_gauge, get_gauge_thresholds
+
+# Profile charts: disable animations to reduce rerender jitter and CPU usage
+_PROFILE_ECHARTS_CONFIG: Final[EChartsConfig] = EChartsConfig(disable_animation=True)
+
+
+def render_echarts(  # type: ignore[override]
+    option: Dict[str, Any],
+    *,
+    height_px: int = 420,
+    width: str = "100%",
+    theme: Optional[str] = None,
+    config: Optional[EChartsConfig] = None,
+    renderer: str = "svg",
+    enable_export: bool = True,
+    export_basename: str = "echarts_chart",
+    caption: Optional[str] = None,
+) -> None:
+    """Render ECharts in the profile tab with animations disabled by default."""
+    cfg = config or _PROFILE_ECHARTS_CONFIG
+    if cfg is not None and not cfg.disable_animation:
+        cfg = replace(cfg, disable_animation=True)
+    _render_echarts_base(
+        option,
+        height_px=height_px,
+        width=width,
+        theme=theme,
+        config=cfg,
+        renderer=renderer,
+        enable_export=enable_export,
+        export_basename=export_basename,
+        caption=caption,
+    )
 
 # Import profile module
 try:
@@ -7487,20 +7519,52 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         elif not api_env_ready:
             st.info("Set GARMIN_EMAIL and GARMIN_PASSWORD in your .env to enable Garmin Connect import.")
         else:
+            latest_metric_date: Optional[date] = None
+            missing_days: Optional[int] = None
+            try:
+                db = get_database()
+                if hasattr(db, "get_garmin_daily_metrics"):
+                    latest_metrics = db.get_garmin_daily_metrics(user.user_id, limit=1)
+                    if latest_metrics:
+                        parsed = pd.to_datetime(latest_metrics[0].metric_date, errors="coerce")
+                        if parsed is not None and not pd.isna(parsed):
+                            latest_metric_date = parsed.date()
+            except Exception:
+                latest_metric_date = None
+
+            if latest_metric_date is not None:
+                today = date.today()
+                missing_days = max(0, (today - latest_metric_date).days)
+                if missing_days == 0:
+                    st.caption(f"Latest stored date: {latest_metric_date} (up to date).")
+                else:
+                    st.caption(
+                        f"Latest stored date: {latest_metric_date} "
+                        f"({missing_days} day(s) behind today)."
+                    )
+
+            fetch_options = [7, 14, 30, 60, 90]
+            default_days = 14
+            if missing_days is not None and missing_days > 0:
+                for opt in fetch_options:
+                    if opt >= missing_days:
+                        default_days = opt
+                        break
+                else:
+                    default_days = fetch_options[-1]
+
             days_to_fetch = st.select_slider(
                 "Days to fetch (includes today)",
-                options=[7, 14, 30],
-                value=14,
+                options=fetch_options,
+                value=default_days,
                 key=f"garmin_api_days_{user.user_id}",
             )
-            if st.button(
-                "Fetch from Garmin Connect",
-                key=f"garmin_api_fetch_{user.user_id}",
-                type="primary",
-            ):
+
+            def _run_garmin_fetch(days_requested: int) -> None:
+                nonlocal refresh_token
                 try:
-                    with st.spinner(f"Fetching last {days_to_fetch} day(s) from Garmin Connect…"):
-                        records = fetch_garmin_daily_metrics(user.user_id, days=int(days_to_fetch))
+                    with st.spinner(f"Fetching last {days_requested} day(s) from Garmin Connect…"):
+                        records = fetch_garmin_daily_metrics(user.user_id, days=int(days_requested))
                 except GarminAuthError as exc:
                     st.error(str(exc))
                 except Exception as exc:  # noqa: BLE001
@@ -7517,7 +7581,32 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
                         st.session_state[refresh_state_key] = refresh_token
                         summary = summarize_garmin_daily(records)
                         label = summary.get("dates", "")
-                        st.success(f"Imported {summary.get('count', len(records))} day(s) from Garmin Connect. {label}")
+                        st.success(
+                            f"Imported {summary.get('count', len(records))} day(s) from Garmin Connect. {label}"
+                        )
+
+            col_fetch, col_catchup = st.columns(2)
+            with col_fetch:
+                if st.button(
+                    "Fetch from Garmin Connect",
+                    key=f"garmin_api_fetch_{user.user_id}",
+                    type="primary",
+                ):
+                    _run_garmin_fetch(int(days_to_fetch))
+            with col_catchup:
+                catchup_disabled = missing_days is None or missing_days <= 0
+                catchup_help = (
+                    "No missing days detected."
+                    if catchup_disabled
+                    else f"Fetch the last {min(missing_days, 90)} day(s) to catch up."
+                )
+                if st.button(
+                    "Fetch missing days",
+                    key=f"garmin_api_fetch_missing_{user.user_id}",
+                    disabled=catchup_disabled,
+                    help=catchup_help,
+                ):
+                    _run_garmin_fetch(int(min(missing_days or 0, 90)))
 
     if not GARMIN_IMPORT_AVAILABLE:
         st.info("Garmin import module unavailable. Install fitparse and rerun.")
@@ -7722,336 +7811,374 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         if "stress_score" in df.columns:
             stress_mean = df['stress_score'].mean()
             st.metric("Avg stress", f"{stress_mean:.1f}" if pd.notna(stress_mean) else "—")
+    perf_mode = bool(st.session_state.get(f"profile_perf_mode_{user.user_id}", False))
+    with st.expander("⚡ Performance controls (Garmin History)", expanded=False):
+        show_gauges = st.toggle(
+            "Show gauges",
+            value=not perf_mode,
+            key=f"garmin_show_gauges_{user.user_id}",
+        )
+        show_trends = st.toggle(
+            "Show trend charts",
+            value=not perf_mode,
+            key=f"garmin_show_trends_{user.user_id}",
+        )
+        show_stats = st.toggle(
+            "Show summary stats",
+            value=not perf_mode,
+            key=f"garmin_show_stats_{user.user_id}",
+        )
+        show_table = st.toggle(
+            "Show raw daily table",
+            value=False if perf_mode else True,
+            key=f"garmin_show_table_{user.user_id}",
+        )
+        show_advanced = st.toggle(
+            "Show advanced analytics",
+            value=False if perf_mode else True,
+            key=f"garmin_show_advanced_{user.user_id}",
+        )
+    if perf_mode and not any([show_gauges, show_trends, show_stats, show_table, show_advanced]):
+        st.caption("Performance mode is enabled — gauges/charts/analytics are hidden.")
 
     # Render gauges in organized sections
-    st.markdown("### 🏃 Activity & Movement")
-    cols = st.columns(3)
-    activity_gauges = [
-        ("steps", "Steps", "steps"),
-        ("distance_km", "Distance", "distance_km"),
-        ("calories_kcal", "Calories", "calories_kcal"),
-    ]
-    for col, (metric_col, title, threshold_key) in zip(cols, activity_gauges):
-        val, val_date = _latest_non_null(metric_col)
-        if val is None or pd.isna(val):
+    if show_gauges:
+        st.markdown("### 🏃 Activity & Movement")
+        cols = st.columns(3)
+        activity_gauges = [
+            ("steps", "Steps", "steps"),
+            ("distance_km", "Distance", "distance_km"),
+            ("calories_kcal", "Calories", "calories_kcal"),
+        ]
+        for col, (metric_col, title, threshold_key) in zip(cols, activity_gauges):
+            val, val_date = _latest_non_null(metric_col)
+            if val is None or pd.isna(val):
+                with col:
+                    hint = no_data_hints.get(metric_col, "")
+                    st.info(f"No {title} data. {hint}".strip())
+                continue
+            thresholds = get_gauge_thresholds(threshold_key)
+            if not thresholds:
+                continue
+            option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
             with col:
-                hint = no_data_hints.get(metric_col, "")
-                st.info(f"No {title} data. {hint}".strip())
-            continue
-        thresholds = get_gauge_thresholds(threshold_key)
-        if not thresholds:
-            continue
-        option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
-        with col:
-            render_echarts(option, height_px=280)
-            st.caption(f"Latest available: {_date_label(val_date)}")
-    
-    st.markdown("### ❤️ Heart Rate & Stress")
-    cols = st.columns(3)
-    hr_gauges = [
-        ("avg_hr_bpm", "Avg HR", "avg_hr_bpm"),
-        ("resting_hr_bpm", "Resting HR", "resting_hr_bpm"),
-        ("stress_score", "Stress", "stress_score"),
-    ]
-    for col, (metric_col, title, threshold_key) in zip(cols, hr_gauges):
-        val, val_date = _latest_non_null(metric_col)
-        if val is None or pd.isna(val):
+                render_echarts(option, height_px=280)
+                st.caption(f"Latest available: {_date_label(val_date)}")
+        
+        st.markdown("### ❤️ Heart Rate & Stress")
+        cols = st.columns(3)
+        hr_gauges = [
+            ("avg_hr_bpm", "Avg HR", "avg_hr_bpm"),
+            ("resting_hr_bpm", "Resting HR", "resting_hr_bpm"),
+            ("stress_score", "Stress", "stress_score"),
+        ]
+        for col, (metric_col, title, threshold_key) in zip(cols, hr_gauges):
+            val, val_date = _latest_non_null(metric_col)
+            if val is None or pd.isna(val):
+                with col:
+                    hint = no_data_hints.get(metric_col, "")
+                    st.info(f"No {title} data. {hint}".strip())
+                continue
+            thresholds = get_gauge_thresholds(threshold_key)
+            if not thresholds:
+                continue
+            option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
             with col:
-                hint = no_data_hints.get(metric_col, "")
-                st.info(f"No {title} data. {hint}".strip())
-            continue
-        thresholds = get_gauge_thresholds(threshold_key)
-        if not thresholds:
-            continue
-        option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
-        with col:
-            render_echarts(option, height_px=280)
-            st.caption(f"Latest available: {_date_label(val_date)}")
-    
-    st.markdown("### 😴 Sleep & Recovery")
-    cols = st.columns(3)
-    sleep_gauges = [
-        ("sleep_score", "Sleep Score", "sleep_score"),
-        ("sleep_efficiency", "Sleep Efficiency", "sleep_efficiency"),
-        ("sleep_duration_hours", "Sleep Duration", "sleep_duration_hours"),
-    ]
-    for col, (metric_col, title, threshold_key) in zip(cols, sleep_gauges):
-        val, val_date = _latest_non_null(metric_col)
-        if val is None or pd.isna(val):
+                render_echarts(option, height_px=280)
+                st.caption(f"Latest available: {_date_label(val_date)}")
+        
+        st.markdown("### 😴 Sleep & Recovery")
+        cols = st.columns(3)
+        sleep_gauges = [
+            ("sleep_score", "Sleep Score", "sleep_score"),
+            ("sleep_efficiency", "Sleep Efficiency", "sleep_efficiency"),
+            ("sleep_duration_hours", "Sleep Duration", "sleep_duration_hours"),
+        ]
+        for col, (metric_col, title, threshold_key) in zip(cols, sleep_gauges):
+            val, val_date = _latest_non_null(metric_col)
+            if val is None or pd.isna(val):
+                with col:
+                    hint = no_data_hints.get(metric_col, "")
+                    st.info(f"No {title} data. {hint}".strip())
+                continue
+            thresholds = get_gauge_thresholds(threshold_key)
+            if not thresholds:
+                continue
+            option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
             with col:
-                hint = no_data_hints.get(metric_col, "")
-                st.info(f"No {title} data. {hint}".strip())
-            continue
-        thresholds = get_gauge_thresholds(threshold_key)
-        if not thresholds:
-            continue
-        option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
-        with col:
-            render_echarts(option, height_px=280)
-            st.caption(f"Latest available: {_date_label(val_date)}")
-    
-    st.markdown("### 🫁 Respiration & SpO₂")
-    cols = st.columns(3)
-    resp_gauges = [
-        ("avg_spo2", "SpO₂", "spo2_pct"),
-        ("avg_respiration_awake", "Resp Awake", "respiration_awake_bpm"),
-        ("avg_respiration_sleep", "Resp Sleep", "respiration_sleep_bpm"),
-    ]
-    for col, (metric_col, title, threshold_key) in zip(cols, resp_gauges):
-        val, val_date = _latest_non_null(metric_col)
-        if val is None or pd.isna(val):
+                render_echarts(option, height_px=280)
+                st.caption(f"Latest available: {_date_label(val_date)}")
+        
+        st.markdown("### 🫁 Respiration & SpO₂")
+        cols = st.columns(3)
+        resp_gauges = [
+            ("avg_spo2", "SpO₂", "spo2_pct"),
+            ("avg_respiration_awake", "Resp Awake", "respiration_awake_bpm"),
+            ("avg_respiration_sleep", "Resp Sleep", "respiration_sleep_bpm"),
+        ]
+        for col, (metric_col, title, threshold_key) in zip(cols, resp_gauges):
+            val, val_date = _latest_non_null(metric_col)
+            if val is None or pd.isna(val):
+                with col:
+                    hint = no_data_hints.get(metric_col, "")
+                    st.info(f"No {title} data. {hint}".strip())
+                continue
+            thresholds = get_gauge_thresholds(threshold_key)
+            if not thresholds:
+                continue
+            option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
             with col:
-                hint = no_data_hints.get(metric_col, "")
-                st.info(f"No {title} data. {hint}".strip())
-            continue
-        thresholds = get_gauge_thresholds(threshold_key)
-        if not thresholds:
-            continue
-        option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
-        with col:
-            render_echarts(option, height_px=280)
-            st.caption(f"Latest available: {_date_label(val_date)}")
-    
-    st.markdown("### 🔋 Body Battery")
-    cols = st.columns(3)
-    bb_gauges = [
-        ("body_battery_avg", "Avg Level", "body_battery_avg"),
-        ("body_battery_charge", "Charged", "body_battery_charge"),
-        ("body_battery_drain", "Drained", "body_battery_drain"),
-    ]
-    for col, (metric_col, title, threshold_key) in zip(cols, bb_gauges):
-        val, val_date = _latest_non_null(metric_col)
-        if val is None or pd.isna(val):
+                render_echarts(option, height_px=280)
+                st.caption(f"Latest available: {_date_label(val_date)}")
+        
+        st.markdown("### 🔋 Body Battery")
+        cols = st.columns(3)
+        bb_gauges = [
+            ("body_battery_avg", "Avg Level", "body_battery_avg"),
+            ("body_battery_charge", "Charged", "body_battery_charge"),
+            ("body_battery_drain", "Drained", "body_battery_drain"),
+        ]
+        for col, (metric_col, title, threshold_key) in zip(cols, bb_gauges):
+            val, val_date = _latest_non_null(metric_col)
+            if val is None or pd.isna(val):
+                with col:
+                    hint = no_data_hints.get(metric_col, "")
+                    st.info(f"No {title} data. {hint}".strip())
+                continue
+            thresholds = get_gauge_thresholds(threshold_key)
+            if not thresholds:
+                continue
+            option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
             with col:
-                hint = no_data_hints.get(metric_col, "")
-                st.info(f"No {title} data. {hint}".strip())
-            continue
-        thresholds = get_gauge_thresholds(threshold_key)
-        if not thresholds:
-            continue
-        option = build_two_ring_gauge(threshold_key, val, title=title, thresholds=thresholds)
-        with col:
-            render_echarts(option, height_px=280)
-            st.caption(f"Latest available: {_date_label(val_date)}")
+                render_echarts(option, height_px=280)
+                st.caption(f"Latest available: {_date_label(val_date)}")
 
     st.markdown("---")
     st.markdown("---")
-    st.markdown("### 📊 Statistical Analysis")
+    if show_stats or show_trends:
+        st.markdown("### 📊 Statistical Analysis")
     
-    # Build a time-indexed view for charts (ascending time)
-    df_ts = df.copy()
-    if "metric_date" in df_ts.columns:
-        df_ts = df_ts.sort_values("metric_date", ascending=True).set_index("metric_date")
-
     # Summary statistics (computed from DB history; includes all supported Garmin fields)
-    numeric_cols = [
-        c
-        for c in df.columns
-        if c
-        not in {
-            "entry_id",
-            "user_id",
-            "metric_date",
-            "source",
-            "created_at",
-        }
-        and pd.api.types.is_numeric_dtype(df[c])
-    ]
-    if numeric_cols:
-        stats_rows: list[dict[str, Any]] = []
-        for col in numeric_cols:
-            series = pd.to_numeric(df[col], errors="coerce")
-            non_null = series.dropna()
-            latest_non_null: Any = None
-            if not non_null.empty:
-                # df is sorted latest-first; pick first non-null for "latest"
-                latest_non_null = non_null.iloc[0]
-            stats_rows.append(
-                {
-                    "Metric": col,
-                    "N": int(series.notna().sum()),
-                    "Mean": float(series.mean()) if series.notna().any() else None,
-                    "Median": float(series.median()) if series.notna().any() else None,
-                    "Min": float(series.min()) if series.notna().any() else None,
-                    "Max": float(series.max()) if series.notna().any() else None,
-                    "Latest": latest_non_null,
-                }
-            )
-        stats_df = pd.DataFrame(stats_rows)
-        if not stats_df.empty:
-            st.markdown("#### Summary statistics (stored Garmin daily metrics)")
-            st.dataframe(stats_df, use_container_width=True, hide_index=True)
+    if show_stats:
+        numeric_cols = [
+            c
+            for c in df.columns
+            if c
+            not in {
+                "entry_id",
+                "user_id",
+                "metric_date",
+                "source",
+                "created_at",
+            }
+            and pd.api.types.is_numeric_dtype(df[c])
+        ]
+        if numeric_cols:
+            stats_rows: list[dict[str, Any]] = []
+            for col in numeric_cols:
+                series = pd.to_numeric(df[col], errors="coerce")
+                non_null = series.dropna()
+                latest_non_null: Any = None
+                if not non_null.empty:
+                    # df is sorted latest-first; pick first non-null for "latest"
+                    latest_non_null = non_null.iloc[0]
+                stats_rows.append(
+                    {
+                        "Metric": col,
+                        "N": int(series.notna().sum()),
+                        "Mean": float(series.mean()) if series.notna().any() else None,
+                        "Median": float(series.median()) if series.notna().any() else None,
+                        "Min": float(series.min()) if series.notna().any() else None,
+                        "Max": float(series.max()) if series.notna().any() else None,
+                        "Latest": latest_non_null,
+                    }
+                )
+            stats_df = pd.DataFrame(stats_rows)
+            if not stats_df.empty:
+                st.markdown("#### Summary statistics (stored Garmin daily metrics)")
+                st.dataframe(stats_df, use_container_width=True, hide_index=True)
+    elif perf_mode:
+        st.caption("Summary stats hidden (performance mode).")
 
     # Trends (grouped so all Garmin fields can be visualized)
     # Publication-quality charts with physiological context
-    if len(df_ts) > 1 and isinstance(df_ts.index, pd.DatetimeIndex):
-        st.markdown("#### Trends Over Time")
-        st.caption(
-            "**Scientific Background:** These visualizations follow guidelines from Nature Research and "
-            "incorporate evidence-based reference ranges for clinical interpretation. Each category provides "
-            "insight into different aspects of physiological function and recovery capacity."
-        )
+    if show_trends:
+        # Build a time-indexed view for charts (ascending time)
+        df_ts = df.copy()
+        if "metric_date" in df_ts.columns:
+            df_ts = df_ts.sort_values("metric_date", ascending=True).set_index("metric_date")
+
+        if len(df_ts) > 1 and isinstance(df_ts.index, pd.DatetimeIndex):
+            st.markdown("#### Trends Over Time")
+            st.caption(
+                "**Scientific Background:** These visualizations follow guidelines from Nature Research and "
+                "incorporate evidence-based reference ranges for clinical interpretation. Each category provides "
+                "insight into different aspects of physiological function and recovery capacity."
+            )
+            
+            # Convert dates to string list for chart builders
+            date_labels = [d.strftime("%Y-%m-%d") for d in df_ts.index]
+            
+            def _get_series(col: str) -> Optional[List[float]]:
+                """Extract series as list, or None if insufficient data."""
+                if col not in df_ts.columns:
+                    return None
+                series = df_ts[col].tolist()
+                if sum(1 for v in series if v is not None and not pd.isna(v)) < 2:
+                    return None
+                return [v if not pd.isna(v) else None for v in series]
+            
+            rendered_any = False
+            
+            # 1. Activity & Movement
+            steps = _get_series("steps")
+            calories = _get_series("calories_kcal")
+            if steps or calories:
+                rendered_any = True
+                with st.expander("🏃 Activity & Movement", expanded=True):
+                    chart_opt = _build_activity_movement_chart(
+                        dates=date_labels,
+                        steps=steps,
+                        calories=calories,
+                        title="Activity & Movement Trends",
+                    )
+                    render_echarts(chart_opt, height_px=380)
+                    st.markdown(
+                        "*Daily step count is a validated predictor of mortality risk. "
+                        "WHO recommends 8,000-10,000 steps/day for optimal cardiometabolic health.* "
+                        "*(Tudor-Locke et al., 2011)*"
+                    )
+            
+            # 2. Heart Rate & Stress
+            avg_hr = _get_series("avg_hr_bpm")
+            resting_hr = _get_series("resting_hr_bpm")
+            stress_score = _get_series("stress_score")
+            if avg_hr or resting_hr or stress_score:
+                rendered_any = True
+                with st.expander("❤️ Heart Rate & Stress", expanded=True):
+                    chart_opt = _build_hr_stress_chart(
+                        dates=date_labels,
+                        avg_hr=avg_hr,
+                        resting_hr=resting_hr,
+                        stress_score=stress_score,
+                        title="Heart Rate & Stress Trends",
+                    )
+                    render_echarts(chart_opt, height_px=380)
+                    st.markdown(
+                        "*Lower resting heart rate (<60 bpm) indicates athletic conditioning and "
+                        "higher cardiac efficiency. Garmin stress score derives from HRV analysis—"
+                        "scores 26-50 indicate low stress, while 76-100 suggest high sympathetic activation.* "
+                        "*(Shaffer & Ginsberg, 2017)*"
+                    )
+            
+            # 3. Sleep & Recovery
+            sleep_score = _get_series("sleep_score")
+            sleep_efficiency = _get_series("sleep_efficiency")
+            sleep_duration = _get_series("sleep_duration_hours")
+            if sleep_score or sleep_efficiency or sleep_duration:
+                rendered_any = True
+                with st.expander("😴 Sleep & Recovery", expanded=True):
+                    chart_opt = _build_sleep_recovery_chart(
+                        dates=date_labels,
+                        sleep_score=sleep_score,
+                        sleep_efficiency=sleep_efficiency,
+                        sleep_duration=sleep_duration,
+                        title="Sleep & Recovery Trends",
+                    )
+                    render_echarts(chart_opt, height_px=380)
+                    st.markdown(
+                        "*Sleep efficiency ≥85% is considered clinically normal. The National Sleep Foundation "
+                        "recommends 7-9 hours for adults. Chronic sleep debt accumulates and impairs "
+                        "cognitive function, immune response, and cardiovascular health.* "
+                        "*(Ohayon et al., 2017; NSF, 2015)*"
+                    )
+            
+            # 4. Respiration & SpO₂
+            spo2 = _get_series("avg_spo2")
+            resp_awake = _get_series("avg_respiration_awake")
+            resp_sleep = _get_series("avg_respiration_sleep")
+            if spo2 or resp_awake or resp_sleep:
+                rendered_any = True
+                with st.expander("🫁 Respiration & SpO₂", expanded=True):
+                    chart_opt = _build_respiration_spo2_chart(
+                        dates=date_labels,
+                        spo2=spo2,
+                        resp_awake=resp_awake,
+                        resp_sleep=resp_sleep,
+                        title="Respiration & SpO₂ Trends",
+                    )
+                    render_echarts(chart_opt, height_px=380)
+                    st.markdown(
+                        "*SpO₂ ≥95% is considered normal at sea level. Sustained readings below 94% "
+                        "warrant clinical evaluation. Normal adult respiratory rate is 12-20 breaths/min "
+                        "when awake, typically lower (10-16) during sleep.* "
+                        "*(WHO Pulse Oximetry Training Manual, 2011)*"
+                    )
         
-        # Convert dates to string list for chart builders
-        date_labels = [d.strftime("%Y-%m-%d") for d in df_ts.index]
-        
-        def _get_series(col: str) -> Optional[List[float]]:
-            """Extract series as list, or None if insufficient data."""
-            if col not in df_ts.columns:
-                return None
-            series = df_ts[col].tolist()
-            if sum(1 for v in series if v is not None and not pd.isna(v)) < 2:
-                return None
-            return [v if not pd.isna(v) else None for v in series]
-        
-        rendered_any = False
-        
-        # 1. Activity & Movement
-        steps = _get_series("steps")
-        calories = _get_series("calories_kcal")
-        if steps or calories:
-            rendered_any = True
-            with st.expander("🏃 Activity & Movement", expanded=True):
-                chart_opt = _build_activity_movement_chart(
-                    dates=date_labels,
-                    steps=steps,
-                    calories=calories,
-                    title="Activity & Movement Trends",
-                )
-                render_echarts(chart_opt, height_px=380)
-                st.markdown(
-                    "*Daily step count is a validated predictor of mortality risk. "
-                    "WHO recommends 8,000-10,000 steps/day for optimal cardiometabolic health.* "
-                    "*(Tudor-Locke et al., 2011)*"
-                )
-        
-        # 2. Heart Rate & Stress
-        avg_hr = _get_series("avg_hr_bpm")
-        resting_hr = _get_series("resting_hr_bpm")
-        stress_score = _get_series("stress_score")
-        if avg_hr or resting_hr or stress_score:
-            rendered_any = True
-            with st.expander("❤️ Heart Rate & Stress", expanded=True):
-                chart_opt = _build_hr_stress_chart(
-                    dates=date_labels,
-                    avg_hr=avg_hr,
-                    resting_hr=resting_hr,
-                    stress_score=stress_score,
-                    title="Heart Rate & Stress Trends",
-                )
-                render_echarts(chart_opt, height_px=380)
-                st.markdown(
-                    "*Lower resting heart rate (<60 bpm) indicates athletic conditioning and "
-                    "higher cardiac efficiency. Garmin stress score derives from HRV analysis—"
-                    "scores 26-50 indicate low stress, while 76-100 suggest high sympathetic activation.* "
-                    "*(Shaffer & Ginsberg, 2017)*"
-                )
-        
-        # 3. Sleep & Recovery
-        sleep_score = _get_series("sleep_score")
-        sleep_efficiency = _get_series("sleep_efficiency")
-        sleep_duration = _get_series("sleep_duration_hours")
-        if sleep_score or sleep_efficiency or sleep_duration:
-            rendered_any = True
-            with st.expander("😴 Sleep & Recovery", expanded=True):
-                chart_opt = _build_sleep_recovery_chart(
-                    dates=date_labels,
-                    sleep_score=sleep_score,
-                    sleep_efficiency=sleep_efficiency,
-                    sleep_duration=sleep_duration,
-                    title="Sleep & Recovery Trends",
-                )
-                render_echarts(chart_opt, height_px=380)
-                st.markdown(
-                    "*Sleep efficiency ≥85% is considered clinically normal. The National Sleep Foundation "
-                    "recommends 7-9 hours for adults. Chronic sleep debt accumulates and impairs "
-                    "cognitive function, immune response, and cardiovascular health.* "
-                    "*(Ohayon et al., 2017; NSF, 2015)*"
-                )
-        
-        # 4. Respiration & SpO₂
-        spo2 = _get_series("avg_spo2")
-        resp_awake = _get_series("avg_respiration_awake")
-        resp_sleep = _get_series("avg_respiration_sleep")
-        if spo2 or resp_awake or resp_sleep:
-            rendered_any = True
-            with st.expander("🫁 Respiration & SpO₂", expanded=True):
-                chart_opt = _build_respiration_spo2_chart(
-                    dates=date_labels,
-                    spo2=spo2,
-                    resp_awake=resp_awake,
-                    resp_sleep=resp_sleep,
-                    title="Respiration & SpO₂ Trends",
-                )
-                render_echarts(chart_opt, height_px=380)
-                st.markdown(
-                    "*SpO₂ ≥95% is considered normal at sea level. Sustained readings below 94% "
-                    "warrant clinical evaluation. Normal adult respiratory rate is 12-20 breaths/min "
-                    "when awake, typically lower (10-16) during sleep.* "
-                    "*(WHO Pulse Oximetry Training Manual, 2011)*"
-                )
-        
-        # 5. Body Battery
-        bb_avg = _get_series("body_battery_avg")
-        bb_charge = _get_series("body_battery_charge")
-        bb_drain = _get_series("body_battery_drain")
-        if bb_avg or bb_charge or bb_drain:
-            rendered_any = True
-            with st.expander("🔋 Body Battery", expanded=True):
-                chart_opt = _build_body_battery_chart(
-                    dates=date_labels,
-                    bb_avg=bb_avg,
-                    bb_charge=bb_charge,
-                    bb_drain=bb_drain,
-                    title="Body Battery Trends",
-                )
-                render_echarts(chart_opt, height_px=380)
-                st.markdown(
-                    "*Body Battery combines HRV, stress, sleep quality, and activity data into a "
-                    "0-100 energy reserve estimate. Values 75-100 indicate high energy reserves; "
-                    "<25 suggests rest is needed. This metric correlates with subjective fatigue "
-                    "and next-day performance capacity.* "
-                    "*(Firstbeat Technologies, 2014)*"
-                )
-        
-        if not rendered_any:
-            st.caption("Not enough repeated daily values to render trend charts yet.")
+            # 5. Body Battery
+            bb_avg = _get_series("body_battery_avg")
+            bb_charge = _get_series("body_battery_charge")
+            bb_drain = _get_series("body_battery_drain")
+            if bb_avg or bb_charge or bb_drain:
+                rendered_any = True
+                with st.expander("🔋 Body Battery", expanded=True):
+                    chart_opt = _build_body_battery_chart(
+                        dates=date_labels,
+                        bb_avg=bb_avg,
+                        bb_charge=bb_charge,
+                        bb_drain=bb_drain,
+                        title="Body Battery Trends",
+                    )
+                    render_echarts(chart_opt, height_px=380)
+                    st.markdown(
+                        "*Body Battery combines HRV, stress, sleep quality, and activity data into a "
+                        "0-100 energy reserve estimate. Values 75-100 indicate high energy reserves; "
+                        "<25 suggests rest is needed. This metric correlates with subjective fatigue "
+                        "and next-day performance capacity.* "
+                        "*(Firstbeat Technologies, 2014)*"
+                    )
+            
+            if not rendered_any:
+                st.caption("Not enough repeated daily values to render trend charts yet.")
     
-    with st.expander("📋 View all daily metrics", expanded=False):
-        preview_cols = [
-            "metric_date",
-            "steps",
-            "distance_km",
-            "calories_kcal",
-            "avg_hr_bpm",
-            "resting_hr_bpm",
-            "stress_score",
-            "sleep_score",
-            "sleep_efficiency",
-            "sleep_duration_hours",
-            "avg_spo2",
-            "avg_respiration_awake",
-            "avg_respiration_sleep",
-            "body_battery_avg",
-            "body_battery_charge",
-            "body_battery_drain",
-        ]
-        existing_cols = [c for c in preview_cols if c in df.columns]
-        display_df = df[existing_cols].copy()
-        
-        # Format for better display
-        if "metric_date" in display_df.columns:
-            display_df["metric_date"] = display_df["metric_date"].dt.strftime("%Y-%m-%d")
-        st.caption(f"Showing {len(display_df)} day(s) loaded from the database.")
-        
-        st.dataframe(
-            display_df.reset_index(drop=True),
-            use_container_width=True,
-            hide_index=True,
-        )
+    if show_table:
+        with st.expander("📋 View all daily metrics", expanded=False):
+            preview_cols = [
+                "metric_date",
+                "steps",
+                "distance_km",
+                "calories_kcal",
+                "avg_hr_bpm",
+                "resting_hr_bpm",
+                "stress_score",
+                "sleep_score",
+                "sleep_efficiency",
+                "sleep_duration_hours",
+                "avg_spo2",
+                "avg_respiration_awake",
+                "avg_respiration_sleep",
+                "body_battery_avg",
+                "body_battery_charge",
+                "body_battery_drain",
+            ]
+            existing_cols = [c for c in preview_cols if c in df.columns]
+            display_df = df[existing_cols].copy()
+            
+            # Format for better display
+            if "metric_date" in display_df.columns:
+                display_df["metric_date"] = display_df["metric_date"].dt.strftime("%Y-%m-%d")
+            st.caption(f"Showing {len(display_df)} day(s) loaded from the database.")
+            
+            st.dataframe(
+                display_df.reset_index(drop=True),
+                use_container_width=True,
+                hide_index=True,
+            )
+    elif perf_mode:
+        st.caption("Raw Garmin table hidden (performance mode).")
     
     # Advanced Analytics Section
-    if WEARABLE_ANALYTICS_AVAILABLE and len(df) >= 7:
+    if show_advanced and WEARABLE_ANALYTICS_AVAILABLE and len(df) >= 7:
         st.markdown("---")
         st.markdown("### 🧠 Advanced Predictive Analytics")
         st.caption(
@@ -8060,10 +8187,85 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
             "aspects of allostatic load, circadian regulation, and recovery capacity."
         )
         
-        _render_advanced_wearable_analytics(df)
+        _render_advanced_wearable_analytics(df, user.user_id)
 
 
-def _render_advanced_wearable_analytics(df: pd.DataFrame) -> None:
+_WEARABLE_CACHE_TTL_SECONDS: Final[int] = 1800
+_WEARABLE_MAX_HASH_ROWS: Final[int] = 2000
+_WEARABLE_HASH_COLUMNS: Final[tuple[str, ...]] = (
+    "metric_date",
+    "steps",
+    "distance_km",
+    "calories_kcal",
+    "avg_hr_bpm",
+    "resting_hr_bpm",
+    "stress_score",
+    "sleep_score",
+    "sleep_efficiency",
+    "sleep_duration_hours",
+    "avg_spo2",
+    "avg_respiration_awake",
+    "avg_respiration_sleep",
+    "body_battery_avg",
+    "body_battery_charge",
+    "body_battery_drain",
+    "hrv_rmssd_ms",
+    "hrv_sdnn_ms",
+)
+
+
+def _hash_dataframe_for_wearable(
+    df: pd.DataFrame,
+    *,
+    columns: Sequence[str] | None = None,
+    max_rows: int = _WEARABLE_MAX_HASH_ROWS,
+) -> str:
+    """Return a stable hash for wearable analytics inputs (bounded, deterministic)."""
+    if df is None or df.empty:
+        return "empty"
+    working = df
+    if columns:
+        existing = [col for col in columns if col in working.columns]
+        if existing:
+            working = working[existing]
+    if max_rows <= 0:
+        max_rows = _WEARABLE_MAX_HASH_ROWS
+    if len(working) > max_rows:
+        working = working.tail(int(max_rows))
+    try:
+        working = working.copy()
+    except Exception:
+        pass
+    try:
+        working = working.sort_index(axis=1)
+    except Exception:
+        pass
+    try:
+        hashes = pd.util.hash_pandas_object(working, index=True)
+        return hashlib.sha256(hashes.values.tobytes()).hexdigest()
+    except Exception:
+        payload = working.to_json(orient="table", date_format="iso", default_handler=str)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _wearable_insights_signature(df: pd.DataFrame, user_id: str) -> str:
+    """Build a deterministic signature for wearable analytics inputs."""
+    wearable_hash = _hash_dataframe_for_wearable(df, columns=_WEARABLE_HASH_COLUMNS)
+    seed = f"user={user_id}|wearable={wearable_hash}"
+    return hashlib.sha256(seed.encode("utf-8")).hexdigest()
+
+
+@st.cache_data(ttl=_WEARABLE_CACHE_TTL_SECONDS, max_entries=16, show_spinner=False)
+def _cached_wearable_insights(
+    signature: str,
+    df: pd.DataFrame,
+) -> Optional["WearableInsights"]:
+    """Cache wrapper for wearable analytics (signature-guarded)."""
+    _ = signature  # part of cache key; do not remove
+    return generate_wearable_insights(df)
+
+
+def _render_advanced_wearable_analytics(df: pd.DataFrame, user_id: str) -> None:
     """Render advanced wearable analytics with predictive models and insights."""
     if not WEARABLE_ANALYTICS_AVAILABLE:
         st.info("Advanced analytics module not available.")
@@ -8071,7 +8273,8 @@ def _render_advanced_wearable_analytics(df: pd.DataFrame) -> None:
     
     # Generate comprehensive insights
     try:
-        insights = generate_wearable_insights(df)
+        signature = _wearable_insights_signature(df, user_id)
+        insights = _cached_wearable_insights(signature, df)
     except Exception as exc:
         _LOGGER.warning("Failed to generate wearable insights: %s", exc)
         st.warning("Unable to generate advanced analytics. Insufficient data or analysis error.")
@@ -10381,18 +10584,23 @@ def _render_hrv_history(user: UserProfile) -> None:
             help="Reload HRV measurements from the database and redraw all charts.",
         ):
             st.session_state[refresh_state_key] = refresh_token + 1
-            try:
-                st.cache_data.clear()
-            except Exception:  # pragma: no cover - cache may be unavailable in some contexts
-                pass
             st.rerun()
     with col_meta:
         st.caption("If charts look stale after new uploads/analysis, regenerate to refresh them.")
     
     try:
-        with st.spinner("Loading HRV measurements..."):
+        @st.cache_data(ttl=300, max_entries=64, show_spinner=False)
+        def _load_hrv_history_dataframe(
+            uid: str,
+            limit: int,
+            refresh_token: int,
+        ) -> pd.DataFrame:
+            _ = refresh_token
             db = get_database()
-            df = db.get_hrv_dataframe(user.user_id, limit=500, include_rr=False)
+            return db.get_hrv_dataframe(uid, limit=limit, include_rr=False)
+
+        with st.spinner("Loading HRV measurements..."):
+            df = _load_hrv_history_dataframe(user.user_id, 500, refresh_token)
         
         if df.empty:
             st.info("No HRV measurements recorded. Import HRV data from the main analysis to populate this section.")
@@ -10424,17 +10632,43 @@ def _render_hrv_history(user: UserProfile) -> None:
         with col4:
             if "mean_hr_bpm" in df.columns:
                 st.metric("Avg HR", f"{df['mean_hr_bpm'].mean():.0f} bpm")
-        
+
+        perf_mode = bool(st.session_state.get(f"profile_perf_mode_{user.user_id}", False))
+        with st.expander("⚡ Performance controls (HRV History)", expanded=False):
+            show_hrv_charts = st.toggle(
+                "Show HRV charts",
+                value=not perf_mode,
+                key=f"hrv_history_show_charts_{user.user_id}",
+            )
+            show_baseline = st.toggle(
+                "Show baseline/timepoint analysis",
+                value=not perf_mode,
+                key=f"hrv_history_show_baseline_{user.user_id}",
+            )
+            show_advanced = st.toggle(
+                "Show advanced HRV analytics",
+                value=False if perf_mode else True,
+                key=f"hrv_history_show_advanced_{user.user_id}",
+            )
+            show_table = st.toggle(
+                "Show raw HRV table",
+                value=False if perf_mode else True,
+                key=f"hrv_history_show_table_{user.user_id}",
+            )
+        if perf_mode and not any([show_hrv_charts, show_baseline, show_advanced, show_table]):
+            st.caption("Performance mode is enabled — charts/analytics are hidden.")
+
         # Get user age for normative reference
         user_age = 35
-        try:
-            user_context = get_active_user_context()
-            user_age = user_context.get("age_years", 35) or 35
-        except Exception:
-            pass
+        if show_hrv_charts:
+            try:
+                user_context = get_active_user_context()
+                user_age = user_context.get("age_years", 35) or 35
+            except Exception:
+                pass
         
         # === PUBLICATION-QUALITY HRV TIME-DOMAIN TREND CHART ===
-        if len(df) > 1 and "measurement_date" in df.columns and "rmssd_ms" in df.columns:
+        if show_hrv_charts and len(df) > 1 and "measurement_date" in df.columns and "rmssd_ms" in df.columns:
             st.markdown("##### 📈 HRV Time-Domain Metrics with Age-Adjusted Reference Ranges")
             st.caption(
                 "Publication-quality visualization showing RMSSD and SDNN trends with age-stratified "
@@ -10515,177 +10749,183 @@ def _render_hrv_history(user: UserProfile) -> None:
 
         # Longitudinal baseline/change analytics (T0–T21)
         with st.expander("🧪 Baseline / Δ by timepoint (T0–T21)", expanded=False):
-            st.caption(
-                "Groups HRV sessions by your saved longitudinal timepoints (T0…T21), "
-                "computes a baseline from T0, and reports Δ (delta) per timepoint. "
-                "This requires that your saved HRV measurements are tagged with a timepoint."
-            )
-
-            if "timepoint_id" not in df.columns or df["timepoint_id"].isna().all():
-                st.info(
-                    "No timepoint-tagged HRV measurements were found yet. "
-                    "Use the **Longitudinal timepoint (T0–T21)** selector when saving new entries."
-                )
+            if not show_baseline:
+                st.info("Enable **Show baseline/timepoint analysis** to render this section.")
             else:
-                available_metric_candidates = [
-                    "rmssd_ms",
-                    "sdnn_ms",
-                    "mean_hr_bpm",
-                    "hf_power_ms2",
-                    "lf_hf_ratio",
-                    "parasympathetic_index",
-                    "stress_index",
-                    "artifact_percentage",
-                    "quality_score",
-                ]
-                available_metrics = [
-                    m for m in available_metric_candidates if m in df.columns and df[m].notna().any()
-                ]
-                if not available_metrics:
-                    st.info("Timepoints are present, but no numeric HRV metrics are available to summarize yet.")
+                st.caption(
+                    "Groups HRV sessions by your saved longitudinal timepoints (T0…T21), "
+                    "computes a baseline from T0, and reports Δ (delta) per timepoint. "
+                    "This requires that your saved HRV measurements are tagged with a timepoint."
+                )
+
+                if "timepoint_id" not in df.columns or df["timepoint_id"].isna().all():
+                    st.info(
+                        "No timepoint-tagged HRV measurements were found yet. "
+                        "Use the **Longitudinal timepoint (T0–T21)** selector when saving new entries."
+                    )
                 else:
-                    col_a, col_b = st.columns([2, 1])
-                    with col_a:
-                        selected_metrics = st.multiselect(
-                            "Metrics to summarize",
-                            options=available_metrics,
-                            default=[m for m in ["rmssd_ms", "sdnn_ms", "mean_hr_bpm"] if m in available_metrics],
-                            key=f"profile_timepoint_metrics_{user.user_id}",
-                            help="These metrics will be aggregated per timepoint, then compared vs the baseline timepoint.",
-                        )
-                    with col_b:
-                        agg_mode = st.selectbox(
-                            "Aggregation",
-                            options=["median", "mean"],
-                            index=0,
-                            key=f"profile_timepoint_agg_{user.user_id}",
-                            help="How to combine multiple sessions within the same timepoint.",
-                        )
-
-                    try:
-                        # If the user unselects everything, fall back to the default metric list inside the DB helper.
-                        metrics_arg = selected_metrics if selected_metrics else None
-                        tp_table = db.get_hrv_timepoint_change_table(
-                            user.user_id,
-                            metrics=metrics_arg,
-                            agg=str(agg_mode),
-                            limit=500,
-                        )
-                    except Exception as exc:  # noqa: BLE001
-                        tp_table = pd.DataFrame()
-                        st.error(f"Unable to compute timepoint baseline/Δ table: {exc}")
-
-                    if tp_table.empty:
-                        st.info(
-                            "No timepoint summaries could be produced yet. "
-                            "Ensure your HRV measurements are saved with a timepoint label (T0…T21)."
-                        )
+                    available_metric_candidates = [
+                        "rmssd_ms",
+                        "sdnn_ms",
+                        "mean_hr_bpm",
+                        "hf_power_ms2",
+                        "lf_hf_ratio",
+                        "parasympathetic_index",
+                        "stress_index",
+                        "artifact_percentage",
+                        "quality_score",
+                    ]
+                    available_metrics = [
+                        m for m in available_metric_candidates if m in df.columns and df[m].notna().any()
+                    ]
+                    if not available_metrics:
+                        st.info("Timepoints are present, but no numeric HRV metrics are available to summarize yet.")
                     else:
-                        st.dataframe(tp_table, use_container_width=True)
-                        st.caption(
-                            "Columns prefixed with `baseline_` are the baseline values (T0), and `delta_` columns are "
-                            "computed as (timepoint_value − baseline_value)."
-                        )
+                        col_a, col_b = st.columns([2, 1])
+                        with col_a:
+                            selected_metrics = st.multiselect(
+                                "Metrics to summarize",
+                                options=available_metrics,
+                                default=[m for m in ["rmssd_ms", "sdnn_ms", "mean_hr_bpm"] if m in available_metrics],
+                                key=f"profile_timepoint_metrics_{user.user_id}",
+                                help="These metrics will be aggregated per timepoint, then compared vs the baseline timepoint.",
+                            )
+                        with col_b:
+                            agg_mode = st.selectbox(
+                                "Aggregation",
+                                options=["median", "mean"],
+                                index=0,
+                                key=f"profile_timepoint_agg_{user.user_id}",
+                                help="How to combine multiple sessions within the same timepoint.",
+                            )
+
+                        try:
+                            # If the user unselects everything, fall back to the default metric list inside the DB helper.
+                            metrics_arg = selected_metrics if selected_metrics else None
+                            tp_table = db.get_hrv_timepoint_change_table(
+                                user.user_id,
+                                metrics=metrics_arg,
+                                agg=str(agg_mode),
+                                limit=500,
+                            )
+                        except Exception as exc:  # noqa: BLE001
+                            tp_table = pd.DataFrame()
+                            st.error(f"Unable to compute timepoint baseline/Δ table: {exc}")
+
+                        if tp_table.empty:
+                            st.info(
+                                "No timepoint summaries could be produced yet. "
+                                "Ensure your HRV measurements are saved with a timepoint label (T0…T21)."
+                            )
+                        else:
+                            st.dataframe(tp_table, use_container_width=True)
+                            st.caption(
+                                "Columns prefixed with `baseline_` are the baseline values (T0), and `delta_` columns are "
+                                "computed as (timepoint_value − baseline_value)."
+                            )
 
         # Additional performance & recovery visuals with publication-quality charts
         with st.expander("🏃 Performance & Recovery Plots (Publication Quality)", expanded=False):
-            st.markdown("""
-            **Scientific Background:** These visualizations follow guidelines from Nature Research 
-            and incorporate age-stratified normative data for clinical interpretation. 
-            Each metric provides insight into different aspects of autonomic function and recovery capacity.
-            """)
-            
-            # === Heart Rate Trend with Age-Based Reference ===
-            if "mean_hr_bpm" in df.columns and df["mean_hr_bpm"].notna().any():
-                hr_df = df[["measurement_date", "mean_hr_bpm"]].dropna()
-                hr_df = hr_df.sort_values("measurement_date")
-                if len(hr_df) >= 3:
-                    st.markdown("##### ❤️ Resting Heart Rate Trend")
-                    hr_chart = _build_hr_trend_chart(
-                        dates=hr_df["measurement_date"].astype(str).tolist(),
-                        hr_values=hr_df["mean_hr_bpm"].tolist(),
-                        age=int(user_age),
-                        title="Resting Heart Rate with Physiological Zones",
+            if not show_hrv_charts:
+                st.info("Enable **Show HRV charts** to render this section.")
+            else:
+                st.markdown("""
+                **Scientific Background:** These visualizations follow guidelines from Nature Research 
+                and incorporate age-stratified normative data for clinical interpretation. 
+                Each metric provides insight into different aspects of autonomic function and recovery capacity.
+                """)
+                
+                # === Heart Rate Trend with Age-Based Reference ===
+                if "mean_hr_bpm" in df.columns and df["mean_hr_bpm"].notna().any():
+                    hr_df = df[["measurement_date", "mean_hr_bpm"]].dropna()
+                    hr_df = hr_df.sort_values("measurement_date")
+                    if len(hr_df) >= 3:
+                        st.markdown("##### ❤️ Resting Heart Rate Trend")
+                        hr_chart = _build_hr_trend_chart(
+                            dates=hr_df["measurement_date"].astype(str).tolist(),
+                            hr_values=hr_df["mean_hr_bpm"].tolist(),
+                            age=int(user_age),
+                            title="Resting Heart Rate with Physiological Zones",
+                        )
+                        render_echarts(hr_chart, height_px=350)
+                
+                # === LF/HF Ratio (Sympathovagal Balance) ===
+                if "lf_hf_ratio" in df.columns and df["lf_hf_ratio"].notna().any():
+                    lf_hf_df = df[["measurement_date", "lf_hf_ratio"]].dropna()
+                    lf_hf_df = lf_hf_df.sort_values("measurement_date")
+                    if len(lf_hf_df) >= 3:
+                        st.markdown("##### ⚖️ Sympathovagal Balance (LF/HF Ratio)")
+                        lf_hf_chart = _build_lf_hf_trend_chart(
+                            dates=lf_hf_df["measurement_date"].astype(str).tolist(),
+                            lf_hf_values=lf_hf_df["lf_hf_ratio"].tolist(),
+                            age=int(user_age),
+                            title="LF/HF Ratio Trend with Autonomic Interpretation",
+                        )
+                        render_echarts(lf_hf_chart, height_px=350)
+                
+                # === Autonomic Indices (Stress, PNS, HRV Score) ===
+                stress_vals = None
+                pns_vals = None
+                hrv_score_vals = None
+                idx_dates = None
+                
+                if "stress_index" in df.columns and df["stress_index"].notna().any():
+                    stress_df = df[["measurement_date", "stress_index"]].dropna()
+                    if len(stress_df) >= 3:
+                        stress_df = stress_df.sort_values("measurement_date")
+                        idx_dates = stress_df["measurement_date"].astype(str).tolist()
+                        stress_vals = stress_df["stress_index"].tolist()
+                
+                if "parasympathetic_index" in df.columns and df["parasympathetic_index"].notna().any():
+                    pns_df = df[["measurement_date", "parasympathetic_index"]].dropna()
+                    if len(pns_df) >= 3:
+                        pns_df = pns_df.sort_values("measurement_date")
+                        if idx_dates is None:
+                            idx_dates = pns_df["measurement_date"].astype(str).tolist()
+                        pns_vals = pns_df["parasympathetic_index"].tolist()
+                
+                if "hrv_score" in df.columns and df["hrv_score"].notna().any():
+                    score_df = df[["measurement_date", "hrv_score"]].dropna()
+                    if len(score_df) >= 3:
+                        score_df = score_df.sort_values("measurement_date")
+                        if idx_dates is None:
+                            idx_dates = score_df["measurement_date"].astype(str).tolist()
+                        hrv_score_vals = score_df["hrv_score"].tolist()
+                
+                if idx_dates and (stress_vals or pns_vals or hrv_score_vals):
+                    st.markdown("##### 📊 Autonomic Function Indices")
+                    idx_chart = _build_autonomic_indices_chart(
+                        dates=idx_dates,
+                        stress_index=stress_vals,
+                        parasympathetic_index=pns_vals,
+                        hrv_score=hrv_score_vals,
+                        title="Autonomic Function Indices Over Time",
                     )
-                    render_echarts(hr_chart, height_px=350)
-            
-            # === LF/HF Ratio (Sympathovagal Balance) ===
-            if "lf_hf_ratio" in df.columns and df["lf_hf_ratio"].notna().any():
-                lf_hf_df = df[["measurement_date", "lf_hf_ratio"]].dropna()
-                lf_hf_df = lf_hf_df.sort_values("measurement_date")
-                if len(lf_hf_df) >= 3:
-                    st.markdown("##### ⚖️ Sympathovagal Balance (LF/HF Ratio)")
-                    lf_hf_chart = _build_lf_hf_trend_chart(
-                        dates=lf_hf_df["measurement_date"].astype(str).tolist(),
-                        lf_hf_values=lf_hf_df["lf_hf_ratio"].tolist(),
-                        age=int(user_age),
-                        title="LF/HF Ratio Trend with Autonomic Interpretation",
-                    )
-                    render_echarts(lf_hf_chart, height_px=350)
-            
-            # === Autonomic Indices (Stress, PNS, HRV Score) ===
-            stress_vals = None
-            pns_vals = None
-            hrv_score_vals = None
-            idx_dates = None
-            
-            if "stress_index" in df.columns and df["stress_index"].notna().any():
-                stress_df = df[["measurement_date", "stress_index"]].dropna()
-                if len(stress_df) >= 3:
-                    stress_df = stress_df.sort_values("measurement_date")
-                    idx_dates = stress_df["measurement_date"].astype(str).tolist()
-                    stress_vals = stress_df["stress_index"].tolist()
-            
-            if "parasympathetic_index" in df.columns and df["parasympathetic_index"].notna().any():
-                pns_df = df[["measurement_date", "parasympathetic_index"]].dropna()
-                if len(pns_df) >= 3:
-                    pns_df = pns_df.sort_values("measurement_date")
-                    if idx_dates is None:
-                        idx_dates = pns_df["measurement_date"].astype(str).tolist()
-                    pns_vals = pns_df["parasympathetic_index"].tolist()
-            
-            if "hrv_score" in df.columns and df["hrv_score"].notna().any():
-                score_df = df[["measurement_date", "hrv_score"]].dropna()
-                if len(score_df) >= 3:
-                    score_df = score_df.sort_values("measurement_date")
-                    if idx_dates is None:
-                        idx_dates = score_df["measurement_date"].astype(str).tolist()
-                    hrv_score_vals = score_df["hrv_score"].tolist()
-            
-            if idx_dates and (stress_vals or pns_vals or hrv_score_vals):
-                st.markdown("##### 📊 Autonomic Function Indices")
-                idx_chart = _build_autonomic_indices_chart(
-                    dates=idx_dates,
-                    stress_index=stress_vals,
-                    parasympathetic_index=pns_vals,
-                    hrv_score=hrv_score_vals,
-                    title="Autonomic Function Indices Over Time",
-                )
-                render_echarts(idx_chart, height_px=380)
-            
-            # === lnRMSSD Trend (Athletic Performance Tracking) ===
-            if "rmssd_ms" in df.columns and df["rmssd_ms"].notna().any():
-                ln_df = df[["measurement_date", "rmssd_ms"]].copy()
-                ln_df = ln_df[(ln_df["rmssd_ms"].notna()) & (ln_df["rmssd_ms"] > 0)]
-                if len(ln_df) >= 5:
-                    ln_df = ln_df.sort_values("measurement_date")
-                    ln_rmssd_values = np.log(ln_df["rmssd_ms"].astype(float)).tolist()
-                    dates_ln = ln_df["measurement_date"].astype(str).tolist()
-                    
-                    st.markdown("##### 📐 lnRMSSD Trend (Log-Transformed)")
-                    st.caption(
-                        "lnRMSSD is commonly used in athletic monitoring to track recovery. "
-                        "Log transformation normalizes the distribution and reduces the influence "
-                        "of outliers. Coefficient of Variation (CV) < 10% indicates stable baseline."
-                    )
-                    
-                    # Calculate CV
-                    ln_arr = np.array(ln_rmssd_values)
-                    ln_mean = float(np.mean(ln_arr))
-                    ln_sd = float(np.std(ln_arr))
-                    ln_cv = (ln_sd / ln_mean * 100) if ln_mean > 0 else 0
-                    
-                    ln_ewma = _ewma_smooth(ln_arr, span=7).tolist()
+                    render_echarts(idx_chart, height_px=380)
+                
+                # === lnRMSSD Trend (Athletic Performance Tracking) ===
+                if "rmssd_ms" in df.columns and df["rmssd_ms"].notna().any():
+                    ln_df = df[["measurement_date", "rmssd_ms"]].copy()
+                    ln_df = ln_df[(ln_df["rmssd_ms"].notna()) & (ln_df["rmssd_ms"] > 0)]
+                    if len(ln_df) >= 5:
+                        ln_df = ln_df.sort_values("measurement_date")
+                        ln_rmssd_values = np.log(ln_df["rmssd_ms"].astype(float)).tolist()
+                        dates_ln = ln_df["measurement_date"].astype(str).tolist()
+                        
+                        st.markdown("##### 📐 lnRMSSD Trend (Log-Transformed)")
+                        st.caption(
+                            "lnRMSSD is commonly used in athletic monitoring to track recovery. "
+                            "Log transformation normalizes the distribution and reduces the influence "
+                            "of outliers. Coefficient of Variation (CV) < 10% indicates stable baseline."
+                        )
+                        
+                        # Calculate CV
+                        ln_arr = np.array(ln_rmssd_values)
+                        ln_mean = float(np.mean(ln_arr))
+                        ln_sd = float(np.std(ln_arr))
+                        ln_cv = (ln_sd / ln_mean * 100) if ln_mean > 0 else 0
+                        
+                        ln_ewma = _ewma_smooth(ln_arr, span=7).tolist()
                     
                     ln_chart = {
                         "title": {
@@ -10813,169 +11053,176 @@ def _render_hrv_history(user: UserProfile) -> None:
 
         # HRV × wearable/activity relationships (when daily metrics exist)
         with st.expander("🔗 HRV × Activity (Garmin daily metrics)", expanded=False):
-            try:
-                garmin_df = pd.DataFrame()
-                if hasattr(db, "get_garmin_daily_dataframe"):
-                    garmin_df = db.get_garmin_daily_dataframe(user.user_id, limit=365)  # type: ignore[attr-defined]
-                elif hasattr(db, "get_garmin_daily_metrics"):
-                    rows = db.get_garmin_daily_metrics(user.user_id, limit=365)  # type: ignore[attr-defined]
-                    if rows:
-                        garmin_df = pd.DataFrame([r.to_dict() for r in rows])
-            except Exception:
-                garmin_df = pd.DataFrame()
-
-            if garmin_df.empty or "metric_date" not in garmin_df.columns:
-                st.info("No Garmin daily metrics available yet for activity/recovery overlays.")
+            if not show_hrv_charts:
+                st.info("Enable **Show HRV charts** to render this section.")
             else:
-                garmin_df = garmin_df.copy()
-                garmin_df["metric_date"] = pd.to_datetime(garmin_df["metric_date"], errors="coerce")
-                garmin_df = garmin_df.dropna(subset=["metric_date"])
-                if garmin_df.empty:
-                    st.info("No usable Garmin dates found yet.")
+                try:
+                    garmin_df = pd.DataFrame()
+                    if hasattr(db, "get_garmin_daily_dataframe"):
+                        garmin_df = db.get_garmin_daily_dataframe(user.user_id, limit=365)  # type: ignore[attr-defined]
+                    elif hasattr(db, "get_garmin_daily_metrics"):
+                        rows = db.get_garmin_daily_metrics(user.user_id, limit=365)  # type: ignore[attr-defined]
+                        if rows:
+                            garmin_df = pd.DataFrame([r.to_dict() for r in rows])
+                except Exception:
+                    garmin_df = pd.DataFrame()
+
+                if garmin_df.empty or "metric_date" not in garmin_df.columns:
+                    st.info("No Garmin daily metrics available yet for activity/recovery overlays.")
                 else:
-                    garmin_daily_cols = [
-                        c
-                            for c in [
-                                "steps",
-                                "distance_km",
-                                "calories_kcal",
-                                "sleep_score",
-                                "sleep_efficiency",
-                                "sleep_duration_hours",
-                                "resting_hr_bpm",
-                                "hrv_rmssd_ms",
-                                "stress_score",
-                                "avg_spo2",
-                                "avg_respiration_sleep",
-                                "body_battery_avg",
-                            ]
-                        if c in garmin_df.columns and garmin_df[c].notna().any()
-                    ]
-                    if not garmin_daily_cols:
-                        st.info("Garmin metrics found, but no activity/recovery fields are populated yet.")
+                    garmin_df = garmin_df.copy()
+                    garmin_df["metric_date"] = pd.to_datetime(garmin_df["metric_date"], errors="coerce")
+                    garmin_df = garmin_df.dropna(subset=["metric_date"])
+                    if garmin_df.empty:
+                        st.info("No usable Garmin dates found yet.")
                     else:
-                        garmin_daily = garmin_df.set_index("metric_date")[garmin_daily_cols].sort_index()
-
-                        # Aggregate HRV to daily medians for fair alignment with daily Garmin metrics.
-                        hrv_daily_cols = [
+                        garmin_daily_cols = [
                             c
-                            for c in ["rmssd_ms", "sdnn_ms", "mean_hr_bpm"]
-                            if c in df.columns and df[c].notna().any()
-                        ]
-                        hrv_daily = pd.DataFrame()
-                        if hrv_daily_cols and "measurement_date" in df.columns:
-                            hrv_tmp = df[["measurement_date"] + hrv_daily_cols].copy()
-                            hrv_tmp["measurement_date"] = pd.to_datetime(hrv_tmp["measurement_date"], errors="coerce")
-                            hrv_tmp = hrv_tmp.dropna(subset=["measurement_date"])
-                            if not hrv_tmp.empty:
-                                hrv_tmp["day"] = hrv_tmp["measurement_date"].dt.normalize()
-                                hrv_daily = (
-                                    hrv_tmp.groupby("day", as_index=True)[hrv_daily_cols]
-                                    .median()
-                                    .sort_index()
-                                )
-
-                        if hrv_daily.empty:
-                            st.info("HRV history is available, but not enough daily values to align with Garmin yet.")
-                        else:
-                            merged = hrv_daily.join(garmin_daily, how="inner")
-                            if merged.empty:
-                                st.info("No overlapping days between HRV measurements and Garmin daily metrics yet.")
-                            else:
-                                # Publication-quality HRV × Activity time series
-                                has_steps = "steps" in merged.columns and merged["steps"].notna().any()
-                                has_rmssd = "rmssd_ms" in merged.columns and merged["rmssd_ms"].notna().any()
-                                
-                                if has_steps or has_rmssd:
-                                    merged_sorted = merged.sort_index()
-                                    dates_list = [str(d)[:10] for d in merged_sorted.index.tolist()]
-                                    steps_data = merged_sorted["steps"].tolist() if has_steps else None
-                                    rmssd_data = merged_sorted["rmssd_ms"].tolist() if has_rmssd else None
-                                    
-                                    activity_chart = _build_hrv_activity_timeseries_chart(
-                                        dates=dates_list,
-                                        steps=steps_data,
-                                        rmssd_ms=rmssd_data,
-                                        title="HRV × Activity Time Series",
-                                    )
-                                    render_echarts(activity_chart, height_px=400)
-                                    st.markdown(
-                                        "*Daily steps (activity load) plotted with RMSSD (parasympathetic recovery). "
-                                        "High activity + high RMSSD indicates good fitness and recovery. "
-                                        "High activity + low RMSSD may suggest overtraining.* "
-                                        "*(Plews et al., 2013; Stanley et al., 2013)*"
-                                    )
-
-                                # Publication-quality scatter plots with regression
-                                st.markdown("##### 📊 HRV × Activity Correlations")
-                                scatter_pairs = [
-                                    ("steps", "rmssd_ms", "RMSSD vs Steps", "Steps", "RMSSD (ms)"),
-                                    ("distance_km", "rmssd_ms", "RMSSD vs Distance", "Distance (km)", "RMSSD (ms)"),
-                                    ("calories_kcal", "rmssd_ms", "RMSSD vs Calories", "Calories (kcal)", "RMSSD (ms)"),
-                                    ("sleep_score", "rmssd_ms", "RMSSD vs Sleep Score", "Sleep Score", "RMSSD (ms)"),
-                                    ("stress_score", "rmssd_ms", "RMSSD vs Stress Score", "Stress Score", "RMSSD (ms)"),
-                                    ("body_battery_avg", "rmssd_ms", "RMSSD vs Body Battery", "Body Battery (avg)", "RMSSD (ms)"),
+                                for c in [
+                                    "steps",
+                                    "distance_km",
+                                    "calories_kcal",
+                                    "sleep_score",
+                                    "sleep_efficiency",
+                                    "sleep_duration_hours",
+                                    "resting_hr_bpm",
+                                    "hrv_rmssd_ms",
+                                    "stress_score",
+                                    "avg_spo2",
+                                    "avg_respiration_sleep",
+                                    "body_battery_avg",
                                 ]
-                                
-                                scatter_cols = st.columns(2)
-                                scatter_idx = 0
-                                
-                                for x_col, y_col, chart_title, xlab, ylab in scatter_pairs:
-                                    if x_col not in merged.columns or y_col not in merged.columns:
-                                        continue
-                                    paired = merged[[x_col, y_col]].dropna()
-                                    if len(paired) < 3:
-                                        continue
-                                    
-                                    corr = paired[x_col].corr(paired[y_col])
-                                    x_vals = paired[x_col].tolist()
-                                    y_vals = paired[y_col].tolist()
-                                    
-                                    scatter_chart = _build_hrv_activity_scatter_chart(
-                                        x_values=x_vals,
-                                        y_values=y_vals,
-                                        x_label=xlab,
-                                        y_label=ylab,
-                                        title=chart_title,
-                                        correlation=corr,
-                                        n_samples=len(paired),
+                            if c in garmin_df.columns and garmin_df[c].notna().any()
+                        ]
+                        if not garmin_daily_cols:
+                            st.info("Garmin metrics found, but no activity/recovery fields are populated yet.")
+                        else:
+                            garmin_daily = garmin_df.set_index("metric_date")[garmin_daily_cols].sort_index()
+
+                            # Aggregate HRV to daily medians for fair alignment with daily Garmin metrics.
+                            hrv_daily_cols = [
+                                c
+                                for c in ["rmssd_ms", "sdnn_ms", "mean_hr_bpm"]
+                                if c in df.columns and df[c].notna().any()
+                            ]
+                            hrv_daily = pd.DataFrame()
+                            if hrv_daily_cols and "measurement_date" in df.columns:
+                                hrv_tmp = df[["measurement_date"] + hrv_daily_cols].copy()
+                                hrv_tmp["measurement_date"] = pd.to_datetime(hrv_tmp["measurement_date"], errors="coerce")
+                                hrv_tmp = hrv_tmp.dropna(subset=["measurement_date"])
+                                if not hrv_tmp.empty:
+                                    hrv_tmp["day"] = hrv_tmp["measurement_date"].dt.normalize()
+                                    hrv_daily = (
+                                        hrv_tmp.groupby("day", as_index=True)[hrv_daily_cols]
+                                        .median()
+                                        .sort_index()
                                     )
+
+                            if hrv_daily.empty:
+                                st.info("HRV history is available, but not enough daily values to align with Garmin yet.")
+                            else:
+                                merged = hrv_daily.join(garmin_daily, how="inner")
+                                if merged.empty:
+                                    st.info("No overlapping days between HRV measurements and Garmin daily metrics yet.")
+                                else:
+                                    # Publication-quality HRV × Activity time series
+                                    has_steps = "steps" in merged.columns and merged["steps"].notna().any()
+                                    has_rmssd = "rmssd_ms" in merged.columns and merged["rmssd_ms"].notna().any()
                                     
-                                    with scatter_cols[scatter_idx % 2]:
-                                        render_echarts(scatter_chart, height_px=320)
-                                    scatter_idx += 1
-                                
-                                if scatter_idx > 0:
-                                    st.markdown(
-                                        "*Scatter plots show relationships between activity metrics and RMSSD. "
-                                        "Regression lines indicate trend direction. Correlation strength: "
-                                        "|r| ≥0.7 strong, 0.4-0.7 moderate, 0.2-0.4 weak, <0.2 negligible.* "
-                                        "*(Buchheit, 2014)*"
-                                    )
+                                    if has_steps or has_rmssd:
+                                        merged_sorted = merged.sort_index()
+                                        dates_list = [str(d)[:10] for d in merged_sorted.index.tolist()]
+                                        steps_data = merged_sorted["steps"].tolist() if has_steps else None
+                                        rmssd_data = merged_sorted["rmssd_ms"].tolist() if has_rmssd else None
+                                        
+                                        activity_chart = _build_hrv_activity_timeseries_chart(
+                                            dates=dates_list,
+                                            steps=steps_data,
+                                            rmssd_ms=rmssd_data,
+                                            title="HRV × Activity Time Series",
+                                        )
+                                        render_echarts(activity_chart, height_px=400)
+                                        st.markdown(
+                                            "*Daily steps (activity load) plotted with RMSSD (parasympathetic recovery). "
+                                            "High activity + high RMSSD indicates good fitness and recovery. "
+                                            "High activity + low RMSSD may suggest overtraining.* "
+                                            "*(Plews et al., 2013; Stanley et al., 2013)*"
+                                        )
+
+                                    # Publication-quality scatter plots with regression
+                                    st.markdown("##### 📊 HRV × Activity Correlations")
+                                    scatter_pairs = [
+                                        ("steps", "rmssd_ms", "RMSSD vs Steps", "Steps", "RMSSD (ms)"),
+                                        ("distance_km", "rmssd_ms", "RMSSD vs Distance", "Distance (km)", "RMSSD (ms)"),
+                                        ("calories_kcal", "rmssd_ms", "RMSSD vs Calories", "Calories (kcal)", "RMSSD (ms)"),
+                                        ("sleep_score", "rmssd_ms", "RMSSD vs Sleep Score", "Sleep Score", "RMSSD (ms)"),
+                                        ("stress_score", "rmssd_ms", "RMSSD vs Stress Score", "Stress Score", "RMSSD (ms)"),
+                                        ("body_battery_avg", "rmssd_ms", "RMSSD vs Body Battery", "Body Battery (avg)", "RMSSD (ms)"),
+                                    ]
+                                    
+                                    scatter_cols = st.columns(2)
+                                    scatter_idx = 0
+                                    
+                                    for x_col, y_col, chart_title, xlab, ylab in scatter_pairs:
+                                        if x_col not in merged.columns or y_col not in merged.columns:
+                                            continue
+                                        paired = merged[[x_col, y_col]].dropna()
+                                        if len(paired) < 3:
+                                            continue
+                                        
+                                        corr = paired[x_col].corr(paired[y_col])
+                                        x_vals = paired[x_col].tolist()
+                                        y_vals = paired[y_col].tolist()
+                                        
+                                        scatter_chart = _build_hrv_activity_scatter_chart(
+                                            x_values=x_vals,
+                                            y_values=y_vals,
+                                            x_label=xlab,
+                                            y_label=ylab,
+                                            title=chart_title,
+                                            correlation=corr,
+                                            n_samples=len(paired),
+                                        )
+                                        
+                                        with scatter_cols[scatter_idx % 2]:
+                                            render_echarts(scatter_chart, height_px=320)
+                                        scatter_idx += 1
+                                    
+                                    if scatter_idx > 0:
+                                        st.markdown(
+                                            "*Scatter plots show relationships between activity metrics and RMSSD. "
+                                            "Regression lines indicate trend direction. Correlation strength: "
+                                            "|r| ≥0.7 strong, 0.4-0.7 moderate, 0.2-0.4 weak, <0.2 negligible.* "
+                                            "*(Buchheit, 2014)*"
+                                        )
         
         # Advanced HRV Analytics Platform
-        with st.expander("🧬 Advanced HRV Analytics (ML, Statistics, Clinical Decision Support)", expanded=False):
-            # Get Garmin data for integration analysis
-            try:
-                garmin_analytics_df = pd.DataFrame()
-                if hasattr(db, "get_garmin_daily_dataframe"):
-                    garmin_analytics_df = db.get_garmin_daily_dataframe(user.user_id, limit=365)
-                elif hasattr(db, "get_garmin_daily_metrics"):
-                    garmin_rows = db.get_garmin_daily_metrics(user.user_id, limit=365)
-                    if garmin_rows:
-                        garmin_analytics_df = pd.DataFrame([r.to_dict() for r in garmin_rows])
-            except Exception:
-                garmin_analytics_df = pd.DataFrame()
-            
-            _render_advanced_hrv_analytics(
-                user=user,
-                hrv_df=df,
-                garmin_df=garmin_analytics_df if not garmin_analytics_df.empty else None,
-            )
+        if show_advanced:
+            with st.expander("🧬 Advanced HRV Analytics (ML, Statistics, Clinical Decision Support)", expanded=False):
+                # Get Garmin data for integration analysis
+                try:
+                    garmin_analytics_df = pd.DataFrame()
+                    if hasattr(db, "get_garmin_daily_dataframe"):
+                        garmin_analytics_df = db.get_garmin_daily_dataframe(user.user_id, limit=365)
+                    elif hasattr(db, "get_garmin_daily_metrics"):
+                        garmin_rows = db.get_garmin_daily_metrics(user.user_id, limit=365)
+                        if garmin_rows:
+                            garmin_analytics_df = pd.DataFrame([r.to_dict() for r in garmin_rows])
+                except Exception:
+                    garmin_analytics_df = pd.DataFrame()
+                
+                _render_advanced_hrv_analytics(
+                    user=user,
+                    hrv_df=df,
+                    garmin_df=garmin_analytics_df if not garmin_analytics_df.empty else None,
+                )
+        elif perf_mode:
+            st.caption("Advanced HRV analytics hidden (performance mode).")
         
         # Full data table
-        with st.expander("📊 All HRV Measurements"):
-            st.dataframe(df, use_container_width=True)
+        if show_table:
+            with st.expander("📊 All HRV Measurements"):
+                st.dataframe(df, use_container_width=True)
         
     except Exception as exc:
         if DATABASE_AVAILABLE and is_sqlite_database_corruption_error(exc):
@@ -10997,10 +11244,11 @@ def _render_profile_readiness(user: UserProfile) -> None:
         "against a selectable personal baseline."
     )
 
-    try:
+    @st.cache_data(ttl=300, max_entries=64, show_spinner=False)
+    def _load_readiness_dataframe(uid: str) -> pd.DataFrame:
         db = get_database()
-        df = db.get_hrv_dataframe(
-            user.user_id,
+        return db.get_hrv_dataframe(
+            uid,
             limit=365,
             include_rr=False,
             columns=(
@@ -11016,6 +11264,9 @@ def _render_profile_readiness(user: UserProfile) -> None:
                 "created_at",
             ),
         )
+
+    try:
+        df = _load_readiness_dataframe(user.user_id)
     except Exception as exc:  # noqa: BLE001
         st.error(f"Unable to load readiness history: {exc}")
         return
@@ -16551,6 +16802,16 @@ def render_user_profile_tab() -> None:
         # Timepoint selector (shared across sub-tabs; avoids duplicate keys).
         _render_longitudinal_timepoint_controls(current_user.user_id)
         st.markdown("---")
+
+        perf_key = f"profile_perf_mode_{current_user.user_id}"
+        perf_mode = st.toggle(
+            "⚡ Performance mode (hide heavy charts/gauges)",
+            value=bool(st.session_state.get(perf_key, True)),
+            key=perf_key,
+            help="When enabled, heavy charts/analytics are hidden by default to keep the app responsive.",
+        )
+        if perf_mode:
+            st.caption("Performance mode is ON — expand sections to selectively render charts/analytics.")
         
         # PERFORMANCE FIX: Use selectbox navigation instead of nested tabs
         # Nested st.tabs renders ALL content on every rerun, causing severe slowdowns.
