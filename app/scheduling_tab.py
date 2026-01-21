@@ -4581,10 +4581,13 @@ def _render_radiation_assessment_panel() -> None:
     col_fetch1, col_fetch2 = st.columns([3, 1])
     
     with col_fetch1:
+        auto_fetch_key = "eva_radiation_auto_fetch"
+        if auto_fetch_key not in st.session_state:
+            manual_only = bool(st.session_state.get("manual_processing_only", True))
+            st.session_state[auto_fetch_key] = not manual_only
         auto_fetch = st.checkbox(
             "🛰️ Fetch Real-Time Data",
-            value=True,
-            key="eva_radiation_auto_fetch",
+            key=auto_fetch_key,
             help="Automatically fetch current space weather conditions from NOAA SWPC and SpaceWeatherLive",
         )
     
