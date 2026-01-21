@@ -1,0 +1,60 @@
+# Streamlit configuration for HRV Analysis Suite (app/ working directory).
+#
+# This mirrors the repo-root .streamlit/config.toml but is scoped to runs
+# launched from app/ so the file-watcher is disabled even when the CWD is app/.
+
+[server]
+# Disable file watcher to prevent rerun loops from OneDrive/file activity.
+fileWatcherType = "none"
+
+# WebSocket ping settings are not supported in this Streamlit version; rely on defaults.
+
+# Ignore project folders that change at runtime (paths relative to app/).
+folderWatchBlacklist = [
+  "../logs",
+  "../crew",
+  "data_cache",
+  "../.cursor",
+]
+
+# Never auto-rerun on file save.
+runOnSave = false
+
+# Run headless (no browser auto-open).
+headless = true
+
+# Enable serving static files from .streamlit/static/
+enableStaticServing = true
+
+# Maximum upload size in MB (default 200).
+maxUploadSize = 500
+
+# Enable Cross-Origin Resource Sharing (for debugging tools).
+enableCORS = true
+
+# Enable XSRF protection.
+enableXsrfProtection = true
+
+[runner]
+# Prevent fast-rerun race conditions (Streamlit 1.36.0 stability).
+fastReruns = false
+magicEnabled = true
+enforceSerializableSessionState = false
+
+[client]
+# Helpful for research debugging; the UI also enables this at runtime.
+showErrorDetails = true
+toolbarMode = "developer"
+
+[browser]
+# Disable usage stats collection.
+gatherUsageStats = false
+
+[global]
+# Development mode - set to true only for verbose debugging.
+developmentMode = false
+showWarningOnDirectExecution = true
+
+[logger]
+level = "info"
+
