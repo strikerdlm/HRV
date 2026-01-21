@@ -498,7 +498,7 @@ def build_two_ring_gauge(
             "fontWeight": "bold",
             "color": value_color,
             "formatter": f"{{value}} {thresh.unit}",
-            "valueAnimation": True,
+            "valueAnimation": False,
         },
         "data": [
             {
