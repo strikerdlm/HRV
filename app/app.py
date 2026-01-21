@@ -4313,17 +4313,8 @@ def _persist_analysis_results(
                 rec_date_obj = datetime.fromisoformat(recording_date_iso).date()
             except ValueError:
                 rec_date_obj = date.today()
-            try:
-                manager.store_rr_intervals(
-                    up.rr_ms,
-                    filename=source,
-                    recording_date=rec_date_obj,
-                    overwrite=True,
-                )
-            except FileExistsError:
-                pass
-            except Exception as exc:  # pragma: no cover - defensive
-                logger.debug("Unable to store RR file for %s: %s", source, exc)
+            # NOTE: Raw RR intervals are already stored by _persist_raw_uploads().
+            # Do not call store_rr_intervals here to avoid duplicate storage/logging.
             # Persist analysis payload for reuse
             try:
                 source_windowed = windowed_df[windowed_df["source"] == source] if not windowed_df.empty else pd.DataFrame()
@@ -4451,6 +4442,36 @@ def _list_library_rr_files() -> Dict[str, List[Dict[str, Any]]]:
                     result[display_name] = file_list
     
     return result
+
+
+_RERUN_DEBOUNCE_KEY: Final[str] = "_last_rerun_time_mono"
+_RERUN_DEBOUNCE_MIN_INTERVAL_SEC: Final[float] = 0.5
+
+
+def _safe_rerun(reason: str = "") -> None:
+    """Trigger st.rerun() with debouncing to prevent rapid consecutive reruns.
+
+    If a rerun was triggered less than _RERUN_DEBOUNCE_MIN_INTERVAL_SEC ago,
+    this call is skipped. This prevents UI loops where multiple rerun triggers
+    fire in rapid succession (e.g., button clicks, state changes).
+
+    Args:
+        reason: Optional string describing why rerun was requested (for logging).
+    """
+    now = time.monotonic()
+    last_rerun = st.session_state.get(_RERUN_DEBOUNCE_KEY, 0.0)
+    if now - last_rerun < _RERUN_DEBOUNCE_MIN_INTERVAL_SEC:
+        # Debounce: skip this rerun request.
+        if reason:
+            _LOGGER.debug("Rerun debounced (reason=%s, delta=%.3fs)", reason, now - last_rerun)
+        return
+    st.session_state[_RERUN_DEBOUNCE_KEY] = now
+    if reason:
+        try:
+            log_rerun_trigger(reason)
+        except Exception:  # pragma: no cover - logging should never crash app
+            pass
+    st.rerun()
 
 
 def _clear_tab_load_state(prefix: str = "_tab_loaded_") -> int:
@@ -7359,8 +7380,7 @@ def main() -> None:
             st.cache_resource.clear()
         except Exception:
             pass
-        log_rerun_trigger("mission_switch", from_mission=previous_mission, to_mission=active_mission)
-        st.rerun()
+        _safe_rerun(f"mission_switch:{previous_mission}->{active_mission}")
 
     # ----------------------------------------------------------------------
     # Debug Mode Toggle (sidebar)
