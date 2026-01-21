@@ -558,10 +558,11 @@ def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDaily
         raise ValueError("days must be an integer.") from None
     if days <= 0:
         return []
-    if days > 30:
+    max_days = 90
+    if days > max_days:
         # Defensive cap to reduce rate-limit risk.
-        _LOGGER.info("Capping Garmin Connect fetch to 30 days (requested %d).", days)
-        days = 30
+        _LOGGER.info("Capping Garmin Connect fetch to %d days (requested %d).", max_days, days)
+        days = max_days
 
     start_date = date.today() - timedelta(days=days - 1)
     records: List[GarminDailyMetrics] = []
