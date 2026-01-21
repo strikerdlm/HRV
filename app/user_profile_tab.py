@@ -9149,11 +9149,11 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
         st.error(f"Unable to prepare storage for uploads: {exc}")
         return
 
-    queued: list[dict[str, Any]] = st.session_state.get("queued_rr_uploads", [])
+    queued_paths: list[dict[str, Any]] = st.session_state.get("queued_rr_filepaths", [])
     # Track already-queued items to avoid unbounded growth on reruns.
-    existing_keys = {
-        (str(item.get("name")), str(item.get("recording_start")))
-        for item in queued
+    existing_paths = {
+        (str(item.get("path")), str(item.get("recording_start")))
+        for item in queued_paths
         if isinstance(item, dict)
     }
     processed_key = f"_profile_rr_upload_processed_{user.user_id}"
@@ -9186,8 +9186,9 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
                 preview_rr_ms = rr_ms
             start_date = parse_filename_date(uploaded.name) or date.today()
             start_ts = datetime.combine(start_date, datetime.min.time(), tzinfo=timezone.utc)
+            stored_path: Optional[Path] = None
             try:
-                manager.store_rr_intervals(
+                stored_path = manager.store_rr_intervals(
                     rr_ms,
                     filename=uploaded.name,
                     recording_date=start_date,
@@ -9195,23 +9196,25 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
                 )
             except FileExistsError:
                 # Already stored; continue to queue for analysis
-                pass
+                stored_path = None
             record_start = start_ts.isoformat()
-            queue_key = (uploaded.name, record_start)
-            if queue_key not in existing_keys:
-                queued.append(
-                    {
-                        "name": uploaded.name,
-                        "rr_ms": rr_ms,
-                        "recording_start": record_start,
-                    }
-                )
-                existing_keys.add(queue_key)
+            if stored_path is not None:
+                queue_key = (str(stored_path), record_start)
+                if queue_key not in existing_paths:
+                    queued_paths.append(
+                        {
+                            "path": str(stored_path),
+                            "name": uploaded.name,
+                            "recording_start": record_start,
+                        }
+                    )
+                    existing_paths.add(queue_key)
             processed_hashes.add(file_hash)
             stored_any = True
         except Exception as exc:  # pragma: no cover - defensive
             st.error(f"Failed to store {uploaded.name}: {exc}")
-    st.session_state["queued_rr_uploads"] = queued
+    if queued_paths:
+        st.session_state["queued_rr_filepaths"] = queued_paths
     if stored_any:
         st.success("Files stored under this profile and queued for analysis.")
         # Inline quick-look plots for the first uploaded file to avoid blank UI
