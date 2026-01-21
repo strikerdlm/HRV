@@ -7402,6 +7402,20 @@ def main() -> None:
         if skip_circadian:
             st.info("ℹ️ Circadian tab skipped (prevents rerun loop). Uncheck to re-enable.")
         
+        # Experimental: JS-based tab persistence can trigger rerun loops on some
+        # Streamlit versions. Keep it OFF by default for stability.
+        tab_persistence_enabled = st.checkbox(
+            "Enable tab persistence (experimental)",
+            value=bool(st.session_state.get("enable_tab_persistence", False)),
+            key="enable_tab_persistence",
+            help=(
+                "Restores the last active tab on rerun using JavaScript. "
+                "If you see repeated reconnect/rerun loops, leave this OFF."
+            ),
+        )
+        if tab_persistence_enabled:
+            st.info("Tab persistence enabled (experimental). Disable if reconnect loops occur.")
+        
         st.caption("Debug logs: `logs/app.log`, `logs/errors.log`, `logs/streamlit.log`")
 
     # Apply neutral layout refinements (responsive margins, full-width
@@ -9252,80 +9266,80 @@ def main() -> None:
         ]
     )
     
-    # Preserve active tab across reruns using JavaScript
-    # This prevents automatic return to Overview when clicking compute/analyze buttons
-    # Uses event delegation and singleton pattern to prevent listener accumulation
-    st.markdown(
-        """
-        <script>
-        (function() {
-            'use strict';
-            const tabKey = '_streamlit_active_tab';
-            const initKey = '_streamlit_tab_persistence_init';
-            
-            // Singleton: only initialize once per page session to prevent listener accumulation
-            if (window[initKey]) {
-                // Already initialized - just restore tab if needed (no new listeners)
-                const savedIndex = sessionStorage.getItem(tabKey);
-                if (savedIndex !== null) {
-                    setTimeout(function() {
-                        const buttons = document.querySelectorAll('[data-baseweb="tab"]');
-                        const index = parseInt(savedIndex, 10);
-                        if (buttons[index] && buttons[index].getAttribute('aria-selected') !== 'true') {
-                            buttons[index].click();
-                        }
-                    }, 50);
-                }
-                return;
-            }
-            
-            // Mark as initialized (prevents duplicate listeners on reruns)
-            window[initKey] = true;
-            
-            // Use event delegation on document to avoid stale references
-            // This approach doesn't require removing/re-adding listeners
-            document.addEventListener('click', function(event) {
-                const target = event.target.closest('[data-baseweb="tab"]');
-                if (target) {
-                    const buttons = document.querySelectorAll('[data-baseweb="tab"]');
-                    const index = Array.from(buttons).indexOf(target);
-                    if (index >= 0) {
-                        sessionStorage.setItem(tabKey, index.toString());
+    # Preserve active tab across reruns using JavaScript (optional).
+    # This can trigger rerun loops on some Streamlit versions, so it's off by default.
+    if bool(st.session_state.get("enable_tab_persistence", False)):
+        st.markdown(
+            """
+            <script>
+            (function() {
+                'use strict';
+                const tabKey = '_streamlit_active_tab';
+                const initKey = '_streamlit_tab_persistence_init';
+                
+                // Singleton: only initialize once per page session to prevent listener accumulation
+                if (window[initKey]) {
+                    // Already initialized - just restore tab if needed (no new listeners)
+                    const savedIndex = sessionStorage.getItem(tabKey);
+                    if (savedIndex !== null) {
+                        setTimeout(function() {
+                            const buttons = document.querySelectorAll('[data-baseweb="tab"]');
+                            const index = parseInt(savedIndex, 10);
+                            if (buttons[index] && buttons[index].getAttribute('aria-selected') !== 'true') {
+                                buttons[index].click();
+                            }
+                        }, 50);
                     }
+                    return;
                 }
-            }, true); // Use capture phase for reliable detection
-            
-            // Restore active tab ONCE on initial load only (no MutationObserver to prevent loops)
-            function restoreTab() {
-                const savedIndex = sessionStorage.getItem(tabKey);
-                if (savedIndex !== null) {
-                    const buttons = document.querySelectorAll('[data-baseweb="tab"]');
-                    if (buttons.length > 0) {
-                        const index = parseInt(savedIndex, 10);
-                        if (index >= 0 && index < buttons.length) {
-                            const targetBtn = buttons[index];
-                            if (targetBtn && targetBtn.getAttribute('aria-selected') !== 'true') {
-                                targetBtn.click();
+                
+                // Mark as initialized (prevents duplicate listeners on reruns)
+                window[initKey] = true;
+                
+                // Use event delegation on document to avoid stale references
+                // This approach doesn't require removing/re-adding listeners
+                document.addEventListener('click', function(event) {
+                    const target = event.target.closest('[data-baseweb="tab"]');
+                    if (target) {
+                        const buttons = document.querySelectorAll('[data-baseweb="tab"]');
+                        const index = Array.from(buttons).indexOf(target);
+                        if (index >= 0) {
+                            sessionStorage.setItem(tabKey, index.toString());
+                        }
+                    }
+                }, true); // Use capture phase for reliable detection
+                
+                // Restore active tab ONCE on initial load only (no MutationObserver to prevent loops)
+                function restoreTab() {
+                    const savedIndex = sessionStorage.getItem(tabKey);
+                    if (savedIndex !== null) {
+                        const buttons = document.querySelectorAll('[data-baseweb="tab"]');
+                        if (buttons.length > 0) {
+                            const index = parseInt(savedIndex, 10);
+                            if (index >= 0 && index < buttons.length) {
+                                const targetBtn = buttons[index];
+                                if (targetBtn && targetBtn.getAttribute('aria-selected') !== 'true') {
+                                    targetBtn.click();
+                                }
                             }
                         }
                     }
                 }
-            }
-            
-            // Try restoration ONCE after initial page load (no continuous observation)
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function() {
+                
+                // Try restoration ONCE after initial page load (no continuous observation)
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', function() {
+                        setTimeout(restoreTab, 200);
+                    });
+                } else {
                     setTimeout(restoreTab, 200);
-                });
-            } else {
-                setTimeout(restoreTab, 200);
-            }
-            // NOTE: Removed MutationObserver to prevent potential rerun loops
-        })();
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
+                }
+                // NOTE: Removed MutationObserver to prevent potential rerun loops
+            })();
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
     _sw_loading_msg: Optional[st.delta_generator.DeltaGenerator] = None
     # ---------------------------------------------------------------------------
     # RENDER TIMING TRACKER - Always log tab boundaries to identify hangs
