@@ -9339,12 +9339,13 @@ def main() -> None:
         elapsed = (time.perf_counter() - _render_start_time) * 1000
         _LOGGER.debug("UI: render_%s:%s | elapsed=%.0fms", name, phase, elapsed)
     
-    _LOGGER.info(
-        "UI: main_tabs_created | has_hrv_data=%s | uploads=%d | profile=%s",
-        has_hrv_data,
-        len(uploads),
-        active_display_name,
-    )
+    if _LOGGER.isEnabledFor(logging.DEBUG):
+        _LOGGER.debug(
+            "UI: main_tabs_created | has_hrv_data=%s | uploads=%d | profile=%s",
+            has_hrv_data,
+            len(uploads),
+            active_display_name,
+        )
     with tab_overview:
         _log_tab("overview", "start")
         st.markdown("### 📊 Analysis Overview")
@@ -12587,381 +12588,359 @@ the next morning predicts recovery status:
 
 1. **Plews, D.J., Laursen, P.B., Stanley, J., Kilding, A.E., & Buchheit, M.** (2013). Training 
    adaptation and heart rate variability in elite endurance athletes: Opening the door to effective 
-   monitoring. *Sports Medicine*, 43, 773–781. [DOI: 10.1007/s40279-013-0071-8](https://doi.org/10.1007/s40279-013-0071-8)
-
-2. **Botek, M., McKune, A.J., Krejci, J., Stejskal, P., & Gaba, A.** (2014). Change in performance 
-   in response to training load adjustment based on autonomic activity. 
-   *International Journal of Sports Medicine*, 35(6), 482–488. [PMID: 24129989](https://pubmed.ncbi.nlm.nih.gov/24129989/)
-
-3. **Alfonso, C., Clarke, D.C., & Capdevila, L.** (2025). Individual training prescribed by heart 
-   rate variability, heart rate and well-being scores in experienced cyclists. 
-   *Scientific Reports*, 15, 13540. [PMID: 41028151](https://pubmed.ncbi.nlm.nih.gov/41028151/)
-
-4. **Thayer, J.F., Åhs, F., Fredrikson, M., Sollers, J.J., & Wager, T.D.** (2012). A meta-analysis 
-   of heart rate variability and neuroimaging studies: Implications for heart rate variability as 
-   a marker of stress and health. *Neuroscience & Biobehavioral Reviews*, 36(2), 747–756. 
-   [DOI: 10.1016/j.neubiorev.2011.11.009](https://doi.org/10.1016/j.neubiorev.2011.11.009)
-
-5. **Kiviniemi, A.M., et al.** (2007). Endurance training guided individually by daily heart rate 
-   variability measurements. *European Journal of Applied Physiology*, 101(6), 743–751. 
-   [DOI: 10.1007/s00421-007-0552-2](https://doi.org/10.1007/s00421-007-0552-2)
-
 </small>
-""", unsafe_allow_html=True)
-        
-        st.markdown(
-            "*Compares current parasympathetic index with your historical baseline. "
-            "Categories follow Kubios readiness definitions.*")
-
-        # ------------------------------------------------------------------
-        # HRF (Heart Rate Fragmentation) panel for performance-oriented review
-        # ------------------------------------------------------------------
-        if has_hrv_data and "multi_results_df" in locals() and not multi_results_df.empty:
-            with st.expander("⚡ HRF (Heart Rate Fragmentation) — Rhythm stability markers", expanded=False):
-                st.markdown(
-                    "**What is Heart Rate Fragmentation (HRF)?**  \n"
-                    "HRF quantifies how often the beat‑to‑beat RR interval dynamics *switch direction* (acceleration ↔ deceleration), "
-                    "creating short, alternating runs in the RR time series — a pattern described as **sinoatrial instability** that can "
-                    "be present even when the ECG appears sinus rhythm.  \n\n"
-                    "**Medical / physiology meaning (high‑level)**  \n"
-                    "- HRF reflects a *breakdown of smooth, organized beat‑to‑beat regulation* and may represent components of short‑term "
-                    "variability that are **not purely parasympathetic (vagal) modulation**.  \n"
-                    "- Because of this, elevated HRF can **confound interpretation** of short‑term HRV magnitude (e.g., HF power / RMSSD) "
-                    "as “more vagal tone” in some cases.  \n"
-                    "- In older cohorts, HRF markers (e.g., PIP) have been studied as predictors of long‑term incident atrial fibrillation "
-                    "(PROOF‑AF).  \n\n"
-                    "**Operational interpretation (research / crew context)**  \n"
-                    "- **High HRF + low quality / many artifacts** → treat as a *data-quality and ectopy* flag first (motion, poor contact, "
-                    "or uncorrected ectopic beats can raise fragmentation).  \n"
-                    "- **High HRF + good quality + persistent vs your baseline** → may indicate reduced autonomic stability/recovery or a "
-                    "subclinical stressor; interpret alongside mean HR, RMSSD/HF, sleep, symptoms, illness, and training/load context.  \n\n"
-                    "**How to decrease / increase HRF (practical levers)**  \n"
-                    "- To **decrease measured HRF**: record at true rest (quiet breathing, no talking/movement), ensure good sensor contact, "
-                    "and prefer the app’s cleaned RR series when available.  \n"
-                    "- Factors that can **increase HRF (or the appearance of HRF)** include irregular breathing, acute stress, sleep loss, "
-                    "alcohol, illness/inflammation, stimulants, and ectopic beats/arrhythmia. Treat single-session spikes cautiously and "
-                    "focus on trends.  \n\n"
-                    "*HRF is an adjunct biomarker and not a standalone diagnosis.*"
-                )
-                st.caption(
-                    "Key references: Costa et al. (2017) https://doi.org/10.3389/fphys.2017.00255; "
-                    "Costa et al. (2017) https://doi.org/10.3389/fphys.2017.00827; "
-                    "Hayano et al. (2020) https://doi.org/10.3390/app10093314; "
-                    "Guichard et al. (2025, PROOF‑AF) https://doi.org/10.1093/ehjopen/oeaf030."
-                )
-                try:
-                    from hrv_fragmentation import HRFMetrics, interpret_hrf_metrics  # noqa: PLC0415
-                except Exception:
-                    HRFMetrics = None  # type: ignore[assignment]
-                    interpret_hrf_metrics = None  # type: ignore[assignment]
-
-                if HRFMetrics is None or interpret_hrf_metrics is None:
-                    st.info("HRF module not available.")
-                else:
-                    src_names = (
-                        multi_results_df["source"].astype(str).tolist()
-                        if "source" in multi_results_df.columns
-                        else ["Current"]
+            """)
+        render_readiness = _should_render_tab("readiness", "Readiness")
+        if render_readiness:
+            # ------------------------------------------------------------------
+            # HRF (Heart Rate Fragmentation) panel for performance-oriented review
+            # ------------------------------------------------------------------
+            if has_hrv_data and "multi_results_df" in locals() and not multi_results_df.empty:
+                with st.expander("⚡ HRF (Heart Rate Fragmentation) — Rhythm stability markers", expanded=False):
+                    st.markdown(
+                        "**What is Heart Rate Fragmentation (HRF)?**  \n"
+                        "HRF quantifies how often the beat‑to‑beat RR interval dynamics *switch direction* (acceleration ↔ deceleration), "
+                        "creating short, alternating runs in the RR time series — a pattern described as **sinoatrial instability** that can "
+                        "be present even when the ECG appears sinus rhythm.  \n\n"
+                        "**Medical / physiology meaning (high‑level)**  \n"
+                        "- HRF reflects a *breakdown of smooth, organized beat‑to‑beat regulation* and may represent components of short‑term "
+                        "variability that are **not purely parasympathetic (vagal) modulation**.  \n"
+                        "- Because of this, elevated HRF can **confound interpretation** of short‑term HRV magnitude (e.g., HF power / RMSSD) "
+                        "as “more vagal tone” in some cases.  \n"
+                        "- In older cohorts, HRF markers (e.g., PIP) have been studied as predictors of long‑term incident atrial fibrillation "
+                        "(PROOF‑AF).  \n\n"
+                        "**Operational interpretation (research / crew context)**  \n"
+                        "- **High HRF + low quality / many artifacts** → treat as a *data-quality and ectopy* flag first (motion, poor contact, "
+                        "or uncorrected ectopic beats can raise fragmentation).  \n"
+                        "- **High HRF + good quality + persistent vs your baseline** → may indicate reduced autonomic stability/recovery or a "
+                        "subclinical stressor; interpret alongside mean HR, RMSSD/HF, sleep, symptoms, illness, and training/load context.  \n\n"
+                        "**How to decrease / increase HRF (practical levers)**  \n"
+                        "- To **decrease measured HRF**: record at true rest (quiet breathing, no talking/movement), ensure good sensor contact, "
+                        "and prefer the app’s cleaned RR series when available.  \n"
+                        "- Factors that can **increase HRF (or the appearance of HRF)** include irregular breathing, acute stress, sleep loss, "
+                        "alcohol, illness/inflammation, stimulants, and ectopic beats/arrhythmia. Treat single-session spikes cautiously and "
+                        "focus on trends.  \n\n"
+                        "*HRF is an adjunct biomarker and not a standalone diagnosis.*"
                     )
-                    sel_src = st.selectbox(
-                        "Dataset",
-                        options=src_names,
-                        index=max(len(src_names) - 1, 0),
-                        key="readiness_hrf_source",
-                    )
-                    row_hrf = (
-                        multi_results_df[multi_results_df["source"] == sel_src].iloc[0]
-                        if "source" in multi_results_df.columns
-                        else multi_results_df.iloc[0]
-                    )
-                    pip = float(row_hrf.get("hrf_pip_pct", np.nan))
-                    pip_h = float(row_hrf.get("hrf_pip_h_pct", np.nan))
-                    pip_s = float(row_hrf.get("hrf_pip_s_pct", np.nan))
-                    ials = float(row_hrf.get("hrf_ials", np.nan))
-                    pss = float(row_hrf.get("hrf_pss_pct", np.nan))
-                    pas = float(row_hrf.get("hrf_pas_pct", np.nan))
-                    w0 = float(row_hrf.get("hrf_w0_pct", np.nan))
-                    w1 = float(row_hrf.get("hrf_w1_pct", np.nan))
-                    w2 = float(row_hrf.get("hrf_w2_pct", np.nan))
-                    w3 = float(
-                        row_hrf.get(
-                            "hrf_w3_pct",
-                            row_hrf.get("hrf_w3", np.nan),
-                        )
-                    )
-                    n_int = int(row_hrf.get("n_intervals", 0) or 0)
-                    quality_ok = bool(row_hrf.get("hrf_quality_ok", True))
-
-                    cols_hrf_1 = st.columns(4)
-                    cols_hrf_1[0].metric("PIP", f"{pip:.1f}%" if np.isfinite(pip) else "n/a")
-                    cols_hrf_1[1].metric("PIP_H", f"{pip_h:.1f}%" if np.isfinite(pip_h) else "n/a")
-                    cols_hrf_1[2].metric("PIP_S", f"{pip_s:.1f}%" if np.isfinite(pip_s) else "n/a")
-                    cols_hrf_1[3].metric("IALS", f"{ials:.3f}" if np.isfinite(ials) else "n/a")
-
-                    cols_hrf_2 = st.columns(4)
-                    cols_hrf_2[0].metric("PSS", f"{pss:.1f}%" if np.isfinite(pss) else "n/a")
-                    cols_hrf_2[1].metric("PAS", f"{pas:.1f}%" if np.isfinite(pas) else "n/a")
-                    cols_hrf_2[2].metric("W3", f"{w3:.1f}%" if np.isfinite(w3) else "n/a")
-                    cols_hrf_2[3].metric("Quality", "OK" if quality_ok else "Low")
-
-                    if all(
-                        np.isfinite(v)
-                        for v in (pip, pip_h, pip_s, ials, pss, pas, w0, w1, w2, w3)
-                    ):
-                        hrf_obj = HRFMetrics(
-                            pip=pip,
-                            pip_h=pip_h,
-                            pip_s=pip_s,
-                            ials=ials,
-                            pss=pss,
-                            pas=pas,
-                            w0=w0,
-                            w1=w1,
-                            w2=w2,
-                            w3=w3,
-                            n_intervals=n_int,
-                            quality_ok=quality_ok,
-                        )
-                        interp = interpret_hrf_metrics(hrf_obj)
-                        st.markdown(
-                            f"- **PIP**: {interp.get('pip', 'n/a')}\n"
-                            f"- **W3**: {interp.get('w3', 'n/a')}\n"
-                            f"- **IALS**: {interp.get('ials', 'n/a')}"
-                        )
-                        if "quality" in interp:
-                            st.warning(interp["quality"])
-                    else:
-                        st.info("HRF metrics will appear after you run HRV analysis with advanced metrics enabled.")
-
                     st.caption(
-                        "Interpretation is based on published HRF cohorts and may not generalize to younger/athletic cohorts "
-                        "or recordings with substantial ectopy/artifacts. Use trends and clinical/operational context."
+                        "Key references: Costa et al. (2017) https://doi.org/10.3389/fphys.2017.00255; "
+                        "Costa et al. (2017) https://doi.org/10.3389/fphys.2017.00827; "
+                        "Hayano et al. (2020) https://doi.org/10.3390/app10093314; "
+                        "Guichard et al. (2025, PROOF‑AF) https://doi.org/10.1093/ehjopen/oeaf030."
                     )
-        pns_display_mapping: Dict[str, float] = {}
-        ordered_names: List[str] = []
-        if active_user_id:
-            try:
-                hist_df = _cached_pns_history(active_user_id, limit=365)
-            except Exception:  # pragma: no cover - defensive
-                hist_df = pd.DataFrame()
-            if not hist_df.empty and "parasympathetic_index" in hist_df.columns:
-                hist_df = hist_df.copy()
-                # Ensure chronological ordering (oldest→newest) for baseline building.
-                hist_df["measurement_date"] = pd.to_datetime(
-                    hist_df["measurement_date"], errors="coerce"
-                )
-                hist_df["created_at"] = pd.to_datetime(
-                    hist_df.get("created_at"), errors="coerce"
-                )
-                hist_df = hist_df.dropna(subset=["measurement_date"])
-                hist_df = hist_df.sort_values(
-                    ["measurement_date", "created_at"], ascending=True
-                )
-                collision_counter: Dict[str, int] = {}
-                for _, row in hist_df.iterrows():
-                    pns = row.get("parasympathetic_index")
                     try:
-                        pns_val = float(pns) if pns is not None else float("nan")
-                    except (TypeError, ValueError):
-                        pns_val = float("nan")
-                    if not np.isfinite(pns_val):
-                        continue
-                    date_ts = row.get("measurement_date")
-                    date_label = (
-                        pd.to_datetime(date_ts).date().isoformat()
-                        if date_ts is not None
-                        else "unknown-date"
+                        from hrv_fragmentation import HRFMetrics, interpret_hrf_metrics  # noqa: PLC0415
+                    except Exception:
+                        HRFMetrics = None  # type: ignore[assignment]
+                        interpret_hrf_metrics = None  # type: ignore[assignment]
+
+                    if HRFMetrics is None or interpret_hrf_metrics is None:
+                        st.info("HRF module not available.")
+                    else:
+                        src_names = (
+                            multi_results_df["source"].astype(str).tolist()
+                            if "source" in multi_results_df.columns
+                            else ["Current"]
+                        )
+                        sel_src = st.selectbox(
+                            "Dataset",
+                            options=src_names,
+                            index=max(len(src_names) - 1, 0),
+                            key="readiness_hrf_source",
+                        )
+                        row_hrf = (
+                            multi_results_df[multi_results_df["source"] == sel_src].iloc[0]
+                            if "source" in multi_results_df.columns
+                            else multi_results_df.iloc[0]
+                        )
+                        pip = float(row_hrf.get("hrf_pip_pct", np.nan))
+                        pip_h = float(row_hrf.get("hrf_pip_h_pct", np.nan))
+                        pip_s = float(row_hrf.get("hrf_pip_s_pct", np.nan))
+                        ials = float(row_hrf.get("hrf_ials", np.nan))
+                        pss = float(row_hrf.get("hrf_pss_pct", np.nan))
+                        pas = float(row_hrf.get("hrf_pas_pct", np.nan))
+                        w0 = float(row_hrf.get("hrf_w0_pct", np.nan))
+                        w1 = float(row_hrf.get("hrf_w1_pct", np.nan))
+                        w2 = float(row_hrf.get("hrf_w2_pct", np.nan))
+                        w3 = float(
+                            row_hrf.get(
+                                "hrf_w3_pct",
+                                row_hrf.get("hrf_w3", np.nan),
+                            )
+                        )
+                        n_int = int(row_hrf.get("n_intervals", 0) or 0)
+                        quality_ok = bool(row_hrf.get("hrf_quality_ok", True))
+
+                        cols_hrf_1 = st.columns(4)
+                        cols_hrf_1[0].metric("PIP", f"{pip:.1f}%" if np.isfinite(pip) else "n/a")
+                        cols_hrf_1[1].metric("PIP_H", f"{pip_h:.1f}%" if np.isfinite(pip_h) else "n/a")
+                        cols_hrf_1[2].metric("PIP_S", f"{pip_s:.1f}%" if np.isfinite(pip_s) else "n/a")
+                        cols_hrf_1[3].metric("IALS", f"{ials:.3f}" if np.isfinite(ials) else "n/a")
+
+                        cols_hrf_2 = st.columns(4)
+                        cols_hrf_2[0].metric("PSS", f"{pss:.1f}%" if np.isfinite(pss) else "n/a")
+                        cols_hrf_2[1].metric("PAS", f"{pas:.1f}%" if np.isfinite(pas) else "n/a")
+                        cols_hrf_2[2].metric("W3", f"{w3:.1f}%" if np.isfinite(w3) else "n/a")
+                        cols_hrf_2[3].metric("Quality", "OK" if quality_ok else "Low")
+
+                        if all(
+                            np.isfinite(v)
+                            for v in (pip, pip_h, pip_s, ials, pss, pas, w0, w1, w2, w3)
+                        ):
+                            hrf_obj = HRFMetrics(
+                                pip=pip,
+                                pip_h=pip_h,
+                                pip_s=pip_s,
+                                ials=ials,
+                                pss=pss,
+                                pas=pas,
+                                w0=w0,
+                                w1=w1,
+                                w2=w2,
+                                w3=w3,
+                                n_intervals=n_int,
+                                quality_ok=quality_ok,
+                            )
+                            interp = interpret_hrf_metrics(hrf_obj)
+                            st.markdown(
+                                f"- **PIP**: {interp.get('pip', 'n/a')}\n"
+                                f"- **W3**: {interp.get('w3', 'n/a')}\n"
+                                f"- **IALS**: {interp.get('ials', 'n/a')}"
+                            )
+                            if "quality" in interp:
+                                st.warning(interp["quality"])
+                        else:
+                            st.info("HRF metrics will appear after you run HRV analysis with advanced metrics enabled.")
+
+                        st.caption(
+                            "Interpretation is based on published HRF cohorts and may not generalize to younger/athletic cohorts "
+                            "or recordings with substantial ectopy/artifacts. Use trends and clinical/operational context."
+                        )
+            pns_display_mapping: Dict[str, float] = {}
+            ordered_names: List[str] = []
+            if active_user_id:
+                try:
+                    hist_df = _cached_pns_history(active_user_id, limit=365)
+                except Exception:  # pragma: no cover - defensive
+                    hist_df = pd.DataFrame()
+                if not hist_df.empty and "parasympathetic_index" in hist_df.columns:
+                    hist_df = hist_df.copy()
+                    # Ensure chronological ordering (oldest→newest) for baseline building.
+                    hist_df["measurement_date"] = pd.to_datetime(
+                        hist_df["measurement_date"], errors="coerce"
                     )
-                    src = str(row.get("source_file") or "HRV session")
-                    suffix = str(row.get("file_hash") or "").strip()
-                    suffix = suffix[:8] if suffix else str(row.get("measurement_id") or "")[:8]
-                    base_label = f"{date_label} · {src}"
-                    if suffix:
-                        base_label = f"{base_label} · {suffix}"
-                    count = collision_counter.get(base_label, 0)
-                    collision_counter[base_label] = count + 1
-                    label = base_label if count == 0 else f"{base_label} ({count + 1})"
-                    pns_display_mapping[label] = pns_val
-                    ordered_names.append(label)
+                    hist_df["created_at"] = pd.to_datetime(
+                        hist_df.get("created_at"), errors="coerce"
+                    )
+                    hist_df = hist_df.dropna(subset=["measurement_date"])
+                    hist_df = hist_df.sort_values(
+                        ["measurement_date", "created_at"], ascending=True
+                    )
+                    collision_counter: Dict[str, int] = {}
+                    for _, row in hist_df.iterrows():
+                        pns = row.get("parasympathetic_index")
+                        try:
+                            pns_val = float(pns) if pns is not None else float("nan")
+                        except (TypeError, ValueError):
+                            pns_val = float("nan")
+                        if not np.isfinite(pns_val):
+                            continue
+                        date_ts = row.get("measurement_date")
+                        date_label = (
+                            pd.to_datetime(date_ts).date().isoformat()
+                            if date_ts is not None
+                            else "unknown-date"
+                        )
+                        src = str(row.get("source_file") or "HRV session")
+                        suffix = str(row.get("file_hash") or "").strip()
+                        suffix = suffix[:8] if suffix else str(row.get("measurement_id") or "")[:8]
+                        base_label = f"{date_label} · {src}"
+                        if suffix:
+                            base_label = f"{base_label} · {suffix}"
+                        count = collision_counter.get(base_label, 0)
+                        collision_counter[base_label] = count + 1
+                        label = base_label if count == 0 else f"{base_label} ({count + 1})"
+                        pns_display_mapping[label] = pns_val
+                        ordered_names.append(label)
 
-        # Fall back to current-session computed mapping when DB history is unavailable.
-        if not pns_display_mapping and pns_mapping:
-            pns_display_mapping = dict(pns_mapping)
-            ordered_names = [name for name in ordered_sources if name in pns_display_mapping]
+            # Fall back to current-session computed mapping when DB history is unavailable.
+            if not pns_display_mapping and pns_mapping:
+                pns_display_mapping = dict(pns_mapping)
+                ordered_names = [name for name in ordered_sources if name in pns_display_mapping]
 
-        if not pns_display_mapping:
-            st.info(
-                "No readiness history available yet. Run HRV analysis (or save HRV measurements) "
-                "to build a parasympathetic baseline."
-            )
-        else:
-            if not ordered_names:
+            if not pns_display_mapping:
                 st.info(
-                    "Ready metrics unavailable; ensure parasympathetic index was computed."
+                    "No readiness history available yet. Run HRV analysis (or save HRV measurements) "
+                    "to build a parasympathetic baseline."
                 )
             else:
-                default_idx = max(len(ordered_names) - 1, 0)
-                current_sel = st.selectbox(
-                    "Current measurement", ordered_names, index=default_idx
-                )
-                default_baseline = [
-                    name for name in ordered_names if name != current_sel
-                ]
-                baseline_sel = st.multiselect(
-                    "Historical baseline datasets (oldest to newest)",
-                    options=ordered_names,
-                    default=default_baseline,
-                )
-                include_current = st.checkbox(
-                    "Include current measurement in baseline", value=False
-                )
-                min_hist = int(
-                    st.number_input(
-                        "Minimum historical samples",
-                        min_value=3,
-                        max_value=30,
-                        value=7,
-                        step=1,
-                    )
-                )
-                max_default = int(max(min_hist, min(30, len(ordered_names))))
-                max_hist = int(
-                    st.slider(
-                        "Historical window (max records retained)",
-                        min_value=min_hist,
-                        max_value=90,
-                        value=max_default,
-                        step=1,
-                    )
-                )
-                history_names: List[str] = []
-                for name in ordered_names:
-                    if name in baseline_sel and (
-                        include_current or name != current_sel
-                    ):
-                        history_names.append(name)
-                if include_current and current_sel not in history_names:
-                    history_names.append(current_sel)
-                if not history_names:
-                    st.warning(
-                        "Select at least one baseline record to build readiness baseline."
+                if not ordered_names:
+                    st.info(
+                        "Ready metrics unavailable; ensure parasympathetic index was computed."
                     )
                 else:
-                    history_values = [
-                        pns_display_mapping[name]
-                        for name in ordered_names
-                        if name in history_names
+                    default_idx = max(len(ordered_names) - 1, 0)
+                    current_sel = st.selectbox(
+                        "Current measurement", ordered_names, index=default_idx
+                    )
+                    default_baseline = [
+                        name for name in ordered_names if name != current_sel
                     ]
-                    # Avoid raising errors when insufficient history is
-                    # available
-                    if len(history_values) < int(min_hist):
-                        st.info(
-                            f"Readiness baseline needs at least {int(min_hist)} samples; currently {len(history_values)}."
+                    baseline_sel = st.multiselect(
+                        "Historical baseline datasets (oldest to newest)",
+                        options=ordered_names,
+                        default=default_baseline,
+                    )
+                    include_current = st.checkbox(
+                        "Include current measurement in baseline", value=False
+                    )
+                    min_hist = int(
+                        st.number_input(
+                            "Minimum historical samples",
+                            min_value=3,
+                            max_value=30,
+                            value=7,
+                            step=1,
                         )
-                        baseline = None
+                    )
+                    max_default = int(max(min_hist, min(30, len(ordered_names))))
+                    max_hist = int(
+                        st.slider(
+                            "Historical window (max records retained)",
+                            min_value=min_hist,
+                            max_value=90,
+                            value=max_default,
+                            step=1,
+                        )
+                    )
+                    history_names: List[str] = []
+                    for name in ordered_names:
+                        if name in baseline_sel and (
+                            include_current or name != current_sel
+                        ):
+                            history_names.append(name)
+                    if include_current and current_sel not in history_names:
+                        history_names.append(current_sel)
+                    if not history_names:
+                        st.warning(
+                            "Select at least one baseline record to build readiness baseline."
+                        )
                     else:
-                        try:
-                            baseline = build_readiness_baseline(
-                                history_values,
-                                min_samples=min_hist,
-                                max_samples=max_hist,
+                        history_values = [
+                            pns_display_mapping[name]
+                            for name in ordered_names
+                            if name in history_names
+                        ]
+                        # Avoid raising errors when insufficient history is
+                        # available
+                        if len(history_values) < int(min_hist):
+                            st.info(
+                                f"Readiness baseline needs at least {int(min_hist)} samples; currently {len(history_values)}."
                             )
-                        except ValueError as exc:
-                            logger.warning(
-                                "Readiness baseline configuration issue: %s",
-                                exc,
-                                exc_info=True,
-                            )
-                            st.warning(f"Baseline configuration issue: {exc}")
                             baseline = None
-                    if baseline is not None:
-                        current_pns = float(
-                            pns_display_mapping.get(
-                                current_sel, np.nan))
-                        if not np.isfinite(current_pns):
-                            st.warning(
-                                "Current measurement lacks a valid parasympathetic index."
-                            )
                         else:
-                            readiness = readiness_from_pns(
-                                current_pns, baseline)
-                            _score = readiness['readiness_score']
-                            _category = readiness['readiness_category']
-                            _pns = readiness['pns_index']
-                            _z = readiness['z_score']
-                            
-                            # ============================================================
-                            # WHOOP/OURA-STYLE RECOVERY DASHBOARD
-                            # ============================================================
-                            
-                            # Determine colors based on category
-                            _cat_colors = {
-                                "VERY LOW": {"primary": "#F44336", "bg": "rgba(244, 67, 54, 0.1)", "emoji": "🔴"},
-                                "LOW": {"primary": "#FF9800", "bg": "rgba(255, 152, 0, 0.1)", "emoji": "🟠"},
-                                "NORMAL": {"primary": "#4CAF50", "bg": "rgba(76, 175, 80, 0.1)", "emoji": "🟢"},
-                                "HIGH": {"primary": "#2196F3", "bg": "rgba(33, 150, 243, 0.1)", "emoji": "🔵"},
-                            }
-                            _colors = _cat_colors.get(_category, _cat_colors["NORMAL"])
-                            
-                            # HERO SECTION: Big Recovery Score
-                            st.markdown("---")
-                            st.markdown("### 🎯 Today's Recovery Status")
-                            
-                            _hero_col1, _hero_col2 = st.columns([1, 1])
-                            
-                            with _hero_col1:
-                                # Giant recovery gauge (Whoop-style circular)
-                                _recovery_gauge = {
-                                    "series": [
-                                        {
-                                            "type": "gauge",
-                                            "startAngle": 90,
-                                            "endAngle": -270,
-                                            "center": ["50%", "50%"],
-                                            "radius": "90%",
-                                            "min": 0,
-                                            "max": 100,
-                                            "splitNumber": 10,
-                                            "itemStyle": {"color": _colors["primary"]},
-                                            "progress": {
-                                                "show": True,
-                                                "width": 30,
-                                                "roundCap": True,
-                                            },
-                                            "axisLine": {
-                                                "lineStyle": {
-                                                    "width": 30,
-                                                    "color": [[1, "rgba(200, 200, 200, 0.2)"]],
-                                                }
-                                            },
-                                            "axisTick": {"show": False},
-                                            "splitLine": {"show": False},
-                                            "axisLabel": {"show": False},
-                                            "pointer": {"show": False},
-                                            "anchor": {"show": False},
-                                            "title": {
-                                                "show": True,
-                                                "offsetCenter": [0, "35%"],
-                                                "fontSize": 16,
-                                                "color": "#666",
-                                            },
-                                            "detail": {
-                                                "valueAnimation": True,
-                                                "offsetCenter": [0, "-5%"],
-                                                "fontSize": 48,
-                                                "fontWeight": "bold",
-                                                "formatter": "{value}%",
-                                                "color": _colors["primary"],
-                                            },
-                                            "data": [{"value": int(round(_score, 0)), "name": "RECOVERY"}],
-                                        }
-                                    ],
+                            try:
+                                baseline = build_readiness_baseline(
+                                    history_values,
+                                    min_samples=min_hist,
+                                    max_samples=max_hist,
+                                )
+                            except ValueError as exc:
+                                logger.warning(
+                                    "Readiness baseline configuration issue: %s",
+                                    exc,
+                                    exc_info=True,
+                                )
+                                st.warning(f"Baseline configuration issue: {exc}")
+                                baseline = None
+                        if baseline is not None:
+                            current_pns = float(
+                                pns_display_mapping.get(
+                                    current_sel, np.nan))
+                            if not np.isfinite(current_pns):
+                                st.warning(
+                                    "Current measurement lacks a valid parasympathetic index."
+                                )
+                            else:
+                                readiness = readiness_from_pns(
+                                    current_pns, baseline)
+                                _score = readiness['readiness_score']
+                                _category = readiness['readiness_category']
+                                _pns = readiness['pns_index']
+                                _z = readiness['z_score']
+                                
+                                # ============================================================
+                                # WHOOP/OURA-STYLE RECOVERY DASHBOARD
+                                # ============================================================
+                                
+                                # Determine colors based on category
+                                _cat_colors = {
+                                    "VERY LOW": {"primary": "#F44336", "bg": "rgba(244, 67, 54, 0.1)", "emoji": "🔴"},
+                                    "LOW": {"primary": "#FF9800", "bg": "rgba(255, 152, 0, 0.1)", "emoji": "🟠"},
+                                    "NORMAL": {"primary": "#4CAF50", "bg": "rgba(76, 175, 80, 0.1)", "emoji": "🟢"},
+                                    "HIGH": {"primary": "#2196F3", "bg": "rgba(33, 150, 243, 0.1)", "emoji": "🔵"},
                                 }
-                                render_echarts(_recovery_gauge, height_px=320, width="100%", config=EChartsConfig())
-                            
-                            with _hero_col2:
-                                # Status card with recommendations
-                                st.markdown(f"""
+                                _colors = _cat_colors.get(_category, _cat_colors["NORMAL"])
+                                
+                                # HERO SECTION: Big Recovery Score
+                                st.markdown("---")
+                                st.markdown("### 🎯 Today's Recovery Status")
+                                
+                                _hero_col1, _hero_col2 = st.columns([1, 1])
+                                
+                                with _hero_col1:
+                                    # Giant recovery gauge (Whoop-style circular)
+                                    _recovery_gauge = {
+                                        "series": [
+                                            {
+                                                "type": "gauge",
+                                                "startAngle": 90,
+                                                "endAngle": -270,
+                                                "center": ["50%", "50%"],
+                                                "radius": "90%",
+                                                "min": 0,
+                                                "max": 100,
+                                                "splitNumber": 10,
+                                                "itemStyle": {"color": _colors["primary"]},
+                                                "progress": {
+                                                    "show": True,
+                                                    "width": 30,
+                                                    "roundCap": True,
+                                                },
+                                                "axisLine": {
+                                                    "lineStyle": {
+                                                        "width": 30,
+                                                        "color": [[1, "rgba(200, 200, 200, 0.2)"]],
+                                                    }
+                                                },
+                                                "axisTick": {"show": False},
+                                                "splitLine": {"show": False},
+                                                "axisLabel": {"show": False},
+                                                "pointer": {"show": False},
+                                                "anchor": {"show": False},
+                                                "title": {
+                                                    "show": True,
+                                                    "offsetCenter": [0, "35%"],
+                                                    "fontSize": 16,
+                                                    "color": "#666",
+                                                },
+                                                "detail": {
+                                                    "valueAnimation": True,
+                                                    "offsetCenter": [0, "-5%"],
+                                                    "fontSize": 48,
+                                                    "fontWeight": "bold",
+                                                    "formatter": "{value}%",
+                                                    "color": _colors["primary"],
+                                                },
+                                                "data": [{"value": int(round(_score, 0)), "name": "RECOVERY"}],
+                                            }
+                                        ],
+                                    }
+                                    render_echarts(_recovery_gauge, height_px=320, width="100%", config=EChartsConfig())
+                                
+                                with _hero_col2:
+                                    # Status card with recommendations
+                                    st.markdown(f"""
 <div style="background: {_colors['bg']}; border-left: 5px solid {_colors['primary']}; 
             border-radius: 12px; padding: 24px; margin: 10px 0;">
     <div style="font-size: 14px; color: #666; text-transform: uppercase; letter-spacing: 1px;">
@@ -12977,247 +12956,273 @@ the next morning predicts recovery status:
          "🛑 Poor recovery detected. Rest or very light activity recommended."}
     </div>
 </div>
-                                """, unsafe_allow_html=True)
-                                
-                                # Key metrics cards (3 mini cards)
-                                _m1, _m2, _m3 = st.columns(3)
-                                with _m1:
-                                    st.markdown(f"""
+                                    """, unsafe_allow_html=True)
+                                    
+                                    # Key metrics cards (3 mini cards)
+                                    _m1, _m2, _m3 = st.columns(3)
+                                    with _m1:
+                                        st.markdown(f"""
 <div style="background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center;">
     <div style="font-size: 11px; color: #666; text-transform: uppercase;">PNS Index</div>
     <div style="font-size: 24px; font-weight: bold; color: #333;">{_pns:.2f}</div>
 </div>
-                                    """, unsafe_allow_html=True)
-                                with _m2:
-                                    st.markdown(f"""
+                                        """, unsafe_allow_html=True)
+                                    with _m2:
+                                        st.markdown(f"""
 <div style="background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center;">
     <div style="font-size: 11px; color: #666; text-transform: uppercase;">Z-Score</div>
     <div style="font-size: 24px; font-weight: bold; color: #333;">{_z:+.2f}</div>
 </div>
-                                    """, unsafe_allow_html=True)
-                                with _m3:
-                                    st.markdown(f"""
+                                        """, unsafe_allow_html=True)
+                                    with _m3:
+                                        st.markdown(f"""
 <div style="background: #f8f9fa; border-radius: 8px; padding: 12px; text-align: center;">
     <div style="font-size: 11px; color: #666; text-transform: uppercase;">Baseline</div>
     <div style="font-size: 24px; font-weight: bold; color: #333;">{readiness['baseline_count']}</div>
 </div>
-                                    """, unsafe_allow_html=True)
-                            
-                            # ============================================================
-                            # RECOVERY TREND CHART (7-day sparkline style)
-                            # ============================================================
-                            st.markdown("---")
-                            st.markdown("### 📈 Recovery Trend")
-                            
-                            # Build trend data from history
-                            _trend_data = []
-                            _trend_labels = []
-                            for _lbl in history_names[-14:]:  # Last 14 sessions
-                                _val = pns_display_mapping.get(_lbl, 0)
-                                _trend_data.append(round(_val, 3))
-                                # Short label: just date part
-                                _short_lbl = _lbl.split(" · ")[0] if " · " in _lbl else _lbl[:10]
-                                _trend_labels.append(_short_lbl)
-                            
-                            # Add current if not in list
-                            if current_sel not in history_names[-14:]:
-                                _trend_data.append(round(_pns, 3))
-                                _short_curr = current_sel.split(" · ")[0] if " · " in current_sel else current_sel[:10]
-                                _trend_labels.append(_short_curr)
-                            
-                            _trend_opt = {
-                                "tooltip": {
-                                    "trigger": "axis",
-                                    "formatter": "{b}<br/>PNS: {c}",
-                                },
-                                "grid": {"left": 50, "right": 30, "top": 40, "bottom": 60},
-                                "xAxis": {
-                                    "type": "category",
-                                    "data": _trend_labels,
-                                    "axisLabel": {"rotate": 45, "fontSize": 10},
-                                    "boundaryGap": False,
-                                },
-                                "yAxis": {
-                                    "type": "value",
-                                    "name": "PNS Index",
-                                    "nameTextStyle": {"fontSize": 11},
-                                    "splitLine": {"lineStyle": {"type": "dashed", "color": "#eee"}},
-                                },
-                                "series": [
-                                    {
-                                        "type": "line",
-                                        "data": _trend_data,
-                                        "smooth": True,
-                                        "symbol": "circle",
-                                        "symbolSize": 8,
-                                        "lineStyle": {"width": 3, "color": "#4CAF50"},
-                                        "areaStyle": {
-                                            "color": {
-                                                "type": "linear",
-                                                "x": 0, "y": 0, "x2": 0, "y2": 1,
-                                                "colorStops": [
-                                                    {"offset": 0, "color": "rgba(76, 175, 80, 0.4)"},
-                                                    {"offset": 1, "color": "rgba(76, 175, 80, 0.05)"},
-                                                ],
-                                            }
-                                        },
-                                        "itemStyle": {"color": "#4CAF50"},
-                                        "markLine": {
-                                            "symbol": "none",
-                                            "data": [
-                                                {"yAxis": readiness["baseline_mean"], "name": "Mean", "lineStyle": {"color": "#666", "type": "dashed"}},
-                                                {"yAxis": readiness["very_low_cut"], "name": "Very Low", "lineStyle": {"color": "#F44336", "type": "dotted"}},
-                                                {"yAxis": readiness["high_cut"], "name": "High", "lineStyle": {"color": "#2196F3", "type": "dotted"}},
-                                            ],
-                                            "label": {"position": "end", "fontSize": 10},
-                                        },
-                                        "markPoint": {
-                                            "data": [
-                                                {"type": "max", "name": "Peak", "itemStyle": {"color": "#2196F3"}},
-                                                {"type": "min", "name": "Low", "itemStyle": {"color": "#F44336"}},
-                                            ],
-                                            "symbolSize": 40,
-                                            "label": {"fontSize": 10},
-                                        },
-                                    }
-                                ],
-                            }
-                            render_echarts(_trend_opt, height_px=320, width="100%", config=EChartsConfig())
-                            
-                            # ============================================================
-                            # RECOVERY BREAKDOWN (Contributing Factors)
-                            # ============================================================
-                            st.markdown("---")
-                            st.markdown("### 🔍 Recovery Breakdown")
-                            
-                            _bd_col1, _bd_col2 = st.columns(2)
-                            
-                            with _bd_col1:
-                                # Baseline statistics radar chart
-                                _radar_opt = {
-                                    "title": {"text": "Baseline Statistics", "left": "center", "textStyle": {"fontSize": 14}},
-                                    "tooltip": {},
-                                    "radar": {
-                                        "indicator": [
-                                            {"name": "Mean PNS", "max": max(readiness["baseline_mean"] * 2, 2)},
-                                            {"name": "Consistency (1/CV)", "max": 10},
-                                            {"name": "Sample Size", "max": 30},
-                                            {"name": "Current vs Mean", "max": 2},
-                                        ],
-                                        "radius": "60%",
-                                    },
-                                    "series": [{
-                                        "type": "radar",
-                                        "data": [{
-                                            "value": [
-                                                round(readiness["baseline_mean"], 2),
-                                                round(1 / (readiness["baseline_std"] / readiness["baseline_mean"] + 0.01), 2) if readiness["baseline_mean"] > 0 else 0,
-                                                readiness["baseline_count"],
-                                                round(_pns / readiness["baseline_mean"], 2) if readiness["baseline_mean"] > 0 else 1,
-                                            ],
-                                            "name": "Your Baseline",
-                                            "areaStyle": {"color": "rgba(76, 175, 80, 0.3)"},
-                                            "lineStyle": {"color": "#4CAF50"},
-                                            "itemStyle": {"color": "#4CAF50"},
-                                        }],
-                                    }],
-                                }
-                                render_echarts(_radar_opt, height_px=280, width="100%", config=EChartsConfig())
-                            
-                            with _bd_col2:
-                                # Category distribution pie
-                                _cat_counts = {"VERY LOW": 0, "LOW": 0, "NORMAL": 0, "HIGH": 0}
-                                for _h_name in history_names:
-                                    _h_val = pns_display_mapping.get(_h_name, 0)
-                                    if _h_val < readiness["very_low_cut"]:
-                                        _cat_counts["VERY LOW"] += 1
-                                    elif _h_val < readiness["low_cut"]:
-                                        _cat_counts["LOW"] += 1
-                                    elif _h_val < readiness["high_cut"]:
-                                        _cat_counts["NORMAL"] += 1
-                                    else:
-                                        _cat_counts["HIGH"] += 1
+                                        """, unsafe_allow_html=True)
                                 
-                                _pie_opt = {
-                                    "title": {"text": "Historical Distribution", "left": "center", "textStyle": {"fontSize": 14}},
-                                    "tooltip": {"trigger": "item", "formatter": "{b}: {c} ({d}%)"},
-                                    "series": [{
-                                        "type": "pie",
-                                        "radius": ["35%", "60%"],
-                                        "avoidLabelOverlap": True,
-                                        "itemStyle": {"borderRadius": 8, "borderColor": "#fff", "borderWidth": 2},
-                                        "label": {"show": True, "fontSize": 11},
-                                        "data": [
-                                            {"value": _cat_counts["HIGH"], "name": "HIGH", "itemStyle": {"color": "#2196F3"}},
-                                            {"value": _cat_counts["NORMAL"], "name": "NORMAL", "itemStyle": {"color": "#4CAF50"}},
-                                            {"value": _cat_counts["LOW"], "name": "LOW", "itemStyle": {"color": "#FF9800"}},
-                                            {"value": _cat_counts["VERY LOW"], "name": "VERY LOW", "itemStyle": {"color": "#F44336"}},
-                                        ],
-                                    }],
+                                # ============================================================
+                                # RECOVERY TREND CHART (7-day sparkline style)
+                                # ============================================================
+                                st.markdown("---")
+                                st.markdown("### 📈 Recovery Trend")
+                                
+                                # Build trend data from history
+                                _trend_data = []
+                                _trend_labels = []
+                                for _lbl in history_names[-14:]:  # Last 14 sessions
+                                    _val = pns_display_mapping.get(_lbl, 0)
+                                    _trend_data.append(round(_val, 3))
+                                    # Short label: just date part
+                                    _short_lbl = _lbl.split(" · ")[0] if " · " in _lbl else _lbl[:10]
+                                    _trend_labels.append(_short_lbl)
+                                
+                                # Add current if not in list
+                                if current_sel not in history_names[-14:]:
+                                    _trend_data.append(round(_pns, 3))
+                                    _short_curr = current_sel.split(" · ")[0] if " · " in current_sel else current_sel[:10]
+                                    _trend_labels.append(_short_curr)
+                                
+                                _trend_opt = {
+                                    "tooltip": {
+                                        "trigger": "axis",
+                                        "formatter": "{b}<br/>PNS: {c}",
+                                    },
+                                    "grid": {"left": 50, "right": 30, "top": 40, "bottom": 60},
+                                    "xAxis": {
+                                        "type": "category",
+                                        "data": _trend_labels,
+                                        "axisLabel": {"rotate": 45, "fontSize": 10},
+                                        "boundaryGap": False,
+                                    },
+                                    "yAxis": {
+                                        "type": "value",
+                                        "name": "PNS Index",
+                                        "nameTextStyle": {"fontSize": 11},
+                                        "splitLine": {"lineStyle": {"type": "dashed", "color": "#eee"}},
+                                    },
+                                    "series": [
+                                        {
+                                            "type": "line",
+                                            "data": _trend_data,
+                                            "smooth": True,
+                                            "symbol": "circle",
+                                            "symbolSize": 8,
+                                            "lineStyle": {"width": 3, "color": "#4CAF50"},
+                                            "areaStyle": {
+                                                "color": {
+                                                    "type": "linear",
+                                                    "x": 0, "y": 0, "x2": 0, "y2": 1,
+                                                    "colorStops": [
+                                                        {"offset": 0, "color": "rgba(76, 175, 80, 0.4)"},
+                                                        {"offset": 1, "color": "rgba(76, 175, 80, 0.05)"},
+                                                    ],
+                                                }
+                                            },
+                                            "itemStyle": {"color": "#4CAF50"},
+                                            "markLine": {
+                                                "symbol": "none",
+                                                "data": [
+                                                    {"yAxis": readiness["baseline_mean"], "name": "Mean", "lineStyle": {"color": "#666", "type": "dashed"}},
+                                                    {"yAxis": readiness["very_low_cut"], "name": "Very Low", "lineStyle": {"color": "#F44336", "type": "dotted"}},
+                                                    {"yAxis": readiness["high_cut"], "name": "High", "lineStyle": {"color": "#2196F3", "type": "dotted"}},
+                                                ],
+                                                "label": {"position": "end", "fontSize": 10},
+                                            },
+                                            "markPoint": {
+                                                "data": [
+                                                    {"type": "max", "name": "Peak", "itemStyle": {"color": "#2196F3"}},
+                                                    {"type": "min", "name": "Low", "itemStyle": {"color": "#F44336"}},
+                                                ],
+                                                "symbolSize": 40,
+                                                "label": {"fontSize": 10},
+                                            },
+                                        }
+                                    ],
                                 }
-                                render_echarts(_pie_opt, height_px=280, width="100%", config=EChartsConfig())
-                            
-                            # ============================================================
-                            # TRAINING RECOMMENDATION CARDS
-                            # ============================================================
-                            st.markdown("---")
-                            st.markdown("### 💪 Training Recommendations")
-                            
-                            _rec_data = {
-                                "HIGH": {
-                                    "intensity": "🔥 High Intensity OK",
-                                    "volume": "📈 High Volume OK",
-                                    "activities": "Intervals, competitions, PRs",
-                                    "avoid": "Nothing — you're primed!",
-                                    "color": "#2196F3",
-                                },
-                                "NORMAL": {
-                                    "intensity": "⚡ Moderate Intensity",
-                                    "volume": "📊 Normal Volume",
-                                    "activities": "Tempo, steady-state, skills",
-                                    "avoid": "Max efforts",
-                                    "color": "#4CAF50",
-                                },
-                                "LOW": {
-                                    "intensity": "🚶 Low Intensity",
-                                    "volume": "📉 Reduced Volume",
-                                    "activities": "Easy runs, mobility, yoga",
-                                    "avoid": "HIIT, heavy lifting",
-                                    "color": "#FF9800",
-                                },
-                                "VERY LOW": {
-                                    "intensity": "🛌 Rest Day",
-                                    "volume": "⏸️ Minimal/None",
-                                    "activities": "Walk, stretch, sleep",
-                                    "avoid": "All intense exercise",
-                                    "color": "#F44336",
-                                },
-                            }
-                            _rec = _rec_data.get(_category, _rec_data["NORMAL"])
-                            
-                            _r1, _r2, _r3, _r4 = st.columns(4)
-                            with _r1:
-                                st.markdown(f"""
+                                render_echarts(_trend_opt, height_px=320, width="100%", config=EChartsConfig())
+                                
+                                # ============================================================
+                                # RECOVERY BREAKDOWN (Contributing Factors)
+                                # ============================================================
+                                st.markdown("---")
+                                st.markdown("### 🔍 Recovery Breakdown")
+                                
+                                _bd_col1, _bd_col2 = st.columns(2)
+                                
+                                with _bd_col1:
+                                    # Baseline statistics radar chart
+                                    _radar_opt = {
+                                        "title": {"text": "Baseline Statistics", "left": "center", "textStyle": {"fontSize": 14}},
+                                        "tooltip": {},
+                                        "radar": {
+                                            "indicator": [
+                                                {"name": "Mean PNS", "max": max(readiness["baseline_mean"] * 2, 2)},
+                                                {"name": "Consistency (1/CV)", "max": 10},
+                                                {"name": "Sample Size", "max": 30},
+                                                {"name": "Current vs Mean", "max": 2},
+                                            ],
+                                            "radius": "60%",
+                                        },
+                                        "series": [{
+                                            "type": "radar",
+                                            "data": [{
+                                                "value": [
+                                                    round(readiness["baseline_mean"], 2),
+                                                    round(1 / (readiness["baseline_std"] / readiness["baseline_mean"] + 0.01), 2) if readiness["baseline_mean"] > 0 else 0,
+                                                    readiness["baseline_count"],
+                                                    round(_pns / readiness["baseline_mean"], 2) if readiness["baseline_mean"] > 0 else 1,
+                                                ],
+                                                "name": "Your Baseline",
+                                                "areaStyle": {"color": "rgba(76, 175, 80, 0.3)"},
+                                                "lineStyle": {"color": "#4CAF50"},
+                                                "itemStyle": {"color": "#4CAF50"},
+                                            }],
+                                        }],
+                                    }
+                                    render_echarts(_radar_opt, height_px=280, width="100%", config=EChartsConfig())
+                                
+                                with _bd_col2:
+                                    # Category distribution pie
+                                    _cat_counts = {"VERY LOW": 0, "LOW": 0, "NORMAL": 0, "HIGH": 0}
+                                    for _h_name in history_names:
+                                        _h_val = pns_display_mapping.get(_h_name, 0)
+                                        if _h_val < readiness["very_low_cut"]:
+                                            _cat_counts["VERY LOW"] += 1
+                                        elif _h_val < readiness["low_cut"]:
+                                            _cat_counts["LOW"] += 1
+                                        elif _h_val < readiness["high_cut"]:
+                                            _cat_counts["NORMAL"] += 1
+                                        else:
+                                            _cat_counts["HIGH"] += 1
+                                    
+                                    _pie_opt = {
+                                        "title": {"text": "Historical Distribution", "left": "center", "textStyle": {"fontSize": 14}},
+                                        "tooltip": {"trigger": "item", "formatter": "{b}: {c} ({d}%)"},
+                                        "series": [{
+                                            "type": "pie",
+                                            "radius": ["35%", "60%"],
+                                            "avoidLabelOverlap": True,
+                                            "itemStyle": {"borderRadius": 8, "borderColor": "#fff", "borderWidth": 2},
+                                            "label": {"show": True, "fontSize": 11},
+                                            "data": [
+                                                {"value": _cat_counts["HIGH"], "name": "HIGH", "itemStyle": {"color": "#2196F3"}},
+                                                {"value": _cat_counts["NORMAL"], "name": "NORMAL", "itemStyle": {"color": "#4CAF50"}},
+                                                {"value": _cat_counts["LOW"], "name": "LOW", "itemStyle": {"color": "#FF9800"}},
+                                                {"value": _cat_counts["VERY LOW"], "name": "VERY LOW", "itemStyle": {"color": "#F44336"}},
+                                            ],
+                                        }],
+                                    }
+                                    render_echarts(_pie_opt, height_px=280, width="100%", config=EChartsConfig())
+                                
+                                # ============================================================
+                                # TRAINING RECOMMENDATION CARDS
+                                # ============================================================
+                                st.markdown("---")
+                                st.markdown("### 💪 Training Recommendations")
+                                
+                                _rec_data = {
+                                    "HIGH": {
+                                        "intensity": "🔥 High Intensity OK",
+                                        "volume": "📈 High Volume OK",
+                                        "activities": "Intervals, competitions, PRs",
+                                        "avoid": "Nothing — you're primed!",
+                                        "color": "#2196F3",
+                                    },
+                                    "NORMAL": {
+                                        "intensity": "⚡ Moderate Intensity",
+                                        "volume": "📊 Normal Volume",
+                                        "activities": "Tempo, steady-state, skills",
+                                        "avoid": "Max efforts",
+                                        "color": "#4CAF50",
+                                    },
+                                    "LOW": {
+                                        "intensity": "🚶 Low Intensity",
+                                        "volume": "📉 Reduced Volume",
+                                        "activities": "Easy runs, mobility, yoga",
+                                        "avoid": "HIIT, heavy lifting",
+                                        "color": "#FF9800",
+                                    },
+                                    "VERY LOW": {
+                                        "intensity": "🛌 Rest Day",
+                                        "volume": "⏸️ Minimal/None",
+                                        "activities": "Walk, stretch, sleep",
+                                        "avoid": "All intense exercise",
+                                        "color": "#F44336",
+                                    },
+                                }
+                                _rec = _rec_data.get(_category, _rec_data["NORMAL"])
+                                
+                                _r1, _r2, _r3, _r4 = st.columns(4)
+                                with _r1:
+                                    st.markdown(f"""
 <div style="background: {_rec['color']}22; border-radius: 12px; padding: 16px; text-align: center; height: 120px;">
     <div style="font-size: 11px; color: #666; text-transform: uppercase;">Intensity</div>
     <div style="font-size: 16px; font-weight: bold; color: {_rec['color']}; margin-top: 8px;">{_rec['intensity']}</div>
 </div>
-                                """, unsafe_allow_html=True)
-                            with _r2:
-                                st.markdown(f"""
+                                    """, unsafe_allow_html=True)
+                                with _r2:
+                                    st.markdown(f"""
 <div style="background: {_rec['color']}22; border-radius: 12px; padding: 16px; text-align: center; height: 120px;">
     <div style="font-size: 11px; color: #666; text-transform: uppercase;">Volume</div>
                     <div style="font-size: 16px; font-weight: bold; color: {_rec['color']}; margin-top: 8px;">{_rec['volume']}</div>
 </div>
-                                """, unsafe_allow_html=True)
-                            with _r3:
-                                st.markdown(f"""
+                                    """, unsafe_allow_html=True)
+                                with _r3:
+                                    st.markdown(f"""
 <div style="background: #f8f9fa; border-radius: 12px; padding: 16px; text-align: center; height: 120px;">
     <div style="font-size: 11px; color: #666; text-transform: uppercase;">Good For</div>
     <div style="font-size: 13px; color: #333; margin-top: 8px;">{_rec['activities']}</div>
 </div>
-                                """, unsafe_allow_html=True)
-                            with _r4:
+                                    """, unsafe_allow_html=True)
+                                with _r4:
+                                    st.markdown(f"""
+<div style="background: #fff3e0; border-radius: 12px; padding: 16px; text-align: center; height: 120px;">
+    <div style="font-size: 11px; color: #666; text-transform: uppercase;">Avoid</div>
+    <div style="font-size: 13px; color: #e65100; margin-top: 8px;">{_rec['avoid']}</div>
+</div>
+                                    """, unsafe_allow_html=True)
+                                
+                                # Detailed stats in expander
+                                with st.expander("📊 Detailed Baseline Statistics", expanded=False):
+                                    details_df = pd.DataFrame({
+                                        "Metric": ["Baseline Mean", "Baseline Std", "Very Low Cut", "Low Cut", "High Cut", "Samples", "Z-Score"],
+                                        "Value": [
+                                            f"{readiness['baseline_mean']:.3f}",
+                                            f"{readiness['baseline_std']:.3f}",
+                                            f"{readiness['very_low_cut']:.3f}",
+                                            f"{readiness['low_cut']:.3f}",
+                                            f"{readiness['high_cut']:.3f}",
+                                            f"{readiness['baseline_count']}",
+                                            f"{readiness['z_score']:+.2f}",
+                                        ],
+                                    })
+                                    st.dataframe(details_df, hide_index=True, use_container_width=True)
+                                
+                                st.caption(
+                                    "💡 **Tip**: Consistent daily morning recordings (1–5 minutes, relaxed breathing) improve baseline reliability. "
+                                    "Categories follow Kubios readiness definitions based on percentile thresholds.")
                                 st.markdown(f"""
 <div style="background: #fff3e0; border-radius: 12px; padding: 16px; text-align: center; height: 120px;">
     <div style="font-size: 11px; color: #666; text-transform: uppercase;">Avoid</div>
@@ -24957,7 +24962,11 @@ This allows models to capture delayed biological responses to space weather chan
             "- Use **🔬 Space Analytics** for correlations and ML (button-driven)."
         )
         _log_tab("refs", "end")
-    _LOGGER.info("UI: main_render_complete | total_elapsed=%.0fms", (time.perf_counter() - _render_start_time) * 1000)
+    if _LOGGER.isEnabledFor(logging.DEBUG):
+        _LOGGER.debug(
+            "UI: main_render_complete | total_elapsed=%.0fms",
+            (time.perf_counter() - _render_start_time) * 1000,
+        )
     
     # Mark render as complete and show user-visible indicator
     # This helps users know the app has finished processing
