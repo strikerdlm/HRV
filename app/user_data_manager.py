@@ -25,6 +25,7 @@ import logging
 import os
 import re
 import shutil
+import sys
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
@@ -57,6 +58,10 @@ _CREW_DIR_NAME: Final[str] = "crew"
 _MISSION_SUBJECTS_DIR_NAME: Final[str] = "subjects"
 _MAX_LEGACY_USERS_TO_COPY: Final[int] = 500
 _MAX_LEGACY_LOOSE_FILES_TO_COPY: Final[int] = 200
+
+# Avoid excessive user_info.json writes (Streamlit file-watcher can rerun on each write).
+_USER_INFO_WRITE_MIN_INTERVAL_SECONDS: Final[int] = 300
+_ENV_ENABLE_LAST_ACCESS_WRITE: Final[str] = "HRV_ENABLE_LAST_ACCESS_WRITE"
 
 # Maximum files to load per category
 _MAX_FILES_PER_CATEGORY: Final[int] = 1000
@@ -92,6 +97,27 @@ def _agent_debug_log(
             log_file.write(json.dumps(payload, default=str) + "\n")
     except OSError:
         pass
+
+
+def _is_streamlit_runtime() -> bool:
+    """Return True when running under a Streamlit app session."""
+    if "streamlit" in sys.modules:
+        return True
+    env_markers = (
+        "STREAMLIT_SERVER_PORT",
+        "STREAMLIT_SERVER_HEADLESS",
+        "STREAMLIT_RUNTIME",
+    )
+    return any(bool(os.environ.get(marker)) for marker in env_markers)
+
+
+def _should_update_last_access() -> bool:
+    """Return True when last_access writes should be allowed."""
+    if os.environ.get(_ENV_ENABLE_LAST_ACCESS_WRITE, "").strip() == "1":
+        return True
+    if _is_streamlit_runtime():
+        return False
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -444,15 +470,33 @@ class UserDataManager:
         if info_file.exists():
             # Load existing user
             user_info = self._load_user_info(info_file)
-            user_info.last_access = datetime.now(tz=timezone.utc)
-            # Update name/age/sex if provided
-            if name:
+            now = datetime.now(tz=timezone.utc)
+            last_access = user_info.last_access
+            if last_access.tzinfo is None or last_access.tzinfo.utcoffset(last_access) is None:
+                last_access = last_access.replace(tzinfo=timezone.utc)
+
+            changed = False
+            # Update name/age/sex if provided and different
+            if name and name != user_info.name:
                 user_info.name = name
-            if age is not None:
+                changed = True
+            if age is not None and age != user_info.age:
                 user_info.age = age
-            if sex != "Other":
+                changed = True
+            if sex != "Other" and sex != user_info.sex:
                 user_info.sex = sex
-            self._save_user_info(user_info, info_file)
+                changed = True
+
+            # Throttle last_access updates to avoid constant file writes.
+            # Skip entirely under Streamlit unless explicitly enabled.
+            if _should_update_last_access():
+                elapsed = (now - last_access).total_seconds()
+                if elapsed >= _USER_INFO_WRITE_MIN_INTERVAL_SECONDS:
+                    user_info.last_access = now
+                    changed = True
+
+            if changed:
+                self._save_user_info(user_info, info_file)
         elif create_if_missing:
             # Create new user
             if self._auto_create:
