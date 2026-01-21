@@ -9150,11 +9150,26 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
         return
 
     queued: list[dict[str, Any]] = st.session_state.get("queued_rr_uploads", [])
+    # Track already-queued items to avoid unbounded growth on reruns.
+    existing_keys = {
+        (str(item.get("name")), str(item.get("recording_start")))
+        for item in queued
+        if isinstance(item, dict)
+    }
+    processed_key = f"_profile_rr_upload_processed_{user.user_id}"
+    if processed_key not in st.session_state:
+        st.session_state[processed_key] = set()
+    processed_hashes: set[str] = st.session_state[processed_key]
+
     stored_any = False
     preview_rr_ms: Optional[np.ndarray] = None
     for uploaded in uploaded_files:
         try:
-            content = uploaded.read().decode("utf-8", errors="ignore")
+            file_bytes = uploaded.getvalue()
+            file_hash = hashlib.sha256(file_bytes).hexdigest()
+            if file_hash in processed_hashes:
+                continue
+            content = file_bytes.decode("utf-8", errors="ignore")
 
             if uploaded.name.lower().endswith(".csv"):
                 # Polar Flow/H10 CSV: first column of RR values (ms); drop headers/non-numeric
@@ -9181,13 +9196,18 @@ def _render_profile_rr_uploads(user: UserProfile) -> None:
             except FileExistsError:
                 # Already stored; continue to queue for analysis
                 pass
-            queued.append(
-                {
-                    "name": uploaded.name,
-                    "rr_ms": rr_ms,
-                    "recording_start": start_ts.isoformat(),
-                }
-            )
+            record_start = start_ts.isoformat()
+            queue_key = (uploaded.name, record_start)
+            if queue_key not in existing_keys:
+                queued.append(
+                    {
+                        "name": uploaded.name,
+                        "rr_ms": rr_ms,
+                        "recording_start": record_start,
+                    }
+                )
+                existing_keys.add(queue_key)
+            processed_hashes.add(file_hash)
             stored_any = True
         except Exception as exc:  # pragma: no cover - defensive
             st.error(f"Failed to store {uploaded.name}: {exc}")
