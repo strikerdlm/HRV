@@ -47,7 +47,9 @@ from typing import Any, Callable, Final, TypeVar
 # Constants
 # ---------------------------------------------------------------------------
 
-_LOG_DIR: Final[Path] = Path(__file__).parent.parent / "logs"
+_ENV_LOG_DIR: Final[str] = "HRV_LOG_DIR"
+_DEFAULT_LOG_DIR: Final[Path] = Path(__file__).parent.parent / "logs"
+_ACTIVE_LOG_DIR: Path | None = None
 _LOG_FORMAT: Final[str] = (
     "%(asctime)s | %(levelname)-8s | %(name)s:%(lineno)d | %(message)s"
 )
@@ -75,6 +77,46 @@ _streamlit_debug_enabled: bool = False
 
 # Type variable for decorators
 F = TypeVar("F", bound=Callable[..., Any])
+
+
+def _is_streamlit_runtime() -> bool:
+    """Return True when running under a Streamlit app session."""
+    if "streamlit" in sys.modules:
+        return True
+    env_markers = (
+        "STREAMLIT_SERVER_PORT",
+        "STREAMLIT_SERVER_HEADLESS",
+        "STREAMLIT_RUNTIME",
+    )
+    return any(bool(os.environ.get(marker)) for marker in env_markers)
+
+
+def _default_user_log_root() -> Path:
+    """Return a per-user log root outside the repo (avoids Streamlit file watcher)."""
+    if os.name == "nt":
+        base = os.environ.get("LOCALAPPDATA") or os.environ.get("APPDATA")
+        if isinstance(base, str) and base.strip():
+            return Path(base) / "HRV"
+    return Path.home() / ".hrv"
+
+
+def _resolve_log_dir(explicit_dir: Path | None) -> Path:
+    """Resolve the log directory with env override and Streamlit-safe default."""
+    if explicit_dir is not None:
+        return explicit_dir
+    env_dir = os.environ.get(_ENV_LOG_DIR)
+    if isinstance(env_dir, str) and env_dir.strip():
+        return Path(env_dir.strip()).expanduser().absolute()
+    if _is_streamlit_runtime():
+        return (_default_user_log_root() / "logs").absolute()
+    return _DEFAULT_LOG_DIR
+
+
+def get_log_dir() -> Path:
+    """Return the active log directory (resolved once logging is initialized)."""
+    if _ACTIVE_LOG_DIR is not None:
+        return _ACTIVE_LOG_DIR
+    return _resolve_log_dir(None)
 
 
 # ---------------------------------------------------------------------------
@@ -156,13 +198,13 @@ def setup_logging(
     global _logging_initialized  # noqa: PLW0603
 
     if _logging_initialized:
-        return _LOG_DIR if log_dir is None else log_dir
+        return get_log_dir()
 
     # Allow env vars to override levels without code changes.
     log_level_console = _parse_log_level_env(_ENV_LOG_CONSOLE_LEVEL, default=log_level_console)
     log_level_file = _parse_log_level_env(_ENV_LOG_FILE_LEVEL, default=log_level_file)
 
-    target_dir = log_dir if log_dir is not None else _LOG_DIR
+    target_dir = _resolve_log_dir(log_dir)
 
     # Create logs directory
     try:
@@ -252,6 +294,8 @@ def setup_logging(
     )
     root_logger.info(startup_msg)
 
+    global _ACTIVE_LOG_DIR  # noqa: PLW0603
+    _ACTIVE_LOG_DIR = target_dir
     _logging_initialized = True
     return target_dir
 
@@ -299,7 +343,7 @@ def get_session_log_path() -> Path:
         Path for a timestamped session log.
     """
     timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    return _LOG_DIR / f"session_{timestamp}.log"
+    return get_log_dir() / f"session_{timestamp}.log"
 
 
 def log_user_action(action: str, details: dict | None = None) -> None:
@@ -370,7 +414,7 @@ def enable_streamlit_debug(*, verbose: bool = True) -> None:
     
     # Create dedicated streamlit log file
     if not _streamlit_debug_enabled:
-        target_dir = _LOG_DIR
+        target_dir = get_log_dir()
         target_dir.mkdir(parents=True, exist_ok=True)
         
         streamlit_log_path = target_dir / "streamlit.log"
@@ -553,7 +597,7 @@ def get_debug_info() -> dict[str, Any]:
         "python_version": sys.version,
         "platform": platform.platform(),
         "cwd": os.getcwd(),
-        "log_dir": str(_LOG_DIR),
+        "log_dir": str(get_log_dir()),
         "logging_initialized": _logging_initialized,
         "streamlit_debug_enabled": _streamlit_debug_enabled,
     }
@@ -587,7 +631,7 @@ def dump_debug_report(filepath: Path | None = None) -> Path:
     """
     if filepath is None:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-        filepath = _LOG_DIR / f"debug_report_{timestamp}.txt"
+        filepath = get_log_dir() / f"debug_report_{timestamp}.txt"
     
     info = get_debug_info()
     
@@ -617,7 +661,7 @@ def dump_debug_report(filepath: Path | None = None) -> Path:
     ]
     
     # Add recent errors from error log
-    error_log = _LOG_DIR / "errors.log"
+    error_log = get_log_dir() / "errors.log"
     if error_log.exists():
         lines.append("RECENT ERRORS (last 50 lines)")
         lines.append("-" * 40)
