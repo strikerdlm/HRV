@@ -605,7 +605,7 @@ def build_radiation_timeline(
     # Auto-detect solar cycle phase if not provided
     if solar_cycle_phase is None:
         solar_cycle_phase = detect_solar_cycle_phase_from_noaa(target_date=start_date)
-        _LOGGER.info("Auto-detected solar cycle phase: %s", solar_cycle_phase)
+        _LOGGER.debug("Auto-detected solar cycle phase: %s", solar_cycle_phase)
     
     # Adjust base dose rate for solar cycle
     cycle_multiplier = {
