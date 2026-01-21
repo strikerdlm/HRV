@@ -48,6 +48,7 @@ class EChartsConfig:
     cdn_url: str = _CDN_URL
     local_echarts_path: Optional[Path] = _LOCAL_ECHARTS_PATH
     embed_inline: bool = True
+    disable_animation: bool = False
 
 
 # Cache for loaded bundles keyed by path string
@@ -210,6 +211,33 @@ def render_echarts(
     uid = uuid.uuid4().hex[:12]
     container_id = f"ec-{uid}"
     toolbar_id = f"tb-{uid}"
+
+    # Apply animation overrides when requested
+    if cfg.disable_animation:
+        option_to_render = dict(option_to_render)
+        option_to_render.setdefault("animation", False)
+        option_to_render.setdefault("animationDuration", 0)
+        option_to_render.setdefault("animationDurationUpdate", 0)
+
+        series_obj = option_to_render.get("series")
+
+        def _disable_series_animation(series: Dict[str, Any]) -> Dict[str, Any]:
+            series_copy = dict(series)
+            series_copy["animation"] = False
+            detail = series_copy.get("detail")
+            if isinstance(detail, dict) and detail.get("valueAnimation"):
+                detail_copy = dict(detail)
+                detail_copy["valueAnimation"] = False
+                series_copy["detail"] = detail_copy
+            return series_copy
+
+        if isinstance(series_obj, list):
+            option_to_render["series"] = [
+                _disable_series_animation(s) if isinstance(s, dict) else s
+                for s in series_obj
+            ]
+        elif isinstance(series_obj, dict):
+            option_to_render["series"] = _disable_series_animation(series_obj)
 
     # Serialize option
     option_json = json.dumps(option_to_render, separators=(",", ":"), ensure_ascii=False)
