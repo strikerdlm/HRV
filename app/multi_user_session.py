@@ -20,6 +20,13 @@ from typing import Any, Dict, Final, List, Optional, Tuple
 
 import streamlit as st
 
+# Safe rerun utility with debouncing and circuit breaker
+try:
+    from rerun_utils import safe_rerun
+except ImportError:  # pragma: no cover
+    def safe_rerun(reason: str = "") -> None:  # type: ignore[misc]
+        safe_rerun("multi_user_session_rerun")
+
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 # Constants
@@ -302,7 +309,7 @@ def render_user_switcher() -> None:
             ):
                 if not is_active:
                     manager.switch_to_user(session["user_id"])
-                    st.rerun()
+                    safe_rerun("multi_user_session_rerun")
 
 
 def render_user_session_manager() -> None:
@@ -339,12 +346,12 @@ def render_user_session_manager() -> None:
                 else:
                     if st.button("Switch", key=f"switch_{session['user_id']}", type="secondary"):
                         manager.switch_to_user(session["user_id"])
-                        st.rerun()
+                        safe_rerun("multi_user_session_rerun")
             
             with cols[2]:
                 if st.button("✕", key=f"remove_{session['user_id']}", help="Close session"):
                     manager.remove_user_session(session["user_id"])
-                    st.rerun()
+                    safe_rerun("multi_user_session_rerun")
         
         st.divider()
     
