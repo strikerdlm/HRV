@@ -5533,14 +5533,140 @@ def _format_tz_display(tz_value: tzinfo) -> str:
     return f"{name} (UTC{sign}{hours:02d}:{minutes:02d})"
 
 
+def _coerce_garmin_record_dict(record: Any) -> Dict[str, Any]:
+    """Coerce a Garmin daily metrics record into a dict."""
+    if isinstance(record, dict):
+        return dict(record)
+    if is_dataclass(record):
+        return asdict(record)
+    if hasattr(record, "to_dict"):
+        try:
+            return record.to_dict()  # type: ignore[no-any-return]
+        except Exception:
+            return {}
+    try:
+        return dict(vars(record))
+    except Exception:
+        return {}
+
+
+def _normalize_datetime_value(value: Any) -> Optional[str]:
+    """Normalize datetime-like values to ISO strings for parsing."""
+    if value is None:
+        return None
+    if isinstance(value, pd.Timestamp):
+        return value.to_pydatetime().isoformat()
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, str):
+        return value
+    return None
+
+
+def _get_latest_garmin_daily_from_db(user_id: str) -> Optional[Dict[str, Any]]:
+    """Fetch the latest Garmin daily metrics row from the local database."""
+    if not user_id:
+        return None
+    try:
+        db = get_database()
+    except Exception as exc:
+        if log_exception:
+            log_exception(_LOGGER, "Garmin DB lookup failed", exc)
+        return None
+    row: Optional[Dict[str, Any]] = None
+    if hasattr(db, "get_garmin_daily_dataframe"):
+        try:
+            df = db.get_garmin_daily_dataframe(user_id, limit=1)  # type: ignore[attr-defined]
+            if df is not None and not df.empty:
+                row = df.iloc[0].to_dict()
+        except Exception as exc:
+            if log_exception:
+                log_exception(_LOGGER, "Garmin DB dataframe lookup failed", exc)
+    if row is None and hasattr(db, "get_garmin_daily_metrics"):
+        try:
+            rows = db.get_garmin_daily_metrics(user_id, limit=1)  # type: ignore[attr-defined]
+            if rows:
+                row = _coerce_garmin_record_dict(rows[0])
+        except Exception as exc:
+            if log_exception:
+                log_exception(_LOGGER, "Garmin DB row lookup failed", exc)
+    if not row:
+        return None
+    for key in ("metric_date", "sleep_start_utc", "sleep_end_utc", "created_at"):
+        normalized = _normalize_datetime_value(row.get(key))
+        if normalized is not None:
+            row[key] = normalized
+    return row
+
+
+def _garmin_record_value(record: Any, key: str) -> Any:
+    """Return a Garmin record field from dicts or dataclasses."""
+    if isinstance(record, dict):
+        return record.get(key)
+    return getattr(record, key, None)
+
+
+def _build_garmin_sleep_payload(
+    record: Any,
+    now_dt: datetime,
+) -> Optional[Dict[str, float]]:
+    """Build a sleep payload from a Garmin daily record."""
+    sleep_hours_val = _safe_float(_garmin_record_value(record, "sleep_duration_hours"))
+    if sleep_hours_val is None or sleep_hours_val <= 0.0:
+        return None
+    sleep_quality = None
+    eff_val = _safe_float(_garmin_record_value(record, "sleep_efficiency"))
+    if eff_val is not None:
+        sleep_quality = eff_val if 0.0 <= eff_val <= 1.2 else eff_val / 100.0
+    if sleep_quality is None:
+        score_val = _safe_float(_garmin_record_value(record, "sleep_score"))
+        if score_val is not None:
+            sleep_quality = score_val / 100.0
+    if sleep_quality is None:
+        sleep_quality = 0.7
+    sleep_quality = max(0.0, min(1.0, float(sleep_quality)))
+
+    hours_awake = float(now_dt.hour - 7 if now_dt.hour >= 7 else now_dt.hour + 17)
+    end_dt_raw = _garmin_record_value(record, "sleep_end_utc")
+    end_dt = _parse_iso_utc(str(end_dt_raw)) if end_dt_raw else None
+    if end_dt:
+        hours_awake = _compute_hours_since_wake(end_dt, now_dt)
+
+    rmssd_val = _safe_float(_garmin_record_value(record, "hrv_rmssd_ms"))
+    resting_hr_val = _safe_float(_garmin_record_value(record, "resting_hr_bpm"))
+    if resting_hr_val is None:
+        resting_hr_val = _safe_float(_garmin_record_value(record, "avg_hr_bpm"))
+
+    payload: Dict[str, float] = {
+        "sleep_hours": round(float(sleep_hours_val), 2),
+        "sleep_quality": round(float(sleep_quality), 2),
+        "hours_awake": round(float(hours_awake), 2),
+    }
+    if rmssd_val is not None:
+        payload["rmssd_ms"] = float(rmssd_val)
+    if resting_hr_val is not None:
+        payload["resting_hr"] = float(resting_hr_val)
+    return payload
+
+
 def _get_latest_garmin_sleep_payload(user: UserProfile, now_dt: datetime) -> Optional[Dict[str, float]]:
     """Fetch latest Garmin Vivosmart sleep metrics to feed SAFTE/HRV inputs."""
-    if fetch_garmin_daily_metrics is None:
+    if not user or not user.user_id:
         return None
     if now_dt.tzinfo is None:
         now_dt = now_dt.replace(tzinfo=_get_bogota_tz())
     else:
         now_dt = now_dt.astimezone(_get_bogota_tz())
+
+    # Prefer locally stored Garmin daily metrics if available
+    cached_row = _get_latest_garmin_daily_from_db(user.user_id)
+    if cached_row:
+        cached_payload = _build_garmin_sleep_payload(cached_row, now_dt)
+        if cached_payload is not None:
+            return cached_payload
+
+    if fetch_garmin_daily_metrics is None:
+        return None
     try:
         records = fetch_garmin_daily_metrics(user.user_id, days=7)
     except Exception as exc:  # pragma: no cover - defensive
@@ -5552,45 +5678,13 @@ def _get_latest_garmin_sleep_payload(user: UserProfile, now_dt: datetime) -> Opt
 
     chosen = None
     for rec in sorted(records, key=lambda r: r.metric_date, reverse=True):
-        if rec.sleep_duration_hours:
+        if _safe_float(getattr(rec, "sleep_duration_hours", None)):
             chosen = rec
             break
     if chosen is None:
         return None
 
-    sleep_hours = float(chosen.sleep_duration_hours or 0.0)
-    sleep_quality = None
-    if chosen.sleep_efficiency is not None:
-        eff = float(chosen.sleep_efficiency)
-        sleep_quality = eff if 0.0 <= eff <= 1.2 else eff / 100.0
-    if sleep_quality is None and chosen.sleep_score is not None:
-        sleep_quality = float(chosen.sleep_score) / 100.0
-    if sleep_quality is None:
-        sleep_quality = 0.7
-    sleep_quality = max(0.0, min(1.0, sleep_quality))
-
-    hours_awake = float(now_dt.hour - 7 if now_dt.hour >= 7 else now_dt.hour + 17)
-    end_dt = _parse_iso_utc(chosen.sleep_end_utc)
-    if end_dt:
-        hours_awake = _compute_hours_since_wake(end_dt, now_dt)
-
-    rmssd_val = chosen.hrv_rmssd_ms if chosen.hrv_rmssd_ms is not None else None
-    resting_hr_val = (
-        chosen.resting_hr_bpm
-        if chosen.resting_hr_bpm is not None
-        else (chosen.avg_hr_bpm if chosen.avg_hr_bpm is not None else None)
-    )
-
-    payload: Dict[str, float] = {
-        "sleep_hours": round(sleep_hours, 2),
-        "sleep_quality": round(sleep_quality, 2),
-        "hours_awake": round(hours_awake, 2),
-    }
-    if rmssd_val is not None:
-        payload["rmssd_ms"] = float(rmssd_val)
-    if resting_hr_val is not None:
-        payload["resting_hr"] = float(resting_hr_val)
-    return payload
+    return _build_garmin_sleep_payload(chosen, now_dt)
 
 
 # ---------------------------------------------------------------------------
