@@ -31,6 +31,13 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+# Safe rerun utility with debouncing and circuit breaker
+try:
+    from rerun_utils import safe_rerun
+except ImportError:  # pragma: no cover
+    def safe_rerun(reason: str = "") -> None:  # type: ignore[misc]
+        safe_rerun("sleep_tab_rerun")
+
 # Local imports
 try:
     from sleep_analysis import (
@@ -114,7 +121,7 @@ def _render_user_login_section() -> UserInfo | None:
         if st.sidebar.button("🚪 Logout", key="sleep_logout_btn"):
             st.session_state[_SESSION_CURRENT_USER] = None
             st.session_state[_SESSION_SLEEP_NIGHTS] = []
-            st.rerun()
+            safe_rerun("sleep_tab_rerun")
 
         return user
 
@@ -166,7 +173,7 @@ def _render_user_login_section() -> UserInfo | None:
                     )
                     st.session_state[_SESSION_CURRENT_USER] = user
                     st.success(f"Welcome, {user.name}!")
-                    st.rerun()
+                    safe_rerun("sleep_tab_rerun")
                 except Exception as exc:
                     st.error(f"Login failed: {exc}")
             else:
@@ -211,7 +218,7 @@ def _render_data_management_section(user: UserInfo) -> None:
         try:
             _load_user_sleep_data(user)
             st.sidebar.success("Data loaded successfully!")
-            st.rerun()
+            safe_rerun("sleep_tab_rerun")
         except Exception as e:
             st.sidebar.error(f"Error: {e}")
 

@@ -602,6 +602,20 @@ Get-Content logs/errors.log
 - For new core logic, prefer **pytest + Hypothesis** property-based tests (artifact detection, interpolation, PSD, correlations).
 - Target ≥90% coverage on critical modules (`app/hrv_core.py`, `app/noaa_space.py`) and treat warnings as errors during CI.
 
+#### Rerun-Loop Regression Rule (MANDATORY)
+Any change that touches Streamlit UI, session state, caching, or background data fetches **must** pass this rule before it can be considered complete:
+
+1. **Run the app** (operational or research entrypoint, as applicable).
+2. **Navigate and test all three critical tabs**:
+   - Space Data
+   - HRV
+   - History
+   Test with **both** a named user profile and a guest profile.
+3. **Completion check**: once calculations finish, the page **must stop recalculating**. Acceptable behavior is **≤ 2–3 reruns per user action**. Any continuous rerun/recalc loop is a failure.
+4. **Log gate**: search `hrv_app.log` for `CIRCUIT_BREAKER_TRIPPED`. If present, treat as **test failure** and fix the root cause before merging or release.
+   - If `hrv_app.log` is not present, check `logs/app.log` for the same pattern.
+5. **If failure occurs**: capture the stack trace, identify the triggering rerun path, and fix by routing through `safe_rerun()` with debouncing and circuit breaker.
+
 ### Caching Strategy
 - NOAA space data cached in `app/data_cache/noaa_space/` with 6-hour TTL
 - Cache files named by source key and content hash
