@@ -138,6 +138,7 @@ from export_utils import (
     fit_cohort_longitudinal_mixed_effects,
 )
 from echarts_component import EChartsConfig, render_echarts
+from rerun_utils import safe_rerun, reset_circuit_breaker, get_rerun_stats
 from space_weather_alignment import (
     align_space_weather_series,
     align_space_weather_columns,
@@ -4444,34 +4445,9 @@ def _list_library_rr_files() -> Dict[str, List[Dict[str, Any]]]:
     return result
 
 
-_RERUN_DEBOUNCE_KEY: Final[str] = "_last_rerun_time_mono"
-_RERUN_DEBOUNCE_MIN_INTERVAL_SEC: Final[float] = 0.5
-
-
-def _safe_rerun(reason: str = "") -> None:
-    """Trigger st.rerun() with debouncing to prevent rapid consecutive reruns.
-
-    If a rerun was triggered less than _RERUN_DEBOUNCE_MIN_INTERVAL_SEC ago,
-    this call is skipped. This prevents UI loops where multiple rerun triggers
-    fire in rapid succession (e.g., button clicks, state changes).
-
-    Args:
-        reason: Optional string describing why rerun was requested (for logging).
-    """
-    now = time.monotonic()
-    last_rerun = st.session_state.get(_RERUN_DEBOUNCE_KEY, 0.0)
-    if now - last_rerun < _RERUN_DEBOUNCE_MIN_INTERVAL_SEC:
-        # Debounce: skip this rerun request.
-        if reason:
-            _LOGGER.debug("Rerun debounced (reason=%s, delta=%.3fs)", reason, now - last_rerun)
-        return
-    st.session_state[_RERUN_DEBOUNCE_KEY] = now
-    if reason:
-        try:
-            log_rerun_trigger(reason)
-        except Exception:  # pragma: no cover - logging should never crash app
-            pass
-    st.rerun()
+# _safe_rerun moved to rerun_utils.py - use safe_rerun() instead
+# Alias for backward compatibility within this file
+_safe_rerun = safe_rerun
 
 
 def _clear_tab_load_state(prefix: str = "_tab_loaded_") -> int:
@@ -4690,7 +4666,7 @@ def _render_library_loader() -> Dict[str, UploadedRR]:
             else:
                 st.success(f"Loaded {len(selected_files)} file(s) into workspace.")
             
-            st.rerun()
+            safe_rerun("library files loaded")
     
     return out
 
@@ -5353,7 +5329,7 @@ def _should_render_tab(
             use_container_width=True,
         ):
             st.session_state[state_key] = True
-            st.rerun()
+            safe_rerun(f"tab load button: {label}")
     with col_hint:
         st.caption(
             "Manual tab rendering is enabled in **Processing Mode** (sidebar). "
@@ -14913,15 +14889,14 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                     duration_sec=session_duration * 60,
                     breathing_rate=breathing_rate,
                 )
-                st.rerun()
+                safe_rerun("biofeedback session started")
             
-            # Handle session stop
             if stop_session:
                 st.session_state["biofeedback_running"] = False
                 session_result = engine.end_session()
                 if session_result:
                     st.session_state["biofeedback_last_session"] = session_result
-                st.rerun()
+                safe_rerun("biofeedback session stopped")
             
             # Display area
             st.markdown("---")
@@ -15174,14 +15149,14 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 session_result = engine.end_session()
                 if session_result:
                     st.session_state["biofeedback_last_session"] = session_result
-                st.rerun()
+                safe_rerun("biofeedback session auto-stopped")
 
             if st.session_state.get("biofeedback_running", False):
                 # Add a refresh button for manual updates during the session.
                 col_refresh, col_spacer = st.columns([1, 3])
                 with col_refresh:
                     if st.button("🔄 Refresh", key="biofeedback_refresh", help="Update the live view"):
-                        st.rerun()
+                        safe_rerun("biofeedback refresh clicked")
                 
                 _render_biofeedback_live_view(
                     engine,
@@ -19544,7 +19519,7 @@ space weather events, maintained by the Community Coordinated Modeling Center (C
                             export_store.pop("corr_full", None)
                             export_store.pop("corr_best", None)
                             st.session_state["space_weather_export"] = export_store
-                        st.rerun()
+                        safe_rerun("correlation cache cleared")
 
             if corr_windowed_df.empty:
                 info_col, action_col = st.columns([0.65, 0.35])
@@ -19568,7 +19543,7 @@ space weather events, maintained by the Community Coordinated Modeling Center (C
                         else:
                             st.session_state["auto_run_hrv_analysis"] = True
                             st.session_state.pop("hrv_analysis_complete_signature", None)
-                            st.rerun()
+                            safe_rerun("HRV analysis triggered from space weather tab")
             elif "start" not in corr_windowed_df.columns:
                 st.info("Windowed HRV data does not include start timestamps.")
             elif not corr_metric_list:
@@ -22389,7 +22364,7 @@ shifts the predictor time series backward in time:
                     else:
                         st.session_state["auto_run_hrv_analysis"] = True
                         st.session_state.pop("hrv_analysis_complete_signature", None)
-                        st.rerun()
+                        safe_rerun("HRV analysis triggered from space analytics tab")
         elif not has_noaa:
             st.info("Load cached NOAA or fetch NOAA feeds above to enable correlations.")
         else:
@@ -24742,11 +24717,11 @@ This allows models to capture delayed biological responses to space weather chan
             if not show_full_about:
                 if st.button("Load full About page", key="about_load_full"):
                     st.session_state["_about_show_full"] = True
-                    st.rerun()
+                    safe_rerun("about page: load full")
             else:
                 if st.button("Show lightweight About (faster)", key="about_show_light"):
                     st.session_state["_about_show_full"] = False
-                    st.rerun()
+                    safe_rerun("about page: show lightweight")
         with col_hint:
             st.caption(
                 "Tip: the full About page renders large documentation and may take longer. "
