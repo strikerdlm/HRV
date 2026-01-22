@@ -445,6 +445,7 @@ except ImportError:
     HRV_CACHE_AVAILABLE = False
 
 from dataclasses import asdict, dataclass
+from collections import deque
 from datetime import timezone, timedelta, datetime, date, time as dt_time
 from typing import (
     Any,
@@ -2365,12 +2366,24 @@ def _auto_fetch_noaa_space_if_needed(state: Dict[str, Any]) -> None:
 # UI thread to poll for completion without blocking.
 # Auto-refresh interval: 12 hours (43200 seconds)
 _BG_FETCH_INTERVAL_SECONDS = 43200  # 12 hours
+_BG_FETCH_LOOP_WINDOW_SECONDS = 120.0
+_BG_FETCH_LOOP_MAX_STARTS = 3
+_BG_FETCH_MAX_RUNTIME_SECONDS = 120.0
+_BG_FETCH_START_HISTORY_MAX = 12
 
 _bg_fetch_lock = threading.Lock()
 _bg_fetch_results: Dict[str, Any] = {
     "space_weather": {"done": False, "error": None, "data": {}, "fetch_time": None},
     "noaa": {"done": False, "error": None, "data": {}, "fetch_time": None},
     "donki": {"done": False, "error": None, "data": {}, "fetch_time": None},
+}
+_bg_fetch_meta: Dict[str, Any] = {
+    "start_times": deque(maxlen=_BG_FETCH_START_HISTORY_MAX),
+    "last_start": None,
+    "last_end": None,
+    "last_success": None,
+    "loop_detected": False,
+    "last_loop_at": None,
 }
 _bg_fetch_thread: Optional[threading.Thread] = None
 
@@ -2384,6 +2397,7 @@ def _bg_fetch_all_space_data() -> None:
     """
     global _bg_fetch_results
     fetch_time = time.time()
+    had_error = False
     _LOGGER.info("BG SpaceData: background fetch thread started")
 
     # 1. Space Weather (Kp + Flux)
@@ -2408,6 +2422,7 @@ def _bg_fetch_all_space_data() -> None:
         )
     except Exception as exc:
         log_exception(_LOGGER, "Background fetch failed: space weather", exc)
+        had_error = True
         with _bg_fetch_lock:
             _bg_fetch_results["space_weather"]["error"] = str(exc)
             _bg_fetch_results["space_weather"]["done"] = True
@@ -2423,6 +2438,8 @@ def _bg_fetch_all_space_data() -> None:
             use_cache=True,
             max_workers=4,
         )
+        if errors:
+            had_error = True
         with _bg_fetch_lock:
             _bg_fetch_results["noaa"]["data"] = {
                 "bundles": bundles,
@@ -2440,6 +2457,7 @@ def _bg_fetch_all_space_data() -> None:
         )
     except Exception as exc:
         log_exception(_LOGGER, "Background fetch failed: NOAA feeds", exc)
+        had_error = True
         with _bg_fetch_lock:
             _bg_fetch_results["noaa"]["error"] = str(exc)
             _bg_fetch_results["noaa"]["done"] = True
@@ -2463,6 +2481,8 @@ def _bg_fetch_all_space_data() -> None:
             "last_updated": None,
         }
         _fetch_donki_datasets(donki_tmp_state, start_str, end_str, endpoints=None)
+        if donki_tmp_state.get("errors"):
+            had_error = True
 
         with _bg_fetch_lock:
             _bg_fetch_results["donki"]["data"] = {
@@ -2485,10 +2505,13 @@ def _bg_fetch_all_space_data() -> None:
         )
     except Exception as exc:
         log_exception(_LOGGER, "Background fetch failed: NASA DONKI", exc)
+        had_error = True
         with _bg_fetch_lock:
             _bg_fetch_results["donki"]["error"] = str(exc)
             _bg_fetch_results["donki"]["done"] = True
             _bg_fetch_results["donki"]["fetch_time"] = fetch_time
+    finally:
+        _record_bg_fetch_end(success=not had_error)
 
 
 def _is_bg_fetch_stale() -> bool:
@@ -2528,6 +2551,75 @@ def _reset_bg_fetch_for_refresh() -> None:
             _bg_fetch_results[key]["_applied"] = False
 
 
+def _record_bg_fetch_start_locked(now: float) -> bool:
+    """Record a background fetch start while holding _bg_fetch_lock."""
+    if _bg_fetch_meta.get("loop_detected"):
+        return True
+    start_times: deque = _bg_fetch_meta["start_times"]
+    start_times.append(now)
+    _bg_fetch_meta["last_start"] = now
+    window_start = now - _BG_FETCH_LOOP_WINDOW_SECONDS
+    recent_starts = [t for t in start_times if t >= window_start]
+    if len(recent_starts) > _BG_FETCH_LOOP_MAX_STARTS:
+        _bg_fetch_meta["loop_detected"] = True
+        _bg_fetch_meta["last_loop_at"] = now
+        return True
+    return False
+
+
+def _record_bg_fetch_start(now: Optional[float] = None) -> bool:
+    """
+    Record a background fetch start and detect rapid restart loops.
+
+    Returns True if a loop is detected or previously flagged.
+    """
+    if now is None:
+        now = time.time()
+    with _bg_fetch_lock:
+        return _record_bg_fetch_start_locked(now)
+
+
+def _record_bg_fetch_end(success: bool, now: Optional[float] = None) -> None:
+    """Record background fetch completion status."""
+    if now is None:
+        now = time.time()
+    with _bg_fetch_lock:
+        _bg_fetch_meta["last_end"] = now
+        _bg_fetch_meta["last_success"] = bool(success)
+
+
+def _get_bg_fetch_health(now: Optional[float] = None) -> Dict[str, Any]:
+    """Return health metadata used by the UI/diagnostics."""
+    if now is None:
+        now = time.time()
+    running = _is_bg_fetch_thread_running()
+    with _bg_fetch_lock:
+        last_start = _bg_fetch_meta.get("last_start")
+        last_end = _bg_fetch_meta.get("last_end")
+        last_success = _bg_fetch_meta.get("last_success")
+        loop_detected = _bg_fetch_meta.get("loop_detected")
+        last_loop_at = _bg_fetch_meta.get("last_loop_at")
+    runtime_s = None
+    timed_out = False
+    if running and last_start is not None:
+        runtime_s = max(0.0, now - last_start)
+        if runtime_s >= _BG_FETCH_MAX_RUNTIME_SECONDS:
+            timed_out = True
+    return {
+        "running": running,
+        "last_start": last_start,
+        "last_end": last_end,
+        "last_success": last_success,
+        "loop_detected": loop_detected,
+        "last_loop_at": last_loop_at,
+        "runtime_s": runtime_s,
+        "timed_out": timed_out,
+        "max_runtime_s": _BG_FETCH_MAX_RUNTIME_SECONDS,
+        "loop_window_s": _BG_FETCH_LOOP_WINDOW_SECONDS,
+        "loop_max_starts": _BG_FETCH_LOOP_MAX_STARTS,
+    }
+
+
 def _start_background_fetch(force: bool = False) -> bool:
     """
     Spawn a background thread to fetch all space weather data.
@@ -2544,6 +2636,9 @@ def _start_background_fetch(force: bool = False) -> bool:
         # Don't start if already running
         if _bg_fetch_thread is not None and _bg_fetch_thread.is_alive():
             _LOGGER.info("BG SpaceData: fetch already running, skip start")
+            return False
+        if _bg_fetch_meta.get("loop_detected"):
+            _LOGGER.warning("BG SpaceData: loop previously detected; auto-fetch disabled until reset")
             return False
 
         # Snapshot current fetch times to evaluate staleness without re-locking
@@ -2567,6 +2662,16 @@ def _start_background_fetch(force: bool = False) -> bool:
         if force or _are_fetch_times_stale(fetch_times_snapshot):
             _reset_bg_fetch_for_refresh()
             _LOGGER.info("BG SpaceData: background fetch state reset (force=%s)", force)
+        now = time.time()
+        if _record_bg_fetch_start_locked(now):
+            _LOGGER.warning("BG SpaceData: loop detected; auto-fetch disabled until reset")
+            for key in ("space_weather", "noaa", "donki"):
+                _bg_fetch_results[key]["done"] = True
+                _bg_fetch_results[key]["error"] = (
+                    "Background fetch loop detected; auto-fetch disabled until reset."
+                )
+                _bg_fetch_results[key]["fetch_time"] = now
+            return False
 
         # Start a new daemon thread while holding the lock to avoid races
         _bg_fetch_thread = threading.Thread(
@@ -2606,6 +2711,16 @@ def _get_bg_fetch_age_str() -> str:
         return f"{hours:.1f}h ago"
     return f"{hours / 24:.1f}d ago"
 
+
+def _format_bg_fetch_ts(ts: Optional[float]) -> str:
+    """Format a Unix timestamp in UTC for diagnostics."""
+    if ts is None:
+        return "—"
+    try:
+        return pd.to_datetime(ts, unit="s", utc=True).strftime("%Y-%m-%d %H:%M:%S UTC")
+    except Exception:  # pragma: no cover - defensive
+        return "—"
+
 def _is_bg_fetch_thread_running() -> bool:
     thread = _bg_fetch_thread
     return bool(thread is not None and thread.is_alive())
@@ -2619,6 +2734,12 @@ def _reset_background_fetch_status() -> None:
             _bg_fetch_results[key]["data"] = {}
             _bg_fetch_results[key]["fetch_time"] = None
             _bg_fetch_results[key]["_applied"] = False
+        _bg_fetch_meta["start_times"].clear()
+        _bg_fetch_meta["last_start"] = None
+        _bg_fetch_meta["last_end"] = None
+        _bg_fetch_meta["last_success"] = None
+        _bg_fetch_meta["loop_detected"] = False
+        _bg_fetch_meta["last_loop_at"] = None
 
 
 def _poll_background_fetch() -> Dict[str, Any]:
@@ -2629,7 +2750,8 @@ def _poll_background_fetch() -> Dict[str, Any]:
       {"space_weather": {"done": bool, "error": str|None, "stale": bool}, ...}
     """
     now = time.time()
-    running = _is_bg_fetch_thread_running()
+    health = _get_bg_fetch_health(now)
+    running = bool(health.get("running")) and not bool(health.get("timed_out"))
     with _bg_fetch_lock:
         result = {}
         for k, v in _bg_fetch_results.items():
@@ -2649,6 +2771,10 @@ def _poll_background_fetch() -> Dict[str, Any]:
                 "running": running_key,
                 "started": started,
                 "idle": idle,
+                "loop_detected": bool(health.get("loop_detected")),
+                "timed_out": bool(health.get("timed_out")),
+                "runtime_s": health.get("runtime_s"),
+                "max_runtime_s": health.get("max_runtime_s"),
             }
         return result
 
@@ -17434,6 +17560,32 @@ that predicts cognitive performance based on:
                     "Keys: NASA DONKI="
                     + ("✅" if bool(NASA_API_KEY) else "❌")
                 )
+            health = _get_bg_fetch_health()
+            if health.get("loop_detected"):
+                st.error(
+                    "Background fetch loop detected; auto-fetch disabled until reset."
+                )
+            elif health.get("timed_out"):
+                runtime_label = (
+                    f"{health.get('runtime_s', 0):.0f}s"
+                    if isinstance(health.get("runtime_s"), (int, float))
+                    else "unknown"
+                )
+                max_label = (
+                    f"{health.get('max_runtime_s', 0):.0f}s"
+                    if isinstance(health.get("max_runtime_s"), (int, float))
+                    else "unknown"
+                )
+                st.warning(
+                    "Background fetch exceeded max runtime "
+                    f"({runtime_label} > {max_label}); treated as idle."
+                )
+            st.caption(
+                "Background fetch health | "
+                f"last start: {_format_bg_fetch_ts(health.get('last_start'))} | "
+                f"last end: {_format_bg_fetch_ts(health.get('last_end'))} | "
+                f"last success: {health.get('last_success')}"
+            )
 
             history = _space_steps.get("history", [])
             if isinstance(history, list) and history:
@@ -20249,6 +20401,42 @@ The Space Analytics tab provides statistical correlation tools for hypothesis te
         auto_fetch_enabled = bool(st.session_state.get("allow_space_auto_fetch", False))
         any_running = any(info.get("running", False) for info in fetch_state.values())
         any_errors = any(bool(info.get("error")) for info in fetch_state.values())
+        loop_detected = any(info.get("loop_detected", False) for info in fetch_state.values())
+        timed_out = any(info.get("timed_out", False) for info in fetch_state.values())
+        runtime_s = next(
+            (
+                info.get("runtime_s")
+                for info in fetch_state.values()
+                if info.get("runtime_s") is not None
+            ),
+            None,
+        )
+        max_runtime_s = next(
+            (
+                info.get("max_runtime_s")
+                for info in fetch_state.values()
+                if info.get("max_runtime_s") is not None
+            ),
+            None,
+        )
+        if loop_detected:
+            st.error(
+                "Background space-data fetch loop detected; auto-fetch disabled until reset."
+            )
+        if timed_out:
+            runtime_label = (
+                f"{runtime_s:.0f}s" if isinstance(runtime_s, (int, float)) else "unknown"
+            )
+            max_label = (
+                f"{max_runtime_s:.0f}s"
+                if isinstance(max_runtime_s, (int, float))
+                else "unknown"
+            )
+            st.warning(
+                "Background space-data fetch exceeded max runtime "
+                f"({runtime_label} > {max_label}); treated as idle. "
+                "Use 'Reset bg fetch' if it remains stuck."
+            )
         if not auto_fetch_enabled:
             st.caption("Background space-data fetch: disabled (manual-only mode).")
         elif any_running:
