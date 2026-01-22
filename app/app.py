@@ -5578,6 +5578,11 @@ def _should_render_tab(
     if not label.strip():
         raise ValueError("label must be a non-empty string.")
 
+    stable_nav = bool(st.session_state.get("stable_navigation_mode", False))
+    active_label = st.session_state.get("stable_nav_section")
+    if stable_nav and active_label and label != active_label:
+        return False
+
     manual_rendering = bool(st.session_state.get("manual_tab_rendering", True))
     if not manual_rendering:
         return True
@@ -5607,6 +5612,84 @@ def _should_render_tab(
             "Disable it to auto-load tabs."
         )
     return False
+
+
+def _render_stable_navigation_sidebar(tab_labels: Sequence[str]) -> str:
+    """Render stable navigation controls and return active label (or empty)."""
+    if not isinstance(tab_labels, (list, tuple)):
+        raise TypeError("tab_labels must be a list or tuple.")
+    if not tab_labels:
+        return ""
+    stable_default = bool(st.session_state.get("stable_navigation_mode", True))
+    stable_enabled = st.sidebar.checkbox(
+        "Stable navigation (single section rendering)",
+        value=stable_default,
+        key="stable_navigation_mode",
+        help=(
+            "When enabled, only the selected section renders. "
+            "This prevents heavy tabs from triggering repeated reruns."
+        ),
+    )
+    if not stable_enabled:
+        st.session_state.pop("stable_nav_section", None)
+        return ""
+    if st.session_state.get("enable_tab_persistence"):
+        st.session_state["enable_tab_persistence"] = False
+    current_label = st.session_state.get("stable_nav_section")
+    if current_label not in tab_labels:
+        current_label = tab_labels[0]
+        st.session_state["stable_nav_section"] = current_label
+    active_label = st.sidebar.radio(
+        "Navigation",
+        options=list(tab_labels),
+        index=tab_labels.index(current_label),
+        key="stable_nav_section",
+    )
+    st.markdown(
+        """
+        <style>
+        div[data-baseweb="tab-list"] {
+            display: none !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+    return str(active_label)
+
+
+def _apply_rerun_storm_guard() -> Dict[str, Any]:
+    """Detect rapid reruns and auto-stabilize the UI state."""
+    stats = get_rerun_stats()
+    try:
+        recent = int(stats.get("recent_count", 0))
+        max_allowed = int(stats.get("max_allowed", 0))
+    except Exception:
+        recent = 0
+        max_allowed = 0
+    storm = bool(max_allowed > 0 and recent >= max_allowed)
+    st.session_state["_rerun_storm_active"] = storm
+    if not storm:
+        return stats
+
+    st.session_state["manual_processing_only"] = True
+    st.session_state["manual_tab_rendering"] = True
+    st.session_state["allow_space_auto_fetch"] = False
+    st.session_state["enable_tab_persistence"] = False
+    st.session_state["stable_navigation_mode"] = True
+    if "performance_settings" in st.session_state:
+        perf = st.session_state["performance_settings"]
+        perf["max_plot_points"] = min(int(perf.get("max_plot_points", 500)), 500)
+        perf["max_dataframe_rows"] = min(int(perf.get("max_dataframe_rows", 200)), 200)
+        perf["enable_heavy_plots"] = False
+        perf["enable_spectrogram"] = False
+        perf["enable_nonlinear"] = False
+        perf["enable_windowed_hrv"] = False
+        perf["enable_frequency_domain"] = False
+        perf["enable_ml_clustering"] = False
+        perf["enable_nasa_donki"] = False
+        perf["enable_space_weather_impact"] = False
+    return stats
 
 
 def _plot_rr_timeseries(
@@ -5703,6 +5786,12 @@ def _plot_rr_timeseries(
                     xf = timestamps_masked.loc[valid_mask].astype(
                         str).to_numpy()
                     yf = rr_masked.loc[valid_mask].to_numpy(dtype=float)
+                    if max_points is not None and xf.size > max_points:
+                        idx = np.linspace(
+                            0, xf.size - 1, int(max_points), dtype=int
+                        )
+                        xf = xf[idx]
+                        yf = yf[idx]
                     series.append(
                         {
                             **_echarts_scatter_series(f"{name} artifacts", xf, yf),
@@ -5877,9 +5966,15 @@ def _plot_psd_overlay(
     render_echarts(opt, height_px=420, width="100%", config=EChartsConfig())
 
 
-def _plot_poincare(datasets: Dict[str, UploadedRR],
-                   max_points: int = 5000) -> None:
+def _plot_poincare(
+    datasets: Dict[str, UploadedRR],
+    *,
+    max_points: Optional[int] = None,
+) -> None:
     series = []
+    if max_points is None and PERFORMANCE_UTILS_AVAILABLE:
+        perf = get_performance_settings()
+        max_points = int(perf.get("max_plot_points", 2000))
     for name, up in datasets.items():
         rr = up.rr_ms_clean if (up.rr_ms_clean is not None) else up.rr_ms
         if rr.size < 2:
@@ -5889,8 +5984,8 @@ def _plot_poincare(datasets: Dict[str, UploadedRR],
             continue
         x = rr[:-1]
         y = rr[1:]
-        if x.size > max_points:
-            idx = np.linspace(0, x.size - 1, max_points).astype(int)
+        if max_points is not None and x.size > max_points:
+            idx = np.linspace(0, x.size - 1, int(max_points)).astype(int)
             x = x[idx]
             y = y[idx]
         series.append(_echarts_scatter_series(name, x, y))
@@ -6058,6 +6153,10 @@ def _plot_deviation_timeline(windowed_df: pd.DataFrame) -> None:
         return
     series = []
     colors = {"green": "#43a047", "yellow": "#fb8c00", "red": "#e53935"}
+    max_points = None
+    if PERFORMANCE_UTILS_AVAILABLE:
+        perf = get_performance_settings()
+        max_points = int(perf.get("max_plot_points", 2000))
     for src, sub in windowed_df.groupby("source"):
         for level in ["green", "yellow", "red"]:
             ss = sub[sub["dev_level"] == level]
@@ -6067,6 +6166,9 @@ def _plot_deviation_timeline(windowed_df: pd.DataFrame) -> None:
                 [str(x), float(y)]
                 for x, y in zip(ss["start"].astype(str), ss["dev_index"].astype(float))
             ]
+            if max_points is not None and len(data) > max_points:
+                idx = np.linspace(0, len(data) - 1, int(max_points), dtype=int)
+                data = [data[i] for i in idx]
             series.append(
                 {
                     "name": f"{src} — {level}",
@@ -7579,6 +7681,32 @@ def main() -> None:
 
     # Show error details in UI
     st.set_option("client.showErrorDetails", True)
+
+    run_count = int(st.session_state.get("_ui_run_count", 0)) + 1
+    st.session_state["_ui_run_count"] = run_count
+    rerun_stats = _apply_rerun_storm_guard()
+    st.session_state["_last_rerun_stats"] = rerun_stats
+    if _LOGGER.isEnabledFor(logging.DEBUG):
+        _LOGGER.debug(
+            "UI run=%d | manual_tab_rendering=%s | manual_processing_only=%s | rerun=%s",
+            run_count,
+            st.session_state.get("manual_tab_rendering"),
+            st.session_state.get("manual_processing_only"),
+            rerun_stats,
+        )
+
+    if st.session_state.get("_rerun_storm_active"):
+        storm_cols = st.columns([3, 1])
+        with storm_cols[0]:
+            st.warning(
+                "Rerun storm detected. Auto-stabilization enabled "
+                "(manual tabs, heavy plots disabled)."
+            )
+        with storm_cols[1]:
+            if st.button("Recover", key="_rerun_storm_recover"):
+                reset_circuit_breaker()
+                st.session_state["_rerun_storm_active"] = False
+                safe_rerun("rerun_storm_recover")
     
     # Disable Streamlit stale element dimming globally
     # This prevents the "faded" appearance during long computations
@@ -7658,6 +7786,21 @@ def main() -> None:
         elif not debug_mode and st.session_state.get("_debug_mode_enabled", False):
             st.session_state["_debug_mode_enabled"] = False
             st.info("Debug logging disabled (takes effect on next restart)")
+
+        rerun_stats = st.session_state.get("_last_rerun_stats") or get_rerun_stats()
+        recent_count = rerun_stats.get("recent_count")
+        max_allowed = rerun_stats.get("max_allowed")
+        last_ago = rerun_stats.get("last_rerun_ago")
+        last_label = f"{last_ago:.2f}s" if isinstance(last_ago, (int, float)) else "n/a"
+        st.caption(
+            f"Rerun status: {recent_count}/{max_allowed} in {rerun_stats.get('window_seconds')}s | "
+            f"last rerun {last_label} ago"
+        )
+        st.caption(f"Run count: {st.session_state.get('_ui_run_count', 0)}")
+        if st.button("Reset rerun breaker", key="_reset_rerun_breaker"):
+            reset_circuit_breaker()
+            st.session_state["_rerun_storm_active"] = False
+            st.success("Rerun breaker reset.")
         
         if st.button("📋 Generate Debug Report", key="_generate_debug_report"):
             try:
@@ -9491,6 +9634,40 @@ def main() -> None:
     except Exception:
         active_user_context = _guest_user_context()
 
+    tab_labels = [
+        "Overview",
+        "👤 User Profile",
+        "Time Series",
+        "Frequency",
+        "Nonlinear",
+        "Spectrogram",
+        "Windowed",
+        "Metrics",
+        "🧩 HRF ↔ HRV",
+        "ANS Function Tests",
+        "Readiness",
+        "Gauges",
+        "📈 Unified Timeline",
+        "📊 Population Norms",
+        "🫀 Biofeedback",
+        "😴 SAFTE/Fatigue",
+        "☀️ Circadian",
+        "🌐 Space Data",
+        "🔬 Space Analytics",
+        "📄 Export",
+        "Science",
+        "📚 References",
+        "ℹ️ About",
+    ]
+    active_section_label = _render_stable_navigation_sidebar(tab_labels)
+    stable_nav_enabled = bool(st.session_state.get("stable_navigation_mode", False))
+    if _LOGGER.isEnabledFor(logging.DEBUG):
+        _LOGGER.debug(
+            "UI: navigation_mode | stable=%s | active=%s",
+            stable_nav_enabled,
+            active_section_label,
+        )
+
     # Tabs
     (
         tab_overview,
@@ -9516,33 +9693,7 @@ def main() -> None:
         tab_science,
         tab_refs,
         tab_about,
-    ) = st.tabs(
-        [
-            "Overview",
-            "👤 User Profile",
-            "Time Series",
-            "Frequency",
-            "Nonlinear",
-            "Spectrogram",
-            "Windowed",
-            "Metrics",
-            "🧩 HRF ↔ HRV",
-            "ANS Function Tests",
-            "Readiness",
-            "Gauges",
-            "📈 Unified Timeline",
-            "📊 Population Norms",
-            "🫀 Biofeedback",
-            "😴 SAFTE/Fatigue",
-            "☀️ Circadian",
-            "🌐 Space Data",
-            "🔬 Space Analytics",
-            "📄 Export",
-            "Science",
-            "📚 References",
-            "ℹ️ About",
-        ]
-    )
+    ) = st.tabs(tab_labels)
     
     # Preserve active tab across reruns using JavaScript (optional).
     # This can trigger rerun loops on some Streamlit versions, so it's off by default.
@@ -9745,7 +9896,7 @@ def main() -> None:
     # =========================================================================
     with tab_user_profile:
         _log_tab("user_profile", "start")
-        if _should_render_tab("user_profile", "User Profile"):
+        if _should_render_tab("user_profile", "👤 User Profile"):
             if USER_PROFILE_TAB_AVAILABLE:
                 try:
                     render_user_profile_tab()
@@ -11879,7 +12030,7 @@ HRV deviated from baseline. Episodes include:
                 )
             else:
                 st.info("Upload HRV RR data to compute HRF/HRV metrics and correlations.")
-        elif _should_render_tab("hrf_hrv", "HRF ↔ HRV"):
+        elif _should_render_tab("hrf_hrv", "🧩 HRF ↔ HRV"):
             # Prefer in-memory analysis outputs; fall back to session-cached frames.
             base_results = (
                 multi_results_df
@@ -14703,7 +14854,7 @@ elite endurance athletes. *Medicine & Science in Sports & Exercise*, 45(9), 1721
         
         if not POPULATION_NORMS_AVAILABLE:
             st.error("Population norms module not available. Please check installation.")
-        elif _should_render_tab("pop_norms", "Population Norms"):
+        elif _should_render_tab("pop_norms", "📊 Population Norms"):
             # Explanation section
             with st.expander("📖 **Understanding Population Norms**", expanded=False):
                 st.markdown("""
@@ -15080,7 +15231,7 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
             st.warning(
                 "⚠️ Real-time HRV module not available. Install dependencies: `pip install bleak`"
             )
-        elif _should_render_tab("biofeedback", "Biofeedback"):
+        elif _should_render_tab("biofeedback", "🫀 Biofeedback"):
             st.markdown("---")
             
             # Session settings
@@ -15527,7 +15678,7 @@ controlled breathing, typically at your "resonance frequency" (~6 breaths/min fo
                 "⚠️ Fatigue module not available. Please ensure `fatigue_integration.py` "
                 "and the `fatigue_calculator` package are properly installed."
             )
-        elif _should_render_tab("fatigue", "SAFTE/Fatigue"):
+        elif _should_render_tab("fatigue", "😴 SAFTE/Fatigue"):
             tab_settings_manager = get_tab_settings_manager()
             cross_tab_broker = get_cross_tab_broker()
             fatigue_user_id = (
@@ -17470,7 +17621,7 @@ that predicts cognitive performance based on:
                 "🌙 **Circadian tab is temporarily disabled** for troubleshooting.\n\n"
                 "To re-enable, uncheck *'Skip Circadian tab'* in **Developer Tools** (sidebar)."
             )
-        elif _should_render_tab("circadian", "Circadian"):
+        elif _should_render_tab("circadian", "☀️ Circadian"):
             if CIRCADIAN_TAB_AVAILABLE:
                 # Pass user profile if available for personalized simulations
                 try:
@@ -20887,7 +21038,7 @@ The Space Analytics tab provides statistical correlation tools for hypothesis te
                     else:
                         st.session_state["auto_run_hrv_analysis"] = True
                         st.session_state.pop("hrv_analysis_complete_signature", None)
-                        st.rerun()
+                        safe_rerun("HRV analysis triggered from NOAA correlation tab")
             else:
                 st.info(
                     "Correlations run only when you click **Compute correlations**. "
@@ -21006,7 +21157,7 @@ The Space Analytics tab provides statistical correlation tools for hypothesis te
                     else:
                         st.session_state["auto_run_hrv_analysis"] = True
                         st.session_state.pop("hrv_analysis_complete_signature", None)
-                        st.rerun()
+                        safe_rerun("HRV analysis triggered from NOAA batch tab")
             elif not metrics_available:
                 st.info("No numeric HRV metrics available for correlation.")
             elif not dataset_options:
