@@ -152,6 +152,10 @@ The app detects your CPU capabilities at startup:
 
 **Offline Mode**: Disable all download toggles for completely offline HRV analysis. Cached data remains available.
 
+**Research stability controls (v1.9.6)**:
+- **Stable navigation (single section rendering)**: When enabled, the sidebar **Navigation** selector renders only the chosen section to avoid heavy tabs re-executing on every rerun.
+- **Rerun storm guard**: If rapid reruns are detected, the app automatically switches to manual-only processing, disables heavy plots, and surfaces a **Recover** button in Developer Tools.
+
 ### Installation Steps
 
 **Step 1: Clone or download the repository**
