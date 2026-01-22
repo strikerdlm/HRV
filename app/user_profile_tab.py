@@ -6988,10 +6988,6 @@ def _render_clinical_assessment(user: UserProfile) -> None:
             else wake_dt_val.replace(tzinfo=local_tz)
         )
         st.session_state[ctx_wake_time_key] = wake_dt_local
-        st.session_state[ctx_hours_wake_key] = _compute_hours_since_wake(
-            wake_dt_local,
-            datetime.now(tz=local_tz),
-        )
     
     # Garmin autofill section (outside form)
     st.markdown("#### 📊 Assessment Context")
@@ -7096,22 +7092,15 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                 date.today(), wake_time_today, tzinfo=local_tz
             )
             st.session_state[ctx_wake_time_key] = wake_dt_today
-            st.session_state[ctx_hours_wake_key] = _compute_hours_since_wake(
+            hours_since_wake_val = _compute_hours_since_wake(
                 wake_dt_today, datetime.now(tz=local_tz)
             )
             
             col1, col2, col3 = st.columns(3)
             with col1:
-                hours_since_wake = st.number_input(
-                    t('hours_since_waking'),
-                    min_value=0.0,
-                    max_value=48.0,
-                    value=float(st.session_state[ctx_hours_wake_key]),
-                    step=0.5,
-                    key=ctx_hours_wake_key,
-                    disabled=True,
-                    help="Calculated from wake time and current clock time.",
-                )
+                hours_since_wake = float(hours_since_wake_val)
+                st.metric(t('hours_since_waking'), f"{hours_since_wake:.1f} h")
+                st.caption("Calculated from wake time and current clock time.")
             with col2:
                 hours_sleep = st.number_input(
                     t('hours_slept'),
@@ -7131,7 +7120,7 @@ def _render_clinical_assessment(user: UserProfile) -> None:
                     key=ctx_caffeine_key,
                 )
             st.caption(
-                f"Hours awake ({st.session_state[ctx_hours_wake_key]:.1f}h) "
+                f"Hours awake ({hours_since_wake:.1f}h) "
                 f"= now ({datetime.now(tz=local_tz).strftime('%H:%M')}) minus wake "
                 f"time ({wake_time_today.strftime('%H:%M')})."
             )
@@ -7811,35 +7800,11 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
         if "stress_score" in df.columns:
             stress_mean = df['stress_score'].mean()
             st.metric("Avg stress", f"{stress_mean:.1f}" if pd.notna(stress_mean) else "—")
-    perf_mode = bool(st.session_state.get(f"profile_perf_mode_{user.user_id}", False))
-    with st.expander("⚡ Performance controls (Garmin History)", expanded=False):
-        show_gauges = st.toggle(
-            "Show gauges",
-            value=not perf_mode,
-            key=f"garmin_show_gauges_{user.user_id}",
-        )
-        show_trends = st.toggle(
-            "Show trend charts",
-            value=not perf_mode,
-            key=f"garmin_show_trends_{user.user_id}",
-        )
-        show_stats = st.toggle(
-            "Show summary stats",
-            value=not perf_mode,
-            key=f"garmin_show_stats_{user.user_id}",
-        )
-        show_table = st.toggle(
-            "Show raw daily table",
-            value=False if perf_mode else True,
-            key=f"garmin_show_table_{user.user_id}",
-        )
-        show_advanced = st.toggle(
-            "Show advanced analytics",
-            value=False if perf_mode else True,
-            key=f"garmin_show_advanced_{user.user_id}",
-        )
-    if perf_mode and not any([show_gauges, show_trends, show_stats, show_table, show_advanced]):
-        st.caption("Performance mode is enabled — gauges/charts/analytics are hidden.")
+    show_gauges = True
+    show_trends = True
+    show_stats = True
+    show_table = True
+    show_advanced = True
 
     # Render gauges in organized sections
     if show_gauges:
@@ -7997,8 +7962,6 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
             if not stats_df.empty:
                 st.markdown("#### Summary statistics (stored Garmin daily metrics)")
                 st.dataframe(stats_df, use_container_width=True, hide_index=True)
-    elif perf_mode:
-        st.caption("Summary stats hidden (performance mode).")
 
     # Trends (grouped so all Garmin fields can be visualized)
     # Publication-quality charts with physiological context
@@ -8174,8 +8137,6 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
                 use_container_width=True,
                 hide_index=True,
             )
-    elif perf_mode:
-        st.caption("Raw Garmin table hidden (performance mode).")
     
     # Advanced Analytics Section
     if show_advanced and WEARABLE_ANALYTICS_AVAILABLE and len(df) >= 7:
@@ -10633,30 +10594,10 @@ def _render_hrv_history(user: UserProfile) -> None:
             if "mean_hr_bpm" in df.columns:
                 st.metric("Avg HR", f"{df['mean_hr_bpm'].mean():.0f} bpm")
 
-        perf_mode = bool(st.session_state.get(f"profile_perf_mode_{user.user_id}", False))
-        with st.expander("⚡ Performance controls (HRV History)", expanded=False):
-            show_hrv_charts = st.toggle(
-                "Show HRV charts",
-                value=not perf_mode,
-                key=f"hrv_history_show_charts_{user.user_id}",
-            )
-            show_baseline = st.toggle(
-                "Show baseline/timepoint analysis",
-                value=not perf_mode,
-                key=f"hrv_history_show_baseline_{user.user_id}",
-            )
-            show_advanced = st.toggle(
-                "Show advanced HRV analytics",
-                value=False if perf_mode else True,
-                key=f"hrv_history_show_advanced_{user.user_id}",
-            )
-            show_table = st.toggle(
-                "Show raw HRV table",
-                value=False if perf_mode else True,
-                key=f"hrv_history_show_table_{user.user_id}",
-            )
-        if perf_mode and not any([show_hrv_charts, show_baseline, show_advanced, show_table]):
-            st.caption("Performance mode is enabled — charts/analytics are hidden.")
+        show_hrv_charts = True
+        show_baseline = True
+        show_advanced = True
+        show_table = True
 
         # Get user age for normative reference
         user_age = 35
@@ -11216,8 +11157,6 @@ def _render_hrv_history(user: UserProfile) -> None:
                     hrv_df=df,
                     garmin_df=garmin_analytics_df if not garmin_analytics_df.empty else None,
                 )
-        elif perf_mode:
-            st.caption("Advanced HRV analytics hidden (performance mode).")
         
         # Full data table
         if show_table:
@@ -16803,16 +16742,6 @@ def render_user_profile_tab() -> None:
         _render_longitudinal_timepoint_controls(current_user.user_id)
         st.markdown("---")
 
-        perf_key = f"profile_perf_mode_{current_user.user_id}"
-        perf_mode = st.toggle(
-            "⚡ Performance mode (hide heavy charts/gauges)",
-            value=bool(st.session_state.get(perf_key, True)),
-            key=perf_key,
-            help="When enabled, heavy charts/analytics are hidden by default to keep the app responsive.",
-        )
-        if perf_mode:
-            st.caption("Performance mode is ON — expand sections to selectively render charts/analytics.")
-        
         # PERFORMANCE FIX: Use selectbox navigation instead of nested tabs
         # Nested st.tabs renders ALL content on every rerun, causing severe slowdowns.
         # Selectbox with conditional rendering only processes the selected section.
