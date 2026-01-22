@@ -19,6 +19,8 @@ Contributing to **AsterPhysiology** Research Initiative
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
 
+**NEW in v1.9.7**: **Research Stability + NASA Autofill Sync** — Removed experimental tab persistence to prevent rerun loops, and NASA Nutrition sleep inputs now share the Profile Tools values so Garmin autofill updates the visible fields immediately.
+
 **NEW in v1.9.6**: **Research Stability Controls** — Stable navigation mode renders one section at a time via a sidebar selector, a rerun storm guard auto-disables heavy plots during rapid reruns, and time-series artifacts/deviation timelines now downsample to performance caps for smooth interaction.
 
 **NEW in v1.9.1**: **Enhanced Space Weather & EVA Radiation Dashboards** — Beautiful real-time space weather visualization with gauge-based dashboard showing flare probabilities (C/M/X-Class), F10.7 Flux with historic/projected trends, and Active CMEs. New EVA Radiation Metrics Dashboard provides comprehensive radiation monitoring with normalized threshold visualization. All gauges use modern two-ring style with color-coded risk zones. UI improvements include dark blue font colors for better readability and verified/validated technical resource links.
