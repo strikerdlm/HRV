@@ -404,6 +404,8 @@ def enable_streamlit_debug(*, verbose: bool = True) -> None:
     for logger_name in streamlit_loggers:
         logger = logging.getLogger(logger_name)
         logger.setLevel(level)
+        # Ensure Streamlit logs propagate to root handlers (console + file).
+        logger.propagate = True
     
     # Also enable tornado/websocket debugging if verbose
     if verbose:
@@ -411,6 +413,10 @@ def enable_streamlit_debug(*, verbose: bool = True) -> None:
         logging.getLogger("tornado.access").setLevel(logging.WARNING)
         logging.getLogger("tornado.application").setLevel(logging.DEBUG)
         logging.getLogger("tornado.general").setLevel(logging.DEBUG)
+        logging.getLogger("tornado").propagate = True
+        logging.getLogger("tornado.access").propagate = True
+        logging.getLogger("tornado.application").propagate = True
+        logging.getLogger("tornado.general").propagate = True
     
     # Create dedicated streamlit log file
     if not _streamlit_debug_enabled:
