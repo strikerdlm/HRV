@@ -19,7 +19,14 @@ from pathlib import Path
 
 import streamlit as st
 
-from agent_runtime import AgentRuntimeConfig, build_default_agent_runtime_config
+# Safe rerun utility with debouncing and circuit breaker
+try:
+    from rerun_utils import safe_rerun
+except ImportError:  # pragma: no cover
+    def safe_rerun(reason: str = "") -> None:  # type: ignore[misc]
+        safe_rerun("about_tab_rerun")
+
+from agent_runtime import AgentRuntimeConfig
 from version_info import get_app_release_date, get_app_version, get_git_metadata
 
 # Application metadata
@@ -479,7 +486,7 @@ def render_about_tab() -> None:
                 st.info("Showing a preview for performance. Click below to load the full manual.")
                 if st.button("Load full manual (may be slow)", key="about_full_manual"):
                     st.session_state["about_show_full_manual"] = True
-                    st.rerun()
+                    safe_rerun("about_tab_rerun")
                 st.markdown(f'<div class="manual-content">', unsafe_allow_html=True)
                 st.markdown(manual_preview)
                 st.markdown('</div>', unsafe_allow_html=True)
@@ -510,7 +517,7 @@ def render_about_tab() -> None:
                 st.info("Showing a preview for performance. Click below to load the full changelog.")
                 if st.button("Load full changelog (may be slow)", key="about_full_changelog"):
                     st.session_state["about_show_full_changelog"] = True
-                    st.rerun()
+                    safe_rerun("about_tab_rerun")
                 st.markdown(f'<div class="changelog-content">', unsafe_allow_html=True)
                 st.markdown(changelog_preview)
                 st.markdown('</div>', unsafe_allow_html=True)
