@@ -7276,7 +7276,8 @@ def _select_hrv_metric_columns(
 
 
 def main() -> None:
-    logger: logging.Logger = setup_console_logging(logging.INFO)
+    logger: logging.Logger = setup_console_logging(logging.DEBUG)
+    enable_streamlit_debug(verbose=True)
     
     # Set high process priority for better performance (if available)
     _set_process_priority()
@@ -7287,6 +7288,8 @@ def main() -> None:
     # -------------------------------------------------------------------------
     if "_app_session_ready" not in st.session_state:
         st.session_state["_app_session_ready"] = True
+    if "_debug_mode_enabled" not in st.session_state:
+        st.session_state["_debug_mode_enabled"] = True
     
     # WORKAROUND: Skip circadian tab by default to prevent infinite rerun loop
     # The circadian tab has an issue where it triggers app restarts after saving settings
