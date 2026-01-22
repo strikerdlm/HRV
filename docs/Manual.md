@@ -662,7 +662,7 @@ Each indicator glows when active (count > 0) and dims when inactive. A summary p
 
 ### Sleep & Chronotype Inputs + Garmin Autofill (v1.8.37)
 
-- **Energy & Nutrition → Sleep & Chronotype**: Sliders/inputs for sleep hours, sleep quality, hours awake, chronotype offset, RMSSD, resting HR, and VO₂. A **Sync to Profile Tools Engine** button pushes these values into SAFTE fatigue and Operational Performance tools. A **📡 Autofill from Garmin** button pulls the latest Vivosmart sleep to fill these fields automatically.
+- **Energy & Nutrition → Sleep & Chronotype**: Sliders/inputs for sleep hours, sleep quality, hours awake, chronotype offset, RMSSD, resting HR, and VO₂. A **Sync to Profile Tools Engine** button pushes these values into SAFTE fatigue and Operational Performance tools. A **📡 Autofill from Garmin** button prefers stored Garmin daily metrics (when present) and falls back to live Garmin Connect to fill these fields automatically.
 - **Profile Tools Engine → Garmin Autofill**: One-click Vivosmart/Garmin pull fills sleep hours, sleep quality, hours awake, RMSSD, and resting HR for SAFTE/Operational calculations. Users without a device can still enter values manually.
 
 ### Longitudinal timepoints (T0–T21)
