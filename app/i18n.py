@@ -20,6 +20,13 @@ from typing import Any, Dict, Final, Optional
 
 import streamlit as st
 
+# Safe rerun utility with debouncing and circuit breaker
+try:
+    from rerun_utils import safe_rerun
+except ImportError:  # pragma: no cover
+    def safe_rerun(reason: str = "") -> None:  # type: ignore[misc]
+        safe_rerun("i18n_rerun")
+
 _LOGGER: Final[logging.Logger] = logging.getLogger(__name__)
 
 # Session state key for language
@@ -673,7 +680,7 @@ def render_language_selector(
     # Update session state if changed
     if selected != current:
         set_language(selected)
-        st.rerun()
+        safe_rerun("i18n_rerun")
     
     return selected
 
@@ -705,7 +712,7 @@ def render_language_toggle() -> Language:
         
         if new_lang != current:
             set_language(new_lang)
-            st.rerun()
+            safe_rerun("i18n_rerun")
     
     return current
 
