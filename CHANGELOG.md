@@ -1,10 +1,22 @@
 # Changelog
 
+**Author:** Dr Diego Malpica MD
+
 All notable changes to the Mission Control - Flight Surgeon are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+
+## [1.9.6] - 2026-01-22
+
+### Changed
+- Research UI: Added **Stable navigation (single section rendering)** with a sidebar selector to minimize rerun load and prevent inactive tabs from re-executing heavy plots.
+- Research UI: Added rerun telemetry + an automatic **rerun storm guard** that switches to manual-only processing and disables heavy plots when rapid reruns are detected.
+
+### Fixed
+- Time Series: Artifact markers and deviation timelines now downsample using performance caps; Poincaré plots inherit `max_plot_points` for consistent payload size.
+- Space Analytics: Manual analysis triggers now use `safe_rerun()` to avoid bypassing the rerun circuit breaker.
 
 ## [1.9.5] - 2026-01-22
 
