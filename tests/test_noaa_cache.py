@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 import sys
 
@@ -113,5 +114,33 @@ def test_slice_noaa_bundle_time_range_filters_rows() -> None:
     )
     assert list(sliced.frame["x"]) == [2.0]
     assert sliced.frame[sliced.time_column].min() == pd.Timestamp("2024-01-01T01:00:00Z")
+
+
+def test_load_noaa_space_data_times_out(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Ensure overall timeout returns quickly and records an error."""
+    monkeypatch.setattr(noaa_space, "NOAA_SPACE_CACHE_DIR", tmp_path, raising=False)
+
+    def slow_download(_spec: noaa_space.NOAASourceSpec) -> pd.DataFrame:
+        time.sleep(0.2)
+        return pd.DataFrame(
+            {
+                "time_tag": pd.to_datetime(["2024-01-01T00:00:00Z"], utc=True),
+                "flux": [1.0],
+            }
+        )
+
+    monkeypatch.setattr(noaa_space, "_download_dataset", slow_download)
+    t0 = time.monotonic()
+    bundles, errors = noaa_space.load_noaa_space_data(
+        keys=["f107_flux"],
+        use_cache=False,
+        max_workers=1,
+        overall_timeout_s=0.05,
+    )
+    dt = time.monotonic() - t0
+    assert dt < 0.2
+    assert "f107_flux" in errors
+    assert "Timed out" in errors["f107_flux"]
+    assert bundles == {}
 
 
