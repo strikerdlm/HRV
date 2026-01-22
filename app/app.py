@@ -1,4 +1,5 @@
 # flake8: noqa
+# Author: Dr Diego Malpica MD
 from __future__ import annotations
 
 # NOTE:
@@ -864,7 +865,11 @@ except ImportError:
     SOMFIT_AVAILABLE = False
 
 
-def setup_console_logging(level: int = logging.INFO) -> logging.Logger:
+def setup_console_logging(
+    level: int = logging.INFO,
+    *,
+    file_level: Optional[int] = None,
+) -> logging.Logger:
     """
     Configure an application logger with both console and file output.
     
@@ -894,11 +899,15 @@ def setup_console_logging(level: int = logging.INFO) -> logging.Logger:
     """
     if not isinstance(level, int):
         raise TypeError("level must be an int logging level")
+    if file_level is None:
+        file_level = level
+    if not isinstance(file_level, int):
+        raise TypeError("file_level must be an int logging level")
     
     # Initialize centralized file logging (idempotent)
     try:
         from logging_config import setup_logging
-        setup_logging(log_level_console=level)
+        setup_logging(log_level_console=level, log_level_file=file_level)
     except ImportError:
         pass  # Fall back to console-only if logging_config unavailable
     
@@ -7538,12 +7547,6 @@ def _select_hrv_metric_columns(
 
 
 def main() -> None:
-    logger: logging.Logger = setup_console_logging(logging.DEBUG)
-    enable_streamlit_debug(verbose=True)
-    
-    # Set high process priority for better performance (if available)
-    _set_process_priority()
-    
     # -------------------------------------------------------------------------
     # Initialize session state early to prevent race conditions
     # This helps prevent "Tried to use SessionInfo before initialized" errors
@@ -7551,7 +7554,20 @@ def main() -> None:
     if "_app_session_ready" not in st.session_state:
         st.session_state["_app_session_ready"] = True
     if "_debug_mode_enabled" not in st.session_state:
-        st.session_state["_debug_mode_enabled"] = True
+        st.session_state["_debug_mode_enabled"] = False
+
+    debug_enabled = bool(st.session_state.get("_debug_mode_enabled", False))
+    log_level = logging.DEBUG if debug_enabled else logging.INFO
+    logger: logging.Logger = setup_console_logging(
+        log_level,
+        file_level=log_level,
+    )
+    if debug_enabled and not st.session_state.get("_streamlit_debug_configured", False):
+        enable_streamlit_debug(verbose=True)
+        st.session_state["_streamlit_debug_configured"] = True
+    
+    # Set high process priority for better performance (if available)
+    _set_process_priority()
     
     # WORKAROUND: Skip circadian tab by default to prevent infinite rerun loop
     # The circadian tab has an issue where it triggers app restarts after saving settings
@@ -7637,6 +7653,7 @@ def main() -> None:
         if debug_mode and not st.session_state.get("_debug_mode_enabled", False):
             st.session_state["_debug_mode_enabled"] = True
             enable_streamlit_debug(verbose=True)
+            st.session_state["_streamlit_debug_configured"] = True
             st.success("Debug logging enabled. Check `logs/streamlit.log`")
         elif not debug_mode and st.session_state.get("_debug_mode_enabled", False):
             st.session_state["_debug_mode_enabled"] = False
