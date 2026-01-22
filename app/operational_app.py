@@ -5,6 +5,7 @@ from __future__ import annotations
 # Run:
 #   streamlit run app/operational_app.py
 
+import logging
 import os
 import sys
 from pathlib import Path
@@ -111,7 +112,8 @@ def _render_developer_tools_sidebar() -> None:
 
 def main() -> None:
     _ensure_app_dir_on_path()
-    setup_logging()
+    setup_logging(log_level_console=logging.DEBUG)
+    enable_streamlit_debug(verbose=True)
 
     # Set app mode early for any downstream policy checks (no UI side effects).
     os.environ["HRV_APP_MODE"] = "operational"
@@ -132,6 +134,10 @@ def main() -> None:
     except Exception:
         # Badge is non-critical; keep operational flow stable.
         pass
+
+    # Keep developer debug flag in sync (debug is always on by default).
+    if "_debug_mode_enabled" not in st.session_state:
+        st.session_state["_debug_mode_enabled"] = True
 
     # Delay-import UI modules until after page config to avoid StreamlitAPIException.
     try:
