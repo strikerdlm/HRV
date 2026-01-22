@@ -12143,88 +12143,53 @@ def _render_profile_tools_engine(user: UserProfile) -> None:
     
     if show_parameters:
         col1, col2, col3 = st.columns(3)
+        sleep_hours_preview = _safe_float(st.session_state.get(f"tools_sleep_hours_{user.user_id}")) or 7.0
+        sleep_quality_preview = _safe_float(st.session_state.get(f"tools_sleep_quality_{user.user_id}")) or 0.7
+        hours_awake_preview = _safe_float(st.session_state.get(f"tools_hours_awake_{user.user_id}")) or float(
+            current_hour - 7 if current_hour >= 7 else current_hour + 17
+        )
+        profile_chrono_offset = _safe_float(getattr(user, "chronotype_offset_hours", None)) or 0.0
+        chrono_index = 2
+        if profile_chrono_offset <= -1.5:
+            chrono_index = 0
+        elif profile_chrono_offset <= -0.5:
+            chrono_index = 1
+        elif profile_chrono_offset >= 1.5:
+            chrono_index = 4
+        elif profile_chrono_offset >= 0.5:
+            chrono_index = 3
+        chrono_labels = [
+            "Morning (-2h)",
+            "Slight morning (-1h)",
+            "Neutral (0h)",
+            "Slight evening (+1h)",
+            "Evening (+2h)",
+        ]
+        chronotype_preview = (
+            str(st.session_state.get(f"tools_chronotype_{user.user_id}"))
+            if st.session_state.get(f"tools_chronotype_{user.user_id}")
+            else chrono_labels[chrono_index]
+        )
+        rmssd_preview = _safe_float(st.session_state.get(f"tools_rmssd_{user.user_id}")) or 35.0
+        resting_hr_preview = _safe_float(st.session_state.get(f"tools_resting_hr_{user.user_id}")) or float(
+            user.resting_hr_bpm or 65
+        )
 
         with col1:
-            _ = st.number_input(  # widget persists to session_state via key
-                "Sleep hours (last night)",
-                min_value=0.0,
-                max_value=14.0,
-                value=7.0,
-                step=0.5,
-                key=f"tools_sleep_hours_{user.user_id}",
-            )
-            _ = st.slider(  # widget persists to session_state via key
-                "Sleep quality (0-1)",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.7,
-                step=0.1,
-                key=f"tools_sleep_quality_{user.user_id}",
-            )
+            st.metric("Sleep hours (last night)", f"{sleep_hours_preview:.1f} h")
+            st.metric("Sleep quality (0-1)", f"{sleep_quality_preview:.2f}")
 
         with col2:
-            _ = st.number_input(  # widget persists to session_state via key
-                "Hours awake",
-                min_value=0.0,
-                max_value=48.0,
-                value=float(current_hour - 7 if current_hour >= 7 else current_hour + 17),
-                step=0.5,
-                key=f"tools_hours_awake_{user.user_id}",
-            )
-            # Chronotype offset loaded from user profile (persistent)
-            # Map user profile chronotype_offset_hours to selectbox index
-            # Handle case where attribute might not exist (older UserProfile instances)
-            profile_chrono_offset = _safe_float(getattr(user, 'chronotype_offset_hours', None)) or 0.0
-            chrono_index = 2  # Default to "Neutral (0h)"
-            if profile_chrono_offset <= -1.5:
-                chrono_index = 0  # "Morning (-2h)"
-            elif profile_chrono_offset <= -0.5:
-                chrono_index = 1  # "Slight morning (-1h)"
-            elif profile_chrono_offset >= 1.5:
-                chrono_index = 4  # "Evening (+2h)"
-            elif profile_chrono_offset >= 0.5:
-                chrono_index = 3  # "Slight evening (+1h)"
-            # Use session state if set, otherwise use profile value
-            if f"tools_chronotype_{user.user_id}" not in st.session_state:
-                st.session_state[f"tools_chronotype_{user.user_id}"] = [
-                    "Morning (-2h)",
-                    "Slight morning (-1h)",
-                    "Neutral (0h)",
-                    "Slight evening (+1h)",
-                    "Evening (+2h)",
-                ][chrono_index]
-            _ = st.selectbox(  # widget persists to session_state via key
-                "Chronotype",
-                options=[
-                    "Morning (-2h)",
-                    "Slight morning (-1h)",
-                    "Neutral (0h)",
-                    "Slight evening (+1h)",
-                    "Evening (+2h)",
-                ],
-                index=chrono_index,
-                key=f"tools_chronotype_{user.user_id}",
-                help="Chronotype is saved to your profile and persists across sessions. Garmin autofill does not change this.",
-            )
+            st.metric("Hours awake", f"{hours_awake_preview:.1f}")
+            st.metric("Chronotype", chronotype_preview)
 
         with col3:
-            _ = st.number_input(  # widget persists to session_state via key
-                "RMSSD (ms) - from HRV",
-                min_value=0.0,
-                max_value=200.0,
-                value=35.0,
-                step=1.0,
-                help="Enter your latest RMSSD value from HRV analysis",
-                key=f"tools_rmssd_{user.user_id}",
-            )
-            _ = st.number_input(  # widget persists to session_state via key
-                "Resting HR (bpm)",
-                min_value=30,
-                max_value=120,
-                value=int(user.resting_hr_bpm or 65),
-                step=1,
-                key=f"tools_resting_hr_{user.user_id}",
-            )
+            st.metric("RMSSD (ms)", f"{rmssd_preview:.1f}")
+            st.metric("Resting HR (bpm)", f"{resting_hr_preview:.0f}")
+
+        st.caption(
+            "Edit these inputs in the NASA Nutrition Calculator to keep a single shared set of values."
+        )
 
     # Ensure variables exist even when parameter widgets are hidden.
     sleep_hours_raw = _safe_float(st.session_state.get(f"tools_sleep_hours_{user.user_id}"))
@@ -13726,7 +13691,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                 max_value=14.0,
                 step=0.5,
                 value=sleep_hours_val,
-                key=f"nasa_sleep_hours_{user.user_id}",
+                key=sleep_key,
             )
             sleep_quality_val = st.slider(
                 "Sleep quality (0-1)",
@@ -13734,7 +13699,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                 max_value=1.0,
                 step=0.05,
                 value=sleep_quality_val,
-                key=f"nasa_sleep_quality_{user.user_id}",
+                key=sleep_quality_key,
             )
         with col_sleep_b:
             hours_awake_val = st.number_input(
@@ -13743,7 +13708,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                 max_value=48.0,
                 step=0.5,
                 value=hours_awake_val,
-                key=f"nasa_hours_awake_{user.user_id}",
+                key=hours_awake_key,
             )
             chronotype_offset_val = st.slider(
                 "Chronotype offset (hours)",
@@ -13752,7 +13717,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                 step=0.25,
                 value=chronotype_offset_val,
                 help="Morning type negative; evening type positive.",
-                key=f"nasa_chronotype_offset_{user.user_id}",
+                key=chrono_key,
             )
         with col_sleep_c:
             rmssd_val = st.number_input(
@@ -13761,7 +13726,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                 max_value=200.0,
                 step=1.0,
                 value=rmssd_val,
-                key=f"nasa_rmssd_{user.user_id}",
+                key=rmssd_key,
             )
             resting_hr_val = st.number_input(
                 "Resting HR (bpm)",
@@ -13769,7 +13734,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                 max_value=120,
                 step=1,
                 value=int(resting_hr_val),
-                key=f"nasa_resting_hr_{user.user_id}",
+                key=resting_hr_key,
             )
 
         col_vo2_sync, col_sleep_sync = st.columns([1, 1])
@@ -13780,7 +13745,7 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                 max_value=90.0,
                 step=0.5,
                 value=vo2_val,
-                key=f"nasa_vo2_{user.user_id}",
+                key=vo2_key,
             )
 
         with col_sleep_sync:
@@ -13789,14 +13754,6 @@ def _render_nasa_calculator(user: UserProfile) -> None:
                 key=f"sync_sleep_to_tools_{user.user_id}",
                 help="Push these sleep/chronotype/HRV values into the Profile Tools Engine (SAFTE + Operational Performance) and save to profile.",
             ):
-                st.session_state[sleep_key] = float(sleep_hours_val)
-                st.session_state[sleep_quality_key] = float(sleep_quality_val)
-                st.session_state[hours_awake_key] = float(hours_awake_val)
-                st.session_state[chrono_key] = float(chronotype_offset_val)
-                st.session_state[rmssd_key] = float(rmssd_val)
-                st.session_state[resting_hr_key] = float(resting_hr_val)
-                st.session_state[vo2_key] = float(vo2_val)
-                
                 # Persist to user profile
                 try:
                     db = get_database()
