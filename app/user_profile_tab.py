@@ -41,6 +41,13 @@ except ImportError:  # pragma: no cover - fallback if logging_config missing
     get_logger = None  # type: ignore[assignment]
     log_exception = None  # type: ignore[assignment]
 
+# Safe rerun utility with debouncing and circuit breaker
+try:
+    from rerun_utils import safe_rerun
+except ImportError:  # pragma: no cover - fallback if rerun_utils missing
+    def safe_rerun(reason: str = "") -> None:  # type: ignore[misc]
+        st.rerun()
+
 # Import database module
 try:
     from user_database import (
@@ -5903,7 +5910,7 @@ def _render_ble_rr_recorder(user: UserProfile) -> None:
             st.error(state["error_msg"])
             if st.button("Clear Error", key=f"clear_ble_error_{user.user_id}"):
                 state["error_msg"] = None
-                st.rerun()
+                safe_rerun("profile_tab_rerun")
         
         # --- Scan Section ---
         if not recorder.is_connected and not state.get("is_scanning"):
@@ -5915,7 +5922,7 @@ def _render_ble_rr_recorder(user: UserProfile) -> None:
                 if st.button("🔍 Scan", key=f"ble_scan_{user.user_id}", use_container_width=True):
                     state["is_scanning"] = True
                     state["error_msg"] = None
-                    st.rerun()
+                    safe_rerun("profile_tab_rerun")
             
             # Show previously found devices
             if state["devices"]:
@@ -5930,7 +5937,7 @@ def _render_ble_rr_recorder(user: UserProfile) -> None:
                 
                 if st.button("🔗 Connect", key=f"ble_connect_{user.user_id}", use_container_width=True):
                     state["is_connecting"] = True
-                    st.rerun()
+                    safe_rerun("profile_tab_rerun")
         
         # Handle scanning (separate from UI)
         if state.get("is_scanning"):
@@ -5944,7 +5951,7 @@ def _render_ble_rr_recorder(user: UserProfile) -> None:
                 except Exception as exc:
                     state["error_msg"] = f"Scan failed: {exc}"
                     state["is_scanning"] = False
-                st.rerun()
+                safe_rerun("profile_tab_rerun")
         
         # Handle connection (separate from UI)
         if state.get("is_connecting"):
@@ -5962,7 +5969,7 @@ def _render_ble_rr_recorder(user: UserProfile) -> None:
                 except Exception as exc:
                     state["error_msg"] = f"Connection error: {exc}"
                     state["is_connecting"] = False
-                st.rerun()
+                safe_rerun("profile_tab_rerun")
         
         # --- Connected Section ---
         if recorder.is_connected:
@@ -5997,7 +6004,7 @@ def _render_ble_rr_recorder(user: UserProfile) -> None:
                                 state["error_msg"] = "Failed to start recording"
                         except Exception as exc:
                             state["error_msg"] = f"Start error: {exc}"
-                        st.rerun()
+                        safe_rerun("profile_tab_rerun")
                 else:
                     if st.button(
                         "⏹️ Stop Recording",
@@ -6013,7 +6020,7 @@ def _render_ble_rr_recorder(user: UserProfile) -> None:
                             st.success(f"✅ Recording saved: `{filepath}`")
                         except Exception as exc:
                             state["error_msg"] = f"Stop error: {exc}"
-                        st.rerun()
+                        safe_rerun("profile_tab_rerun")
             
             with rec_col2:
                 if st.button(
@@ -6026,7 +6033,7 @@ def _render_ble_rr_recorder(user: UserProfile) -> None:
                         state["is_recording"] = False
                     except Exception as exc:
                         state["error_msg"] = f"Disconnect error: {exc}"
-                    st.rerun()
+                    safe_rerun("profile_tab_rerun")
             
             # Recording stats
             if recorder.is_recording:
@@ -6046,7 +6053,7 @@ def _render_ble_rr_recorder(user: UserProfile) -> None:
                 
                 # Refresh button for live updates
                 if st.button("🔄 Refresh Stats", key=f"ble_refresh_{user.user_id}"):
-                    st.rerun()
+                    safe_rerun("profile_tab_rerun")
                 
                 st.caption(f"📁 Saving to: `{stats.file_path}`")
         
@@ -6135,7 +6142,7 @@ def _render_ble_rr_recorder_guest() -> None:
             st.error(state["error_msg"])
             if st.button("Clear Error", key="clear_ble_error_guest"):
                 state["error_msg"] = None
-                st.rerun()
+                safe_rerun("profile_tab_rerun")
         
         # --- Scan Section ---
         if not recorder.is_connected and not state.get("is_scanning"):
@@ -6147,7 +6154,7 @@ def _render_ble_rr_recorder_guest() -> None:
                 if st.button("🔍 Scan", key="ble_scan_guest", use_container_width=True):
                     state["is_scanning"] = True
                     state["error_msg"] = None
-                    st.rerun()
+                    safe_rerun("profile_tab_rerun")
             
             # Show previously found devices
             if state["devices"]:
@@ -6162,7 +6169,7 @@ def _render_ble_rr_recorder_guest() -> None:
                 
                 if st.button("🔗 Connect", key="ble_connect_guest", use_container_width=True):
                     state["is_connecting"] = True
-                    st.rerun()
+                    safe_rerun("profile_tab_rerun")
         
         # Handle scanning (separate from UI)
         if state.get("is_scanning"):
@@ -6176,7 +6183,7 @@ def _render_ble_rr_recorder_guest() -> None:
                 except Exception as exc:
                     state["error_msg"] = f"Scan failed: {exc}"
                     state["is_scanning"] = False
-                st.rerun()
+                safe_rerun("profile_tab_rerun")
         
         # Handle connection (separate from UI)
         if state.get("is_connecting"):
@@ -6194,7 +6201,7 @@ def _render_ble_rr_recorder_guest() -> None:
                 except Exception as exc:
                     state["error_msg"] = f"Connection error: {exc}"
                     state["is_connecting"] = False
-                st.rerun()
+                safe_rerun("profile_tab_rerun")
         
         # --- Connected Section ---
         if recorder.is_connected:
@@ -6229,7 +6236,7 @@ def _render_ble_rr_recorder_guest() -> None:
                                 state["error_msg"] = "Failed to start recording"
                         except Exception as exc:
                             state["error_msg"] = f"Start error: {exc}"
-                        st.rerun()
+                        safe_rerun("profile_tab_rerun")
                 else:
                     if st.button(
                         "⏹️ Stop Recording",
@@ -6245,7 +6252,7 @@ def _render_ble_rr_recorder_guest() -> None:
                             st.success(f"✅ Recording saved: `{filepath}`")
                         except Exception as exc:
                             state["error_msg"] = f"Stop error: {exc}"
-                        st.rerun()
+                        safe_rerun("profile_tab_rerun")
             
             with rec_col2:
                 if st.button(
@@ -6258,7 +6265,7 @@ def _render_ble_rr_recorder_guest() -> None:
                         state["is_recording"] = False
                     except Exception as exc:
                         state["error_msg"] = f"Disconnect error: {exc}"
-                    st.rerun()
+                    safe_rerun("profile_tab_rerun")
             
             # Recording stats
             if recorder.is_recording:
@@ -6278,7 +6285,7 @@ def _render_ble_rr_recorder_guest() -> None:
                 
                 # Refresh button for live updates
                 if st.button("🔄 Refresh Stats", key="ble_refresh_guest"):
-                    st.rerun()
+                    safe_rerun("profile_tab_rerun")
                 
                 st.caption(f"📁 Saving to: `{stats.file_path}`")
         
@@ -6351,7 +6358,7 @@ def _render_profile_view(user: UserProfile) -> None:
     # Edit profile button
     if st.button("✏️ Edit Profile"):
         st.session_state["edit_profile_mode"] = True
-        st.rerun()
+        safe_rerun("profile_tab_rerun")
     
     # BLE RR Interval Recording Section
     _render_ble_rr_recorder(user)
@@ -6411,14 +6418,14 @@ def _render_profile_edit(user: UserProfile) -> None:
                     db.update_user(user)
                     st.session_state["edit_profile_mode"] = False
                     st.success("Profile updated!")
-                    st.rerun()
+                    safe_rerun("profile_tab_rerun")
                 except Exception as exc:
                     st.error(f"Failed to update: {exc}")
         
         with col_cancel:
             if st.form_submit_button("❌ Cancel"):
                 st.session_state["edit_profile_mode"] = False
-                st.rerun()
+                safe_rerun("profile_tab_rerun")
 
 
 # ---------------------------------------------------------------------------
@@ -9543,7 +9550,7 @@ def _render_profile_rr_library(user: UserProfile) -> None:
             st.session_state["queued_rr_filepaths"] = _build_queue_payload()
             _set_current_user(user)
             st.success("Queued stored RR recordings for the analysis workspace.")
-            st.rerun()
+            safe_rerun("profile_tab_rerun")
     with col_b:
         if st.button(
             "🚀 Load + run HRV analysis",
@@ -9561,7 +9568,7 @@ def _render_profile_rr_library(user: UserProfile) -> None:
             st.session_state["auto_run_hrv_analysis"] = True
             _set_current_user(user)
             st.success("Queued recordings and starting HRV analysis…")
-            st.rerun()
+            safe_rerun("profile_tab_rerun")
 
 
 @_fragment_if_available
@@ -9629,7 +9636,7 @@ def _render_sqlite_corruption_recovery_ui(*, context_label: str, user_id: str, e
                     st.cache_data.clear()
                 except Exception:  # pragma: no cover
                     pass
-                st.rerun()
+                safe_rerun("profile_tab_rerun")
 
     st.markdown("### Create a new empty database (last resort)")
     st.caption(
@@ -9656,7 +9663,7 @@ def _render_sqlite_corruption_recovery_ui(*, context_label: str, user_id: str, e
                 st.cache_data.clear()
             except Exception:  # pragma: no cover
                 pass
-            st.rerun()
+            safe_rerun("profile_tab_rerun")
 
 
 # =============================================================================
@@ -10585,7 +10592,7 @@ def _render_hrv_history(user: UserProfile) -> None:
             help="Reload HRV measurements from the database and redraw all charts.",
         ):
             st.session_state[refresh_state_key] = refresh_token + 1
-            st.rerun()
+            safe_rerun("profile_tab_rerun")
     with col_meta:
         st.caption("If charts look stale after new uploads/analysis, regenerate to refresh them.")
     
@@ -11532,13 +11539,13 @@ def _render_data_management(user: UserProfile) -> None:
                             _set_current_user(None)
                             st.session_state.pop("confirm_delete", None)
                             st.success("Account deleted.")
-                            st.rerun()
+                            safe_rerun("profile_tab_rerun")
                         except Exception as exc:
                             st.error(f"Delete failed: {exc}")
                 with col_no:
                     if st.button("Cancel"):
                         st.session_state.pop("confirm_delete", None)
-                        st.rerun()
+                        safe_rerun("profile_tab_rerun")
 
 
 def _render_fit_csv_tools(user: UserProfile) -> None:
@@ -14017,7 +14024,7 @@ def _render_body_composition_form(user: UserProfile) -> None:
                 except Exception:
                     pass
                 st.success("✅ Body composition saved to your profile.")
-                st.rerun()
+                safe_rerun("profile_tab_rerun")
 
 
 def _render_medical_history_summary(user: UserProfile) -> None:
@@ -14508,7 +14515,7 @@ def _should_render_profile_section(section_id: str, label: str) -> bool:
             use_container_width=True,
         ):
             st.session_state[state_key] = True
-            st.rerun()
+            safe_rerun("profile_tab_rerun")
     with col_hint:
         st.caption(
             "Manual-only processing is enabled in **Processing Mode** (sidebar). "
@@ -15416,7 +15423,7 @@ def _render_radiation_eva_matrix(
                             st.success("✅ Space weather data refreshed")
                         else:
                             st.warning(f"Partial fetch: {', '.join(_errors.values())}")
-                        st.rerun()
+                        safe_rerun("profile_tab_rerun")
                     except Exception as exc:
                         _LOGGER.warning("EVA matrix space weather refresh failed: %s", exc)
                         st.error(f"Refresh failed: {exc}")
@@ -16100,7 +16107,7 @@ def _render_medical_record_form(user: UserProfile) -> None:
                             st.success("✅ Space weather data updated from NOAA SWPC")
                         # Mark that space weather was refreshed so metrics recompute
                         st.session_state[f"_sw_refreshed_{user.user_id}"] = True
-                        st.rerun()
+                        safe_rerun("profile_tab_rerun")
                     except Exception as exc:
                         _LOGGER.warning("Space weather refresh failed: %s", exc)
                         st.error(f"Refresh failed: {exc}")
@@ -16677,7 +16684,7 @@ def _render_user_sessions_tab(current_user: UserProfile) -> None:
                     make_active=False,  # Don't switch, just add
                 ):
                     st.success(f"Added {user_to_add.username} to active sessions!")
-                    st.rerun()
+                    safe_rerun("profile_tab_rerun")
                 else:
                     st.error("Failed to add user session.")
     
@@ -16746,7 +16753,7 @@ def render_user_profile_tab() -> None:
             new_user = _render_registration_form()
             if new_user:
                 _set_current_user(new_user)
-                st.rerun()
+                safe_rerun("profile_tab_rerun")
     else:
         # Top banner with login state and logout button (visible on all sections)
         banner_col1, banner_col2 = st.columns([3, 1])

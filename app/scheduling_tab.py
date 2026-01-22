@@ -107,6 +107,13 @@ except ImportError:
     def log_exception(logger: Any, message: str, exc: BaseException) -> None:  # type: ignore[no-redef]
         logger.exception("%s: %s", message, exc)
 
+# Safe rerun utility with debouncing and circuit breaker
+try:
+    from rerun_utils import safe_rerun
+except ImportError:  # pragma: no cover - fallback if rerun_utils missing
+    def safe_rerun(reason: str = "") -> None:  # type: ignore[misc]
+        safe_rerun("scheduling_tab_rerun")
+
 _LOGGER = get_logger(__name__)
 
 
@@ -945,7 +952,7 @@ def _render_activity_list(
                     if st.button("🗑️", key=f"del_{activity.schedule_id}"):
                         # Remove activity from schedule
                         daily.activities = [a for a in daily.activities if a.schedule_id != activity.schedule_id]
-                        st.rerun()
+                        safe_rerun("scheduling_tab_rerun")
                 
                 st.markdown("---")
 
@@ -1322,7 +1329,7 @@ def _render_activity_grouping_panel(
                             success, conflicts = engine.move_activity_group(group_id, time_offset, schedule_date)
                             if success:
                                 st.success(f"✅ Group moved by {time_offset} minutes")
-                                st.rerun()
+                                safe_rerun("scheduling_tab_rerun")
                             else:
                                 st.error(f"❌ Cannot move group: {len(conflicts)} conflicts")
                                 for conflict in conflicts:
@@ -1333,7 +1340,7 @@ def _render_activity_grouping_panel(
                 if st.button("🗑️ Delete Group", key=f"delete_group_{group_id}"):
                     del engine.activity_groups[group_id]
                     st.success("✅ Group deleted")
-                    st.rerun()
+                    safe_rerun("scheduling_tab_rerun")
     
     st.markdown("---")
     
@@ -1369,7 +1376,7 @@ def _render_activity_grouping_panel(
         else:
             group = engine.create_activity_group(group_name, selected_activities, group_description)
             st.success(f"✅ Group '{group.name}' created with {len(selected_activities)} activities")
-            st.rerun()
+            safe_rerun("scheduling_tab_rerun")
 
 
 # ---------------------------------------------------------------------------
@@ -1402,7 +1409,7 @@ def _render_schedule_rollback_panel(
             snapshot = engine.create_schedule_snapshot(schedule_date, snapshot_desc, created_by="user")
             if snapshot:
                 st.success(f"✅ Snapshot created: {snapshot.version_id[:8]}...")
-                st.rerun()
+                safe_rerun("scheduling_tab_rerun")
             else:
                 st.error("❌ Failed to create snapshot")
     
@@ -1424,7 +1431,7 @@ def _render_schedule_rollback_panel(
                 if st.button("⏪ Rollback to This Version", key=f"rollback_{version.version_id}"):
                     if engine.rollback_schedule(schedule_date, version.version_id):
                         st.success("✅ Schedule rolled back successfully")
-                        st.rerun()
+                        safe_rerun("scheduling_tab_rerun")
                     else:
                         st.error("❌ Rollback failed")
     else:
@@ -1595,7 +1602,7 @@ def _render_circadian_optimization_panel(
                                 )
                                 if scheduled:
                                     st.success(f"✅ Scheduled at {start_time.strftime('%H:%M')}")
-                                    st.rerun()
+                                    safe_rerun("scheduling_tab_rerun")
                                 else:
                                     st.error(f"❌ Scheduling failed: {len(conflicts)} conflicts")
                     
@@ -1715,7 +1722,7 @@ def _render_workload_balancing_panel(
                         if activity:
                             activity.crew_id = suggestion["to_crew_id"]
                             st.success("✅ Activity redistributed")
-                            st.rerun()
+                            safe_rerun("scheduling_tab_rerun")
                         else:
                             st.error("❌ Activity not found")
         else:
@@ -1876,14 +1883,14 @@ def _render_realtime_updates_panel(
         # Update last check time
         if st.button("✅ Mark as Read", key="mark_changes_read"):
             st.session_state["last_change_check"] = datetime.now()
-            st.rerun()
+            safe_rerun("scheduling_tab_rerun")
     else:
         st.info("✅ No new changes since last check")
     
     # Manual refresh button
     if st.button("🔄 Refresh Now", key="manual_refresh"):
         st.session_state["last_change_check"] = datetime.now()
-        st.rerun()
+        safe_rerun("scheduling_tab_rerun")
 
 
 # ---------------------------------------------------------------------------
@@ -1972,7 +1979,7 @@ def _render_procedure_integration_panel(
                 
                 if success:
                     st.success(f"✅ Procedure '{procedure_options[selected_procedure]}' linked to activity")
-                    st.rerun()
+                    safe_rerun("scheduling_tab_rerun")
                 else:
                     st.error("❌ Failed to link procedure")
             
@@ -3258,7 +3265,7 @@ def _render_performance_forecast(
                         st.error(f"Error fetching Garmin data: {exc}")
                         log_exception(_LOGGER, "Error fetching Garmin data", exc)
                     if request_rerun:
-                        st.rerun()
+                        safe_rerun("scheduling_tab_rerun")
     
     # (Summary + windows are now rendered from the research-style fatigue analysis result above.)
 
@@ -3762,7 +3769,7 @@ def _render_eva_procedures_panel(
                     eva_crew_ids=[eva_crew_1, eva_crew_2],
                 )
                 st.success("✅ Full daily schedule generated with EVA!")
-                st.rerun()
+                safe_rerun("scheduling_tab_rerun")
     
     # Sub-tabs for different checklists
     checklist_tab1, checklist_tab2, checklist_tab3, checklist_tab4, checklist_tab5 = st.tabs([
@@ -4594,7 +4601,7 @@ def _render_radiation_assessment_panel() -> None:
     with col_fetch2:
         if st.button("🔄 Refresh", key="eva_radiation_refresh"):
             st.cache_data.clear()
-            st.rerun()
+            safe_rerun("scheduling_tab_rerun")
     
     # Fetch real-time data
     realtime_data = None
@@ -5572,7 +5579,7 @@ def _render_activity_status_tracking_panel(
                             )
                             if success:
                                 st.success("Status updated")
-                                st.rerun()
+                                safe_rerun("scheduling_tab_rerun")
                             else:
                                 st.error("Failed to update status")
                 
@@ -5810,7 +5817,7 @@ def _render_resource_inventory_panel(
                     )
                     if success:
                         st.success(message)
-                        st.rerun()
+                        safe_rerun("scheduling_tab_rerun")
                     else:
                         st.error(message)
 
