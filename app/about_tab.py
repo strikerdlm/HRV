@@ -26,7 +26,7 @@ except ImportError:  # pragma: no cover
     def safe_rerun(reason: str = "") -> None:  # type: ignore[misc]
         safe_rerun("about_tab_rerun")
 
-from agent_runtime import AgentRuntimeConfig
+from agent_runtime import AgentRuntimeConfig, build_default_agent_runtime_config
 from version_info import get_app_release_date, get_app_version, get_git_metadata
 
 # Application metadata
