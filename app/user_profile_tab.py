@@ -1970,11 +1970,14 @@ def _fragment_if_available(func: Any) -> Any:
     # Always return the function unchanged - fragments are disabled
     return func
 def _session_ready_guard() -> bool:
-    """Prevent render work before Streamlit session is fully initialized."""
-    ready = st.session_state.get("_app_session_ready")
-    if ready is None:
-        st.session_state["_app_session_ready"] = True
-        return False
+    """Guard for session readiness - always returns True.
+    
+    Previously this returned False on first call to delay rendering,
+    but that caused blank UI on first render. Now it's a no-op that
+    always returns True since session state is ready by the time
+    render functions are called.
+    """
+    # Always ready - Streamlit session is initialized before render
     return True
 
 
@@ -7269,17 +7272,11 @@ def _render_assessment_preview(
 @_fragment_if_available
 def _render_assessment_history(user: UserProfile) -> None:
     """Render clinical assessment history."""
-    if not _session_ready_guard():
-        st.info("Initializing session…")
-        return
+    # Note: _session_ready_guard() was previously here but now always returns True
+    # so no early return is needed.
     st.markdown("## 📈 Assessment History")
     
-    # Use cached loader for fast repeated views
-    @st.cache_data(ttl=60, max_entries=64, show_spinner=False)
-    def _load_clinical_history_cached(uid: str, limit: int) -> list:
-        db = get_database()
-        return [h.to_dict() for h in db.get_clinical_scales_history(uid, limit=limit)]
-
+    # Use module-level cached loader (defined at top of file) for stable caching
     history_limit = st.selectbox(
         "History window (assessments)",
         options=[50, 90, 180, 365, 730],
@@ -7406,6 +7403,34 @@ def _render_assessment_history(user: UserProfile) -> None:
         st.error(f"Failed to load history: {exc}")
 
 
+# Module-level cached loader for Garmin history (moved outside render function for stable caching)
+@st.cache_data(ttl=300, max_entries=64, show_spinner=False)
+def _load_garmin_history_cached(uid: str, limit: int, refresh: int) -> pd.DataFrame:
+    """Load Garmin daily metrics DataFrame from database with caching.
+    
+    This function is intentionally at module level (not inside a render function)
+    to ensure the cache decorator works correctly across reruns.
+    
+    Args:
+        uid: User ID.
+        limit: Maximum number of days to load.
+        refresh: Cache-busting token (increment to force refresh).
+        
+    Returns:
+        DataFrame with Garmin daily metrics.
+    """
+    _ = refresh  # Used only to bust cache when explicitly requested
+    db = get_database()
+    if hasattr(db, "get_garmin_daily_dataframe"):
+        return db.get_garmin_daily_dataframe(uid, limit=int(limit))  # type: ignore[attr-defined]
+    if hasattr(db, "get_garmin_daily_metrics"):
+        metrics = db.get_garmin_daily_metrics(uid, limit=int(limit))  # type: ignore[attr-defined]
+        if not metrics:
+            return pd.DataFrame()
+        return pd.DataFrame([m.to_dict() for m in metrics])
+    return pd.DataFrame()
+
+
 @_fragment_if_available
 def _render_garmin_metrics_history(user: UserProfile) -> None:
     """Render wrist-wearable wellness/activity history with gauges."""
@@ -7490,8 +7515,10 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
                 if entries:
                     db = get_database()
                     db.save_garmin_daily_metrics(entries)
-                    refresh_token += 1
-                    st.session_state[refresh_state_key] = refresh_token
+                    # Note: Don't increment refresh_token here to avoid session state
+                    # changes during render. The user can click "Refresh" if needed.
+                    # The data is saved to DB and will be visible on next explicit refresh.
+                    st.toast(f"Saved {len(entries)} Garmin metric(s). Click Refresh to update charts.")
         except Exception as exc:  # noqa: BLE001
             if log_exception is not None:
                 log_exception(_LOGGER, "Failed to persist sidebar Garmin metrics", exc)
@@ -7622,21 +7649,9 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
     with col_meta:
         st.caption("If values look stale after a sync/import, click refresh.")
 
-    @st.cache_data(ttl=300, max_entries=64, show_spinner=False)
-    def _load_history(uid: str, limit: int, refresh: int) -> pd.DataFrame:
-        _ = refresh  # bust cache when imports occur or refresh is clicked
-        db = get_database()
-        if hasattr(db, "get_garmin_daily_dataframe"):
-            return db.get_garmin_daily_dataframe(uid, limit=int(limit))  # type: ignore[attr-defined]
-        if hasattr(db, "get_garmin_daily_metrics"):
-            metrics = db.get_garmin_daily_metrics(uid, limit=int(limit))  # type: ignore[attr-defined]
-            if not metrics:
-                return pd.DataFrame()
-            return pd.DataFrame([m.to_dict() for m in metrics])
-        return pd.DataFrame()
-
+    # Use module-level cached function instead of defining inside render
     try:
-        df = _load_history(user.user_id, int(history_limit), refresh_token)
+        df = _load_garmin_history_cached(user.user_id, int(history_limit), refresh_token)
     except Exception as exc:  # noqa: BLE001
         st.error(f"Unable to load Garmin history: {exc}")
         return
@@ -10525,6 +10540,31 @@ def _render_hrv_garmin_integration_tab(
                 st.success(rec)
 
 
+# Module-level cached loader for HRV history (moved outside render function for stable caching)
+@st.cache_data(ttl=300, max_entries=64, show_spinner=False)
+def _load_hrv_history_dataframe_cached(
+    uid: str,
+    limit: int,
+    refresh_token: int,
+) -> pd.DataFrame:
+    """Load HRV history DataFrame from database with caching.
+    
+    This function is intentionally at module level (not inside a render function)
+    to ensure the cache decorator works correctly across reruns.
+    
+    Args:
+        uid: User ID.
+        limit: Maximum number of records to load.
+        refresh_token: Cache-busting token (increment to force refresh).
+        
+    Returns:
+        DataFrame with HRV measurements.
+    """
+    _ = refresh_token  # Used only to bust cache when explicitly requested
+    db = get_database()
+    return db.get_hrv_dataframe(uid, limit=limit, include_rr=False)
+
+
 @_fragment_if_available
 def _render_hrv_history(user: UserProfile) -> None:
     """Render HRV measurement history."""
@@ -10550,18 +10590,8 @@ def _render_hrv_history(user: UserProfile) -> None:
         st.caption("If charts look stale after new uploads/analysis, regenerate to refresh them.")
     
     try:
-        @st.cache_data(ttl=300, max_entries=64, show_spinner=False)
-        def _load_hrv_history_dataframe(
-            uid: str,
-            limit: int,
-            refresh_token: int,
-        ) -> pd.DataFrame:
-            _ = refresh_token
-            db = get_database()
-            return db.get_hrv_dataframe(uid, limit=limit, include_rr=False)
-
         with st.spinner("Loading HRV measurements..."):
-            df = _load_hrv_history_dataframe(user.user_id, 500, refresh_token)
+            df = _load_hrv_history_dataframe_cached(user.user_id, 500, refresh_token)
         
         if df.empty:
             st.info("No HRV measurements recorded. Import HRV data from the main analysis to populate this section.")
