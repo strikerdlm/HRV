@@ -509,7 +509,7 @@ def render_bpv_input_ui() -> Optional[List[BloodPressureReading]]:
                 st.session_state["bp_readings"] = []
             st.session_state["bp_readings"].append(reading)
             st.success(f"Added reading: {sbp}/{dbp} mmHg")
-            st.rerun()
+            safe_rerun("bpv_analysis_rerun")
     
     # File upload option
     with st.expander("📁 Upload BP Data File"):
