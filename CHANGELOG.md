@@ -8,6 +8,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.9.8] - 2026-01-22
+
+### Changed
+- Research UI: Sidebar navigation now drives the active view (tabs hidden), so navigation happens only from the sidepanel selector.
+- Research UI: Stable navigation is enforced in the Research app to keep inactive sections from driving reruns.
+- Research UI: HRV processing and Space Weather correlations run in guest mode without requiring a selected profile.
+
 ## [1.9.7] - 2026-01-22
 
 ### Fixed
