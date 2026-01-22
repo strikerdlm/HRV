@@ -22,6 +22,13 @@ import numpy as np
 import pandas as pd
 import streamlit as st
 
+# Safe rerun utility with debouncing and circuit breaker
+try:
+    from rerun_utils import safe_rerun
+except ImportError:  # pragma: no cover
+    def safe_rerun(reason: str = "") -> None:  # type: ignore[misc]
+        safe_rerun("user_management_ui_rerun")
+
 from .user_database import (
     UserProfile,
     ClinicalScales,
@@ -95,7 +102,7 @@ def render_user_selector() -> Optional[UserProfile]:
                 use_container_width=True,
             ):
                 set_current_user(None)
-                st.rerun()
+                safe_rerun("user_management_ui_rerun")
         
         # Quick stats
         hrv_count = len(db.get_hrv_history(current_user.user_id, limit=10000))
@@ -126,7 +133,7 @@ def render_user_selector() -> Optional[UserProfile]:
             profile = user_options[selected]
             if profile and st.sidebar.button("Login", key="login_btn", use_container_width=True):
                 set_current_user(profile)
-                st.rerun()
+                safe_rerun("user_management_ui_rerun")
     else:
         st.sidebar.info("No users found. Create your first profile!")
         if st.sidebar.button("➕ Create Profile", key="create_first_profile", use_container_width=True):
@@ -215,7 +222,7 @@ def render_profile_creator() -> None:
         
         if cancelled:
             st.session_state["show_profile_creator"] = False
-            st.rerun()
+            safe_rerun("user_management_ui_rerun")
         
         if submitted:
             if not username or not full_name:
@@ -257,7 +264,7 @@ def render_profile_creator() -> None:
                 set_current_user(profile)
                 st.session_state["show_profile_creator"] = False
                 st.success(f"Profile created for {full_name}!")
-                st.rerun()
+                safe_rerun("user_management_ui_rerun")
             except Exception as e:
                 st.error(f"Error creating profile: {e}")
 
@@ -389,7 +396,7 @@ def render_profile_editor() -> None:
         
         if cancelled:
             st.session_state["show_profile_editor"] = False
-            st.rerun()
+            safe_rerun("user_management_ui_rerun")
         
         if submitted:
             if not full_name:
@@ -420,7 +427,7 @@ def render_profile_editor() -> None:
                 set_current_user(current_user)
                 st.session_state["show_profile_editor"] = False
                 st.success("Profile updated!")
-                st.rerun()
+                safe_rerun("user_management_ui_rerun")
             except Exception as e:
                 st.error(f"Error updating profile: {e}")
 
@@ -724,7 +731,7 @@ def render_user_management_tab() -> None:
         # Quick create button
         if st.button("➕ Create New Profile", key="quick_create_profile"):
             st.session_state["show_profile_creator"] = True
-            st.rerun()
+            safe_rerun("user_management_ui_rerun")
         return
     
     # Tab navigation for user management sections
