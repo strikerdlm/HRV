@@ -19,6 +19,13 @@ from logging_config import (
     setup_logging,
 )
 
+# Safe rerun utility with debouncing and circuit breaker
+try:
+    from rerun_utils import safe_rerun
+except ImportError:  # pragma: no cover
+    def safe_rerun(reason: str = "") -> None:  # type: ignore[misc]
+        st.rerun()
+
 _LOGGER = get_logger(__name__)
 
 
@@ -81,7 +88,7 @@ def _render_crew_workspace_sidebar() -> None:
         except Exception:
             pass
         log_rerun_trigger("mission_switch", from_mission=previous_mission, to_mission=active_mission)
-        st.rerun()
+        safe_rerun("operational_app: mission_switch")
 
 
 def _render_developer_tools_sidebar() -> None:
