@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.9.7] - 2026-01-22
+
+### Fixed
+- Research UI: Removed experimental tab persistence to eliminate session_state mutation errors and reduce rerun loops.
+- User Profile: NASA Nutrition sleep inputs now share the Profile Tools values, so Garmin autofill updates the visible NASA fields immediately.
+
+### Changed
+- Research UI: Stable navigation keeps heavy tab rendering gated to the active section via the shared render guard.
+
 ## [1.9.6] - 2026-01-22
 
 ### Changed
