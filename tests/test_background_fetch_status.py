@@ -38,3 +38,28 @@ def test_poll_background_fetch_running(monkeypatch: pytest.MonkeyPatch) -> None:
 
     result = app_module._poll_background_fetch()
     assert any(info.get("running", False) for info in result.values())
+
+
+def test_bg_fetch_loop_detection(monkeypatch: pytest.MonkeyPatch) -> None:
+    app_module._reset_background_fetch_status()
+    monkeypatch.setattr(app_module, "_BG_FETCH_LOOP_WINDOW_SECONDS", 10.0, raising=False)
+    monkeypatch.setattr(app_module, "_BG_FETCH_LOOP_MAX_STARTS", 2, raising=False)
+
+    now = 100.0
+    assert app_module._record_bg_fetch_start(now) is False
+    assert app_module._record_bg_fetch_start(now + 1) is False
+    assert app_module._record_bg_fetch_start(now + 2) is True
+
+    health = app_module._get_bg_fetch_health(now + 2)
+    assert health.get("loop_detected") is True
+
+
+def test_bg_fetch_timeout_health(monkeypatch: pytest.MonkeyPatch) -> None:
+    app_module._reset_background_fetch_status()
+    monkeypatch.setattr(app_module, "_BG_FETCH_MAX_RUNTIME_SECONDS", 10.0, raising=False)
+    monkeypatch.setattr(app_module, "_bg_fetch_thread", _DummyThread(True), raising=False)
+    with app_module._bg_fetch_lock:
+        app_module._bg_fetch_meta["last_start"] = 50.0
+
+    health = app_module._get_bg_fetch_health(100.0)
+    assert health.get("timed_out") is True
