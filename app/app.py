@@ -5633,8 +5633,6 @@ def _render_stable_navigation_sidebar(tab_labels: Sequence[str]) -> str:
     if not stable_enabled:
         st.session_state.pop("stable_nav_section", None)
         return ""
-    if st.session_state.get("enable_tab_persistence"):
-        st.session_state["enable_tab_persistence"] = False
     current_label = st.session_state.get("stable_nav_section")
     if current_label not in tab_labels:
         current_label = tab_labels[0]
@@ -5658,6 +5656,19 @@ def _render_stable_navigation_sidebar(tab_labels: Sequence[str]) -> str:
     return str(active_label)
 
 
+def _section_active(label: str) -> bool:
+    """Return True when the requested section should render."""
+    if not isinstance(label, str):
+        raise TypeError("label must be a string.")
+    stable_nav = bool(st.session_state.get("stable_navigation_mode", False))
+    if not stable_nav:
+        return True
+    active_label = st.session_state.get("stable_nav_section")
+    if not active_label:
+        return True
+    return active_label == label
+
+
 def _apply_rerun_storm_guard() -> Dict[str, Any]:
     """Detect rapid reruns and auto-stabilize the UI state."""
     stats = get_rerun_stats()
@@ -5675,7 +5686,6 @@ def _apply_rerun_storm_guard() -> Dict[str, Any]:
     st.session_state["manual_processing_only"] = True
     st.session_state["manual_tab_rendering"] = True
     st.session_state["allow_space_auto_fetch"] = False
-    st.session_state["enable_tab_persistence"] = False
     st.session_state["stable_navigation_mode"] = True
     if "performance_settings" in st.session_state:
         perf = st.session_state["performance_settings"]
@@ -7823,19 +7833,9 @@ def main() -> None:
         if skip_circadian:
             st.info("ℹ️ Circadian tab skipped (prevents rerun loop). Uncheck to re-enable.")
         
-        # Experimental: JS-based tab persistence can trigger rerun loops on some
-        # Streamlit versions. Keep it OFF by default for stability.
-        tab_persistence_enabled = st.checkbox(
-            "Enable tab persistence (experimental)",
-            value=bool(st.session_state.get("enable_tab_persistence", False)),
-            key="enable_tab_persistence",
-            help=(
-                "Restores the last active tab on rerun using JavaScript. "
-                "If you see repeated reconnect/rerun loops, leave this OFF."
-            ),
+        st.caption(
+            "Tab persistence was removed to prevent rerun loops in the Research app."
         )
-        if tab_persistence_enabled:
-            st.info("Tab persistence enabled (experimental). Disable if reconnect loops occur.")
         
         st.caption("Debug logs: `logs/app.log`, `logs/errors.log`, `logs/streamlit.log`")
 
@@ -9695,80 +9695,6 @@ def main() -> None:
         tab_about,
     ) = st.tabs(tab_labels)
     
-    # Preserve active tab across reruns using JavaScript (optional).
-    # This can trigger rerun loops on some Streamlit versions, so it's off by default.
-    if bool(st.session_state.get("enable_tab_persistence", False)):
-        st.markdown(
-            """
-            <script>
-            (function() {
-                'use strict';
-                const tabKey = '_streamlit_active_tab';
-                const initKey = '_streamlit_tab_persistence_init';
-                
-                // Singleton: only initialize once per page session to prevent listener accumulation
-                if (window[initKey]) {
-                    // Already initialized - just restore tab if needed (no new listeners)
-                    const savedIndex = sessionStorage.getItem(tabKey);
-                    if (savedIndex !== null) {
-                        setTimeout(function() {
-                            const buttons = document.querySelectorAll('[data-baseweb="tab"]');
-                            const index = parseInt(savedIndex, 10);
-                            if (buttons[index] && buttons[index].getAttribute('aria-selected') !== 'true') {
-                                buttons[index].click();
-                            }
-                        }, 50);
-                    }
-                    return;
-                }
-                
-                // Mark as initialized (prevents duplicate listeners on reruns)
-                window[initKey] = true;
-                
-                // Use event delegation on document to avoid stale references
-                // This approach doesn't require removing/re-adding listeners
-                document.addEventListener('click', function(event) {
-                    const target = event.target.closest('[data-baseweb="tab"]');
-                    if (target) {
-                        const buttons = document.querySelectorAll('[data-baseweb="tab"]');
-                        const index = Array.from(buttons).indexOf(target);
-                        if (index >= 0) {
-                            sessionStorage.setItem(tabKey, index.toString());
-                        }
-                    }
-                }, true); // Use capture phase for reliable detection
-                
-                // Restore active tab ONCE on initial load only (no MutationObserver to prevent loops)
-                function restoreTab() {
-                    const savedIndex = sessionStorage.getItem(tabKey);
-                    if (savedIndex !== null) {
-                        const buttons = document.querySelectorAll('[data-baseweb="tab"]');
-                        if (buttons.length > 0) {
-                            const index = parseInt(savedIndex, 10);
-                            if (index >= 0 && index < buttons.length) {
-                                const targetBtn = buttons[index];
-                                if (targetBtn && targetBtn.getAttribute('aria-selected') !== 'true') {
-                                    targetBtn.click();
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                // Try restoration ONCE after initial page load (no continuous observation)
-                if (document.readyState === 'loading') {
-                    document.addEventListener('DOMContentLoaded', function() {
-                        setTimeout(restoreTab, 200);
-                    });
-                } else {
-                    setTimeout(restoreTab, 200);
-                }
-                // NOTE: Removed MutationObserver to prevent potential rerun loops
-            })();
-            </script>
-            """,
-            unsafe_allow_html=True,
-        )
     _sw_loading_msg: Optional[st.delta_generator.DeltaGenerator] = None
     # ---------------------------------------------------------------------------
     # RENDER TIMING TRACKER - Always log tab boundaries to identify hangs
@@ -9790,136 +9716,142 @@ def main() -> None:
             active_display_name,
         )
     with tab_overview:
-        _log_tab("overview", "start")
-        st.markdown("### 📊 Analysis Overview")
-        st.markdown("*Summary of uploaded datasets and computed metrics*")
+        if not _section_active("Overview"):
+            st.empty()
+        else:
+            _log_tab("overview", "start")
+            st.markdown("### 📊 Analysis Overview")
+            st.markdown("*Summary of uploaded datasets and computed metrics*")
 
-        # -----------------------------------------------------------------
-        # Build / Version Control (visible on Overview)
-        # -----------------------------------------------------------------
-        try:
-            from version_info import (  # noqa: PLC0415
-                get_app_release_date,
-                get_app_version,
-                get_git_metadata,
-            )
+            # -----------------------------------------------------------------
+            # Build / Version Control (visible on Overview)
+            # -----------------------------------------------------------------
+            try:
+                from version_info import (  # noqa: PLC0415
+                    get_app_release_date,
+                    get_app_version,
+                    get_git_metadata,
+                )
 
-            app_version = get_app_version()
-            release_date = get_app_release_date()
-            git_meta = get_git_metadata()
-            git_dirty = " • dirty" if getattr(git_meta, "is_dirty", False) else ""
-            git_commit_time = getattr(git_meta, "commit_time", "")
+                app_version = get_app_version()
+                release_date = get_app_release_date()
+                git_meta = get_git_metadata()
+                git_dirty = " • dirty" if getattr(git_meta, "is_dirty", False) else ""
+                git_commit_time = getattr(git_meta, "commit_time", "")
 
-            st.markdown(
-                f"""
-                <div class="hrv-palette-card" style="margin: 0 0 12px 0;">
-                    <div style="font-size: 28px; color:#697184;">🧾</div>
-                    <div style="flex: 1;">
-                        <div class="hrv-palette-card__title">Build / Version Control</div>
-                        <div class="hrv-palette-card__value" style="font-size: 14px;">
-                            <b>Version</b>: v{app_version} (release date: {release_date})<br/>
-                            <b>Git</b>: {git_meta.branch} @ {git_meta.short_hash}{git_dirty}<br/>
-                            <b>Last commit time</b>: {git_commit_time}
+                st.markdown(
+                    f"""
+                    <div class="hrv-palette-card" style="margin: 0 0 12px 0;">
+                        <div style="font-size: 28px; color:#697184;">🧾</div>
+                        <div style="flex: 1;">
+                            <div class="hrv-palette-card__title">Build / Version Control</div>
+                            <div class="hrv-palette-card__value" style="font-size: 14px;">
+                                <b>Version</b>: v{app_version} (release date: {release_date})<br/>
+                                <b>Git</b>: {git_meta.branch} @ {git_meta.short_hash}{git_dirty}<br/>
+                                <b>Last commit time</b>: {git_commit_time}
+                            </div>
                         </div>
                     </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                    """,
+                    unsafe_allow_html=True,
+                )
 
-            with st.expander("📌 Latest CHANGELOG headline", expanded=False):
-                st.code(f"## [{app_version}] - {release_date}")
-        except Exception:
-            # Never block Overview rendering if git/changelog metadata is unavailable.
-            pass
-        
-        # Data status panel
-        if WELCOME_HEADER_AVAILABLE:
-            from welcome_header import render_data_status_panel, render_getting_started_guide, render_quick_access_grid
-            render_data_status_panel(
-                has_rr_data=has_hrv_data,
-                rr_count=total_rr_count,
-                has_profile="current_user_profile" in st.session_state and st.session_state.get("current_user_profile"),
-                has_space_weather="space_weather_data" in st.session_state and st.session_state.get("space_weather_data"),
-            )
-        
-        # Quick start guide for new users
-        if not has_hrv_data:
+                with st.expander("📌 Latest CHANGELOG headline", expanded=False):
+                    st.code(f"## [{app_version}] - {release_date}")
+            except Exception:
+                # Never block Overview rendering if git/changelog metadata is unavailable.
+                pass
+            
+            # Data status panel
             if WELCOME_HEADER_AVAILABLE:
-                render_getting_started_guide()
-                st.divider()
-                render_quick_access_grid(has_data=False)
-            else:
-                st.info(
-                    "👋 **Welcome!** Upload RR interval data using the sidebar to begin HRV analysis.\n\n"
-                    "**Available without data:**\n"
-                    "- ☀️ Circadian Physiology - Simulate circadian rhythms\n"
-                    "- 🌍 Space Weather - View current solar activity\n"
-                    "- 😴 SAFTE Model - Model fatigue scenarios"
+                from welcome_header import render_data_status_panel, render_getting_started_guide, render_quick_access_grid
+                render_data_status_panel(
+                    has_rr_data=has_hrv_data,
+                    rr_count=total_rr_count,
+                    has_profile="current_user_profile" in st.session_state and st.session_state.get("current_user_profile"),
+                    has_space_weather="space_weather_data" in st.session_state and st.session_state.get("space_weather_data"),
                 )
-        
-        if meta_rows:
-            st.dataframe(pd.DataFrame(meta_rows))
-        # Deviation summary per dataset
-        if apply_dev and not windowed_df.empty and "dev_level" in windowed_df.columns:
-            summary = (
-                windowed_df.groupby("source")["dev_level"]
-                .value_counts()
-                .unstack(fill_value=0)
-                .reindex(columns=["green", "yellow", "red"], fill_value=0)
-                .reset_index()
-            )
-            # Add max deviation index per source for quick scan
-            max_dev = (windowed_df.groupby("source")[
-                "dev_index"].max().rename("max_dev_index"))
-            summary = summary.merge(max_dev, on="source", how="left")
-            st.dataframe(
-                summary.rename(
-                    columns={
-                        "green": "windows_green",
-                        "yellow": "windows_yellow",
-                        "red": "windows_red",
-                    }
+            
+            # Quick start guide for new users
+            if not has_hrv_data:
+                if WELCOME_HEADER_AVAILABLE:
+                    render_getting_started_guide()
+                    st.divider()
+                    render_quick_access_grid(has_data=False)
+                else:
+                    st.info(
+                        "👋 **Welcome!** Upload RR interval data using the sidebar to begin HRV analysis.\n\n"
+                        "**Available without data:**\n"
+                        "- ☀️ Circadian Physiology - Simulate circadian rhythms\n"
+                        "- 🌍 Space Weather - View current solar activity\n"
+                        "- 😴 SAFTE Model - Model fatigue scenarios"
+                    )
+            
+            if meta_rows:
+                st.dataframe(pd.DataFrame(meta_rows))
+            # Deviation summary per dataset
+            if apply_dev and not windowed_df.empty and "dev_level" in windowed_df.columns:
+                summary = (
+                    windowed_df.groupby("source")["dev_level"]
+                    .value_counts()
+                    .unstack(fill_value=0)
+                    .reindex(columns=["green", "yellow", "red"], fill_value=0)
+                    .reset_index()
                 )
-            )
-        # Show derived respiratory rate when available
-        if (
-            not multi_results_df.empty
-            and "respiratory_rate_bpm" in multi_results_df.columns
-        ):
-            st.dataframe(multi_results_df[["source", "respiratory_rate_bpm"]].rename(
-                columns={"respiratory_rate_bpm": "respiratory_rate [breaths/min]"}))
-        _log_tab("overview", "end")
+                # Add max deviation index per source for quick scan
+                max_dev = (windowed_df.groupby("source")[
+                    "dev_index"].max().rename("max_dev_index"))
+                summary = summary.merge(max_dev, on="source", how="left")
+                st.dataframe(
+                    summary.rename(
+                        columns={
+                            "green": "windows_green",
+                            "yellow": "windows_yellow",
+                            "red": "windows_red",
+                        }
+                    )
+                )
+            # Show derived respiratory rate when available
+            if (
+                not multi_results_df.empty
+                and "respiratory_rate_bpm" in multi_results_df.columns
+            ):
+                st.dataframe(multi_results_df[["source", "respiratory_rate_bpm"]].rename(
+                    columns={"respiratory_rate_bpm": "respiratory_rate [breaths/min]"}))
+            _log_tab("overview", "end")
     
     # =========================================================================
     # USER PROFILE TAB - Centralized user data and clinical assessments
     # =========================================================================
     with tab_user_profile:
-        _log_tab("user_profile", "start")
-        if _should_render_tab("user_profile", "👤 User Profile"):
-            if USER_PROFILE_TAB_AVAILABLE:
-                try:
-                    render_user_profile_tab()
-                except Exception as exc:  # pragma: no cover - UI safety net
-                    log_exception(_LOGGER, "User Profile tab crashed (skipping)", exc)
-                    st.error(
-                        "User Profile encountered an error and was skipped so the rest of the app can continue. "
-                        "Check `logs/errors.log` for details."
+        if not _section_active("👤 User Profile"):
+            st.empty()
+        else:
+            _log_tab("user_profile", "start")
+            if _should_render_tab("user_profile", "👤 User Profile"):
+                if USER_PROFILE_TAB_AVAILABLE:
+                    try:
+                        render_user_profile_tab()
+                    except Exception as exc:  # pragma: no cover - UI safety net
+                        log_exception(_LOGGER, "User Profile tab crashed (skipping)", exc)
+                        st.error(
+                            "User Profile encountered an error and was skipped so the rest of the app can continue. "
+                            "Check `logs/errors.log` for details."
+                        )
+                        with st.expander("Error details", expanded=False):
+                            st.code(str(exc))
+                else:
+                    st.markdown("### 👤 User Profile")
+                    st.warning(
+                        "User Profile module not available.\n\n"
+                        "This tab provides:\n"
+                        "- **Personal data management** (age, weight, height, BMI)\n"
+                        "- **Clinical scales** (ESS, Samn-Perelli, KSS, PSQI)\n"
+                        "- **Assessment history** with timestamps\n"
+                        "- **HRV measurement tracking**\n\n"
+                        "Please ensure `user_profile_tab.py` is in the app directory."
                     )
-                    with st.expander("Error details", expanded=False):
-                        st.code(str(exc))
-            else:
-                st.markdown("### 👤 User Profile")
-                st.warning(
-                    "User Profile module not available.\n\n"
-                    "This tab provides:\n"
-                    "- **Personal data management** (age, weight, height, BMI)\n"
-                    "- **Clinical scales** (ESS, Samn-Perelli, KSS, PSQI)\n"
-                    "- **Assessment history** with timestamps\n"
-                    "- **HRV measurement tracking**\n\n"
-                    "Please ensure `user_profile_tab.py` is in the app directory."
-                )
-        _log_tab("user_profile", "end")
+            _log_tab("user_profile", "end")
     
     with tab_ts:
         _log_tab("time_series", "start")
