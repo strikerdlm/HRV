@@ -5620,19 +5620,8 @@ def _render_stable_navigation_sidebar(tab_labels: Sequence[str]) -> str:
         raise TypeError("tab_labels must be a list or tuple.")
     if not tab_labels:
         return ""
-    stable_default = bool(st.session_state.get("stable_navigation_mode", True))
-    stable_enabled = st.sidebar.checkbox(
-        "Stable navigation (single section rendering)",
-        value=stable_default,
-        key="stable_navigation_mode",
-        help=(
-            "When enabled, only the selected section renders. "
-            "This prevents heavy tabs from triggering repeated reruns."
-        ),
-    )
-    if not stable_enabled:
-        st.session_state.pop("stable_nav_section", None)
-        return ""
+    if "stable_navigation_mode" not in st.session_state:
+        st.session_state["stable_navigation_mode"] = True
     current_label = st.session_state.get("stable_nav_section")
     if current_label not in tab_labels:
         current_label = tab_labels[0]
@@ -5667,6 +5656,90 @@ def _section_active(label: str) -> bool:
     if not active_label:
         return True
     return active_label == label
+
+
+def _render_covariate_sidebar() -> Dict[str, Any]:
+    """Render sidebar controls for covariate adjustment inputs."""
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Patient profile (covariate adjustment)")
+    # Default to active user profile context when available.
+    try:
+        _sidebar_user_ctx = get_active_user_context()
+    except Exception:
+        _sidebar_user_ctx = _guest_user_context()
+    _sidebar_uid = (
+        str(_sidebar_user_ctx.get("user_id"))
+        if _sidebar_user_ctx.get("has_user") and _sidebar_user_ctx.get("user_id")
+        else "guest"
+    )
+    enable_cov = st.sidebar.checkbox(
+        "Enable covariate adjustment (RMSSD/SDNN)",
+        value=False,
+        key=f"cov_enable_{_sidebar_uid}",
+    )
+    use_profile_cov = st.sidebar.toggle(
+        "Use active profile defaults",
+        value=bool(_sidebar_user_ctx.get("has_user")),
+        key=f"cov_use_profile_{_sidebar_uid}",
+        help="When enabled, age/sex/BMI/activity default to the active user profile.",
+    )
+    _default_age = int(_sidebar_user_ctx.get("age_years") or 45)
+    _default_bmi = float(_sidebar_user_ctx.get("bmi") or 25.0)
+    _sex_ctx = str(_sidebar_user_ctx.get("sex") or "other").lower()
+    if _sex_ctx.startswith("m"):
+        _default_sex = "Male"
+    elif _sex_ctx.startswith("f"):
+        _default_sex = "Female"
+    else:
+        _default_sex = "Other"
+    _activity_ctx = str(_sidebar_user_ctx.get("activity_level") or "").lower()
+    if "athlete" in _activity_ctx or "very" in _activity_ctx or "extreme" in _activity_ctx:
+        _default_exercise = "Athlete"
+    elif "sedentary" in _activity_ctx:
+        _default_exercise = "Sedentary"
+    else:
+        _default_exercise = "Moderate"
+
+    age_years = st.sidebar.number_input(
+        "Age (years)",
+        min_value=10,
+        max_value=100,
+        value=_default_age,
+        step=1,
+        key=f"cov_age_{_sidebar_uid}",
+        disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
+    )
+    sex = st.sidebar.selectbox(
+        "Sex",
+        ["Female", "Male", "Other"],
+        index=["Female", "Male", "Other"].index(_default_sex),
+        key=f"cov_sex_{_sidebar_uid}",
+        disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
+    )
+    bmi = st.sidebar.number_input(
+        "BMI (kg/m²)",
+        min_value=10.0,
+        max_value=60.0,
+        value=_default_bmi,
+        step=0.5,
+        key=f"cov_bmi_{_sidebar_uid}",
+        disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
+    )
+    exercise = st.sidebar.selectbox(
+        "Exercise regularity",
+        ["Sedentary", "Moderate", "Athlete"],
+        index=["Sedentary", "Moderate", "Athlete"].index(_default_exercise),
+        key=f"cov_exercise_{_sidebar_uid}",
+        disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
+    )
+    return {
+        "enable_cov": bool(enable_cov),
+        "age_years": int(age_years),
+        "sex": str(sex),
+        "bmi": float(bmi),
+        "exercise": str(exercise),
+        "use_profile_cov": bool(use_profile_cov),
+    }
 
 
 def _apply_rerun_storm_guard() -> Dict[str, Any]:
@@ -8094,6 +8167,10 @@ def main() -> None:
         """,
         unsafe_allow_html=True,
     )
+    if active_user_id is None:
+        st.caption(
+            "No user profile selected. HRV analysis and Space Weather correlations run in guest mode."
+        )
 
     # Initialize uploads dictionary
     uploads: Dict[str, UploadedRR] = {}
@@ -8251,6 +8328,12 @@ def main() -> None:
     
     # Initialize flag for data availability - used throughout for conditional rendering
     has_hrv_data_uploaded = bool(uploads)
+    cov_settings = _render_covariate_sidebar()
+    enable_cov = bool(cov_settings["enable_cov"])
+    age_years = int(cov_settings["age_years"])
+    sex = str(cov_settings["sex"])
+    bmi = float(cov_settings["bmi"])
+    exercise = str(cov_settings["exercise"])
 
     # ==========================================================================
     # SIDEBAR CONTROLS - Show HRV settings only when data is available
@@ -8401,78 +8484,6 @@ def main() -> None:
         # Processing mode settings (manual-only analysis + manual tab rendering + space-data fetch)
         _render_processing_mode_sidebar()
 
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("Patient profile (covariate adjustment)")
-        # Default to active user profile context when available.
-        try:
-            _sidebar_user_ctx = get_active_user_context()
-        except Exception:
-            _sidebar_user_ctx = _guest_user_context()
-        _sidebar_uid = (
-            str(_sidebar_user_ctx.get("user_id"))
-            if _sidebar_user_ctx.get("has_user") and _sidebar_user_ctx.get("user_id")
-            else "guest"
-        )
-        enable_cov = st.sidebar.checkbox(
-            "Enable covariate adjustment (RMSSD/SDNN)",
-            value=False,
-            key=f"cov_enable_{_sidebar_uid}",
-        )
-        use_profile_cov = st.sidebar.toggle(
-            "Use active profile defaults",
-            value=bool(_sidebar_user_ctx.get("has_user")),
-            key=f"cov_use_profile_{_sidebar_uid}",
-            help="When enabled, age/sex/BMI/activity default to the active user profile.",
-        )
-        _default_age = int(_sidebar_user_ctx.get("age_years") or 45)
-        _default_bmi = float(_sidebar_user_ctx.get("bmi") or 25.0)
-        _sex_ctx = str(_sidebar_user_ctx.get("sex") or "other").lower()
-        if _sex_ctx.startswith("m"):
-            _default_sex = "Male"
-        elif _sex_ctx.startswith("f"):
-            _default_sex = "Female"
-        else:
-            _default_sex = "Other"
-        _activity_ctx = str(_sidebar_user_ctx.get("activity_level") or "").lower()
-        if "athlete" in _activity_ctx or "very" in _activity_ctx or "extreme" in _activity_ctx:
-            _default_exercise = "Athlete"
-        elif "sedentary" in _activity_ctx:
-            _default_exercise = "Sedentary"
-        else:
-            _default_exercise = "Moderate"
-
-        age_years = st.sidebar.number_input(
-            "Age (years)",
-            min_value=10,
-            max_value=100,
-            value=_default_age,
-            step=1,
-            key=f"cov_age_{_sidebar_uid}",
-            disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
-        )
-        sex = st.sidebar.selectbox(
-            "Sex",
-            ["Female", "Male", "Other"],
-            index=["Female", "Male", "Other"].index(_default_sex),
-            key=f"cov_sex_{_sidebar_uid}",
-            disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
-        )
-        bmi = st.sidebar.number_input(
-            "BMI (kg/m²)",
-            min_value=10.0,
-            max_value=60.0,
-            value=_default_bmi,
-            step=0.5,
-            key=f"cov_bmi_{_sidebar_uid}",
-            disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
-        )
-        exercise = st.sidebar.selectbox(
-            "Exercise regularity",
-            ["Sedentary", "Moderate", "Athlete"],
-            index=["Sedentary", "Moderate", "Athlete"].index(_default_exercise),
-            key=f"cov_exercise_{_sidebar_uid}",
-            disabled=bool(use_profile_cov and _sidebar_user_ctx.get("has_user")),
-        )
 
         # Apply minimal mode overrides to ensure fastest behavior by default
         if minimal_mode:
@@ -8504,11 +8515,11 @@ def main() -> None:
             high_compute=bool(high_compute),
             apply_dev=bool(apply_dev),
             dev_metrics=dev_metrics,
-            covariate_enabled=bool(enable_cov),
-            covariate_age=int(age_years),
-            covariate_sex=str(sex),
-            covariate_bmi=float(bmi),
-            covariate_exercise=str(exercise),
+            covariate_enabled=bool(cov_settings["enable_cov"]),
+            covariate_age=int(cov_settings["age_years"]),
+            covariate_sex=str(cov_settings["sex"]),
+            covariate_bmi=float(cov_settings["bmi"]),
+            covariate_exercise=str(cov_settings["exercise"]),
         )
         if duplicate_measurements:
             st.sidebar.warning(
@@ -9694,6 +9705,26 @@ def main() -> None:
         tab_refs,
         tab_about,
     ) = st.tabs(tab_labels)
+
+    if stable_nav_enabled and active_section_label in tab_labels:
+        active_index = tab_labels.index(active_section_label)
+        st.markdown(
+            f"""
+            <script>
+            (function() {{
+                const buttons = document.querySelectorAll('[data-baseweb="tab"]');
+                const index = {active_index};
+                if (buttons.length > index) {{
+                    const btn = buttons[index];
+                    if (btn && btn.getAttribute('aria-selected') !== 'true') {{
+                        btn.click();
+                    }}
+                }}
+            }})();
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
     
     _sw_loading_msg: Optional[st.delta_generator.DeltaGenerator] = None
     # ---------------------------------------------------------------------------
