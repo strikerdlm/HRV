@@ -48,6 +48,13 @@ from typing import Any, Dict, Final, List, Optional, Tuple, Set
 
 import streamlit as st
 
+# Safe rerun utility with debouncing and circuit breaker
+try:
+    from rerun_utils import safe_rerun
+except ImportError:  # pragma: no cover
+    def safe_rerun(reason: str = "") -> None:  # type: ignore[misc]
+        safe_rerun("experiments_tab_rerun")
+
 try:
     from echarts_component import render_echarts
 except ImportError:
@@ -924,7 +931,7 @@ def _render_experiment_form(
         if delete_clicked and is_edit and experiment:
             _delete_experiment(experiment.experiment_id)
             st.success(f"🗑️ Experiment '{experiment.title}' deleted.")
-            st.rerun()
+            safe_rerun("experiments_tab_rerun")
     
     return None
 
@@ -1020,14 +1027,14 @@ def _render_crew_assignment_panel(
                     experiment.primary_operator = crew.name
                     _save_experiment(experiment)
                     st.success(f"✅ {crew.name} set as Primary Operator")
-                    st.rerun()
+                    safe_rerun("experiments_tab_rerun")
             
             with col2:
                 if st.button(f"Set as Backup", key=f"backup_{crew.crew_id}_{experiment.experiment_id}"):
                     experiment.backup_operator = crew.name
                     _save_experiment(experiment)
                     st.success(f"✅ {crew.name} set as Backup Operator")
-                    st.rerun()
+                    safe_rerun("experiments_tab_rerun")
 
 
 def _render_schedule_integration_panel(
@@ -1136,7 +1143,7 @@ def _render_schedule_integration_panel(
             experiment.schedule_blocks.append(new_block)
             _save_experiment(experiment)
             st.success("✅ Schedule block added!")
-            st.rerun()
+            safe_rerun("experiments_tab_rerun")
     
     # Show existing blocks
     if experiment.schedule_blocks:
@@ -1225,10 +1232,10 @@ def _render_experiments_overview(engine: Optional[Any] = None) -> None:
                 st.write("")  # Spacer
                 if st.button("📝 Edit", key=f"edit_{exp.experiment_id}"):
                     st.session_state["editing_experiment"] = exp.experiment_id
-                    st.rerun()
+                    safe_rerun("experiments_tab_rerun")
                 if st.button("📅 Schedule", key=f"sched_{exp.experiment_id}"):
                     st.session_state["scheduling_experiment"] = exp.experiment_id
-                    st.rerun()
+                    safe_rerun("experiments_tab_rerun")
     else:
         st.info("No experiments defined yet. Create your first experiment to get started!")
 
@@ -1263,7 +1270,7 @@ def render_experiments_tab() -> None:
         with col1:
             if st.button("← Back to List"):
                 st.session_state.pop("editing_experiment", None)
-                st.rerun()
+                safe_rerun("experiments_tab_rerun")
         
         _render_experiment_form(experiment=exp, engine=engine)
         
@@ -1278,7 +1285,7 @@ def render_experiments_tab() -> None:
         with col1:
             if st.button("← Back to List"):
                 st.session_state.pop("scheduling_experiment", None)
-                st.rerun()
+                safe_rerun("experiments_tab_rerun")
         
         st.markdown(f"## 📅 Schedule: {exp.title}")
         
@@ -1297,7 +1304,7 @@ def render_experiments_tab() -> None:
         with tab2:
             result = _render_experiment_form(engine=engine)
             if result:
-                st.rerun()
+                safe_rerun("experiments_tab_rerun")
 
 
 # ---------------------------------------------------------------------------
