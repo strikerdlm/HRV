@@ -1958,6 +1958,29 @@ def _run_space_data_step(
     return bool(ok)
 
 
+def _run_with_timeout(
+    fn: Callable[[], Any],
+    *,
+    timeout_s: float,
+) -> Tuple[Optional[Any], Optional[str], bool]:
+    """Run a callable with a hard timeout and return (result, error, timed_out)."""
+    if timeout_s <= 0:
+        raise ValueError("timeout_s must be > 0")
+    import concurrent.futures
+
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(fn)
+    try:
+        result = future.result(timeout=float(timeout_s))
+        return result, None, False
+    except concurrent.futures.TimeoutError:
+        return None, f"Timed out after {timeout_s:.0f}s", True
+    except Exception as exc:
+        return None, str(exc), False
+    finally:
+        future.cancel()
+        executor.shutdown(wait=False, cancel_futures=True)
+
 NOAA_CORE_KEYS: tuple[str, ...] = (
     "planetary_k_index_3h",
     "f107_flux",
@@ -2034,6 +2057,8 @@ def _load_noaa_space_datasets_with_progress(
     keys: Optional[Sequence[str]] = None,
     use_cache: bool = True,
     allow_stale_cache: bool = False,
+    step_timeout_s: float = 8.0,
+    overall_timeout_s: Optional[float] = None,
     on_step_start: Optional[Callable[[str], None]] = None,
     on_step_complete: Optional[Callable[[str, int, Optional[str]], None]] = None,
     on_step_error: Optional[Callable[[str, str], None]] = None,
@@ -2050,16 +2075,45 @@ def _load_noaa_space_datasets_with_progress(
     selected_keys = list(keys) if keys is not None else list(NOAA_SOURCES.keys())
     bundles: Dict[str, Any] = {}
     errors: Dict[str, str] = {}
-    
+    if step_timeout_s <= 0:
+        raise ValueError("step_timeout_s must be > 0")
+    if overall_timeout_s is None:
+        overall_timeout_s = 45.0 if len(selected_keys) <= 6 else 75.0
+    if overall_timeout_s <= 0:
+        raise ValueError("overall_timeout_s must be > 0")
+
+    def _load_cached_bundle(key: str) -> Optional[NOAADataBundle]:
+        try:
+            cached_bundles, _ = load_noaa_space_cache(
+                keys=[key],
+                allow_stale_cache=True,
+            )
+            return cached_bundles.get(key)
+        except Exception:
+            return None
+
     try:
-        for key in selected_keys:
+        start_all = time.perf_counter()
+        for idx, key in enumerate(selected_keys):
+            elapsed = time.perf_counter() - start_all
+            if elapsed >= overall_timeout_s:
+                timeout_msg = f"Overall NOAA fetch timed out after {overall_timeout_s:.0f}s."
+                for remaining in selected_keys[idx:]:
+                    errors[remaining] = timeout_msg
+                    if on_step_error:
+                        try:
+                            on_step_error(remaining, timeout_msg)
+                        except Exception:
+                            pass
+                break
+
             # Notify step start
             if on_step_start:
                 try:
                     on_step_start(key)
                 except Exception:
                     pass
-            
+
             spec = NOAA_SOURCES.get(key)
             if spec is None:
                 error_msg = f"Unknown NOAA dataset key: {key}"
@@ -2070,32 +2124,46 @@ def _load_noaa_space_datasets_with_progress(
                     except Exception:
                         pass
                 continue
-            
-            try:
-                bundle = fetch_noaa_source(
+
+            remaining_budget = max(1.0, overall_timeout_s - elapsed)
+            timeout_budget = min(float(step_timeout_s), float(remaining_budget))
+
+            def _do_fetch() -> NOAADataBundle:
+                return fetch_noaa_source(
                     spec,
                     use_cache=use_cache,
                     allow_stale_cache=allow_stale_cache,
                 )
-                bundles[key] = bundle
-                row_count = len(bundle.frame) if bundle.frame is not None else 0
-                
-                # Notify completion
-                if on_step_complete:
-                    try:
-                        on_step_complete(key, row_count, None)
-                    except Exception:
-                        pass
-                        
-            except Exception as exc:
-                error_msg = str(exc)
-                errors[key] = error_msg
-                if on_step_error:
-                    try:
-                        on_step_error(key, error_msg)
-                    except Exception:
-                        pass
-        
+
+            result, err, _timed_out = _run_with_timeout(_do_fetch, timeout_s=timeout_budget)
+            if err or result is None:
+                cached_bundle = _load_cached_bundle(key) if use_cache else None
+                error_text = err or "Fetch failed"
+                if cached_bundle is not None:
+                    bundles[key] = cached_bundle
+                    errors[key] = f"{error_text}; using cached copy."
+                    if on_step_complete:
+                        try:
+                            on_step_complete(key, len(cached_bundle.frame), None)
+                        except Exception:
+                            pass
+                else:
+                    errors[key] = err or "Unknown NOAA fetch error."
+                    if on_step_error:
+                        try:
+                            on_step_error(key, errors[key])
+                        except Exception:
+                            pass
+                continue
+
+            bundles[key] = result
+            row_count = len(result.frame) if result.frame is not None else 0
+            if on_step_complete:
+                try:
+                    on_step_complete(key, row_count, None)
+                except Exception:
+                    pass
+
         state["bundles"] = bundles
         state["errors"] = errors
         state["last_updated"] = pd.Timestamp.utcnow()
@@ -2103,7 +2171,6 @@ def _load_noaa_space_datasets_with_progress(
         state["corr_params"] = {}
         state["global_corr"] = pd.DataFrame()
         state["global_corr_labels"] = {}
-        
     except Exception as exc:
         state["bundles"] = {}
         state["errors"] = {"__global__": str(exc)}
@@ -2112,7 +2179,6 @@ def _load_noaa_space_datasets_with_progress(
         state["corr_params"] = {}
         state["global_corr"] = pd.DataFrame()
         state["global_corr_labels"] = {}
-        
     finally:
         state["loading"] = False
 
@@ -2540,6 +2606,20 @@ def _get_bg_fetch_age_str() -> str:
         return f"{hours:.1f}h ago"
     return f"{hours / 24:.1f}d ago"
 
+def _is_bg_fetch_thread_running() -> bool:
+    thread = _bg_fetch_thread
+    return bool(thread is not None and thread.is_alive())
+
+def _reset_background_fetch_status() -> None:
+    """Reset background fetch bookkeeping to the idle state."""
+    with _bg_fetch_lock:
+        for key in ("space_weather", "noaa", "donki"):
+            _bg_fetch_results[key]["done"] = False
+            _bg_fetch_results[key]["error"] = None
+            _bg_fetch_results[key]["data"] = {}
+            _bg_fetch_results[key]["fetch_time"] = None
+            _bg_fetch_results[key]["_applied"] = False
+
 
 def _poll_background_fetch() -> Dict[str, Any]:
     """
@@ -2549,6 +2629,7 @@ def _poll_background_fetch() -> Dict[str, Any]:
       {"space_weather": {"done": bool, "error": str|None, "stale": bool}, ...}
     """
     now = time.time()
+    running = _is_bg_fetch_thread_running()
     with _bg_fetch_lock:
         result = {}
         for k, v in _bg_fetch_results.items():
@@ -2557,10 +2638,17 @@ def _poll_background_fetch() -> Dict[str, Any]:
                 fetch_time is None
                 or (now - fetch_time) >= _BG_FETCH_INTERVAL_SECONDS
             )
+            started = bool(fetch_time is not None or running)
+            done = bool(v.get("done"))
+            running_key = bool(running and not done)
+            idle = bool(not running_key and not done and fetch_time is None)
             result[k] = {
-                "done": v["done"],
-                "error": v["error"],
+                "done": done,
+                "error": v.get("error"),
                 "stale": is_stale,
+                "running": running_key,
+                "started": started,
+                "idle": idle,
             }
         return result
 
@@ -3596,6 +3684,8 @@ def _fetch_donki_datasets_with_progress(
     end_date: str,
     endpoints: Optional[List[str]] = None,
     *,
+    step_timeout_s: float = 15.0,
+    overall_timeout_s: Optional[float] = None,
     on_step_start: Optional[Callable[[str], None]] = None,
     on_step_complete: Optional[Callable[[str, int, Optional[str]], None]] = None,
     on_step_error: Optional[Callable[[str, str], None]] = None,
@@ -3624,8 +3714,27 @@ def _fetch_donki_datasets_with_progress(
     targets = endpoints or list(DONKI_ENDPOINTS.keys())
     datasets: Dict[str, pd.DataFrame] = {}
     errors: Dict[str, str] = {}
-    
-    for code in targets:
+    if step_timeout_s <= 0:
+        raise ValueError("step_timeout_s must be > 0")
+    if overall_timeout_s is None:
+        overall_timeout_s = max(30.0, 6.0 * float(len(targets)))
+    if overall_timeout_s <= 0:
+        raise ValueError("overall_timeout_s must be > 0")
+
+    start_all = time.perf_counter()
+    for idx, code in enumerate(targets):
+        elapsed = time.perf_counter() - start_all
+        if elapsed >= overall_timeout_s:
+            timeout_msg = f"Overall DONKI fetch timed out after {overall_timeout_s:.0f}s."
+            for remaining in targets[idx:]:
+                errors[remaining] = timeout_msg
+                if on_step_error:
+                    try:
+                        on_step_error(remaining, timeout_msg)
+                    except Exception:
+                        pass
+            break
+
         # Notify step start
         if on_step_start:
             try:
@@ -3657,8 +3766,35 @@ def _fetch_donki_datasets_with_progress(
                     except Exception:
                         pass
                 continue
-            
-            df = fetch_donki(code, start_to_use, end_to_use)
+
+            remaining_budget = max(1.0, overall_timeout_s - elapsed)
+            timeout_budget = min(float(step_timeout_s), float(remaining_budget))
+
+            def _do_fetch() -> pd.DataFrame:
+                return fetch_donki(code, start_to_use, end_to_use)
+
+            result, err, _timed_out = _run_with_timeout(_do_fetch, timeout_s=timeout_budget)
+            if err or result is None:
+                stale_df = _read_dataframe_cache(cache_file, max_age=None)
+                if isinstance(stale_df, pd.DataFrame) and not stale_df.empty:
+                    datasets[code] = stale_df
+                    error_text = err or "Fetch failed"
+                    errors[code] = f"{error_text}; using cached copy."
+                    if on_step_complete:
+                        try:
+                            on_step_complete(code, len(stale_df), None)
+                        except Exception:
+                            pass
+                else:
+                    errors[code] = err or "Unknown DONKI fetch error."
+                    if on_step_error:
+                        try:
+                            on_step_error(code, errors[code])
+                        except Exception:
+                            pass
+                continue
+
+            df = result
             _write_dataframe_cache(cache_file, df)
             datasets[code] = df
             
@@ -17280,12 +17416,19 @@ that predicts cognitive performance based on:
         # -----------------------------------------------------------------
         _space_steps = _space_data_step_runner_state()
         with st.expander("📋 Space Data step log (debug)", expanded=False):
-            col_clear, col_env = st.columns([1, 3])
+            col_clear, col_reset, col_env = st.columns([1, 1, 3])
             with col_clear:
                 if st.button("🧹 Clear step log", key="space_data_step_log_clear"):
                     _space_steps["history"] = []
                     _space_steps["last"] = {}
                     st.success("Cleared Space Data step log.")
+            with col_reset:
+                if st.button("🔁 Reset bg fetch", key="space_data_reset_bg_fetch"):
+                    if _is_bg_fetch_thread_running():
+                        st.warning("Background fetch thread is still running; wait for it to finish or restart the app.")
+                    else:
+                        _reset_background_fetch_status()
+                        st.success("Background fetch status reset (idle).")
             with col_env:
                 st.caption(
                     "Keys: NASA DONKI="
@@ -20103,8 +20246,12 @@ The Space Analytics tab provides statistical correlation tools for hypothesis te
 
         # Live visibility into background/async space-data work so "Running..." is explained
         fetch_state = _poll_background_fetch()
-        any_running = any(not info.get("done", False) for info in fetch_state.values())
-        if any_running:
+        auto_fetch_enabled = bool(st.session_state.get("allow_space_auto_fetch", False))
+        any_running = any(info.get("running", False) for info in fetch_state.values())
+        any_errors = any(bool(info.get("error")) for info in fetch_state.values())
+        if not auto_fetch_enabled:
+            st.caption("Background space-data fetch: disabled (manual-only mode).")
+        elif any_running:
             with st.status("Background space-data fetch is running…", state="running", expanded=True) as status:
                 for key, info in fetch_state.items():
                     label = {
@@ -20112,13 +20259,17 @@ The Space Analytics tab provides statistical correlation tools for hypothesis te
                         "noaa": "NOAA feeds",
                         "donki": "NASA DONKI",
                     }.get(key, key)
-                    if info.get("done"):
-                        status.write(f"✅ {label}: done")
+                    if info.get("running"):
+                        status.write(f"⏳ {label}: fetching…")
                     elif info.get("error"):
                         status.write(f"⚠️ {label}: error — {info.get('error')}")
+                    elif info.get("done"):
+                        status.write(f"✅ {label}: done")
                     else:
-                        status.write(f"⏳ {label}: fetching…")
+                        status.write(f"⏸️ {label}: idle")
         else:
+            if any_errors:
+                st.warning("Background space-data fetch completed with errors. Use the step log for details.")
             st.caption(f"Background space-data fetch status: idle | Age: {_get_bg_fetch_age_str()}")
 
         with st.expander("🌞 **Understanding Space Weather Metrics**", expanded=False):
