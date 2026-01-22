@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.9.5] - 2026-01-22
+
+### Fixed
+- User Profile: Garmin autofill for sleep/chronotype inputs now prefers stored Garmin daily metrics and falls back to live Garmin Connect when needed, restoring the NASA Nutrition autofill behavior without forcing credentials.
+- App runtime: Debug logging is now opt-in (default off), and file logging follows the debug toggle to reduce idle rerun loops and background overhead on Windows/OneDrive.
+
 ## [1.9.4] - 2026-01-20
 
 ### Changed
