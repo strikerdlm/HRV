@@ -152,10 +152,12 @@ The app detects your CPU capabilities at startup:
 
 **Offline Mode**: Disable all download toggles for completely offline HRV analysis. Cached data remains available.
 
-**Research stability controls (v1.9.7)**:
-- **Stable navigation (single section rendering)**: When enabled, the sidebar **Navigation** selector targets a single section and gates heavy HRV renderers to the active view.
+**Research stability controls (v1.9.8)**:
+- **Sidebar-only navigation**: The sidebar **Navigation** selector now drives the active view; tabs are hidden to prevent accidental multi-tab rendering.
+- **Stable navigation (single section rendering)**: The selector gates heavy HRV renderers to the active view for smoother interaction.
 - **Rerun storm guard**: If rapid reruns are detected, the app automatically switches to manual-only processing, disables heavy plots, and surfaces a **Recover** button in Developer Tools.
 - **Tab persistence removed**: The experimental tab persistence toggle was removed to prevent session_state mutation errors and rerun loops.
+- **Guest analysis supported**: HRV processing and Space Weather correlations run without selecting a user profile (guest mode).
 
 ### Installation Steps
 
