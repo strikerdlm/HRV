@@ -152,9 +152,10 @@ The app detects your CPU capabilities at startup:
 
 **Offline Mode**: Disable all download toggles for completely offline HRV analysis. Cached data remains available.
 
-**Research stability controls (v1.9.6)**:
-- **Stable navigation (single section rendering)**: When enabled, the sidebar **Navigation** selector renders only the chosen section to avoid heavy tabs re-executing on every rerun.
+**Research stability controls (v1.9.7)**:
+- **Stable navigation (single section rendering)**: When enabled, the sidebar **Navigation** selector targets a single section and gates heavy HRV renderers to the active view.
 - **Rerun storm guard**: If rapid reruns are detected, the app automatically switches to manual-only processing, disables heavy plots, and surfaces a **Recover** button in Developer Tools.
+- **Tab persistence removed**: The experimental tab persistence toggle was removed to prevent session_state mutation errors and rerun loops.
 
 ### Installation Steps
 
@@ -858,6 +859,7 @@ Adjustments:
 5. **Cross-Tab Integration**: Your profile data automatically flows to:
    - HRV interpretation (age-adjusted norms)
    - NASA Nutrition Calculator (VO₂max compensation)
+   - NASA Nutrition sleep inputs share values with the Profile Tools Engine; Garmin autofill updates both
    - Fatigue Prediction (sleep requirements)
    - Circadian Physiology (chronotype adjustments)
 
