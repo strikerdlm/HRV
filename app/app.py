@@ -12737,168 +12737,168 @@ HRV deviated from baseline. Episodes include:
                 st.info("Upload a dataset to compute autonomic function metrics.")
             elif _should_render_tab("ans", "ANS Function Tests"):
                 names = list(datasets.keys())
-            selected_dataset_name = st.selectbox("Dataset", names, index=0)
-            selected_dataset = datasets[selected_dataset_name]
-            use_clean_for_ans = st.checkbox(
-                "Use cleaned RR series (if available)",
-                value=bool(apply_clean),
-                key="ans_use_clean_checkbox",
-            )
-            try:
-                ts_series, rr_series = _prepare_rr_series(
-                    selected_dataset, use_clean_for_ans
+                selected_dataset_name = st.selectbox("Dataset", names, index=0)
+                selected_dataset = datasets[selected_dataset_name]
+                use_clean_for_ans = st.checkbox(
+                    "Use cleaned RR series (if available)",
+                    value=bool(apply_clean),
+                    key="ans_use_clean_checkbox",
                 )
-            except ValueError as exc:
-                logger.warning(
-                    "Preparing RR series failed: %s",
-                    exc,
-                    exc_info=True)
-                st.warning(str(exc))
-            else:
-                with st.form(f"ans-form-{selected_dataset_name}"):
-                    col_a, col_b = st.columns(2)
-                    vals_phase_ii_input = col_a.text_input(
-                        "Valsalva phase II window (s)", "15 25"
+                try:
+                    ts_series, rr_series = _prepare_rr_series(
+                        selected_dataset, use_clean_for_ans
                     )
-                    vals_phase_iv_input = col_b.text_input(
-                        "Valsalva phase IV window (s)", "25 35"
-                    )
-                    deep_start_input = col_a.number_input(
-                        "Deep breathing start (s)", min_value=0.0, value=0.0, step=1.0)
-                    deep_cycle_input = col_b.number_input(
-                        "Deep breathing cycle length (s)",
-                        min_value=1.0,
-                        value=10.0,
-                        step=0.5,
-                    )
-                    deep_cycles_input = col_a.number_input(
-                        "Number of breathing cycles",
-                        min_value=1,
-                        max_value=12,
-                        value=6,
-                        step=1,
-                    )
-                    stand_time_input = col_b.number_input(
-                        "Stand event time (s)", min_value=0.0, value=60.0, step=1.0)
-                    ratio15_window_input = col_a.text_input(
-                        "30:15 ratio – 15th-beat window (s)", "5 20"
-                    )
-                    ratio30_window_input = col_b.text_input(
-                        "30:15 ratio – 30th-beat window (s)", "20 40"
-                    )
-                    submit_ans = st.form_submit_button("Compute ANS metrics")
-                if submit_ans:
-                    errors: List[str] = []
-                    valsalva_result: Optional[Dict[str, float]] = None
-                    deep_breathing_result: Optional[Dict[str, Any]] = None
-                    ratio_30_15_result: Optional[Dict[str, float]] = None
-                    try:
-                        phase_ii_window = _parse_window_seconds(
-                            vals_phase_ii_input, "Valsalva phase II window"
+                except ValueError as exc:
+                    logger.warning(
+                        "Preparing RR series failed: %s",
+                        exc,
+                        exc_info=True)
+                    st.warning(str(exc))
+                else:
+                    with st.form(f"ans-form-{selected_dataset_name}"):
+                        col_a, col_b = st.columns(2)
+                        vals_phase_ii_input = col_a.text_input(
+                            "Valsalva phase II window (s)", "15 25"
                         )
-                        phase_iv_window = _parse_window_seconds(
-                            vals_phase_iv_input, "Valsalva phase IV window"
+                        vals_phase_iv_input = col_b.text_input(
+                            "Valsalva phase IV window (s)", "25 35"
                         )
-                        valsalva_result = compute_valsalva_ratio(
-                            ts_series, rr_series, phase_ii_window, phase_iv_window)
-                    except ValueError as exc:
-                        logger.warning(
-                            "Valsalva ratio computation inputs invalid: %s",
-                            exc,
-                            exc_info=True,
+                        deep_start_input = col_a.number_input(
+                            "Deep breathing start (s)", min_value=0.0, value=0.0, step=1.0)
+                        deep_cycle_input = col_b.number_input(
+                            "Deep breathing cycle length (s)",
+                            min_value=1.0,
+                            value=10.0,
+                            step=0.5,
                         )
-                        errors.append(f"Valsalva ratio: {exc}")
-                    try:
-                        start_time_s = _parse_float(
-                            deep_start_input, "Deep breathing start (s)"
+                        deep_cycles_input = col_a.number_input(
+                            "Number of breathing cycles",
+                            min_value=1,
+                            max_value=12,
+                            value=6,
+                            step=1,
                         )
-                        cycle_length_s = _parse_float(
-                            deep_cycle_input, "Deep breathing cycle length (s)"
+                        stand_time_input = col_b.number_input(
+                            "Stand event time (s)", min_value=0.0, value=60.0, step=1.0)
+                        ratio15_window_input = col_a.text_input(
+                            "30:15 ratio – 15th-beat window (s)", "5 20"
                         )
-                        deep_breathing_result = compute_deep_breathing_response(
-                            ts_series,
-                            rr_series,
-                            start_time_s=start_time_s,
-                            cycle_length_s=cycle_length_s,
-                            n_cycles=int(deep_cycles_input),
+                        ratio30_window_input = col_b.text_input(
+                            "30:15 ratio – 30th-beat window (s)", "20 40"
                         )
-                    except ValueError as exc:
-                        logger.warning(
-                            "Deep breathing response inputs invalid: %s",
-                            exc,
-                            exc_info=True,
-                        )
-                        errors.append(f"Deep breathing response: {exc}")
-                    try:
-                        window_15_s = _parse_window_seconds(
-                            ratio15_window_input, "30:15 ratio (15th-beat window)")
-                        window_30_s = _parse_window_seconds(
-                            ratio30_window_input, "30:15 ratio (30th-beat window)")
-                        stand_time_s = _parse_float(
-                            stand_time_input, "Stand event time (s)"
-                        )
-                        ratio_30_15_result = compute_30_15_ratio(
-                            ts_series,
-                            rr_series,
-                            stand_time_s=stand_time_s,
-                            window_15_s=window_15_s,
-                            window_30_s=window_30_s,
-                        )
-                    except ValueError as exc:
-                        logger.warning(
-                            "30:15 ratio inputs invalid: %s", exc, exc_info=True)
-                        errors.append(f"30:15 ratio: {exc}")
-                    if errors:
-                        for err in errors:
-                            st.warning(err)
-                    if valsalva_result is not None:
-                        st.markdown("### Valsalva Ratio")
-                        cols = st.columns(3)
-                        cols[0].metric(
-                            "Valsalva ratio",
-                            f"{valsalva_result['valsalva_ratio']:.2f}",
-                        )
-                        cols[1].metric(
-                            "Phase II min RR (ms)",
-                            f"{valsalva_result['phase_ii_min_rr_ms']:.1f}",
-                        )
-                        cols[2].metric(
-                            "Phase IV max RR (ms)",
-                            f"{valsalva_result['phase_iv_max_rr_ms']:.1f}",
-                        )
-                    if deep_breathing_result is not None:
-                        st.markdown("### Deep Breathing (E:I Response)")
-                        col_db1, col_db2, col_db3 = st.columns(3)
-                        col_db1.metric(
-                            "Mean E–I difference (ms)",
-                            f"{deep_breathing_result['ei_mean_difference_ms']:.1f}",
-                        )
-                        col_db2.metric(
-                            "Mean E–I ratio",
-                            f"{deep_breathing_result['ei_mean_ratio']:.3f}",
-                        )
-                        col_db3.metric(
-                            "Mean HR difference (bpm)",
-                            f"{deep_breathing_result['hr_mean_difference_bpm']:.1f}",
-                        )
-                        details_df = pd.DataFrame(
-                            list(deep_breathing_result["cycle_details"])
-                        )
-                    if ratio_30_15_result is not None:
-                        st.markdown("### 30:15 Ratio")
-                        col_30a, col_30b, col_30c = st.columns(3)
-                        col_30a.metric(
-                            "30:15 ratio",
-                            f"{ratio_30_15_result['ratio_30_15']:.2f}",
-                        )
-                        col_30b.metric(
-                            "15th-beat min RR (ms)",
-                            f"{ratio_30_15_result['rr_15_min_ms']:.1f}",
-                        )
-                        col_30c.metric(
-                            "30th-beat max RR (ms)",
-                            f"{ratio_30_15_result['rr_30_max_ms']:.1f}",
-                        )
+                        submit_ans = st.form_submit_button("Compute ANS metrics")
+                    if submit_ans:
+                        errors: List[str] = []
+                        valsalva_result: Optional[Dict[str, float]] = None
+                        deep_breathing_result: Optional[Dict[str, Any]] = None
+                        ratio_30_15_result: Optional[Dict[str, float]] = None
+                        try:
+                            phase_ii_window = _parse_window_seconds(
+                                vals_phase_ii_input, "Valsalva phase II window"
+                            )
+                            phase_iv_window = _parse_window_seconds(
+                                vals_phase_iv_input, "Valsalva phase IV window"
+                            )
+                            valsalva_result = compute_valsalva_ratio(
+                                ts_series, rr_series, phase_ii_window, phase_iv_window)
+                        except ValueError as exc:
+                            logger.warning(
+                                "Valsalva ratio computation inputs invalid: %s",
+                                exc,
+                                exc_info=True,
+                            )
+                            errors.append(f"Valsalva ratio: {exc}")
+                        try:
+                            start_time_s = _parse_float(
+                                deep_start_input, "Deep breathing start (s)"
+                            )
+                            cycle_length_s = _parse_float(
+                                deep_cycle_input, "Deep breathing cycle length (s)"
+                            )
+                            deep_breathing_result = compute_deep_breathing_response(
+                                ts_series,
+                                rr_series,
+                                start_time_s=start_time_s,
+                                cycle_length_s=cycle_length_s,
+                                n_cycles=int(deep_cycles_input),
+                            )
+                        except ValueError as exc:
+                            logger.warning(
+                                "Deep breathing response inputs invalid: %s",
+                                exc,
+                                exc_info=True,
+                            )
+                            errors.append(f"Deep breathing response: {exc}")
+                        try:
+                            window_15_s = _parse_window_seconds(
+                                ratio15_window_input, "30:15 ratio (15th-beat window)")
+                            window_30_s = _parse_window_seconds(
+                                ratio30_window_input, "30:15 ratio (30th-beat window)")
+                            stand_time_s = _parse_float(
+                                stand_time_input, "Stand event time (s)"
+                            )
+                            ratio_30_15_result = compute_30_15_ratio(
+                                ts_series,
+                                rr_series,
+                                stand_time_s=stand_time_s,
+                                window_15_s=window_15_s,
+                                window_30_s=window_30_s,
+                            )
+                        except ValueError as exc:
+                            logger.warning(
+                                "30:15 ratio inputs invalid: %s", exc, exc_info=True)
+                            errors.append(f"30:15 ratio: {exc}")
+                        if errors:
+                            for err in errors:
+                                st.warning(err)
+                        if valsalva_result is not None:
+                            st.markdown("### Valsalva Ratio")
+                            cols = st.columns(3)
+                            cols[0].metric(
+                                "Valsalva ratio",
+                                f"{valsalva_result['valsalva_ratio']:.2f}",
+                            )
+                            cols[1].metric(
+                                "Phase II min RR (ms)",
+                                f"{valsalva_result['phase_ii_min_rr_ms']:.1f}",
+                            )
+                            cols[2].metric(
+                                "Phase IV max RR (ms)",
+                                f"{valsalva_result['phase_iv_max_rr_ms']:.1f}",
+                            )
+                        if deep_breathing_result is not None:
+                            st.markdown("### Deep Breathing (E:I Response)")
+                            col_db1, col_db2, col_db3 = st.columns(3)
+                            col_db1.metric(
+                                "Mean E–I difference (ms)",
+                                f"{deep_breathing_result['ei_mean_difference_ms']:.1f}",
+                            )
+                            col_db2.metric(
+                                "Mean E–I ratio",
+                                f"{deep_breathing_result['ei_mean_ratio']:.3f}",
+                            )
+                            col_db3.metric(
+                                "Mean HR difference (bpm)",
+                                f"{deep_breathing_result['hr_mean_difference_bpm']:.1f}",
+                            )
+                            details_df = pd.DataFrame(
+                                list(deep_breathing_result["cycle_details"])
+                            )
+                        if ratio_30_15_result is not None:
+                            st.markdown("### 30:15 Ratio")
+                            col_30a, col_30b, col_30c = st.columns(3)
+                            col_30a.metric(
+                                "30:15 ratio",
+                                f"{ratio_30_15_result['ratio_30_15']:.2f}",
+                            )
+                            col_30b.metric(
+                                "15th-beat min RR (ms)",
+                                f"{ratio_30_15_result['rr_15_min_ms']:.1f}",
+                            )
+                            col_30c.metric(
+                                "30th-beat max RR (ms)",
+                                f"{ratio_30_15_result['rr_30_max_ms']:.1f}",
+                            )
         if render_section:
             _log_tab("ans", "end")
     with tab_readiness:
