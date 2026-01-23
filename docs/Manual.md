@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.9.1  
-**Last Updated:** 2025-12-30
+**Version:** 1.9.9  
+**Last Updated:** 2026-01-23
 
 ---
 
@@ -152,9 +152,11 @@ The app detects your CPU capabilities at startup:
 
 **Offline Mode**: Disable all download toggles for completely offline HRV analysis. Cached data remains available.
 
-**Research stability controls (v1.9.8)**:
-- **Sidebar-only navigation**: The sidebar **Navigation** selector now drives the active view; tabs are hidden to prevent accidental multi-tab rendering.
+**Research stability controls (v1.9.9)**:
+- **Sidebar-only navigation**: The sidebar **Navigation** selector drives the active view; tabs are hidden to prevent accidental multi-tab rendering.
 - **Stable navigation (single section rendering)**: The selector gates heavy HRV renderers to the active view for smoother interaction.
+- **Selection-change activation**: The active view is applied only when the sidebar selection changes to avoid redundant reruns.
+- **Guest results visibility**: Manual tab gating is bypassed for the active section so guest HRV and Space Analytics outputs render immediately.
 - **Rerun storm guard**: If rapid reruns are detected, the app automatically switches to manual-only processing, disables heavy plots, and surfaces a **Recover** button in Developer Tools.
 - **Tab persistence removed**: The experimental tab persistence toggle was removed to prevent session_state mutation errors and rerun loops.
 - **Guest analysis supported**: HRV processing and Space Weather correlations run without selecting a user profile (guest mode).
