@@ -5580,8 +5580,8 @@ def _should_render_tab(
 
     stable_nav = bool(st.session_state.get("stable_navigation_mode", False))
     active_label = st.session_state.get("stable_nav_section")
-    if stable_nav and active_label and label != active_label:
-        return False
+    if stable_nav and active_label:
+        return label == active_label
 
     manual_rendering = bool(st.session_state.get("manual_tab_rendering", True))
     if not manual_rendering:
@@ -9707,24 +9707,27 @@ def main() -> None:
     ) = st.tabs(tab_labels)
 
     if stable_nav_enabled and active_section_label in tab_labels:
-        active_index = tab_labels.index(active_section_label)
-        st.markdown(
-            f"""
-            <script>
-            (function() {{
-                const buttons = document.querySelectorAll('[data-baseweb="tab"]');
-                const index = {active_index};
-                if (buttons.length > index) {{
-                    const btn = buttons[index];
-                    if (btn && btn.getAttribute('aria-selected') !== 'true') {{
-                        btn.click();
+        prev_label = st.session_state.get("_nav_applied_label")
+        if prev_label != active_section_label:
+            st.session_state["_nav_applied_label"] = active_section_label
+            active_index = tab_labels.index(active_section_label)
+            st.markdown(
+                f"""
+                <script>
+                (function() {{
+                    const buttons = document.querySelectorAll('[data-baseweb="tab"]');
+                    const index = {active_index};
+                    if (buttons.length > index) {{
+                        const btn = buttons[index];
+                        if (btn && btn.getAttribute('aria-selected') !== 'true') {{
+                            btn.click();
+                        }}
                     }}
-                }}
-            }})();
-            </script>
-            """,
-            unsafe_allow_html=True,
-        )
+                }})();
+                </script>
+                """,
+                unsafe_allow_html=True,
+            )
     
     _sw_loading_msg: Optional[st.delta_generator.DeltaGenerator] = None
     # ---------------------------------------------------------------------------
@@ -9732,12 +9735,43 @@ def main() -> None:
     # ---------------------------------------------------------------------------
     _render_start_time = time.perf_counter()
     
+    _tab_label_map = {
+        "overview": "Overview",
+        "user_profile": "👤 User Profile",
+        "time_series": "Time Series",
+        "frequency": "Frequency",
+        "nonlinear": "Nonlinear",
+        "tfr": "Spectrogram",
+        "windowed": "Windowed",
+        "metrics": "Metrics",
+        "hrf_hrv": "🧩 HRF ↔ HRV",
+        "ans": "ANS Function Tests",
+        "readiness": "Readiness",
+        "gauges": "Gauges",
+        "unified": "📈 Unified Timeline",
+        "pop_norms": "📊 Population Norms",
+        "biofeedback": "🫀 Biofeedback",
+        "fatigue": "😴 SAFTE/Fatigue",
+        "science": "Science",
+        "circadian": "☀️ Circadian",
+        "space_data": "🌐 Space Data",
+        "space_analytics": "🔬 Space Analytics",
+        "export": "📄 Export",
+        "about": "ℹ️ About",
+        "refs": "📚 References",
+    }
+
     def _log_tab(name: str, phase: str = "start") -> None:
         """Log tab render progress with elapsed time (debug only)."""
-        if not _LOGGER.isEnabledFor(logging.DEBUG):
-            return
-        elapsed = (time.perf_counter() - _render_start_time) * 1000
-        _LOGGER.debug("UI: render_%s:%s | elapsed=%.0fms", name, phase, elapsed)
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            elapsed = (time.perf_counter() - _render_start_time) * 1000
+            _LOGGER.debug("UI: render_%s:%s | elapsed=%.0fms", name, phase, elapsed)
+        if (
+            phase == "end"
+            and bool(st.session_state.get("stable_navigation_mode", False))
+            and st.session_state.get("stable_nav_section") == _tab_label_map.get(name)
+        ):
+            st.stop()
     
     if _LOGGER.isEnabledFor(logging.DEBUG):
         _LOGGER.debug(
@@ -9885,8 +9919,12 @@ def main() -> None:
             _log_tab("user_profile", "end")
     
     with tab_ts:
-        _log_tab("time_series", "start")
-        if not has_hrv_data:
+        render_section = _section_active("Time Series")
+        if render_section:
+            _log_tab("time_series", "start")
+        if not render_section:
+            st.empty()
+        elif not has_hrv_data:
             st.info(
                 "📈 **Time Series Analysis**\n\n"
                 "This tab displays your RR interval and heart rate time series plots.\n\n"
@@ -10382,10 +10420,15 @@ alcohol all support vagal tone (Christensen et al., 1999).
 
 </small>
 """, unsafe_allow_html=True)
-        _log_tab("time_series", "end")
+        if render_section:
+            _log_tab("time_series", "end")
     with tab_freq:
-        _log_tab("frequency", "start")
-        if not has_hrv_data:
+        render_section = _section_active("Frequency")
+        if render_section:
+            _log_tab("frequency", "start")
+        if not render_section:
+            st.empty()
+        elif not has_hrv_data:
             st.info(
                 "🌊 **Frequency Domain Analysis**\n\n"
                 "This tab shows power spectral density (PSD) analysis of your HRV data.\n\n"
@@ -10961,10 +11004,15 @@ If your HF power is below age-matched norms or you have elevated sympathetic mar
 - Wong, A., et al. (2017). *Altern Ther Health Med, 23*(2), 28-33. [PMID: 28323625](https://pubmed.ncbi.nlm.nih.gov/28323625/)
 - Hepburn, H., et al. (2005). *Eur J Appl Physiol, 94*(5-6), 681-689. [PMID: 15906077](https://pubmed.ncbi.nlm.nih.gov/15906077/)
             """)
-        _log_tab("frequency", "end")
+        if render_section:
+            _log_tab("frequency", "end")
     with tab_nl:
-        _log_tab("nonlinear", "start")
-        if not has_hrv_data:
+        render_section = _section_active("Nonlinear")
+        if render_section:
+            _log_tab("nonlinear", "start")
+        if not render_section:
+            st.empty()
+        elif not has_hrv_data:
             st.info(
                 "🔀 **Nonlinear Analysis**\n\n"
                 "This tab shows Poincaré plots, entropy measures, and fractal analysis.\n\n"
@@ -11561,10 +11609,15 @@ Quick protocol to try now (safe for healthy users):
 - Prioritize 7–9 h sleep; regular schedule.
                 """
             )
-        _log_tab("nonlinear", "end")
+        if render_section:
+            _log_tab("nonlinear", "end")
     with tab_tfr:
-        _log_tab("tfr", "start")
-        if not has_hrv_data:
+        render_section = _section_active("Spectrogram")
+        if render_section:
+            _log_tab("tfr", "start")
+        if not render_section:
+            st.empty()
+        elif not has_hrv_data:
             st.info(
                 "📉 **Time-Frequency Analysis (Spectrogram)**\n\n"
                 "This tab visualizes how spectral power changes over time.\n\n"
@@ -11703,10 +11756,15 @@ in **short, overlapping windows**, revealing how the frequency content **evolves
 </small>
 """, unsafe_allow_html=True)
         
-        _log_tab("tfr", "end")
+        if render_section:
+            _log_tab("tfr", "end")
     with tab_window:
-        _log_tab("windowed", "start")
-        if not has_hrv_data:
+        render_section = _section_active("Windowed")
+        if render_section:
+            _log_tab("windowed", "start")
+        if not render_section:
+            st.empty()
+        elif not has_hrv_data:
             st.info(
                 "🪟 **Windowed Analysis**\n\n"
                 "This tab shows HRV metrics computed over sliding time windows.\n\n"
@@ -11890,196 +11948,207 @@ HRV deviated from baseline. Episodes include:
             pass
         else:
             st.info("No windowed metrics to display.")
-        _log_tab("windowed", "end")
+        if render_section:
+            _log_tab("windowed", "end")
     with tab_metrics:
-        _log_tab("metrics", "start")
-        st.markdown("### 📋 Comprehensive Metrics Table")
-        st.markdown("*All computed HRV metrics across time, frequency, nonlinear, and advanced domains*")
-        
-        if not has_hrv_data:
-            st.info(
-                "📋 **Metrics Dashboard**\n\n"
-                "This tab displays a comprehensive table of all computed HRV metrics.\n\n"
-                "**Metric Categories:**\n"
-                "- **Time Domain**: SDNN, RMSSD, pNN50, Mean HR\n"
-                "- **Frequency Domain**: VLF, LF, HF, LF/HF ratio\n"
-                "- **Nonlinear**: SD1, SD2, DFA α1, Sample Entropy\n"
-                "- **Advanced**: Deceleration capacity, symbolic dynamics, recurrence\n\n"
-                "👈 **Upload HRV data to compute metrics.**"
-            )
-            with st.expander("📊 Example: HRV Reference Values (Healthy Adult at Rest)"):
-                st.markdown("""
-                | Metric | Typical Range | Unit | Interpretation |
-                |--------|---------------|------|----------------|
-                | SDNN | 50-100 | ms | Overall variability |
-                | RMSSD | 25-60 | ms | Vagal tone |
-                | pNN50 | 5-25 | % | Parasympathetic marker |
-                | LF power | 300-1000 | ms² | Baroreflex activity |
-                | HF power | 200-800 | ms² | Respiratory sinus arrhythmia |
-                | DFA α1 | 0.75-1.25 | - | Fractal complexity |
-                
-                *Values from Shaffer & Ginsberg (2017), Task Force (1996)*
-                """)
-        elif not multi_results_df.empty and _should_render_tab("metrics", "Metrics"):
-            st.dataframe(multi_results_df)
-            novel_columns = [
-                "hrf_pip_pct",
-                "hrf_pip_h_pct",
-                "hrf_pip_s_pct",
-                "hrf_ials",
-                "hrf_pss_pct",
-                "hrf_pas_pct",
-                "hrf_w0_pct",
-                "hrf_w1_pct",
-                "hrf_w2_pct",
-                "hrf_w3_pct",
-                "hrf_quality_ok",
-                "deceleration_capacity",
-                "acceleration_capacity",
-                "permutation_entropy",
-                "permutation_entropy_norm",
-                "symbolic_0v_pct",
-                "symbolic_2uv_pct",
-                "mfdfa_width",
-                "rqa_rr",
-                "rqa_det",
-                "entropy_lf",
-                "entropy_hf",
-                "entropy_lf_hf_ratio",
-                "rmssd_master_ratio",
-            ]
-            available_novel = [
-                col for col in novel_columns if col in multi_results_df.columns
-            ]
-            if available_novel:
-                st.markdown("Novel metrics (advanced signal analytics):")
-                st.dataframe(multi_results_df[["source"] + available_novel])
-            if enable_cov and "rmssd_z_cov" in multi_results_df.columns:
-                st.markdown(
-                    "Covariate-adjusted (patient profile) expectations and z-scores:"
-                )
-                cols_to_show = ["source"]
-                for c in [
-                    "rmssd",
-                    "rmssd_expected",
-                    "rmssd_z_cov",
-                    "sdnn",
-                    "sdnn_expected",
-                    "sdnn_z_cov",
-                ]:
-                    if c in multi_results_df.columns:
-                        cols_to_show.append(c)
-                st.dataframe(multi_results_df[cols_to_show])
-        elif not multi_results_df.empty:
-            pass
+        render_section = _section_active("Metrics")
+        if render_section:
+            _log_tab("metrics", "start")
+        if not render_section:
+            st.empty()
         else:
-            st.info("No metrics to display.")
-        _log_tab("metrics", "end")
-    with tab_hrf_hrv:
-        _log_tab("hrf_hrv", "start")
-        st.markdown("### 🧩 HRF ↔ HRV (Fragmentation + Correlations)")
-        st.markdown(
-            "*Offline analysis of **Heart Rate Fragmentation (HRF)** metrics and their relationships to HRV metrics.*"
-        )
-        st.caption(
-            "This tab is intentionally **decoupled** from NOAA/SWPC/DONKI fetch pipelines. "
-            "It uses only your uploaded HRV recordings and computed metrics."
-        )
-
-        if not has_hrv_data:
-            if has_hrv_data_uploaded:
+            st.markdown("### 📋 Comprehensive Metrics Table")
+            st.markdown("*All computed HRV metrics across time, frequency, nonlinear, and advanced domains*")
+            if not has_hrv_data:
                 st.info(
-                    "HRV data is uploaded. Click **Run HRV Analysis** (top of page) to compute metrics, then return here."
+                    "📋 **Metrics Dashboard**\n\n"
+                    "This tab displays a comprehensive table of all computed HRV metrics.\n\n"
+                    "**Metric Categories:**\n"
+                    "- **Time Domain**: SDNN, RMSSD, pNN50, Mean HR\n"
+                    "- **Frequency Domain**: VLF, LF, HF, LF/HF ratio\n"
+                    "- **Nonlinear**: SD1, SD2, DFA α1, Sample Entropy\n"
+                    "- **Advanced**: Deceleration capacity, symbolic dynamics, recurrence\n\n"
+                    "👈 **Upload HRV data to compute metrics.**"
                 )
-            else:
-                st.info("Upload HRV RR data to compute HRF/HRV metrics and correlations.")
-        elif _should_render_tab("hrf_hrv", "🧩 HRF ↔ HRV"):
-            # Prefer in-memory analysis outputs; fall back to session-cached frames.
-            base_results = (
-                multi_results_df
-                if isinstance(multi_results_df, pd.DataFrame) and not multi_results_df.empty
-                else st.session_state.get("_hrv_cached_multi_results_df", pd.DataFrame())
-            )
-            if not isinstance(base_results, pd.DataFrame) or base_results.empty:
-                st.info("Run HRV analysis to generate per-recording metrics for HRF/HRV correlations.")
-            elif "source" not in base_results.columns:
-                st.warning(
-                    "Metrics table is missing the `source` column; cannot build per-recording HRF summaries."
-                )
-            else:
-                use_clean_for_hrf = st.checkbox(
-                    "Use cleaned RR series (if available) for HRF computations",
-                    value=bool(apply_clean),
-                    key="hrf_tab_use_clean_rr",
-                    help="If enabled, HRF metrics are computed from the cleaned RR series when present.",
-                )
-
-                # If cached results were computed before HRF metrics were added (or if fast mode skipped them),
-                # compute HRF metrics quickly (O(n)) from the RR series and merge them into the per-recording frame.
-                need_hrf_cols = (
+                with st.expander("📊 Example: HRV Reference Values (Healthy Adult at Rest)"):
+                    st.markdown("""
+                    | Metric | Typical Range | Unit | Interpretation |
+                    |--------|---------------|------|----------------|
+                    | SDNN | 50-100 | ms | Overall variability |
+                    | RMSSD | 25-60 | ms | Vagal tone |
+                    | pNN50 | 5-25 | % | Parasympathetic marker |
+                    | LF power | 300-1000 | ms² | Baroreflex activity |
+                    | HF power | 200-800 | ms² | Respiratory sinus arrhythmia |
+                    | DFA α1 | 0.75-1.25 | - | Fractal complexity |
+                    
+                    *Values from Shaffer & Ginsberg (2017), Task Force (1996)*
+                    """)
+            elif not multi_results_df.empty and _should_render_tab("metrics", "Metrics"):
+                st.dataframe(multi_results_df)
+                novel_columns = [
                     "hrf_pip_pct",
-                    "hrf_ials",
-                    "hrf_pss_pct",
                     "hrf_pip_h_pct",
                     "hrf_pip_s_pct",
+                    "hrf_ials",
+                    "hrf_pss_pct",
                     "hrf_pas_pct",
                     "hrf_w0_pct",
                     "hrf_w1_pct",
                     "hrf_w2_pct",
                     "hrf_w3_pct",
                     "hrf_quality_ok",
-                    "hrf_pip",
-                    "hrf_w3",
+                    "deceleration_capacity",
+                    "acceleration_capacity",
+                    "permutation_entropy",
+                    "permutation_entropy_norm",
+                    "symbolic_0v_pct",
+                    "symbolic_2uv_pct",
+                    "mfdfa_width",
+                    "rqa_rr",
+                    "rqa_det",
+                    "entropy_lf",
+                    "entropy_hf",
+                    "entropy_lf_hf_ratio",
+                    "rmssd_master_ratio",
+                ]
+                available_novel = [
+                    col for col in novel_columns if col in multi_results_df.columns
+                ]
+                if available_novel:
+                    st.markdown("Novel metrics (advanced signal analytics):")
+                    st.dataframe(multi_results_df[["source"] + available_novel])
+                if enable_cov and "rmssd_z_cov" in multi_results_df.columns:
+                    st.markdown(
+                        "Covariate-adjusted (patient profile) expectations and z-scores:"
+                    )
+                    cols_to_show = ["source"]
+                    for c in [
+                        "rmssd",
+                        "rmssd_expected",
+                        "rmssd_z_cov",
+                        "sdnn",
+                        "sdnn_expected",
+                        "sdnn_z_cov",
+                    ]:
+                        if c in multi_results_df.columns:
+                            cols_to_show.append(c)
+                    st.dataframe(multi_results_df[cols_to_show])
+            elif not multi_results_df.empty:
+                pass
+            else:
+                st.info("No metrics to display.")
+        if render_section:
+            _log_tab("metrics", "end")
+    with tab_hrf_hrv:
+        render_section = _section_active("🧩 HRF ↔ HRV")
+        if render_section:
+            _log_tab("hrf_hrv", "start")
+        if not render_section:
+            st.empty()
+        else:
+            st.markdown("### 🧩 HRF ↔ HRV (Fragmentation + Correlations)")
+            st.markdown(
+                "*Offline analysis of **Heart Rate Fragmentation (HRF)** metrics and their relationships to HRV metrics.*"
+            )
+            st.caption(
+                "This tab is intentionally **decoupled** from NOAA/SWPC/DONKI fetch pipelines. "
+                "It uses only your uploaded HRV recordings and computed metrics."
+            )
+
+            if not has_hrv_data:
+                if has_hrv_data_uploaded:
+                    st.info(
+                        "HRV data is uploaded. Click **Run HRV Analysis** (top of page) to compute metrics, then return here."
+                    )
+                else:
+                    st.info("Upload HRV RR data to compute HRF/HRV metrics and correlations.")
+            elif _should_render_tab("hrf_hrv", "🧩 HRF ↔ HRV"):
+                # Prefer in-memory analysis outputs; fall back to session-cached frames.
+                base_results = (
+                    multi_results_df
+                    if isinstance(multi_results_df, pd.DataFrame) and not multi_results_df.empty
+                    else st.session_state.get("_hrv_cached_multi_results_df", pd.DataFrame())
                 )
-                missing_any_hrf = any(col not in base_results.columns for col in need_hrf_cols)
-                merged_results = base_results.copy()
+                if not isinstance(base_results, pd.DataFrame) or base_results.empty:
+                    st.info("Run HRV analysis to generate per-recording metrics for HRF/HRV correlations.")
+                elif "source" not in base_results.columns:
+                    st.warning(
+                        "Metrics table is missing the `source` column; cannot build per-recording HRF summaries."
+                    )
+                else:
+                    use_clean_for_hrf = st.checkbox(
+                        "Use cleaned RR series (if available) for HRF computations",
+                        value=bool(apply_clean),
+                        key="hrf_tab_use_clean_rr",
+                        help="If enabled, HRF metrics are computed from the cleaned RR series when present.",
+                    )
 
-                if missing_any_hrf:
-                    cache_key = "hrf_hrv_tab_hrf_cache"
-                    cache_payload = st.session_state.get(cache_key, {})
-                    sig = {
-                        "upload_signature": list(upload_signature),
-                        "use_clean": bool(use_clean_for_hrf),
-                    }
-                    cached_df = cache_payload.get("df")
-                    if cache_payload.get("sig") == sig and isinstance(cached_df, pd.DataFrame):
-                        hrf_df = cached_df
-                    else:
-                        from hrv_core import compute_heart_rate_fragmentation  # noqa: PLC0415
+                    # If cached results were computed before HRF metrics were added (or if fast mode skipped them),
+                    # compute HRF metrics quickly (O(n)) from the RR series and merge them into the per-recording frame.
+                    need_hrf_cols = (
+                        "hrf_pip_pct",
+                        "hrf_ials",
+                        "hrf_pss_pct",
+                        "hrf_pip_h_pct",
+                        "hrf_pip_s_pct",
+                        "hrf_pas_pct",
+                        "hrf_w0_pct",
+                        "hrf_w1_pct",
+                        "hrf_w2_pct",
+                        "hrf_w3_pct",
+                        "hrf_quality_ok",
+                        "hrf_pip",
+                        "hrf_w3",
+                    )
+                    missing_any_hrf = any(col not in base_results.columns for col in need_hrf_cols)
+                    merged_results = base_results.copy()
 
-                        try:
-                            from hrv_fragmentation import compute_hrf_metrics  # noqa: PLC0415
-                        except Exception:
-                            compute_hrf_metrics = None  # type: ignore[assignment]
+                    if missing_any_hrf:
+                        cache_key = "hrf_hrv_tab_hrf_cache"
+                        cache_payload = st.session_state.get(cache_key, {})
+                        sig = {
+                            "upload_signature": list(upload_signature),
+                            "use_clean": bool(use_clean_for_hrf),
+                        }
+                        cached_df = cache_payload.get("df")
+                        if cache_payload.get("sig") == sig and isinstance(cached_df, pd.DataFrame):
+                            hrf_df = cached_df
+                        else:
+                            from hrv_core import compute_heart_rate_fragmentation  # noqa: PLC0415
 
-                        rr_sources = datasets if datasets else uploads
-                        rows: List[Dict[str, Any]] = []
-                        for src_name, up in rr_sources.items():
-                            rr_arr = getattr(up, "rr_ms", None)
-                            if use_clean_for_hrf:
-                                rr_clean = getattr(up, "rr_ms_clean", None)
-                                if isinstance(rr_clean, np.ndarray) and rr_clean.size >= 10:
-                                    rr_arr = rr_clean
-                            if not isinstance(rr_arr, np.ndarray) or rr_arr.size < 10:
-                                continue
-                            row: Dict[str, Any] = {"source": str(src_name)}
-                            row.update(compute_heart_rate_fragmentation(rr_arr))
-                            if compute_hrf_metrics is not None:
-                                hrf = compute_hrf_metrics(rr_arr)
-                                row["hrf_pip_h_pct"] = float(hrf.pip_h)
-                                row["hrf_pip_s_pct"] = float(hrf.pip_s)
-                                row["hrf_pas_pct"] = float(hrf.pas)
-                                row["hrf_w0_pct"] = float(hrf.w0)
-                                row["hrf_w1_pct"] = float(hrf.w1)
-                                row["hrf_w2_pct"] = float(hrf.w2)
-                                row["hrf_w3_pct"] = float(hrf.w3)
-                                row["hrf_w3"] = float(hrf.w3)
-                                row["hrf_quality_ok"] = bool(hrf.quality_ok)
-                            if "hrf_pip_pct" in row:
-                                row["hrf_pip"] = float(row["hrf_pip_pct"])
-                            rows.append(row)
-                        hrf_df = pd.DataFrame(rows)
-                        st.session_state[cache_key] = {"sig": sig, "df": hrf_df}
+                            try:
+                                from hrv_fragmentation import compute_hrf_metrics  # noqa: PLC0415
+                            except Exception:
+                                compute_hrf_metrics = None  # type: ignore[assignment]
+
+                            rr_sources = datasets if datasets else uploads
+                            rows: List[Dict[str, Any]] = []
+                            for src_name, up in rr_sources.items():
+                                rr_arr = getattr(up, "rr_ms", None)
+                                if use_clean_for_hrf:
+                                    rr_clean = getattr(up, "rr_ms_clean", None)
+                                    if isinstance(rr_clean, np.ndarray) and rr_clean.size >= 10:
+                                        rr_arr = rr_clean
+                                if not isinstance(rr_arr, np.ndarray) or rr_arr.size < 10:
+                                    continue
+                                row: Dict[str, Any] = {"source": str(src_name)}
+                                row.update(compute_heart_rate_fragmentation(rr_arr))
+                                if compute_hrf_metrics is not None:
+                                    hrf = compute_hrf_metrics(rr_arr)
+                                    row["hrf_pip_h_pct"] = float(hrf.pip_h)
+                                    row["hrf_pip_s_pct"] = float(hrf.pip_s)
+                                    row["hrf_pas_pct"] = float(hrf.pas)
+                                    row["hrf_w0_pct"] = float(hrf.w0)
+                                    row["hrf_w1_pct"] = float(hrf.w1)
+                                    row["hrf_w2_pct"] = float(hrf.w2)
+                                    row["hrf_w3_pct"] = float(hrf.w3)
+                                    row["hrf_w3"] = float(hrf.w3)
+                                    row["hrf_quality_ok"] = bool(hrf.quality_ok)
+                                if "hrf_pip_pct" in row:
+                                    row["hrf_pip"] = float(row["hrf_pip_pct"])
+                                rows.append(row)
+                            hrf_df = pd.DataFrame(rows)
+                            st.session_state[cache_key] = {"sig": sig, "df": hrf_df}
 
                     if isinstance(hrf_df, pd.DataFrame) and not hrf_df.empty:
                         merged_results = merged_results.merge(
@@ -12639,14 +12708,20 @@ HRV deviated from baseline. Episodes include:
                                     st.info(
                                         "Not enough overlapping samples to compute HRF↔HRV pairwise tests (need ≥3 recordings per pair)."
                                     )
-        _log_tab("hrf_hrv", "end")
+        if render_section:
+            _log_tab("hrf_hrv", "end")
     with tab_ans:
-        _log_tab("ans", "start")
-        st.markdown("### 🫀 Autonomic Function Tests")
-        st.markdown("*Clinical-grade autonomic reflex assessments*")
-        
-        with st.expander("📖 **Understanding Autonomic Tests**", expanded=False):
-            st.markdown("""
+        render_section = _section_active("ANS Function Tests")
+        if render_section:
+            _log_tab("ans", "start")
+        if not render_section:
+            st.empty()
+        else:
+            st.markdown("### 🫀 Autonomic Function Tests")
+            st.markdown("*Clinical-grade autonomic reflex assessments*")
+            
+            with st.expander("📖 **Understanding Autonomic Tests**", expanded=False):
+                st.markdown("""
 **These bedside tests evaluate autonomic nervous system integrity:**
 
 **1. Valsalva Maneuver Ratio**
@@ -12674,13 +12749,13 @@ HRV deviated from baseline. Episodes include:
 - Medication effects on autonomic function
             """)
         
-        st.markdown(
-            "*Configure time windows relative to recording start. "
-            "Windows specified in seconds as `start end` (e.g., `15 25`).*")
-        if not datasets:
-            st.info("Upload a dataset to compute autonomic function metrics.")
-        elif _should_render_tab("ans", "ANS Function Tests"):
-            names = list(datasets.keys())
+            st.markdown(
+                "*Configure time windows relative to recording start. "
+                "Windows specified in seconds as `start end` (e.g., `15 25`).*")
+            if not datasets:
+                st.info("Upload a dataset to compute autonomic function metrics.")
+            elif _should_render_tab("ans", "ANS Function Tests"):
+                names = list(datasets.keys())
             selected_dataset_name = st.selectbox("Dataset", names, index=0)
             selected_dataset = datasets[selected_dataset_name]
             use_clean_for_ans = st.checkbox(
@@ -12843,7 +12918,8 @@ HRV deviated from baseline. Episodes include:
                             "30th-beat max RR (ms)",
                             f"{ratio_30_15_result['rr_30_max_ms']:.1f}",
                         )
-        _log_tab("ans", "end")
+        if render_section:
+            _log_tab("ans", "end")
     with tab_readiness:
         _log_tab("readiness", "start")
         st.markdown("### 🏃 Readiness & Recovery Assessment")
