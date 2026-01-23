@@ -12735,7 +12735,7 @@ HRV deviated from baseline. Episodes include:
                 "Windows specified in seconds as `start end` (e.g., `15 25`).*")
             if not datasets:
                 st.info("Upload a dataset to compute autonomic function metrics.")
-            elif _should_render_tab("ans", "ANS Function Tests"):
+            else:
                 names = list(datasets.keys())
                 selected_dataset_name = st.selectbox("Dataset", names, index=0)
                 selected_dataset = datasets[selected_dataset_name]
