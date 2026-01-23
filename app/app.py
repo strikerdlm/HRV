@@ -12086,6 +12086,8 @@ HRV deviated from baseline. Episodes include:
                     )
                     missing_any_hrf = any(col not in base_results.columns for col in need_hrf_cols)
                     merged_results = base_results.copy()
+                    # Initialize hrf_df to None to avoid NameError when missing_any_hrf is False
+                    hrf_df: pd.DataFrame | None = None
 
                     if missing_any_hrf:
                         cache_key = "hrf_hrv_tab_hrf_cache"
