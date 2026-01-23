@@ -5632,11 +5632,16 @@ def _render_stable_navigation_sidebar(tab_labels: Sequence[str]) -> str:
         index=tab_labels.index(current_label),
         key="stable_nav_section",
     )
+    # Hide tab bar visually but keep it in DOM for JS click
     st.markdown(
         """
         <style>
         div[data-baseweb="tab-list"] {
-            display: none !important;
+            opacity: 0 !important;
+            height: 0 !important;
+            overflow: hidden !important;
+            margin: 0 !important;
+            padding: 0 !important;
         }
         </style>
         """,
@@ -9707,27 +9712,39 @@ def main() -> None:
     ) = st.tabs(tab_labels)
 
     if stable_nav_enabled and active_section_label in tab_labels:
-        prev_label = st.session_state.get("_nav_applied_label")
-        if prev_label != active_section_label:
-            st.session_state["_nav_applied_label"] = active_section_label
-            active_index = tab_labels.index(active_section_label)
-            st.markdown(
-                f"""
-                <script>
-                (function() {{
+        active_index = tab_labels.index(active_section_label)
+        # Always inject JS to ensure correct tab is active after rerun
+        st.markdown(
+            f"""
+            <script>
+            (function() {{
+                function clickTab() {{
                     const buttons = document.querySelectorAll('[data-baseweb="tab"]');
                     const index = {active_index};
                     if (buttons.length > index) {{
                         const btn = buttons[index];
                         if (btn && btn.getAttribute('aria-selected') !== 'true') {{
-                            btn.click();
+                            btn.dispatchEvent(new MouseEvent('click', {{
+                                bubbles: true,
+                                cancelable: true,
+                                view: window
+                            }}));
                         }}
                     }}
-                }})();
-                </script>
-                """,
-                unsafe_allow_html=True,
-            )
+                }}
+                // Wait for DOM to be fully rendered
+                if (document.readyState === 'complete') {{
+                    setTimeout(clickTab, 100);
+                }} else {{
+                    window.addEventListener('load', function() {{
+                        setTimeout(clickTab, 100);
+                    }});
+                }}
+            }})();
+            </script>
+            """,
+            unsafe_allow_html=True,
+        )
     
     _sw_loading_msg: Optional[st.delta_generator.DeltaGenerator] = None
     # ---------------------------------------------------------------------------
