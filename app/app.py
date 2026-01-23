@@ -12050,6 +12050,9 @@ HRV deviated from baseline. Episodes include:
                     if isinstance(multi_results_df, pd.DataFrame) and not multi_results_df.empty
                     else st.session_state.get("_hrv_cached_multi_results_df", pd.DataFrame())
                 )
+                # Initialize merged_results to empty DataFrame to avoid UnboundLocalError
+                # when the else block is not executed.
+                merged_results = pd.DataFrame()
                 if not isinstance(base_results, pd.DataFrame) or base_results.empty:
                     st.info("Run HRV analysis to generate per-recording metrics for HRF/HRV correlations.")
                 elif "source" not in base_results.columns:
@@ -12159,7 +12162,11 @@ HRV deviated from baseline. Episodes include:
                         st.session_state["_hrv_cached_multi_results_df"] = merged_results
 
                 st.markdown("#### HRF summary (selected recording)")
-                sources = merged_results["source"].astype(str).tolist()
+                # Guard against empty merged_results or missing "source" column
+                if merged_results.empty or "source" not in merged_results.columns:
+                    sources = []
+                else:
+                    sources = merged_results["source"].astype(str).tolist()
                 if not sources:
                     st.info("No per-recording summaries available.")
                 else:
