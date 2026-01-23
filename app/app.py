@@ -4746,7 +4746,7 @@ def _enforce_manual_processing_on_profile_change(profile_token: str) -> bool:
         return False
     st.session_state["_active_profile_token"] = profile_token
     st.session_state["manual_processing_only"] = True
-    st.session_state["manual_tab_rendering"] = True
+    # Don't force manual_tab_rendering - let tabs render normally
     st.session_state["allow_space_auto_fetch"] = False
     st.session_state.pop("auto_run_hrv_analysis", None)
     st.session_state["hrv_analysis_ready"] = False
@@ -4759,7 +4759,8 @@ def _render_processing_mode_sidebar() -> None:
     """Render Processing Mode controls in the sidebar."""
     st.session_state.setdefault("manual_processing_only", True)
     st.session_state.setdefault("allow_space_auto_fetch", False)
-    st.session_state.setdefault("manual_tab_rendering", True)
+    # Default False: tabs auto-render so navigation works immediately
+    st.session_state.setdefault("manual_tab_rendering", False)
     with st.sidebar.expander("🧭 Processing Mode", expanded=False):
         st.checkbox(
             "Manual-only processing (disable auto-run)",
@@ -4772,7 +4773,7 @@ def _render_processing_mode_sidebar() -> None:
         )
         st.checkbox(
             "Manual tab rendering (load tabs on demand)",
-            value=bool(st.session_state.get("manual_tab_rendering", True)),
+            value=bool(st.session_state.get("manual_tab_rendering", False)),
             key="manual_tab_rendering",
             help=(
                 "When enabled, each tab requires an explicit Load click before "
@@ -5583,7 +5584,7 @@ def _should_render_tab(
     if stable_nav and active_label:
         return label == active_label
 
-    manual_rendering = bool(st.session_state.get("manual_tab_rendering", True))
+    manual_rendering = bool(st.session_state.get("manual_tab_rendering", False))
     if not manual_rendering:
         return True
 
@@ -5615,13 +5616,25 @@ def _should_render_tab(
 
 
 def _render_stable_navigation_sidebar(tab_labels: Sequence[str]) -> str:
-    """Render stable navigation controls and return active label (or empty)."""
+    """Render stable navigation controls and return active label (or empty).
+    
+    Stable navigation is OFF by default to allow normal tab clicking. When
+    enabled via Developer Tools, the sidebar radio gates heavy content rendering.
+    """
     if not isinstance(tab_labels, (list, tuple)):
         raise TypeError("tab_labels must be a list or tuple.")
     if not tab_labels:
         return ""
+    # Default to False - normal tab behavior
     if "stable_navigation_mode" not in st.session_state:
-        st.session_state["stable_navigation_mode"] = True
+        st.session_state["stable_navigation_mode"] = False
+    stable_nav = bool(st.session_state.get("stable_navigation_mode", False))
+    
+    if not stable_nav:
+        # Normal mode - no sidebar navigation, tabs work directly
+        return ""
+    
+    # Stable nav mode - sidebar radio controls which tab content renders
     current_label = st.session_state.get("stable_nav_section")
     if current_label not in tab_labels:
         current_label = tab_labels[0]
@@ -5631,21 +5644,6 @@ def _render_stable_navigation_sidebar(tab_labels: Sequence[str]) -> str:
         options=list(tab_labels),
         index=tab_labels.index(current_label),
         key="stable_nav_section",
-    )
-    # Hide tab bar visually but keep it in DOM for JS click
-    st.markdown(
-        """
-        <style>
-        div[data-baseweb="tab-list"] {
-            opacity: 0 !important;
-            height: 0 !important;
-            overflow: hidden !important;
-            margin: 0 !important;
-            padding: 0 !important;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
     )
     return str(active_label)
 
@@ -9711,41 +9709,7 @@ def main() -> None:
         tab_about,
     ) = st.tabs(tab_labels)
 
-    if stable_nav_enabled and active_section_label in tab_labels:
-        active_index = tab_labels.index(active_section_label)
-        # Always inject JS to ensure correct tab is active after rerun
-        st.markdown(
-            f"""
-            <script>
-            (function() {{
-                function clickTab() {{
-                    const buttons = document.querySelectorAll('[data-baseweb="tab"]');
-                    const index = {active_index};
-                    if (buttons.length > index) {{
-                        const btn = buttons[index];
-                        if (btn && btn.getAttribute('aria-selected') !== 'true') {{
-                            btn.dispatchEvent(new MouseEvent('click', {{
-                                bubbles: true,
-                                cancelable: true,
-                                view: window
-                            }}));
-                        }}
-                    }}
-                }}
-                // Wait for DOM to be fully rendered
-                if (document.readyState === 'complete') {{
-                    setTimeout(clickTab, 100);
-                }} else {{
-                    window.addEventListener('load', function() {{
-                        setTimeout(clickTab, 100);
-                    }});
-                }}
-            }})();
-            </script>
-            """,
-            unsafe_allow_html=True,
-        )
-    
+    # Sidebar selection gates heavy content; tabs visible for direct click navigation
     _sw_loading_msg: Optional[st.delta_generator.DeltaGenerator] = None
     # ---------------------------------------------------------------------------
     # RENDER TIMING TRACKER - Always log tab boundaries to identify hangs
