@@ -12050,9 +12050,11 @@ HRV deviated from baseline. Episodes include:
                     if isinstance(multi_results_df, pd.DataFrame) and not multi_results_df.empty
                     else st.session_state.get("_hrv_cached_multi_results_df", pd.DataFrame())
                 )
-                # Initialize merged_results to empty DataFrame to avoid UnboundLocalError
-                # when the else block is not executed.
+                # Initialize merged_results and hrf_df to avoid UnboundLocalError
+                # when the else block is not executed. Python's scoping requires
+                # variables to be defined before any branch that assigns them.
                 merged_results = pd.DataFrame()
+                hrf_df: pd.DataFrame | None = None
                 if not isinstance(base_results, pd.DataFrame) or base_results.empty:
                     st.info("Run HRV analysis to generate per-recording metrics for HRF/HRV correlations.")
                 elif "source" not in base_results.columns:
@@ -12086,8 +12088,6 @@ HRV deviated from baseline. Episodes include:
                     )
                     missing_any_hrf = any(col not in base_results.columns for col in need_hrf_cols)
                     merged_results = base_results.copy()
-                    # Initialize hrf_df to None to avoid NameError when missing_any_hrf is False
-                    hrf_df: pd.DataFrame | None = None
 
                     if missing_any_hrf:
                         cache_key = "hrf_hrv_tab_hrf_cache"
