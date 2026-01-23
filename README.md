@@ -9,15 +9,17 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.9.1-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.9.9-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2025--12--30-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2026--01--23-blue)](CHANGELOG.md)
 
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.9.9**: **Guest Results Visibility** — Sidebar-driven navigation now activates the selected view only when it changes and bypasses manual tab gating so guest HRV and Space Analytics outputs render immediately.
 
 **NEW in v1.9.8**: **Sidebar-Only Navigation + Guest Analysis** — The sidebar selector now drives the active view (tabs hidden), stable navigation is always on in Research, and HRV + Space Weather analyses run in guest mode without selecting a profile.
 
