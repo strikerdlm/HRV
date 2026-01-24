@@ -2,15 +2,15 @@
 
 ### Author
 
-**Dr. Diego Leonel Malpica Hincapié, MD**  
+**Dr Diego Malpica MD**  
 *Aerospace Medicine Specialist*  
 National University of Colombia  
 Physiology Instructor, Colombian Aerospace Force  
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.9.9  
-**Last Updated:** 2026-01-23
+**Version:** 1.9.10  
+**Last Updated:** 2026-01-24
 
 ---
 
@@ -43,6 +43,7 @@ This manual provides step-by-step instructions for all features of Mission Contr
 21. [Troubleshooting](#troubleshooting)
 22. [Scientific References](#scientific-references)
 23. [Advanced ECG R-Peak Detection](#advanced-ecg-r-peak-detection)
+24. [Space Weather Data Science (Single User)](#space-weather-data-science-single-user)
 24. [Multi-Modal Sensor Fusion](#multi-modal-sensor-fusion)
 25. [Long-Term HRV Trending Analysis](#long-term-hrv-trending-analysis)
 26. [Exercise HRV Analysis](#exercise-hrv-analysis)
@@ -229,12 +230,18 @@ conda run -n hrv-py312 streamlit run app/operational_app.py
 # or (research app: core statistics/analytics dashboards)
 # conda run -n hrv-py312 streamlit run app/research_app.py
 # conda run -n hrv-py312 streamlit run app/app.py
+# or (single-user data science app, latest Streamlit)
+# conda run -n hrv-py312 pip install -r requirements_streamlit_latest.txt
+# conda run -n hrv-py312 streamlit run app/space_weather_ds_app.py
 
 # Virtualenv (after activating .venv)
 # streamlit run app/operational_app.py
 # or (full dashboards)
 # streamlit run app/research_app.py
 # streamlit run app/app.py
+# or (single-user data science app, latest Streamlit)
+# pip install -r requirements_streamlit_latest.txt
+# streamlit run app/space_weather_ds_app.py
 ```
 
 The app opens at `http://localhost:8501` in your default browser.
@@ -242,6 +249,32 @@ The app opens at `http://localhost:8501` in your default browser.
 **Operational vs Research (rules of thumb)**:
 - **Operational app**: **Crew-facing intake + mission operations** — collect and review crucial crew information (profiles/clinical logs) with lightweight context. Keep it **stable, fast, and non-analytic**.
 - **Research app**: **Core statistics/analytics** — HRV/HRF computation, Space Data/Space Analytics (correlations + ML), exports, and GPT‑5.2 interpretation.
+- **Space Weather Data Science (Single User)**: streamlined workflow focused on single-subject HRV/HRF, NOAA/Space Weather analytics, and ML patterns. Uses the latest Streamlit with a separate requirements file and no user profiles.
+
+---
+
+## Space Weather Data Science (Single User)
+
+This standalone app (`app/space_weather_ds_app.py`) is a performance-focused, single-user workflow that preserves the space-weather and data-science capabilities of the research app without user profiles.
+
+**Install (latest Streamlit)**:
+
+```bash
+# Conda
+conda run -n hrv-py312 pip install -r requirements_streamlit_latest.txt
+conda run -n hrv-py312 streamlit run app/space_weather_ds_app.py
+
+# Virtualenv
+pip install -r requirements_streamlit_latest.txt
+streamlit run app/space_weather_ds_app.py
+```
+
+**Performance profiles**:
+- **Lightweight (default)**: minimal compute, fast UI, reduced analytics scope.
+- **Balanced**: full HRV/HRF metrics and correlations.
+- **RTX 5070 GPU**: enables GPU acceleration where available (requires CUDA 13.x and `cupy-cuda13x`).
+
+**Secrets**: Use a `.env` file for `GARMIN_EMAIL`, `GARMIN_PASSWORD`, and `NASA_API_KEY`. Never commit secrets.
 
 ---
 

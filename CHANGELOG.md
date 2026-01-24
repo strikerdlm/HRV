@@ -8,6 +8,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.9.10] - 2026-01-24
+
+### Added
+- New single-user Space Weather Data Science app (`app/space_weather_ds_app.py`) with streamlined HRV/HRF, NOAA/Space Weather analytics, and ML pattern workflows.
+- Separate requirements file (`requirements_streamlit_latest.txt`) pinned to Streamlit 1.53.1 for the new app.
+
+### Changed
+- README and Manual updated with new app launch instructions and performance profiles.
+
 ## [1.9.9] - 2026-01-23
 
 ### Fixed
