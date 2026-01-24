@@ -121,36 +121,15 @@ def _auto_axis_bounds(
     max_ceil: Optional[float] = None,
     nice_round: bool = True,
 ) -> tuple[float, float]:
-    values: list[float] = []
-    for arr in data_arrays:
-        if arr is None:
-            continue
-        for val in arr:
-            if val is None:
-                continue
-            if isinstance(val, float) and np.isnan(val):
-                continue
-            values.append(float(val))
-    if not values:
-        return (0.0, 1.0)
-    data_min = min(values)
-    data_max = max(values)
-    data_range = data_max - data_min
-    if data_range <= 0:
-        data_range = abs(data_min) * 0.2 if data_min != 0 else 1.0
-    padding = data_range * padding_pct
-    calc_min = data_min - padding
-    calc_max = data_max + padding
-    if min_floor is not None:
-        calc_min = max(calc_min, min_floor)
-    if max_ceil is not None:
-        calc_max = min(calc_max, max_ceil)
-    if not nice_round:
-        return (float(calc_min), float(calc_max))
-    magnitude = 10 ** np.floor(np.log10(abs(calc_max - calc_min)))
-    rounded_min = np.floor(calc_min / magnitude) * magnitude
-    rounded_max = np.ceil(calc_max / magnitude) * magnitude
-    return (float(rounded_min), float(rounded_max))
+    from user_profile_tab import _auto_axis_bounds as shared_bounds
+
+    return shared_bounds(
+        *data_arrays,
+        padding_pct=padding_pct,
+        min_floor=min_floor,
+        max_ceil=max_ceil,
+        nice_round=nice_round,
+    )
 
 
 def _compute_ewma(values: Sequence[Optional[float]], span: int = 7) -> list[Optional[float]]:
@@ -304,6 +283,11 @@ def _collect_rr_sessions(files: Sequence[Any]) -> tuple[list[RRSession], list[st
             )
         )
     return sessions, warnings
+
+
+def _reset_index_to_timestamp(df: pd.DataFrame) -> pd.DataFrame:
+    index_name = df.index.name or "index"
+    return df.reset_index().rename(columns={index_name: "timestamp"})
 
 
 def _apply_gpu_metrics(rr_ms: np.ndarray, metrics: dict[str, float]) -> dict[str, float]:
@@ -525,6 +509,7 @@ def _render_ingest_section() -> None:
                 else:
                     if uploaded is None:
                         st.warning("Upload a Garmin file first.")
+                        return
                     else:
                         with tempfile.TemporaryDirectory() as tmpdir:
                             path = os.path.join(tmpdir, uploaded.name)
@@ -753,8 +738,7 @@ def _render_space_analytics_section(profile: ProfileSettings) -> None:
     direction = st.selectbox("Direction", ["ge", "le"])
     baseline_days = st.slider("Baseline window (days)", min_value=1, max_value=14, value=3)
     if st.button("Compute event deltas"):
-        series = solar_daily[[event_metric]].copy()
-        series = series.reset_index().rename(columns={"index": "timestamp"})
+        series = _reset_index_to_timestamp(solar_daily[[event_metric]].copy())
         cfg = ThresholdEventConfig(
             threshold=float(threshold),
             direction=direction,  # type: ignore[arg-type]
@@ -766,8 +750,7 @@ def _render_space_analytics_section(profile: ProfileSettings) -> None:
             st.info("No events detected for the selected threshold.")
         else:
             first_event = events.iloc[0]
-            physio_df = physio_daily.copy()
-            physio_df = physio_df.reset_index().rename(columns={"index": "timestamp"})
+            physio_df = _reset_index_to_timestamp(physio_daily.copy())
             deltas = compute_baseline_vs_event_deltas(
                 physio_df,
                 time_col="timestamp",

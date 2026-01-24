@@ -17,6 +17,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Changed
 - README and Manual updated with new app launch instructions and performance profiles.
 
+### Fixed
+- Space Weather DS app: avoid double messaging when Garmin file uploads are missing.
+- Space Weather DS app: event-aligned deltas now handle named indices when resetting timestamps.
+
 ## [1.9.9] - 2026-01-23
 
 ### Fixed
