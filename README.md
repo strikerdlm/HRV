@@ -2,22 +2,24 @@
 
 ## Author
 
-**Dr. Diego Leonel Malpica Hincapié, MD**
+**Dr Diego Malpica MD**
 *Aerospace Medicine Specialist*
 National University of Colombia
 Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.9.9-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.9.10-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2026--01--23-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2026--01--24-blue)](CHANGELOG.md)
 
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.9.10**: **Space Weather Data Science (Single User)** — New streamlined research app (`app/space_weather_ds_app.py`) using the latest Streamlit (1.53.1) with a separate requirements file (`requirements_streamlit_latest.txt`) and performance profiles (Lightweight default, RTX 5070 GPU mode).
 
 **NEW in v1.9.9**: **Guest Results Visibility** — Sidebar-driven navigation now activates the selected view only when it changes and bypasses manual tab gating so guest HRV and Space Analytics outputs render immediately.
 
@@ -92,6 +94,9 @@ conda run -n hrv-py312 pip install -r requirements.txt
 conda run -n hrv-py312 streamlit run app/operational_app.py  # fast UI (profile + simple space-weather context)
 # or (full dashboards: correlations/ML + NOAA/Space Weather analysis)
 conda run -n hrv-py312 streamlit run app/research_app.py
+# or (single-user data science app with latest Streamlit)
+conda run -n hrv-py312 pip install -r requirements_streamlit_latest.txt
+conda run -n hrv-py312 streamlit run app/space_weather_ds_app.py
 
 # (Optional interactive shell)
 # conda activate hrv-py312
@@ -118,6 +123,9 @@ pip install -r requirements.txt
 streamlit run app/operational_app.py
 # or (full dashboards)
 streamlit run app/research_app.py
+# or (single-user data science app with latest Streamlit)
+pip install -r requirements_streamlit_latest.txt
+streamlit run app/space_weather_ds_app.py
 ```
 
 The app will open in your default browser at `http://localhost:8501`.
@@ -126,6 +134,7 @@ The app will open in your default browser at `http://localhost:8501`.
 
 - **Operational app** (`app/operational_app.py`): use for **clinical workflows** (User Profile, mission logs) and **lightweight space-weather context** (cached NOAA Kp/proton alerting inside the profile). Keep this app **fast, stable, and low-latency**.
 - **Research app** (`app/research_app.py`): use for **HRV/HRF computation**, **NOAA/Space Weather dashboards**, **correlations**, and **ML**. This app can be heavier and is where experimental/advanced analytics should live.
+- **Space Weather Data Science (Single User)** (`app/space_weather_ds_app.py`): streamlined workflow focused on single-subject analytics, NOAA/Space Weather correlations, and ML patterns. Uses the latest Streamlit via `requirements_streamlit_latest.txt`.
 
 ### Your First Analysis (5 Minutes)
 
@@ -826,6 +835,7 @@ HRV/
 │   ├── app.py                      # Main Streamlit application
 │   ├── research_app.py             # Research UI entrypoint (full dashboards)
 │   ├── operational_app.py          # Operational UI entrypoint (fast workflow)
+│   ├── space_weather_ds_app.py     # Single-user space weather data science app
 │   ├── hrv_core.py                 # Core HRV computation functions
 │   ├── hrv_progress.py             # Modern HRV progress tracking (v1.8.68)
 │   ├── hrv_interpretation.py       # Enhanced HRV interpretation module (v1.8.68)

@@ -1,0 +1,71 @@
+# Author: Dr Diego Malpica MD
+# Mission Control - Flight Surgeon (Latest Streamlit for space_weather_ds_app.py)
+# Last updated: 2026-01-24
+# Streamlit pinned to 1.53.1 (latest on PyPI at time of update)
+
+# ===========================================================================
+# CORE DEPENDENCIES (Required)
+# ===========================================================================
+streamlit==1.53.1
+
+# Pin Tornado to prevent WebSocket ping/timeout issues (stable with latest Streamlit)
+tornado==6.4.2
+requests>=2.31,<3
+pandas>=2.2,<2.3
+numpy>=1.26,<2.2
+scipy>=1.11,<2.0
+python-dotenv>=1.0,<2.0
+beautifulsoup4>=4.12,<5
+openai>=1.55,<2
+
+# ===========================================================================
+# SCIENTIFIC COMPUTING
+# ===========================================================================
+scikit-learn>=1.3,<1.6
+statsmodels>=0.14,<0.15
+
+# ===========================================================================
+# ADVANCED ML (Optional)
+# ===========================================================================
+xgboost>=2.0,<3.0
+lightgbm>=4.0,<5.0
+shap>=0.43,<1.0
+
+# ===========================================================================
+# PERFORMANCE OPTIMIZATION (Recommended)
+# ===========================================================================
+numba>=0.59,<1
+psutil>=5.9,<6
+
+# ===========================================================================
+# DATA VISUALIZATION
+# ===========================================================================
+plotly>=5.0,<6
+kaleido>=0.2,<1
+
+# ===========================================================================
+# DEVICE INTEGRATIONS (Optional)
+# ===========================================================================
+pygt3x>=0.4
+pyedflib>=0.1.30
+python-fitparse>=2.0.4,<3.0
+garminconnect>=0.2.36
+pyelftools>=0.27,<1
+pyserial==3.5.*
+bleak>=0.21,<1.0
+
+# ===========================================================================
+# GPU ACCELERATION (Optional)
+# ===========================================================================
+# For RTX 50xx (Blackwell, CUDA 13.x): pip install cupy-cuda13x
+# For RTX 40xx/30xx (Ada/Ampere, CUDA 12.x): pip install cupy-cuda12x
+# For RTX 20xx/10xx (Turing/Pascal, CUDA 11.x): pip install cupy-cuda11x
+
+# ===========================================================================
+# DEVELOPMENT & TESTING (Recommended)
+# ===========================================================================
+pytest>=7.4,<10
+hypothesis>=6.90,<7
+mypy>=1.8,<2
+ruff>=0.3,<1
+bandit>=1.7,<2
