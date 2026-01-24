@@ -1,8 +1,9 @@
 # WARP.md
+Author: Dr Diego Malpica MD
 
 This file provides guidance to WARP (warp.dev), Cursor, and other AI agents when working with code in this repository.
 
-**Version**: 1.9.0 | **Last Updated**: 2025-12-29 | **Environment**: conda (`hrv-py312`)
+**Version**: 1.9.1 | **Last Updated**: 2026-01-24 | **Environment**: conda (`hrv-py312`)
 
 ---
 
@@ -20,6 +21,8 @@ streamlit run app/operational_app.py
 
 # Research (core statistics/analytics: HRV/HRF + Space Data/Analytics + exports/AI)
 streamlit run app/research_app.py
+# Space Weather Data Science (single-user, latest Streamlit)
+streamlit run app/space_weather_ds_app.py
 # Legacy research entrypoint:
 # streamlit run app/app.py
 
@@ -878,6 +881,7 @@ HRV/
 │   ├── app.py                    # Research app Streamlit UI
 │   ├── operational_app.py        # Operational app (crew intake + scheduling)
 │   ├── research_app.py           # Research app entrypoint
+│   ├── space_weather_ds_app.py   # Single-user space weather data science app
 │   ├── hrv_core.py               # Core HRV computations
 │   ├── noaa_space.py             # NOAA data ingestion
 │   ├── gpu_processing.py         # GPU-accelerated computations
