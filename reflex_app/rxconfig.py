@@ -25,11 +25,11 @@ def _resolve_api_url() -> str | None:
     the `api_url` must be publicly reachable.
     """
 
-    raw = os.environ.get("API_URL")
-    if raw is None:
-        return None
-    value = raw.strip()
-    return value or None
+    raw = os.environ.get("API_URL", "").strip()
+    if raw:
+        return raw
+    # Default for local Docker runs; override via API_URL in prod.
+    return "http://localhost:8000"
 
 
 def _resolve_cors_allowed_origins() -> list[str]:
@@ -43,12 +43,7 @@ def _resolve_cors_allowed_origins() -> list[str]:
         parts = [item.strip() for item in raw.split(",")]
         return [item for item in parts if item]
 
-    return [
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-        "http://localhost:3001",
-        "http://127.0.0.1:3001",
-    ]
+    return ["*"]
 
 
 config = rx.Config(
