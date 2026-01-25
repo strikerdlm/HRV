@@ -23,6 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reflex Operational users list now avoids Var boolean checks.
 - Reflex Research metrics summary now avoids Var boolean checks.
 - Reflex Docker defaults to `REFLEX_SSR=false` to avoid prerender crashes.
+- Reflex Docker allows local CORS for uploads and fetches.
 
 
 ## [1.9.10] - 2026-01-24
