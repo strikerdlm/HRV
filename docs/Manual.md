@@ -98,6 +98,24 @@ Manual fetch buttons remain available for on-demand refresh. Force refresh bypas
 | Browser | Chrome 90+ | Chrome/Edge latest |
 | GPU (optional) | — | NVIDIA RTX 3080/4090/5070 |
 
+### Reflex v2 (New UI — higher performance on slow compute)
+
+Mission Control - Flight Surgeon is being migrated from Streamlit to **Reflex** for a more app-like UI and better performance characteristics (fewer global reruns, explicit background tasks). The legacy Streamlit apps remain fully supported.
+
+**Key points**
+- **Legacy preserved**: Streamlit stays in `app/` unchanged.
+- **New app location**: Reflex v2 lives in `reflex_app/`.
+- **No authentication**: Reflex v2 runs without auth by design.
+- **ECharts-first visuals**: Reflex v2 uses `reflex-echarts` (ECharts via React) to preserve publication-grade plots.
+
+**Run Reflex v2 (PowerShell)**
+```powershell
+conda run -n hrv-py312 pip install -r requirements_reflex.txt
+cd reflex_app
+$env:PYTHONPATH=".."   # allow importing legacy `app/` computation modules
+conda run -n hrv-py312 reflex run
+```
+
 ### GPU Acceleration (Optional)
 
 For heavy HRV computations, GPU acceleration is supported via NVIDIA CUDA:
@@ -4633,6 +4651,9 @@ docker-compose up -d
 
 # View logs
 docker-compose logs -f app
+
+# Run Reflex v2 (optional; frontend :3000, backend :8000)
+docker-compose --profile reflex up -d reflex_v2
 ```
 
 The application will be available at `http://localhost:8501`.
