@@ -52,6 +52,22 @@ class ResearchState(rx.State):
 
     export_files: list[dict[str, str]] = []
 
+    @rx.event
+    def set_qc_method(self, value: str) -> None:
+        """Set the QC method selection."""
+        allowed = ("threshold_median", "threshold_prev")
+        self.qc_method = str(value) if value in allowed else "threshold_median"
+
+    @rx.event
+    def set_noaa_plot_key(self, value: str) -> None:
+        """Set the NOAA dataset key selection."""
+        self.noaa_plot_key = str(value) if value else "planetary_k_index_3h"
+
+    @rx.event
+    def set_noaa_plot_column(self, value: str) -> None:
+        """Set the NOAA value column selection."""
+        self.noaa_plot_column = str(value) if value else "Kp"
+
     def _rr_dir(self) -> Path:
         base = rx.get_upload_dir() / "hrv_reflex" / "research_rr"
         base.mkdir(parents=True, exist_ok=True)
@@ -235,7 +251,7 @@ def research_page() -> rx.Component:
             rx.select(
                 ["threshold_median", "threshold_prev"],
                 value=ResearchState.qc_method,
-                on_change=ResearchState.set_qc_method,  # type: ignore[attr-defined]
+                on_change=ResearchState.set_qc_method,
             ),
             spacing="2",
             align="center",
@@ -258,13 +274,13 @@ def research_page() -> rx.Component:
             rx.select(
                 noaa_keys,
                 value=ResearchState.noaa_plot_key,
-                on_change=ResearchState.set_noaa_plot_key,  # type: ignore[attr-defined]
+                on_change=ResearchState.set_noaa_plot_key,
             ),
             rx.text("Value column:", color=c["text_secondary"]),
             rx.select(
                 ResearchState.noaa_plot_columns,
                 value=ResearchState.noaa_plot_column,
-                on_change=ResearchState.set_noaa_plot_column,  # type: ignore[attr-defined]
+                on_change=ResearchState.set_noaa_plot_column,
             ),
             rx.button("Fetch", on_click=ResearchState.fetch_noaa, loading=ResearchState.noaa_running),
             spacing="2",
