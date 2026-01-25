@@ -1,21 +1,23 @@
-# HRV Analysis Platform - Reflex v2 Docker Image
+# HRV Analysis Platform - Reflex v2 Backend Docker Image
 # Author: Dr Diego Malpica MD
 #
-# This container runs the new Reflex UI in production mode.
+# This container runs the Reflex BACKEND ONLY in production mode.
+# The frontend is served by nginx (see web.Dockerfile and nginx.conf).
 # Legacy Streamlit deployment remains in `Dockerfile` / `docker-compose.yml` `app` service.
+#
+# Architecture:
+# - nginx (port 80/3001) -> serves static frontend + proxies WebSocket to backend
+# - backend (port 8000) -> handles events via /_event/ WebSocket endpoint
 
 FROM python:3.12-slim
 
 WORKDIR /app
 
 # System dependencies:
-# - nodejs/npm: required by Reflex frontend
 # - curl: healthcheck
+# Note: nodejs/npm not needed for backend-only mode
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    nodejs \
-    npm \
     curl \
-    unzip \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -36,16 +38,16 @@ ENV PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
     REFLEX_UPLOADED_FILES_DIR=/app/uploaded_files
 
-# Ports (Reflex prod defaults)
-EXPOSE 3000
+# Backend port only
 EXPOSE 8000
 
-# Health check: frontend should respond on :3000
-HEALTHCHECK --interval=30s --timeout=10s --start-period=90s --retries=5 \
-    CMD curl -f http://localhost:3000/ || exit 1
+# Health check: backend /ping endpoint
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD curl -f http://localhost:8000/ping || exit 1
 
 WORKDIR /app/reflex_app
 
-# Production mode (frontend :3000, backend :8000)
-CMD ["reflex", "run", "--env", "prod", "--backend-host", "0.0.0.0", "--backend-port", "8000", "--frontend-port", "3000"]
+# Production mode - BACKEND ONLY
+# Frontend is served by nginx with proper WebSocket proxying
+CMD ["reflex", "run", "--env", "prod", "--backend-only", "--backend-host", "0.0.0.0", "--backend-port", "8000"]
 
