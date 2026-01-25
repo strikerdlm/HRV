@@ -109,6 +109,42 @@ services:
       - hrv_network
 
   # ---------------------------------------------------------------------------
+  # HRV Analysis Application (Reflex v2)
+  # ---------------------------------------------------------------------------
+  # Notes:
+  # - This runs the new Reflex UI in prod mode (frontend :3000, backend :8000).
+  # - Legacy Streamlit deployment remains the `app` service above.
+  reflex_v2:
+    build:
+      context: .
+      dockerfile: Dockerfile.reflex
+    container_name: hrv_reflex_v2
+    restart: unless-stopped
+    profiles:
+      - reflex
+    environment:
+      # Browser must reach the backend websocket URL (override in real deployments)
+      API_URL: ${API_URL:-http://localhost:8000}
+      PYTHONPATH: /app
+      REFLEX_UPLOADED_FILES_DIR: /app/uploaded_files
+      # API keys (set in .env file, DO NOT commit)
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - ./crew:/app/crew
+      - reflex_uploads:/app/uploaded_files
+    ports:
+      - "${REFLEX_FRONTEND_PORT:-3001}:3000"
+      - "${REFLEX_BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    networks:
+      - hrv_network
+
+  # ---------------------------------------------------------------------------
   # Database Admin (pgAdmin) - Optional, for development/debugging
   # ---------------------------------------------------------------------------
   pgadmin:
@@ -142,6 +178,8 @@ volumes:
     name: hrv_app_data
   pgadmin_data:
     name: hrv_pgadmin_data
+  reflex_uploads:
+    name: hrv_reflex_uploads
 
 # ---------------------------------------------------------------------------
 # Networks
