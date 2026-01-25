@@ -1,0 +1,41 @@
+# Author: Dr Diego Malpica MD
+#
+# Mission Control - Flight Surgeon (Reflex v2) dependencies.
+#
+# Notes:
+# - This file is intentionally separate from `requirements.txt` (Streamlit legacy)
+#   so you can install/run Reflex without touching the Streamlit runtime.
+# - The Reflex app reuses core computation modules from `app/` (HRV/NOAA/etc).
+# - Avoid committing secrets; use `.env`.
+
+# Reflex web framework (Python -> FastAPI + Next.js)
+# NOTE: Reflex <0.8 can conflict with modern Pydantic/SQLModel stacks; require 0.8+.
+reflex>=0.8
+
+# ECharts wrapper for Reflex (wraps echarts-for-react)
+reflex-echarts
+
+# Core scientific stack (shared with legacy modules)
+requests>=2.31,<3
+pandas>=2.2,<2.3
+numpy>=1.26,<2.2
+scipy>=1.11,<2.0
+beautifulsoup4>=4.12,<5
+python-dotenv>=1.0,<2.0
+
+# Optional but used by some shared modules
+scikit-learn>=1.3,<1.6
+statsmodels>=0.14,<0.15
+numba>=0.59,<1
+psutil>=5.9,<8
+
+# AI features (kept for parity; still optional at runtime)
+openai>=1.55,<2
+
+# Dev/test parity
+pytest>=7.4,<10
+hypothesis>=6.90,<7
+ruff>=0.3,<1
+mypy>=1.8,<2
+bandit>=1.7,<2
+
