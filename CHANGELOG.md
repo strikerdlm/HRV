@@ -7,6 +7,31 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.13] - 2026-01-25
+
+### Changed
+- **Modern UI overhaul**: Space Weather DS page completely redesigned with beautiful card-based layout.
+  - Professional visual hierarchy using Radix theme system with sky accent colors
+  - Card components for grouping related content (Upload, Configuration, Results, etc.)
+  - Prominent status panel with spinner, progress bar, and percentage display during analysis
+  - Metric badges with colored backgrounds for better visual feedback
+  - Improved section headers with icons for better navigation
+  - Responsive grid layouts that adapt to screen size
+
+### Added
+- **Toast notifications**: Real-time feedback for user actions:
+  - Success toast when files are uploaded
+  - Success/warning toasts when HRV analysis completes
+  - Success/warning toasts when NOAA data is fetched
+  - Success toast when export completes
+  - Warning toast when export attempted without data
+- Enhanced theme system with modern color palette (sky, slate, emerald, amber)
+- Better progress indicator showing percentage complete during analysis
+
+### Fixed
+- Changed `check_circle` icon to `check` (valid Lucide icon name)
+- Improved file count badge that shows actual number of loaded files
+
 ## [1.9.12] - 2026-01-25
 
 ### Changed
