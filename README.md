@@ -103,6 +103,32 @@ conda run -n hrv-py312 streamlit run app/space_weather_ds_app.py
 # streamlit run app/operational_app.py
 ```
 
+#### Reflex v2 (New — higher performance UI)
+
+The new Reflex app is built in `reflex_app/` and keeps the legacy Streamlit apps in `app/` unchanged.
+
+**Prerequisites**:
+- Node.js LTS (required by Reflex to build the frontend)
+- Python 3.12 (recommended) and the `hrv-py312` conda env
+
+**Run (PowerShell)**:
+
+```powershell
+conda run -n hrv-py312 pip install -r requirements_reflex.txt
+cd reflex_app
+
+# Allow the Reflex app to import the legacy computation modules from ../app
+$env:PYTHONPATH=".."
+
+# Dev mode
+conda run -n hrv-py312 reflex run
+
+# Production build (frontend on :3000, backend on :8000)
+# conda run -n hrv-py312 reflex run --env prod
+```
+
+**Production note**: set `API_URL` to the externally reachable backend URL (ending in `:8000`) for websocket connectivity.
+
 #### Option 2: Using Virtual Environment
 
 ```bash
@@ -903,6 +929,9 @@ docker-compose down
 
 # Include pgAdmin for database management
 docker-compose --profile admin up -d
+
+# Run Reflex v2 (frontend :3000, backend :8000)
+docker-compose --profile reflex up -d reflex_v2
 ```
 
 **Environment Variables** (create `.env` file):
