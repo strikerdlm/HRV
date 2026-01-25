@@ -570,7 +570,7 @@ def space_weather_ds_page() -> rx.Component:
                     rx.select(
                         ["Lightweight", "Balanced", "RTX 5070 GPU"],
                         value=SpaceWeatherDSState.performance_profile,
-                        on_change=SpaceWeatherDSState.set_performance_profile,  # type: ignore[attr-defined]
+                        on_change=SpaceWeatherDSState.set_performance_profile,
                     ),
                     spacing="2",
                     align="center",
@@ -580,7 +580,7 @@ def space_weather_ds_page() -> rx.Component:
                     rx.select(
                         ["threshold_median", "threshold_prev"],
                         value=SpaceWeatherDSState.qc_method,
-                        on_change=SpaceWeatherDSState.set_qc_method,  # type: ignore[attr-defined]
+                        on_change=SpaceWeatherDSState.set_qc_method,
                     ),
                     spacing="2",
                     align="center",
@@ -592,7 +592,7 @@ def space_weather_ds_page() -> rx.Component:
                         max=0.5,
                         step=0.05,
                         value=[SpaceWeatherDSState.qc_max_deviation],
-                        on_change=SpaceWeatherDSState.set_qc_max_deviation,  # type: ignore[attr-defined]
+                        on_change=SpaceWeatherDSState.set_qc_max_deviation,
                     ),
                     spacing="2",
                     align="center",
@@ -606,7 +606,7 @@ def space_weather_ds_page() -> rx.Component:
                         min=5,
                         max=31,
                         step=2,
-                        on_change=SpaceWeatherDSState.set_qc_median_window,  # type: ignore[attr-defined]
+                        on_change=SpaceWeatherDSState.set_qc_median_window,
                     ),
                     spacing="2",
                     align="center",
