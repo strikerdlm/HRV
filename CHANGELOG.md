@@ -22,6 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Reflex Space Weather DS metric rows now avoid Var boolean checks in `rx.foreach`.
 - Reflex Operational users list now avoids Var boolean checks.
 - Reflex Research metrics summary now avoids Var boolean checks.
+- Reflex Docker defaults to `REFLEX_SSR=false` to avoid prerender crashes.
 
 
 ## [1.9.10] - 2026-01-24
