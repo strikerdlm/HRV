@@ -45,6 +45,22 @@ class OperationalState(rx.State):
         self.status = f"Active mission set to {value}."
         self.error = ""
 
+    @rx.event
+    def set_new_username(self, value: str) -> None:
+        """Set the new username form field."""
+        self.new_username = str(value) if value else ""
+
+    @rx.event
+    def set_new_full_name(self, value: str) -> None:
+        """Set the new full name form field."""
+        self.new_full_name = str(value) if value else ""
+
+    @rx.event
+    def set_new_sex(self, value: str) -> None:
+        """Set the new sex form field."""
+        allowed = ("male", "female", "other")
+        self.new_sex = str(value) if value in allowed else "other"
+
     async def _load_users_blocking(self) -> list[dict[str, Any]]:
         try:
             from app.user_database import UserDatabase  # type: ignore
@@ -218,19 +234,19 @@ def operational_page() -> rx.Component:
                 rx.input(
                     placeholder="Username (required)",
                     value=OperationalState.new_username,
-                    on_change=OperationalState.set_new_username,  # type: ignore[attr-defined]
+                    on_change=OperationalState.set_new_username,
                     width="280px",
                 ),
                 rx.input(
                     placeholder="Full name (optional)",
                     value=OperationalState.new_full_name,
-                    on_change=OperationalState.set_new_full_name,  # type: ignore[attr-defined]
+                    on_change=OperationalState.set_new_full_name,
                     width="340px",
                 ),
                 rx.select(
                     ["male", "female", "other"],
                     value=OperationalState.new_sex,
-                    on_change=OperationalState.set_new_sex,  # type: ignore[attr-defined]
+                    on_change=OperationalState.set_new_sex,
                 ),
                 rx.button("Create user", on_click=OperationalState.create_user),
                 spacing="3",
