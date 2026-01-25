@@ -7,6 +7,16 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.12] - 2026-01-25
+
+### Security
+- **CORS hardening**: Reflex default CORS origins changed from `["*"]` to restrictive localhost list (`http://localhost:3000`, `http://localhost:3001`, `http://127.0.0.1:3000`, `http://127.0.0.1:3001`). Production deployments must explicitly set `CORS_ALLOWED_ORIGINS` env var.
+
+### Fixed
+- **Buttons not working**: Defined explicit `@rx.event` setters for all state variables in `OperationalState`, `ResearchState`, and removed reliance on deprecated `state_auto_setters` feature.
+- Reflex config now explicitly sets `state_auto_setters=True` to suppress deprecation warnings until migration to explicit setters is complete.
+- Removed stale `# type: ignore[attr-defined]` comments from event handler bindings.
+
 ## [1.9.11] - 2026-01-25
 
 ### Added
