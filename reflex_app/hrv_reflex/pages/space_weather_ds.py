@@ -180,7 +180,7 @@ class SpaceWeatherDSState(rx.State):
         self.job_progress_pct = 0
 
     @rx.event
-    async def handle_rr_upload(self, files: list[Any]) -> None:
+    async def handle_rr_upload(self, files: list[Any]):
         """Save uploaded RR text files to the server upload dir.
 
         Note: do not store RR arrays in state (keeps UI fast on slow machines).
@@ -190,6 +190,7 @@ class SpaceWeatherDSState(rx.State):
 
         if not isinstance(files, list) or not files:
             self.job_error = "No files received. Select RR files, then click Upload."
+            yield rx.toast.error("No files selected. Please select files first.")
             return
 
         storage = self._rr_storage_dir()
@@ -224,6 +225,7 @@ class SpaceWeatherDSState(rx.State):
                 existing.add(name)
         self.rr_files = merged
         self.job_message = f"Uploaded {len(saved)} file(s)."
+        yield rx.toast.success(f"Successfully uploaded {len(saved)} file(s)!")
 
     @rx.event
     def set_hrv_trend_metric(self, value: str) -> None:
@@ -328,6 +330,10 @@ class SpaceWeatherDSState(rx.State):
                 self.job_message = f"Processed {idx + 1}/{total}"
                 self.job_progress_pct = pct
 
+        # Count successful vs error rows
+        success_count = sum(1 for r in rows if "error" not in r)
+        error_count = len(rows) - success_count
+
         async with self:
             self.session_metrics = rows
             # Build default trend chart (rmssd) for quick feedback.
@@ -336,7 +342,19 @@ class SpaceWeatherDSState(rx.State):
             except Exception:
                 self.hrv_trend_option = {}
             self.job_running = False
-            self.job_message = "Done."
+            self.job_message = f"Completed! {success_count} sessions processed successfully."
+
+        # Yield toast notification
+        if error_count > 0:
+            yield rx.toast.warning(
+                f"Analysis complete: {success_count} successful, {error_count} errors",
+                duration=5000,
+            )
+        else:
+            yield rx.toast.success(
+                f"Analysis complete! {success_count} sessions processed successfully.",
+                duration=5000,
+            )
 
     @rx.event
     def set_noaa_plot_key(self, value: str) -> None:
@@ -404,12 +422,22 @@ class SpaceWeatherDSState(rx.State):
             self.noaa_option = option
             self.noaa_running = False
 
+        # Toast notification
+        if error_rows:
+            yield rx.toast.warning(
+                f"NOAA fetch complete with {len(error_rows)} warning(s)",
+                duration=4000,
+            )
+        else:
+            yield rx.toast.success("NOAA data fetched successfully!", duration=3000)
+
     @rx.event
-    async def export_session_metrics(self) -> None:
+    async def export_session_metrics(self):
         """Write CSV/JSON exports to the Reflex upload dir and expose links."""
 
         if not self.session_metrics:
             self.export_files = []
+            yield rx.toast.warning("No data to export. Run analysis first.")
             return
 
         export_dir = self._export_dir()
@@ -440,76 +468,105 @@ class SpaceWeatherDSState(rx.State):
             {"name": csv_name, "url": rx.get_upload_url(f"hrv_reflex/exports/{csv_name}")},
             {"name": json_name, "url": rx.get_upload_url(f"hrv_reflex/exports/{json_name}")},
         ]
+        yield rx.toast.success("Export complete! Click the file badges to download.")
+
+
+def _metric_badge(label: str, value: Any, unit: str, color_scheme: str = "blue") -> rx.Component:
+    """Create a visually appealing metric badge."""
+    if isinstance(value, (int, float)):
+        display_val = f"{value:.1f}" if isinstance(value, float) else str(value)
+    else:
+        display_val = "—"
+
+    return rx.box(
+        rx.vstack(
+            rx.text(label, size="1", weight="medium", color=colors()["text_secondary"]),
+            rx.hstack(
+                rx.text(display_val, size="4", weight="bold", color=colors()["text_primary"]),
+                rx.text(unit, size="2", color=colors()["text_secondary"]),
+                spacing="1",
+                align="baseline",
+            ),
+            spacing="1",
+            align="center",
+        ),
+        background=f"var(--{color_scheme}-2)",
+        padding="12px 16px",
+        border_radius="8px",
+        min_width="90px",
+    )
+
+
+def _reactive_metric_badge(label: str, value: Any, unit: str, color_scheme: str = "blue") -> rx.Component:
+    """Create a visually appealing metric badge for reactive Var values."""
+    c = colors()
+    return rx.box(
+        rx.vstack(
+            rx.text(label, size="1", weight="medium", color=c["text_secondary"]),
+            rx.hstack(
+                rx.cond(
+                    value.is_not_none(),
+                    rx.text(value, size="4", weight="bold", color=c["text_primary"]),
+                    rx.text("—", size="4", weight="bold", color=c["text_secondary"]),
+                ),
+                rx.text(unit, size="2", color=c["text_secondary"]),
+                spacing="1",
+                align="baseline",
+            ),
+            spacing="1",
+            align="center",
+        ),
+        background=f"var(--{color_scheme}-2)",
+        padding="12px 16px",
+        border_radius="8px",
+        min_width="90px",
+    )
 
 
 def _metrics_preview(rows: Any) -> rx.Component:
     c = colors()
-    empty_view = rx.text("No results yet. Upload files and click Run analysis.", color=c["text_secondary"])
-
-    def _metric_text(label: str, value: Any, unit: str) -> rx.Component:
-        if isinstance(value, (int, float)):
-            return rx.text(f"{label}: {value} {unit}".strip())
-        if value is None:
-            return rx.text(f"{label}: —")
-        return rx.cond(
-            value.is_not_none(),
-            rx.text(f"{label}: ", value, f" {unit}".strip()),
-            rx.text(f"{label}: —"),
-        )
+    empty_view = rx.callout(
+        "No results yet. Upload RR files and click 'Run HRV Analysis' to compute metrics.",
+        icon="info",
+        color_scheme="blue",
+        size="2",
+    )
 
     def _row_view(row: Any) -> rx.Component:
-        if isinstance(row, dict):
-            name = str(row.get("session_name", "session"))
-            err = row.get("error")
-            if err:
-                return rx.callout(f"{name}: {err}", icon="triangle_alert", color_scheme="red")
-            rmssd = row.get("rmssd")
-            sdnn = row.get("sdnn")
-            mean_hr = row.get("mean_hr")
-            artifact = row.get("artifact_pct")
-            return rx.box(
-                rx.vstack(
-                    rx.heading(name, size="3", color=c["text_primary"]),
-                    rx.hstack(
-                        _metric_text("RMSSD", rmssd, "ms"),
-                        _metric_text("SDNN", sdnn, "ms"),
-                        _metric_text("Mean HR", mean_hr, "bpm"),
-                        _metric_text("Artifacts", artifact, "%"),
-                        wrap="wrap",
-                        spacing="4",
-                        color=c["text_secondary"],
-                    ),
-                    spacing="2",
-                    align="start",
-                ),
-                border=f"1px solid {c['border']}",
-                border_radius="10px",
-                padding="12px",
-                width="100%",
-            )
-
         name = row.get("session_name", "session")
         err = row.get("error", "")
-        error_view = rx.callout(rx.text(name, ": ", err), icon="triangle_alert", color_scheme="red")
-        metrics_view = rx.box(
+
+        error_view = rx.callout(
+            rx.text(name, ": ", err),
+            icon="triangle_alert",
+            color_scheme="red",
+            size="2",
+        )
+
+        metrics_view = rx.card(
             rx.vstack(
-                rx.heading(name, size="3", color=c["text_primary"]),
                 rx.hstack(
-                    _metric_text("RMSSD", row.get("rmssd"), "ms"),
-                    _metric_text("SDNN", row.get("sdnn"), "ms"),
-                    _metric_text("Mean HR", row.get("mean_hr"), "bpm"),
-                    _metric_text("Artifacts", row.get("artifact_pct"), "%"),
-                    wrap="wrap",
-                    spacing="4",
-                    color=c["text_secondary"],
+                    rx.icon("activity", size=18, color=c["accent"]),
+                    rx.heading(name, size="3", weight="bold", color=c["text_primary"]),
+                    spacing="2",
+                    align="center",
                 ),
-                spacing="2",
+                rx.separator(size="4"),
+                rx.hstack(
+                    _reactive_metric_badge("RMSSD", row.get("rmssd"), "ms", "sky"),
+                    _reactive_metric_badge("SDNN", row.get("sdnn"), "ms", "blue"),
+                    _reactive_metric_badge("Mean HR", row.get("mean_hr"), "bpm", "green"),
+                    _reactive_metric_badge("Artifacts", row.get("artifact_pct"), "%", "amber"),
+                    wrap="wrap",
+                    spacing="3",
+                    justify="start",
+                ),
+                spacing="3",
                 align="start",
+                width="100%",
             ),
-            border=f"1px solid {c['border']}",
-            border_radius="10px",
-            padding="12px",
-            width="100%",
+            size="2",
+            variant="surface",
         )
         return rx.cond(err, error_view, metrics_view)
 
@@ -517,6 +574,104 @@ def _metrics_preview(rows: Any) -> rx.Component:
     if isinstance(rows, list):
         return rows_view if rows else empty_view
     return rx.cond(rows.length() > 0, rows_view, empty_view)
+
+
+def _section_header(icon_name: str, title: str, subtitle: str = "") -> rx.Component:
+    """Create a consistent section header with icon."""
+    c = colors()
+    return rx.vstack(
+        rx.hstack(
+            rx.icon(icon_name, size=24, color=c["accent"]),
+            rx.heading(title, size="5", weight="bold", color=c["text_primary"]),
+            spacing="2",
+            align="center",
+        ),
+        rx.cond(
+            subtitle != "",
+            rx.text(subtitle, size="2", color=c["text_secondary"]),
+            rx.fragment(),
+        ),
+        spacing="1",
+        align="start",
+        width="100%",
+    )
+
+
+def _status_panel() -> rx.Component:
+    """Create a prominent status panel showing current job state."""
+    c = colors()
+
+    # Running state - show spinner and progress
+    running_view = rx.card(
+        rx.vstack(
+            rx.hstack(
+                rx.spinner(size="3"),
+                rx.vstack(
+                    rx.text("Processing...", size="3", weight="bold", color=c["text_primary"]),
+                    rx.text(SpaceWeatherDSState.job_message, size="2", color=c["text_secondary"]),
+                    spacing="1",
+                    align="start",
+                ),
+                spacing="3",
+                align="center",
+            ),
+            rx.progress(
+                value=SpaceWeatherDSState.job_progress_pct,
+                size="3",
+                color_scheme="sky",
+            ),
+            rx.text(
+                SpaceWeatherDSState.job_progress_pct.to_string() + "% complete",
+                size="1",
+                color=c["text_secondary"],
+            ),
+            spacing="3",
+            align="start",
+            width="100%",
+        ),
+        size="2",
+        variant="surface",
+        style={"background": "var(--sky-2)", "border": "2px solid var(--sky-6)"},
+    )
+
+    # Error state - show error callout
+    error_view = rx.callout(
+        SpaceWeatherDSState.job_error,
+        icon="triangle_alert",
+        color_scheme="red",
+        size="2",
+        high_contrast=True,
+    )
+
+    # Idle state with message
+    idle_with_message = rx.callout(
+        SpaceWeatherDSState.job_message,
+        icon="check",
+        color_scheme="green",
+        size="2",
+    )
+
+    # Default idle state
+    idle_default = rx.callout(
+        "Ready to process. Upload files and click 'Run HRV Analysis' to begin.",
+        icon="info",
+        color_scheme="blue",
+        size="2",
+    )
+
+    return rx.cond(
+        SpaceWeatherDSState.job_running,
+        running_view,
+        rx.cond(
+            SpaceWeatherDSState.job_error != "",
+            error_view,
+            rx.cond(
+                SpaceWeatherDSState.job_message != "",
+                idle_with_message,
+                idle_default,
+            ),
+        ),
+    )
 
 
 def space_weather_ds_page() -> rx.Component:
@@ -528,78 +683,137 @@ def space_weather_ds_page() -> rx.Component:
     except Exception:
         noaa_keys = ["planetary_k_index_3h", "geospace_dst", "f107_flux"]
 
-    body = rx.vstack(
-        rx.callout(
-            "Phase 1 MVP: RR ingest + QC + HRV/HRF compute (background task) with minimal, fast UI.",
-            icon="info",
-            color_scheme="blue",
+    # File count badge
+    file_count_badge = rx.cond(
+        SpaceWeatherDSState.rr_files.length() > 0,
+        rx.badge(
+            SpaceWeatherDSState.rr_files.length().to_string() + " files loaded",
+            color_scheme="green",
+            size="2",
+            variant="soft",
         ),
-        rx.hstack(
-            rx.vstack(
-                rx.heading("1) Upload RR files", size="4", color=c["text_primary"]),
-                rx.upload(
-                    rx.text("Click to upload or drag and drop RR text files (TXT/CSV)."),
-                    id=upload_id,
-                    accept={"text/plain": [".txt", ".csv"]},
-                    multiple=True,
-                    max_files=60,
-                ),
-                rx.hstack(
-                    rx.button(
-                        "Upload",
-                        on_click=SpaceWeatherDSState.handle_rr_upload(
-                            rx.upload_files(upload_id=upload_id),
-                        ),
+        rx.badge("No files loaded", color_scheme="gray", size="2", variant="soft"),
+    )
+
+    # Upload Card
+    upload_card = rx.card(
+        rx.vstack(
+            _section_header("upload", "Upload RR Files", "Upload your RR interval text files (.txt or .csv)"),
+            rx.separator(size="4"),
+            rx.upload(
+                rx.vstack(
+                    rx.icon("file_plus", size=48, color=c["accent"]),
+                    rx.text(
+                        "Click to upload or drag and drop",
+                        size="3",
+                        weight="medium",
+                        color=c["text_primary"],
                     ),
-                    rx.button(
-                        "Clear",
-                        variant="outline",
-                        on_click=SpaceWeatherDSState.clear_rr_files,
+                    rx.text(
+                        "Supports TXT/CSV files (max 60 files)",
+                        size="2",
+                        color=c["text_secondary"],
                     ),
                     spacing="2",
+                    align="center",
+                    padding="24px",
                 ),
-                rx.text(rx.selected_files(upload_id), color=c["text_secondary"]),
-                spacing="2",
-                align="start",
-                width="100%",
+                id=upload_id,
+                accept={"text/plain": [".txt", ".csv"]},
+                multiple=True,
+                max_files=60,
+                border=f"2px dashed {c['border']}",
+                border_radius="12px",
+                padding="0",
+                _hover={"border_color": c["accent"], "background": "var(--sky-1)"},
             ),
-            rx.vstack(
-                rx.heading("2) Configure & run", size="4", color=c["text_primary"]),
-                rx.hstack(
-                    rx.text("Profile:", color=c["text_secondary"]),
+            rx.hstack(
+                rx.button(
+                    rx.icon("upload", size=16),
+                    "Upload Files",
+                    size="3",
+                    color_scheme="sky",
+                    on_click=SpaceWeatherDSState.handle_rr_upload(
+                        rx.upload_files(upload_id=upload_id),
+                    ),
+                ),
+                rx.button(
+                    rx.icon("trash_2", size=16),
+                    "Clear All",
+                    size="3",
+                    variant="outline",
+                    color_scheme="red",
+                    on_click=SpaceWeatherDSState.clear_rr_files,
+                ),
+                file_count_badge,
+                spacing="3",
+                align="center",
+                wrap="wrap",
+            ),
+            rx.text(rx.selected_files(upload_id), size="2", color=c["text_secondary"]),
+            spacing="4",
+            align="start",
+            width="100%",
+        ),
+        size="3",
+        variant="surface",
+    )
+
+    # Configuration Card
+    config_card = rx.card(
+        rx.vstack(
+            _section_header("settings", "Configuration", "Adjust analysis parameters"),
+            rx.separator(size="4"),
+            rx.grid(
+                rx.vstack(
+                    rx.text("Performance Profile", size="2", weight="medium", color=c["text_primary"]),
                     rx.select(
                         ["Lightweight", "Balanced", "RTX 5070 GPU"],
                         value=SpaceWeatherDSState.performance_profile,
                         on_change=SpaceWeatherDSState.set_performance_profile,
+                        size="3",
                     ),
                     spacing="2",
-                    align="center",
+                    align="start",
+                    width="100%",
                 ),
-                rx.hstack(
-                    rx.text("QC method:", color=c["text_secondary"]),
+                rx.vstack(
+                    rx.text("QC Method", size="2", weight="medium", color=c["text_primary"]),
                     rx.select(
                         ["threshold_median", "threshold_prev"],
                         value=SpaceWeatherDSState.qc_method,
                         on_change=SpaceWeatherDSState.set_qc_method,
+                        size="3",
                     ),
                     spacing="2",
-                    align="center",
+                    align="start",
+                    width="100%",
                 ),
-                rx.hstack(
-                    rx.text("Max deviation:", color=c["text_secondary"]),
+                rx.vstack(
+                    rx.hstack(
+                        rx.text("Max Deviation", size="2", weight="medium", color=c["text_primary"]),
+                        rx.badge(
+                            SpaceWeatherDSState.qc_max_deviation.to_string(),
+                            color_scheme="sky",
+                            size="1",
+                        ),
+                        spacing="2",
+                        align="center",
+                    ),
                     rx.slider(
                         min=0.05,
                         max=0.5,
                         step=0.05,
                         value=[SpaceWeatherDSState.qc_max_deviation],
                         on_change=SpaceWeatherDSState.set_qc_max_deviation,
+                        size="2",
                     ),
                     spacing="2",
-                    align="center",
+                    align="start",
                     width="100%",
                 ),
-                rx.hstack(
-                    rx.text("Median window:", color=c["text_secondary"]),
+                rx.vstack(
+                    rx.text("Median Window", size="2", weight="medium", color=c["text_primary"]),
                     rx.input(
                         type_="number",
                         value=SpaceWeatherDSState.qc_median_window,
@@ -607,147 +821,318 @@ def space_weather_ds_page() -> rx.Component:
                         max=31,
                         step=2,
                         on_change=SpaceWeatherDSState.set_qc_median_window,
+                        size="3",
                     ),
                     spacing="2",
-                    align="center",
+                    align="start",
+                    width="100%",
                 ),
-                rx.button(
-                    "Run HRV analysis",
-                    on_click=SpaceWeatherDSState.run_hrv_analysis,
-                    disabled=SpaceWeatherDSState.job_running,
-                    loading=SpaceWeatherDSState.job_running,
-                ),
+                columns="2",
+                spacing="4",
+                width="100%",
+            ),
+            rx.separator(size="4"),
+            rx.button(
                 rx.cond(
                     SpaceWeatherDSState.job_running,
-                    rx.progress(value=SpaceWeatherDSState.job_progress_pct),
-                    rx.text("", color=c["text_secondary"]),
-                ),
-                rx.cond(
-                    SpaceWeatherDSState.job_error != "",
-                    rx.callout(SpaceWeatherDSState.job_error, icon="triangle_alert", color_scheme="red"),
-                    rx.text(SpaceWeatherDSState.job_message, color=c["text_secondary"]),
-                ),
-                spacing="2",
-                align="start",
-                width="100%",
-            ),
-            spacing="6",
-            align="start",
-            width="100%",
-            wrap="wrap",
-        ),
-        rx.divider(),
-        rx.heading("3) Results (preview)", size="4", color=c["text_primary"]),
-        _metrics_preview(SpaceWeatherDSState.session_metrics),
-        rx.divider(),
-        rx.heading("4) Daily trend chart (ECharts)", size="4", color=c["text_primary"]),
-        rx.hstack(
-            rx.text("Metric:", color=c["text_secondary"]),
-            rx.select(
-                ["rmssd", "sdnn", "mean_hr", "pnn50"],
-                value=SpaceWeatherDSState.hrv_trend_metric,
-                on_change=SpaceWeatherDSState.set_hrv_trend_metric,
-            ),
-            rx.button("Build chart", variant="outline", on_click=SpaceWeatherDSState.rebuild_hrv_trend_chart),
-            spacing="2",
-            align="center",
-        ),
-        rx.cond(
-            SpaceWeatherDSState.hrv_trend_option != {},
-            rx.box(
-                echarts(option=SpaceWeatherDSState.hrv_trend_option),
-                width="100%",
-                max_width="1100px",
-                border=f"1px solid {c['border']}",
-                border_radius="10px",
-                padding="8px",
-            ),
-            rx.text("Need ≥3 days of data to render a daily trend chart.", color=c["text_secondary"]),
-        ),
-        rx.divider(),
-        rx.heading("5) NOAA Space Weather (fetch + plot)", size="4", color=c["text_primary"]),
-        rx.text("Fetch is cache-first and runs in a background task.", color=c["text_secondary"]),
-        rx.hstack(
-            rx.vstack(
-                rx.text("Dataset:", color=c["text_secondary"]),
-                rx.select(
-                    noaa_keys,
-                    value=SpaceWeatherDSState.noaa_plot_key,
-                    on_change=SpaceWeatherDSState.set_noaa_plot_key,
-                ),
-                rx.button(
-                    "Fetch NOAA feed (cache-first)",
-                    on_click=SpaceWeatherDSState.fetch_noaa,
-                    loading=SpaceWeatherDSState.noaa_running,
-                    disabled=SpaceWeatherDSState.noaa_running,
-                ),
-                spacing="2",
-                align="start",
-                width="100%",
-            ),
-            rx.vstack(
-                rx.text("Value column:", color=c["text_secondary"]),
-                rx.select(
-                    SpaceWeatherDSState.noaa_plot_columns,
-                    value=SpaceWeatherDSState.noaa_plot_column,
-                    on_change=SpaceWeatherDSState.set_noaa_plot_column,
-                ),
-                spacing="2",
-                align="start",
-                width="100%",
-            ),
-            spacing="6",
-            align="start",
-            width="100%",
-            wrap="wrap",
-        ),
-        rx.cond(
-            SpaceWeatherDSState.noaa_errors != [],
-            rx.vstack(
-                rx.foreach(
-                    SpaceWeatherDSState.noaa_errors,
-                    lambda e: rx.callout(
-                        f"{e.get('key')}: {e.get('error')}",
-                        icon="triangle_alert",
-                        color_scheme="yellow",
+                    rx.hstack(
+                        rx.spinner(size="2"),
+                        rx.text("Processing..."),
+                        spacing="2",
+                        align="center",
+                    ),
+                    rx.hstack(
+                        rx.icon("play", size=18),
+                        rx.text("Run HRV Analysis"),
+                        spacing="2",
+                        align="center",
                     ),
                 ),
-                spacing="2",
-                width="100%",
+                size="4",
+                color_scheme="green",
+                variant="solid",
+                on_click=SpaceWeatherDSState.run_hrv_analysis,
+                disabled=SpaceWeatherDSState.job_running,
+                style={"width": "100%", "font_weight": "600"},
             ),
-            rx.text("", color=c["text_secondary"]),
+            spacing="4",
+            align="start",
+            width="100%",
         ),
-        rx.cond(
-            SpaceWeatherDSState.noaa_option != {},
-            rx.box(
-                echarts(option=SpaceWeatherDSState.noaa_option),
-                width="100%",
-                max_width="1100px",
-                border=f"1px solid {c['border']}",
-                border_radius="10px",
-                padding="8px",
-            ),
-            rx.text("Fetch NOAA feeds to render a chart.", color=c["text_secondary"]),
+        size="3",
+        variant="surface",
+    )
+
+    # Status Card
+    status_card = rx.card(
+        rx.vstack(
+            _section_header("activity", "Status"),
+            rx.separator(size="4"),
+            _status_panel(),
+            spacing="4",
+            align="start",
+            width="100%",
         ),
-        rx.divider(),
-        rx.heading("6) Export", size="4", color=c["text_primary"]),
-        rx.button("Export session metrics (CSV + JSON)", on_click=SpaceWeatherDSState.export_session_metrics),
-        rx.cond(
-            SpaceWeatherDSState.export_files != [],
-            rx.vstack(
-                rx.foreach(
-                    SpaceWeatherDSState.export_files,
-                    lambda f: rx.link(f.get("name", "export"), href=f.get("url", "#")),
+        size="3",
+        variant="surface",
+    )
+
+    # Results Card
+    results_card = rx.card(
+        rx.vstack(
+            _section_header("bar_chart_3", "Analysis Results", "HRV metrics computed from your RR data"),
+            rx.separator(size="4"),
+            _metrics_preview(SpaceWeatherDSState.session_metrics),
+            spacing="4",
+            align="start",
+            width="100%",
+        ),
+        size="3",
+        variant="surface",
+    )
+
+    # HRV Trend Chart Card
+    trend_card = rx.card(
+        rx.vstack(
+            _section_header("trending_up", "Daily Trend Chart", "Visualize HRV metrics over time"),
+            rx.separator(size="4"),
+            rx.hstack(
+                rx.vstack(
+                    rx.text("Metric", size="2", weight="medium", color=c["text_primary"]),
+                    rx.select(
+                        ["rmssd", "sdnn", "mean_hr", "pnn50"],
+                        value=SpaceWeatherDSState.hrv_trend_metric,
+                        on_change=SpaceWeatherDSState.set_hrv_trend_metric,
+                        size="3",
+                    ),
+                    spacing="2",
+                    align="start",
                 ),
-                spacing="2",
+                rx.button(
+                    rx.icon("refresh_cw", size=16),
+                    "Build Chart",
+                    size="3",
+                    variant="outline",
+                    color_scheme="sky",
+                    on_click=SpaceWeatherDSState.rebuild_hrv_trend_chart,
+                ),
+                spacing="4",
+                align="end",
+            ),
+            rx.cond(
+                SpaceWeatherDSState.hrv_trend_option != {},
+                rx.box(
+                    echarts(option=SpaceWeatherDSState.hrv_trend_option),
+                    width="100%",
+                    height="400px",
+                    border_radius="8px",
+                    overflow="hidden",
+                ),
+                rx.callout(
+                    "Need ≥3 days of data to render a daily trend chart. Run analysis first.",
+                    icon="info",
+                    color_scheme="blue",
+                    size="2",
+                ),
+            ),
+            spacing="4",
+            align="start",
+            width="100%",
+        ),
+        size="3",
+        variant="surface",
+    )
+
+    # NOAA Space Weather Card
+    noaa_card = rx.card(
+        rx.vstack(
+            _section_header("sun", "NOAA Space Weather", "Fetch and visualize space weather data"),
+            rx.separator(size="4"),
+            rx.grid(
+                rx.vstack(
+                    rx.text("Dataset", size="2", weight="medium", color=c["text_primary"]),
+                    rx.select(
+                        noaa_keys,
+                        value=SpaceWeatherDSState.noaa_plot_key,
+                        on_change=SpaceWeatherDSState.set_noaa_plot_key,
+                        size="3",
+                    ),
+                    spacing="2",
+                    align="start",
+                    width="100%",
+                ),
+                rx.vstack(
+                    rx.text("Value Column", size="2", weight="medium", color=c["text_primary"]),
+                    rx.select(
+                        SpaceWeatherDSState.noaa_plot_columns,
+                        value=SpaceWeatherDSState.noaa_plot_column,
+                        on_change=SpaceWeatherDSState.set_noaa_plot_column,
+                        size="3",
+                    ),
+                    spacing="2",
+                    align="start",
+                    width="100%",
+                ),
+                columns="2",
+                spacing="4",
+                width="100%",
+            ),
+            rx.button(
+                rx.cond(
+                    SpaceWeatherDSState.noaa_running,
+                    rx.hstack(
+                        rx.spinner(size="2"),
+                        rx.text("Fetching..."),
+                        spacing="2",
+                        align="center",
+                    ),
+                    rx.hstack(
+                        rx.icon("download", size=16),
+                        rx.text("Fetch NOAA Data"),
+                        spacing="2",
+                        align="center",
+                    ),
+                ),
+                size="3",
+                color_scheme="amber",
+                on_click=SpaceWeatherDSState.fetch_noaa,
+                loading=SpaceWeatherDSState.noaa_running,
+                disabled=SpaceWeatherDSState.noaa_running,
+            ),
+            rx.cond(
+                SpaceWeatherDSState.noaa_errors.length() > 0,
+                rx.vstack(
+                    rx.foreach(
+                        SpaceWeatherDSState.noaa_errors,
+                        lambda e: rx.callout(
+                            rx.text(e.get("key"), ": ", e.get("error")),
+                            icon="triangle_alert",
+                            color_scheme="amber",
+                            size="2",
+                        ),
+                    ),
+                    spacing="2",
+                    width="100%",
+                ),
+                rx.fragment(),
+            ),
+            rx.cond(
+                SpaceWeatherDSState.noaa_option != {},
+                rx.box(
+                    echarts(option=SpaceWeatherDSState.noaa_option),
+                    width="100%",
+                    height="400px",
+                    border_radius="8px",
+                    overflow="hidden",
+                ),
+                rx.callout(
+                    "Click 'Fetch NOAA Data' to load space weather data.",
+                    icon="info",
+                    color_scheme="blue",
+                    size="2",
+                ),
+            ),
+            spacing="4",
+            align="start",
+            width="100%",
+        ),
+        size="3",
+        variant="surface",
+    )
+
+    # Export Card
+    export_card = rx.card(
+        rx.vstack(
+            _section_header("download", "Export Data", "Download your analysis results"),
+            rx.separator(size="4"),
+            rx.hstack(
+                rx.button(
+                    rx.icon("file_spreadsheet", size=16),
+                    "Export CSV & JSON",
+                    size="3",
+                    color_scheme="violet",
+                    on_click=SpaceWeatherDSState.export_session_metrics,
+                ),
+                rx.cond(
+                    SpaceWeatherDSState.export_files.length() > 0,
+                    rx.hstack(
+                        rx.foreach(
+                            SpaceWeatherDSState.export_files,
+                            lambda f: rx.link(
+                                rx.badge(
+                                    rx.icon("file_down", size=12),
+                                    f.get("name", "export"),
+                                    color_scheme="green",
+                                    size="2",
+                                    variant="soft",
+                                ),
+                                href=f.get("url", "#"),
+                            ),
+                        ),
+                        spacing="2",
+                    ),
+                    rx.text("Export will appear here", size="2", color=c["text_secondary"]),
+                ),
+                spacing="4",
+                align="center",
+                wrap="wrap",
+            ),
+            spacing="4",
+            align="start",
+            width="100%",
+        ),
+        size="3",
+        variant="surface",
+    )
+
+    body = rx.vstack(
+        # Page header
+        rx.hstack(
+            rx.vstack(
+                rx.heading(
+                    "Space Weather Data Science",
+                    size="7",
+                    weight="bold",
+                    color=c["text_primary"],
+                ),
+                rx.text(
+                    "Analyze HRV data and correlate with space weather conditions",
+                    size="3",
+                    color=c["text_secondary"],
+                ),
+                spacing="1",
                 align="start",
             ),
-            rx.text("No exports yet.", color=c["text_secondary"]),
+            rx.badge(
+                "Phase 1 MVP",
+                color_scheme="sky",
+                size="2",
+                variant="surface",
+            ),
+            justify="between",
+            align="start",
+            width="100%",
+            wrap="wrap",
         ),
+        rx.separator(size="4"),
+        # Main content grid
+        rx.grid(
+            upload_card,
+            config_card,
+            columns="2",
+            spacing="4",
+            width="100%",
+        ),
+        status_card,
+        results_card,
+        trend_card,
+        noaa_card,
+        export_card,
         spacing="4",
         align="start",
         width="100%",
-        max_width="1100px",
+        max_width="1200px",
+        padding="4",
     )
-    return app_shell(title="Space Weather Data Science (Single User)", body=body)
+    return app_shell(title="Space Weather DS", body=body)
 
