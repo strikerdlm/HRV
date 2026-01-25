@@ -7,6 +7,22 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.11] - 2026-01-25
+
+### Added
+- Reflex v2 scaffold under `reflex_app/` (keeps legacy Streamlit `app/` untouched).
+- ECharts validation page in Reflex v2 (via `reflex-echarts`) to preserve ECharts-first visuals.
+- New Reflex dependency manifest `requirements_reflex.txt`.
+
+### Fixed
+- Reflex Docker image now installs `unzip` to satisfy frontend dependency initialization.
+- Reflex Space Weather DS slider now binds a sequence value to avoid startup crash.
+- Reflex Space Weather DS uses `rx.input(type_="number")` to avoid missing `number_input`.
+- Reflex Space Weather DS metrics preview now uses `rx.cond` to avoid Var bool errors.
+- Reflex Space Weather DS metric rows now avoid Var boolean checks in `rx.foreach`.
+- Reflex Operational users list now avoids Var boolean checks.
+- Reflex Research metrics summary now avoids Var boolean checks.
+
 
 ## [1.9.10] - 2026-01-24
 
