@@ -9,15 +9,17 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.9.10-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.9.14-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2026--01--24-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2026--01--30-blue)](CHANGELOG.md)
 
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+
+**NEW in v1.9.14**: **TypeScript/Next.js Frontend** — Modern frontend under `frontend/` with FastAPI backend under `api/`. Features include crew dashboard, space weather gauges, HRV analysis with Poincaré plots, solar-HRV correlations, and Garmin integration. Run both with `.\start-frontend.ps1` (frontend port 3100, API port 8180).
 
 **NEW in v1.9.10**: **Space Weather Data Science (Single User)** — New streamlined research app (`app/space_weather_ds_app.py`) using the latest Streamlit (1.53.1) with a separate requirements file (`requirements_streamlit_latest.txt`) and performance profiles (Lightweight default, RTX 5070 GPU mode).
 
@@ -103,31 +105,35 @@ conda run -n hrv-py312 streamlit run app/space_weather_ds_app.py
 # streamlit run app/operational_app.py
 ```
 
-#### Reflex v2 (New — higher performance UI)
+#### TypeScript/Next.js Frontend (Modern UI)
 
-The new Reflex app is built in `reflex_app/` and keeps the legacy Streamlit apps in `app/` unchanged.
+A modern TypeScript/React frontend is available under `frontend/` with a FastAPI backend under `api/`.
 
 **Prerequisites**:
-- Node.js LTS (required by Reflex to build the frontend)
-- Python 3.12 (recommended) and the `hrv-py312` conda env
+- Node.js 18+ (LTS recommended)
+- Python 3.12 and the `hrv-py312` conda env
 
-**Run (PowerShell)**:
+**Quick Start (PowerShell)**:
 
 ```powershell
-conda run -n hrv-py312 pip install -r requirements_reflex.txt
-cd reflex_app
+# Option 1: Use the start script (starts both API and frontend)
+.\start-frontend.ps1
 
-# Allow the Reflex app to import the legacy computation modules from ../app
-$env:PYTHONPATH=".."
+# Option 2: Manual start
+# Terminal 1 - Start API (port 8180)
+conda activate hrv-py312
+uvicorn api.main:app --reload --port 8180
 
-# Dev mode
-conda run -n hrv-py312 reflex run
-
-# Production build (frontend on :3000, backend on :8000)
-# conda run -n hrv-py312 reflex run --env prod
+# Terminal 2 - Start Frontend (port 3100)
+cd frontend
+npm install   # first time only
+npm run dev
 ```
 
-**Production note**: set `API_URL` to the externally reachable backend URL (ending in `:8000`) for websocket connectivity.
+**Access Points**:
+- Frontend: http://localhost:3100
+- API Docs: http://localhost:8180/docs
+- Streamlit: http://localhost:8501 (unchanged)
 
 #### Option 2: Using Virtual Environment
 
@@ -930,8 +936,8 @@ docker-compose down
 # Include pgAdmin for database management
 docker-compose --profile admin up -d
 
-# Run Reflex v2 (frontend :3000, backend :8000)
-docker-compose --profile reflex up -d reflex_v2
+# Run TypeScript frontend with FastAPI backend (API :8180)
+docker-compose --profile typescript up -d api
 ```
 
 **Environment Variables** (create `.env` file):
