@@ -7,6 +7,45 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.14] - 2026-01-30
+
+### Added
+- **TypeScript/Next.js Frontend**: New modern frontend implementation under `frontend/` directory.
+  - Complete API client library (`lib/api.ts`, `lib/research-api.ts`) for FastAPI backend communication
+  - Utility functions (`lib/utils.ts`) with formatting helpers, debounce, and API configuration
+  - Dashboard page with crew profiles, space weather widget, and quick actions
+  - Research hub with four comprehensive modules:
+    - Space Weather Dashboard: Real-time Kp, F10.7, solar wind gauges with impact predictions
+    - HRV Analysis: Time/frequency/nonlinear domain analysis with Poincaré plots and HRF radar
+    - Solar-HRV Correlations: Heatmap visualization, lag analysis, significance testing
+    - Garmin Integration: Sleep architecture, SpO2, body battery, respiration metrics
+  - Publication-quality ECharts components following project visualization standards
+  - HRV gauge component with dual-ring design and color-coded risk zones
+- **FastAPI Backend**: REST API under `api/` directory exposing Python HRV analysis modules.
+  - `/api/health` - Health check endpoint
+  - `/api/users` - User profile CRUD operations
+  - `/api/experiments` - Experiment management (in-memory storage)
+  - `/api/space-weather` - Basic space weather snapshot
+  - `/api/research/*` - Comprehensive research endpoints:
+    - `/api/research/space-weather/current` - Full space weather with impact predictions
+    - `/api/research/hrv/analyze` - RR interval analysis with all HRV domains
+    - `/api/research/correlations/hrv-space-weather` - Solar-physiological correlation analysis
+    - `/api/research/garmin/*` - Garmin wearable data integration
+- **Start Script** (`start-frontend.ps1`): PowerShell script to launch both FastAPI backend and Next.js frontend
+
+### Technical Details
+- Frontend runs on port 3100, API on port 8180
+- CORS configured for localhost development
+- ECharts integration with scientific color palette per project visualization rules
+- Full TypeScript type definitions for all API models
+
+### Deprecated
+- **Reflex v2 removed**: The experimental Reflex framework has been deprecated in favor of the TypeScript/Next.js frontend. Files removed:
+  - `reflex_app/` directory
+  - `Dockerfile.reflex`
+  - `requirements_reflex.txt`
+  - `tests/test_reflex_space_weather_ds_core.py`
+
 ## [1.9.13] - 2026-01-25
 
 ### Changed
