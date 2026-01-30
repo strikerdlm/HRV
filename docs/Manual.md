@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.9.10  
-**Last Updated:** 2026-01-24
+**Version:** 1.9.14  
+**Last Updated:** 2026-01-30
 
 ---
 
@@ -98,22 +98,48 @@ Manual fetch buttons remain available for on-demand refresh. Force refresh bypas
 | Browser | Chrome 90+ | Chrome/Edge latest |
 | GPU (optional) | — | NVIDIA RTX 3080/4090/5070 |
 
-### Reflex v2 (New UI — higher performance on slow compute)
+### TypeScript Frontend (Modern UI)
 
-Mission Control - Flight Surgeon is being migrated from Streamlit to **Reflex** for a more app-like UI and better performance characteristics (fewer global reruns, explicit background tasks). The legacy Streamlit apps remain fully supported.
+A modern TypeScript/Next.js frontend is available under `frontend/` with a FastAPI backend under `api/`. This provides a responsive, app-like experience while leveraging the Python HRV analysis modules.
 
 **Key points**
-- **Legacy preserved**: Streamlit stays in `app/` unchanged.
-- **New app location**: Reflex v2 lives in `reflex_app/`.
-- **No authentication**: Reflex v2 runs without auth by design.
-- **ECharts-first visuals**: Reflex v2 uses `reflex-echarts` (ECharts via React) to preserve publication-grade plots.
+- **Streamlit preserved**: The main Streamlit app stays in `app/` unchanged.
+- **TypeScript frontend**: Modern React/Next.js UI in `frontend/`.
+- **FastAPI backend**: REST API in `api/` exposing Python HRV modules.
+- **ECharts-first visuals**: Publication-quality charts using Apache ECharts.
 
-**Run Reflex v2 (PowerShell)**
+**Features**
+- Dashboard with crew profiles and space weather widget
+- Research hub with 4 modules:
+  - Space Weather Dashboard (Kp, F10.7, solar wind gauges)
+  - HRV Analysis (time/frequency/nonlinear domains, Poincaré, HRF)
+  - Solar-HRV Correlations (heatmap, lag analysis)
+  - Garmin Integration (sleep, SpO2, body battery)
+
+**Run TypeScript Frontend (PowerShell)**
 ```powershell
-conda run -n hrv-py312 pip install -r requirements_reflex.txt
-cd reflex_app
-$env:PYTHONPATH=".."   # allow importing legacy `app/` computation modules
-conda run -n hrv-py312 reflex run
+# Option 1: Use the start script
+.\start-frontend.ps1
+
+# Option 2: Manual start
+# Terminal 1 - Start API (port 8180)
+conda activate hrv-py312
+uvicorn api.main:app --reload --port 8180
+
+# Terminal 2 - Start Frontend (port 3100)
+cd frontend
+npm install   # first time only
+npm run dev
+```
+
+**Access Points**
+- Frontend: http://localhost:3100
+- API Docs: http://localhost:8180/docs
+
+**Environment Configuration**
+To use custom ports, set environment variables:
+```powershell
+$env:NEXT_PUBLIC_API_URL = "http://localhost:8180"
 ```
 
 ### GPU Acceleration (Optional)
@@ -4652,17 +4678,18 @@ docker-compose up -d
 # View logs
 docker-compose logs -f app
 
-# Run Reflex v2 (optional; frontend :3000, backend :8000)
-docker-compose --profile reflex up -d reflex_v2
+# Run TypeScript Frontend with FastAPI (optional)
+docker-compose --profile typescript up -d api
 ```
 
-The application will be available at `http://localhost:8501`.
+The Streamlit application will be available at `http://localhost:8501`.
 
 ### Services
 
 | Service | Port | Description |
 |---------|------|-------------|
 | **app** | 8501 | Streamlit application |
+| **api** | 8180 | FastAPI backend (for TypeScript frontend) |
 | **db** | 5432 | PostgreSQL with TimescaleDB |
 | **redis** | 6379 | Session caching |
 | **pgadmin** | 5050 | Database administration (optional) |
