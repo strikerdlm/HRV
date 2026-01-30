@@ -109,67 +109,32 @@ services:
       - hrv_network
 
   # ---------------------------------------------------------------------------
-  # HRV Analysis Application (Reflex v2) - Backend
+  # FastAPI Backend (for TypeScript Frontend)
   # ---------------------------------------------------------------------------
   # Notes:
-  # - This runs the Reflex BACKEND ONLY (event handlers, state management).
-  # - Frontend is served by nginx (reflex_frontend service) with proper WebSocket proxying.
-  # - Legacy Streamlit deployment remains the `app` service above.
-  reflex_backend:
+  # - REST API exposing Python HRV analysis modules to the TypeScript frontend.
+  # - Frontend served separately via Next.js (see frontend/ directory).
+  api:
     build:
       context: .
-      dockerfile: Dockerfile.reflex
-    container_name: hrv_reflex_backend
+      dockerfile: Dockerfile
+    container_name: hrv_api
     restart: unless-stopped
     profiles:
-      - reflex
+      - typescript
+    command: uvicorn api.main:app --host 0.0.0.0 --port 8180
     environment:
       PYTHONPATH: /app
-      REFLEX_UPLOADED_FILES_DIR: /app/uploaded_files
       # API keys (set in .env file, DO NOT commit)
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
     volumes:
+      - ./app:/app/app:ro
+      - ./api:/app/api:ro
       - ./crew:/app/crew
-      - reflex_uploads:/app/uploaded_files
-    expose:
-      - "8000"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/ping"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 60s
-    networks:
-      - hrv_network
-
-  # ---------------------------------------------------------------------------
-  # HRV Analysis Application (Reflex v2) - Frontend (nginx)
-  # ---------------------------------------------------------------------------
-  # Notes:
-  # - This serves the static frontend and proxies WebSocket connections to backend.
-  # - WebSocket proxying at /_event/ is CRITICAL for button/event functionality.
-  # - Reference: https://geniepy.com/blog/how-to-run-reflex-apps-in-production/
-  reflex_frontend:
-    build:
-      context: .
-      dockerfile: reflex_app/web.Dockerfile
-      args:
-        # API_URL must be the externally accessible URL where nginx is served.
-        # WebSocket connections go through nginx at /_event/.
-        # For local Docker: http://localhost:3001 (nginx on port 3001)
-        # For production: set to your domain (e.g., https://hrv.example.com)
-        API_URL: ${API_URL:-http://localhost:3001}
-    container_name: hrv_reflex_frontend
-    restart: unless-stopped
-    profiles:
-      - reflex
-    depends_on:
-      reflex_backend:
-        condition: service_healthy
     ports:
-      - "${REFLEX_FRONTEND_PORT:-3001}:80"
+      - "${API_PORT:-8180}:8180"
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      test: ["CMD", "curl", "-f", "http://localhost:8180/api/health"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -211,8 +176,6 @@ volumes:
     name: hrv_app_data
   pgadmin_data:
     name: hrv_pgadmin_data
-  reflex_uploads:
-    name: hrv_reflex_uploads
 
 # ---------------------------------------------------------------------------
 # Networks
