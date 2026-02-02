@@ -246,21 +246,21 @@ Costa MD et al. (2017, 2021) - Heart Rate Fragmentation series`,
   },
 ];
 
-function ReferenceCard({ ref }: { ref: Reference }) {
+function ReferenceCard({ reference }: { reference: Reference }) {
   return (
     <div className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1">
-          <p className="font-medium text-sm">{ref.title}</p>
-          <p className="text-xs text-muted-foreground mt-1">{ref.authors} ({ref.year})</p>
-          <p className="text-xs text-muted-foreground italic">{ref.journal}</p>
+          <p className="font-medium text-sm">{reference.title}</p>
+          <p className="text-xs text-muted-foreground mt-1">{reference.authors} ({reference.year})</p>
+          <p className="text-xs text-muted-foreground italic">{reference.journal}</p>
         </div>
-        <Badge variant="outline" className="shrink-0">{ref.category}</Badge>
+        <Badge variant="outline" className="shrink-0">{reference.category}</Badge>
       </div>
       <div className="flex items-center gap-3 mt-3">
-        {ref.doi && (
+        {reference.doi && (
           <a
-            href={`https://doi.org/${ref.doi}`}
+            href={`https://doi.org/${reference.doi}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-primary hover:underline flex items-center gap-1"
@@ -269,9 +269,9 @@ function ReferenceCard({ ref }: { ref: Reference }) {
             DOI
           </a>
         )}
-        {ref.pmid && (
+        {reference.pmid && (
           <a
-            href={`https://pubmed.ncbi.nlm.nih.gov/${ref.pmid}`}
+            href={`https://pubmed.ncbi.nlm.nih.gov/${reference.pmid}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-primary hover:underline flex items-center gap-1"
@@ -316,10 +316,10 @@ export default function SciencePage() {
   const [searchQuery, setSearchQuery] = React.useState("");
 
   const filteredRefs = references.filter(
-    (ref) =>
-      ref.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ref.authors.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      ref.category.toLowerCase().includes(searchQuery.toLowerCase())
+    (item) =>
+      item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.authors.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      item.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
@@ -379,8 +379,8 @@ export default function SciencePage() {
                 />
               </div>
               <div className="grid gap-4 md:grid-cols-2">
-                {filteredRefs.map((ref) => (
-                  <ReferenceCard key={ref.id} ref={ref} />
+                {filteredRefs.map((item) => (
+                  <ReferenceCard key={item.id} reference={item} />
                 ))}
               </div>
               {filteredRefs.length === 0 && (
