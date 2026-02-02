@@ -187,6 +187,25 @@ class GarminConnectClient:
             # login() can take a tokenstore path - it will try to load from there first
             self.client.login(tokenstore_path)  # type: ignore[arg-type]
             _LOGGER.info("Successfully logged in using saved tokens")
+            
+            # IMPORTANT: After token-based login, the display_name might not be set.
+            # We need to trigger a call that populates it, otherwise API calls fail with
+            # "None" in the URL path (e.g., /usersummary/daily/None).
+            # The get_full_name() method populates display_name as a side effect.
+            if not getattr(self.client, 'display_name', None):
+                _LOGGER.info("display_name not set after token login, fetching user info...")
+                try:
+                    self.client.get_full_name()  # type: ignore[attr-defined]
+                    _LOGGER.info(f"User display_name loaded: {self.client.display_name}")
+                except Exception as name_exc:
+                    _LOGGER.warning(f"Could not fetch display_name: {name_exc}")
+                    # If we can't get the display_name, the token might be invalid
+                    # Fall through to fresh login
+                    if not getattr(self.client, 'display_name', None):
+                        raise GarminConnectAuthenticationError(
+                            "Token login succeeded but display_name not available"
+                        ) from name_exc
+            
             return self.client
         except (
             FileNotFoundError,
@@ -234,6 +253,15 @@ class GarminConnectClient:
                     "\n  (Not recommended for security reasons) "
                     f"\n\nToken storage location: {tokenstore_path}"
                 )
+            
+            # Ensure display_name is set after fresh login
+            if not getattr(self.client, 'display_name', None):
+                _LOGGER.info("Fetching user info to populate display_name...")
+                try:
+                    self.client.get_full_name()  # type: ignore[attr-defined]
+                    _LOGGER.info(f"User display_name loaded: {self.client.display_name}")
+                except Exception as name_exc:
+                    _LOGGER.warning(f"Could not fetch display_name: {name_exc}")
             
             # Save tokens for future use (reduces MFA prompts)
             # Following official repository pattern: garmin.garth.dump(tokenstore_path)
