@@ -6,7 +6,14 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
+/** Application mode - mirrors Python backend separation */
+export type AppMode = "operational" | "research";
+
 interface AppState {
+  // App mode - separates operational and research functionality
+  appMode: AppMode;
+  setAppMode: (mode: AppMode) => void;
+
   // Mission state
   activeMission: string;
   setActiveMission: (mission: string) => void;
@@ -19,10 +26,10 @@ interface AppState {
   activeUserId: string | null;
   setActiveUserId: (userId: string | null) => void;
 
-  // Sidebar state
-  sidebarCollapsed: boolean;
+  // Sidebar state (sidebarOpen = !sidebarCollapsed for clarity)
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
   toggleSidebar: () => void;
-  setSidebarCollapsed: (collapsed: boolean) => void;
 
   // Notifications
   unreadNotifications: number;
@@ -36,6 +43,10 @@ interface AppState {
 export const useAppStore = create<AppState>()(
   persist(
     (set) => ({
+      // App mode - defaults to operational (mission control dashboard)
+      appMode: "operational",
+      setAppMode: (mode) => set({ appMode: mode }),
+
       // Mission state
       activeMission: "Mission 1",
       setActiveMission: (mission) => set({ activeMission: mission }),
@@ -49,10 +60,9 @@ export const useAppStore = create<AppState>()(
       setActiveUserId: (userId) => set({ activeUserId: userId }),
 
       // Sidebar state
-      sidebarCollapsed: false,
-      toggleSidebar: () =>
-        set((state) => ({ sidebarCollapsed: !state.sidebarCollapsed })),
-      setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+      sidebarOpen: true,
+      setSidebarOpen: (open) => set({ sidebarOpen: open }),
+      toggleSidebar: () => set((state) => ({ sidebarOpen: !state.sidebarOpen })),
 
       // Notifications
       unreadNotifications: 0,
@@ -67,10 +77,11 @@ export const useAppStore = create<AppState>()(
       storage: createJSONStorage(() => localStorage),
       // Only persist certain fields
       partialize: (state) => ({
+        appMode: state.appMode,
         activeMission: state.activeMission,
         debugMode: state.debugMode,
         activeUserId: state.activeUserId,
-        sidebarCollapsed: state.sidebarCollapsed,
+        sidebarOpen: state.sidebarOpen,
         theme: state.theme,
       }),
     }
