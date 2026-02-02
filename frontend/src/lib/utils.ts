@@ -149,3 +149,60 @@ export function isValidEmail(email: string): boolean {
 export function generateId(prefix: string = "id"): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 }
+
+/**
+ * Format date only (no time)
+ */
+export function formatDate(
+  isoString: string | null | undefined
+): string {
+  if (!isoString) return "N/A";
+
+  const date = new Date(isoString);
+  if (isNaN(date.getTime())) return "Invalid date";
+
+  return date.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}
+
+/**
+ * Format value with unit
+ */
+export function formatWithUnit(
+  value: number | null | undefined,
+  unit: string,
+  precision: number = 1
+): string {
+  if (value === null || value === undefined) return "N/A";
+  return `${value.toFixed(precision)} ${unit}`;
+}
+
+/**
+ * Capitalize first letter of string
+ */
+export function capitalize(text: string): string {
+  if (!text) return "";
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
+/**
+ * Get status color class
+ */
+export function getStatusColor(status: string): string {
+  const colors: Record<string, string> = {
+    draft: "text-muted-foreground",
+    approved: "text-success",
+    in_progress: "text-info",
+    paused: "text-warning",
+    completed: "text-success",
+    cancelled: "text-danger",
+    active: "text-success",
+    inactive: "text-muted-foreground",
+    pending: "text-warning",
+    error: "text-danger",
+  };
+  return colors[status] || "text-muted-foreground";
+}
