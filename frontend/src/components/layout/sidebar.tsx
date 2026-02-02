@@ -15,7 +15,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Sun,
-  Settings,
   Activity,
   GitCompare,
   Watch,
@@ -25,7 +24,6 @@ import {
   Network,
   Zap,
   Layers,
-  BarChart3,
   Target,
   Moon,
   Clock,
@@ -51,14 +49,24 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { useAppStore } from "@/lib/store";
+import { ModeSwitcher } from "./mode-switcher";
 
-// Operational navigation items
+// ============================================================================
+// OPERATIONAL MODE NAVIGATION
+// Mirrors operational_app.py - Fast UI for mission operations
+// ============================================================================
 const operationalNav = [
   { id: "dashboard", label: "Dashboard", icon: LayoutDashboard, href: "/" },
   { id: "scheduling", label: "Crew Scheduling", icon: Calendar, href: "/scheduling" },
   { id: "experiments", label: "Experiments", icon: FlaskConical, href: "/experiments" },
   { id: "profile", label: "User Profile", icon: User, href: "/profile" },
+  { id: "about", label: "About", icon: Info, href: "/about" },
 ];
+
+// ============================================================================
+// RESEARCH MODE NAVIGATION
+// Mirrors research_app.py - Full HRV analysis and research tools
+// ============================================================================
 
 // Research navigation items - Core
 const researchNavCore = [
@@ -94,23 +102,15 @@ const researchNavTools = [
   { id: "science", label: "References", icon: Book, href: "/research/science" },
 ];
 
-// Combined for backward compatibility
-const researchNav = [
-  ...researchNavCore,
-  ...researchNavHRV,
-  ...researchNavClinical,
-  ...researchNavTools,
-];
-
-// About/Info
-const infoNav = [
-  { id: "about", label: "About", icon: Info, href: "/about" },
-];
-
 export function Sidebar() {
   const pathname = usePathname();
-  const { sidebarOpen, setSidebarOpen, activeMission, setActiveMission } =
+  const { sidebarOpen, setSidebarOpen, activeMission, setActiveMission, appMode } =
     useAppStore();
+
+  // Determine app title based on mode
+  const appTitle = appMode === "operational" ? "Mission Control" : "Research Lab";
+  const appSubtitle = appMode === "operational" ? "Operational" : "HRV Analysis";
+  const AppIcon = appMode === "operational" ? Rocket : Microscope;
 
   return (
     <TooltipProvider>
@@ -127,335 +127,318 @@ export function Sidebar() {
             animate={{ opacity: sidebarOpen ? 1 : 0 }}
             className="flex items-center gap-2 overflow-hidden"
           >
-            <Rocket className="h-8 w-8 text-primary" />
+            <AppIcon className={cn("h-8 w-8", appMode === "operational" ? "text-primary" : "text-success")} />
             <div className="flex flex-col">
-              <span className="font-bold text-foreground">Mission Control</span>
+              <span className="font-bold text-foreground">{appTitle}</span>
               <span className="text-xs text-muted-foreground">
-                Flight Surgeon
+                {appSubtitle}
               </span>
             </div>
           </motion.div>
           {!sidebarOpen && (
-            <Rocket className="h-8 w-8 text-primary mx-auto" />
+            <AppIcon className={cn("h-8 w-8 mx-auto", appMode === "operational" ? "text-primary" : "text-success")} />
           )}
         </div>
 
         <Separator />
 
-        {/* Mission Selector */}
+        {/* Mode Switcher */}
         <div className="p-4">
-          {sidebarOpen ? (
-            <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
-                Active Mission
-              </label>
-              <Select value={activeMission} onValueChange={setActiveMission}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select mission" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="Mission 1">Mission 1</SelectItem>
-                  <SelectItem value="Mission 2">Mission 2</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          ) : (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <div className="flex justify-center">
-                  <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                    <span className="text-xs font-bold text-primary">
-                      {activeMission.replace("Mission ", "M")}
-                    </span>
-                  </div>
-                </div>
-              </TooltipTrigger>
-              <TooltipContent side="right">
-                <p>{activeMission}</p>
-              </TooltipContent>
-            </Tooltip>
-          )}
+          <ModeSwitcher collapsed={!sidebarOpen} />
         </div>
 
         <Separator />
 
-        {/* Navigation */}
+        {/* Mission Selector - Only show in operational mode */}
+        {appMode === "operational" && (
+          <>
+            <div className="p-4">
+              {sidebarOpen ? (
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                    Active Mission
+                  </label>
+                  <Select value={activeMission} onValueChange={setActiveMission}>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select mission" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Mission 1">Mission 1</SelectItem>
+                      <SelectItem value="Mission 2">Mission 2</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex justify-center">
+                      <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <span className="text-xs font-bold text-primary">
+                          {activeMission.replace("Mission ", "M")}
+                        </span>
+                      </div>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">
+                    <p>{activeMission}</p>
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+            <Separator />
+          </>
+        )}
+
+        {/* Navigation - Mode-aware */}
         <nav className="flex-1 p-2 space-y-1 overflow-y-auto">
-          {/* Operational Section */}
-          {sidebarOpen && (
-            <p className="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Operational
-            </p>
+          {/* ================================================================ */}
+          {/* OPERATIONAL MODE NAVIGATION */}
+          {/* ================================================================ */}
+          {appMode === "operational" && (
+            <>
+              {sidebarOpen && (
+                <p className="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Operations
+                </p>
+              )}
+              {operationalNav.map((item) => {
+                const isActive = pathname === item.href;
+                const Icon = item.icon;
+
+                return (
+                  <Tooltip key={item.id}>
+                    <TooltipTrigger asChild>
+                      <Link href={item.href}>
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
+                            isActive
+                              ? "bg-primary text-primary-foreground"
+                              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                          )}
+                        >
+                          <Icon className="h-5 w-5 shrink-0" />
+                          {sidebarOpen && (
+                            <motion.span
+                              initial={false}
+                              animate={{ opacity: sidebarOpen ? 1 : 0 }}
+                              className="font-medium text-sm"
+                            >
+                              {item.label}
+                            </motion.span>
+                          )}
+                        </motion.div>
+                      </Link>
+                    </TooltipTrigger>
+                    {!sidebarOpen && (
+                      <TooltipContent side="right">
+                        <p>{item.label}</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                );
+              })}
+            </>
           )}
-          {operationalNav.map((item) => {
-            const isActive = pathname === item.href;
-            const Icon = item.icon;
 
-            return (
-              <Tooltip key={item.id}>
-                <TooltipTrigger asChild>
-                  <Link href={item.href}>
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                      )}
-                    >
-                      <Icon className="h-5 w-5 shrink-0" />
-                      {sidebarOpen && (
-                        <motion.span
-                          initial={false}
-                          animate={{ opacity: sidebarOpen ? 1 : 0 }}
-                          className="font-medium text-sm"
+          {/* ================================================================ */}
+          {/* RESEARCH MODE NAVIGATION */}
+          {/* ================================================================ */}
+          {appMode === "research" && (
+            <>
+              {/* Research Section - Core */}
+              {sidebarOpen && (
+                <p className="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Research
+                </p>
+              )}
+              {researchNavCore.map((item) => {
+                const isActive = pathname === item.href || (item.href !== "/research" && pathname.startsWith(item.href));
+                const Icon = item.icon;
+
+                return (
+                  <Tooltip key={item.id}>
+                    <TooltipTrigger asChild>
+                      <Link href={item.href}>
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
+                            isActive
+                              ? "bg-success text-success-foreground"
+                              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                          )}
                         >
-                          {item.label}
-                        </motion.span>
-                      )}
-                    </motion.div>
-                  </Link>
-                </TooltipTrigger>
-                {!sidebarOpen && (
-                  <TooltipContent side="right">
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            );
-          })}
+                          <Icon className="h-5 w-5 shrink-0" />
+                          {sidebarOpen && (
+                            <motion.span
+                              initial={false}
+                              animate={{ opacity: sidebarOpen ? 1 : 0 }}
+                              className="font-medium text-sm"
+                            >
+                              {item.label}
+                            </motion.span>
+                          )}
+                        </motion.div>
+                      </Link>
+                    </TooltipTrigger>
+                    {!sidebarOpen && (
+                      <TooltipContent side="right">
+                        <p>{item.label}</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                );
+              })}
 
-          {/* Research Section - Core */}
-          <Separator className="my-2" />
-          {sidebarOpen && (
-            <p className="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Research
-            </p>
+              {/* Research Section - HRV Analysis */}
+              <Separator className="my-2" />
+              {sidebarOpen && (
+                <p className="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  HRV Analysis
+                </p>
+              )}
+              {researchNavHRV.map((item) => {
+                const isActive = pathname === item.href;
+                const Icon = item.icon;
+
+                return (
+                  <Tooltip key={item.id}>
+                    <TooltipTrigger asChild>
+                      <Link href={item.href}>
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
+                            sidebarOpen ? "pl-5" : "",
+                            isActive
+                              ? "bg-success text-success-foreground"
+                              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                          )}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          {sidebarOpen && (
+                            <motion.span
+                              initial={false}
+                              animate={{ opacity: sidebarOpen ? 1 : 0 }}
+                              className="font-medium text-sm"
+                            >
+                              {item.label}
+                            </motion.span>
+                          )}
+                        </motion.div>
+                      </Link>
+                    </TooltipTrigger>
+                    {!sidebarOpen && (
+                      <TooltipContent side="right">
+                        <p>{item.label}</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                );
+              })}
+
+              {/* Research Section - Clinical Tools */}
+              <Separator className="my-2" />
+              {sidebarOpen && (
+                <p className="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Clinical Tools
+                </p>
+              )}
+              {researchNavClinical.map((item) => {
+                const isActive = pathname === item.href;
+                const Icon = item.icon;
+
+                return (
+                  <Tooltip key={item.id}>
+                    <TooltipTrigger asChild>
+                      <Link href={item.href}>
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
+                            sidebarOpen ? "pl-5" : "",
+                            isActive
+                              ? "bg-success text-success-foreground"
+                              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                          )}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          {sidebarOpen && (
+                            <motion.span
+                              initial={false}
+                              animate={{ opacity: sidebarOpen ? 1 : 0 }}
+                              className="font-medium text-sm"
+                            >
+                              {item.label}
+                            </motion.span>
+                          )}
+                        </motion.div>
+                      </Link>
+                    </TooltipTrigger>
+                    {!sidebarOpen && (
+                      <TooltipContent side="right">
+                        <p>{item.label}</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                );
+              })}
+
+              {/* Research Section - Tools */}
+              <Separator className="my-2" />
+              {sidebarOpen && (
+                <p className="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                  Tools & Export
+                </p>
+              )}
+              {researchNavTools.map((item) => {
+                const isActive = pathname === item.href;
+                const Icon = item.icon;
+
+                return (
+                  <Tooltip key={item.id}>
+                    <TooltipTrigger asChild>
+                      <Link href={item.href}>
+                        <motion.div
+                          whileHover={{ scale: 1.02 }}
+                          whileTap={{ scale: 0.98 }}
+                          className={cn(
+                            "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
+                            sidebarOpen ? "pl-5" : "",
+                            isActive
+                              ? "bg-success text-success-foreground"
+                              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                          )}
+                        >
+                          <Icon className="h-4 w-4 shrink-0" />
+                          {sidebarOpen && (
+                            <motion.span
+                              initial={false}
+                              animate={{ opacity: sidebarOpen ? 1 : 0 }}
+                              className="font-medium text-sm"
+                            >
+                              {item.label}
+                            </motion.span>
+                          )}
+                        </motion.div>
+                      </Link>
+                    </TooltipTrigger>
+                    {!sidebarOpen && (
+                      <TooltipContent side="right">
+                        <p>{item.label}</p>
+                      </TooltipContent>
+                    )}
+                  </Tooltip>
+                );
+              })}
+            </>
           )}
-          {researchNavCore.map((item) => {
-            const isActive = pathname === item.href || (item.href !== "/research" && pathname.startsWith(item.href));
-            const Icon = item.icon;
-
-            return (
-              <Tooltip key={item.id}>
-                <TooltipTrigger asChild>
-                  <Link href={item.href}>
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                      )}
-                    >
-                      <Icon className="h-5 w-5 shrink-0" />
-                      {sidebarOpen && (
-                        <motion.span
-                          initial={false}
-                          animate={{ opacity: sidebarOpen ? 1 : 0 }}
-                          className="font-medium text-sm"
-                        >
-                          {item.label}
-                        </motion.span>
-                      )}
-                    </motion.div>
-                  </Link>
-                </TooltipTrigger>
-                {!sidebarOpen && (
-                  <TooltipContent side="right">
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            );
-          })}
-
-          {/* Research Section - HRV Analysis */}
-          {sidebarOpen && (
-            <p className="px-3 py-1 mt-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              HRV Analysis
-            </p>
-          )}
-          {researchNavHRV.map((item) => {
-            const isActive = pathname === item.href;
-            const Icon = item.icon;
-
-            return (
-              <Tooltip key={item.id}>
-                <TooltipTrigger asChild>
-                  <Link href={item.href}>
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
-                        sidebarOpen ? "pl-5" : "",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                      )}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      {sidebarOpen && (
-                        <motion.span
-                          initial={false}
-                          animate={{ opacity: sidebarOpen ? 1 : 0 }}
-                          className="font-medium text-sm"
-                        >
-                          {item.label}
-                        </motion.span>
-                      )}
-                    </motion.div>
-                  </Link>
-                </TooltipTrigger>
-                {!sidebarOpen && (
-                  <TooltipContent side="right">
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            );
-          })}
-
-          {/* Research Section - Clinical Tools */}
-          {sidebarOpen && (
-            <p className="px-3 py-1 mt-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Clinical Tools
-            </p>
-          )}
-          {researchNavClinical.map((item) => {
-            const isActive = pathname === item.href;
-            const Icon = item.icon;
-
-            return (
-              <Tooltip key={item.id}>
-                <TooltipTrigger asChild>
-                  <Link href={item.href}>
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
-                        sidebarOpen ? "pl-5" : "",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                      )}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      {sidebarOpen && (
-                        <motion.span
-                          initial={false}
-                          animate={{ opacity: sidebarOpen ? 1 : 0 }}
-                          className="font-medium text-sm"
-                        >
-                          {item.label}
-                        </motion.span>
-                      )}
-                    </motion.div>
-                  </Link>
-                </TooltipTrigger>
-                {!sidebarOpen && (
-                  <TooltipContent side="right">
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            );
-          })}
-
-          {/* Research Section - Tools */}
-          {sidebarOpen && (
-            <p className="px-3 py-1 mt-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
-              Tools
-            </p>
-          )}
-          {researchNavTools.map((item) => {
-            const isActive = pathname === item.href;
-            const Icon = item.icon;
-
-            return (
-              <Tooltip key={item.id}>
-                <TooltipTrigger asChild>
-                  <Link href={item.href}>
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
-                        sidebarOpen ? "pl-5" : "",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                      )}
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      {sidebarOpen && (
-                        <motion.span
-                          initial={false}
-                          animate={{ opacity: sidebarOpen ? 1 : 0 }}
-                          className="font-medium text-sm"
-                        >
-                          {item.label}
-                        </motion.span>
-                      )}
-                    </motion.div>
-                  </Link>
-                </TooltipTrigger>
-                {!sidebarOpen && (
-                  <TooltipContent side="right">
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            );
-          })}
-
-          {/* Info Section */}
-          <Separator className="my-2" />
-          {infoNav.map((item) => {
-            const isActive = pathname === item.href;
-            const Icon = item.icon;
-
-            return (
-              <Tooltip key={item.id}>
-                <TooltipTrigger asChild>
-                  <Link href={item.href}>
-                    <motion.div
-                      whileHover={{ scale: 1.02 }}
-                      whileTap={{ scale: 0.98 }}
-                      className={cn(
-                        "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
-                        isActive
-                          ? "bg-primary text-primary-foreground"
-                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                      )}
-                    >
-                      <Icon className="h-5 w-5 shrink-0" />
-                      {sidebarOpen && (
-                        <motion.span
-                          initial={false}
-                          animate={{ opacity: sidebarOpen ? 1 : 0 }}
-                          className="font-medium text-sm"
-                        >
-                          {item.label}
-                        </motion.span>
-                      )}
-                    </motion.div>
-                  </Link>
-                </TooltipTrigger>
-                {!sidebarOpen && (
-                  <TooltipContent side="right">
-                    <p>{item.label}</p>
-                  </TooltipContent>
-                )}
-              </Tooltip>
-            );
-          })}
         </nav>
 
         <Separator />
@@ -474,21 +457,30 @@ export function Sidebar() {
           )}
 
           {/* Collapse Button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="w-full justify-center"
-          >
-            {sidebarOpen ? (
-              <>
-                <ChevronLeft className="h-4 w-4 mr-2" />
-                Collapse
-              </>
-            ) : (
-              <ChevronRight className="h-4 w-4" />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setSidebarOpen(!sidebarOpen)}
+                className="w-full justify-center"
+              >
+                {sidebarOpen ? (
+                  <>
+                    <ChevronLeft className="h-4 w-4 mr-2" />
+                    Collapse
+                  </>
+                ) : (
+                  <ChevronRight className="h-4 w-4" />
+                )}
+              </Button>
+            </TooltipTrigger>
+            {!sidebarOpen && (
+              <TooltipContent side="right">
+                <p>Expand Sidebar</p>
+              </TooltipContent>
             )}
-          </Button>
+          </Tooltip>
         </div>
       </motion.aside>
     </TooltipProvider>
