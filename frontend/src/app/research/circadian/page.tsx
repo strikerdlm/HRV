@@ -31,75 +31,93 @@ import type { CircadianResponse } from "@/types/research";
 // Default user ID when no user is selected
 const DEFAULT_USER_ID = "demo-user";
 
-// Circadian Clock Visualization
+// Circadian Clock Visualization (using radar chart for reliability)
 function CircadianClock({ data }: { data: CircadianResponse }) {
   const currentHour = data.phase_angle_hours ?? new Date().getHours();
 
+  // Generate hour labels for the radar
+  const hourLabels = data.hours.map((h) => `${h.toString().padStart(2, "0")}:00`);
+
   const option: Record<string, unknown> = {
-    polar: { radius: "75%" },
-    angleAxis: {
-      type: "value",
-      min: 0,
-      max: 24,
-      startAngle: 90,
-      clockwise: true,
-      splitNumber: 24,
-      axisLine: { show: false },
-      axisTick: { show: false },
-      axisLabel: {
-        formatter: (val: number) => (val === 24 ? "0" : val.toString().padStart(2, "0")),
+    radar: {
+      indicator: hourLabels.map((label) => ({
+        name: label,
+        max: 100,
+      })),
+      shape: "circle",
+      splitNumber: 5,
+      axisName: {
         color: SCIENTIFIC_COLORS.textPrimary,
+        fontSize: 10,
       },
       splitLine: {
-        show: true,
         lineStyle: { color: "rgba(100,100,100,0.2)" },
       },
-    },
-    radiusAxis: {
-      type: "value",
-      min: 0,
-      max: 100,
-      axisLine: { show: false },
-      axisTick: { show: false },
-      axisLabel: { show: false },
-      splitLine: { show: false },
+      splitArea: {
+        show: true,
+        areaStyle: {
+          color: ["rgba(100,100,100,0.05)", "rgba(100,100,100,0.1)"],
+        },
+      },
+      axisLine: {
+        lineStyle: { color: "rgba(100,100,100,0.3)" },
+      },
     },
     series: [
-      // Alertness area
       {
-        type: "bar",
-        coordinateSystem: "polar",
-        data: data.hours.map((h, i) => ({
-          value: [data.alertness_level[i], h + 0.5],
-          itemStyle: {
-            color:
-              data.alertness_level[i] >= 70
-                ? SCIENTIFIC_COLORS.success
-                : data.alertness_level[i] >= 50
-                  ? SCIENTIFIC_COLORS.warning
-                  : SCIENTIFIC_COLORS.danger,
-            opacity: 0.7,
-          },
-        })),
-        barWidth: "100%",
-      },
-      // Current time marker
-      {
-        type: "line",
-        coordinateSystem: "polar",
-        data: [
-          [0, currentHour],
-          [100, currentHour],
-        ],
-        lineStyle: { width: 3, color: SCIENTIFIC_COLORS.primary },
+        type: "radar",
         symbol: "none",
+        data: [
+          {
+            value: data.alertness_level,
+            name: "Alertness",
+            lineStyle: { width: 2, color: SCIENTIFIC_COLORS.primary },
+            areaStyle: {
+              color: {
+                type: "radial",
+                x: 0.5, y: 0.5, r: 0.5,
+                colorStops: [
+                  { offset: 0, color: "rgba(52, 152, 219, 0.1)" },
+                  { offset: 1, color: "rgba(52, 152, 219, 0.4)" },
+                ],
+              },
+            },
+            itemStyle: { color: SCIENTIFIC_COLORS.primary },
+          },
+        ],
       },
     ],
     tooltip: {
       trigger: "item",
-      formatter: (params: { value: [number, number] }) =>
-        `${Math.floor(params.value[1]).toString().padStart(2, "0")}:00<br/>Alertness: ${params.value[0].toFixed(0)}%`,
+      formatter: (params: { value: number[]; name: string }) => {
+        if (!params.value) return "";
+        const maxIdx = params.value.indexOf(Math.max(...params.value));
+        return `<strong>${params.name}</strong><br/>Peak: ${hourLabels[maxIdx]} (${params.value[maxIdx].toFixed(0)}%)`;
+      },
     },
+    graphic: [
+      {
+        type: "text",
+        left: "center",
+        top: "center",
+        style: {
+          text: `${currentHour.toString().padStart(2, "0")}:00`,
+          fontSize: 24,
+          fontWeight: "bold",
+          fill: SCIENTIFIC_COLORS.primary,
+        },
+      },
+      {
+        type: "text",
+        left: "center",
+        top: "55%",
+        style: {
+          text: "Current",
+          fontSize: 12,
+          fill: SCIENTIFIC_COLORS.textSecondary,
+        },
+      },
+    ],
   };
 
   return <EChartsWrapper option={option} height={400} showToolbox={false} />;
