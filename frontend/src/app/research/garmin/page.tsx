@@ -80,7 +80,7 @@ function MetricCard({
   );
 }
 
-// Body Battery Gauge
+// Body Battery Gauge - Elegant design with large arc and thin needle
 function BodyBatteryGauge({
   high,
   low,
@@ -89,22 +89,29 @@ function BodyBatteryGauge({
   low: number | null;
 }) {
   const highValue = high ?? 0;
-  const lowValue = low ?? 0;
+  const hasData = high !== null;
+  
+  const getBatteryColor = (v: number) => {
+    if (v >= 75) return SCIENTIFIC_COLORS.success;
+    if (v >= 50) return SCIENTIFIC_COLORS.primary;
+    if (v >= 25) return SCIENTIFIC_COLORS.warning;
+    return SCIENTIFIC_COLORS.danger;
+  };
 
   const option: Record<string, unknown> = {
     series: [
       {
         type: "gauge" as const,
-        center: ["50%", "60%"],
-        radius: "90%",
-        startAngle: 200,
-        endAngle: -20,
+        center: ["50%", "65%"],
+        radius: "95%",
+        startAngle: 180,
+        endAngle: 0,
         min: 0,
         max: 100,
         splitNumber: 10,
         axisLine: {
           lineStyle: {
-            width: 15,
+            width: 25,
             color: [
               [0.25, SCIENTIFIC_COLORS.danger],
               [0.5, SCIENTIFIC_COLORS.warning],
@@ -114,54 +121,71 @@ function BodyBatteryGauge({
           },
         },
         pointer: {
-          length: "60%",
+          icon: "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
+          length: "65%",
           width: 6,
+          offsetCenter: [0, "-10%"],
           itemStyle: {
-            color:
-              highValue >= 75
-                ? SCIENTIFIC_COLORS.success
-                : highValue >= 50
-                  ? SCIENTIFIC_COLORS.primary
-                  : highValue >= 25
-                    ? SCIENTIFIC_COLORS.warning
-                    : SCIENTIFIC_COLORS.danger,
+            color: hasData ? getBatteryColor(highValue) : "#94a3b8",
           },
         },
-        axisTick: { show: false },
-        splitLine: { show: false },
+        anchor: {
+          show: true,
+          showAbove: true,
+          size: 18,
+          itemStyle: {
+            borderWidth: 3,
+            borderColor: hasData ? getBatteryColor(highValue) : "#94a3b8",
+            color: "#fff",
+          },
+        },
+        axisTick: {
+          show: true,
+          splitNumber: 2,
+          length: 8,
+          distance: 5,
+          lineStyle: { color: "#64748b", width: 1 },
+        },
+        splitLine: {
+          show: true,
+          length: 15,
+          distance: 5,
+          lineStyle: { color: "#475569", width: 2 },
+        },
         axisLabel: {
-          distance: 25,
-          color: SCIENTIFIC_COLORS.textPrimary,
-          fontSize: 10,
+          distance: 30,
+          color: "#1e293b",
+          fontSize: 12,
+          fontWeight: "600",
         },
         detail: {
           valueAnimation: true,
-          formatter: (val: number) => (high !== null ? `${val}%` : "N/A"),
-          fontSize: 24,
+          formatter: () => hasData ? `${highValue}%` : "—",
+          fontSize: 38,
           fontWeight: "bold",
-          color: SCIENTIFIC_COLORS.textPrimary,
-          offsetCenter: [0, "25%"],
+          color: hasData ? getBatteryColor(highValue) : "#94a3b8",
+          offsetCenter: [0, "30%"],
         },
-        data: [{ value: highValue, name: "High" }],
+        data: [{ value: highValue }],
       },
     ],
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="h-full">
+      <CardHeader className="pb-0">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Battery className="h-5 w-5 text-success" />
           Body Battery
         </CardTitle>
         <CardDescription>
-          High: {high ?? "N/A"}% | Low: {low ?? "N/A"}%
+          High: {high ?? "—"}% | Low: {low ?? "—"}%
         </CardDescription>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         <EChartsWrapper
           option={option}
-          height={200}
+          height={260}
           showToolbox={false}
         />
       </CardContent>
