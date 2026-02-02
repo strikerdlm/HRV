@@ -10,6 +10,8 @@ import {
   WifiOff,
   Settings,
   Bell,
+  Rocket,
+  Microscope,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -21,6 +23,7 @@ import {
 } from "@/components/ui/tooltip";
 import { useAppStore } from "@/lib/store";
 import { checkHealth } from "@/lib/api";
+import { cn } from "@/lib/utils";
 
 interface HeaderProps {
   title: string;
@@ -28,7 +31,7 @@ interface HeaderProps {
 }
 
 export function Header({ title, description }: HeaderProps) {
-  const { debugMode, setDebugMode, activeMission } = useAppStore();
+  const { debugMode, setDebugMode, activeMission, appMode } = useAppStore();
   const [apiStatus, setApiStatus] = React.useState<"online" | "offline" | "checking">("checking");
 
   React.useEffect(() => {
@@ -46,6 +49,10 @@ export function Header({ title, description }: HeaderProps) {
     return () => clearInterval(interval);
   }, []);
 
+  const ModeIcon = appMode === "operational" ? Rocket : Microscope;
+  const modeLabel = appMode === "operational" ? "Operational" : "Research";
+  const modeColor = appMode === "operational" ? "text-primary" : "text-success";
+
   return (
     <TooltipProvider>
       <motion.header
@@ -61,9 +68,20 @@ export function Header({ title, description }: HeaderProps) {
               <p className="text-sm text-muted-foreground">{description}</p>
             )}
           </div>
-          <Badge variant="outline" className="hidden sm:flex">
-            {activeMission}
+          {/* Mode Badge */}
+          <Badge
+            variant="outline"
+            className={cn("hidden sm:flex items-center gap-1.5", modeColor)}
+          >
+            <ModeIcon className="h-3 w-3" />
+            {modeLabel}
           </Badge>
+          {/* Mission Badge - only in operational mode */}
+          {appMode === "operational" && (
+            <Badge variant="secondary" className="hidden md:flex">
+              {activeMission}
+            </Badge>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
