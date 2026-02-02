@@ -8,6 +8,7 @@ import {
   Zap,
   Wind,
   AlertTriangle,
+  AlertCircle,
   Clock,
   RefreshCw,
   Activity,
@@ -26,7 +27,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
-import { getCurrentSpaceWeather } from "@/lib/research-api";
+import { getCurrentSpaceWeather, refreshSpaceWeather } from "@/lib/research-api";
 import type {
   SpaceWeatherSnapshot,
   ImpactPrediction,
@@ -307,22 +308,39 @@ export default function SpaceWeatherPage() {
   const [data, setData] = React.useState<SpaceWeatherSnapshot | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [lastFetch, setLastFetch] = React.useState<Date | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchData = async (forceRefresh: boolean = false) => {
     setLoading(true);
+    setError(null);
     try {
-      const snapshot = await getCurrentSpaceWeather();
+      // Use refresh endpoint for force refresh, otherwise try current first
+      let snapshot: SpaceWeatherSnapshot;
+      if (forceRefresh) {
+        snapshot = await refreshSpaceWeather(true);
+      } else {
+        snapshot = await getCurrentSpaceWeather();
+      }
       setData(snapshot);
       setLastFetch(new Date());
-    } catch (error) {
-      console.error("Failed to fetch space weather:", error);
+      
+      // Check for errors in response
+      if (snapshot.errors && Object.keys(snapshot.errors).length > 0) {
+        const errorMsg = Object.values(snapshot.errors).join(", ");
+        if (errorMsg && !errorMsg.includes("nominal")) {
+          setError(errorMsg);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch space weather:", err);
+      setError(err instanceof Error ? err.message : "Failed to fetch data");
     } finally {
       setLoading(false);
     }
   };
 
   React.useEffect(() => {
-    fetchData();
+    fetchData(false);
   }, []);
 
   return (
@@ -354,13 +372,39 @@ export default function SpaceWeatherPage() {
               </Badge>
             )}
           </div>
-          <Button onClick={fetchData} disabled={loading}>
+          <Button onClick={() => fetchData(true)} disabled={loading}>
             <RefreshCw
               className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
             />
             Refresh Data
           </Button>
         </motion.div>
+
+        {/* Error Display */}
+        {error && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+          >
+            <Card className="border-destructive">
+              <CardContent className="pt-4">
+                <div className="flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
+                  <div>
+                    <p className="font-medium text-destructive">
+                      Data Fetch Error
+                    </p>
+                    <p className="text-sm text-muted-foreground">{error}</p>
+                    <p className="text-xs text-muted-foreground mt-2">
+                      Ensure the backend API is running on port 8180 and can
+                      reach NOAA/NASA services.
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        )}
 
         {/* Gauges Grid */}
         <div className="grid gap-4 md:grid-cols-3">
