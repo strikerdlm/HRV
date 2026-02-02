@@ -22,9 +22,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
 import { getPopulationNorms } from "@/lib/research-api";
+import { useAppStore } from "@/lib/store";
 import type { PopulationNormsResponse, AgeNorm } from "@/types/research";
 
-const DEMO_USER_ID = "demo-user";
+// Default user ID when no user is selected
+const DEFAULT_USER_ID = "demo-user";
 
 // Age-Stratified Bar Chart
 function NormsBarChart({ norms, metric }: { norms: AgeNorm[]; metric: string }) {
@@ -212,10 +214,14 @@ export default function NormsPage() {
   const [loading, setLoading] = React.useState(false);
   const [metric, setMetric] = React.useState<string>("rmssd");
 
+  // Get user ID from global store
+  const activeUserId = useAppStore((state) => state.activeUserId);
+  const userId = activeUserId ?? DEFAULT_USER_ID;
+
   const fetchData = React.useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getPopulationNorms(DEMO_USER_ID, metric);
+      const result = await getPopulationNorms(userId, metric);
       if (result.norms.length === 0) {
         // Demo data already provided by API
       }
@@ -225,7 +231,7 @@ export default function NormsPage() {
     } finally {
       setLoading(false);
     }
-  }, [metric]);
+  }, [userId, metric]);
 
   React.useEffect(() => {
     fetchData();
