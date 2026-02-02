@@ -668,27 +668,84 @@ export default function SpaceWeatherPage() {
               </CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <div>
-                  <h4 className="font-medium">Kp Index & HRV</h4>
+                  <h4 className="font-medium">Kp Index & Cardiovascular Effects</h4>
                   <p className="text-muted-foreground">
-                    Higher Kp values (≥5) have been associated with reduced
-                    parasympathetic activity (RMSSD, HF power) in multiple
-                    studies (Alabdulgader et al., 2018).
+                    The Kp index (0-9 scale) measures global geomagnetic disturbance. 
+                    Values ≥5 indicate geomagnetic storms that have been associated 
+                    with reduced parasympathetic activity (RMSSD, HF power) and 
+                    increased cardiovascular events in multiple epidemiological studies.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1 italic">
+                    Alabdulgader et al. (2018) found significant correlations between 
+                    Kp and HRV metrics in long-term monitoring.
                   </p>
                 </div>
                 <Separator />
                 <div>
-                  <h4 className="font-medium">Solar Wind Effects</h4>
+                  <h4 className="font-medium">Solar Wind & IMF Bz</h4>
                   <p className="text-muted-foreground">
-                    Solar wind speed &gt;500 km/s may precede autonomic changes
-                    by 12-36 hours. Monitor for potential HRV fluctuations.
+                    Solar wind speed &gt;500 km/s combined with southward IMF 
+                    (Bz &lt; 0) creates optimal conditions for geomagnetic coupling. 
+                    Effects on human physiology typically appear 12-36 hours after 
+                    the solar wind arrives at Earth.
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1 italic">
+                    The delay reflects both magnetospheric response time and 
+                    biological adaptation processes.
                   </p>
                 </div>
                 <Separator />
                 <div>
-                  <h4 className="font-medium">Polar H10 Timing</h4>
+                  <h4 className="font-medium">F10.7 Solar Radio Flux</h4>
                   <p className="text-muted-foreground">
-                    For clean HRV recordings, avoid measurements during
-                    geomagnetically disturbed periods (Kp ≥ 5).
+                    F10.7 (measured in Solar Flux Units) is a proxy for overall 
+                    solar activity including UV/EUV radiation. Values &gt;150 SFU 
+                    indicate high solar activity periods. This index follows the 
+                    ~11-year solar cycle.
+                  </p>
+                </div>
+                <Separator />
+                <div>
+                  <h4 className="font-medium">Polar H10 Recording Guidance</h4>
+                  <p className="text-muted-foreground">
+                    For optimal HRV baseline measurements, prefer geomagnetically 
+                    quiet periods (Kp &lt; 4). During storms (Kp ≥ 5), document 
+                    conditions but interpret results with caution. The app displays 
+                    recommended recording windows based on current conditions.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+            
+            {/* Measurement Recommendation */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Activity className="h-5 w-5 text-success" />
+                  Current Measurement Recommendation
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={`p-4 rounded-lg ${
+                  (data?.data.kp_index ?? 0) < 4 
+                    ? "bg-success/10 border border-success/30" 
+                    : (data?.data.kp_index ?? 0) < 5 
+                      ? "bg-warning/10 border border-warning/30"
+                      : "bg-danger/10 border border-danger/30"
+                }`}>
+                  <p className="font-medium">
+                    {(data?.data.kp_index ?? 0) < 4 
+                      ? "✓ Good Conditions for HRV Recording"
+                      : (data?.data.kp_index ?? 0) < 5 
+                        ? "⚠ Moderate Conditions - Proceed with Awareness"
+                        : "⚠ Disturbed Conditions - Consider Rescheduling Baseline Measurements"}
+                  </p>
+                  <p className="text-sm text-muted-foreground mt-2">
+                    {(data?.data.kp_index ?? 0) < 4 
+                      ? "Current geomagnetic conditions are quiet. This is an optimal window for establishing or updating your HRV baseline."
+                      : (data?.data.kp_index ?? 0) < 5 
+                        ? "Minor geomagnetic activity detected. Recordings are acceptable but document current space weather conditions."
+                        : "Geomagnetic storm in progress. HRV measurements may show atypical patterns. Document conditions for later correlation analysis."}
                   </p>
                 </div>
               </CardContent>
