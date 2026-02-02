@@ -291,10 +291,10 @@ function NewUserForm({
 
 export default function ProfilePage() {
   const [users, setUsers] = React.useState<UserProfile[]>([]);
-  const { selectedUserId, setSelectedUserId } = useAppStore();
+  const { activeUserId, setActiveUserId } = useAppStore();
   const [loading, setLoading] = React.useState(true);
 
-  const selectedUser = users.find((u) => u.user_id === selectedUserId) || null;
+  const selectedUser = users.find((u) => u.user_id === activeUserId) || null;
 
   const fetchUsers = async () => {
     try {
@@ -331,8 +331,8 @@ export default function ProfilePage() {
   const handleDelete = async (userId: string) => {
     try {
       await deleteUser(userId);
-      if (selectedUserId === userId) {
-        setSelectedUserId(null);
+      if (activeUserId === userId) {
+        setActiveUserId(null);
       }
       await fetchUsers();
     } catch (error) {
@@ -357,8 +357,8 @@ export default function ProfilePage() {
               <UserCard
                 key={user.user_id}
                 user={user}
-                isSelected={selectedUserId === user.user_id}
-                onSelect={() => setSelectedUserId(user.user_id)}
+                isSelected={activeUserId === user.user_id}
+                onSelect={() => setActiveUserId(user.user_id)}
                 onDelete={() => handleDelete(user.user_id)}
               />
             ))}
