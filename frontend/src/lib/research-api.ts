@@ -12,7 +12,7 @@ import type {
   CorrelationAnalysisResult,
 } from "@/types/research";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8180";
 
 /**
  * Get current space weather data and impact predictions
@@ -183,5 +183,86 @@ export async function getSpaceWeatherHistory(params: {
   } catch (error) {
     console.error("Error fetching space weather history:", error);
     return [];
+  }
+}
+
+/**
+ * Force refresh space weather data from NOAA/NASA sources
+ */
+export async function refreshSpaceWeather(
+  force: boolean = true
+): Promise<SpaceWeatherSnapshot> {
+  try {
+    const response = await fetch(`${API_BASE}/api/research/space-weather/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ force }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error("Error refreshing space weather:", error);
+
+    // Return empty snapshot on error
+    return {
+      data: {
+        kp_index: null,
+        kp_status: null,
+        dst_index: null,
+        f10_7_flux: null,
+        f10_7_status: null,
+        solar_wind_speed: null,
+        solar_wind_density: null,
+        solar_wind_bz: null,
+        xray_flux: null,
+        xray_class: null,
+        proton_flux_10mev: null,
+        proton_flux_100mev: null,
+        sep_event_active: false,
+        geomagnetic_status: null,
+        radiation_status: null,
+        fetched_at: null,
+      },
+      predictions: [],
+      next_impact: null,
+      most_severe: null,
+      errors: {
+        refresh: error instanceof Error ? error.message : "Unknown error",
+      },
+    };
+  }
+}
+
+/**
+ * Sync Garmin Connect data for a user
+ */
+export async function syncGarminData(
+  userId: string,
+  days: number = 14
+): Promise<{ success: boolean; records_synced: number; message: string; date_range?: string }> {
+  try {
+    const response = await fetch(`${API_BASE}/api/research/garmin/sync/${userId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ days }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.detail || `HTTP ${response.status}: ${response.statusText}`
+      );
+    }
+
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error("Error syncing Garmin data:", error);
+    throw error;
   }
 }
