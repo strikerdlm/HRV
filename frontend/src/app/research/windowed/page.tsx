@@ -25,9 +25,11 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
 import { getHRVWindowed } from "@/lib/research-api";
+import { useAppStore } from "@/lib/store";
 import type { WindowedMetricsResponse } from "@/types/research";
 
-const DEMO_USER_ID = "demo-user";
+// Default user ID when no user is selected
+const DEFAULT_USER_ID = "demo-user";
 
 // Multi-line time series chart
 function WindowedChart({ data, metric }: { data: WindowedMetricsResponse; metric: "rmssd" | "sdnn" | "lf_hf_ratio" }) {
@@ -199,10 +201,14 @@ export default function WindowedPage() {
   const [windowSize, setWindowSize] = React.useState(300);
   const [stepSize, setStepSize] = React.useState(60);
 
+  // Get user ID from global store
+  const activeUserId = useAppStore((state) => state.activeUserId);
+  const userId = activeUserId ?? DEFAULT_USER_ID;
+
   const fetchData = React.useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getHRVWindowed(DEMO_USER_ID, windowSize, stepSize);
+      const result = await getHRVWindowed(userId, windowSize, stepSize);
       if (result.n_windows === 0) {
         // Generate demo data
         const n = 50;
@@ -260,7 +266,7 @@ export default function WindowedPage() {
     } finally {
       setLoading(false);
     }
-  }, [windowSize, stepSize]);
+  }, [userId, windowSize, stepSize]);
 
   React.useEffect(() => {
     fetchData();
