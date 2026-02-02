@@ -325,3 +325,379 @@ export const CATEGORY_ICONS: Record<EnergyCategory, string> = {
   hss: "🌬️",
   geomagnetic: "🧭",
 };
+
+// ---------------------------------------------------------------------------
+// Time Series Types (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface DeviationZone {
+  start_idx: number;
+  end_idx: number;
+  start_time: string | null;
+  end_time: string | null;
+  severity: "normal" | "mild" | "moderate" | "severe";
+  direction: "high" | "low";
+  mean_deviation_pct: number;
+}
+
+export interface RRTimeSeriesResponse {
+  timestamps: string[];
+  rr_ms: number[];
+  hr_bpm: number[];
+  deviation_zones: DeviationZone[];
+  mean_rr: number | null;
+  std_rr: number | null;
+  min_rr: number | null;
+  max_rr: number | null;
+  total_beats: number;
+  duration_seconds: number | null;
+  percentiles: Record<string, number>;
+  age_norm_mean: number | null;
+  age_norm_low: number | null;
+  age_norm_high: number | null;
+}
+
+// ---------------------------------------------------------------------------
+// Frequency Domain Types (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface BandPower {
+  power_ms2: number;
+  power_pct: number;
+  peak_hz: number | null;
+  normalized_units: number | null;
+}
+
+export interface FrequencyDomainResponse {
+  frequencies: number[];
+  psd: number[];
+  vlf: BandPower | null;
+  lf: BandPower | null;
+  hf: BandPower | null;
+  total_power: number | null;
+  lf_hf_ratio: number | null;
+  lf_nu: number | null;
+  hf_nu: number | null;
+  method: string;
+  window_length: number | null;
+  autonomic_balance: "parasympathetic" | "balanced" | "sympathetic";
+  clinical_notes: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Nonlinear Analysis Types (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface EllipseParams {
+  center_x: number;
+  center_y: number;
+  width: number;
+  height: number;
+  angle: number;
+}
+
+export interface NonlinearResponse {
+  rr_n: number[];
+  rr_n1: number[];
+  sd1: number | null;
+  sd2: number | null;
+  sd1_sd2_ratio: number | null;
+  ellipse: EllipseParams | null;
+  dfa_alpha1: number | null;
+  dfa_alpha2: number | null;
+  dfa_alpha1_interpretation: string | null;
+  sample_entropy: number | null;
+  approximate_entropy: number | null;
+  complexity_state: "reduced" | "normal" | "elevated";
+  interpretation: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Windowed Analysis Types (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface WindowedMetricsResponse {
+  timestamps: string[];
+  rmssd: (number | null)[];
+  sdnn: (number | null)[];
+  pnn50: (number | null)[];
+  mean_hr: (number | null)[];
+  lf_power: (number | null)[];
+  hf_power: (number | null)[];
+  lf_hf_ratio: (number | null)[];
+  rmssd_ewma: (number | null)[];
+  sdnn_ewma: (number | null)[];
+  anomaly_indices: number[];
+  cluster_labels: number[];
+  window_size_seconds: number;
+  step_size_seconds: number;
+  n_windows: number;
+}
+
+// ---------------------------------------------------------------------------
+// HRF Analysis Types (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface HRFResponse {
+  pip: number | null;
+  pip_hard: number | null;
+  pip_soft: number | null;
+  ials: number | null;
+  pss: number | null;
+  pas: number | null;
+  pip_trend: number[];
+  timestamps: string[];
+  pip_rmssd_correlation: number | null;
+  fragmentation_level: "low" | "normal" | "elevated" | "high";
+  af_risk_indicator: string | null;
+  clinical_notes: string[];
+  quality_ok: boolean;
+}
+
+// ---------------------------------------------------------------------------
+// Readiness Types (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface ReadinessComponent {
+  name: string;
+  value: number;
+  weight: number;
+  contribution: number;
+  status: "good" | "warning" | "poor";
+}
+
+export interface ReadinessResponse {
+  score: number | null;
+  baseline: number | null;
+  deviation_from_baseline: number | null;
+  trend_direction: "improving" | "stable" | "declining";
+  trend_7day: number[];
+  trend_dates: string[];
+  components: ReadinessComponent[];
+  readiness_status: "ready" | "moderate" | "rest_recommended";
+  recommendations: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Fatigue Types (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface FatigueResponse {
+  effectiveness_pct: number | null;
+  fatigue_level: "well_rested" | "normal" | "fatigued" | "severely_fatigued";
+  forecast_hours: number[];
+  forecast_effectiveness: number[];
+  sleep_debt_hours: number | null;
+  optimal_sleep_hours: number;
+  risk_level: "low" | "moderate" | "high" | "critical";
+  risk_color: "green" | "yellow" | "red";
+  recommendations: string[];
+  next_optimal_sleep: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Circadian Types (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface CircadianResponse {
+  current_phase: "day" | "evening" | "night" | "morning";
+  phase_angle_hours: number | null;
+  optimal_performance_start: string | null;
+  optimal_performance_end: string | null;
+  optimal_sleep_start: string | null;
+  hours: number[];
+  alertness_level: number[];
+  light_exposure_lux: number | null;
+  light_recommendation: string | null;
+  chronotype: "early" | "intermediate" | "late";
+  notes: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Population Norms Types (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface AgeNorm {
+  age_range: string;
+  metric: string;
+  mean: number;
+  std: number;
+  p5: number;
+  p25: number;
+  p50: number;
+  p75: number;
+  p95: number;
+  source: string;
+}
+
+export interface PopulationNormsResponse {
+  norms: AgeNorm[];
+  user_age_group: string | null;
+  user_percentiles: Record<string, number>;
+  primary_source: string;
+  additional_sources: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Export Types (Phase 1)
+// ---------------------------------------------------------------------------
+
+export interface ExportRequest {
+  format: "csv" | "json" | "markdown" | "pdf";
+  include_timeseries: boolean;
+  include_frequency: boolean;
+  include_nonlinear: boolean;
+  include_hrf: boolean;
+  date_range_days: number;
+}
+
+export interface ExportResponse {
+  format: string;
+  filename: string;
+  content_type: string;
+  data: string;
+  records_exported: number;
+  date_range: string;
+}
+
+// ---------------------------------------------------------------------------
+// Comprehensive Metrics Types (Phase 3)
+// ---------------------------------------------------------------------------
+
+export interface ComprehensiveHRVMetrics {
+  // Time domain
+  mean_rr: number | null;
+  sdnn: number | null;
+  sdsd: number | null;
+  rmssd: number | null;
+  nn50: number | null;
+  pnn50: number | null;
+  nn20: number | null;
+  pnn20: number | null;
+  cvnn: number | null;
+  cvsd: number | null;
+  mean_hr: number | null;
+  sd_hr: number | null;
+  min_hr: number | null;
+  max_hr: number | null;
+  
+  // Frequency domain
+  vlf_power: number | null;
+  lf_power: number | null;
+  hf_power: number | null;
+  total_power: number | null;
+  lf_nu: number | null;
+  hf_nu: number | null;
+  lf_hf_ratio: number | null;
+  
+  // Nonlinear
+  sd1: number | null;
+  sd2: number | null;
+  sd1_sd2_ratio: number | null;
+  csi: number | null;  // Cardiac Sympathetic Index
+  cvi: number | null;  // Cardiac Vagal Index
+  dfa_alpha1: number | null;
+  dfa_alpha2: number | null;
+  sample_entropy: number | null;
+  approximate_entropy: number | null;
+  
+  // HRF
+  pip: number | null;
+  ials: number | null;
+  pss: number | null;
+  pas: number | null;
+  
+  // Geometric
+  hrv_triangular_index: number | null;
+  tinn: number | null;
+  
+  // Advanced
+  baevsky_stress_index: number | null;
+  prsa_ac: number | null;  // Phase-Rectified Signal Averaging - Acceleration
+  prsa_dc: number | null;  // Phase-Rectified Signal Averaging - Deceleration
+}
+
+// ---------------------------------------------------------------------------
+// ANS Function Test Types (Phase 4)
+// ---------------------------------------------------------------------------
+
+export interface ANSTestResult {
+  test_name: string;
+  value: number | null;
+  normal_range: [number, number];
+  unit: string;
+  status: "normal" | "borderline" | "abnormal";
+  interpretation: string;
+}
+
+export interface ANSFunctionResponse {
+  ratio_30_15: ANSTestResult | null;
+  valsalva_ratio: ANSTestResult | null;
+  deep_breathing_ei: ANSTestResult | null;
+  overall_autonomic_function: "normal" | "borderline" | "abnormal";
+  summary: string[];
+  recommendations: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Scientific References Types (Phase 5)
+// ---------------------------------------------------------------------------
+
+export interface ScientificReference {
+  id: string;
+  authors: string;
+  year: number;
+  title: string;
+  journal: string;
+  volume: string | null;
+  pages: string | null;
+  doi: string | null;
+  pmid: string | null;
+  category: string;
+  summary: string;
+}
+
+export interface MethodologySection {
+  id: string;
+  title: string;
+  content: string;
+  references: string[];
+  subsections: MethodologySection[];
+}
+
+// ---------------------------------------------------------------------------
+// Color and Styling Constants
+// ---------------------------------------------------------------------------
+
+export const DEVIATION_COLORS: Record<DeviationZone["severity"], string> = {
+  normal: "#27ae60",
+  mild: "#f1c40f",
+  moderate: "#e67e22",
+  severe: "#e74c3c",
+};
+
+export const READINESS_COLORS: Record<ReadinessResponse["readiness_status"], string> = {
+  ready: "#27ae60",
+  moderate: "#f39c12",
+  rest_recommended: "#e74c3c",
+};
+
+export const FATIGUE_COLORS: Record<FatigueResponse["fatigue_level"], string> = {
+  well_rested: "#27ae60",
+  normal: "#3498db",
+  fatigued: "#f39c12",
+  severely_fatigued: "#e74c3c",
+};
+
+export const COMPLEXITY_COLORS: Record<NonlinearResponse["complexity_state"], string> = {
+  reduced: "#e74c3c",
+  normal: "#27ae60",
+  elevated: "#f39c12",
+};
+
+export const FRAGMENTATION_COLORS: Record<HRFResponse["fragmentation_level"], string> = {
+  low: "#27ae60",
+  normal: "#3498db",
+  elevated: "#f39c12",
+  high: "#e74c3c",
+};
