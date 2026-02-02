@@ -19,7 +19,7 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8180";
  */
 export async function getCurrentSpaceWeather(): Promise<SpaceWeatherSnapshot> {
   try {
-    const response = await fetch(`${API_BASE}/api/space-weather/current`, {
+    const response = await fetch(`${API_BASE}/api/research/space-weather/current`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });
