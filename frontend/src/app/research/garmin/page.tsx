@@ -45,7 +45,7 @@ function MetricCard({
   description,
 }: {
   title: string;
-  value: number | string | null;
+  value: number | string | null | undefined;
   unit?: string;
   icon: React.ElementType;
   color: string;
@@ -85,8 +85,8 @@ function BodyBatteryGauge({
   high,
   low,
 }: {
-  high: number | null;
-  low: number | null;
+  high: number | null | undefined;
+  low: number | null | undefined;
 }) {
   const highValue = high ?? 0;
   const hasData = high !== null;
