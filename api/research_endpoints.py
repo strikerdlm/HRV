@@ -909,3 +909,1292 @@ async def refresh_space_weather(
     except Exception as exc:
         _LOGGER.error(f"Error refreshing space weather: {exc}")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# New HRV Analysis Endpoints (Phase 1)
+# ---------------------------------------------------------------------------
+
+
+class DeviationZone(BaseModel):
+    """RR interval deviation zone."""
+    
+    start_idx: int
+    end_idx: int
+    start_time: Optional[str] = None
+    end_time: Optional[str] = None
+    severity: str  # normal, mild, moderate, severe
+    direction: str  # high, low
+    mean_deviation_pct: float
+
+
+class RRTimeSeriesResponse(BaseModel):
+    """RR interval time series with deviation analysis."""
+    
+    timestamps: List[str] = Field(default_factory=list)
+    rr_ms: List[float] = Field(default_factory=list)
+    hr_bpm: List[float] = Field(default_factory=list)
+    deviation_zones: List[DeviationZone] = Field(default_factory=list)
+    
+    # Summary statistics
+    mean_rr: Optional[float] = None
+    std_rr: Optional[float] = None
+    min_rr: Optional[float] = None
+    max_rr: Optional[float] = None
+    total_beats: int = 0
+    duration_seconds: Optional[float] = None
+    
+    # Percentile distribution
+    percentiles: Dict[str, float] = Field(default_factory=dict)
+    
+    # Age-stratified reference (for visual bands)
+    age_norm_mean: Optional[float] = None
+    age_norm_low: Optional[float] = None
+    age_norm_high: Optional[float] = None
+
+
+@router.get("/hrv/timeseries/{user_id}", response_model=RRTimeSeriesResponse)
+async def get_hrv_timeseries(
+    user_id: str,
+    limit: int = Query(default=1000, ge=100, le=10000),
+) -> RRTimeSeriesResponse:
+    """Get RR interval time series with deviation zones for visualization."""
+    try:
+        import numpy as np
+        from user_database import UserDatabase
+        
+        db = UserDatabase()
+        
+        # Get user's RR data from latest recording
+        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
+        
+        if not history:
+            return RRTimeSeriesResponse()
+        
+        latest = history[0]
+        rr_data = latest.rr_intervals_ms or []
+        
+        if not rr_data:
+            return RRTimeSeriesResponse()
+        
+        rr_array = np.array(rr_data[:limit], dtype=float)
+        
+        # Generate timestamps (cumulative from RR intervals)
+        cumulative_ms = np.cumsum(rr_array)
+        start_time = latest.recorded_at or datetime.now(timezone.utc)
+        timestamps = [
+            (start_time + timedelta(milliseconds=float(ms))).isoformat()
+            for ms in cumulative_ms
+        ]
+        
+        # Calculate HR from RR
+        hr_bpm = [60000.0 / rr if rr > 0 else 0 for rr in rr_array]
+        
+        # Calculate deviation zones using robust z-scores
+        mean_rr = float(np.mean(rr_array))
+        std_rr = float(np.std(rr_array))
+        mad = float(np.median(np.abs(rr_array - np.median(rr_array))))
+        
+        deviation_zones = []
+        if mad > 0:
+            z_scores = (rr_array - np.median(rr_array)) / (1.4826 * mad)
+            
+            in_zone = False
+            zone_start = 0
+            zone_severity = "normal"
+            zone_direction = "high"
+            
+            for i, z in enumerate(z_scores):
+                if abs(z) > 2:  # Deviation threshold
+                    if not in_zone:
+                        in_zone = True
+                        zone_start = i
+                        zone_direction = "high" if z > 0 else "low"
+                        zone_severity = "severe" if abs(z) > 3 else "moderate" if abs(z) > 2.5 else "mild"
+                else:
+                    if in_zone:
+                        zone_end = i
+                        if zone_end - zone_start >= 3:  # Min 3 beats
+                            deviation_zones.append(DeviationZone(
+                                start_idx=zone_start,
+                                end_idx=zone_end,
+                                start_time=timestamps[zone_start] if zone_start < len(timestamps) else None,
+                                end_time=timestamps[zone_end - 1] if zone_end - 1 < len(timestamps) else None,
+                                severity=zone_severity,
+                                direction=zone_direction,
+                                mean_deviation_pct=float(np.mean(np.abs(z_scores[zone_start:zone_end])) * 100),
+                            ))
+                        in_zone = False
+        
+        # Calculate percentiles
+        percentiles = {
+            "p5": float(np.percentile(rr_array, 5)),
+            "p25": float(np.percentile(rr_array, 25)),
+            "p50": float(np.percentile(rr_array, 50)),
+            "p75": float(np.percentile(rr_array, 75)),
+            "p95": float(np.percentile(rr_array, 95)),
+        }
+        
+        return RRTimeSeriesResponse(
+            timestamps=timestamps,
+            rr_ms=[float(r) for r in rr_array],
+            hr_bpm=hr_bpm,
+            deviation_zones=deviation_zones,
+            mean_rr=mean_rr,
+            std_rr=std_rr,
+            min_rr=float(np.min(rr_array)),
+            max_rr=float(np.max(rr_array)),
+            total_beats=len(rr_array),
+            duration_seconds=float(cumulative_ms[-1]) / 1000 if len(cumulative_ms) > 0 else None,
+            percentiles=percentiles,
+            age_norm_mean=850.0,  # Placeholder - should come from population_norms
+            age_norm_low=700.0,
+            age_norm_high=1000.0,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error fetching HRV timeseries for {user_id}: {exc}")
+        return RRTimeSeriesResponse()
+
+
+class BandPower(BaseModel):
+    """Frequency band power details."""
+    
+    power_ms2: float
+    power_pct: float
+    peak_hz: Optional[float] = None
+    normalized_units: Optional[float] = None
+
+
+class FrequencyDomainResponse(BaseModel):
+    """Frequency domain HRV analysis results."""
+    
+    # PSD data for plotting
+    frequencies: List[float] = Field(default_factory=list)
+    psd: List[float] = Field(default_factory=list)
+    
+    # Band powers
+    vlf: Optional[BandPower] = None
+    lf: Optional[BandPower] = None
+    hf: Optional[BandPower] = None
+    total_power: Optional[float] = None
+    
+    # Ratios
+    lf_hf_ratio: Optional[float] = None
+    lf_nu: Optional[float] = None
+    hf_nu: Optional[float] = None
+    
+    # Method info
+    method: str = "welch"
+    window_length: Optional[int] = None
+    
+    # Interpretation
+    autonomic_balance: str = "balanced"  # parasympathetic, balanced, sympathetic
+    clinical_notes: List[str] = Field(default_factory=list)
+
+
+@router.get("/hrv/frequency/{user_id}", response_model=FrequencyDomainResponse)
+async def get_hrv_frequency(
+    user_id: str,
+    method: str = Query(default="welch", description="PSD method: welch, periodogram, ar"),
+) -> FrequencyDomainResponse:
+    """Get frequency domain HRV analysis with PSD and band powers."""
+    try:
+        import numpy as np
+        from user_database import UserDatabase
+        from hrv_core import compute_frequency_domain_metrics
+        
+        db = UserDatabase()
+        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
+        
+        if not history:
+            return FrequencyDomainResponse()
+        
+        latest = history[0]
+        rr_data = latest.rr_intervals_ms or []
+        
+        if len(rr_data) < 100:
+            return FrequencyDomainResponse(
+                clinical_notes=["Insufficient data for frequency analysis (need ≥100 beats)"]
+            )
+        
+        rr_array = np.array(rr_data, dtype=float)
+        
+        # Compute frequency metrics
+        freq_metrics = await asyncio.to_thread(
+            compute_frequency_domain_metrics,
+            rr_array,
+            method=method,
+        )
+        
+        # Get PSD arrays if available
+        frequencies = freq_metrics.get("frequencies", [])
+        psd = freq_metrics.get("psd", [])
+        
+        # Calculate total power
+        vlf_power = freq_metrics.get("vlf_power", 0) or 0
+        lf_power = freq_metrics.get("lf_power", 0) or 0
+        hf_power = freq_metrics.get("hf_power", 0) or 0
+        total = vlf_power + lf_power + hf_power
+        
+        # Create band power objects
+        vlf = BandPower(
+            power_ms2=vlf_power,
+            power_pct=(vlf_power / total * 100) if total > 0 else 0,
+            peak_hz=freq_metrics.get("vlf_peak"),
+        )
+        lf = BandPower(
+            power_ms2=lf_power,
+            power_pct=(lf_power / total * 100) if total > 0 else 0,
+            peak_hz=freq_metrics.get("lf_peak"),
+            normalized_units=freq_metrics.get("lf_nu"),
+        )
+        hf = BandPower(
+            power_ms2=hf_power,
+            power_pct=(hf_power / total * 100) if total > 0 else 0,
+            peak_hz=freq_metrics.get("hf_peak"),
+            normalized_units=freq_metrics.get("hf_nu"),
+        )
+        
+        # Determine autonomic balance
+        lf_hf = freq_metrics.get("lf_hf_ratio", 1.0) or 1.0
+        if lf_hf < 0.5:
+            balance = "parasympathetic"
+        elif lf_hf > 2.0:
+            balance = "sympathetic"
+        else:
+            balance = "balanced"
+        
+        # Clinical notes
+        notes = []
+        if hf_power > 0 and hf_power < 100:
+            notes.append("Low HF power may indicate reduced parasympathetic activity")
+        if lf_hf > 3.0:
+            notes.append("Elevated LF/HF ratio suggests sympathetic dominance")
+        if total < 500:
+            notes.append("Low total power may indicate autonomic dysfunction")
+        
+        return FrequencyDomainResponse(
+            frequencies=[float(f) for f in frequencies] if len(frequencies) > 0 else [],
+            psd=[float(p) for p in psd] if len(psd) > 0 else [],
+            vlf=vlf,
+            lf=lf,
+            hf=hf,
+            total_power=total,
+            lf_hf_ratio=lf_hf,
+            lf_nu=freq_metrics.get("lf_nu"),
+            hf_nu=freq_metrics.get("hf_nu"),
+            method=method,
+            autonomic_balance=balance,
+            clinical_notes=notes,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error computing frequency domain for {user_id}: {exc}")
+        return FrequencyDomainResponse()
+
+
+class EllipseParams(BaseModel):
+    """Poincare ellipse parameters."""
+    
+    center_x: float
+    center_y: float
+    width: float  # 2*SD2
+    height: float  # 2*SD1
+    angle: float  # Rotation angle (typically 45 degrees)
+
+
+class NonlinearResponse(BaseModel):
+    """Nonlinear HRV analysis results."""
+    
+    # Poincare plot data
+    rr_n: List[float] = Field(default_factory=list)  # RR(n)
+    rr_n1: List[float] = Field(default_factory=list)  # RR(n+1)
+    
+    # Poincare metrics
+    sd1: Optional[float] = None
+    sd2: Optional[float] = None
+    sd1_sd2_ratio: Optional[float] = None
+    ellipse: Optional[EllipseParams] = None
+    
+    # DFA metrics
+    dfa_alpha1: Optional[float] = None
+    dfa_alpha2: Optional[float] = None
+    dfa_alpha1_interpretation: Optional[str] = None
+    
+    # Entropy metrics
+    sample_entropy: Optional[float] = None
+    approximate_entropy: Optional[float] = None
+    
+    # Complexity interpretation
+    complexity_state: str = "normal"  # reduced, normal, elevated
+    interpretation: List[str] = Field(default_factory=list)
+
+
+@router.get("/hrv/nonlinear/{user_id}", response_model=NonlinearResponse)
+async def get_hrv_nonlinear(user_id: str) -> NonlinearResponse:
+    """Get nonlinear HRV analysis including Poincare, DFA, and entropy."""
+    try:
+        import numpy as np
+        from user_database import UserDatabase
+        from hrv_core import compute_poincare_metrics, compute_dfa_metrics, compute_entropy_metrics
+        
+        db = UserDatabase()
+        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
+        
+        if not history:
+            return NonlinearResponse()
+        
+        latest = history[0]
+        rr_data = latest.rr_intervals_ms or []
+        
+        if len(rr_data) < 30:
+            return NonlinearResponse(interpretation=["Insufficient data for nonlinear analysis"])
+        
+        rr_array = np.array(rr_data, dtype=float)
+        
+        # Poincare data
+        rr_n = rr_array[:-1]
+        rr_n1 = rr_array[1:]
+        
+        # Compute Poincare metrics
+        poincare = await asyncio.to_thread(compute_poincare_metrics, rr_array)
+        
+        sd1 = poincare.get("sd1", 0)
+        sd2 = poincare.get("sd2", 0)
+        
+        # Ellipse params
+        ellipse = EllipseParams(
+            center_x=float(np.mean(rr_n)),
+            center_y=float(np.mean(rr_n1)),
+            width=2 * sd2 if sd2 else 0,
+            height=2 * sd1 if sd1 else 0,
+            angle=45.0,
+        )
+        
+        # DFA metrics
+        dfa = await asyncio.to_thread(compute_dfa_metrics, rr_array)
+        alpha1 = dfa.get("dfa_alpha1")
+        
+        # DFA interpretation
+        alpha1_interp = None
+        if alpha1 is not None:
+            if alpha1 < 0.5:
+                alpha1_interp = "Anti-correlated, suggests cardiac pathology"
+            elif alpha1 < 0.75:
+                alpha1_interp = "Reduced correlation, may indicate autonomic dysfunction"
+            elif alpha1 <= 1.0:
+                alpha1_interp = "Normal fractal scaling (healthy heart)"
+            elif alpha1 <= 1.5:
+                alpha1_interp = "Strong correlation, normal or slightly elevated"
+            else:
+                alpha1_interp = "Brownian noise, may indicate loss of complexity"
+        
+        # Entropy metrics
+        try:
+            entropy = await asyncio.to_thread(compute_entropy_metrics, rr_array)
+            sample_ent = entropy.get("sample_entropy")
+            approx_ent = entropy.get("approximate_entropy")
+        except Exception:
+            sample_ent = None
+            approx_ent = None
+        
+        # Determine complexity state
+        complexity = "normal"
+        interp = []
+        
+        if sd1 and sd1 < 20:
+            complexity = "reduced"
+            interp.append("Low SD1 indicates reduced short-term variability")
+        if alpha1 and (alpha1 < 0.65 or alpha1 > 1.35):
+            complexity = "reduced" if alpha1 < 0.65 else "elevated"
+            interp.append(f"DFA α1 = {alpha1:.2f} - {alpha1_interp}")
+        if sample_ent and sample_ent < 1.0:
+            interp.append("Low sample entropy suggests reduced complexity")
+        
+        if not interp:
+            interp.append("Nonlinear dynamics within normal range")
+        
+        return NonlinearResponse(
+            rr_n=[float(r) for r in rr_n[:1000]],  # Limit for plotting
+            rr_n1=[float(r) for r in rr_n1[:1000]],
+            sd1=sd1,
+            sd2=sd2,
+            sd1_sd2_ratio=sd1 / sd2 if sd2 and sd2 > 0 else None,
+            ellipse=ellipse,
+            dfa_alpha1=alpha1,
+            dfa_alpha2=dfa.get("dfa_alpha2"),
+            dfa_alpha1_interpretation=alpha1_interp,
+            sample_entropy=sample_ent,
+            approximate_entropy=approx_ent,
+            complexity_state=complexity,
+            interpretation=interp,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error computing nonlinear metrics for {user_id}: {exc}")
+        return NonlinearResponse()
+
+
+class WindowedMetricsResponse(BaseModel):
+    """Windowed HRV analysis over time."""
+    
+    timestamps: List[str] = Field(default_factory=list)
+    
+    # Time domain per window
+    rmssd: List[Optional[float]] = Field(default_factory=list)
+    sdnn: List[Optional[float]] = Field(default_factory=list)
+    pnn50: List[Optional[float]] = Field(default_factory=list)
+    mean_hr: List[Optional[float]] = Field(default_factory=list)
+    
+    # Frequency domain per window
+    lf_power: List[Optional[float]] = Field(default_factory=list)
+    hf_power: List[Optional[float]] = Field(default_factory=list)
+    lf_hf_ratio: List[Optional[float]] = Field(default_factory=list)
+    
+    # EWMA trends
+    rmssd_ewma: List[Optional[float]] = Field(default_factory=list)
+    sdnn_ewma: List[Optional[float]] = Field(default_factory=list)
+    
+    # Anomaly detection
+    anomaly_indices: List[int] = Field(default_factory=list)
+    cluster_labels: List[int] = Field(default_factory=list)
+    
+    # Config
+    window_size_seconds: int = 300
+    step_size_seconds: int = 60
+    n_windows: int = 0
+
+
+@router.get("/hrv/windowed/{user_id}", response_model=WindowedMetricsResponse)
+async def get_hrv_windowed(
+    user_id: str,
+    window_size: int = Query(default=300, ge=60, le=600, description="Window size in seconds"),
+    step_size: int = Query(default=60, ge=30, le=300, description="Step size in seconds"),
+) -> WindowedMetricsResponse:
+    """Get windowed HRV analysis over time with trend detection."""
+    try:
+        import numpy as np
+        import pandas as pd
+        from user_database import UserDatabase
+        from hrv_core import compute_windowed_hrv
+        
+        db = UserDatabase()
+        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
+        
+        if not history:
+            return WindowedMetricsResponse()
+        
+        latest = history[0]
+        rr_data = latest.rr_intervals_ms or []
+        
+        if len(rr_data) < 100:
+            return WindowedMetricsResponse()
+        
+        rr_array = np.array(rr_data, dtype=float)
+        
+        # Create DataFrame with cumulative timestamps
+        cumulative_ms = np.cumsum(rr_array)
+        start_time = latest.recorded_at or datetime.now(timezone.utc)
+        
+        df = pd.DataFrame({
+            "timestamp": [start_time + timedelta(milliseconds=float(ms)) for ms in cumulative_ms],
+            "rr_ms": rr_array,
+        })
+        df["timestamp"] = pd.to_datetime(df["timestamp"])
+        
+        # Compute windowed metrics
+        windowed_df = await asyncio.to_thread(
+            compute_windowed_hrv,
+            df,
+            window_size_sec=window_size,
+            step_size_sec=step_size,
+        )
+        
+        if windowed_df is None or windowed_df.empty:
+            return WindowedMetricsResponse()
+        
+        # Extract data
+        timestamps = windowed_df["window_start"].dt.strftime("%Y-%m-%dT%H:%M:%SZ").tolist()
+        
+        def safe_list(col: str) -> List[Optional[float]]:
+            if col in windowed_df.columns:
+                return [None if pd.isna(v) else float(v) for v in windowed_df[col]]
+            return []
+        
+        rmssd = safe_list("rmssd")
+        sdnn = safe_list("sdnn")
+        
+        # Calculate EWMA
+        rmssd_ewma = []
+        sdnn_ewma = []
+        alpha = 2 / (7 + 1)  # 7-window smoothing
+        
+        for i, val in enumerate(rmssd):
+            if i == 0:
+                rmssd_ewma.append(val)
+            else:
+                prev = rmssd_ewma[i - 1]
+                if val is not None and prev is not None:
+                    rmssd_ewma.append(alpha * val + (1 - alpha) * prev)
+                else:
+                    rmssd_ewma.append(prev)
+        
+        for i, val in enumerate(sdnn):
+            if i == 0:
+                sdnn_ewma.append(val)
+            else:
+                prev = sdnn_ewma[i - 1]
+                if val is not None and prev is not None:
+                    sdnn_ewma.append(alpha * val + (1 - alpha) * prev)
+                else:
+                    sdnn_ewma.append(prev)
+        
+        # Simple anomaly detection using z-score
+        anomaly_indices = []
+        valid_rmssd = [v for v in rmssd if v is not None]
+        if valid_rmssd:
+            mean_rmssd = np.mean(valid_rmssd)
+            std_rmssd = np.std(valid_rmssd)
+            if std_rmssd > 0:
+                for i, val in enumerate(rmssd):
+                    if val is not None and abs(val - mean_rmssd) > 2 * std_rmssd:
+                        anomaly_indices.append(i)
+        
+        return WindowedMetricsResponse(
+            timestamps=timestamps,
+            rmssd=rmssd,
+            sdnn=sdnn,
+            pnn50=safe_list("pnn50"),
+            mean_hr=safe_list("mean_hr"),
+            lf_power=safe_list("lf_power"),
+            hf_power=safe_list("hf_power"),
+            lf_hf_ratio=safe_list("lf_hf_ratio"),
+            rmssd_ewma=rmssd_ewma,
+            sdnn_ewma=sdnn_ewma,
+            anomaly_indices=anomaly_indices,
+            cluster_labels=[],  # Would need ML module
+            window_size_seconds=window_size,
+            step_size_seconds=step_size,
+            n_windows=len(timestamps),
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error computing windowed HRV for {user_id}: {exc}")
+        return WindowedMetricsResponse()
+
+
+class HRFResponse(BaseModel):
+    """Heart Rate Fragmentation analysis."""
+    
+    pip: Optional[float] = None  # Percentage of Inflection Points
+    pip_hard: Optional[float] = None
+    pip_soft: Optional[float] = None
+    ials: Optional[float] = None  # Inverse Average Length of Segments
+    pss: Optional[float] = None  # Percentage of Short Segments
+    pas: Optional[float] = None  # Percentage of Alternating Segments
+    
+    # Time series for trend visualization
+    pip_trend: List[float] = Field(default_factory=list)
+    timestamps: List[str] = Field(default_factory=list)
+    
+    # Correlation with traditional HRV
+    pip_rmssd_correlation: Optional[float] = None
+    
+    # Interpretation
+    fragmentation_level: str = "normal"  # low, normal, elevated, high
+    af_risk_indicator: Optional[str] = None
+    clinical_notes: List[str] = Field(default_factory=list)
+    
+    quality_ok: bool = True
+
+
+@router.get("/hrv/hrf/{user_id}", response_model=HRFResponse)
+async def get_hrv_hrf(user_id: str) -> HRFResponse:
+    """Get Heart Rate Fragmentation analysis."""
+    try:
+        import numpy as np
+        from user_database import UserDatabase
+        
+        db = UserDatabase()
+        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
+        
+        if not history:
+            return HRFResponse()
+        
+        latest = history[0]
+        rr_data = latest.rr_intervals_ms or []
+        
+        if len(rr_data) < 100:
+            return HRFResponse(quality_ok=False, clinical_notes=["Insufficient data for HRF analysis"])
+        
+        rr_array = np.array(rr_data, dtype=float)
+        
+        # Compute HRF metrics
+        try:
+            from hrv_fragmentation import compute_hrf_metrics
+            hrf = await asyncio.to_thread(compute_hrf_metrics, rr_array)
+            
+            pip = hrf.pip
+            pip_hard = hrf.pip_h
+            pip_soft = hrf.pip_s
+            ials = hrf.ials
+            pss = hrf.pss
+            pas = hrf.pas
+        except ImportError:
+            # Fallback: compute basic PIP manually
+            deltas = np.diff(rr_array)
+            sign_changes = np.diff(np.sign(deltas))
+            inflection_points = np.sum(sign_changes != 0)
+            pip = (inflection_points / (len(rr_array) - 2)) * 100 if len(rr_array) > 2 else 0
+            pip_hard = None
+            pip_soft = None
+            ials = None
+            pss = None
+            pas = None
+        
+        # Determine fragmentation level
+        frag_level = "normal"
+        notes = []
+        af_risk = None
+        
+        if pip is not None:
+            if pip > 70:
+                frag_level = "high"
+                notes.append("High fragmentation may indicate autonomic instability")
+                af_risk = "Elevated AF risk based on PROOF-AF criteria"
+            elif pip > 55:
+                frag_level = "elevated"
+                notes.append("Moderately elevated fragmentation")
+            elif pip < 30:
+                frag_level = "low"
+                notes.append("Low fragmentation, normal sinus rhythm")
+        
+        # Reference: PROOF-AF Study
+        if not notes:
+            notes.append("HRF metrics within normal range")
+        notes.append("Reference: Costa et al. 2017, Heart Rate Fragmentation as Novel Biomarker")
+        
+        return HRFResponse(
+            pip=pip,
+            pip_hard=pip_hard,
+            pip_soft=pip_soft,
+            ials=ials,
+            pss=pss,
+            pas=pas,
+            fragmentation_level=frag_level,
+            af_risk_indicator=af_risk,
+            clinical_notes=notes,
+            quality_ok=True,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error computing HRF for {user_id}: {exc}")
+        return HRFResponse()
+
+
+class ReadinessComponent(BaseModel):
+    """Component of readiness score."""
+    
+    name: str
+    value: float
+    weight: float
+    contribution: float
+    status: str  # good, warning, poor
+
+
+class ReadinessResponse(BaseModel):
+    """Readiness score and baseline analysis."""
+    
+    score: Optional[float] = None  # 0-100
+    baseline: Optional[float] = None
+    deviation_from_baseline: Optional[float] = None
+    
+    # Trend
+    trend_direction: str = "stable"  # improving, stable, declining
+    trend_7day: List[float] = Field(default_factory=list)
+    trend_dates: List[str] = Field(default_factory=list)
+    
+    # Components
+    components: List[ReadinessComponent] = Field(default_factory=list)
+    
+    # Recommendations
+    readiness_status: str = "ready"  # ready, moderate, rest_recommended
+    recommendations: List[str] = Field(default_factory=list)
+
+
+@router.get("/hrv/readiness/{user_id}", response_model=ReadinessResponse)
+async def get_hrv_readiness(user_id: str) -> ReadinessResponse:
+    """Get readiness score based on HRV baseline comparison."""
+    try:
+        import numpy as np
+        from user_database import UserDatabase
+        
+        db = UserDatabase()
+        
+        # Get recent HRV history for trend
+        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=14)
+        
+        if not history:
+            return ReadinessResponse(recommendations=["No HRV data available. Record morning HRV for baseline."])
+        
+        # Extract RMSSD values (primary readiness metric)
+        rmssd_values = []
+        dates = []
+        for h in reversed(history):  # Oldest first
+            metrics = h.hrv_metrics or {}
+            rmssd = metrics.get("rmssd")
+            if rmssd is not None:
+                rmssd_values.append(rmssd)
+                dates.append(h.recorded_at.strftime("%Y-%m-%d") if h.recorded_at else "")
+        
+        if not rmssd_values:
+            return ReadinessResponse(recommendations=["No RMSSD data available"])
+        
+        # Calculate ln(RMSSD) for stability
+        ln_rmssd = [np.log(r) if r > 0 else 0 for r in rmssd_values]
+        
+        # Baseline is 7-day rolling average
+        baseline_window = min(7, len(ln_rmssd))
+        baseline = np.mean(ln_rmssd[-baseline_window:])
+        
+        # Current value
+        current = ln_rmssd[-1]
+        
+        # Calculate readiness score (0-100 scale)
+        # Based on SWC (Smallest Worthwhile Change) approach from Plews et al.
+        cv = np.std(ln_rmssd[-baseline_window:]) / baseline if baseline > 0 else 0
+        swc = 0.5 * cv * baseline  # Half the coefficient of variation
+        
+        deviation = current - baseline
+        
+        # Convert to 0-100 score
+        if swc > 0:
+            z_score = deviation / swc
+            score = 50 + (z_score * 10)  # 10 points per SWC
+            score = max(0, min(100, score))
+        else:
+            score = 50
+        
+        # Determine trend
+        if len(ln_rmssd) >= 3:
+            recent_trend = ln_rmssd[-3:]
+            if recent_trend[-1] > recent_trend[0] * 1.05:
+                trend = "improving"
+            elif recent_trend[-1] < recent_trend[0] * 0.95:
+                trend = "declining"
+            else:
+                trend = "stable"
+        else:
+            trend = "stable"
+        
+        # Components
+        latest_metrics = history[0].hrv_metrics or {}
+        components = []
+        
+        rmssd_val = latest_metrics.get("rmssd", 0)
+        components.append(ReadinessComponent(
+            name="RMSSD",
+            value=rmssd_val,
+            weight=0.4,
+            contribution=rmssd_val * 0.4 / 100,
+            status="good" if rmssd_val > 30 else "warning" if rmssd_val > 20 else "poor",
+        ))
+        
+        hf_power = latest_metrics.get("hf_power", 0)
+        components.append(ReadinessComponent(
+            name="HF Power",
+            value=hf_power,
+            weight=0.3,
+            contribution=min(hf_power / 1000, 1) * 0.3,
+            status="good" if hf_power > 200 else "warning" if hf_power > 100 else "poor",
+        ))
+        
+        # Recommendations
+        recs = []
+        if score < 40:
+            status = "rest_recommended"
+            recs.append("Consider light recovery activities only")
+            recs.append("Ensure adequate sleep (7-9 hours)")
+        elif score < 60:
+            status = "moderate"
+            recs.append("Moderate intensity training appropriate")
+            recs.append("Monitor fatigue levels throughout the day")
+        else:
+            status = "ready"
+            recs.append("High readiness - appropriate for intense training")
+        
+        return ReadinessResponse(
+            score=score,
+            baseline=np.exp(baseline) if baseline > 0 else None,  # Convert back from ln
+            deviation_from_baseline=deviation,
+            trend_direction=trend,
+            trend_7day=ln_rmssd[-7:] if len(ln_rmssd) >= 7 else ln_rmssd,
+            trend_dates=dates[-7:] if len(dates) >= 7 else dates,
+            components=components,
+            readiness_status=status,
+            recommendations=recs,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error computing readiness for {user_id}: {exc}")
+        return ReadinessResponse()
+
+
+class FatigueResponse(BaseModel):
+    """SAFTE fatigue prediction response."""
+    
+    # Current state
+    effectiveness_pct: Optional[float] = None  # 0-100%
+    fatigue_level: str = "normal"  # well_rested, normal, fatigued, severely_fatigued
+    
+    # 24-hour forecast
+    forecast_hours: List[int] = Field(default_factory=list)
+    forecast_effectiveness: List[float] = Field(default_factory=list)
+    
+    # Sleep debt
+    sleep_debt_hours: Optional[float] = None
+    optimal_sleep_hours: float = 8.0
+    
+    # Risk assessment
+    risk_level: str = "low"  # low, moderate, high, critical
+    risk_color: str = "green"  # green, yellow, red
+    
+    # Recommendations
+    recommendations: List[str] = Field(default_factory=list)
+    next_optimal_sleep: Optional[str] = None
+
+
+@router.get("/fatigue/{user_id}", response_model=FatigueResponse)
+async def get_fatigue_prediction(user_id: str) -> FatigueResponse:
+    """Get SAFTE-based fatigue prediction."""
+    try:
+        from user_database import UserDatabase
+        
+        db = UserDatabase()
+        
+        # Try to get Garmin sleep data
+        garmin_data = await asyncio.to_thread(db.get_garmin_daily_metrics, user_id, 7)
+        
+        # Calculate sleep debt from last 7 days
+        sleep_hours = []
+        for g in garmin_data:
+            if g.sleep_duration_hours:
+                sleep_hours.append(g.sleep_duration_hours)
+        
+        optimal = 8.0
+        if sleep_hours:
+            avg_sleep = sum(sleep_hours) / len(sleep_hours)
+            sleep_debt = max(0, (optimal - avg_sleep) * len(sleep_hours))
+        else:
+            avg_sleep = optimal
+            sleep_debt = 0
+        
+        # Simple effectiveness model (inspired by SAFTE)
+        base_effectiveness = 100
+        debt_penalty = min(sleep_debt * 5, 40)  # Max 40% penalty
+        effectiveness = base_effectiveness - debt_penalty
+        
+        # Determine fatigue level
+        if effectiveness >= 90:
+            fatigue_level = "well_rested"
+            risk = "low"
+            color = "green"
+        elif effectiveness >= 70:
+            fatigue_level = "normal"
+            risk = "low"
+            color = "green"
+        elif effectiveness >= 50:
+            fatigue_level = "fatigued"
+            risk = "moderate"
+            color = "yellow"
+        else:
+            fatigue_level = "severely_fatigued"
+            risk = "high"
+            color = "red"
+        
+        # Generate 24-hour forecast (simplified circadian model)
+        now_hour = datetime.now().hour
+        forecast_hours = list(range(24))
+        forecast_eff = []
+        
+        for h in forecast_hours:
+            hour_of_day = (now_hour + h) % 24
+            # Circadian influence (simplified)
+            if 2 <= hour_of_day <= 6:
+                circadian = -15  # Window of Circadian Low (WOCL)
+            elif 14 <= hour_of_day <= 16:
+                circadian = -5  # Post-lunch dip
+            elif 9 <= hour_of_day <= 12 or 16 <= hour_of_day <= 20:
+                circadian = 5  # Peak alertness
+            else:
+                circadian = 0
+            
+            forecast_eff.append(max(0, min(100, effectiveness + circadian)))
+        
+        # Recommendations
+        recs = []
+        if sleep_debt > 4:
+            recs.append(f"Sleep debt: {sleep_debt:.1f} hours. Prioritize recovery sleep.")
+        if fatigue_level in ["fatigued", "severely_fatigued"]:
+            recs.append("Avoid safety-critical tasks during WOCL (0200-0600)")
+            recs.append("Consider strategic napping (20-30 min)")
+        if any(e < 60 for e in forecast_eff[:8]):
+            recs.append("Low effectiveness predicted in next 8 hours")
+        
+        if not recs:
+            recs.append("Adequate rest levels - normal operations appropriate")
+        
+        return FatigueResponse(
+            effectiveness_pct=effectiveness,
+            fatigue_level=fatigue_level,
+            forecast_hours=forecast_hours,
+            forecast_effectiveness=forecast_eff,
+            sleep_debt_hours=sleep_debt,
+            optimal_sleep_hours=optimal,
+            risk_level=risk,
+            risk_color=color,
+            recommendations=recs,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error computing fatigue for {user_id}: {exc}")
+        return FatigueResponse()
+
+
+class CircadianResponse(BaseModel):
+    """Circadian rhythm analysis."""
+    
+    # Current phase
+    current_phase: str = "day"  # day, evening, night, morning
+    phase_angle_hours: Optional[float] = None  # Hours from midnight
+    
+    # Optimal windows
+    optimal_performance_start: Optional[str] = None
+    optimal_performance_end: Optional[str] = None
+    optimal_sleep_start: Optional[str] = None
+    
+    # 24-hour clock data for visualization
+    hours: List[int] = Field(default_factory=list)
+    alertness_level: List[float] = Field(default_factory=list)  # 0-100
+    
+    # Light exposure (if available)
+    light_exposure_lux: Optional[float] = None
+    light_recommendation: Optional[str] = None
+    
+    # Interpretation
+    chronotype: str = "intermediate"  # early, intermediate, late
+    notes: List[str] = Field(default_factory=list)
+
+
+@router.get("/circadian/{user_id}", response_model=CircadianResponse)
+async def get_circadian_analysis(user_id: str) -> CircadianResponse:
+    """Get circadian rhythm analysis and recommendations."""
+    try:
+        now = datetime.now()
+        current_hour = now.hour
+        
+        # Determine current phase
+        if 6 <= current_hour < 12:
+            phase = "morning"
+        elif 12 <= current_hour < 18:
+            phase = "day"
+        elif 18 <= current_hour < 22:
+            phase = "evening"
+        else:
+            phase = "night"
+        
+        # Generate 24-hour alertness profile (simplified two-process model)
+        hours = list(range(24))
+        alertness = []
+        
+        for h in hours:
+            # Circadian component (Process C) - peaks around 16:00-18:00
+            circadian = 50 + 30 * np.cos(2 * np.pi * (h - 16) / 24) if 'np' in dir() else 50
+            
+            # Homeostatic component (Process S) - simplified
+            # Assuming wake at 07:00
+            wake_hour = 7
+            hours_awake = (h - wake_hour) % 24 if h >= wake_hour else 24 - (wake_hour - h)
+            homeostatic = max(0, 100 - hours_awake * 5)
+            
+            # Combined alertness
+            import math
+            circadian = 50 + 30 * math.cos(2 * math.pi * (h - 16) / 24)
+            combined = (circadian * 0.6 + homeostatic * 0.4)
+            alertness.append(max(0, min(100, combined)))
+        
+        # Find optimal windows
+        peak_idx = alertness.index(max(alertness))
+        optimal_start = f"{peak_idx-2:02d}:00" if peak_idx >= 2 else f"{peak_idx+22:02d}:00"
+        optimal_end = f"{(peak_idx+2) % 24:02d}:00"
+        
+        # Optimal sleep (based on alertness trough)
+        min_idx = alertness.index(min(alertness))
+        sleep_start = f"{(min_idx-4) % 24:02d}:00"
+        
+        notes = [
+            "Circadian rhythm follows ~24-hour cycle regulated by suprachiasmatic nucleus",
+            "Light exposure in morning helps maintain rhythm alignment",
+            "Avoid bright light 2 hours before intended sleep time",
+        ]
+        
+        return CircadianResponse(
+            current_phase=phase,
+            phase_angle_hours=float(current_hour),
+            optimal_performance_start=optimal_start,
+            optimal_performance_end=optimal_end,
+            optimal_sleep_start=sleep_start,
+            hours=hours,
+            alertness_level=alertness,
+            chronotype="intermediate",
+            notes=notes,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error computing circadian for {user_id}: {exc}")
+        return CircadianResponse()
+
+
+class AgeNorm(BaseModel):
+    """Age-stratified normative values."""
+    
+    age_range: str  # "20-29", "30-39", etc.
+    metric: str
+    
+    mean: float
+    std: float
+    p5: float
+    p25: float
+    p50: float
+    p75: float
+    p95: float
+    
+    source: str  # Citation
+
+
+class PopulationNormsResponse(BaseModel):
+    """Population normative data."""
+    
+    norms: List[AgeNorm] = Field(default_factory=list)
+    
+    # User's position (if user_id provided)
+    user_age_group: Optional[str] = None
+    user_percentiles: Dict[str, float] = Field(default_factory=dict)
+    
+    # Sources
+    primary_source: str = "Nunan et al. 2010"
+    additional_sources: List[str] = Field(default_factory=list)
+
+
+@router.get("/norms", response_model=PopulationNormsResponse)
+async def get_population_norms(
+    user_id: Optional[str] = None,
+    metric: str = Query(default="rmssd", description="HRV metric: rmssd, sdnn, pnn50, lf_hf_ratio"),
+) -> PopulationNormsResponse:
+    """Get age-stratified population norms for HRV metrics."""
+    
+    # Normative data from literature (Nunan et al. 2010, Shaffer & Ginsberg 2017)
+    # RMSSD norms by age group (ms)
+    rmssd_norms = [
+        AgeNorm(age_range="20-29", metric="rmssd", mean=42.0, std=15.0, p5=20, p25=32, p50=40, p75=52, p95=70, source="Nunan et al. 2010"),
+        AgeNorm(age_range="30-39", metric="rmssd", mean=35.0, std=13.0, p5=15, p25=26, p50=34, p75=44, p95=60, source="Nunan et al. 2010"),
+        AgeNorm(age_range="40-49", metric="rmssd", mean=30.0, std=12.0, p5=12, p25=22, p50=29, p75=38, p95=52, source="Nunan et al. 2010"),
+        AgeNorm(age_range="50-59", metric="rmssd", mean=25.0, std=10.0, p5=10, p25=18, p50=24, p75=32, p95=44, source="Nunan et al. 2010"),
+        AgeNorm(age_range="60-69", metric="rmssd", mean=22.0, std=9.0, p5=8, p25=16, p50=21, p75=28, p95=38, source="Nunan et al. 2010"),
+        AgeNorm(age_range="70+", metric="rmssd", mean=20.0, std=8.0, p5=7, p25=14, p50=19, p75=26, p95=35, source="Nunan et al. 2010"),
+    ]
+    
+    sdnn_norms = [
+        AgeNorm(age_range="20-29", metric="sdnn", mean=50.0, std=16.0, p5=25, p25=40, p50=48, p75=60, p95=80, source="Task Force 1996"),
+        AgeNorm(age_range="30-39", metric="sdnn", mean=45.0, std=15.0, p5=22, p25=35, p50=44, p75=55, p95=72, source="Task Force 1996"),
+        AgeNorm(age_range="40-49", metric="sdnn", mean=40.0, std=14.0, p5=18, p25=30, p50=39, p75=50, p95=65, source="Task Force 1996"),
+        AgeNorm(age_range="50-59", metric="sdnn", mean=35.0, std=12.0, p5=15, p25=27, p50=34, p75=43, p95=58, source="Task Force 1996"),
+        AgeNorm(age_range="60-69", metric="sdnn", mean=32.0, std=11.0, p5=14, p25=24, p50=31, p75=40, p95=52, source="Task Force 1996"),
+        AgeNorm(age_range="70+", metric="sdnn", mean=28.0, std=10.0, p5=12, p25=21, p50=27, p75=35, p95=46, source="Task Force 1996"),
+    ]
+    
+    # Select appropriate norms
+    if metric == "rmssd":
+        norms = rmssd_norms
+    elif metric == "sdnn":
+        norms = sdnn_norms
+    else:
+        norms = rmssd_norms  # Default
+    
+    result = PopulationNormsResponse(
+        norms=norms,
+        primary_source="Nunan D, Sandercock GR, Brodie DA. A quantitative systematic review of normal values for short-term heart rate variability in healthy adults. Pacing Clin Electrophysiol. 2010;33(11):1407-17.",
+        additional_sources=[
+            "Task Force of ESC/NASPE. Heart rate variability: standards of measurement. Circulation. 1996;93(5):1043-65.",
+            "Shaffer F, Ginsberg JP. An Overview of Heart Rate Variability Metrics and Norms. Front Public Health. 2017;5:258.",
+        ],
+    )
+    
+    # If user_id provided, calculate their percentile
+    if user_id:
+        try:
+            from user_database import UserDatabase
+            import numpy as np
+            
+            db = UserDatabase()
+            user = await asyncio.to_thread(db.get_user, user_id)
+            
+            if user and user.age:
+                # Determine age group
+                age = user.age
+                if age < 30:
+                    age_group = "20-29"
+                elif age < 40:
+                    age_group = "30-39"
+                elif age < 50:
+                    age_group = "40-49"
+                elif age < 60:
+                    age_group = "50-59"
+                elif age < 70:
+                    age_group = "60-69"
+                else:
+                    age_group = "70+"
+                
+                result.user_age_group = age_group
+                
+                # Get user's latest HRV
+                history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
+                if history:
+                    metrics = history[0].hrv_metrics or {}
+                    user_rmssd = metrics.get("rmssd")
+                    user_sdnn = metrics.get("sdnn")
+                    
+                    # Calculate percentile
+                    norm = next((n for n in norms if n.age_range == age_group), None)
+                    if norm and user_rmssd:
+                        # Approximate percentile using normal distribution
+                        z = (user_rmssd - norm.mean) / norm.std if norm.std > 0 else 0
+                        from scipy.stats import norm as scipy_norm
+                        percentile = scipy_norm.cdf(z) * 100
+                        result.user_percentiles["rmssd"] = percentile
+        except Exception as e:
+            _LOGGER.warning(f"Could not calculate user percentile: {e}")
+    
+    return result
+
+
+class ExportRequest(BaseModel):
+    """Export request parameters."""
+    
+    format: str = Field(default="csv", description="Export format: csv, json, markdown, pdf")
+    include_timeseries: bool = False
+    include_frequency: bool = True
+    include_nonlinear: bool = True
+    include_hrf: bool = True
+    date_range_days: int = Field(default=30, ge=1, le=365)
+
+
+class ExportResponse(BaseModel):
+    """Export response with download data."""
+    
+    format: str
+    filename: str
+    content_type: str
+    data: str  # Base64 encoded for binary, raw for text
+    records_exported: int
+    date_range: str
+
+
+@router.post("/export/{user_id}", response_model=ExportResponse)
+async def export_hrv_data(
+    user_id: str,
+    request: ExportRequest = ExportRequest(),
+) -> ExportResponse:
+    """Export HRV data in various formats."""
+    try:
+        import json
+        import base64
+        from user_database import UserDatabase
+        
+        db = UserDatabase()
+        
+        # Get HRV history
+        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=request.date_range_days)
+        
+        if not history:
+            raise HTTPException(status_code=404, detail="No HRV data found for user")
+        
+        # Prepare data
+        records = []
+        for h in history:
+            record = {
+                "date": h.recorded_at.isoformat() if h.recorded_at else None,
+                "duration_min": h.hrv_metrics.get("duration_min") if h.hrv_metrics else None,
+            }
+            
+            if h.hrv_metrics:
+                if request.include_frequency:
+                    record.update({
+                        "rmssd": h.hrv_metrics.get("rmssd"),
+                        "sdnn": h.hrv_metrics.get("sdnn"),
+                        "pnn50": h.hrv_metrics.get("pnn50"),
+                        "mean_hr": h.hrv_metrics.get("mean_hr"),
+                    })
+                if request.include_frequency:
+                    record.update({
+                        "lf_power": h.hrv_metrics.get("lf_power"),
+                        "hf_power": h.hrv_metrics.get("hf_power"),
+                        "lf_hf_ratio": h.hrv_metrics.get("lf_hf_ratio"),
+                    })
+                if request.include_nonlinear:
+                    record.update({
+                        "sd1": h.hrv_metrics.get("sd1"),
+                        "sd2": h.hrv_metrics.get("sd2"),
+                        "dfa_alpha1": h.hrv_metrics.get("dfa_alpha1"),
+                    })
+                if request.include_hrf:
+                    record.update({
+                        "pip": h.hrv_metrics.get("pip"),
+                        "ials": h.hrv_metrics.get("ials"),
+                    })
+            
+            records.append(record)
+        
+        # Format output
+        now = datetime.now()
+        
+        if request.format == "json":
+            content = json.dumps(records, indent=2, default=str)
+            content_type = "application/json"
+            filename = f"hrv_export_{user_id}_{now.strftime('%Y%m%d')}.json"
+        elif request.format == "markdown":
+            lines = ["# HRV Export Report", f"\n**User:** {user_id}", f"**Date:** {now.strftime('%Y-%m-%d')}", f"**Records:** {len(records)}\n", "## Data\n"]
+            if records:
+                headers = list(records[0].keys())
+                lines.append("| " + " | ".join(headers) + " |")
+                lines.append("| " + " | ".join(["---"] * len(headers)) + " |")
+                for r in records[:50]:  # Limit for markdown
+                    lines.append("| " + " | ".join(str(r.get(h, "")) for h in headers) + " |")
+            content = "\n".join(lines)
+            content_type = "text/markdown"
+            filename = f"hrv_report_{user_id}_{now.strftime('%Y%m%d')}.md"
+        else:  # CSV
+            import io
+            import csv
+            output = io.StringIO()
+            if records:
+                writer = csv.DictWriter(output, fieldnames=records[0].keys())
+                writer.writeheader()
+                writer.writerows(records)
+            content = output.getvalue()
+            content_type = "text/csv"
+            filename = f"hrv_export_{user_id}_{now.strftime('%Y%m%d')}.csv"
+        
+        # Calculate date range
+        dates = [h.recorded_at for h in history if h.recorded_at]
+        if dates:
+            date_range = f"{min(dates).strftime('%Y-%m-%d')} to {max(dates).strftime('%Y-%m-%d')}"
+        else:
+            date_range = "N/A"
+        
+        return ExportResponse(
+            format=request.format,
+            filename=filename,
+            content_type=content_type,
+            data=content,
+            records_exported=len(records),
+            date_range=date_range,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _LOGGER.error(f"Error exporting data for {user_id}: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
