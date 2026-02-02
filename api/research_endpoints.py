@@ -259,6 +259,8 @@ class GarminMetrics(BaseModel):
 @router.get("/space-weather/current", response_model=SpaceWeatherSnapshot)
 async def get_current_space_weather() -> SpaceWeatherSnapshot:
     """Get current space weather data with impact predictions."""
+    import re
+    
     try:
         from space_weather_impact import (
             fetch_space_weather_snapshot as fetch_snapshot,
@@ -267,8 +269,79 @@ async def get_current_space_weather() -> SpaceWeatherSnapshot:
         
         snapshot = await asyncio.to_thread(fetch_snapshot)
         
-        # Convert to response model
+        # Helper to check for valid float (not NaN)
+        def _valid_float(val) -> bool:
+            return val is not None and not (val != val)
+        
+        # Extract actual values from the events
+        kp_index: Optional[float] = None
+        dst_index: Optional[float] = None
+        solar_wind_speed: Optional[float] = None
+        solar_wind_density: Optional[float] = None
+        solar_wind_bz: Optional[float] = None
+        xray_flux: Optional[str] = None
+        xray_class: Optional[str] = None
+        proton_flux_10mev: Optional[float] = None
+        
+        # Extract from geomagnetic event (Kp, Dst)
+        if snapshot.geomagnetic_event:
+            evt = snapshot.geomagnetic_event
+            if _valid_float(evt.raw_value):
+                kp_index = evt.raw_value
+            # Parse Dst from source_description: "G2 (Kp=5.0, Dst=-30 nT)"
+            if evt.source_description:
+                dst_match = re.search(r"Dst=(-?\d+(?:\.\d+)?)", evt.source_description)
+                if dst_match:
+                    try:
+                        dst_index = float(dst_match.group(1))
+                    except ValueError:
+                        pass
+        
+        # Extract from plasma event (solar wind)
+        if snapshot.plasma_event:
+            evt = snapshot.plasma_event
+            if _valid_float(evt.raw_value):
+                solar_wind_speed = evt.raw_value
+            # Try to parse density and Bz from source_description
+            if evt.source_description:
+                density_match = re.search(r"(\d+(?:\.\d+)?)\s*p/cm", evt.source_description)
+                if density_match:
+                    try:
+                        solar_wind_density = float(density_match.group(1))
+                    except ValueError:
+                        pass
+                bz_match = re.search(r"Bz[=:\s]*(-?\d+(?:\.\d+)?)", evt.source_description)
+                if bz_match:
+                    try:
+                        solar_wind_bz = float(bz_match.group(1))
+                    except ValueError:
+                        pass
+        
+        # Extract from photon event (X-ray class)
+        if snapshot.photon_event:
+            evt = snapshot.photon_event
+            if evt.source_description:
+                xray_match = re.search(r"([ABCMX]\d+\.?\d*)", evt.source_description)
+                if xray_match:
+                    xray_class = xray_match.group(1)
+                    xray_flux = xray_match.group(1)
+        
+        # Extract from SEP event (proton flux)
+        if snapshot.sep_event:
+            evt = snapshot.sep_event
+            if _valid_float(evt.raw_value):
+                proton_flux_10mev = evt.raw_value
+        
+        # Build the data object with actual values
         data = SpaceWeatherData(
+            kp_index=kp_index,
+            dst_index=dst_index,
+            solar_wind_speed=solar_wind_speed,
+            solar_wind_density=solar_wind_density,
+            solar_wind_bz=solar_wind_bz,
+            xray_flux=xray_flux,
+            xray_class=xray_class,
+            proton_flux_10mev=proton_flux_10mev,
             fetched_at=datetime.now(timezone.utc).isoformat(),
         )
         
