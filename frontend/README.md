@@ -119,6 +119,52 @@ frontend/
 | `/api/research/correlations/hrv-space-weather` | GET | HRV-Space Weather correlations |
 | `/api/research/garmin/latest/{user_id}` | GET | Latest Garmin metrics |
 | `/api/research/garmin/history/{user_id}` | GET | Garmin history (30 days) |
+| `/api/research/garmin/sync/{user_id}` | POST | Sync data from Garmin Connect |
+
+## Garmin Connect Integration
+
+The frontend integrates with Garmin Connect via the [python-garminconnect](https://github.com/cyberjunky/python-garminconnect) library for fetching wearable health data.
+
+### Configuration
+
+Add your Garmin Connect credentials to the project root `.env` file:
+
+```env
+GARMIN_EMAIL=your_garmin_email@example.com
+GARMIN_PASSWORD=your_garmin_password
+```
+
+**Security Note**: Never commit `.env` to version control. The `.gitignore` already excludes it.
+
+### Token-Based Authentication (Recommended)
+
+For accounts with MFA/2FA enabled, pre-generate authentication tokens:
+
+1. Run the token generator once (interactive, handles MFA prompts):
+
+```bash
+conda activate hrv-py312
+python tests/test_garmin_email.py
+```
+
+2. Tokens are saved to `~/.garminconnect/` and will be used automatically on subsequent syncs.
+
+### Features Available
+
+When properly configured, the Garmin page (`/research/garmin`) provides:
+
+- **Real-time Sync**: Click "Sync Data" to fetch up to 90 days of metrics from Garmin Connect
+- **Metrics Displayed**: Steps, resting HR, overnight HRV (RMSSD), SpO2, stress, respiration, Body Battery, sleep (duration, score, efficiency, stages)
+- **History**: View trends over the last 7-30 days
+
+### Troubleshooting
+
+| Error | Solution |
+|-------|----------|
+| "GARMIN_EMAIL/GARMIN_PASSWORD not configured" | Add credentials to `.env` file |
+| "MFA/2FA required" | Run `test_garmin_email.py` to generate tokens |
+| "Rate limit reached" | Wait a few minutes before retrying |
+| "Authentication failed" | Verify credentials, check for typos |
 
 ## Development
 
