@@ -7,6 +7,21 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.15] - 2026-02-01
+
+### Added
+- **Research frontend pages (TypeScript/Next.js)** under `frontend/src/app/research/`:
+  - Time Series, Frequency, Nonlinear, HRF, Windowed, Readiness, ANS Tests, Fatigue, Circadian, Population Norms, Unified Timeline, Export Center, and Science/References — all with publication-grade ECharts and mock-data fallbacks.
+- **Clinical tools**: New ANS Function Tests page (30:15 ratio, Valsalva ratio, deep breathing E:I) with gauge visuals and interpretation cards.
+- **Unified Timeline**: Dual-axis HRV (RMSSD) + Kp index with linked zoom, lag-aware tooltip, and space-weather event callouts.
+
+### Changed
+- **Sidebar navigation**: Research navigation reorganized into HRV Analysis, Clinical Tools, and Tools sections with new Timeline and ANS Tests links for faster access.
+- **Gauge styling**: Consistent elegant arc/needle style across new pages, adhering to scientific color palette and dark text rules.
+
+### Technical Notes
+- Frontend types and API client kept in sync with `/api/research` endpoints for HRV time series, frequency, nonlinear, windowed metrics, HRF, readiness, fatigue (SAFTE), circadian analysis, population norms, and export workflows.
+
 ## [1.9.14] - 2026-01-30
 
 ### Added
