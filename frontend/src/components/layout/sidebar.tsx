@@ -20,6 +20,19 @@ import {
   GitCompare,
   Watch,
   Microscope,
+  TrendingUp,
+  Waves,
+  Network,
+  Zap,
+  Layers,
+  BarChart3,
+  Target,
+  Moon,
+  Clock,
+  Users,
+  Download,
+  Book,
+  Heart,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -47,13 +60,46 @@ const operationalNav = [
   { id: "profile", label: "User Profile", icon: User, href: "/profile" },
 ];
 
-// Research navigation items
-const researchNav = [
+// Research navigation items - Core
+const researchNavCore = [
   { id: "research", label: "Research Hub", icon: Microscope, href: "/research" },
   { id: "space-weather", label: "Space Weather", icon: Sun, href: "/research/space-weather" },
-  { id: "hrv-analysis", label: "HRV Analysis", icon: Activity, href: "/research/hrv-analysis" },
-  { id: "correlations", label: "Correlations", icon: GitCompare, href: "/research/correlations" },
   { id: "garmin", label: "Garmin Data", icon: Watch, href: "/research/garmin" },
+];
+
+// Research navigation items - HRV Analysis
+const researchNavHRV = [
+  { id: "hrv-analysis", label: "HRV Overview", icon: Activity, href: "/research/hrv-analysis" },
+  { id: "time-series", label: "Time Series", icon: TrendingUp, href: "/research/time-series" },
+  { id: "frequency", label: "Frequency Domain", icon: Waves, href: "/research/frequency" },
+  { id: "nonlinear", label: "Nonlinear", icon: Network, href: "/research/nonlinear" },
+  { id: "hrf", label: "HRF Analysis", icon: Zap, href: "/research/hrf" },
+  { id: "windowed", label: "Windowed", icon: Layers, href: "/research/windowed" },
+];
+
+// Research navigation items - Clinical Tools
+const researchNavClinical = [
+  { id: "readiness", label: "Readiness", icon: Target, href: "/research/readiness" },
+  { id: "ans-tests", label: "ANS Tests", icon: Heart, href: "/research/ans-tests" },
+  { id: "fatigue", label: "Fatigue", icon: Moon, href: "/research/fatigue" },
+  { id: "circadian", label: "Circadian", icon: Clock, href: "/research/circadian" },
+  { id: "norms", label: "Population Norms", icon: Users, href: "/research/norms" },
+];
+
+// Research navigation items - Tools & Reference
+const researchNavTools = [
+  { id: "timeline", label: "Timeline", icon: TrendingUp, href: "/research/timeline" },
+  { id: "correlations", label: "Correlations", icon: GitCompare, href: "/research/correlations" },
+  { id: "export", label: "Export Center", icon: Download, href: "/research/export" },
+  { id: "science", label: "References", icon: Book, href: "/research/science" },
+];
+
+// Combined for backward compatibility
+const researchNav = [
+  ...researchNavCore,
+  ...researchNavHRV,
+  ...researchNavClinical,
+  ...researchNavTools,
 ];
 
 // About/Info
@@ -181,14 +227,14 @@ export function Sidebar() {
             );
           })}
 
-          {/* Research Section */}
+          {/* Research Section - Core */}
           <Separator className="my-2" />
           {sidebarOpen && (
             <p className="px-3 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wide">
               Research
             </p>
           )}
-          {researchNav.map((item) => {
+          {researchNavCore.map((item) => {
             const isActive = pathname === item.href || (item.href !== "/research" && pathname.startsWith(item.href));
             const Icon = item.icon;
 
@@ -207,6 +253,147 @@ export function Sidebar() {
                       )}
                     >
                       <Icon className="h-5 w-5 shrink-0" />
+                      {sidebarOpen && (
+                        <motion.span
+                          initial={false}
+                          animate={{ opacity: sidebarOpen ? 1 : 0 }}
+                          className="font-medium text-sm"
+                        >
+                          {item.label}
+                        </motion.span>
+                      )}
+                    </motion.div>
+                  </Link>
+                </TooltipTrigger>
+                {!sidebarOpen && (
+                  <TooltipContent side="right">
+                    <p>{item.label}</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            );
+          })}
+
+          {/* Research Section - HRV Analysis */}
+          {sidebarOpen && (
+            <p className="px-3 py-1 mt-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              HRV Analysis
+            </p>
+          )}
+          {researchNavHRV.map((item) => {
+            const isActive = pathname === item.href;
+            const Icon = item.icon;
+
+            return (
+              <Tooltip key={item.id}>
+                <TooltipTrigger asChild>
+                  <Link href={item.href}>
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
+                        sidebarOpen ? "pl-5" : "",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {sidebarOpen && (
+                        <motion.span
+                          initial={false}
+                          animate={{ opacity: sidebarOpen ? 1 : 0 }}
+                          className="font-medium text-sm"
+                        >
+                          {item.label}
+                        </motion.span>
+                      )}
+                    </motion.div>
+                  </Link>
+                </TooltipTrigger>
+                {!sidebarOpen && (
+                  <TooltipContent side="right">
+                    <p>{item.label}</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            );
+          })}
+
+          {/* Research Section - Clinical Tools */}
+          {sidebarOpen && (
+            <p className="px-3 py-1 mt-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Clinical Tools
+            </p>
+          )}
+          {researchNavClinical.map((item) => {
+            const isActive = pathname === item.href;
+            const Icon = item.icon;
+
+            return (
+              <Tooltip key={item.id}>
+                <TooltipTrigger asChild>
+                  <Link href={item.href}>
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
+                        sidebarOpen ? "pl-5" : "",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
+                      {sidebarOpen && (
+                        <motion.span
+                          initial={false}
+                          animate={{ opacity: sidebarOpen ? 1 : 0 }}
+                          className="font-medium text-sm"
+                        >
+                          {item.label}
+                        </motion.span>
+                      )}
+                    </motion.div>
+                  </Link>
+                </TooltipTrigger>
+                {!sidebarOpen && (
+                  <TooltipContent side="right">
+                    <p>{item.label}</p>
+                  </TooltipContent>
+                )}
+              </Tooltip>
+            );
+          })}
+
+          {/* Research Section - Tools */}
+          {sidebarOpen && (
+            <p className="px-3 py-1 mt-2 text-xs font-medium text-muted-foreground uppercase tracking-wide">
+              Tools
+            </p>
+          )}
+          {researchNavTools.map((item) => {
+            const isActive = pathname === item.href;
+            const Icon = item.icon;
+
+            return (
+              <Tooltip key={item.id}>
+                <TooltipTrigger asChild>
+                  <Link href={item.href}>
+                    <motion.div
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      className={cn(
+                        "flex items-center gap-3 rounded-lg px-3 py-2 transition-colors",
+                        sidebarOpen ? "pl-5" : "",
+                        isActive
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      )}
+                    >
+                      <Icon className="h-4 w-4 shrink-0" />
                       {sidebarOpen && (
                         <motion.span
                           initial={false}
