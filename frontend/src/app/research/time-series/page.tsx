@@ -25,11 +25,12 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
 import { getHRVTimeSeries } from "@/lib/research-api";
+import { useAppStore } from "@/lib/store";
 import type { RRTimeSeriesResponse, DeviationZone } from "@/types/research";
 import { DEVIATION_COLORS } from "@/types/research";
 
-// Mock user ID - in production this would come from context/store
-const DEMO_USER_ID = "demo-user";
+// Default user ID when no user is selected
+const DEFAULT_USER_ID = "demo-user";
 
 function DeviationBadge({ zone }: { zone: DeviationZone }) {
   const color = DEVIATION_COLORS[zone.severity];
@@ -285,11 +286,15 @@ export default function TimeSeriesPage() {
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Get user ID from global store
+  const activeUserId = useAppStore((state) => state.activeUserId);
+  const userId = activeUserId ?? DEFAULT_USER_ID;
+
   const fetchData = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getHRVTimeSeries(DEMO_USER_ID, 2000);
+      const result = await getHRVTimeSeries(userId, 2000);
       if (result.total_beats === 0) {
         // Generate demo data
         const demoData: RRTimeSeriesResponse = {
@@ -323,7 +328,7 @@ export default function TimeSeriesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [userId]);
 
   React.useEffect(() => {
     fetchData();

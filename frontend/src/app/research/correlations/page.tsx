@@ -34,9 +34,9 @@ import { SOLAR_METRIC_INFO, HRV_METRIC_INFO } from "@/types/research";
 // Default user ID when no user is selected
 const DEFAULT_USER_ID = "demo-user";
 
-// Significance colors
+// Significance colors (per project rules: no light gray colors)
 const significanceColors: Record<string, string> = {
-  not_significant: "#888888",
+  not_significant: "#64748b",  // Slate-500 - dark enough for accessibility
   marginal: SCIENTIFIC_COLORS.warning,
   significant: SCIENTIFIC_COLORS.success,
   highly_significant: SCIENTIFIC_COLORS.primary,
