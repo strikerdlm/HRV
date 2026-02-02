@@ -496,19 +496,74 @@ async def delete_experiment(experiment_id: str) -> dict[str, str]:
 @app.get("/api/space-weather", response_model=SpaceWeatherSnapshot, tags=["Space Weather"])
 async def get_space_weather() -> SpaceWeatherSnapshot:
     """Get current space weather snapshot."""
+    import re
+    
     try:
         from space_weather_impact import fetch_space_weather_snapshot
         
         snapshot = await asyncio.to_thread(fetch_space_weather_snapshot)
         
+        # Extract values from the ImpactEvent objects in the snapshot
+        # The snapshot is a dataclass with event objects, not a dict
+        kp_index: Optional[float] = None
+        dst_index: Optional[float] = None
+        f10_7_flux: Optional[float] = None
+        solar_wind_speed: Optional[float] = None
+        solar_wind_density: Optional[float] = None
+        xray_flux: Optional[str] = None
+        proton_flux_10mev: Optional[float] = None
+        
+        # Helper to check for valid float (not NaN)
+        def _valid_float(val: Any) -> bool:
+            return val is not None and not (val != val)  # NaN check
+        
+        # Extract from geomagnetic event (Kp, Dst)
+        # source_description format: "G2 (Kp=5.0, Dst=-30 nT)"
+        if snapshot.geomagnetic_event:
+            evt = snapshot.geomagnetic_event
+            if _valid_float(evt.raw_value):
+                kp_index = evt.raw_value
+            # Parse Dst from source_description
+            if evt.source_description:
+                dst_match = re.search(r"Dst=(-?\d+(?:\.\d+)?)", evt.source_description)
+                if dst_match:
+                    try:
+                        dst_index = float(dst_match.group(1))
+                    except ValueError:
+                        pass
+        
+        # Extract from plasma event (solar wind)
+        if snapshot.plasma_event:
+            evt = snapshot.plasma_event
+            if _valid_float(evt.raw_value):
+                solar_wind_speed = evt.raw_value
+        
+        # Extract from photon event (X-ray class)
+        if snapshot.photon_event:
+            evt = snapshot.photon_event
+            # Try to get X-ray class from source_description or unit
+            if evt.source_description:
+                # Format: "X1.5 Flare" or "C3.2"
+                xray_match = re.search(r"([ABCMX]\d+\.?\d*)", evt.source_description)
+                if xray_match:
+                    xray_flux = xray_match.group(1)
+            if not xray_flux and evt.unit:
+                xray_flux = evt.unit
+        
+        # Extract from SEP event (proton flux)
+        if snapshot.sep_event:
+            evt = snapshot.sep_event
+            if _valid_float(evt.raw_value):
+                proton_flux_10mev = evt.raw_value
+        
         return SpaceWeatherSnapshot(
-            kp_index=snapshot.get("kp_index"),
-            dst_index=snapshot.get("dst_index"),
-            f10_7_flux=snapshot.get("f10_7_flux"),
-            solar_wind_speed=snapshot.get("solar_wind_speed"),
-            solar_wind_density=snapshot.get("solar_wind_density"),
-            xray_flux=snapshot.get("xray_flux"),
-            proton_flux_10mev=snapshot.get("proton_flux_10mev"),
+            kp_index=kp_index,
+            dst_index=dst_index,
+            f10_7_flux=f10_7_flux,
+            solar_wind_speed=solar_wind_speed,
+            solar_wind_density=solar_wind_density,
+            xray_flux=xray_flux,
+            proton_flux_10mev=proton_flux_10mev,
             fetched_at=datetime.now(timezone.utc).isoformat(),
         )
     except ImportError:
