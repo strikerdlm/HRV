@@ -27,8 +27,12 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
 import { getHRVSpaceWeatherCorrelations } from "@/lib/research-api";
+import { useAppStore } from "@/lib/store";
 import type { CorrelationAnalysisResult, CorrelationResult } from "@/types/research";
 import { SOLAR_METRIC_INFO, HRV_METRIC_INFO } from "@/types/research";
+
+// Default user ID when no user is selected
+const DEFAULT_USER_ID = "demo-user";
 
 // Significance colors
 const significanceColors: Record<string, string> = {
@@ -262,22 +266,24 @@ function CorrelationCard({ result }: { result: CorrelationResult }) {
 export default function CorrelationsPage() {
   const [data, setData] = React.useState<CorrelationAnalysisResult | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const activeUserId = useAppStore((state) => state.activeUserId);
+  const userId = activeUserId ?? DEFAULT_USER_ID;
 
-  const fetchCorrelations = async () => {
+  const fetchCorrelations = React.useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getHRVSpaceWeatherCorrelations();
+      const result = await getHRVSpaceWeatherCorrelations(userId);
       setData(result);
     } catch (error) {
       console.error("Failed to fetch correlations:", error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [userId]);
 
   React.useEffect(() => {
     fetchCorrelations();
-  }, []);
+  }, [fetchCorrelations]);
 
   return (
     <PageWrapper
