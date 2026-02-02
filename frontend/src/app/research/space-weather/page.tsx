@@ -46,9 +46,10 @@ const severityVariants: Record<ImpactSeverity, "success" | "info" | "warning" | 
   extreme: "destructive",
 };
 
-// Kp Index Gauge
+// Kp Index Gauge - Elegant design with large arc and thin needle
 function KpGauge({ value }: { value: number | null }) {
   const displayValue = value ?? 0;
+  const hasData = value !== null;
   
   const getKpColor = (kp: number) => {
     if (kp < 4) return SCIENTIFIC_COLORS.success;
@@ -57,20 +58,20 @@ function KpGauge({ value }: { value: number | null }) {
     return SCIENTIFIC_COLORS.danger;
   };
 
-  const option: any = {
+  const option: Record<string, unknown> = {
     series: [
       {
         type: "gauge" as const,
-        center: ["50%", "60%"],
-        radius: "90%",
-        startAngle: 200,
-        endAngle: -20,
+        center: ["50%", "65%"],
+        radius: "95%",
+        startAngle: 180,
+        endAngle: 0,
         min: 0,
         max: 9,
         splitNumber: 9,
         axisLine: {
           lineStyle: {
-            width: 15,
+            width: 25,
             color: [
               [0.33, SCIENTIFIC_COLORS.success],
               [0.55, SCIENTIFIC_COLORS.warning],
@@ -80,24 +81,50 @@ function KpGauge({ value }: { value: number | null }) {
           },
         },
         pointer: {
-          length: "60%",
+          icon: "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
+          length: "65%",
           width: 6,
-          itemStyle: { color: getKpColor(displayValue) },
+          offsetCenter: [0, "-10%"],
+          itemStyle: {
+            color: hasData ? getKpColor(displayValue) : "#94a3b8",
+          },
         },
-        axisTick: { show: false },
-        splitLine: { show: false },
+        anchor: {
+          show: true,
+          showAbove: true,
+          size: 18,
+          itemStyle: {
+            borderWidth: 3,
+            borderColor: hasData ? getKpColor(displayValue) : "#94a3b8",
+            color: "#fff",
+          },
+        },
+        axisTick: {
+          show: true,
+          splitNumber: 1,
+          length: 8,
+          distance: 5,
+          lineStyle: { color: "#64748b", width: 1 },
+        },
+        splitLine: {
+          show: true,
+          length: 15,
+          distance: 5,
+          lineStyle: { color: "#475569", width: 2 },
+        },
         axisLabel: {
-          distance: 25,
-          color: SCIENTIFIC_COLORS.textPrimary,
-          fontSize: 11,
+          distance: 30,
+          color: "#1e293b",
+          fontSize: 13,
+          fontWeight: "600",
         },
         detail: {
           valueAnimation: true,
-          formatter: (val: number) => (value !== null ? val.toFixed(1) : "N/A"),
-          fontSize: 28,
+          formatter: () => hasData ? displayValue.toFixed(1) : "—",
+          fontSize: 42,
           fontWeight: "bold",
-          color: SCIENTIFIC_COLORS.textPrimary,
-          offsetCenter: [0, "25%"],
+          color: hasData ? getKpColor(displayValue) : "#94a3b8",
+          offsetCenter: [0, "35%"],
         },
         data: [{ value: displayValue }],
       },
@@ -105,22 +132,22 @@ function KpGauge({ value }: { value: number | null }) {
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="h-full">
+      <CardHeader className="pb-0">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Compass className="h-5 w-5 text-primary" />
           Kp Index
         </CardTitle>
         <CardDescription>Planetary geomagnetic activity (0-9)</CardDescription>
       </CardHeader>
-      <CardContent>
-        <EChartsWrapper option={option} height={220} showToolbox={false} />
+      <CardContent className="pt-0">
+        <EChartsWrapper option={option} height={260} showToolbox={false} />
       </CardContent>
     </Card>
   );
 }
 
-// Solar Wind Gauge
+// Solar Wind Gauge - Elegant design with large arc and thin needle
 function SolarWindGauge({
   speed,
   density,
@@ -128,132 +155,217 @@ function SolarWindGauge({
   speed: number | null;
   density: number | null;
 }) {
-  const speedValue = speed ?? 0;
+  const speedValue = speed ?? 350;
+  const hasData = speed !== null;
+  
+  const getWindColor = (v: number) => {
+    if (v < 400) return SCIENTIFIC_COLORS.success;
+    if (v < 500) return SCIENTIFIC_COLORS.primary;
+    if (v < 700) return SCIENTIFIC_COLORS.warning;
+    return SCIENTIFIC_COLORS.danger;
+  };
 
-  const option: any = {
+  const option: Record<string, unknown> = {
     series: [
       {
         type: "gauge" as const,
-        center: ["50%", "60%"],
-        radius: "90%",
-        startAngle: 200,
-        endAngle: -20,
+        center: ["50%", "65%"],
+        radius: "95%",
+        startAngle: 180,
+        endAngle: 0,
         min: 200,
         max: 900,
         splitNumber: 7,
         axisLine: {
           lineStyle: {
-            width: 15,
+            width: 25,
             color: [
-              [0.4, SCIENTIFIC_COLORS.success],
-              [0.6, SCIENTIFIC_COLORS.primary],
-              [0.8, SCIENTIFIC_COLORS.warning],
+              [0.29, SCIENTIFIC_COLORS.success],
+              [0.43, SCIENTIFIC_COLORS.primary],
+              [0.71, SCIENTIFIC_COLORS.warning],
               [1, SCIENTIFIC_COLORS.danger],
             ],
           },
         },
         pointer: {
-          length: "60%",
+          icon: "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
+          length: "65%",
           width: 6,
+          offsetCenter: [0, "-10%"],
+          itemStyle: {
+            color: hasData ? getWindColor(speedValue) : "#94a3b8",
+          },
         },
-        axisTick: { show: false },
-        splitLine: { show: false },
+        anchor: {
+          show: true,
+          showAbove: true,
+          size: 18,
+          itemStyle: {
+            borderWidth: 3,
+            borderColor: hasData ? getWindColor(speedValue) : "#94a3b8",
+            color: "#fff",
+          },
+        },
+        axisTick: {
+          show: true,
+          splitNumber: 2,
+          length: 8,
+          distance: 5,
+          lineStyle: { color: "#64748b", width: 1 },
+        },
+        splitLine: {
+          show: true,
+          length: 15,
+          distance: 5,
+          lineStyle: { color: "#475569", width: 2 },
+        },
         axisLabel: {
-          distance: 25,
-          color: SCIENTIFIC_COLORS.textPrimary,
-          fontSize: 10,
+          distance: 30,
+          color: "#1e293b",
+          fontSize: 12,
+          fontWeight: "600",
         },
         detail: {
           valueAnimation: true,
-          formatter: (val: number) =>
-            speed !== null ? `${val.toFixed(0)} km/s` : "N/A",
-          fontSize: 20,
+          formatter: () => hasData ? speedValue.toFixed(0) : "—",
+          fontSize: 38,
           fontWeight: "bold",
-          color: SCIENTIFIC_COLORS.textPrimary,
+          color: hasData ? getWindColor(speedValue) : "#94a3b8",
           offsetCenter: [0, "25%"],
         },
-        data: [{ value: speedValue }],
+        title: {
+          show: true,
+          offsetCenter: [0, "50%"],
+          fontSize: 16,
+          fontWeight: "500",
+          color: "#64748b",
+        },
+        data: [{ value: speedValue, name: "km/s" }],
       },
     ],
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="h-full">
+      <CardHeader className="pb-0">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Wind className="h-5 w-5 text-info" />
           Solar Wind
         </CardTitle>
         <CardDescription>
-          Density: {density?.toFixed(1) ?? "N/A"} p/cm³
+          Density: {density?.toFixed(1) ?? "—"} p/cm³
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <EChartsWrapper option={option} height={220} showToolbox={false} />
+      <CardContent className="pt-0">
+        <EChartsWrapper option={option} height={260} showToolbox={false} />
       </CardContent>
     </Card>
   );
 }
 
-// F10.7 Flux Gauge
+// F10.7 Flux Gauge - Elegant design with large arc and thin needle
 function F107Gauge({ value }: { value: number | null }) {
-  const displayValue = value ?? 70;
+  const displayValue = value ?? 100;
+  const hasData = value !== null;
+  
+  const getFluxColor = (v: number) => {
+    if (v < 100) return SCIENTIFIC_COLORS.success;
+    if (v < 150) return SCIENTIFIC_COLORS.primary;
+    if (v < 200) return SCIENTIFIC_COLORS.warning;
+    return SCIENTIFIC_COLORS.danger;
+  };
 
-  const option: any = {
+  const option: Record<string, unknown> = {
     series: [
       {
         type: "gauge" as const,
-        center: ["50%", "60%"],
-        radius: "90%",
-        startAngle: 200,
-        endAngle: -20,
+        center: ["50%", "65%"],
+        radius: "95%",
+        startAngle: 180,
+        endAngle: 0,
         min: 60,
         max: 300,
         splitNumber: 6,
         axisLine: {
           lineStyle: {
-            width: 15,
+            width: 25,
             color: [
-              [0.25, SCIENTIFIC_COLORS.success],
-              [0.5, SCIENTIFIC_COLORS.primary],
-              [0.75, SCIENTIFIC_COLORS.warning],
+              [0.17, SCIENTIFIC_COLORS.success],
+              [0.37, SCIENTIFIC_COLORS.primary],
+              [0.58, SCIENTIFIC_COLORS.warning],
               [1, SCIENTIFIC_COLORS.danger],
             ],
           },
         },
-        pointer: { length: "60%", width: 6 },
-        axisTick: { show: false },
-        splitLine: { show: false },
+        pointer: {
+          icon: "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
+          length: "65%",
+          width: 6,
+          offsetCenter: [0, "-10%"],
+          itemStyle: {
+            color: hasData ? getFluxColor(displayValue) : "#94a3b8",
+          },
+        },
+        anchor: {
+          show: true,
+          showAbove: true,
+          size: 18,
+          itemStyle: {
+            borderWidth: 3,
+            borderColor: hasData ? getFluxColor(displayValue) : "#94a3b8",
+            color: "#fff",
+          },
+        },
+        axisTick: {
+          show: true,
+          splitNumber: 2,
+          length: 8,
+          distance: 5,
+          lineStyle: { color: "#64748b", width: 1 },
+        },
+        splitLine: {
+          show: true,
+          length: 15,
+          distance: 5,
+          lineStyle: { color: "#475569", width: 2 },
+        },
         axisLabel: {
-          distance: 25,
-          color: SCIENTIFIC_COLORS.textPrimary,
-          fontSize: 10,
+          distance: 30,
+          color: "#1e293b",
+          fontSize: 12,
+          fontWeight: "600",
         },
         detail: {
           valueAnimation: true,
-          formatter: (val: number) =>
-            value !== null ? `${val.toFixed(0)} SFU` : "N/A",
-          fontSize: 20,
+          formatter: () => hasData ? displayValue.toFixed(0) : "—",
+          fontSize: 38,
           fontWeight: "bold",
-          color: SCIENTIFIC_COLORS.textPrimary,
+          color: hasData ? getFluxColor(displayValue) : "#94a3b8",
           offsetCenter: [0, "25%"],
         },
-        data: [{ value: displayValue }],
+        title: {
+          show: true,
+          offsetCenter: [0, "50%"],
+          fontSize: 16,
+          fontWeight: "500",
+          color: "#64748b",
+        },
+        data: [{ value: displayValue, name: "SFU" }],
       },
     ],
   };
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
+    <Card className="h-full">
+      <CardHeader className="pb-0">
         <CardTitle className="flex items-center gap-2 text-lg">
           <Radio className="h-5 w-5 text-warning" />
           F10.7 Flux
         </CardTitle>
         <CardDescription>Solar radio flux (10.7 cm)</CardDescription>
       </CardHeader>
-      <CardContent>
-        <EChartsWrapper option={option} height={220} showToolbox={false} />
+      <CardContent className="pt-0">
+        <EChartsWrapper option={option} height={260} showToolbox={false} />
       </CardContent>
     </Card>
   );
@@ -310,6 +422,23 @@ export default function SpaceWeatherPage() {
   const [lastFetch, setLastFetch] = React.useState<Date | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Messages that are informational, not actual errors
+  const informationalPatterns = [
+    "No ENLIL record",
+    "No solar wind plasma",
+    "No CME",
+    "not found",
+    "No data available",
+    "no recent",
+  ];
+
+  const isInformationalMessage = (msg: string): boolean => {
+    const lowerMsg = msg.toLowerCase();
+    return informationalPatterns.some((pattern) =>
+      lowerMsg.includes(pattern.toLowerCase())
+    );
+  };
+
   const fetchData = async (forceRefresh: boolean = false) => {
     setLoading(true);
     setError(null);
@@ -324,11 +453,13 @@ export default function SpaceWeatherPage() {
       setData(snapshot);
       setLastFetch(new Date());
       
-      // Check for errors in response
+      // Check for actual errors in response (filter out informational messages)
       if (snapshot.errors && Object.keys(snapshot.errors).length > 0) {
-        const errorMsg = Object.values(snapshot.errors).join(", ");
-        if (errorMsg && !errorMsg.includes("nominal")) {
-          setError(errorMsg);
+        const actualErrors = Object.values(snapshot.errors).filter(
+          (msg) => !isInformationalMessage(msg)
+        );
+        if (actualErrors.length > 0) {
+          setError(actualErrors.join(", "));
         }
       }
     } catch (err) {
@@ -406,8 +537,23 @@ export default function SpaceWeatherPage() {
           </motion.div>
         )}
 
+        {/* Info messages for missing optional data */}
+        {data?.errors && Object.keys(data.errors).length > 0 && !error && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-wrap gap-2"
+          >
+            {Object.entries(data.errors).map(([key, msg]) => (
+              <Badge key={key} variant="secondary" className="text-xs">
+                {key}: {msg.length > 50 ? msg.substring(0, 50) + "..." : msg}
+              </Badge>
+            ))}
+          </motion.div>
+        )}
+
         {/* Gauges Grid */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-6 md:grid-cols-3">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
