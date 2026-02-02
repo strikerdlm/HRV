@@ -589,33 +589,35 @@ async def get_latest_garmin_metrics(user_id: str) -> GarminMetrics:
         
         db = UserDatabase()
         
-        # Try to get stored Garmin metrics
-        metrics = await asyncio.to_thread(
+        # Try to get stored Garmin metrics (returns list of GarminDailyMetrics dataclass)
+        metrics_list = await asyncio.to_thread(
             db.get_garmin_daily_metrics,
             user_id,
-            limit=1,
+            1,  # limit
         )
         
-        if not metrics:
+        if not metrics_list:
             return GarminMetrics()
         
-        latest = metrics[0]
+        # Get the latest record (it's a dataclass, not a dict)
+        latest = metrics_list[0]
         return GarminMetrics(
-            spo2_avg=latest.get("spo2_avg"),
-            respiration_awake=latest.get("respiration_awake"),
-            respiration_sleep=latest.get("respiration_sleep"),
-            vo2max=latest.get("vo2max"),
-            sleep_duration_hours=latest.get("sleep_hours"),
-            sleep_deep_minutes=latest.get("deep_sleep_min"),
-            sleep_rem_minutes=latest.get("rem_sleep_min"),
-            sleep_efficiency=latest.get("sleep_efficiency"),
-            sleep_score=latest.get("sleep_score"),
-            body_battery_high=latest.get("bb_high"),
-            body_battery_low=latest.get("bb_low"),
-            stress_avg=latest.get("stress_avg"),
-            steps=latest.get("steps"),
-            resting_hr=latest.get("resting_hr"),
-            date=latest.get("date"),
+            spo2_avg=latest.avg_spo2,
+            respiration_awake=latest.avg_respiration_awake,
+            respiration_sleep=latest.avg_respiration_sleep,
+            vo2max=None,  # Not stored in GarminDailyMetrics
+            sleep_duration_hours=latest.sleep_duration_hours,
+            sleep_deep_minutes=None,  # Not stored in GarminDailyMetrics
+            sleep_rem_minutes=None,  # Not stored in GarminDailyMetrics
+            sleep_efficiency=latest.sleep_efficiency,
+            sleep_score=int(latest.sleep_score) if latest.sleep_score else None,
+            body_battery_high=int(latest.body_battery_charge) if latest.body_battery_charge else None,
+            body_battery_low=int(latest.body_battery_drain) if latest.body_battery_drain else None,
+            stress_avg=latest.stress_score,
+            steps=latest.steps,
+            resting_hr=int(latest.resting_hr_bpm) if latest.resting_hr_bpm else None,
+            hrv_overnight=latest.hrv_rmssd_ms,
+            date=latest.metric_date,
         )
     except Exception as exc:
         _LOGGER.error(f"Error fetching Garmin metrics for user {user_id}: {exc}")
@@ -632,26 +634,205 @@ async def get_garmin_history(
         from user_database import UserDatabase
         
         db = UserDatabase()
+        # Returns list of GarminDailyMetrics dataclass objects
         metrics_list = await asyncio.to_thread(
             db.get_garmin_daily_metrics,
             user_id,
-            limit=days,
+            days,  # limit
         )
         
         result = []
         for m in metrics_list:
             result.append(GarminMetrics(
-                spo2_avg=m.get("spo2_avg"),
-                sleep_duration_hours=m.get("sleep_hours"),
-                sleep_score=m.get("sleep_score"),
-                body_battery_high=m.get("bb_high"),
-                stress_avg=m.get("stress_avg"),
-                steps=m.get("steps"),
-                resting_hr=m.get("resting_hr"),
-                date=m.get("date"),
+                spo2_avg=m.avg_spo2,
+                sleep_duration_hours=m.sleep_duration_hours,
+                sleep_score=int(m.sleep_score) if m.sleep_score else None,
+                body_battery_high=int(m.body_battery_charge) if m.body_battery_charge else None,
+                stress_avg=m.stress_score,
+                steps=m.steps,
+                resting_hr=int(m.resting_hr_bpm) if m.resting_hr_bpm else None,
+                hrv_overnight=m.hrv_rmssd_ms,
+                date=m.metric_date,
             ))
         
         return result
     except Exception as exc:
         _LOGGER.error(f"Error fetching Garmin history for user {user_id}: {exc}")
         return []
+
+
+class GarminSyncRequest(BaseModel):
+    """Garmin sync request parameters."""
+    
+    days: int = Field(default=14, ge=1, le=90, description="Number of days to sync")
+
+
+class GarminSyncResponse(BaseModel):
+    """Garmin sync response."""
+    
+    success: bool
+    records_synced: int
+    message: str
+    date_range: Optional[str] = None
+
+
+@router.post("/garmin/sync/{user_id}", response_model=GarminSyncResponse)
+async def sync_garmin_data(
+    user_id: str,
+    request: GarminSyncRequest = GarminSyncRequest(),
+) -> GarminSyncResponse:
+    """Sync Garmin Connect data for a user.
+    
+    Requires GARMIN_EMAIL and GARMIN_PASSWORD environment variables to be set.
+    """
+    try:
+        from garmin_connect_service import (
+            fetch_garmin_daily_metrics,
+            GarminAuthError,
+            summarize_garmin_daily,
+        )
+        from user_database import UserDatabase
+        
+        # Fetch metrics from Garmin Connect
+        _LOGGER.info(f"Starting Garmin sync for user {user_id}, days={request.days}")
+        records = await asyncio.to_thread(
+            fetch_garmin_daily_metrics,
+            user_id,
+            request.days,
+        )
+        
+        if not records:
+            return GarminSyncResponse(
+                success=True,
+                records_synced=0,
+                message="No new metrics found from Garmin Connect",
+            )
+        
+        # Save to database (save_garmin_daily_metrics expects a sequence)
+        db = UserDatabase()
+        try:
+            await asyncio.to_thread(db.save_garmin_daily_metrics, records)
+            saved_count = len(records)
+        except Exception as save_exc:
+            _LOGGER.warning(f"Failed to save Garmin records: {save_exc}")
+            saved_count = 0
+        
+        # Get summary
+        summary = summarize_garmin_daily(records)
+        
+        return GarminSyncResponse(
+            success=True,
+            records_synced=saved_count,
+            message=f"Successfully synced {saved_count} days of Garmin data",
+            date_range=summary.get("dates"),
+        )
+    except ImportError as exc:
+        _LOGGER.error(f"Garmin Connect module not available: {exc}")
+        raise HTTPException(
+            status_code=500,
+            detail="Garmin Connect module not installed. Install python-garminconnect.",
+        ) from exc
+    except Exception as exc:
+        error_msg = str(exc)
+        _LOGGER.error(f"Garmin sync failed for user {user_id}: {error_msg}")
+        
+        # Check for common auth errors
+        if "GARMIN_EMAIL" in error_msg or "GARMIN_PASSWORD" in error_msg:
+            raise HTTPException(
+                status_code=401,
+                detail="Garmin credentials not configured. Set GARMIN_EMAIL and GARMIN_PASSWORD in .env",
+            ) from exc
+        if "MFA" in error_msg or "2FA" in error_msg or "Authentication" in error_msg:
+            raise HTTPException(
+                status_code=401,
+                detail=f"Garmin authentication failed: {error_msg}",
+            ) from exc
+        if "rate limit" in error_msg.lower():
+            raise HTTPException(
+                status_code=429,
+                detail="Garmin Connect rate limit reached. Please try again later.",
+            ) from exc
+        
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Space Weather Refresh Endpoint
+# ---------------------------------------------------------------------------
+
+
+class SpaceWeatherRefreshRequest(BaseModel):
+    """Space weather refresh request."""
+    
+    force: bool = Field(default=False, description="Force refresh even if cache is valid")
+
+
+@router.post("/space-weather/refresh", response_model=SpaceWeatherSnapshot)
+async def refresh_space_weather(
+    request: SpaceWeatherRefreshRequest = SpaceWeatherRefreshRequest(),
+) -> SpaceWeatherSnapshot:
+    """Force refresh space weather data from NOAA/NASA sources.
+    
+    Use this endpoint when the cached data is stale or you need immediate updates.
+    """
+    try:
+        from space_weather_impact import (
+            fetch_space_weather_snapshot as fetch_snapshot,
+            ImpactEvent,
+        )
+        
+        # Force refresh by clearing any cached data if needed
+        if request.force:
+            _LOGGER.info("Force refreshing space weather data")
+        
+        snapshot = await asyncio.to_thread(fetch_snapshot)
+        
+        # Convert to response model
+        data = SpaceWeatherData(
+            fetched_at=datetime.now(timezone.utc).isoformat(),
+        )
+        
+        predictions = []
+        for event in snapshot.all_events():
+            pred = ImpactPrediction(
+                category=event.category.value,
+                severity=event.severity.value,
+                observation_time=event.observation_time_utc.isoformat() if event.observation_time_utc else None,
+                arrival_time=event.arrival_time_utc.isoformat() if event.arrival_time_utc else None,
+                travel_time_minutes=event.travel_time_minutes,
+                biological_effect=event.biological_effect,
+                polar_h10_recommendation=event.polar_h10_recommendation,
+                raw_value=event.raw_value if not (event.raw_value != event.raw_value) else None,
+                unit=event.unit,
+                confidence=event.confidence,
+            )
+            predictions.append(pred)
+        
+        next_imp = snapshot.next_impact()
+        most_sev = snapshot.most_severe()
+        
+        return SpaceWeatherSnapshot(
+            data=data,
+            predictions=predictions,
+            next_impact=ImpactPrediction(
+                category=next_imp.category.value,
+                severity=next_imp.severity.value,
+                arrival_time=next_imp.arrival_time_utc.isoformat() if next_imp.arrival_time_utc else None,
+                biological_effect=next_imp.biological_effect,
+            ) if next_imp else None,
+            most_severe=ImpactPrediction(
+                category=most_sev.category.value,
+                severity=most_sev.severity.value,
+                biological_effect=most_sev.biological_effect,
+            ) if most_sev else None,
+            errors=snapshot.errors,
+        )
+    except ImportError:
+        _LOGGER.warning("space_weather_impact module not available")
+        return SpaceWeatherSnapshot(
+            data=SpaceWeatherData(fetched_at=datetime.now(timezone.utc).isoformat()),
+            errors={"import": "Space weather module not available"},
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error refreshing space weather: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
