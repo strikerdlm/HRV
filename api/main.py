@@ -39,9 +39,31 @@ if str(_APP_DIR) not in sys.path:
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+# Load environment variables from .env file
+try:
+    from env_loader import load_env_file
+    _env_loaded = load_env_file(verbose=True)
+except ImportError:
+    # Fallback: try loading .env from project root directly
+    try:
+        from dotenv import load_dotenv
+        _env_path = _PROJECT_ROOT / ".env"
+        if _env_path.exists():
+            load_dotenv(dotenv_path=_env_path)
+            _env_loaded = True
+        else:
+            _env_loaded = False
+    except ImportError:
+        _env_loaded = False
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 _LOGGER = logging.getLogger(__name__)
+
+if _env_loaded:
+    _LOGGER.info("Environment variables loaded from .env")
+else:
+    _LOGGER.warning("No .env file loaded - some features may not work")
 
 
 # ---------------------------------------------------------------------------
