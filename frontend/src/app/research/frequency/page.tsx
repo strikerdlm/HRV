@@ -24,9 +24,11 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
 import { getHRVFrequency } from "@/lib/research-api";
+import { useAppStore } from "@/lib/store";
 import type { FrequencyDomainResponse } from "@/types/research";
 
-const DEMO_USER_ID = "demo-user";
+// Default user ID when no user is selected
+const DEFAULT_USER_ID = "demo-user";
 
 // LF/HF Ratio Gauge
 function LFHFGauge({ ratio }: { ratio: number | null }) {
@@ -307,10 +309,14 @@ export default function FrequencyPage() {
   const [loading, setLoading] = React.useState(false);
   const [method, setMethod] = React.useState<"welch" | "periodogram" | "ar">("welch");
 
+  // Get user ID from global store
+  const activeUserId = useAppStore((state) => state.activeUserId);
+  const userId = activeUserId ?? DEFAULT_USER_ID;
+
   const fetchData = React.useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getHRVFrequency(DEMO_USER_ID, method);
+      const result = await getHRVFrequency(userId, method);
       if (!result.vlf && !result.lf && !result.hf) {
         // Generate demo data
         const demoData: FrequencyDomainResponse = {
@@ -343,7 +349,7 @@ export default function FrequencyPage() {
     } finally {
       setLoading(false);
     }
-  }, [method]);
+  }, [userId, method]);
 
   React.useEffect(() => {
     fetchData();

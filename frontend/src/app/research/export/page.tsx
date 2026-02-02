@@ -25,9 +25,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { exportHRVData } from "@/lib/research-api";
+import { useAppStore } from "@/lib/store";
 import type { ExportRequest, ExportResponse } from "@/types/research";
 
-const DEMO_USER_ID = "demo-user";
+// Default user ID when no user is selected
+const DEFAULT_USER_ID = "demo-user";
 
 function FormatCard({
   format,
@@ -100,12 +102,16 @@ export default function ExportPage() {
   const [result, setResult] = React.useState<ExportResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
+  // Get user ID from global store
+  const activeUserId = useAppStore((state) => state.activeUserId);
+  const userId = activeUserId ?? DEFAULT_USER_ID;
+
   const handleExport = async () => {
     setLoading(true);
     setError(null);
     setResult(null);
     try {
-      const response = await exportHRVData(DEMO_USER_ID, {
+      const response = await exportHRVData(userId, {
         format,
         ...options,
       });

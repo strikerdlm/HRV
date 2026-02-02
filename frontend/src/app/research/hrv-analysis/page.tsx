@@ -13,6 +13,8 @@ import {
   Upload,
   BarChart3,
   RefreshCw,
+  Info,
+  HelpCircle,
 } from "lucide-react";
 import { PageWrapper } from "@/components/layout";
 import {
@@ -26,10 +28,59 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
 import { HRVGauge } from "@/components/charts";
 import type { HRVAnalysisResult, HRFMetrics } from "@/types/research";
 import { HRV_METRIC_INFO } from "@/types/research";
+
+/**
+ * Comprehensive metric explanations for publication-quality scientific documentation.
+ * Each metric includes clinical significance, normal ranges, and interpretation guidance.
+ */
+const METRIC_EXPLANATIONS: Record<string, { title: string; explanation: string; normalRange: string; clinicalSignificance: string }> = {
+  sdnn: {
+    title: "SDNN (Standard Deviation of NN Intervals)",
+    explanation: "The gold standard measure of overall HRV. SDNN reflects all cyclic components responsible for variability in the recording period, including circadian rhythms for 24h recordings.",
+    normalRange: "Short-term (5 min): 50-100 ms | 24h: 100-180 ms",
+    clinicalSignificance: "SDNN <50ms in 24h recordings indicates significantly increased cardiovascular risk. Values decline with age but can be improved through exercise, stress reduction, and sleep optimization.",
+  },
+  rmssd: {
+    title: "RMSSD (Root Mean Square of Successive Differences)",
+    explanation: "Primary measure of parasympathetic (vagal) activity. RMSSD reflects beat-to-beat variations and is largely independent of circadian influences, making it ideal for short recordings.",
+    normalRange: "Short-term (5 min): 20-75 ms | Athletes may exceed 100 ms",
+    clinicalSignificance: "Low RMSSD indicates reduced vagal tone, associated with stress, overtraining, or cardiovascular pathology. It's the preferred metric for monitoring recovery and training readiness.",
+  },
+  pnn50: {
+    title: "pNN50 (Percentage of Successive Intervals >50ms)",
+    explanation: "The percentage of successive RR intervals differing by more than 50 milliseconds. Highly correlated with RMSSD and similarly reflects parasympathetic activity.",
+    normalRange: "Short-term: 10-30% | Values vary significantly with age",
+    clinicalSignificance: "Easy to interpret percentage that tracks vagal tone. Like RMSSD, low values indicate reduced parasympathetic activity and potential cardiovascular stress.",
+  },
+  lf_hf_ratio: {
+    title: "LF/HF Ratio",
+    explanation: "Traditionally interpreted as sympathovagal balance, but this interpretation is now disputed. The LF band contains both sympathetic and parasympathetic influences, complicating interpretation.",
+    normalRange: "Typically 0.5-2.0 in resting conditions",
+    clinicalSignificance: "CAUTION: Per Billman (2013), this ratio does NOT accurately reflect sympathovagal balance. Use with care and prefer direct assessment of HF power for parasympathetic evaluation.",
+  },
+  dfa_alpha1: {
+    title: "DFA α1 (Detrended Fluctuation Analysis)",
+    explanation: "Short-term fractal scaling exponent (4-11 beats) measuring self-similarity in heart rate dynamics. Healthy hearts exhibit fractal-like correlation structures (α1 ≈ 1.0).",
+    normalRange: "Healthy: 0.75-1.0 | Optimal: ~1.0",
+    clinicalSignificance: "α1 < 0.65 suggests loss of correlation (pathological). α1 > 1.35 indicates rigid, overly regular rhythm. Both extremes are associated with increased mortality risk.",
+  },
+  pip: {
+    title: "PIP (Percentage of Inflection Points)",
+    explanation: "Primary HRF metric capturing direction changes in successive RR intervals. Unlike traditional HRV, HRF reflects non-autonomic irregularity in cardiac rhythm.",
+    normalRange: "Normal: 40-55% | Elevated AF risk: >60%",
+    clinicalSignificance: "Per Costa et al. (2017, 2021), elevated PIP (>60%) predicts atrial fibrillation independently of traditional HRV measures. Higher values indicate more fragmented, irregular rhythm.",
+  },
+};
 
 // Mock HRV data for demonstration
 const mockHRVResult: HRVAnalysisResult = {
@@ -83,12 +134,13 @@ const mockHRVResult: HRVAnalysisResult = {
   analysis_method: "welch",
 };
 
-// Metric Card Component
+// Metric Card Component with comprehensive scientific tooltips
 function MetricCard({
   title,
   value,
   unit,
   description,
+  metricKey,
   icon: Icon,
   color = "text-primary",
 }: {
@@ -96,14 +148,41 @@ function MetricCard({
   value: number | null;
   unit: string;
   description?: string;
+  metricKey?: string;
   icon: React.ElementType;
   color?: string;
 }) {
+  const explanation = metricKey ? METRIC_EXPLANATIONS[metricKey] : null;
+
   return (
     <div className="p-4 rounded-lg border bg-card">
-      <div className="flex items-center gap-2 mb-2">
-        <Icon className={`h-4 w-4 ${color}`} />
-        <span className="text-sm font-medium">{title}</span>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <div className="flex items-center gap-2">
+          <Icon className={`h-4 w-4 ${color}`} />
+          <span className="text-sm font-medium">{title}</span>
+        </div>
+        {explanation && (
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button className="text-muted-foreground hover:text-foreground transition-colors">
+                  <HelpCircle className="h-3.5 w-3.5" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-sm p-4">
+                <div className="space-y-2">
+                  <p className="font-semibold text-sm">{explanation.title}</p>
+                  <p className="text-xs text-muted-foreground">{explanation.explanation}</p>
+                  <div className="text-xs">
+                    <span className="font-medium text-success">Normal Range: </span>
+                    <span className="text-muted-foreground">{explanation.normalRange}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground italic">{explanation.clinicalSignificance}</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        )}
       </div>
       <p className="text-2xl font-bold">
         {value !== null ? value.toFixed(1) : "N/A"}
@@ -360,6 +439,7 @@ export default function HRVAnalysisPage() {
                   value={data.time_domain.sdnn}
                   unit="ms"
                   description="Overall HRV"
+                  metricKey="sdnn"
                   icon={Activity}
                   color="text-primary"
                 />
@@ -368,6 +448,7 @@ export default function HRVAnalysisPage() {
                   value={data.time_domain.rmssd}
                   unit="ms"
                   description="Parasympathetic"
+                  metricKey="rmssd"
                   icon={Heart}
                   color="text-success"
                 />
@@ -376,6 +457,7 @@ export default function HRVAnalysisPage() {
                   value={data.time_domain.pnn50}
                   unit="%"
                   description="Vagal tone"
+                  metricKey="pnn50"
                   icon={Zap}
                   color="text-warning"
                 />
@@ -387,6 +469,26 @@ export default function HRVAnalysisPage() {
                   icon={Heart}
                   color="text-danger"
                 />
+              </div>
+              
+              {/* Clinical Interpretation Panel */}
+              <div className="mt-4 p-4 rounded-lg bg-muted/50 border">
+                <div className="flex items-start gap-3">
+                  <Info className="h-5 w-5 text-info mt-0.5 flex-shrink-0" />
+                  <div className="space-y-2 text-sm">
+                    <p className="font-medium">Clinical Interpretation</p>
+                    <p className="text-muted-foreground">
+                      {data.time_domain.rmssd !== null && data.time_domain.rmssd > 40
+                        ? "RMSSD indicates healthy parasympathetic (vagal) tone. Values above 40ms in short-term recordings suggest adequate recovery capacity."
+                        : data.time_domain.rmssd !== null && data.time_domain.rmssd < 20
+                          ? "Low RMSSD may indicate reduced vagal tone. Consider factors like recent stress, poor sleep, or overtraining."
+                          : "RMSSD is within moderate range. Continue monitoring for personal baseline establishment."}
+                    </p>
+                    <p className="text-xs text-muted-foreground italic">
+                      Reference: Task Force (1996). Heart rate variability: standards of measurement. Circulation, 93(5), 1043-1065.
+                    </p>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
