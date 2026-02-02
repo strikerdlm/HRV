@@ -49,10 +49,10 @@ echarts.use([
 
 /**
  * Scientific color palette following publication standards
- * Based on project plots.mdc rules
+ * Based on project plots.mdc rules and Nature Research guidelines
  */
 export const SCIENTIFIC_COLORS = {
-  // Primary colors
+  // Primary colors (semantic)
   primary: "#3498db",
   success: "#27ae60",
   warning: "#f39c12",
@@ -72,7 +72,7 @@ export const SCIENTIFIC_COLORS = {
     "#e91e63", // Pink
   ],
   
-  // Risk zones
+  // Risk zones (with opacity for background shading)
   goodZone: "rgba(39, 174, 96, 0.1)",
   normalZone: "rgba(52, 152, 219, 0.1)",
   cautionZone: "rgba(243, 156, 18, 0.1)",
@@ -82,9 +82,14 @@ export const SCIENTIFIC_COLORS = {
   textPrimary: "#1a1a1a",
   textSecondary: "#2c3e50",
   
-  // Grid
+  // Grid and axes
   gridLine: "rgba(44, 62, 80, 0.1)",
   axisLine: "#2c3e50",
+  
+  // Gauge structural elements (acceptable darker grays)
+  gaugeTick: "#64748b",      // Slate-500 for tick marks
+  gaugeSplit: "#475569",     // Slate-600 for split lines
+  gaugeDisabled: "#94a3b8",  // Slate-400 for disabled states
 };
 
 interface EChartsWrapperProps {
@@ -162,22 +167,31 @@ export function EChartsWrapper({
       },
       // Default colors
       color: SCIENTIFIC_COLORS.series,
-      // Toolbox for exports
+      // Toolbox for exports (PNG 300+ DPI, SVG for vector)
       ...(showToolbox && {
         toolbox: {
           feature: {
             saveAsImage: {
               type: "png",
-              pixelRatio: 3,
-              title: "Save PNG",
+              pixelRatio: 3,  // 300+ DPI for publication
+              title: "Save PNG (300 DPI)",
+            },
+            dataZoom: {
+              title: { zoom: "Zoom", back: "Reset Zoom" },
             },
             dataView: {
-              title: "Data View",
+              title: "View Data",
               lang: ["Data View", "Close", "Refresh"],
+            },
+            restore: {
+              title: "Restore",
             },
           },
           right: 20,
           top: 20,
+          iconStyle: {
+            borderColor: SCIENTIFIC_COLORS.textSecondary,
+          },
         },
       }),
       // Merge with provided option
