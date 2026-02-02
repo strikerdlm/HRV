@@ -264,3 +264,4 @@ core
 *.sqlite
 *.db-shm
 *.db-wal
+env
