@@ -315,6 +315,125 @@ const sampleAlerts: Alert[] = [
 ];
 
 // ---------------------------------------------------------------------------
+// Activity Templates (PROGSS-aligned)
+// ---------------------------------------------------------------------------
+
+interface ActivityTemplate {
+  id: string;
+  title: string;
+  description: string;
+  category: ActivityCategory;
+  defaultDuration: number; // minutes
+  priority: "critical" | "high" | "medium" | "low";
+  location?: string;
+}
+
+const ACTIVITY_TEMPLATES: Record<string, ActivityTemplate[]> = {
+  medical: [
+    { id: "med-1", title: "Post-Sleep Assessment", description: "Morning HRV measurement and wellness check", category: "medical", defaultDuration: 60, priority: "high", location: "Medical Bay" },
+    { id: "med-2", title: "Pre-EVA Medical Check", description: "Complete medical evaluation before EVA", category: "medical", defaultDuration: 45, priority: "critical", location: "Medical Bay" },
+    { id: "med-3", title: "Weekly Health Screening", description: "Comprehensive weekly health assessment", category: "medical", defaultDuration: 90, priority: "high", location: "Medical Bay" },
+    { id: "med-4", title: "Blood Draw / Lab Work", description: "Biomarker sample collection", category: "medical", defaultDuration: 30, priority: "medium", location: "Medical Bay" },
+    { id: "med-5", title: "Psychological Assessment", description: "Mood and cognitive assessment", category: "medical", defaultDuration: 45, priority: "high", location: "Private Quarters" },
+  ],
+  exercise: [
+    { id: "ex-1", title: "Morning Exercise", description: "Cardiovascular and resistance training", category: "exercise", defaultDuration: 90, priority: "high", location: "Exercise Module" },
+    { id: "ex-2", title: "Afternoon Exercise", description: "Low-intensity recovery exercise", category: "exercise", defaultDuration: 60, priority: "medium", location: "Exercise Module" },
+    { id: "ex-3", title: "CEVIS Cycling Session", description: "Cycle ergometer with vibration isolation", category: "exercise", defaultDuration: 45, priority: "high", location: "Exercise Module" },
+    { id: "ex-4", title: "ARED Resistance Training", description: "Advanced resistive exercise device", category: "exercise", defaultDuration: 60, priority: "high", location: "Exercise Module" },
+  ],
+  meal: [
+    { id: "meal-1", title: "Breakfast", description: "Morning meal", category: "meal", defaultDuration: 30, priority: "medium", location: "Galley" },
+    { id: "meal-2", title: "Lunch", description: "Midday meal", category: "meal", defaultDuration: 60, priority: "medium", location: "Galley" },
+    { id: "meal-3", title: "Dinner", description: "Evening meal", category: "meal", defaultDuration: 60, priority: "medium", location: "Galley" },
+    { id: "meal-4", title: "Snack / Hydration Break", description: "Scheduled nutrition break", category: "meal", defaultDuration: 15, priority: "low", location: "Galley" },
+  ],
+  experiment: [
+    { id: "exp-1", title: "Science Operations", description: "Scheduled experiment execution", category: "experiment", defaultDuration: 180, priority: "high", location: "Science Module" },
+    { id: "exp-2", title: "Payload Operations", description: "Payload setup and data collection", category: "experiment", defaultDuration: 120, priority: "medium", location: "Science Module" },
+    { id: "exp-3", title: "Earth Observation", description: "Photography and data collection", category: "experiment", defaultDuration: 60, priority: "medium", location: "Cupola" },
+  ],
+  work: [
+    { id: "work-1", title: "Flight Planning Review", description: "Review and update mission timeline", category: "work", defaultDuration: 90, priority: "high", location: "Cupola" },
+    { id: "work-2", title: "EVA Preparation", description: "Suit checkout and EVA briefing", category: "work", defaultDuration: 180, priority: "critical", location: "Airlock" },
+    { id: "work-3", title: "Daily Planning Conference", description: "Mission Control coordination", category: "work", defaultDuration: 30, priority: "high", location: "Comm Station" },
+    { id: "work-4", title: "Handover Briefing", description: "Crew shift handover", category: "work", defaultDuration: 30, priority: "high", location: "Cupola" },
+  ],
+  maintenance: [
+    { id: "maint-1", title: "Systems Maintenance", description: "Environmental control system check", category: "maintenance", defaultDuration: 120, priority: "medium", location: "Node 2" },
+    { id: "maint-2", title: "Inventory Management", description: "Cargo tracking and organization", category: "maintenance", defaultDuration: 60, priority: "low", location: "Storage Module" },
+    { id: "maint-3", title: "Emergency Systems Check", description: "Fire and safety equipment inspection", category: "maintenance", defaultDuration: 45, priority: "high", location: "All Modules" },
+  ],
+  communication: [
+    { id: "comm-1", title: "Ground Communication", description: "Daily planning conference with Mission Control", category: "communication", defaultDuration: 60, priority: "high", location: "Comm Station" },
+    { id: "comm-2", title: "Family Private Communication", description: "Private communication with family", category: "communication", defaultDuration: 30, priority: "medium", location: "Private Quarters" },
+    { id: "comm-3", title: "Public Affairs Event", description: "Media or educational outreach", category: "communication", defaultDuration: 45, priority: "medium", location: "Cupola" },
+  ],
+  sleep: [
+    { id: "sleep-1", title: "Sleep Period", description: "Scheduled sleep", category: "sleep", defaultDuration: 510, priority: "high", location: "Crew Quarters" },
+    { id: "sleep-2", title: "Pre-Sleep Routine", description: "Preparation for sleep", category: "sleep", defaultDuration: 30, priority: "medium", location: "Crew Quarters" },
+    { id: "sleep-3", title: "Post-Sleep Routine", description: "Morning routine and hygiene", category: "sleep", defaultDuration: 30, priority: "medium", location: "Crew Quarters" },
+  ],
+  personal: [
+    { id: "pers-1", title: "Personal Time", description: "Free time for recreation", category: "personal", defaultDuration: 60, priority: "low", location: "Any" },
+    { id: "pers-2", title: "Personal Hygiene", description: "Daily hygiene routine", category: "personal", defaultDuration: 30, priority: "medium", location: "Hygiene Module" },
+  ],
+  emergency: [
+    { id: "emerg-1", title: "Emergency Drill", description: "Scheduled emergency response drill", category: "emergency", defaultDuration: 60, priority: "critical", location: "All Modules" },
+    { id: "emerg-2", title: "Medical Emergency Response", description: "Emergency medical situation", category: "emergency", defaultDuration: 120, priority: "critical", location: "Medical Bay" },
+  ],
+};
+
+// ---------------------------------------------------------------------------
+// PROGSS Checklist Items (aligned with the PROGSS methodology)
+// ---------------------------------------------------------------------------
+
+interface PROGSSCheckItem {
+  id: string;
+  phase: "A" | "PRE" | "B" | "POST";
+  step: string;
+  label: string;
+  description: string;
+  frequency: "daily" | "weekly" | "per_event" | "mission_start" | "mission_end";
+}
+
+const PROGSS_CHECKLIST: PROGSSCheckItem[] = [
+  // Phase A - Characterization Stage
+  { id: "a-1.1", phase: "A", step: "1.1", label: "Mission Definition", description: "Representatives, institutions, budget confirmed", frequency: "mission_start" },
+  { id: "a-1.2", phase: "A", step: "1.2", label: "Destination Defined", description: "Location, agenda, itinerary confirmed", frequency: "mission_start" },
+  { id: "a-1.3", phase: "A", step: "1.3", label: "Resources & Protocols", description: "Essential resources for human presence verified", frequency: "mission_start" },
+  { id: "a-1.4", phase: "A", step: "1.4", label: "Risk Matrix", description: "Risk matrix for accidents and emergencies reviewed", frequency: "mission_start" },
+  { id: "a-1.5", phase: "A", step: "1.5", label: "Personnel Criteria", description: "Criteria for registration of professionals", frequency: "mission_start" },
+  { id: "a-1.6", phase: "A", step: "1.6", label: "Participant Criteria", description: "Criteria for participant suitability", frequency: "mission_start" },
+  // Pre-Stage
+  { id: "pre-2.1", phase: "PRE", step: "2.1", label: "Screening Complete", description: "Sociodemographic and health history collected", frequency: "mission_start" },
+  { id: "pre-2.2", phase: "PRE", step: "2.2", label: "Assessment Done", description: "Assessment per established criteria completed", frequency: "mission_start" },
+  { id: "pre-2.3", phase: "PRE", step: "2.3", label: "Preparation", description: "Baggage, identification, supplies prepared", frequency: "mission_start" },
+  { id: "pre-2.4", phase: "PRE", step: "2.4", label: "Training Complete", description: "Participants and professionals trained", frequency: "mission_start" },
+  { id: "pre-2.5", phase: "PRE", step: "2.5", label: "Reporting Training", description: "Incident reporting and update flow established", frequency: "mission_start" },
+  // Phase B - During Stage (daily items)
+  { id: "b-3.1", phase: "B", step: "3.1", label: "Remote Monitoring", description: "Self-management checklist completed", frequency: "daily" },
+  { id: "b-3.2", phase: "B", step: "3.2", label: "Emergency Protocols", description: "Emergency protocols reviewed if needed", frequency: "per_event" },
+  { id: "b-3.3", phase: "B", step: "3.3", label: "Communication", description: "Scheduled communication completed", frequency: "daily" },
+  { id: "b-3.4", phase: "B", step: "3.4", label: "Evaluation Checklist", description: "Post-exposure evaluation items reviewed", frequency: "daily" },
+  // Post-Stage
+  { id: "post-4.1", phase: "POST", step: "4.1", label: "Post-Assessment", description: "Post-exposure assessment checklist comparative", frequency: "mission_end" },
+  { id: "post-4.2", phase: "POST", step: "4.2", label: "Service/Support", description: "Impacts and effects recognized and addressed", frequency: "mission_end" },
+  { id: "post-4.3", phase: "POST", step: "4.3", label: "Exit Interview", description: "Exit/reintegration interview completed", frequency: "mission_end" },
+  { id: "post-4.4", phase: "POST", step: "4.4", label: "Recommendations", description: "Mission assessment and future recommendations", frequency: "mission_end" },
+];
+
+type SemaphoreStatus = "not_started" | "in_progress" | "completed" | "issue";
+
+interface PROGSSCheckStatus {
+  itemId: string;
+  status: SemaphoreStatus;
+  notes?: string;
+  completedAt?: string;
+  completedBy?: string;
+}
+
+// ---------------------------------------------------------------------------
 // Utility Functions
 // ---------------------------------------------------------------------------
 
@@ -1074,6 +1193,389 @@ function EditCrewMemberDialog({
   );
 }
 
+// Add Activity Dialog with Templates Menu
+function AddActivityDialog({
+  open,
+  onOpenChange,
+  onAdd,
+  crewMembers,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onAdd: (activity: Omit<ScheduleActivity, "id">) => void;
+  crewMembers: CrewMember[];
+}) {
+  const [selectedCategory, setSelectedCategory] = React.useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = React.useState<ActivityTemplate | null>(null);
+  const [customMode, setCustomMode] = React.useState(false);
+  const [formData, setFormData] = React.useState({
+    title: "",
+    description: "",
+    startTime: "09:00",
+    endTime: "10:00",
+    category: "work" as ActivityCategory,
+    priority: "medium" as "critical" | "high" | "medium" | "low",
+    location: "",
+    assignedCrew: [] as string[],
+  });
+
+  // Reset state when dialog opens/closes
+  React.useEffect(() => {
+    if (!open) {
+      setSelectedCategory(null);
+      setSelectedTemplate(null);
+      setCustomMode(false);
+      setFormData({
+        title: "",
+        description: "",
+        startTime: "09:00",
+        endTime: "10:00",
+        category: "work",
+        priority: "medium",
+        location: "",
+        assignedCrew: [],
+      });
+    }
+  }, [open]);
+
+  // Apply template to form
+  const applyTemplate = (template: ActivityTemplate) => {
+    setSelectedTemplate(template);
+    const startHour = 9;
+    const durationHours = Math.floor(template.defaultDuration / 60);
+    const durationMins = template.defaultDuration % 60;
+    const endHour = startHour + durationHours;
+    const endMin = durationMins;
+
+    setFormData({
+      title: template.title,
+      description: template.description,
+      startTime: `${String(startHour).padStart(2, "0")}:00`,
+      endTime: `${String(endHour).padStart(2, "0")}:${String(endMin).padStart(2, "0")}`,
+      category: template.category,
+      priority: template.priority,
+      location: template.location || "",
+      assignedCrew: [],
+    });
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!formData.title.trim()) return;
+
+    onAdd({
+      title: formData.title,
+      description: formData.description || undefined,
+      startTime: formData.startTime,
+      endTime: formData.endTime,
+      category: formData.category,
+      priority: formData.priority,
+      location: formData.location || undefined,
+      assignedCrew: formData.assignedCrew,
+      status: "scheduled",
+    });
+    onOpenChange(false);
+  };
+
+  const toggleCrewMember = (role: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      assignedCrew: prev.assignedCrew.includes(role)
+        ? prev.assignedCrew.filter((r) => r !== role)
+        : [...prev.assignedCrew, role],
+    }));
+  };
+
+  const categoryIcons: Record<string, React.ReactNode> = {
+    medical: <Heart className="h-4 w-4" />,
+    exercise: <Activity className="h-4 w-4" />,
+    meal: <Clock className="h-4 w-4" />,
+    experiment: <Target className="h-4 w-4" />,
+    work: <FileText className="h-4 w-4" />,
+    maintenance: <Settings className="h-4 w-4" />,
+    communication: <Globe className="h-4 w-4" />,
+    sleep: <Moon className="h-4 w-4" />,
+    personal: <User className="h-4 w-4" />,
+    emergency: <AlertTriangle className="h-4 w-4" />,
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Plus className="h-5 w-5" />
+            Add Activity
+          </DialogTitle>
+          <DialogDescription>
+            Select from templates or create a custom activity
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex-1 overflow-y-auto">
+          {/* Step 1: Category Selection */}
+          {!selectedCategory && !customMode && (
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="space-y-4"
+            >
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium">Select Activity Category</h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCustomMode(true)}
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Custom Activity
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
+                {Object.keys(ACTIVITY_TEMPLATES).map((category) => (
+                  <motion.button
+                    key={category}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    className={`p-4 rounded-lg border-2 transition-all text-left ${
+                      CATEGORY_COLORS[category]?.split(" ")[0] || "bg-muted"
+                    } hover:shadow-md`}
+                    onClick={() => setSelectedCategory(category)}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      {categoryIcons[category]}
+                      <span className="font-medium capitalize text-sm">{category}</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {ACTIVITY_TEMPLATES[category]?.length || 0} templates
+                    </p>
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Step 2: Template Selection */}
+          {selectedCategory && !selectedTemplate && !customMode && (
+            <motion.div
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="space-y-4"
+            >
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedCategory(null)}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Back
+                </Button>
+                <h4 className="font-medium capitalize">{selectedCategory} Activities</h4>
+              </div>
+
+              <div className="grid gap-2">
+                {ACTIVITY_TEMPLATES[selectedCategory]?.map((template) => (
+                  <motion.button
+                    key={template.id}
+                    whileHover={{ scale: 1.01 }}
+                    className="p-4 rounded-lg border bg-card hover:bg-accent/50 transition-all text-left"
+                    onClick={() => applyTemplate(template)}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h5 className="font-medium">{template.title}</h5>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          {template.description}
+                        </p>
+                        <div className="flex items-center gap-2 mt-2">
+                          <Badge variant="outline" className="text-xs">
+                            <Clock className="h-3 w-3 mr-1" />
+                            {template.defaultDuration} min
+                          </Badge>
+                          {template.location && (
+                            <Badge variant="outline" className="text-xs">
+                              📍 {template.location}
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                      <Badge className={PRIORITY_COLORS[template.priority]}>
+                        {template.priority}
+                      </Badge>
+                    </div>
+                  </motion.button>
+                ))}
+              </div>
+            </motion.div>
+          )}
+
+          {/* Step 3: Activity Configuration (after template or custom) */}
+          {(selectedTemplate || customMode) && (
+            <motion.div
+              initial={{ opacity: 0, x: 10 }}
+              animate={{ opacity: 1, x: 0 }}
+            >
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="flex items-center gap-2 mb-4">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedTemplate(null);
+                      setCustomMode(false);
+                      setSelectedCategory(null);
+                    }}
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Back
+                  </Button>
+                  <h4 className="font-medium">
+                    {selectedTemplate ? `Configure: ${selectedTemplate.title}` : "Custom Activity"}
+                  </h4>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2 col-span-2">
+                    <Label>Title *</Label>
+                    <Input
+                      value={formData.title}
+                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      placeholder="Activity title"
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2 col-span-2">
+                    <Label>Description</Label>
+                    <Textarea
+                      value={formData.description}
+                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                      placeholder="Activity description"
+                      rows={2}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Start Time</Label>
+                    <Input
+                      type="time"
+                      value={formData.startTime}
+                      onChange={(e) => setFormData({ ...formData, startTime: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>End Time</Label>
+                    <Input
+                      type="time"
+                      value={formData.endTime}
+                      onChange={(e) => setFormData({ ...formData, endTime: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Category</Label>
+                    <Select
+                      value={formData.category}
+                      onValueChange={(v) => setFormData({ ...formData, category: v as ActivityCategory })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.keys(ACTIVITY_TEMPLATES).map((cat) => (
+                          <SelectItem key={cat} value={cat}>
+                            <span className="capitalize">{cat}</span>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Priority</Label>
+                    <Select
+                      value={formData.priority}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, priority: v as typeof formData.priority })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="critical">Critical</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="low">Low</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2 col-span-2">
+                    <Label>Location</Label>
+                    <Input
+                      value={formData.location}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      placeholder="Activity location"
+                    />
+                  </div>
+
+                  {/* Crew Assignment */}
+                  <div className="space-y-2 col-span-2">
+                    <Label>Assign Crew Members</Label>
+                    <div className="flex flex-wrap gap-2">
+                      {crewMembers.map((member) => (
+                        <motion.button
+                          key={member.id}
+                          type="button"
+                          whileHover={{ scale: 1.05 }}
+                          whileTap={{ scale: 0.95 }}
+                          className={`px-3 py-2 rounded-lg border transition-all ${
+                            formData.assignedCrew.includes(member.role)
+                              ? "bg-primary text-primary-foreground border-primary"
+                              : "bg-card hover:bg-accent/50"
+                          }`}
+                          onClick={() => toggleCrewMember(member.role)}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{member.role}</span>
+                            <span className="text-xs opacity-75">
+                              {member.user.full_name?.split(" ")[0] || member.user.username}
+                            </span>
+                          </div>
+                        </motion.button>
+                      ))}
+                    </div>
+                    {formData.assignedCrew.length === 0 && (
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Click crew members to assign them to this activity
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                <DialogFooter className="pt-4">
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={!formData.title.trim()}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Activity
+                  </Button>
+                </DialogFooter>
+              </form>
+            </motion.div>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // Add Crew Member Dialog
 function AddCrewMemberDialog({
   open,
@@ -1403,13 +1905,413 @@ function DaySummaryCard({ activities }: { activities: ScheduleActivity[] }) {
   );
 }
 
+// PROGSS Checklist Component with Semaphore Colors
+function PROGSSChecklist({
+  checkStatuses,
+  onStatusChange,
+  missionDay,
+}: {
+  checkStatuses: Record<string, PROGSSCheckStatus>;
+  onStatusChange: (itemId: string, status: SemaphoreStatus, notes?: string) => void;
+  missionDay: number;
+}) {
+  const getStatusColor = (status: SemaphoreStatus): string => {
+    switch (status) {
+      case "completed":
+        return "bg-green-500 hover:bg-green-600";
+      case "in_progress":
+        return "bg-yellow-500 hover:bg-yellow-600";
+      case "issue":
+        return "bg-red-500 hover:bg-red-600";
+      default:
+        return "bg-gray-300 hover:bg-gray-400";
+    }
+  };
+
+  const getNextStatus = (current: SemaphoreStatus): SemaphoreStatus => {
+    const cycle: SemaphoreStatus[] = ["not_started", "in_progress", "completed", "issue"];
+    const idx = cycle.indexOf(current);
+    return cycle[(idx + 1) % cycle.length];
+  };
+
+  const phases = [
+    { id: "A", label: "Phase A - Characterization", icon: Shield },
+    { id: "PRE", label: "Pre-Stage - Preparation", icon: FileText },
+    { id: "B", label: "Phase B - During Mission", icon: Activity },
+    { id: "POST", label: "Post-Stage - Assessment", icon: CheckCircle },
+  ];
+
+  // Filter items based on frequency and mission day
+  const getVisibleItems = (phase: string) => {
+    return PROGSS_CHECKLIST.filter((item) => {
+      if (item.phase !== phase) return false;
+      // Show daily items always, mission_start only on day 1, mission_end on last days
+      if (item.frequency === "daily") return true;
+      if (item.frequency === "per_event") return true;
+      if (item.frequency === "mission_start" && missionDay <= 3) return true;
+      if (item.frequency === "mission_end" && missionDay >= 7) return true; // Assuming short mission
+      if (item.frequency === "weekly" && missionDay % 7 === 0) return true;
+      return false;
+    });
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Target className="h-5 w-5" />
+          PROGSS Daily Checklist
+        </CardTitle>
+        <CardDescription>
+          Mission Day {missionDay} - Click indicators to cycle status
+        </CardDescription>
+        {/* Legend */}
+        <div className="flex items-center gap-4 mt-2 text-xs">
+          <div className="flex items-center gap-1">
+            <div className="h-3 w-3 rounded-full bg-gray-300" />
+            <span>Not Started</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="h-3 w-3 rounded-full bg-yellow-500" />
+            <span>In Progress</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="h-3 w-3 rounded-full bg-green-500" />
+            <span>Completed</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <div className="h-3 w-3 rounded-full bg-red-500" />
+            <span>Issue</span>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {phases.map(({ id: phaseId, label, icon: Icon }) => {
+          const items = getVisibleItems(phaseId);
+          if (items.length === 0) return null;
+
+          return (
+            <div key={phaseId} className="space-y-2">
+              <h4 className="font-medium text-sm flex items-center gap-2 text-muted-foreground">
+                <Icon className="h-4 w-4" />
+                {label}
+              </h4>
+              <div className="space-y-1">
+                {items.map((item) => {
+                  const status = checkStatuses[item.id]?.status || "not_started";
+                  return (
+                    <motion.div
+                      key={item.id}
+                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
+                      layout
+                    >
+                      <motion.button
+                        whileHover={{ scale: 1.1 }}
+                        whileTap={{ scale: 0.9 }}
+                        className={`h-6 w-6 rounded-full transition-colors ${getStatusColor(status)}`}
+                        onClick={() => onStatusChange(item.id, getNextStatus(status))}
+                        title={`Click to change status (current: ${status})`}
+                      >
+                        {status === "completed" && (
+                          <CheckCircle className="h-4 w-4 text-white mx-auto" />
+                        )}
+                        {status === "issue" && (
+                          <AlertTriangle className="h-4 w-4 text-white mx-auto" />
+                        )}
+                      </motion.button>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {item.step} - {item.label}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">
+                          {item.description}
+                        </p>
+                      </div>
+                      <Badge variant="outline" className="text-xs shrink-0">
+                        {item.frequency.replace("_", " ")}
+                      </Badge>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </CardContent>
+    </Card>
+  );
+}
+
+// Crew Detail Modal - Shows full profile when crew member is clicked
+function CrewDetailModal({
+  member,
+  open,
+  onOpenChange,
+  onEdit,
+}: {
+  member: CrewMember | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onEdit: () => void;
+}) {
+  if (!member) return null;
+
+  const calculateBMI = () => {
+    if (!member.user.height_cm || !member.user.weight_kg) return null;
+    const heightM = member.user.height_cm / 100;
+    return (member.user.weight_kg / (heightM * heightM)).toFixed(1);
+  };
+
+  const calculateAge = () => {
+    if (!member.user.date_of_birth) return null;
+    const birth = new Date(member.user.date_of_birth);
+    const today = new Date();
+    let age = today.getFullYear() - birth.getFullYear();
+    const monthDiff = today.getMonth() - birth.getMonth();
+    if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+      age--;
+    }
+    return age;
+  };
+
+  const bmi = calculateBMI();
+  const age = calculateAge();
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
+              <span className="text-xl font-bold text-primary">{member.role}</span>
+            </div>
+            <div>
+              <span>{member.user.full_name || member.user.username}</span>
+              <p className="text-sm text-muted-foreground font-normal capitalize">
+                {member.status.replace("_", " ")} • {member.role}
+              </p>
+            </div>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-6">
+          {/* Performance Metrics */}
+          <div className="grid grid-cols-4 gap-4">
+            <div className="p-4 rounded-lg border bg-card text-center">
+              <div className={`text-2xl font-bold ${getIHPIColor(member.ihpiScore)}`}>
+                {member.ihpiScore}%
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">IHPI Score</p>
+            </div>
+            <div className="p-4 rounded-lg border bg-card text-center">
+              <div className="text-2xl font-bold">{member.fatigueLevel}%</div>
+              <p className="text-xs text-muted-foreground mt-1">Fatigue</p>
+            </div>
+            <div className="p-4 rounded-lg border bg-card text-center">
+              <div className="text-2xl font-bold">{member.sleepDebt}h</div>
+              <p className="text-xs text-muted-foreground mt-1">Sleep Debt</p>
+            </div>
+            <div className="p-4 rounded-lg border bg-card text-center">
+              <div className="text-2xl font-bold">{member.readinessScore}%</div>
+              <p className="text-xs text-muted-foreground mt-1">Readiness</p>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Identity Information */}
+          <div>
+            <h4 className="font-medium mb-3 flex items-center gap-2">
+              <User className="h-4 w-4" />
+              Identity
+            </h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Full Name</span>
+                <p className="font-medium">{member.user.full_name || "Not set"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Email</span>
+                <p className="font-medium">{member.user.email || "Not set"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Sex</span>
+                <p className="font-medium capitalize">{member.user.sex}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Age</span>
+                <p className="font-medium">{age ? `${age} years` : "Not set"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Occupation</span>
+                <p className="font-medium">{member.user.occupation || "Not set"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Language</span>
+                <p className="font-medium uppercase">{member.user.language || "EN"}</p>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Biometric Data */}
+          <div>
+            <h4 className="font-medium mb-3 flex items-center gap-2">
+              <Activity className="h-4 w-4" />
+              Biometrics
+            </h4>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Height</span>
+                <p className="font-medium">
+                  {member.user.height_cm ? `${member.user.height_cm} cm` : "Not set"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Weight</span>
+                <p className="font-medium">
+                  {member.user.weight_kg ? `${member.user.weight_kg} kg` : "Not set"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">BMI</span>
+                <p className="font-medium">{bmi ? `${bmi} kg/m²` : "N/A"}</p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Resting HR</span>
+                <p className="font-medium">
+                  {member.user.resting_hr_bpm ? `${member.user.resting_hr_bpm} bpm` : "Not set"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Max HR</span>
+                <p className="font-medium">
+                  {member.user.max_hr_bpm ? `${member.user.max_hr_bpm} bpm` : "Not set"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">VO2max</span>
+                <p className="font-medium">
+                  {member.user.vo2max_ml_kg_min
+                    ? `${member.user.vo2max_ml_kg_min} ml/kg/min`
+                    : "Not set"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Lifestyle Factors */}
+          <div>
+            <h4 className="font-medium mb-3 flex items-center gap-2">
+              <Heart className="h-4 w-4" />
+              Lifestyle
+            </h4>
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Activity Level</span>
+                <p className="font-medium capitalize">
+                  {member.user.activity_level?.replace("_", " ") || "Not set"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Smoking Status</span>
+                <p className="font-medium capitalize">
+                  {member.user.smoking_status?.replace("_", " ") || "Not set"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Alcohol Use</span>
+                <p className="font-medium capitalize">
+                  {member.user.alcohol_use?.replace("_", " ") || "Not set"}
+                </p>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Caffeine Intake</span>
+                <p className="font-medium">
+                  {member.user.caffeine_intake_mg
+                    ? `${member.user.caffeine_intake_mg} mg/day`
+                    : "Not set"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <Separator />
+
+          {/* Medical Information */}
+          <div>
+            <h4 className="font-medium mb-3 flex items-center gap-2 text-warning">
+              <FileText className="h-4 w-4" />
+              Medical Information
+            </h4>
+            <div className="space-y-3 text-sm">
+              <div>
+                <span className="text-muted-foreground">Medical Conditions</span>
+                <div className="mt-1">
+                  {member.user.medical_conditions?.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {member.user.medical_conditions.map((condition, idx) => (
+                        <Badge key={idx} variant="outline" className="text-xs">
+                          {condition}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">None reported</p>
+                  )}
+                </div>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Current Medications</span>
+                <div className="mt-1">
+                  {member.user.medications?.length > 0 ? (
+                    <div className="flex flex-wrap gap-1">
+                      {member.user.medications.map((med, idx) => (
+                        <Badge key={idx} variant="secondary" className="text-xs">
+                          {med}
+                        </Badge>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-muted-foreground">None reported</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter className="mt-6">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            Close
+          </Button>
+          <Button onClick={onEdit}>
+            <Edit className="h-4 w-4 mr-2" />
+            Edit Profile
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // IHPI Gauge Component
-function IHPIGauge({ member }: { member: CrewMember }) {
+function IHPIGauge({ member, onClick }: { member: CrewMember; onClick?: () => void }) {
   const score = member.ihpiScore;
   const color = getIHPIBgColor(score);
 
   return (
-    <div className="p-4 rounded-lg border bg-card">
+    <motion.div
+      className={`p-4 rounded-lg border bg-card transition-all ${
+        onClick ? "cursor-pointer hover:bg-accent/50 hover:shadow-md" : ""
+      }`}
+      onClick={onClick}
+      whileHover={onClick ? { scale: 1.02 } : undefined}
+      whileTap={onClick ? { scale: 0.98 } : undefined}
+    >
       <div className="flex items-center gap-3 mb-3">
         <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
           <span className="font-bold text-primary">{member.role}</span>
@@ -1422,6 +2324,9 @@ function IHPIGauge({ member }: { member: CrewMember }) {
             {member.status.replace("_", " ")}
           </p>
         </div>
+        {onClick && (
+          <ChevronRight className="h-4 w-4 ml-auto text-muted-foreground" />
+        )}
       </div>
 
       {/* Circular Gauge */}
@@ -1457,6 +2362,9 @@ function IHPIGauge({ member }: { member: CrewMember }) {
 
       <div className="text-center mt-2">
         <p className="text-xs text-muted-foreground">IHPI Score</p>
+        {onClick && (
+          <p className="text-xs text-primary mt-1">Click for details</p>
+        )}
       </div>
 
       {/* Sub-metrics */}
@@ -1474,7 +2382,7 @@ function IHPIGauge({ member }: { member: CrewMember }) {
           <p className="text-sm font-medium">{member.readinessScore}%</p>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }
 
@@ -1495,7 +2403,16 @@ export default function SchedulingPage() {
   const [editingMember, setEditingMember] = React.useState<CrewMember | null>(null);
   const [editDialogOpen, setEditDialogOpen] = React.useState(false);
   const [addDialogOpen, setAddDialogOpen] = React.useState(false);
+  const [addActivityDialogOpen, setAddActivityDialogOpen] = React.useState(false);
   const [categoryFilter, setCategoryFilter] = React.useState<string>("all");
+  
+  // Crew Detail Modal state
+  const [selectedCrewMember, setSelectedCrewMember] = React.useState<CrewMember | null>(null);
+  const [crewDetailOpen, setCrewDetailOpen] = React.useState(false);
+  
+  // PROGSS Checklist state
+  const [progssStatuses, setProgssStatuses] = React.useState<Record<string, PROGSSCheckStatus>>({});
+  const [missionDay, setMissionDay] = React.useState(1);
 
   // Fetch users and build crew members
   const fetchData = React.useCallback(async () => {
@@ -1636,6 +2553,48 @@ export default function SchedulingPage() {
     );
   };
 
+  // Add new activity
+  const handleAddActivity = (activity: Omit<ScheduleActivity, "id">) => {
+    const newActivity: ScheduleActivity = {
+      ...activity,
+      id: `activity-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+    };
+    setActivities((prev) => {
+      // Insert in sorted order by start time
+      const updated = [...prev, newActivity];
+      updated.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      return updated;
+    });
+  };
+
+  // Open crew detail modal
+  const handleCrewClick = (member: CrewMember) => {
+    setSelectedCrewMember(member);
+    setCrewDetailOpen(true);
+  };
+
+  // Handle edit from crew detail modal
+  const handleEditFromDetail = () => {
+    if (selectedCrewMember) {
+      setCrewDetailOpen(false);
+      handleEditCrewMember(selectedCrewMember);
+    }
+  };
+
+  // Update PROGSS checklist status
+  const handleProgssStatusChange = (itemId: string, status: SemaphoreStatus, notes?: string) => {
+    setProgssStatuses((prev) => ({
+      ...prev,
+      [itemId]: {
+        itemId,
+        status,
+        notes,
+        completedAt: status === "completed" ? new Date().toISOString() : prev[itemId]?.completedAt,
+        completedBy: status === "completed" ? "Current User" : prev[itemId]?.completedBy,
+      },
+    }));
+  };
+
   // Filtered activities
   const filteredActivities = React.useMemo(() => {
     if (categoryFilter === "all") return activities;
@@ -1694,13 +2653,17 @@ export default function SchedulingPage() {
                       <Badge variant="outline">{activeMission}</Badge>
                     </div>
                     <CardDescription>
-                      Real-time IHPI scores and operational status
+                      Real-time IHPI scores and operational status - Click any crew member for details
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                       {crewMembers.map((member) => (
-                        <IHPIGauge key={member.id} member={member} />
+                        <IHPIGauge
+                          key={member.id}
+                          member={member}
+                          onClick={() => handleCrewClick(member)}
+                        />
                       ))}
                     </div>
                   </CardContent>
@@ -1732,6 +2695,88 @@ export default function SchedulingPage() {
 
                 <DaySummaryCard activities={activities} />
               </div>
+            </div>
+
+            {/* PROGSS Daily Checklist */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <PROGSSChecklist
+                checkStatuses={progssStatuses}
+                onStatusChange={handleProgssStatusChange}
+                missionDay={missionDay}
+              />
+              
+              {/* Mission Day Control */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Calendar className="h-5 w-5" />
+                    Mission Progress
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted-foreground">Current Mission Day</span>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setMissionDay(Math.max(1, missionDay - 1))}
+                        disabled={missionDay <= 1}
+                      >
+                        <Minus className="h-4 w-4" />
+                      </Button>
+                      <span className="text-2xl font-bold w-12 text-center">{missionDay}</span>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setMissionDay(missionDay + 1)}
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                  
+                  <Separator />
+                  
+                  {/* PROGSS Completion Summary */}
+                  <div className="space-y-3">
+                    <h4 className="text-sm font-medium">Checklist Completion</h4>
+                    {(() => {
+                      const total = Object.keys(progssStatuses).length || 1;
+                      const completed = Object.values(progssStatuses).filter(
+                        (s) => s.status === "completed"
+                      ).length;
+                      const issues = Object.values(progssStatuses).filter(
+                        (s) => s.status === "issue"
+                      ).length;
+                      const inProgress = Object.values(progssStatuses).filter(
+                        (s) => s.status === "in_progress"
+                      ).length;
+                      const completionPct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+                      return (
+                        <>
+                          <Progress value={completionPct} className="h-3" />
+                          <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                            <div className="p-2 rounded bg-green-500/10">
+                              <p className="font-bold text-green-600">{completed}</p>
+                              <p className="text-xs text-muted-foreground">Completed</p>
+                            </div>
+                            <div className="p-2 rounded bg-yellow-500/10">
+                              <p className="font-bold text-yellow-600">{inProgress}</p>
+                              <p className="text-xs text-muted-foreground">In Progress</p>
+                            </div>
+                            <div className="p-2 rounded bg-red-500/10">
+                              <p className="font-bold text-red-600">{issues}</p>
+                              <p className="text-xs text-muted-foreground">Issues</p>
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           </TabsContent>
 
@@ -1795,7 +2840,7 @@ export default function SchedulingPage() {
                 <Button variant="outline" size="icon">
                   <Download className="h-4 w-4" />
                 </Button>
-                <Button>
+                <Button onClick={() => setAddActivityDialogOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Activity
                 </Button>
@@ -1898,13 +2943,17 @@ export default function SchedulingPage() {
                 </CardTitle>
                 <CardDescription>
                   Composite scores based on fatigue, sleep debt, circadian alignment,
-                  and physiological readiness
+                  and physiological readiness - Click any crew member for full profile
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {crewMembers.map((member) => (
-                    <IHPIGauge key={member.id} member={member} />
+                    <IHPIGauge
+                      key={member.id}
+                      member={member}
+                      onClick={() => handleCrewClick(member)}
+                    />
                   ))}
                 </div>
               </CardContent>
@@ -2024,6 +3073,20 @@ export default function SchedulingPage() {
         open={addDialogOpen}
         onOpenChange={setAddDialogOpen}
         onAdd={handleAddCrewMember}
+      />
+
+      <AddActivityDialog
+        open={addActivityDialogOpen}
+        onOpenChange={setAddActivityDialogOpen}
+        onAdd={handleAddActivity}
+        crewMembers={crewMembers}
+      />
+
+      <CrewDetailModal
+        member={selectedCrewMember}
+        open={crewDetailOpen}
+        onOpenChange={setCrewDetailOpen}
+        onEdit={handleEditFromDetail}
       />
     </PageWrapper>
   );
