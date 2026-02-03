@@ -17,12 +17,14 @@ import {
   X,
   AlertTriangle,
   CheckCircle,
+  CheckCircle2,
   Activity,
   Heart,
   Moon,
   Zap,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   BarChart3,
   Settings,
   User,
@@ -35,6 +37,10 @@ import {
   Minus,
   Globe,
   Shield,
+  Check,
+  Loader2,
+  PlayCircle,
+  StopCircle,
 } from "lucide-react";
 import { PageWrapper } from "@/components/layout";
 import {
@@ -1905,7 +1911,421 @@ function DaySummaryCard({ activities }: { activities: ScheduleActivity[] }) {
   );
 }
 
-// PROGSS Checklist Component with Semaphore Colors
+// ---------------------------------------------------------------------------
+// Animated Check Button Component
+// ---------------------------------------------------------------------------
+function AnimatedCheckButton({
+  status,
+  onClick,
+  size = "md",
+}: {
+  status: SemaphoreStatus;
+  onClick: () => void;
+  size?: "sm" | "md" | "lg";
+}) {
+  const [isAnimating, setIsAnimating] = React.useState(false);
+  const [showConfetti, setShowConfetti] = React.useState(false);
+
+  const sizeClasses = {
+    sm: "h-6 w-6",
+    md: "h-8 w-8",
+    lg: "h-10 w-10",
+  };
+
+  const iconSizes = {
+    sm: "h-3 w-3",
+    md: "h-4 w-4",
+    lg: "h-5 w-5",
+  };
+
+  const handleClick = () => {
+    setIsAnimating(true);
+    if (status === "in_progress") {
+      // About to complete - show confetti
+      setShowConfetti(true);
+      setTimeout(() => setShowConfetti(false), 1000);
+    }
+    onClick();
+    setTimeout(() => setIsAnimating(false), 300);
+  };
+
+  const getGradient = () => {
+    switch (status) {
+      case "completed":
+        return "bg-gradient-to-br from-emerald-400 via-green-500 to-emerald-600 shadow-lg shadow-green-500/30";
+      case "in_progress":
+        return "bg-gradient-to-br from-amber-400 via-yellow-500 to-orange-500 shadow-lg shadow-yellow-500/30";
+      case "issue":
+        return "bg-gradient-to-br from-red-400 via-red-500 to-rose-600 shadow-lg shadow-red-500/30";
+      default:
+        return "bg-gradient-to-br from-slate-200 via-slate-300 to-slate-400 dark:from-slate-600 dark:via-slate-700 dark:to-slate-800";
+    }
+  };
+
+  const getRingColor = () => {
+    switch (status) {
+      case "completed":
+        return "ring-green-500/50";
+      case "in_progress":
+        return "ring-yellow-500/50";
+      case "issue":
+        return "ring-red-500/50";
+      default:
+        return "ring-slate-400/30";
+    }
+  };
+
+  return (
+    <div className="relative">
+      {/* Confetti particles */}
+      <AnimatePresence>
+        {showConfetti && (
+          <>
+            {[...Array(8)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-2 h-2 rounded-full"
+                style={{
+                  background: ["#22c55e", "#eab308", "#3b82f6", "#ec4899", "#8b5cf6"][i % 5],
+                  left: "50%",
+                  top: "50%",
+                }}
+                initial={{ x: 0, y: 0, scale: 0, opacity: 1 }}
+                animate={{
+                  x: Math.cos((i * Math.PI) / 4) * 40,
+                  y: Math.sin((i * Math.PI) / 4) * 40,
+                  scale: 1,
+                  opacity: 0,
+                }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 0.6, ease: "easeOut" }}
+              />
+            ))}
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Pulse ring animation */}
+      <AnimatePresence>
+        {status === "completed" && (
+          <motion.div
+            className={`absolute inset-0 rounded-full ring-2 ${getRingColor()}`}
+            initial={{ scale: 1, opacity: 0.8 }}
+            animate={{ scale: 1.5, opacity: 0 }}
+            transition={{ duration: 1, repeat: Infinity }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Main button */}
+      <motion.button
+        className={`
+          ${sizeClasses[size]} rounded-full ${getGradient()}
+          flex items-center justify-center cursor-pointer
+          transition-all duration-200 hover:scale-110
+          ring-2 ring-offset-2 ring-offset-background ${getRingColor()}
+        `}
+        whileHover={{ scale: 1.15, rotate: status === "not_started" ? 10 : 0 }}
+        whileTap={{ scale: 0.85 }}
+        animate={isAnimating ? { rotate: [0, -10, 10, 0], scale: [1, 1.2, 1] } : {}}
+        onClick={handleClick}
+        type="button"
+      >
+        <AnimatePresence mode="wait">
+          {status === "completed" && (
+            <motion.div
+              key="check"
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              exit={{ scale: 0, rotate: 180 }}
+              transition={{ type: "spring", stiffness: 500, damping: 25 }}
+            >
+              <Check className={`${iconSizes[size]} text-white drop-shadow-md`} strokeWidth={3} />
+            </motion.div>
+          )}
+          {status === "in_progress" && (
+            <motion.div
+              key="progress"
+              initial={{ scale: 0 }}
+              animate={{ scale: 1, rotate: 360 }}
+              exit={{ scale: 0 }}
+              transition={{ type: "spring", stiffness: 400, damping: 20, rotate: { duration: 2, repeat: Infinity, ease: "linear" } }}
+            >
+              <Loader2 className={`${iconSizes[size]} text-white drop-shadow-md`} />
+            </motion.div>
+          )}
+          {status === "issue" && (
+            <motion.div
+              key="alert"
+              initial={{ scale: 0 }}
+              animate={{ scale: [1, 1.1, 1] }}
+              transition={{ scale: { duration: 0.5, repeat: Infinity } }}
+            >
+              <AlertTriangle className={`${iconSizes[size]} text-white drop-shadow-md`} strokeWidth={2.5} />
+            </motion.div>
+          )}
+          {status === "not_started" && (
+            <motion.div
+              key="empty"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              className={`${iconSizes[size]} rounded-full border-2 border-dashed border-white/50`}
+            />
+          )}
+        </AnimatePresence>
+      </motion.button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Progress Ring Component
+// ---------------------------------------------------------------------------
+function ProgressRing({
+  progress,
+  size = 80,
+  strokeWidth = 6,
+  color = "#22c55e",
+}: {
+  progress: number;
+  size?: number;
+  strokeWidth?: number;
+  color?: string;
+}) {
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const offset = circumference - (progress / 100) * circumference;
+
+  return (
+    <div className="relative" style={{ width: size, height: size }}>
+      <svg className="transform -rotate-90" width={size} height={size}>
+        {/* Background circle */}
+        <circle
+          className="text-muted/30"
+          strokeWidth={strokeWidth}
+          stroke="currentColor"
+          fill="transparent"
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+        />
+        {/* Progress circle */}
+        <motion.circle
+          stroke={color}
+          strokeWidth={strokeWidth}
+          strokeLinecap="round"
+          fill="transparent"
+          r={radius}
+          cx={size / 2}
+          cy={size / 2}
+          initial={{ strokeDashoffset: circumference }}
+          animate={{ strokeDashoffset: offset }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          style={{
+            strokeDasharray: circumference,
+          }}
+        />
+      </svg>
+      <div className="absolute inset-0 flex items-center justify-center">
+        <motion.span
+          className="text-lg font-bold"
+          key={progress}
+          initial={{ scale: 1.2, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+        >
+          {progress}%
+        </motion.span>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PROGSS Phase Card Component
+// ---------------------------------------------------------------------------
+function PROGSSPhaseCard({
+  phase,
+  label,
+  icon: Icon,
+  items,
+  checkStatuses,
+  onStatusChange,
+  isExpanded,
+  onToggle,
+}: {
+  phase: string;
+  label: string;
+  icon: React.ElementType;
+  items: PROGSSCheckItem[];
+  checkStatuses: Record<string, PROGSSCheckStatus>;
+  onStatusChange: (itemId: string, status: SemaphoreStatus, notes?: string) => void;
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  const completedCount = items.filter((item) => checkStatuses[item.id]?.status === "completed").length;
+  const progress = items.length > 0 ? Math.round((completedCount / items.length) * 100) : 0;
+
+  const getNextStatus = (current: SemaphoreStatus): SemaphoreStatus => {
+    const cycle: SemaphoreStatus[] = ["not_started", "in_progress", "completed", "issue"];
+    const idx = cycle.indexOf(current);
+    return cycle[(idx + 1) % cycle.length];
+  };
+
+  const getPhaseGradient = () => {
+    switch (phase) {
+      case "A":
+        return "from-blue-500/10 via-indigo-500/10 to-violet-500/10";
+      case "PRE":
+        return "from-cyan-500/10 via-teal-500/10 to-emerald-500/10";
+      case "B":
+        return "from-amber-500/10 via-orange-500/10 to-red-500/10";
+      case "POST":
+        return "from-purple-500/10 via-pink-500/10 to-rose-500/10";
+      default:
+        return "from-slate-500/10 to-slate-600/10";
+    }
+  };
+
+  const getPhaseColor = () => {
+    switch (phase) {
+      case "A":
+        return "#6366f1";
+      case "PRE":
+        return "#14b8a6";
+      case "B":
+        return "#f97316";
+      case "POST":
+        return "#a855f7";
+      default:
+        return "#64748b";
+    }
+  };
+
+  const getFrequencyBadge = (frequency: string) => {
+    const config = {
+      daily: { bg: "bg-blue-500/10", text: "text-blue-600 dark:text-blue-400", icon: RefreshCw },
+      weekly: { bg: "bg-purple-500/10", text: "text-purple-600 dark:text-purple-400", icon: Calendar },
+      per_event: { bg: "bg-orange-500/10", text: "text-orange-600 dark:text-orange-400", icon: Zap },
+      mission_start: { bg: "bg-green-500/10", text: "text-green-600 dark:text-green-400", icon: PlayCircle },
+      mission_end: { bg: "bg-red-500/10", text: "text-red-600 dark:text-red-400", icon: StopCircle },
+    };
+    const { bg, text, icon: BadgeIcon } = config[frequency as keyof typeof config] || config.daily;
+    return (
+      <Badge variant="outline" className={`${bg} ${text} text-[10px] gap-1`}>
+        <BadgeIcon className="h-2.5 w-2.5" />
+        {frequency.replace("_", " ")}
+      </Badge>
+    );
+  };
+
+  return (
+    <motion.div
+      layout
+      className={`
+        rounded-xl overflow-hidden
+        bg-gradient-to-br ${getPhaseGradient()}
+        border border-border/50
+        backdrop-blur-sm
+      `}
+    >
+      {/* Phase Header */}
+      <motion.button
+        className="w-full p-4 flex items-center gap-4 hover:bg-white/5 dark:hover:bg-black/5 transition-colors"
+        onClick={onToggle}
+        type="button"
+      >
+        <div
+          className="h-12 w-12 rounded-xl flex items-center justify-center"
+          style={{ background: `linear-gradient(135deg, ${getPhaseColor()}33, ${getPhaseColor()}66)` }}
+        >
+          <Icon className="h-6 w-6" style={{ color: getPhaseColor() }} />
+        </div>
+        <div className="flex-1 text-left">
+          <h4 className="font-semibold text-sm">{label}</h4>
+          <p className="text-xs text-muted-foreground">
+            {completedCount}/{items.length} tasks completed
+          </p>
+        </div>
+        <ProgressRing progress={progress} size={50} strokeWidth={4} color={getPhaseColor()} />
+        <motion.div
+          animate={{ rotate: isExpanded ? 180 : 0 }}
+          transition={{ duration: 0.2 }}
+        >
+          <ChevronDown className="h-5 w-5 text-muted-foreground" />
+        </motion.div>
+      </motion.button>
+
+      {/* Checklist Items */}
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="overflow-hidden"
+          >
+            <div className="px-4 pb-4 space-y-2">
+              {items.map((item, index) => {
+                const status = checkStatuses[item.id]?.status || "not_started";
+                return (
+                  <motion.div
+                    key={item.id}
+                    initial={{ x: -20, opacity: 0 }}
+                    animate={{ x: 0, opacity: 1 }}
+                    transition={{ delay: index * 0.05 }}
+                    className={`
+                      flex items-center gap-3 p-3 rounded-lg
+                      ${status === "completed" 
+                        ? "bg-green-500/10 border border-green-500/20" 
+                        : status === "in_progress"
+                        ? "bg-yellow-500/10 border border-yellow-500/20"
+                        : status === "issue"
+                        ? "bg-red-500/10 border border-red-500/20"
+                        : "bg-white/50 dark:bg-slate-900/50 border border-transparent"
+                      }
+                      hover:shadow-md transition-all duration-200
+                    `}
+                  >
+                    <AnimatedCheckButton
+                      status={status}
+                      onClick={() => onStatusChange(item.id, getNextStatus(status))}
+                      size="md"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className="text-xs font-bold px-1.5 py-0.5 rounded"
+                          style={{ 
+                            background: `${getPhaseColor()}20`,
+                            color: getPhaseColor(),
+                          }}
+                        >
+                          {item.step}
+                        </span>
+                        <p className={`text-sm font-medium ${status === "completed" ? "line-through text-muted-foreground" : ""}`}>
+                          {item.label}
+                        </p>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {item.description}
+                      </p>
+                    </div>
+                    {getFrequencyBadge(item.frequency)}
+                  </motion.div>
+                );
+              })}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PROGSS Checklist Component - ENHANCED with Animations
+// ---------------------------------------------------------------------------
 function PROGSSChecklist({
   checkStatuses,
   onStatusChange,
@@ -1915,126 +2335,172 @@ function PROGSSChecklist({
   onStatusChange: (itemId: string, status: SemaphoreStatus, notes?: string) => void;
   missionDay: number;
 }) {
-  const getStatusColor = (status: SemaphoreStatus): string => {
-    switch (status) {
-      case "completed":
-        return "bg-green-500 hover:bg-green-600";
-      case "in_progress":
-        return "bg-yellow-500 hover:bg-yellow-600";
-      case "issue":
-        return "bg-red-500 hover:bg-red-600";
-      default:
-        return "bg-gray-300 hover:bg-gray-400";
-    }
-  };
-
-  const getNextStatus = (current: SemaphoreStatus): SemaphoreStatus => {
-    const cycle: SemaphoreStatus[] = ["not_started", "in_progress", "completed", "issue"];
-    const idx = cycle.indexOf(current);
-    return cycle[(idx + 1) % cycle.length];
-  };
+  const [expandedPhases, setExpandedPhases] = React.useState<string[]>(["B"]); // Default expand Phase B
+  const [showCelebration, setShowCelebration] = React.useState(false);
 
   const phases = [
-    { id: "A", label: "Phase A - Characterization", icon: Shield },
-    { id: "PRE", label: "Pre-Stage - Preparation", icon: FileText },
-    { id: "B", label: "Phase B - During Mission", icon: Activity },
-    { id: "POST", label: "Post-Stage - Assessment", icon: CheckCircle },
+    { id: "A", label: "Phase A - Characterization", icon: Shield, color: "#6366f1" },
+    { id: "PRE", label: "Pre-Stage - Preparation", icon: FileText, color: "#14b8a6" },
+    { id: "B", label: "Phase B - During Mission", icon: Activity, color: "#f97316" },
+    { id: "POST", label: "Post-Stage - Assessment", icon: CheckCircle2, color: "#a855f7" },
   ];
 
   // Filter items based on frequency and mission day
   const getVisibleItems = (phase: string) => {
     return PROGSS_CHECKLIST.filter((item) => {
       if (item.phase !== phase) return false;
-      // Show daily items always, mission_start only on day 1, mission_end on last days
       if (item.frequency === "daily") return true;
       if (item.frequency === "per_event") return true;
       if (item.frequency === "mission_start" && missionDay <= 3) return true;
-      if (item.frequency === "mission_end" && missionDay >= 7) return true; // Assuming short mission
+      if (item.frequency === "mission_end" && missionDay >= 7) return true;
       if (item.frequency === "weekly" && missionDay % 7 === 0) return true;
       return false;
     });
   };
 
+  // Calculate total progress
+  const allVisibleItems = phases.flatMap((p) => getVisibleItems(p.id));
+  const completedCount = allVisibleItems.filter((item) => checkStatuses[item.id]?.status === "completed").length;
+  const inProgressCount = allVisibleItems.filter((item) => checkStatuses[item.id]?.status === "in_progress").length;
+  const issueCount = allVisibleItems.filter((item) => checkStatuses[item.id]?.status === "issue").length;
+  const totalProgress = allVisibleItems.length > 0 ? Math.round((completedCount / allVisibleItems.length) * 100) : 0;
+
+  // Check for 100% completion celebration
+  React.useEffect(() => {
+    if (totalProgress === 100 && allVisibleItems.length > 0) {
+      setShowCelebration(true);
+      setTimeout(() => setShowCelebration(false), 3000);
+    }
+  }, [totalProgress, allVisibleItems.length]);
+
+  const togglePhase = (phaseId: string) => {
+    setExpandedPhases((prev) =>
+      prev.includes(phaseId) ? prev.filter((p) => p !== phaseId) : [...prev, phaseId]
+    );
+  };
+
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Target className="h-5 w-5" />
-          PROGSS Daily Checklist
-        </CardTitle>
-        <CardDescription>
-          Mission Day {missionDay} - Click indicators to cycle status
-        </CardDescription>
-        {/* Legend */}
-        <div className="flex items-center gap-4 mt-2 text-xs">
-          <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded-full bg-gray-300" />
-            <span>Not Started</span>
+    <Card className="overflow-hidden relative">
+      {/* Celebration overlay */}
+      <AnimatePresence>
+        {showCelebration && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0, rotate: -180 }}
+              animate={{ scale: 1, rotate: 0 }}
+              exit={{ scale: 0, rotate: 180 }}
+              className="text-center"
+            >
+              <motion.div
+                animate={{ scale: [1, 1.1, 1] }}
+                transition={{ duration: 0.5, repeat: Infinity }}
+                className="text-6xl mb-4"
+              >
+                🎉
+              </motion.div>
+              <h3 className="text-2xl font-bold text-white">All Tasks Complete!</h3>
+              <p className="text-white/80">Mission Day {missionDay} checklist finished</p>
+            </motion.div>
+            {/* Confetti */}
+            {[...Array(20)].map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-3 h-3 rounded-full"
+                style={{
+                  background: ["#22c55e", "#eab308", "#3b82f6", "#ec4899", "#8b5cf6", "#f97316"][i % 6],
+                  left: "50%",
+                  top: "50%",
+                }}
+                initial={{ x: 0, y: 0, scale: 0 }}
+                animate={{
+                  x: (Math.random() - 0.5) * 400,
+                  y: (Math.random() - 0.5) * 400,
+                  scale: [0, 1, 0],
+                  rotate: Math.random() * 360,
+                }}
+                transition={{ duration: 2, delay: Math.random() * 0.5 }}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <CardHeader className="bg-gradient-to-r from-primary/5 via-primary/10 to-primary/5 border-b">
+        <div className="flex items-start justify-between">
+          <div className="flex items-center gap-3">
+            <div className="h-12 w-12 rounded-xl bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg shadow-primary/30">
+              <Target className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <CardTitle className="text-lg">PROGSS Daily Checklist</CardTitle>
+              <CardDescription className="flex items-center gap-2">
+                <Badge variant="outline" className="bg-background">
+                  <Calendar className="h-3 w-3 mr-1" />
+                  Day {missionDay}
+                </Badge>
+                <span className="text-xs">Click circles to update status</span>
+              </CardDescription>
+            </div>
           </div>
-          <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded-full bg-yellow-500" />
-            <span>In Progress</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded-full bg-green-500" />
-            <span>Completed</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="h-3 w-3 rounded-full bg-red-500" />
-            <span>Issue</span>
-          </div>
+          <ProgressRing progress={totalProgress} size={70} strokeWidth={5} color="#22c55e" />
+        </div>
+
+        {/* Status Summary */}
+        <div className="flex items-center gap-3 mt-4">
+          <motion.div
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-green-500/10 border border-green-500/20"
+            whileHover={{ scale: 1.05 }}
+          >
+            <div className="h-2.5 w-2.5 rounded-full bg-green-500 animate-pulse" />
+            <span className="text-xs font-medium text-green-600 dark:text-green-400">{completedCount} Done</span>
+          </motion.div>
+          <motion.div
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-yellow-500/10 border border-yellow-500/20"
+            whileHover={{ scale: 1.05 }}
+          >
+            <div className="h-2.5 w-2.5 rounded-full bg-yellow-500" />
+            <span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">{inProgressCount} Active</span>
+          </motion.div>
+          {issueCount > 0 && (
+            <motion.div
+              className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-red-500/10 border border-red-500/20"
+              whileHover={{ scale: 1.05 }}
+              animate={{ scale: [1, 1.05, 1] }}
+              transition={{ duration: 1, repeat: Infinity }}
+            >
+              <div className="h-2.5 w-2.5 rounded-full bg-red-500" />
+              <span className="text-xs font-medium text-red-600 dark:text-red-400">{issueCount} Issues</span>
+            </motion.div>
+          )}
+          <div className="flex-1" />
+          <Badge variant="outline" className="text-xs">
+            {allVisibleItems.length - completedCount - inProgressCount - issueCount} Pending
+          </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
-        {phases.map(({ id: phaseId, label, icon: Icon }) => {
-          const items = getVisibleItems(phaseId);
+
+      <CardContent className="p-4 space-y-3">
+        {phases.map(({ id, label, icon }) => {
+          const items = getVisibleItems(id);
           if (items.length === 0) return null;
 
           return (
-            <div key={phaseId} className="space-y-2">
-              <h4 className="font-medium text-sm flex items-center gap-2 text-muted-foreground">
-                <Icon className="h-4 w-4" />
-                {label}
-              </h4>
-              <div className="space-y-1">
-                {items.map((item) => {
-                  const status = checkStatuses[item.id]?.status || "not_started";
-                  return (
-                    <motion.div
-                      key={item.id}
-                      className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted/50 transition-colors"
-                      layout
-                    >
-                      <motion.button
-                        whileHover={{ scale: 1.1 }}
-                        whileTap={{ scale: 0.9 }}
-                        className={`h-6 w-6 rounded-full transition-colors ${getStatusColor(status)}`}
-                        onClick={() => onStatusChange(item.id, getNextStatus(status))}
-                        title={`Click to change status (current: ${status})`}
-                      >
-                        {status === "completed" && (
-                          <CheckCircle className="h-4 w-4 text-white mx-auto" />
-                        )}
-                        {status === "issue" && (
-                          <AlertTriangle className="h-4 w-4 text-white mx-auto" />
-                        )}
-                      </motion.button>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">
-                          {item.step} - {item.label}
-                        </p>
-                        <p className="text-xs text-muted-foreground truncate">
-                          {item.description}
-                        </p>
-                      </div>
-                      <Badge variant="outline" className="text-xs shrink-0">
-                        {item.frequency.replace("_", " ")}
-                      </Badge>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </div>
+            <PROGSSPhaseCard
+              key={id}
+              phase={id}
+              label={label}
+              icon={icon}
+              items={items}
+              checkStatuses={checkStatuses}
+              onStatusChange={onStatusChange}
+              isExpanded={expandedPhases.includes(id)}
+              onToggle={() => togglePhase(id)}
+            />
           );
         })}
       </CardContent>
