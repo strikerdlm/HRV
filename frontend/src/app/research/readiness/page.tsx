@@ -35,7 +35,7 @@ import { READINESS_COLORS } from "@/types/research";
 // Default user ID when no user is selected
 const DEFAULT_USER_ID = "demo-user";
 
-// Readiness Score Gauge
+// Readiness Score Gauge - Clean minimal design following plot rules
 function ReadinessGauge({ score }: { score: number | null }) {
   const value = score ?? 50;
   const hasData = score !== null;
@@ -46,20 +46,25 @@ function ReadinessGauge({ score }: { score: number | null }) {
     return SCIENTIFIC_COLORS.danger;
   };
 
+  const getLabel = (s: number) => {
+    if (s >= 70) return "Ready";
+    if (s >= 40) return "Moderate";
+    return "Rest";
+  };
+
   const option: Record<string, unknown> = {
     series: [
       {
         type: "gauge",
-        center: ["50%", "60%"],
-        radius: "90%",
-        startAngle: 200,
-        endAngle: -20,
+        center: ["50%", "65%"],
+        radius: "95%",
+        startAngle: 180,
+        endAngle: 0,
         min: 0,
         max: 100,
-        splitNumber: 10,
         axisLine: {
           lineStyle: {
-            width: 30,
+            width: 20,
             color: [
               [0.4, SCIENTIFIC_COLORS.danger],
               [0.7, SCIENTIFIC_COLORS.warning],
@@ -68,74 +73,114 @@ function ReadinessGauge({ score }: { score: number | null }) {
           },
         },
         pointer: {
-          icon: "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
-          length: "55%",
-          width: 8,
-          offsetCenter: [0, "-5%"],
-          itemStyle: { color: hasData ? getColor(value) : "#94a3b8" },
+          length: "70%",
+          width: 6,
+          offsetCenter: [0, "5%"],
+          itemStyle: {
+            color: hasData ? getColor(value) : "#94a3b8",
+            shadowColor: "rgba(0, 0, 0, 0.3)",
+            shadowBlur: 8,
+            shadowOffsetY: 2,
+          },
         },
         anchor: {
           show: true,
           showAbove: true,
-          size: 25,
+          size: 16,
           itemStyle: {
             borderWidth: 4,
             borderColor: hasData ? getColor(value) : "#94a3b8",
             color: "#fff",
+            shadowColor: "rgba(0, 0, 0, 0.2)",
+            shadowBlur: 6,
           },
         },
-        axisTick: { show: true, splitNumber: 5, length: 10, distance: 8, lineStyle: { color: "#64748b", width: 1 } },
-        splitLine: { show: true, length: 20, distance: 8, lineStyle: { color: "#475569", width: 2 } },
-        axisLabel: { distance: 40, color: "#1e293b", fontSize: 14, fontWeight: "600" },
+        axisTick: { show: false },
+        splitLine: { show: false },
+        axisLabel: {
+          show: true,
+          distance: -32,
+          color: "#1a1a1a",
+          fontSize: 11,
+          fontWeight: "600",
+          formatter: (v: number) => {
+            // Only show key values: 0, 40, 70, 100
+            if ([0, 40, 70, 100].includes(v)) return v.toString();
+            return "";
+          },
+        },
+        progress: {
+          show: true,
+          overlap: false,
+          roundCap: true,
+          clip: false,
+        },
         detail: {
           valueAnimation: true,
           formatter: () => (hasData ? Math.round(value).toString() : "—"),
-          fontSize: 48,
+          fontSize: 42,
           fontWeight: "bold",
+          fontFamily: "system-ui, -apple-system, sans-serif",
           color: hasData ? getColor(value) : "#94a3b8",
-          offsetCenter: [0, "25%"],
+          offsetCenter: [0, "30%"],
         },
         title: {
           show: true,
           offsetCenter: [0, "55%"],
-          fontSize: 16,
+          fontSize: 14,
+          fontWeight: "500",
           color: SCIENTIFIC_COLORS.textSecondary,
         },
-        data: [{ value, name: "Readiness Score" }],
+        data: [{ value, name: hasData ? getLabel(value) : "No Data" }],
       },
     ],
   };
 
-  return <EChartsWrapper option={option} height={320} showToolbox={false} />;
+  return <EChartsWrapper option={option} height={280} showToolbox={false} />;
 }
 
-// Trend Sparkline
+// Trend Chart - Clean design following plot rules (no title in chart, use CardHeader)
 function TrendChart({ data }: { data: ReadinessResponse }) {
+  // Calculate dynamic Y-axis bounds
+  const validValues = data.trend_7day.filter((v): v is number => v !== null && !isNaN(v));
+  const dataMin = validValues.length > 0 ? Math.min(...validValues) : 3;
+  const dataMax = validValues.length > 0 ? Math.max(...validValues) : 4;
+  const padding = (dataMax - dataMin) * 0.15 || 0.2;
+
   const option: Record<string, unknown> = {
-    title: {
-      text: "7-Day Trend",
-      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 14 },
+    grid: {
+      left: 45,
+      right: 15,
+      top: 20,
+      bottom: 30,
+      containLabel: true,
     },
-    grid: { left: 50, right: 20, top: 50, bottom: 30 },
     xAxis: {
       type: "category",
       data: data.trend_dates,
       axisLabel: {
-        color: SCIENTIFIC_COLORS.textPrimary,
-        fontSize: 10,
-        interval: Math.max(0, Math.ceil(data.trend_dates.length / 7) - 1),
-        rotate: data.trend_dates.length > 10 ? 45 : 0,
-        align: data.trend_dates.length > 10 ? "right" : "center",
-        showMinLabel: true,
-        showMaxLabel: true,
+        color: "#1a1a1a",
+        fontSize: 11,
+        interval: 0, // Show all labels for 7-day data
       },
-      axisTick: { alignWithLabel: true },
+      axisLine: { lineStyle: { color: "#2c3e50" } },
+      axisTick: { show: false },
     },
     yAxis: {
       type: "value",
       name: "ln(RMSSD)",
-      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary },
-      nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 11 },
+      nameLocation: "middle",
+      nameGap: 30,
+      nameTextStyle: { color: "#1a1a1a", fontSize: 11, fontWeight: "bold" },
+      min: Math.floor((dataMin - padding) * 10) / 10,
+      max: Math.ceil((dataMax + padding) * 10) / 10,
+      axisLabel: {
+        color: "#1a1a1a",
+        fontSize: 10,
+        formatter: (v: number) => v.toFixed(1),
+      },
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: "rgba(44, 62, 80, 0.1)", type: "dashed" } },
     },
     series: [
       {
@@ -143,42 +188,46 @@ function TrendChart({ data }: { data: ReadinessResponse }) {
         data: data.trend_7day,
         smooth: true,
         symbol: "circle",
-        symbolSize: 8,
-        lineStyle: { width: 3, color: SCIENTIFIC_COLORS.primary },
+        symbolSize: 6,
+        lineStyle: { width: 2.5, color: SCIENTIFIC_COLORS.primary },
         itemStyle: { color: SCIENTIFIC_COLORS.primary },
         areaStyle: {
           color: {
             type: "linear",
             x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: "rgba(52, 152, 219, 0.4)" },
-              { offset: 1, color: "rgba(52, 152, 219, 0.05)" },
+              { offset: 0, color: "rgba(52, 152, 219, 0.25)" },
+              { offset: 1, color: "rgba(52, 152, 219, 0)" },
             ],
           },
         },
         markLine: data.baseline
           ? {
               silent: true,
-              data: [{ yAxis: Math.log(data.baseline), name: "Baseline" }],
-              lineStyle: { color: SCIENTIFIC_COLORS.success, type: "dashed", width: 2 },
-              label: { formatter: "Baseline", color: SCIENTIFIC_COLORS.success },
+              symbol: "none",
+              data: [{ yAxis: Math.log(data.baseline) }],
+              lineStyle: { color: SCIENTIFIC_COLORS.success, type: "dashed", width: 1.5 },
+              label: { formatter: "Baseline", fontSize: 10, color: SCIENTIFIC_COLORS.success, position: "end" },
             }
           : undefined,
       },
     ],
     tooltip: {
       trigger: "axis",
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
+      borderColor: "#e2e8f0",
+      textStyle: { color: "#1a1a1a", fontSize: 12 },
       formatter: (params: unknown[]) => {
         const p = params as Array<{ name: string; value: number }>;
-        if (p[0]) {
-          return `${p[0].name}<br/>ln(RMSSD): ${p[0].value.toFixed(2)}`;
+        if (p[0] && p[0].value !== null) {
+          return `<b>${p[0].name}</b><br/>ln(RMSSD): ${p[0].value.toFixed(2)}`;
         }
         return "";
       },
     },
   };
 
-  return <EChartsWrapper option={option} height={220} />;
+  return <EChartsWrapper option={option} height={200} showToolbox={false} />;
 }
 
 // Component Card
@@ -350,16 +399,16 @@ export default function ReadinessPage() {
                 transition={{ delay: 0.1 }}
               >
                 <Card className="h-full">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
                       <Target className="h-5 w-5 text-primary" />
                       Readiness Score
                     </CardTitle>
-                    <CardDescription>
-                      Based on lnRMSSD vs. 7-day rolling baseline
+                    <CardDescription className="text-xs">
+                      0-100 scale based on lnRMSSD vs. 7-day baseline. Green=ready, Yellow=moderate, Red=rest.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-0">
                     <ReadinessGauge score={data.score} />
                     <div className="grid grid-cols-2 gap-4 mt-4">
                       <div className="text-center p-3 rounded-lg border">
@@ -385,16 +434,16 @@ export default function ReadinessPage() {
                 transition={{ delay: 0.2 }}
               >
                 <Card className="h-full">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
                       <TrendingUp className="h-5 w-5 text-info" />
-                      Weekly Trend
+                      7-Day Trend
                     </CardTitle>
-                    <CardDescription>
-                      ln(RMSSD) over the past 7 days with baseline reference
+                    <CardDescription className="text-xs">
+                      ln(RMSSD) trend with baseline reference. Higher = better recovery.
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="pt-0">
                     <TrendChart data={data} />
                     <div className="p-3 rounded-lg bg-muted/50 mt-4">
                       <p className="text-sm">
