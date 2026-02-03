@@ -718,11 +718,17 @@ async def get_garmin_history(
         for m in metrics_list:
             result.append(GarminMetrics(
                 spo2_avg=m.avg_spo2,
+                respiration_awake=m.avg_respiration_awake,
+                respiration_sleep=m.avg_respiration_sleep,
                 sleep_duration_hours=m.sleep_duration_hours,
+                sleep_efficiency=m.sleep_efficiency,
                 sleep_score=int(m.sleep_score) if m.sleep_score else None,
                 body_battery_high=int(m.body_battery_charge) if m.body_battery_charge else None,
+                body_battery_low=int(m.body_battery_drain) if m.body_battery_drain else None,
                 stress_avg=m.stress_score,
                 steps=m.steps,
+                distance_km=m.distance_km,
+                calories_total=int(m.calories_kcal) if m.calories_kcal else None,
                 resting_hr=int(m.resting_hr_bpm) if m.resting_hr_bpm else None,
                 hrv_overnight=m.hrv_rmssd_ms,
                 date=m.metric_date,
