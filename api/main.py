@@ -440,6 +440,59 @@ async def create_user(request: CreateUserRequest) -> UserProfile:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@app.put("/api/users/{user_id}", response_model=UserProfile, tags=["Users"])
+async def update_user(user_id: str, request: UserProfile) -> UserProfile:
+    """Update a user profile."""
+    db = _get_user_database()
+    
+    try:
+        existing = await asyncio.to_thread(db.get_user, user_id)
+        if existing is None:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        from user_database import UserProfile as DBUserProfile
+        
+        # Update the existing profile with new values
+        updated_profile = DBUserProfile(
+            user_id=user_id,
+            username=existing.username,  # Username cannot be changed
+            full_name=request.full_name or existing.full_name,
+            email=request.email or existing.email,
+            date_of_birth=request.date_of_birth or existing.date_of_birth,
+            sex=request.sex or existing.sex,
+            height_cm=request.height_cm if request.height_cm is not None else existing.height_cm,
+            weight_kg=request.weight_kg if request.weight_kg is not None else existing.weight_kg,
+            resting_hr_bpm=request.resting_hr_bpm if request.resting_hr_bpm is not None else existing.resting_hr_bpm,
+            max_hr_bpm=request.max_hr_bpm if request.max_hr_bpm is not None else existing.max_hr_bpm,
+            vo2max_ml_kg_min=request.vo2max_ml_kg_min if request.vo2max_ml_kg_min is not None else existing.vo2max_ml_kg_min,
+            occupation=request.occupation or existing.occupation,
+            activity_level=request.activity_level or existing.activity_level,
+            smoking_status=request.smoking_status if request.smoking_status is not None else getattr(existing, "smoking_status", None),
+            alcohol_use=request.alcohol_use if request.alcohol_use is not None else getattr(existing, "alcohol_use", None),
+            caffeine_intake_mg=request.caffeine_intake_mg if request.caffeine_intake_mg is not None else getattr(existing, "caffeine_intake_mg", None),
+            medical_conditions=request.medical_conditions if request.medical_conditions else getattr(existing, "medical_conditions", []) or [],
+            medications=request.medications if request.medications else getattr(existing, "medications", []) or [],
+            language=request.language or existing.language,
+            created_at=existing.created_at,
+            updated_at=None,  # Will be set by update_user
+        )
+        
+        await asyncio.to_thread(db.update_user, updated_profile)
+        updated = await asyncio.to_thread(db.get_user, user_id)
+        
+        if updated is None:
+            raise HTTPException(status_code=500, detail="Failed to update user")
+        
+        return UserProfile(**_profile_to_dict(updated))
+    except HTTPException:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        _LOGGER.error(f"Error updating user {user_id}: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @app.delete("/api/users/{user_id}", tags=["Users"])
 async def delete_user(user_id: str) -> dict[str, str]:
     """Delete a user."""
