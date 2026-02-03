@@ -7,6 +7,40 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.16] - 2026-02-02
+
+### Added
+- **Comprehensive Crew Scheduling & Human Performance** (TypeScript/Next.js frontend):
+  - Complete operational app implementation at `/scheduling` with tabbed interface
+  - **Status Dashboard Tab**: Real-time IHPI circular gauges for all crew members, active alerts panel, day summary card with task completion tracking
+  - **Schedule Tab**: Full daily schedule with activity cards, date navigation, category filters (medical, exercise, experiment, work, meal, sleep, maintenance, communication, personal, emergency), activity status controls (start/complete)
+  - **Crew Management Tab**: Full CRUD operations for crew members with card-based UI showing IHPI scores, fatigue levels, sleep debt, and readiness scores
+  - **Performance Tab**: IHPI gauge grid with detailed metrics table including Go/No-Go status indicators
+- **Comprehensive Admin Profile Editor**: 5-section tabbed dialog for editing all user profile fields:
+  - Identity: Full name, email, sex, date of birth, language, user metadata
+  - Operational: Crew role (CDR/PLT/MS1-4), status (on duty/off duty/rest/EVA/medical), occupation
+  - Biometrics: Height, weight, resting HR, max HR, VO2max, activity level, auto-calculated BMI
+  - Lifestyle: Smoking status, alcohol use frequency, daily caffeine intake with reference values
+  - Medical: Conditions and medications lists with confidentiality notice
+- **Mission Workspace Selector**: Switch between Mission 1 and Mission 2 with mission-scoped database configurations
+- **ECharts Components**: Added PieChart and GraphicComponent to chart registry for gauge visualizations
+
+### Fixed
+- **lucide-react icon error**: Replaced non-existent `Scatter` icon with `ScatterChart` in correlations page
+- **Badge variant error**: Added missing `danger` variant to badge component
+- **NOAA aggregation error**: Added `numeric_only=True` to pandas resample mean() to prevent errors with non-numeric columns
+- **Next.js cache corruption**: Documented fix for stale cache issues requiring `.next` and `node_modules/.cache` cleanup
+
+### Changed
+- **User Profile API**: Enhanced `PUT /api/users/{user_id}` endpoint to support all profile fields including medical conditions, medications, lifestyle factors
+- **Sidebar UI components**: Added new Shadcn/ui components: Dialog, AlertDialog, Tabs, Progress, Label, Textarea
+
+### Technical Notes
+- Frontend scheduling page uses Zustand store for mission and user state management
+- Framer Motion animations for smooth card transitions and tab switching
+- All IHPI calculations follow SAFTE-FAST validation and NASA Human Performance standards
+- Scientific references displayed in Performance tab (Hursh 2004, Samel 1997, Van Dongen 2003)
+
 ## [1.9.15] - 2026-02-01
 
 ### Added
