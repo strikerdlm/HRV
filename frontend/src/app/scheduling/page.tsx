@@ -503,7 +503,7 @@ function CrewMemberCard({
   );
 }
 
-// Edit Crew Member Dialog
+// Edit Crew Member Dialog - Comprehensive Admin Editor
 function EditCrewMemberDialog({
   member,
   open,
@@ -515,32 +515,56 @@ function EditCrewMemberDialog({
   onOpenChange: (open: boolean) => void;
   onSave: (data: Partial<UserProfile> & { role: string; status: string }) => void;
 }) {
+  const [activeSection, setActiveSection] = React.useState("identity");
   const [formData, setFormData] = React.useState({
+    // Identity
     full_name: "",
+    email: "",
+    sex: "other" as "male" | "female" | "other",
+    date_of_birth: "",
+    language: "en",
+    // Operational
     role: "MS1",
     status: "on_duty",
+    occupation: "",
+    // Biometrics
     height_cm: "",
     weight_kg: "",
     resting_hr_bpm: "",
     max_hr_bpm: "",
     vo2max_ml_kg_min: "",
-    occupation: "",
     activity_level: "",
+    // Lifestyle
+    smoking_status: "",
+    alcohol_use: "",
+    caffeine_intake_mg: "",
+    // Medical
+    medical_conditions: "",
+    medications: "",
   });
 
   React.useEffect(() => {
     if (member) {
       setFormData({
         full_name: member.user.full_name || "",
+        email: member.user.email || "",
+        sex: member.user.sex || "other",
+        date_of_birth: member.user.date_of_birth || "",
+        language: member.user.language || "en",
         role: member.role,
         status: member.status,
+        occupation: member.user.occupation || "",
         height_cm: member.user.height_cm?.toString() || "",
         weight_kg: member.user.weight_kg?.toString() || "",
         resting_hr_bpm: member.user.resting_hr_bpm?.toString() || "",
         max_hr_bpm: member.user.max_hr_bpm?.toString() || "",
         vo2max_ml_kg_min: member.user.vo2max_ml_kg_min?.toString() || "",
-        occupation: member.user.occupation || "",
         activity_level: member.user.activity_level || "",
+        smoking_status: member.user.smoking_status || "",
+        alcohol_use: member.user.alcohol_use || "",
+        caffeine_intake_mg: member.user.caffeine_intake_mg?.toString() || "",
+        medical_conditions: member.user.medical_conditions?.join(", ") || "",
+        medications: member.user.medications?.join(", ") || "",
       });
     }
   }, [member]);
@@ -548,194 +572,501 @@ function EditCrewMemberDialog({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave({
-      full_name: formData.full_name,
+      full_name: formData.full_name || null,
+      email: formData.email || null,
+      sex: formData.sex,
+      date_of_birth: formData.date_of_birth || null,
+      language: formData.language || "en",
+      occupation: formData.occupation || null,
       height_cm: formData.height_cm ? parseFloat(formData.height_cm) : null,
       weight_kg: formData.weight_kg ? parseFloat(formData.weight_kg) : null,
       resting_hr_bpm: formData.resting_hr_bpm ? parseFloat(formData.resting_hr_bpm) : null,
       max_hr_bpm: formData.max_hr_bpm ? parseFloat(formData.max_hr_bpm) : null,
       vo2max_ml_kg_min: formData.vo2max_ml_kg_min ? parseFloat(formData.vo2max_ml_kg_min) : null,
-      occupation: formData.occupation || null,
       activity_level: formData.activity_level || null,
+      smoking_status: formData.smoking_status || null,
+      alcohol_use: formData.alcohol_use || null,
+      caffeine_intake_mg: formData.caffeine_intake_mg ? parseFloat(formData.caffeine_intake_mg) : null,
+      medical_conditions: formData.medical_conditions
+        ? formData.medical_conditions.split(",").map((s) => s.trim()).filter(Boolean)
+        : [],
+      medications: formData.medications
+        ? formData.medications.split(",").map((s) => s.trim()).filter(Boolean)
+        : [],
       role: formData.role,
       status: formData.status,
     });
     onOpenChange(false);
   };
 
+  const sections = [
+    { id: "identity", label: "Identity", icon: User },
+    { id: "operational", label: "Operational", icon: Shield },
+    { id: "biometrics", label: "Biometrics", icon: Activity },
+    { id: "lifestyle", label: "Lifestyle", icon: Heart },
+    { id: "medical", label: "Medical", icon: FileText },
+  ];
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
-          <DialogTitle>
-            {member ? "Edit Crew Member" : "Add Crew Member"}
+          <DialogTitle className="flex items-center gap-2">
+            <Settings className="h-5 w-5" />
+            {member ? `Edit Profile: ${member.user.full_name || member.user.username}` : "Add Crew Member"}
           </DialogTitle>
           <DialogDescription>
-            Update profile information and operational status
+            Full admin access to modify all profile fields
           </DialogDescription>
         </DialogHeader>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Basic Info */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label>Full Name</Label>
-              <Input
-                value={formData.full_name}
-                onChange={(e) =>
-                  setFormData({ ...formData, full_name: e.target.value })
-                }
-                placeholder="Full Name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Role</Label>
-              <Select
-                value={formData.role}
-                onValueChange={(v) => setFormData({ ...formData, role: v })}
+
+        {/* Section Navigation */}
+        <div className="flex gap-1 border-b pb-2">
+          {sections.map((section) => {
+            const Icon = section.icon;
+            return (
+              <Button
+                key={section.id}
+                type="button"
+                variant={activeSection === section.id ? "secondary" : "ghost"}
+                size="sm"
+                className="gap-2"
+                onClick={() => setActiveSection(section.id)}
               >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {ROLES.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {role}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                <Icon className="h-4 w-4" />
+                <span className="hidden sm:inline">{section.label}</span>
+              </Button>
+            );
+          })}
+        </div>
+
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto">
+          <div className="space-y-6 py-4">
+            {/* Identity Section */}
+            {activeSection === "identity" && (
+              <motion.div
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-4"
+              >
+                <h4 className="font-medium flex items-center gap-2 text-primary">
+                  <User className="h-4 w-4" />
+                  Identity Information
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Full Name</Label>
+                    <Input
+                      value={formData.full_name}
+                      onChange={(e) =>
+                        setFormData({ ...formData, full_name: e.target.value })
+                      }
+                      placeholder="Full Name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Email</Label>
+                    <Input
+                      type="email"
+                      value={formData.email}
+                      onChange={(e) =>
+                        setFormData({ ...formData, email: e.target.value })
+                      }
+                      placeholder="email@example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Sex</Label>
+                    <Select
+                      value={formData.sex}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, sex: v as "male" | "female" | "other" })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="male">Male</SelectItem>
+                        <SelectItem value="female">Female</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Date of Birth</Label>
+                    <Input
+                      type="date"
+                      value={formData.date_of_birth}
+                      onChange={(e) =>
+                        setFormData({ ...formData, date_of_birth: e.target.value })
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>Language</Label>
+                    <Select
+                      value={formData.language}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, language: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="en">English</SelectItem>
+                        <SelectItem value="es">Spanish</SelectItem>
+                        <SelectItem value="fr">French</SelectItem>
+                        <SelectItem value="de">German</SelectItem>
+                        <SelectItem value="ru">Russian</SelectItem>
+                        <SelectItem value="zh">Chinese</SelectItem>
+                        <SelectItem value="ja">Japanese</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                {member && (
+                  <div className="p-3 bg-muted/50 rounded-lg text-sm">
+                    <p className="text-muted-foreground">
+                      <strong>User ID:</strong> {member.user.user_id}
+                    </p>
+                    <p className="text-muted-foreground">
+                      <strong>Username:</strong> {member.user.username} (cannot be changed)
+                    </p>
+                    {member.user.created_at && (
+                      <p className="text-muted-foreground">
+                        <strong>Created:</strong>{" "}
+                        {new Date(member.user.created_at).toLocaleDateString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+              </motion.div>
+            )}
+
+            {/* Operational Section */}
+            {activeSection === "operational" && (
+              <motion.div
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-4"
+              >
+                <h4 className="font-medium flex items-center gap-2 text-primary">
+                  <Shield className="h-4 w-4" />
+                  Operational Status
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Crew Role</Label>
+                    <Select
+                      value={formData.role}
+                      onValueChange={(v) => setFormData({ ...formData, role: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {ROLES.map((role) => (
+                          <SelectItem key={role} value={role}>
+                            {role} - {role === "CDR" ? "Commander" :
+                              role === "PLT" ? "Pilot" :
+                              role === "MS1" ? "Mission Specialist 1" :
+                              role === "MS2" ? "Mission Specialist 2" :
+                              role === "MS3" ? "Mission Specialist 3" :
+                              "Mission Specialist 4"}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Current Status</Label>
+                    <Select
+                      value={formData.status}
+                      onValueChange={(v) => setFormData({ ...formData, status: v })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="on_duty">On Duty</SelectItem>
+                        <SelectItem value="off_duty">Off Duty</SelectItem>
+                        <SelectItem value="rest">Rest Period</SelectItem>
+                        <SelectItem value="eva">EVA Operations</SelectItem>
+                        <SelectItem value="medical">Medical Hold</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>Occupation / Specialty</Label>
+                    <Input
+                      value={formData.occupation}
+                      onChange={(e) =>
+                        setFormData({ ...formData, occupation: e.target.value })
+                      }
+                      placeholder="e.g., Flight Engineer, Materials Scientist"
+                    />
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Biometrics Section */}
+            {activeSection === "biometrics" && (
+              <motion.div
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-4"
+              >
+                <h4 className="font-medium flex items-center gap-2 text-primary">
+                  <Activity className="h-4 w-4" />
+                  Physiological Parameters
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Height (cm)</Label>
+                    <Input
+                      type="number"
+                      min="100"
+                      max="250"
+                      value={formData.height_cm}
+                      onChange={(e) =>
+                        setFormData({ ...formData, height_cm: e.target.value })
+                      }
+                      placeholder="175"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Weight (kg)</Label>
+                    <Input
+                      type="number"
+                      min="30"
+                      max="200"
+                      step="0.1"
+                      value={formData.weight_kg}
+                      onChange={(e) =>
+                        setFormData({ ...formData, weight_kg: e.target.value })
+                      }
+                      placeholder="70.0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Resting Heart Rate (bpm)</Label>
+                    <Input
+                      type="number"
+                      min="30"
+                      max="120"
+                      value={formData.resting_hr_bpm}
+                      onChange={(e) =>
+                        setFormData({ ...formData, resting_hr_bpm: e.target.value })
+                      }
+                      placeholder="60"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Maximum Heart Rate (bpm)</Label>
+                    <Input
+                      type="number"
+                      min="120"
+                      max="220"
+                      value={formData.max_hr_bpm}
+                      onChange={(e) =>
+                        setFormData({ ...formData, max_hr_bpm: e.target.value })
+                      }
+                      placeholder="180"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>VO2max (ml/kg/min)</Label>
+                    <Input
+                      type="number"
+                      min="15"
+                      max="90"
+                      step="0.1"
+                      value={formData.vo2max_ml_kg_min}
+                      onChange={(e) =>
+                        setFormData({ ...formData, vo2max_ml_kg_min: e.target.value })
+                      }
+                      placeholder="45.0"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Activity Level</Label>
+                    <Select
+                      value={formData.activity_level}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, activity_level: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="sedentary">Sedentary</SelectItem>
+                        <SelectItem value="light">Light Activity</SelectItem>
+                        <SelectItem value="moderate">Moderate Activity</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="very_active">Very Active / Athlete</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="p-3 bg-info/10 rounded-lg text-sm border border-info/30">
+                  <p className="text-info font-medium">BMI Calculator</p>
+                  {formData.height_cm && formData.weight_kg && (
+                    <p className="text-muted-foreground">
+                      BMI: {(
+                        parseFloat(formData.weight_kg) /
+                        Math.pow(parseFloat(formData.height_cm) / 100, 2)
+                      ).toFixed(1)} kg/m²
+                    </p>
+                  )}
+                </div>
+              </motion.div>
+            )}
+
+            {/* Lifestyle Section */}
+            {activeSection === "lifestyle" && (
+              <motion.div
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-4"
+              >
+                <h4 className="font-medium flex items-center gap-2 text-primary">
+                  <Heart className="h-4 w-4" />
+                  Lifestyle Factors
+                </h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Smoking Status</Label>
+                    <Select
+                      value={formData.smoking_status}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, smoking_status: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="never">Never Smoked</SelectItem>
+                        <SelectItem value="former">Former Smoker</SelectItem>
+                        <SelectItem value="current_light">Current - Light</SelectItem>
+                        <SelectItem value="current_moderate">Current - Moderate</SelectItem>
+                        <SelectItem value="current_heavy">Current - Heavy</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Alcohol Use</Label>
+                    <Select
+                      value={formData.alcohol_use}
+                      onValueChange={(v) =>
+                        setFormData({ ...formData, alcohol_use: v })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select frequency" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">None</SelectItem>
+                        <SelectItem value="occasional">Occasional (1-2/month)</SelectItem>
+                        <SelectItem value="light">Light (1-2/week)</SelectItem>
+                        <SelectItem value="moderate">Moderate (3-7/week)</SelectItem>
+                        <SelectItem value="heavy">Heavy (daily)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2 col-span-2">
+                    <Label>Daily Caffeine Intake (mg)</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      max="1000"
+                      value={formData.caffeine_intake_mg}
+                      onChange={(e) =>
+                        setFormData({ ...formData, caffeine_intake_mg: e.target.value })
+                      }
+                      placeholder="200 (approx. 2 cups of coffee)"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Reference: 1 cup coffee ≈ 95mg, 1 espresso ≈ 63mg, 1 energy drink ≈ 80mg
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+
+            {/* Medical Section */}
+            {activeSection === "medical" && (
+              <motion.div
+                initial={{ opacity: 0, x: 10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="space-y-4"
+              >
+                <h4 className="font-medium flex items-center gap-2 text-primary">
+                  <FileText className="h-4 w-4" />
+                  Medical Information
+                </h4>
+                <div className="p-3 bg-warning/10 rounded-lg text-sm border border-warning/30 mb-4">
+                  <p className="text-warning font-medium flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Confidential Medical Data
+                  </p>
+                  <p className="text-muted-foreground mt-1">
+                    This information is stored securely and used for health monitoring purposes only.
+                  </p>
+                </div>
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label>Medical Conditions</Label>
+                    <Textarea
+                      value={formData.medical_conditions}
+                      onChange={(e) =>
+                        setFormData({ ...formData, medical_conditions: e.target.value })
+                      }
+                      placeholder="Enter conditions separated by commas (e.g., Hypertension, Asthma, Diabetes Type 2)"
+                      rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Separate multiple conditions with commas
+                    </p>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Current Medications</Label>
+                    <Textarea
+                      value={formData.medications}
+                      onChange={(e) =>
+                        setFormData({ ...formData, medications: e.target.value })
+                      }
+                      placeholder="Enter medications separated by commas (e.g., Lisinopril 10mg, Metformin 500mg)"
+                      rows={3}
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Include dosage where applicable. Separate with commas.
+                    </p>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </div>
+
+          <DialogFooter className="border-t pt-4">
+            <div className="flex items-center justify-between w-full">
+              <p className="text-xs text-muted-foreground">
+                All fields are optional except username
+              </p>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit">
+                  <Save className="h-4 w-4 mr-2" />
+                  Save All Changes
+                </Button>
+              </div>
             </div>
-          </div>
-
-          {/* Status */}
-          <div className="space-y-2">
-            <Label>Current Status</Label>
-            <Select
-              value={formData.status}
-              onValueChange={(v) => setFormData({ ...formData, status: v })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="on_duty">On Duty</SelectItem>
-                <SelectItem value="off_duty">Off Duty</SelectItem>
-                <SelectItem value="rest">Rest</SelectItem>
-                <SelectItem value="eva">EVA</SelectItem>
-                <SelectItem value="medical">Medical</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Separator />
-
-          {/* Biometrics */}
-          <div>
-            <h4 className="font-medium mb-4 flex items-center gap-2">
-              <Activity className="h-4 w-4" />
-              Biometrics
-            </h4>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Height (cm)</Label>
-                <Input
-                  type="number"
-                  value={formData.height_cm}
-                  onChange={(e) =>
-                    setFormData({ ...formData, height_cm: e.target.value })
-                  }
-                  placeholder="175"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Weight (kg)</Label>
-                <Input
-                  type="number"
-                  value={formData.weight_kg}
-                  onChange={(e) =>
-                    setFormData({ ...formData, weight_kg: e.target.value })
-                  }
-                  placeholder="70"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Resting HR (bpm)</Label>
-                <Input
-                  type="number"
-                  value={formData.resting_hr_bpm}
-                  onChange={(e) =>
-                    setFormData({ ...formData, resting_hr_bpm: e.target.value })
-                  }
-                  placeholder="60"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Max HR (bpm)</Label>
-                <Input
-                  type="number"
-                  value={formData.max_hr_bpm}
-                  onChange={(e) =>
-                    setFormData({ ...formData, max_hr_bpm: e.target.value })
-                  }
-                  placeholder="180"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>VO2max (ml/kg/min)</Label>
-                <Input
-                  type="number"
-                  step="0.1"
-                  value={formData.vo2max_ml_kg_min}
-                  onChange={(e) =>
-                    setFormData({ ...formData, vo2max_ml_kg_min: e.target.value })
-                  }
-                  placeholder="45.0"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Activity Level</Label>
-                <Select
-                  value={formData.activity_level}
-                  onValueChange={(v) =>
-                    setFormData({ ...formData, activity_level: v })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select level" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="sedentary">Sedentary</SelectItem>
-                    <SelectItem value="light">Light</SelectItem>
-                    <SelectItem value="moderate">Moderate</SelectItem>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="very_active">Very Active</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          {/* Occupation */}
-          <div className="space-y-2">
-            <Label>Occupation/Specialty</Label>
-            <Input
-              value={formData.occupation}
-              onChange={(e) =>
-                setFormData({ ...formData, occupation: e.target.value })
-              }
-              placeholder="e.g., Flight Engineer, Scientist"
-            />
-          </div>
-
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit">
-              <Save className="h-4 w-4 mr-2" />
-              Save Changes
-            </Button>
           </DialogFooter>
         </form>
       </DialogContent>
