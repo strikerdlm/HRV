@@ -645,84 +645,81 @@ interface TimeSeriesData {
 }
 
 function buildKpTimeSeriesChart(data: TimeSeriesData[]): Record<string, unknown> {
+  // Format timestamps for display
   const timestamps = data.map((d) => {
     const date = new Date(d.timestamp);
-    return date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, "0")}:00`;
   });
-  const kpValues = data.map((d) => d.kp ?? null);
+  
+  // Extract only numeric Kp values
+  const kpValues = data.map((d) => {
+    const val = d.kp;
+    return typeof val === "number" && !isNaN(val) ? val : null;
+  });
 
-  // Calculate dynamic bounds with safety checks
-  const validKp = kpValues.filter((v): v is number => v !== null && !isNaN(v));
-  const minKp = validKp.length > 0 ? Math.max(0, Math.min(...validKp) - 0.5) : 0;
-  const maxKp = validKp.length > 0 ? Math.min(9, Math.max(...validKp) + 1) : 9;
+  // Calculate bounds with safety
+  const validKp = kpValues.filter((v): v is number => v !== null);
+  const dataMin = validKp.length > 0 ? Math.min(...validKp) : 0;
+  const dataMax = validKp.length > 0 ? Math.max(...validKp) : 5;
 
   return {
     title: {
-      text: "Kp Index Time Series",
-      subtext: "Planetary geomagnetic activity index (NOAA SWPC)",
+      text: "Kp Index",
       left: "center",
+      top: 10,
       textStyle: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: "bold",
         color: PUBLICATION_COLORS.text,
-      },
-      subtextStyle: {
-        fontSize: 11,
-        color: PUBLICATION_COLORS.subtext,
       },
     },
     tooltip: {
       trigger: "axis",
       backgroundColor: "rgba(255, 255, 255, 0.95)",
       borderColor: "#e2e8f0",
-      borderWidth: 1,
-      textStyle: { color: PUBLICATION_COLORS.text },
-      formatter: (params: Array<{ axisValue: string; value: number }>) => {
+      textStyle: { color: PUBLICATION_COLORS.text, fontSize: 12 },
+      formatter: (params: Array<{ axisValue: string; value: number | null }>) => {
         const p = params[0];
-        if (!p || p.value === null) return "";
+        if (!p || p.value === null || p.value === undefined) return "";
         const level = getKpLevel(p.value);
-        return `<strong>${p.axisValue}</strong><br/>
-                Kp: <span style="color:${level.color};font-weight:bold">${p.value.toFixed(
-          1
-        )}</span> (${level.label})`;
+        return `<b>${p.axisValue}</b><br/>Kp: <span style="color:${level.color};font-weight:600">${p.value.toFixed(1)}</span> (${level.label})`;
       },
     },
     grid: {
-      left: 60,
-      right: 40,
-      top: 80,
-      bottom: 80,
+      left: 50,
+      right: 25,
+      top: 45,
+      bottom: 65,
+      containLabel: true,
     },
     xAxis: {
       type: "category",
       data: timestamps,
       axisLabel: {
         color: PUBLICATION_COLORS.text,
-        fontSize: 9,
-        rotate: 30,
-        interval: Math.max(0, Math.floor(data.length / 10)), // Show ~10 labels
+        fontSize: 10,
+        rotate: 0,
+        interval: Math.max(0, Math.floor(data.length / 8)),
       },
       axisLine: { lineStyle: { color: PUBLICATION_COLORS.axis } },
-      axisTick: { lineStyle: { color: PUBLICATION_COLORS.axis } },
+      axisTick: { show: false },
     },
     yAxis: {
       type: "value",
       name: "Kp",
       nameLocation: "middle",
-      nameGap: 35,
-      nameTextStyle: {
-        color: PUBLICATION_COLORS.text,
-        fontSize: 12,
-        fontWeight: "bold",
-      },
-      min: minKp,
-      max: maxKp,
+      nameGap: 30,
+      nameTextStyle: { color: PUBLICATION_COLORS.text, fontSize: 12, fontWeight: "bold" },
+      min: Math.max(0, Math.floor(dataMin) - 1),
+      max: Math.min(9, Math.ceil(dataMax) + 1),
+      interval: 1,
       axisLabel: {
         color: PUBLICATION_COLORS.text,
-        fontSize: 10,
+        fontSize: 11,
+        formatter: (v: number) => v.toFixed(0),
       },
-      axisLine: { lineStyle: { color: PUBLICATION_COLORS.axis } },
-      splitLine: { lineStyle: { color: PUBLICATION_COLORS.grid } },
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: PUBLICATION_COLORS.grid, type: "dashed" } },
     },
     visualMap: {
       show: false,
@@ -737,255 +734,230 @@ function buildKpTimeSeriesChart(data: TimeSeriesData[]): Record<string, unknown>
     },
     series: [
       {
-        name: "Kp Index",
+        name: "Kp",
         type: "bar",
         data: kpValues,
-        barWidth: "60%",
-        itemStyle: {
-          borderRadius: [4, 4, 0, 0],
-        },
+        barWidth: "70%",
+        itemStyle: { borderRadius: [3, 3, 0, 0] },
         markLine: {
           silent: true,
           symbol: "none",
           lineStyle: { type: "dashed", width: 1.5 },
+          label: { fontSize: 10, distance: [10, 0] },
           data: [
-            {
-              yAxis: 4,
-              label: { formatter: "G1 Threshold", position: "end", color: PUBLICATION_COLORS.active },
-              lineStyle: { color: PUBLICATION_COLORS.active },
-            },
-            {
-              yAxis: 5,
-              label: { formatter: "G2 Threshold", position: "end", color: PUBLICATION_COLORS.minor },
-              lineStyle: { color: PUBLICATION_COLORS.minor },
-            },
+            { yAxis: 4, label: { formatter: "G1", position: "end" }, lineStyle: { color: PUBLICATION_COLORS.active } },
+            { yAxis: 5, label: { formatter: "G2", position: "end" }, lineStyle: { color: PUBLICATION_COLORS.minor } },
           ],
         },
       },
     ],
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
-      { type: "slider", start: 0, end: 100, height: 20, bottom: 10 },
+      { type: "slider", start: 0, end: 100, height: 18, bottom: 5, borderColor: "transparent" },
     ],
     toolbox: {
-      right: 20,
-      top: 10,
+      right: 10,
+      top: 5,
+      itemSize: 14,
       feature: {
-        saveAsImage: { title: "Export PNG", pixelRatio: 3 },
-        dataZoom: { title: { zoom: "Zoom", back: "Reset" } },
+        saveAsImage: { title: "PNG", pixelRatio: 3 },
       },
     },
   };
 }
 
 function buildDstTimeSeriesChart(data: TimeSeriesData[]): Record<string, unknown> {
+  // Format timestamps for display
   const timestamps = data.map((d) => {
     const date = new Date(d.timestamp);
-    return date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+    return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, "0")}:00`;
   });
-  const dstValues = data.map((d) => d.dst ?? null);
+  
+  // Extract only numeric Dst values
+  const dstValues = data.map((d) => {
+    const val = d.dst;
+    return typeof val === "number" && !isNaN(val) ? val : null;
+  });
 
-  const validDst = dstValues.filter((v): v is number => v !== null && !isNaN(v));
-  const minDst = validDst.length > 0 ? Math.min(...validDst) - 20 : -150;
-  const maxDst = validDst.length > 0 ? Math.max(...validDst) + 10 : 50;
+  // Calculate bounds with safety
+  const validDst = dstValues.filter((v): v is number => v !== null);
+  const dataMin = validDst.length > 0 ? Math.min(...validDst) : -100;
+  const dataMax = validDst.length > 0 ? Math.max(...validDst) : 50;
 
   return {
     title: {
-      text: "Dst Index Time Series",
-      subtext: "Disturbance storm time index - ring current strength (NOAA SWPC)",
+      text: "Dst Index",
       left: "center",
+      top: 10,
       textStyle: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: "bold",
         color: PUBLICATION_COLORS.text,
-      },
-      subtextStyle: {
-        fontSize: 11,
-        color: PUBLICATION_COLORS.subtext,
       },
     },
     tooltip: {
       trigger: "axis",
       backgroundColor: "rgba(255, 255, 255, 0.95)",
       borderColor: "#e2e8f0",
-      borderWidth: 1,
-      textStyle: { color: PUBLICATION_COLORS.text },
-      formatter: (params: Array<{ axisValue: string; value: number }>) => {
+      textStyle: { color: PUBLICATION_COLORS.text, fontSize: 12 },
+      formatter: (params: Array<{ axisValue: string; value: number | null }>) => {
         const p = params[0];
-        if (!p || p.value === null) return "";
+        if (!p || p.value === null || p.value === undefined) return "";
         const level = getDstLevel(p.value);
-        return `<strong>${p.axisValue}</strong><br/>
-                Dst: <span style="color:${level.color};font-weight:bold">${p.value.toFixed(
-          0
-        )} nT</span> (${level.label})`;
+        return `<b>${p.axisValue}</b><br/>Dst: <span style="color:${level.color};font-weight:600">${p.value.toFixed(0)} nT</span> (${level.label})`;
       },
     },
     grid: {
-      left: 60,
-      right: 40,
-      top: 80,
-      bottom: 80,
+      left: 55,
+      right: 25,
+      top: 45,
+      bottom: 65,
+      containLabel: true,
     },
     xAxis: {
       type: "category",
       data: timestamps,
       axisLabel: {
         color: PUBLICATION_COLORS.text,
-        fontSize: 9,
-        rotate: 30,
-        interval: Math.max(0, Math.floor(data.length / 10)), // Show ~10 labels
+        fontSize: 10,
+        rotate: 0,
+        interval: Math.max(0, Math.floor(data.length / 8)),
       },
       axisLine: { lineStyle: { color: PUBLICATION_COLORS.axis } },
-      axisTick: { lineStyle: { color: PUBLICATION_COLORS.axis } },
+      axisTick: { show: false },
     },
     yAxis: {
       type: "value",
-      name: "Dst (nT)",
+      name: "nT",
       nameLocation: "middle",
-      nameGap: 40,
-      nameTextStyle: {
-        color: PUBLICATION_COLORS.text,
-        fontSize: 12,
-        fontWeight: "bold",
-      },
-      min: minDst,
-      max: maxDst,
+      nameGap: 35,
+      nameTextStyle: { color: PUBLICATION_COLORS.text, fontSize: 12, fontWeight: "bold" },
+      min: Math.floor((dataMin - 20) / 50) * 50,
+      max: Math.ceil((dataMax + 20) / 50) * 50,
       axisLabel: {
         color: PUBLICATION_COLORS.text,
-        fontSize: 10,
+        fontSize: 11,
+        formatter: (v: number) => v.toFixed(0),
       },
-      axisLine: { lineStyle: { color: PUBLICATION_COLORS.axis } },
-      splitLine: { lineStyle: { color: PUBLICATION_COLORS.grid } },
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: PUBLICATION_COLORS.grid, type: "dashed" } },
     },
     series: [
       {
-        name: "Dst Index",
+        name: "Dst",
         type: "line",
         data: dstValues,
         smooth: true,
-        lineStyle: {
-          color: PUBLICATION_COLORS.dst,
-          width: 2,
-        },
+        lineStyle: { color: PUBLICATION_COLORS.dst, width: 2 },
         areaStyle: {
           color: {
             type: "linear",
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
+            x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: "rgba(220, 38, 38, 0.3)" },
-              { offset: 1, color: "rgba(220, 38, 38, 0.05)" },
+              { offset: 0, color: "rgba(220, 38, 38, 0.25)" },
+              { offset: 1, color: "rgba(220, 38, 38, 0.02)" },
             ],
           },
         },
-        symbol: "circle",
-        symbolSize: 4,
+        symbol: "none",
         markLine: {
           silent: true,
           symbol: "none",
           lineStyle: { type: "dashed", width: 1.5 },
+          label: { fontSize: 10, distance: [10, 0] },
           data: [
-            {
-              yAxis: -50,
-              label: { formatter: "Moderate Storm", position: "end", color: PUBLICATION_COLORS.active },
-              lineStyle: { color: PUBLICATION_COLORS.active },
-            },
-            {
-              yAxis: -100,
-              label: { formatter: "Strong Storm", position: "end", color: PUBLICATION_COLORS.minor },
-              lineStyle: { color: PUBLICATION_COLORS.minor },
-            },
+            { yAxis: 0, label: { formatter: "Quiet", position: "end" }, lineStyle: { color: PUBLICATION_COLORS.quiet } },
+            { yAxis: -50, label: { formatter: "Moderate", position: "end" }, lineStyle: { color: PUBLICATION_COLORS.active } },
           ],
         },
       },
     ],
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
-      { type: "slider", start: 0, end: 100, height: 20, bottom: 10 },
+      { type: "slider", start: 0, end: 100, height: 18, bottom: 5, borderColor: "transparent" },
     ],
     toolbox: {
-      right: 20,
-      top: 10,
+      right: 10,
+      top: 5,
+      itemSize: 14,
       feature: {
-        saveAsImage: { title: "Export PNG", pixelRatio: 3 },
-        dataZoom: { title: { zoom: "Zoom", back: "Reset" } },
+        saveAsImage: { title: "PNG", pixelRatio: 3 },
       },
     },
   };
 }
 
 function buildSolarWindChart(data: TimeSeriesData[]): Record<string, unknown> {
+  // Format timestamps
   const timestamps = data.map((d) => {
     const date = new Date(d.timestamp);
-    return date.toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit" });
+    return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, "0")}:00`;
   });
-  const speedValues = data.map((d) => d.speed ?? null);
-  const densityValues = data.map((d) => d.density ?? null);
-  const bzValues = data.map((d) => d.bz ?? null);
+  
+  // Extract numeric values only
+  const speedValues = data.map((d) => (typeof d.speed === "number" && !isNaN(d.speed) ? d.speed : null));
+  const densityValues = data.map((d) => (typeof d.density === "number" && !isNaN(d.density) ? d.density : null));
+  const bzValues = data.map((d) => (typeof d.bz === "number" && !isNaN(d.bz) ? d.bz : null));
 
   return {
     title: {
-      text: "Solar Wind Parameters",
-      subtext: "ACE/DSCOVR real-time solar wind monitoring (NOAA SWPC)",
+      text: "Solar Wind",
       left: "center",
+      top: 10,
       textStyle: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: "bold",
         color: PUBLICATION_COLORS.text,
-      },
-      subtextStyle: {
-        fontSize: 11,
-        color: PUBLICATION_COLORS.subtext,
       },
     },
     tooltip: {
       trigger: "axis",
       backgroundColor: "rgba(255, 255, 255, 0.95)",
       borderColor: "#e2e8f0",
-      borderWidth: 1,
-      textStyle: { color: PUBLICATION_COLORS.text },
+      textStyle: { color: PUBLICATION_COLORS.text, fontSize: 11 },
     },
     legend: {
       data: ["Speed", "Density", "Bz"],
-      top: 50,
+      top: 35,
       textStyle: { color: PUBLICATION_COLORS.text, fontSize: 11 },
+      itemGap: 20,
     },
     grid: {
-      left: 65,
-      right: 65,
-      top: 90,
-      bottom: 70,
+      left: 55,
+      right: 55,
+      top: 70,
+      bottom: 65,
+      containLabel: true,
     },
     xAxis: {
       type: "category",
       data: timestamps,
       axisLabel: {
         color: PUBLICATION_COLORS.text,
-        fontSize: 9,
-        rotate: 30,
-        interval: Math.floor(data.length / 8), // Show ~8 labels
+        fontSize: 10,
+        rotate: 0,
+        interval: Math.max(0, Math.floor(data.length / 8)),
       },
       axisLine: { lineStyle: { color: PUBLICATION_COLORS.axis } },
+      axisTick: { show: false },
     },
     yAxis: [
       {
         type: "value",
-        name: "Speed (km/s)",
+        name: "km/s",
         position: "left",
-        nameTextStyle: { color: PUBLICATION_COLORS.solarWind, fontSize: 10 },
-        axisLabel: { color: PUBLICATION_COLORS.solarWind, fontSize: 9 },
-        axisLine: { lineStyle: { color: PUBLICATION_COLORS.solarWind } },
-        splitLine: { lineStyle: { color: PUBLICATION_COLORS.grid } },
+        nameTextStyle: { color: PUBLICATION_COLORS.solarWind, fontSize: 11, fontWeight: "bold" },
+        axisLabel: { color: PUBLICATION_COLORS.solarWind, fontSize: 10, formatter: (v: number) => v.toFixed(0) },
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: PUBLICATION_COLORS.grid, type: "dashed" } },
       },
       {
         type: "value",
-        name: "Bz / Density",
+        name: "nT / p/cm³",
         position: "right",
         nameTextStyle: { color: PUBLICATION_COLORS.bz, fontSize: 10 },
-        axisLabel: { color: PUBLICATION_COLORS.bz, fontSize: 9 },
-        axisLine: { lineStyle: { color: PUBLICATION_COLORS.bz } },
+        axisLabel: { color: PUBLICATION_COLORS.bz, fontSize: 10, formatter: (v: number) => v.toFixed(0) },
+        axisLine: { show: false },
         splitLine: { show: false },
       },
     ],
@@ -996,15 +968,15 @@ function buildSolarWindChart(data: TimeSeriesData[]): Record<string, unknown> {
         data: speedValues,
         smooth: true,
         yAxisIndex: 0,
-        lineStyle: { color: PUBLICATION_COLORS.solarWind, width: 2.5 },
+        lineStyle: { color: PUBLICATION_COLORS.solarWind, width: 2 },
         symbol: "none",
         areaStyle: {
           color: {
             type: "linear",
             x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: "rgba(5, 150, 105, 0.2)" },
-              { offset: 1, color: "rgba(5, 150, 105, 0.02)" },
+              { offset: 0, color: "rgba(5, 150, 105, 0.15)" },
+              { offset: 1, color: "rgba(5, 150, 105, 0)" },
             ],
           },
         },
@@ -1026,65 +998,56 @@ function buildSolarWindChart(data: TimeSeriesData[]): Record<string, unknown> {
         yAxisIndex: 1,
         lineStyle: { color: PUBLICATION_COLORS.bz, width: 2 },
         symbol: "none",
-        markLine: {
-          silent: true,
-          symbol: "none",
-          data: [
-            {
-              yAxis: 0,
-              lineStyle: { color: PUBLICATION_COLORS.subtext, type: "solid", width: 1 },
-              label: { show: false },
-            },
-          ],
-        },
       },
     ],
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
-      { type: "slider", start: 0, end: 100, height: 18, bottom: 8 },
+      { type: "slider", start: 0, end: 100, height: 18, bottom: 5, borderColor: "transparent" },
     ],
     toolbox: {
-      right: 15,
+      right: 10,
       top: 5,
+      itemSize: 14,
       feature: {
-        saveAsImage: { title: "Export PNG", pixelRatio: 3 },
-        dataZoom: { title: { zoom: "Zoom", back: "Reset" } },
+        saveAsImage: { title: "PNG", pixelRatio: 3 },
       },
     },
   };
 }
 
 function buildF107Chart(f107Data: Array<{ timestamp: string; f107: number }>): Record<string, unknown> {
-  const timestamps = f107Data.map((d) => d.timestamp);
-  const values = f107Data.map((d) => d.f107);
+  // Format timestamps
+  const timestamps = f107Data.map((d) => {
+    const date = new Date(d.timestamp);
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  });
+  
+  // Extract numeric values
+  const values = f107Data.map((d) => (typeof d.f107 === "number" && !isNaN(d.f107) ? d.f107 : null));
 
   return {
     title: {
-      text: "F10.7 Solar Radio Flux",
-      subtext: "10.7 cm wavelength solar radio emission - proxy for solar activity (NOAA SWPC)",
+      text: "F10.7 Flux",
       left: "center",
+      top: 10,
       textStyle: {
-        fontSize: 16,
+        fontSize: 15,
         fontWeight: "bold",
         color: PUBLICATION_COLORS.text,
-      },
-      subtextStyle: {
-        fontSize: 11,
-        color: PUBLICATION_COLORS.subtext,
       },
     },
     tooltip: {
       trigger: "axis",
       backgroundColor: "rgba(255, 255, 255, 0.95)",
       borderColor: "#e2e8f0",
-      borderWidth: 1,
-      textStyle: { color: PUBLICATION_COLORS.text },
+      textStyle: { color: PUBLICATION_COLORS.text, fontSize: 12 },
     },
     grid: {
-      left: 60,
-      right: 40,
-      top: 80,
-      bottom: 80,
+      left: 50,
+      right: 25,
+      top: 45,
+      bottom: 65,
+      containLabel: true,
     },
     xAxis: {
       type: "category",
@@ -1092,27 +1055,21 @@ function buildF107Chart(f107Data: Array<{ timestamp: string; f107: number }>): R
       axisLabel: {
         color: PUBLICATION_COLORS.text,
         fontSize: 10,
-        rotate: 45,
-        formatter: (v: string) => {
-          const d = new Date(v);
-          return `${d.getMonth() + 1}/${d.getDate()}`;
-        },
+        rotate: 0,
+        interval: Math.max(0, Math.floor(f107Data.length / 8)),
       },
       axisLine: { lineStyle: { color: PUBLICATION_COLORS.axis } },
+      axisTick: { show: false },
     },
     yAxis: {
       type: "value",
-      name: "F10.7 (SFU)",
+      name: "SFU",
       nameLocation: "middle",
-      nameGap: 40,
-      nameTextStyle: {
-        color: PUBLICATION_COLORS.text,
-        fontSize: 12,
-        fontWeight: "bold",
-      },
-      axisLabel: { color: PUBLICATION_COLORS.text, fontSize: 11 },
-      axisLine: { lineStyle: { color: PUBLICATION_COLORS.axis } },
-      splitLine: { lineStyle: { color: PUBLICATION_COLORS.grid } },
+      nameGap: 35,
+      nameTextStyle: { color: PUBLICATION_COLORS.text, fontSize: 12, fontWeight: "bold" },
+      axisLabel: { color: PUBLICATION_COLORS.text, fontSize: 11, formatter: (v: number) => v.toFixed(0) },
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: PUBLICATION_COLORS.grid, type: "dashed" } },
     },
     series: [
       {
@@ -1120,51 +1077,40 @@ function buildF107Chart(f107Data: Array<{ timestamp: string; f107: number }>): R
         type: "line",
         data: values,
         smooth: true,
-        lineStyle: { color: PUBLICATION_COLORS.f107, width: 2.5 },
+        lineStyle: { color: PUBLICATION_COLORS.f107, width: 2 },
+        symbol: "none",
         areaStyle: {
           color: {
             type: "linear",
-            x: 0,
-            y: 0,
-            x2: 0,
-            y2: 1,
+            x: 0, y: 0, x2: 0, y2: 1,
             colorStops: [
-              { offset: 0, color: "rgba(217, 119, 6, 0.3)" },
-              { offset: 1, color: "rgba(217, 119, 6, 0.05)" },
+              { offset: 0, color: "rgba(217, 119, 6, 0.2)" },
+              { offset: 1, color: "rgba(217, 119, 6, 0)" },
             ],
           },
         },
-        symbol: "circle",
-        symbolSize: 6,
         markLine: {
           silent: true,
           symbol: "none",
           lineStyle: { type: "dashed", width: 1.5 },
+          label: { fontSize: 10, distance: [10, 0] },
           data: [
-            {
-              yAxis: 70,
-              label: { formatter: "Solar Minimum", position: "end", color: PUBLICATION_COLORS.quiet },
-              lineStyle: { color: PUBLICATION_COLORS.quiet },
-            },
-            {
-              yAxis: 150,
-              label: { formatter: "High Activity", position: "end", color: PUBLICATION_COLORS.minor },
-              lineStyle: { color: PUBLICATION_COLORS.minor },
-            },
+            { yAxis: 70, label: { formatter: "Min", position: "end" }, lineStyle: { color: PUBLICATION_COLORS.quiet } },
+            { yAxis: 150, label: { formatter: "High", position: "end" }, lineStyle: { color: PUBLICATION_COLORS.minor } },
           ],
         },
       },
     ],
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
-      { type: "slider", start: 0, end: 100, height: 20, bottom: 10 },
+      { type: "slider", start: 0, end: 100, height: 18, bottom: 5, borderColor: "transparent" },
     ],
     toolbox: {
-      right: 20,
-      top: 10,
+      right: 10,
+      top: 5,
+      itemSize: 14,
       feature: {
-        saveAsImage: { title: "Export PNG", pixelRatio: 3 },
-        dataZoom: { title: { zoom: "Zoom", back: "Reset" } },
+        saveAsImage: { title: "PNG", pixelRatio: 3 },
       },
     },
   };
@@ -1656,18 +1602,23 @@ export default function SpaceWeatherPage() {
           <TabsContent value="kp-dst" className="space-y-6">
             {/* Kp Index Time Series */}
             <Card>
-              <CardContent className="pt-6">
+              <CardHeader className="pb-2">
+                <CardDescription className="text-xs">
+                  Planetary K-index: Global geomagnetic activity (0-9 scale). G1-G5 = NOAA storm levels.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0">
                 {kpChartData.length > 0 ? (
                   <EChartsWrapper
                     option={buildKpTimeSeriesChart(kpChartData)}
-                    height={400}
-                    showToolbox={true}
+                    height={350}
+                    showToolbox={false}
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-[400px] text-muted-foreground">
+                  <div className="flex items-center justify-center h-[350px] text-muted-foreground">
                     <div className="text-center">
-                      <Compass className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p>Loading Kp index data...</p>
+                      <Compass className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Loading Kp data...</p>
                     </div>
                   </div>
                 )}
@@ -1676,18 +1627,23 @@ export default function SpaceWeatherPage() {
 
             {/* Dst Index Time Series */}
             <Card>
-              <CardContent className="pt-6">
+              <CardHeader className="pb-2">
+                <CardDescription className="text-xs">
+                  Disturbance Storm Time index: Ring current strength in nanoTesla. Negative values indicate storms.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0">
                 {dstChartData.length > 0 ? (
                   <EChartsWrapper
                     option={buildDstTimeSeriesChart(dstChartData)}
-                    height={400}
-                    showToolbox={true}
+                    height={350}
+                    showToolbox={false}
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-[400px] text-muted-foreground">
+                  <div className="flex items-center justify-center h-[350px] text-muted-foreground">
                     <div className="text-center">
-                      <Waves className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p>Loading Dst index data...</p>
+                      <Waves className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Loading Dst data...</p>
                     </div>
                   </div>
                 )}
@@ -1754,18 +1710,23 @@ export default function SpaceWeatherPage() {
           <TabsContent value="solar-wind" className="space-y-6">
             {/* Solar Wind Time Series */}
             <Card>
-              <CardContent className="pt-6">
+              <CardHeader className="pb-2">
+                <CardDescription className="text-xs">
+                  ACE/DSCOVR real-time data: Speed (km/s), proton density (p/cm³), IMF Bz (nT). Southward Bz enables geomagnetic coupling.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="pt-0">
                 {solarWindChartData.length > 0 ? (
                   <EChartsWrapper
                     option={buildSolarWindChart(solarWindChartData)}
-                    height={450}
-                    showToolbox={true}
+                    height={380}
+                    showToolbox={false}
                   />
                 ) : (
-                  <div className="flex items-center justify-center h-[450px] text-muted-foreground">
+                  <div className="flex items-center justify-center h-[380px] text-muted-foreground">
                     <div className="text-center">
-                      <Wind className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                      <p>Loading solar wind data...</p>
+                      <Wind className="h-10 w-10 mx-auto mb-2 opacity-50" />
+                      <p className="text-sm">Loading solar wind data...</p>
                     </div>
                   </div>
                 )}
