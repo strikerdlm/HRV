@@ -804,10 +804,13 @@ export default function HRVAnalysisPage() {
 
     try {
       const content = await file.text();
+      console.log("File content length:", content.length);
+      
       const rrIntervals = parseRRFile(content);
+      console.log("Parsed RR intervals:", rrIntervals.length);
 
       if (rrIntervals.length < 30) {
-        throw new Error("File must contain at least 30 valid RR intervals (200-2000ms)");
+        throw new Error(`File must contain at least 30 valid RR intervals (200-2000ms). Found: ${rrIntervals.length}`);
       }
 
       // Try to upload to backend for analysis
@@ -818,6 +821,7 @@ export default function HRVAnalysisPage() {
           recording_timestamp: new Date().toISOString(),
           source: file.name,
         });
+        console.log("Backend response:", uploadResponse);
       } catch (e) {
         console.log("Backend upload failed, using local analysis:", e);
       }
@@ -833,45 +837,73 @@ export default function HRVAnalysisPage() {
         fullAnalysis: null,
       };
 
-      const updated = [newTracing, ...tracings];
-      saveTracings(updated);
+      // Update state with functional update to avoid race conditions
+      setTracings((prevTracings) => {
+        const updated = [newTracing, ...prevTracings];
+        if (typeof window !== "undefined") {
+          localStorage.setItem("hrv_tracings", JSON.stringify(updated));
+        }
+        return updated;
+      });
+      
       setSelectedTracing(newTracing);
       setShowUploadDialog(false);
+      setIsUploading(false);
 
-      // Auto-analyze
-      handleAnalyze(newTracing);
+      // Auto-analyze after state updates
+      setTimeout(() => {
+        handleAnalyze(newTracing);
+      }, 100);
     } catch (e) {
+      console.error("Upload error:", e);
       setUploadError(e instanceof Error ? e.message : "Failed to parse file");
-    } finally {
       setIsUploading(false);
     }
   };
 
   // Handle analysis
-  const handleAnalyze = async (tracing: StoredTracing) => {
+  const handleAnalyze = React.useCallback(async (tracing: StoredTracing) => {
     setIsAnalyzing(true);
     setSelectedTracing(tracing);
 
     try {
-      // Simulate analysis delay
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Small delay for UI feedback
+      await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Generate analysis (in real app, this would call the backend)
+      // Validate RR intervals
+      if (!tracing.rrIntervals || tracing.rrIntervals.length < 30) {
+        throw new Error("Insufficient RR intervals for analysis");
+      }
+
+      // Generate analysis
       const analysis = generateMockAnalysis(tracing.rrIntervals);
+      
+      if (!analysis) {
+        throw new Error("Failed to generate analysis");
+      }
+      
       setCurrentAnalysis(analysis);
 
-      // Update tracing with analysis
-      const updated = tracings.map((t) =>
-        t.id === tracing.id ? { ...t, fullAnalysis: analysis } : t
-      );
-      saveTracings(updated);
+      // Update tracing with analysis - use functional update to avoid stale state
+      setTracings((prevTracings) => {
+        const updated = prevTracings.map((t) =>
+          t.id === tracing.id ? { ...t, fullAnalysis: analysis } : t
+        );
+        // Save to localStorage
+        if (typeof window !== "undefined") {
+          localStorage.setItem("hrv_tracings", JSON.stringify(updated));
+        }
+        return updated;
+      });
+      
       setSelectedTracing({ ...tracing, fullAnalysis: analysis });
     } catch (e) {
       console.error("Analysis failed:", e);
+      setUploadError(e instanceof Error ? e.message : "Analysis failed");
     } finally {
       setIsAnalyzing(false);
     }
-  };
+  }, []);
 
   // Handle delete
   const handleDelete = (tracingId: string) => {
