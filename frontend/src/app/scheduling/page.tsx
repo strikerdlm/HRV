@@ -2873,13 +2873,13 @@ function PROGSSChecklist({
             </div>
             <div>
               <CardTitle className="text-lg">PROGSS Daily Checklist</CardTitle>
-              <CardDescription className="flex items-center gap-2">
+              <div className="flex items-center gap-2 mt-1 text-sm text-muted-foreground">
                 <Badge variant="outline" className="bg-background">
                   <Calendar className="h-3 w-3 mr-1" />
                   Day {missionDay}
                 </Badge>
                 <span className="text-xs">Click circles to update status</span>
-              </CardDescription>
+              </div>
             </div>
           </div>
           <ProgressRing progress={totalProgress} size={70} strokeWidth={5} color="#22c55e" />
