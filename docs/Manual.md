@@ -9,8 +9,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.9.14  
-**Last Updated:** 2026-01-30
+**Version:** 1.9.16  
+**Last Updated:** 2026-02-02
 
 ---
 
@@ -5166,7 +5166,94 @@ Following Task Force (1996) and Quigley et al. (2024) guidelines:
 
 The **Crew Scheduling and Human Performance Management** module is a comprehensive tool for mission planning, risk assessment, and GO/NO-GO decisions. It implements evidence-based scoring functions following SAFTE-FAST validation, NASA Human Performance standards, and IOC Energy Availability thresholds.
 
-**Access:** Operational App → 🗓️ Crew Scheduling tab
+**Access:**
+- **TypeScript Frontend (Modern UI):** http://localhost:3100/scheduling
+- **Streamlit (Legacy):** Operational App → 🗓️ Crew Scheduling tab
+
+### TypeScript/Next.js Frontend Implementation (v1.9.16)
+
+The modern frontend provides a complete crew management and scheduling interface with four main tabs:
+
+#### Status Dashboard Tab
+- **Crew Status Overview**: Grid of IHPI circular gauge widgets showing real-time performance scores for each crew member
+- **IHPI Gauges**: Visual circular progress indicators (0-100) with color-coded zones:
+  - Green (≥80%): GO status
+  - Yellow (60-79%): MARGINAL status
+  - Red (<60%): NO-GO status
+- **Sub-metrics Display**: Fatigue level, sleep debt (hours), and readiness score per crew member
+- **Active Alerts Panel**: Real-time warnings and recommendations (elevated fatigue, EVA preparation, etc.)
+- **Day Summary Card**: Task completion progress, work hours, exercise hours, sleep scheduled, compliance percentage
+
+#### Schedule Tab
+- **Date Navigation**: Previous/next day controls with "Today" quick button
+- **Category Filters**: Filter activities by type (medical, exercise, experiment, work, meal, sleep, maintenance, communication, personal, emergency)
+- **Activity Cards**: Timeline view with:
+  - Time column (start/end in 12-hour format)
+  - Activity title and description
+  - Priority badge (critical/high/medium/low with color coding)
+  - Category badge with location
+  - Assigned crew members
+  - Status controls (Start, Complete, Done indicators)
+- **Day Summary**: Real-time tracking of completed tasks and compliance
+
+#### Crew Management Tab
+- **Crew Member Cards**: Card-based UI showing:
+  - Role designation (CDR, PLT, MS1-MS4)
+  - Status indicator (on duty, off duty, rest, EVA, medical)
+  - IHPI score with progress bar
+  - Quick stats grid (sleep debt, fatigue, readiness)
+  - Edit and Delete buttons
+- **Add Crew Member Dialog**: Create new profiles with username, full name, sex, and role
+- **Comprehensive Admin Profile Editor**: 5-section tabbed dialog for full profile editing:
+
+  **1. Identity Section**
+  - Full name, email, sex (male/female/other)
+  - Date of birth (date picker)
+  - Language preference (EN, ES, FR, DE, RU, ZH, JA)
+  - Read-only metadata: User ID, username, creation date
+
+  **2. Operational Section**
+  - Crew role: CDR (Commander), PLT (Pilot), MS1-MS4 (Mission Specialists)
+  - Current status: On Duty, Off Duty, Rest Period, EVA Operations, Medical Hold
+  - Occupation/specialty field
+
+  **3. Biometrics Section**
+  - Height (cm) with range validation (100-250)
+  - Weight (kg) with 0.1 precision
+  - Resting heart rate (bpm) range 30-120
+  - Maximum heart rate (bpm) range 120-220
+  - VO2max (ml/kg/min) with 0.1 precision
+  - Activity level selector (sedentary to very active)
+  - Auto-calculated BMI display
+
+  **4. Lifestyle Section**
+  - Smoking status: Never, Former, Current (light/moderate/heavy)
+  - Alcohol use: None, Occasional, Light, Moderate, Heavy
+  - Daily caffeine intake (mg) with reference values (1 cup coffee ≈ 95mg)
+
+  **5. Medical Section**
+  - Medical conditions (comma-separated list)
+  - Current medications with dosage (comma-separated list)
+  - Confidentiality notice for sensitive data
+
+#### Performance Tab
+- **IHPI Gauge Grid**: Circular gauges for all crew members with sub-metrics
+- **Detailed Metrics Table**: Tabular view with columns:
+  - Crew member (role + name)
+  - Status badge
+  - IHPI percentage (color-coded)
+  - Fatigue level
+  - Sleep debt
+  - Readiness score
+  - Go/No-Go determination (GO, MARGINAL, NO-GO badges)
+- **Scientific Foundation**: Evidence citations (Hursh et al. 2004, Samel et al. 1997, Van Dongen et al. 2003)
+
+### Mission Workspace Selector
+
+The frontend includes a mission workspace selector at the top of the scheduling page:
+- Switch between Mission 1 and Mission 2
+- Mission-scoped database and configurations
+- Visual indicator showing active mission
 
 ### Key Components
 
@@ -5251,7 +5338,7 @@ The decision algorithm follows a hierarchical gate structure:
 - Formula: `kcal/hr = MET × body_mass_kg`
 - EVA planning: +200 kcal per EVA-hour above nominal intake
 
-### UI Tabs
+### UI Tabs (Streamlit Legacy)
 
 #### Status Dashboard
 - **Live Crew Cards**: 6 crew status cards with color-coded IHPI gauges
@@ -5273,6 +5360,24 @@ The decision algorithm follows a hierarchical gate structure:
 - **Readiness Metrics**: Aggregate crew readiness statistics
 - **Alerts Summary**: Consolidated warning list
 - **Export Options**: JSON, CSV data export
+
+### API Endpoints
+
+The FastAPI backend exposes the following endpoints for crew management:
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/users` | GET | List all user profiles |
+| `/api/users` | POST | Create new user profile |
+| `/api/users/{user_id}` | GET | Get specific user profile |
+| `/api/users/{user_id}` | PUT | Update user profile (all fields) |
+| `/api/users/{user_id}` | DELETE | Delete user profile |
+
+The PUT endpoint accepts all `UserProfile` fields including:
+- Identity: `full_name`, `email`, `sex`, `date_of_birth`, `language`
+- Biometrics: `height_cm`, `weight_kg`, `resting_hr_bpm`, `max_hr_bpm`, `vo2max_ml_kg_min`, `activity_level`
+- Lifestyle: `smoking_status`, `alcohol_use`, `caffeine_intake_mg`
+- Medical: `medical_conditions` (array), `medications` (array), `occupation`
 
 ### Scientific References
 
@@ -5517,6 +5622,10 @@ The Crew Scheduling module includes comprehensive real-time space weather monito
 ## Pending Developments and Roadmap
 
 This section outlines completed features and remaining planned enhancements for the Mission Control - Flight Surgeon.
+
+### Completed Features (Q1 2026)
+
+✅ **Comprehensive Crew Scheduling Frontend (v1.9.16)** - Full TypeScript/Next.js operational app with Status Dashboard, Schedule management, Crew Management (CRUD), Performance metrics, comprehensive 5-section admin profile editor, mission workspace selector
 
 ### Completed Features (Q4 2025)
 
