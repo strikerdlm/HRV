@@ -13,6 +13,14 @@ import {
   Clock,
   Sun,
   Heart,
+  Upload,
+  FileText,
+  Database,
+  BarChart3,
+  ScatterChart,
+  Activity,
+  Download,
+  Zap,
 } from "lucide-react";
 import { PageWrapper } from "@/components/layout";
 import {
@@ -24,87 +32,93 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
-import { getHRVSpaceWeatherCorrelations } from "@/lib/research-api";
+import {
+  getNOAADatasets,
+  uploadRRData,
+  parseRRFile,
+  runCorrelationAnalysis,
+} from "@/lib/research-api";
 import { useAppStore } from "@/lib/store";
-import type { CorrelationAnalysisResult, CorrelationResult } from "@/types/research";
-import { SOLAR_METRIC_INFO, HRV_METRIC_INFO } from "@/types/research";
+import type {
+  ComprehensiveCorrelationResponse,
+  DetailedCorrelation,
+  LagAnalysis,
+  RRUploadResponse,
+  NOAADataResponse,
+} from "@/types/research";
+import { SIGNIFICANCE_COLORS, STRENGTH_COLORS } from "@/types/research";
 
-// Default user ID when no user is selected
-const DEFAULT_USER_ID = "demo-user";
+// ---------------------------------------------------------------------------
+// Components
+// ---------------------------------------------------------------------------
 
-// Significance colors (per project rules: no light gray colors)
-const significanceColors: Record<string, string> = {
-  not_significant: "#64748b",  // Slate-500 - dark enough for accessibility
-  marginal: SCIENTIFIC_COLORS.warning,
-  significant: SCIENTIFIC_COLORS.success,
-  highly_significant: SCIENTIFIC_COLORS.primary,
-  very_highly_significant: "#8e44ad",
-};
-
-// Correlation strength badge
-function StrengthBadge({ strength }: { strength: string }) {
-  const variants: Record<string, "default" | "secondary" | "outline" | "success" | "warning" | "destructive"> = {
-    negligible: "secondary",
-    weak: "outline",
-    moderate: "warning",
-    strong: "success",
-    very_strong: "destructive",
-  };
-  return <Badge variant={variants[strength] || "secondary"}>{strength}</Badge>;
-}
-
-// Correlation Heatmap Chart
+// Publication-quality correlation heatmap
 function CorrelationHeatmap({
-  correlations,
+  matrix,
+  pMatrix,
+  solarLabels,
+  hrvLabels,
 }: {
-  correlations: CorrelationResult[];
+  matrix: number[][];
+  pMatrix: number[][];
+  solarLabels: string[];
+  hrvLabels: string[];
 }) {
   // Build heatmap data
-  const solarMetrics = Array.from(new Set(correlations.map((c) => c.solar_metric)));
-  const physioMetrics = Array.from(new Set(correlations.map((c) => c.physio_metric)));
-
-  const data: [number, number, number][] = [];
-  correlations.forEach((c) => {
-    const x = solarMetrics.indexOf(c.solar_metric);
-    const y = physioMetrics.indexOf(c.physio_metric);
-    if (x >= 0 && y >= 0) {
-      data.push([x, y, c.r]);
+  const data: [number, number, number, number][] = [];
+  for (let i = 0; i < solarLabels.length; i++) {
+    for (let j = 0; j < hrvLabels.length; j++) {
+      if (matrix[i] && matrix[i][j] !== undefined) {
+        const pVal = pMatrix[i]?.[j] ?? 1;
+        data.push([j, i, matrix[i][j], pVal]);
+      }
     }
-  });
+  }
 
-  const option: any = {
+  const option: Record<string, unknown> = {
     title: {
-      text: "Solar-HRV Correlation Matrix",
-      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 14 },
+      text: "Solar Activity ↔ HRV Correlation Matrix",
+      subtext: "Spearman correlations with significance indicators (* p<0.05, ** p<0.01, *** p<0.001)",
+      left: "center",
+      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 14, fontWeight: "bold" },
+      subtextStyle: { color: SCIENTIFIC_COLORS.textSecondary, fontSize: 11 },
     },
-    grid: { left: 100, right: 80, top: 50, bottom: 80 },
+    grid: { left: 120, right: 80, top: 80, bottom: 80 },
     xAxis: {
-      type: "category" as const,
-      data: solarMetrics.map((m) => SOLAR_METRIC_INFO[m]?.name || m),
+      type: "category",
+      data: hrvLabels,
+      position: "bottom",
       axisLabel: {
         color: SCIENTIFIC_COLORS.textPrimary,
-        rotate: 30,
-        fontSize: 10,
+        fontSize: 11,
+        interval: 0,
       },
+      axisTick: { alignWithLabel: true },
     },
     yAxis: {
-      type: "category" as const,
-      data: physioMetrics.map((m) => HRV_METRIC_INFO[m]?.name || m),
-      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 10 },
+      type: "category",
+      data: solarLabels,
+      axisLabel: {
+        color: SCIENTIFIC_COLORS.textPrimary,
+        fontSize: 11,
+      },
     },
     visualMap: {
-      min: -1,
-      max: 1,
+      min: -0.5,
+      max: 0.5,
       calculable: true,
       orient: "vertical",
       right: 10,
       top: "center",
+      itemHeight: 200,
       inRange: {
-        color: [SCIENTIFIC_COLORS.danger, "#ffffff", SCIENTIFIC_COLORS.success],
+        color: ["#2563eb", "#60a5fa", "#f8fafc", "#fbbf24", "#dc2626"],
       },
       textStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+      formatter: (value: number) => value.toFixed(2),
     },
     series: [
       {
@@ -112,381 +126,909 @@ function CorrelationHeatmap({
         data: data,
         label: {
           show: true,
-          formatter: (params: any) => params.value[2].toFixed(2),
+          formatter: (params: { value: number[] }) => {
+            const r = params.value[2];
+            const p = params.value[3];
+            let stars = "";
+            if (p < 0.001) stars = "***";
+            else if (p < 0.01) stars = "**";
+            else if (p < 0.05) stars = "*";
+            return `${r.toFixed(2)}${stars}`;
+          },
           color: SCIENTIFIC_COLORS.textPrimary,
           fontSize: 10,
+          fontWeight: "bold",
         },
         emphasis: {
-          itemStyle: { shadowBlur: 10, shadowColor: "rgba(0, 0, 0, 0.5)" },
+          itemStyle: { shadowBlur: 10, shadowColor: "rgba(0, 0, 0, 0.3)" },
+        },
+        itemStyle: {
+          borderWidth: 1,
+          borderColor: "#fff",
         },
       },
     ],
     tooltip: {
-      formatter: (params: any) => {
-        const [x, y, r] = params.value;
-        return `${solarMetrics[x]} ↔ ${physioMetrics[y]}<br/>r = ${r.toFixed(3)}`;
+      formatter: (params: { value: number[] }) => {
+        const [x, y, r, p] = params.value;
+        const hrvName = hrvLabels[x];
+        const solarName = solarLabels[y];
+        const sig = p < 0.05 ? " ★ Significant" : "";
+        return `<b>${solarName} ↔ ${hrvName}</b><br/>
+                r = ${r.toFixed(3)}<br/>
+                p = ${p.toFixed(4)}${sig}<br/>
+                R² = ${(r * r * 100).toFixed(1)}%`;
       },
+    },
+  };
+
+  return <EChartsWrapper option={option} height={380} />;
+}
+
+// Lag analysis line chart
+function LagAnalysisChart({ analyses }: { analyses: LagAnalysis[] }) {
+  if (analyses.length === 0) return null;
+
+  // Use the first analysis as primary
+  const primary = analyses[0];
+  const maxLabels = 8;
+  const interval = Math.max(0, Math.ceil(primary.lags.length / maxLabels) - 1);
+
+  const series = analyses.slice(0, 4).map((a, idx) => ({
+    type: "line",
+    name: `${a.solar_metric} → ${a.hrv_metric}`,
+    data: a.correlations,
+    smooth: true,
+    symbol: "circle",
+    symbolSize: 6,
+    lineStyle: { width: 2 },
+    markPoint: idx === 0 ? {
+      data: [{ type: "max", name: "Optimal" }],
+      label: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 10 },
+    } : undefined,
+  }));
+
+  const option: Record<string, unknown> = {
+    title: {
+      text: "Correlation vs Lag Time",
+      subtext: "Optimal lag maximizes |r| - effects typically appear 12-36h after solar events",
+      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 14 },
+      subtextStyle: { color: SCIENTIFIC_COLORS.textSecondary, fontSize: 10 },
+    },
+    grid: { left: 60, right: 30, top: 80, bottom: 50 },
+    legend: {
+      top: 45,
+      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 10 },
+    },
+    xAxis: {
+      type: "category",
+      data: primary.lags.map((l) => `${l}h`),
+      name: "Lag (hours)",
+      nameLocation: "middle",
+      nameGap: 30,
+      axisLabel: {
+        color: SCIENTIFIC_COLORS.textPrimary,
+        interval,
+        fontSize: 11,
+      },
+      nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+    },
+    yAxis: {
+      type: "value",
+      name: "Correlation (r)",
+      min: -0.5,
+      max: 0.5,
+      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary },
+      nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+      splitLine: { lineStyle: { color: SCIENTIFIC_COLORS.gridLine } },
+    },
+    series,
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: Array<{ seriesName: string; value: number; axisValue: string }>) => {
+        let result = `<b>Lag: ${params[0]?.axisValue}</b><br/>`;
+        params.forEach((p) => {
+          result += `${p.seriesName}: r = ${p.value.toFixed(3)}<br/>`;
+        });
+        return result;
+      },
+    },
+    markLine: {
+      data: [{ yAxis: 0, lineStyle: { type: "dashed", color: "#999" } }],
     },
   };
 
   return <EChartsWrapper option={option} height={320} />;
 }
 
-// Lag Analysis Chart
-function LagAnalysisChart({
-  correlations,
-}: {
-  correlations: CorrelationResult[];
-}) {
-  // Group by lag
-  const lagData: Record<number, number[]> = {};
-  correlations.forEach((c) => {
-    if (!lagData[c.lag_hours]) lagData[c.lag_hours] = [];
-    lagData[c.lag_hours].push(Math.abs(c.r));
-  });
+// Scatter plot for a specific correlation
+function CorrelationScatter({ corr }: { corr: DetailedCorrelation }) {
+  const data = corr.solar_values.map((s, i) => [s, corr.hrv_values[i]]);
 
-  const lags = Object.keys(lagData)
-    .map(Number)
-    .sort((a, b) => a - b);
-  const avgCorrelations = lags.map(
-    (lag) => lagData[lag].reduce((a, b) => a + b, 0) / lagData[lag].length
-  );
-
-  const option: any = {
+  const option: Record<string, unknown> = {
     title: {
-      text: "Average |r| by Lag Time",
-      subtext: "Optimal lag: strongest correlations",
-      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 14 },
-      subtextStyle: { color: SCIENTIFIC_COLORS.textSecondary },
+      text: `${corr.solar_metric_name} vs ${corr.physio_metric_name}`,
+      subtext: `r = ${corr.r.toFixed(3)}, p = ${corr.p_value.toFixed(4)}, n = ${corr.n_samples}`,
+      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 13 },
+      subtextStyle: { color: SCIENTIFIC_COLORS.textSecondary, fontSize: 10 },
     },
-    grid: { left: 50, right: 30, top: 60, bottom: 50 },
+    grid: { left: 50, right: 20, top: 60, bottom: 50 },
     xAxis: {
-      type: "category" as const,
-      data: lags.map((l) => `${l}h`),
-      name: "Lag (hours)",
+      type: "value",
+      name: corr.solar_metric_name,
       nameLocation: "middle",
       nameGap: 30,
-      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary },
-      nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 10 },
+      nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 11 },
     },
     yAxis: {
-      type: "value" as const,
-      name: "Mean |r|",
-      min: 0,
-      max: 0.5,
-      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary },
-      nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+      type: "value",
+      name: corr.physio_metric_name,
+      nameLocation: "middle",
+      nameGap: 35,
+      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 10 },
+      nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 11 },
     },
     series: [
       {
+        type: "scatter",
+        data,
+        symbolSize: 8,
+        itemStyle: {
+          color: corr.r > 0 ? SCIENTIFIC_COLORS.success : SCIENTIFIC_COLORS.danger,
+          opacity: 0.7,
+        },
+      },
+      // Regression line (simplified)
+      {
         type: "line",
-        data: avgCorrelations,
+        data: [
+          [Math.min(...corr.solar_values), Math.min(...corr.hrv_values)],
+          [Math.max(...corr.solar_values), Math.max(...corr.hrv_values)],
+        ],
+        lineStyle: { type: "dashed", color: SCIENTIFIC_COLORS.trend, width: 2 },
+        symbol: "none",
+      },
+    ],
+    tooltip: {
+      formatter: (params: { value: number[] }) => {
+        if (params.value) {
+          return `${corr.solar_metric_name}: ${params.value[0]?.toFixed(1)}<br/>${corr.physio_metric_name}: ${params.value[1]?.toFixed(1)}`;
+        }
+        return "";
+      },
+    },
+  };
+
+  return <EChartsWrapper option={option} height={250} showToolbox={false} />;
+}
+
+// Timeline overlay chart (HRV + Space Weather)
+function TimelineOverlay({ data }: { data: ComprehensiveCorrelationResponse }) {
+  if (data.timeline_data.length === 0) return null;
+
+  const dates = data.timeline_data.map((d) => d.date);
+  const kp = data.timeline_data.map((d) => d.kp ?? null);
+  const rmssd = data.timeline_data.map((d) => d.rmssd ?? null);
+
+  const maxLabels = 10;
+  const interval = Math.max(0, Math.ceil(dates.length / maxLabels) - 1);
+
+  const option: Record<string, unknown> = {
+    title: {
+      text: "HRV & Space Weather Timeline",
+      subtext: "RMSSD (parasympathetic) and Kp Index (geomagnetic activity)",
+      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 14 },
+      subtextStyle: { color: SCIENTIFIC_COLORS.textSecondary, fontSize: 10 },
+    },
+    grid: { left: 60, right: 60, top: 70, bottom: 60 },
+    legend: {
+      top: 45,
+      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 11 },
+    },
+    xAxis: {
+      type: "category",
+      data: dates,
+      axisLabel: {
+        color: SCIENTIFIC_COLORS.textPrimary,
+        interval,
+        rotate: 45,
+        fontSize: 10,
+        align: "right",
+      },
+      axisTick: { alignWithLabel: true },
+    },
+    yAxis: [
+      {
+        type: "value",
+        name: "RMSSD (ms)",
+        position: "left",
+        axisLabel: { color: SCIENTIFIC_COLORS.success },
+        nameTextStyle: { color: SCIENTIFIC_COLORS.success },
+        splitLine: { lineStyle: { color: SCIENTIFIC_COLORS.gridLine } },
+      },
+      {
+        type: "value",
+        name: "Kp Index",
+        position: "right",
+        min: 0,
+        max: 9,
+        axisLabel: { color: SCIENTIFIC_COLORS.warning },
+        nameTextStyle: { color: SCIENTIFIC_COLORS.warning },
+        splitLine: { show: false },
+      },
+    ],
+    series: [
+      {
+        name: "RMSSD",
+        type: "line",
+        yAxisIndex: 0,
+        data: rmssd,
         smooth: true,
-        areaStyle: { opacity: 0.2, color: SCIENTIFIC_COLORS.primary },
-        lineStyle: { color: SCIENTIFIC_COLORS.primary, width: 2 },
-        itemStyle: { color: SCIENTIFIC_COLORS.primary },
-        markPoint: {
-          data: [{ type: "max", name: "Optimal Lag" }],
-          label: { color: SCIENTIFIC_COLORS.textPrimary },
+        symbol: "circle",
+        symbolSize: 4,
+        lineStyle: { width: 2, color: SCIENTIFIC_COLORS.success },
+        itemStyle: { color: SCIENTIFIC_COLORS.success },
+      },
+      {
+        name: "Kp Index",
+        type: "bar",
+        yAxisIndex: 1,
+        data: kp,
+        barWidth: "60%",
+        itemStyle: {
+          color: (params: { value: number }) => {
+            const v = params.value;
+            if (v >= 5) return SCIENTIFIC_COLORS.danger;
+            if (v >= 4) return SCIENTIFIC_COLORS.warning;
+            return "rgba(243, 156, 18, 0.5)";
+          },
         },
       },
     ],
     tooltip: {
       trigger: "axis",
-      formatter: (params: any) =>
-        `Lag: ${params[0].name}<br/>Mean |r|: ${params[0].value.toFixed(3)}`,
+      axisPointer: { type: "cross" },
     },
+    dataZoom: [
+      { type: "inside", start: 0, end: 100 },
+      { type: "slider", start: 0, end: 100, height: 20, bottom: 5 },
+    ],
   };
 
-  return <EChartsWrapper option={option} height={280} />;
+  return <EChartsWrapper option={option} height={350} />;
 }
 
-// Correlation Result Card
-function CorrelationCard({ result }: { result: CorrelationResult }) {
-  const solarInfo = SOLAR_METRIC_INFO[result.solar_metric];
-  const hrvInfo = HRV_METRIC_INFO[result.physio_metric];
-
+// Significant correlation card
+function SignificantCorrelationCard({ corr }: { corr: DetailedCorrelation }) {
   return (
     <motion.div
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
-      className="p-4 rounded-lg border bg-card"
+      className="p-4 rounded-lg border bg-card hover:shadow-md transition-shadow"
     >
       <div className="flex items-start justify-between">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <Sun className="h-4 w-4 text-warning" />
-            <span className="font-medium">
-              {solarInfo?.name || result.solar_metric}
-            </span>
+        <div className="flex-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <Sun className="h-4 w-4 text-warning shrink-0" />
+            <span className="font-medium text-sm">{corr.solar_metric_name}</span>
             <span className="text-muted-foreground">↔</span>
-            <Heart className="h-4 w-4 text-danger" />
-            <span className="font-medium">
-              {hrvInfo?.name || result.physio_metric}
-            </span>
+            <Heart className="h-4 w-4 text-danger shrink-0" />
+            <span className="font-medium text-sm">{corr.physio_metric_name}</span>
           </div>
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Clock className="h-3 w-3" />
-            Lag: {result.lag_hours}h | n = {result.n_samples}
+            Lag: {corr.lag_hours}h | n = {corr.n_samples}
           </div>
         </div>
-        <div className="text-right">
+        <div className="text-right shrink-0">
           <p
             className="text-xl font-bold"
-            style={{ color: result.r > 0 ? SCIENTIFIC_COLORS.success : SCIENTIFIC_COLORS.danger }}
+            style={{ color: corr.r > 0 ? SCIENTIFIC_COLORS.success : SCIENTIFIC_COLORS.danger }}
           >
-            r = {result.r.toFixed(3)}
+            r = {corr.r.toFixed(3)}
           </p>
           <p className="text-xs text-muted-foreground">
-            p = {result.p_value.toFixed(4)}
+            p = {corr.p_value.toFixed(4)}
           </p>
         </div>
       </div>
       <Separator className="my-3" />
-      <div className="flex items-center justify-between">
-        <StrengthBadge strength={result.strength} />
+      <div className="flex items-center justify-between gap-2 flex-wrap">
         <Badge
           style={{
-            backgroundColor: significanceColors[result.significance] + "20",
-            color: significanceColors[result.significance],
+            backgroundColor: STRENGTH_COLORS[corr.strength] + "20",
+            color: STRENGTH_COLORS[corr.strength],
+            borderColor: STRENGTH_COLORS[corr.strength],
           }}
+          variant="outline"
         >
-          {result.significance.replace("_", " ")}
+          {corr.strength}
+        </Badge>
+        <Badge
+          style={{
+            backgroundColor: SIGNIFICANCE_COLORS[corr.significance] + "20",
+            color: SIGNIFICANCE_COLORS[corr.significance],
+            borderColor: SIGNIFICANCE_COLORS[corr.significance],
+          }}
+          variant="outline"
+        >
+          {corr.significance.replace(/_/g, " ")}
+        </Badge>
+        <Badge variant="outline">
+          95% CI: [{corr.ci_lower.toFixed(2)}, {corr.ci_upper.toFixed(2)}]
         </Badge>
       </div>
-      {result.interpretation && (
-        <p className="text-sm text-muted-foreground mt-3">
-          {result.interpretation}
-        </p>
-      )}
+      <p className="text-sm text-muted-foreground mt-3">{corr.interpretation}</p>
     </motion.div>
   );
 }
 
-export default function CorrelationsPage() {
-  const [data, setData] = React.useState<CorrelationAnalysisResult | null>(null);
-  const [loading, setLoading] = React.useState(false);
-  const activeUserId = useAppStore((state) => state.activeUserId);
-  const userId = activeUserId ?? DEFAULT_USER_ID;
+// Upload section component
+function UploadSection({
+  onUpload,
+  uploadResult,
+  loading,
+}: {
+  onUpload: (rr: number[]) => void;
+  uploadResult: RRUploadResponse | null;
+  loading: boolean;
+}) {
+  const [dragActive, setDragActive] = React.useState(false);
+  const inputRef = React.useRef<HTMLInputElement>(null);
 
-  const fetchCorrelations = React.useCallback(async () => {
+  const handleFile = async (file: File) => {
+    const text = await file.text();
+    const rr = parseRRFile(text);
+    if (rr.length >= 30) {
+      onUpload(rr);
+    } else {
+      alert(`Found only ${rr.length} valid RR intervals. Need at least 30.`);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer.files?.[0]) {
+      handleFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      handleFile(e.target.files[0]);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Upload className="h-5 w-5 text-primary" />
+          Upload RR Data
+        </CardTitle>
+        <CardDescription>
+          Upload a text file with RR intervals (ms) for correlation analysis
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <div
+          className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+            dragActive ? "border-primary bg-primary/5" : "border-muted"
+          }`}
+          onDragOver={(e) => { e.preventDefault(); setDragActive(true); }}
+          onDragLeave={() => setDragActive(false)}
+          onDrop={handleDrop}
+          onClick={() => inputRef.current?.click()}
+        >
+          <input
+            ref={inputRef}
+            type="file"
+            accept=".txt,.csv"
+            className="hidden"
+            onChange={handleChange}
+          />
+          <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+          <p className="text-sm font-medium">Drop RR file here or click to browse</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            Accepts .txt or .csv with RR intervals in ms
+          </p>
+        </div>
+
+        {loading && (
+          <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
+            <RefreshCw className="h-4 w-4 animate-spin" />
+            Processing RR data...
+          </div>
+        )}
+
+        {uploadResult && uploadResult.success && (
+          <div className="mt-4 p-3 bg-success/10 rounded-lg border border-success/20">
+            <div className="flex items-center gap-2 text-success font-medium">
+              <CheckCircle className="h-4 w-4" />
+              {uploadResult.message}
+            </div>
+            <div className="grid grid-cols-2 gap-2 mt-2 text-sm">
+              <div>Duration: {uploadResult.duration_minutes.toFixed(1)} min</div>
+              <div>Mean HR: {uploadResult.mean_hr_bpm.toFixed(0)} bpm</div>
+              <div>RMSSD: {uploadResult.rmssd?.toFixed(1) ?? "—"} ms</div>
+              <div>SDNN: {uploadResult.sdnn?.toFixed(1) ?? "—"} ms</div>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// NOAA status section
+function NOAAStatusSection({
+  noaaData,
+  onRefresh,
+  loading,
+}: {
+  noaaData: NOAADataResponse | null;
+  onRefresh: () => void;
+  loading: boolean;
+}) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Database className="h-5 w-5 text-warning" />
+          NOAA Space Weather Data
+        </CardTitle>
+        <CardDescription>
+          Live solar activity data for correlation analysis
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        <Button onClick={onRefresh} disabled={loading} className="w-full mb-4">
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+          Fetch NOAA Data
+        </Button>
+
+        {noaaData && Object.keys(noaaData.datasets).length > 0 && (
+          <div className="space-y-2">
+            {Object.entries(noaaData.datasets).map(([key, info]) => (
+              <div key={key} className="p-2 bg-muted/50 rounded text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{info.title}</span>
+                  <Badge variant="outline" className="text-xs">
+                    {info.rows_available} pts
+                  </Badge>
+                </div>
+                {info.time_range && (
+                  <p className="text-xs text-muted-foreground mt-1 truncate">
+                    {info.time_range}
+                  </p>
+                )}
+              </div>
+            ))}
+            <p className="text-xs text-muted-foreground">
+              Fetched: {new Date(noaaData.fetched_at).toLocaleString()}
+            </p>
+          </div>
+        )}
+
+        {noaaData && Object.keys(noaaData.errors).length > 0 && (
+          <div className="mt-2 p-2 bg-warning/10 rounded text-xs text-warning">
+            <AlertTriangle className="h-3 w-3 inline mr-1" />
+            Some data sources unavailable
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Main Page Component
+// ---------------------------------------------------------------------------
+
+export default function CorrelationsPage() {
+  const [correlationData, setCorrelationData] = React.useState<ComprehensiveCorrelationResponse | null>(null);
+  const [noaaData, setNoaaData] = React.useState<NOAADataResponse | null>(null);
+  const [uploadResult, setUploadResult] = React.useState<RRUploadResponse | null>(null);
+  const [loading, setLoading] = React.useState(false);
+  const [uploadLoading, setUploadLoading] = React.useState(false);
+  const [noaaLoading, setNoaaLoading] = React.useState(false);
+
+  const activeUserId = useAppStore((state) => state.activeUserId);
+
+  // Fetch NOAA data
+  const fetchNOAA = React.useCallback(async () => {
+    setNoaaLoading(true);
+    try {
+      const data = await getNOAADatasets(30);
+      setNoaaData(data);
+    } catch (error) {
+      console.error("NOAA fetch error:", error);
+    } finally {
+      setNoaaLoading(false);
+    }
+  }, []);
+
+  // Handle RR upload
+  const handleRRUpload = React.useCallback(async (rr: number[]) => {
+    setUploadLoading(true);
+    try {
+      const result = await uploadRRData({
+        rr_intervals_ms: rr,
+        recording_timestamp: new Date().toISOString(),
+        source: "uploaded",
+      });
+      setUploadResult(result);
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert("Failed to process RR data: " + (error instanceof Error ? error.message : "Unknown error"));
+    } finally {
+      setUploadLoading(false);
+    }
+  }, []);
+
+  // Run correlation analysis
+  const runAnalysis = React.useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getHRVSpaceWeatherCorrelations(userId);
-      setData(result);
+      const result = await runCorrelationAnalysis({
+        session_id: uploadResult?.session_id,
+        user_id: activeUserId ?? undefined,
+        max_lag_hours: 72,
+      });
+      setCorrelationData(result);
     } catch (error) {
-      console.error("Failed to fetch correlations:", error);
+      console.error("Analysis error:", error);
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [uploadResult?.session_id, activeUserId]);
 
+  // Auto-fetch NOAA on mount
   React.useEffect(() => {
-    fetchCorrelations();
-  }, [fetchCorrelations]);
+    fetchNOAA();
+  }, [fetchNOAA]);
 
   return (
     <PageWrapper
       title="Solar-HRV Correlations"
-      description="Analyze relationships between space weather and physiological parameters"
+      description="Publication-quality analysis of space weather effects on physiological parameters"
     >
       <div className="space-y-6">
-        {/* Header */}
+        {/* Header Actions */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center justify-between flex-wrap gap-4"
         >
-          <div className="flex items-center gap-3">
-            {data && (
+          <div className="flex items-center gap-3 flex-wrap">
+            {correlationData && (
               <>
-                <Badge variant="outline">
-                  {data.n_days} days analyzed
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <Activity className="h-3 w-3" />
+                  {correlationData.n_days} days
+                </Badge>
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <Heart className="h-3 w-3" />
+                  {correlationData.n_hrv_samples} HRV samples
                 </Badge>
                 <Badge variant="success" className="flex items-center gap-1">
                   <CheckCircle className="h-3 w-3" />
-                  {data.significant_correlations.length} significant
+                  {correlationData.significant_correlations.length} significant
                 </Badge>
-                {data.optimal_lag_hours !== null && (
+                {correlationData.optimal_lag_hours !== null && (
                   <Badge variant="info" className="flex items-center gap-1">
                     <Clock className="h-3 w-3" />
-                    Optimal lag: {data.optimal_lag_hours}h
+                    Optimal lag: {correlationData.optimal_lag_hours}h
                   </Badge>
                 )}
               </>
             )}
           </div>
-          <Button onClick={fetchCorrelations} disabled={loading}>
-            <RefreshCw
-              className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`}
-            />
-            Run Analysis
+          <Button onClick={runAnalysis} disabled={loading} size="lg">
+            <Zap className={`h-4 w-4 mr-2 ${loading ? "animate-pulse" : ""}`} />
+            Run Correlation Analysis
           </Button>
         </motion.div>
 
-        {/* Charts Row */}
+        {/* Data Input Section */}
         <div className="grid gap-6 lg:grid-cols-2">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.1 }}
           >
-            <Card className="h-full">
-              <CardContent className="pt-6">
-                {data && data.all_correlations.length > 0 ? (
-                  <CorrelationHeatmap correlations={data.all_correlations} />
-                ) : (
-                  <div className="flex items-center justify-center h-[320px] text-muted-foreground">
-                    No correlation data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <UploadSection
+              onUpload={handleRRUpload}
+              uploadResult={uploadResult}
+              loading={uploadLoading}
+            />
           </motion.div>
-
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <Card className="h-full">
-              <CardContent className="pt-6">
-                {data && data.all_correlations.length > 0 ? (
-                  <LagAnalysisChart correlations={data.all_correlations} />
-                ) : (
-                  <div className="flex items-center justify-center h-[280px] text-muted-foreground">
-                    No lag data available
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+            <NOAAStatusSection
+              noaaData={noaaData}
+              onRefresh={fetchNOAA}
+              loading={noaaLoading}
+            />
           </motion.div>
         </div>
 
-        {/* Significant Correlations */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <GitCompare className="h-5 w-5 text-primary" />
-                Significant Correlations
-              </CardTitle>
-              <CardDescription>
-                Correlations with p &lt; 0.05
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {data?.significant_correlations.map((corr, idx) => (
-                  <CorrelationCard key={idx} result={corr} />
-                ))}
-                {(!data || data.significant_correlations.length === 0) && (
-                  <div className="col-span-full text-center py-8 text-muted-foreground">
-                    <Info className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                    <p>No significant correlations found</p>
-                    <p className="text-sm">
-                      Accumulate more data points for robust analysis
+        {/* Results Section */}
+        {correlationData && (
+          <>
+            {/* Correlation Heatmap */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-primary" />
+                    Correlation Matrix
+                  </CardTitle>
+                  <CardDescription>
+                    Heatmap showing Spearman correlations between solar activity and HRV metrics
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {correlationData.correlation_matrix.length > 0 ? (
+                    <CorrelationHeatmap
+                      matrix={correlationData.correlation_matrix}
+                      pMatrix={correlationData.p_value_matrix}
+                      solarLabels={correlationData.solar_labels}
+                      hrvLabels={correlationData.hrv_labels}
+                    />
+                  ) : (
+                    <div className="h-[380px] flex items-center justify-center text-muted-foreground">
+                      No correlation data available
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Lag Analysis & Timeline */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Clock className="h-5 w-5 text-info" />
+                      Lag Analysis
+                    </CardTitle>
+                    <CardDescription>
+                      How correlations vary with time delay (0-72 hours)
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {correlationData.lag_analyses.length > 0 ? (
+                      <LagAnalysisChart analyses={correlationData.lag_analyses} />
+                    ) : (
+                      <div className="h-[320px] flex items-center justify-center text-muted-foreground">
+                        No lag analysis available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.5 }}
+              >
+                <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-success" />
+                      Timeline Overlay
+                    </CardTitle>
+                    <CardDescription>
+                      HRV and space weather data over time
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {correlationData.timeline_data.length > 0 ? (
+                      <TimelineOverlay data={correlationData} />
+                    ) : (
+                      <div className="h-[350px] flex items-center justify-center text-muted-foreground">
+                        No timeline data available
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </div>
+
+            {/* Scatter Plots */}
+            {correlationData.significant_correlations.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.6 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <ScatterChart className="h-5 w-5 text-primary" />
+                      Significant Correlations - Scatter Plots
+                    </CardTitle>
+                    <CardDescription>
+                      Visual representation of the strongest relationships
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                      {correlationData.significant_correlations.slice(0, 6).map((corr, idx) => (
+                        <CorrelationScatter key={idx} corr={corr} />
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
+            {/* Significant Correlations Cards */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <GitCompare className="h-5 w-5 text-primary" />
+                    Significant Correlations (p &lt; 0.05)
+                  </CardTitle>
+                  <CardDescription>
+                    Statistically significant relationships with effect sizes and confidence intervals
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {correlationData.significant_correlations.map((corr, idx) => (
+                      <SignificantCorrelationCard key={idx} corr={corr} />
+                    ))}
+                    {correlationData.significant_correlations.length === 0 && (
+                      <div className="col-span-full text-center py-8 text-muted-foreground">
+                        <Info className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        <p>No significant correlations found</p>
+                        <p className="text-sm">Accumulate more data points for robust analysis</p>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+
+            {/* Insights & Recommendations */}
+            <div className="grid gap-6 lg:grid-cols-2">
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.8 }}
+              >
+                <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <TrendingUp className="h-5 w-5 text-info" />
+                      Pattern Insights
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-3">
+                      {correlationData.pattern_insights.map((insight, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <CheckCircle className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                          <span className="text-sm">{insight}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              </motion.div>
+
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.9 }}
+              >
+                <Card className="h-full">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <AlertTriangle className="h-5 w-5 text-warning" />
+                      Recommendations
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ul className="space-y-3">
+                      {correlationData.recommendations.map((rec, idx) => (
+                        <li key={idx} className="flex items-start gap-2">
+                          <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                          <span className="text-sm">{rec}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            </div>
+
+            {/* Methodology & References */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 1.0 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle>Methodology & Scientific Background</CardTitle>
+                </CardHeader>
+                <CardContent className="text-sm text-muted-foreground space-y-3">
+                  <div>
+                    <strong>Statistical Methods:</strong>
+                    <ul className="list-disc ml-5 mt-1 space-y-1">
+                      {correlationData.methodology_notes.map((note, idx) => (
+                        <li key={idx}>{note}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <Separator />
+                  <div>
+                    <strong>Scientific Background:</strong>
+                    <p className="mt-1">
+                      Multiple studies have documented associations between geomagnetic disturbances
+                      and autonomic nervous system activity. Effects typically appear with 12-36 hour delays
+                      (Alabdulgader et al., 2018; Vieira et al., 2022). Even modest correlations (r = 0.2-0.4)
+                      may be biologically meaningful given the complexity of physiological regulation.
                     </p>
                   </div>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+                  <div>
+                    <strong>Key References:</strong>
+                    <p className="text-xs mt-1">
+                      Alabdulgader A, et al. (2018). Human Heart Rhythm Sensitivity to Earth Local Magnetic
+                      Field Fluctuations. J Vibroeng. | Vieira CLZ, et al. (2022). Geomagnetic activity and
+                      HRV: A Review. Adv Space Res. | Stoupel E, et al. (2008). Space proton flux and
+                      cardiovascular deaths. Int J Biometeorol.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            </motion.div>
+          </>
+        )}
 
-        {/* Insights & Recommendations */}
-        <div className="grid gap-6 lg:grid-cols-2">
+        {/* Initial State - No Results Yet */}
+        {!correlationData && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
+            transition={{ delay: 0.3 }}
           >
-            <Card className="h-full">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5 text-info" />
-                  Pattern Insights
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3">
-                  {data?.pattern_insights.map((insight, idx) => (
-                    <li key={idx} className="flex items-start gap-2">
-                      <CheckCircle className="h-4 w-4 text-success mt-0.5 flex-shrink-0" />
-                      <span className="text-sm">{insight}</span>
-                    </li>
-                  ))}
-                </ul>
+            <Card>
+              <CardContent className="py-12 text-center">
+                <GitCompare className="h-12 w-12 mx-auto mb-4 text-muted-foreground opacity-50" />
+                <h3 className="text-lg font-medium mb-2">Ready for Analysis</h3>
+                <p className="text-muted-foreground max-w-md mx-auto">
+                  Upload RR interval data or use stored HRV recordings, then click
+                  "Run Correlation Analysis" to discover relationships between space weather
+                  and your physiological parameters.
+                </p>
               </CardContent>
             </Card>
           </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-          >
-            <Card className="h-full">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <AlertTriangle className="h-5 w-5 text-warning" />
-                  Recommendations
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <ul className="space-y-3">
-                  {data?.recommendations.map((rec, idx) => (
-                    <li key={idx} className="flex items-start gap-2">
-                      <Info className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                      <span className="text-sm">{rec}</span>
-                    </li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        {/* Scientific Context */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.6 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>Scientific Background</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground space-y-2">
-              <p>
-                <strong>Geomagnetic Activity & ANS:</strong> Multiple studies
-                have documented associations between geomagnetic disturbances
-                (measured by Kp, Dst indices) and autonomic nervous system
-                activity. Effects typically appear with 12-36 hour delays.
-              </p>
-              <p>
-                <strong>Correlation Interpretation:</strong> Due to the
-                complexity of physiological regulation, even modest correlations
-                (r = 0.2-0.4) may be biologically meaningful. Individual
-                sensitivity varies considerably.
-              </p>
-              <p>
-                <strong>Causality Note:</strong> Correlations do not imply
-                causation. Multiple confounding factors (sleep, activity,
-                stress) should be controlled when interpreting results.
-              </p>
-              <Separator className="my-3" />
-              <p className="text-xs">
-                References: Alabdulgader et al. (2018), Stoupel et al. (2008),
-                Otsuka et al. (2001)
-              </p>
-            </CardContent>
-          </Card>
-        </motion.div>
+        )}
       </div>
     </PageWrapper>
   );
