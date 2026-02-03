@@ -9,17 +9,20 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.9.15-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.9.16-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2026--02--01-blue)](CHANGELOG.md)
+[![Last Updated](https://img.shields.io/badge/Updated-2026--02--02-blue)](CHANGELOG.md)
 
 ---
 
 Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
 
+**NEW in v1.9.16**: **Comprehensive Crew Scheduling & Human Performance** — Full operational app implementation in TypeScript/Next.js frontend with Status Dashboard (IHPI gauges, alerts), Schedule management (activity cards, filters), Crew Management (full CRUD with comprehensive admin profile editor), and Performance metrics (Go/No-Go indicators). Includes 5-section tabbed profile editor covering identity, operational, biometrics, lifestyle, and medical fields.
+
 **NEW in v1.9.15**: **Research Frontend Expansion** — Added 11 dedicated TypeScript/Next.js research pages (Time Series, Frequency, Nonlinear, HRF, Windowed, Readiness, ANS Tests, Fatigue, Circadian, Population Norms, Timeline, Export, Science) with publication-grade ECharts, mock-data fallbacks, and reorganized sidebar navigation.
+
 **NEW in v1.9.14**: **TypeScript/Next.js Frontend** — Modern frontend under `frontend/` with FastAPI backend under `api/`. Features include crew dashboard, space weather gauges, HRV analysis with Poincaré plots, solar-HRV correlations, and Garmin integration. Run both with `.\start-frontend.ps1` (frontend port 3100, API port 8180).
 
 **NEW in v1.9.10**: **Space Weather Data Science (Single User)** — New streamlined research app (`app/space_weather_ds_app.py`) using the latest Streamlit (1.53.1) with a separate requirements file (`requirements_streamlit_latest.txt`) and performance profiles (Lightweight default, RTX 5070 GPU mode).
