@@ -865,3 +865,171 @@ export async function getGarminHistory(
     return [];
   }
 }
+
+// ---------------------------------------------------------------------------
+// Enhanced NOAA Data API (Phase 6)
+// ---------------------------------------------------------------------------
+
+import type {
+  NOAADataResponse,
+  RRUploadRequest,
+  RRUploadResponse,
+  ComprehensiveCorrelationResponse,
+  CorrelationRequest,
+} from "@/types/research";
+
+/**
+ * Get comprehensive NOAA space weather datasets for correlation analysis
+ */
+export async function getNOAADatasets(
+  days: number = 30,
+  sources: string = "planetary_k_index_3h,geospace_dst,solar_wind_wind,f107_flux"
+): Promise<NOAADataResponse> {
+  try {
+    const params = new URLSearchParams({
+      days: days.toString(),
+      sources,
+    });
+
+    const response = await fetch(
+      `${API_BASE}/api/research/space-weather/datasets?${params.toString()}`,
+      {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching NOAA datasets:", error);
+    return {
+      fetched_at: new Date().toISOString(),
+      sources: [],
+      datasets: {},
+      kp_data: [],
+      dst_data: [],
+      solar_wind_data: [],
+      errors: { fetch: error instanceof Error ? error.message : "Unknown error" },
+    };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// RR Upload API (Phase 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Upload RR interval data for analysis
+ */
+export async function uploadRRData(data: RRUploadRequest): Promise<RRUploadResponse> {
+  try {
+    const response = await fetch(`${API_BASE}/api/research/hrv/upload`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error uploading RR data:", error);
+    throw error;
+  }
+}
+
+/**
+ * Parse RR intervals from a text file
+ * Supports formats: one value per line, comma-separated, space-separated
+ */
+export function parseRRFile(content: string): number[] {
+  // Remove BOM if present
+  const cleaned = content.replace(/^\uFEFF/, "").trim();
+  
+  // Try different formats
+  let values: number[] = [];
+  
+  // Try one value per line
+  const lines = cleaned.split(/[\r\n]+/);
+  if (lines.length > 10) {
+    values = lines
+      .map((line) => parseFloat(line.trim()))
+      .filter((v) => !isNaN(v) && v > 0);
+  }
+  
+  // If not enough values, try comma-separated
+  if (values.length < 10) {
+    values = cleaned
+      .split(/[,;]+/)
+      .map((v) => parseFloat(v.trim()))
+      .filter((v) => !isNaN(v) && v > 0);
+  }
+  
+  // If still not enough, try space-separated
+  if (values.length < 10) {
+    values = cleaned
+      .split(/\s+/)
+      .map((v) => parseFloat(v.trim()))
+      .filter((v) => !isNaN(v) && v > 0);
+  }
+  
+  return values;
+}
+
+// ---------------------------------------------------------------------------
+// Comprehensive Correlation Analysis API (Phase 6)
+// ---------------------------------------------------------------------------
+
+/**
+ * Run comprehensive Solar-HRV correlation analysis
+ */
+export async function runCorrelationAnalysis(
+  request: CorrelationRequest
+): Promise<ComprehensiveCorrelationResponse> {
+  try {
+    const response = await fetch(`${API_BASE}/api/research/correlations/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error running correlation analysis:", error);
+    
+    // Return empty result
+    const now = new Date().toISOString();
+    return {
+      analysis_date: now,
+      data_start: now,
+      data_end: now,
+      n_days: 0,
+      n_hrv_samples: 0,
+      n_solar_samples: 0,
+      correlation_matrix: [],
+      p_value_matrix: [],
+      solar_labels: [],
+      hrv_labels: [],
+      significant_correlations: [],
+      all_correlations: [],
+      lag_analyses: [],
+      optimal_lag_hours: null,
+      timeline_data: [],
+      pattern_insights: ["Error running analysis: " + (error instanceof Error ? error.message : "Unknown error")],
+      recommendations: [],
+      methodology_notes: [],
+    };
+  }
+}
