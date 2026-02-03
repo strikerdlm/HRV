@@ -498,9 +498,9 @@ async def analyze_rr_intervals(
         )
         from hrv_fragmentation import compute_hrf_metrics
         
-        # Clean and validate
+        # Clean and validate - returns (cleaned_rr_ms, valid_mask, summary_dict)
         rr_array = np.array(rr_intervals, dtype=float)
-        cleaned, mask = await asyncio.to_thread(clean_rr_intervals, rr_array)
+        cleaned, mask, summary = await asyncio.to_thread(clean_rr_intervals, rr_array)
         
         if len(cleaned) < 30:
             raise HTTPException(status_code=400, detail="Not enough valid RR intervals (min 30)")
@@ -515,7 +515,8 @@ async def analyze_rr_intervals(
         # Compute HRF
         hrf = await asyncio.to_thread(compute_hrf_metrics, cleaned)
         
-        artifact_pct = (1 - len(cleaned) / len(rr_array)) * 100 if len(rr_array) > 0 else 0
+        # Use artifact percentage from cleaning summary
+        artifact_pct = summary.get("flagged_pct", 0.0)
         
         return HRVAnalysisResult(
             duration_minutes=len(cleaned) * np.mean(cleaned) / 60000,
