@@ -445,38 +445,38 @@ async def get_latest_hrv_analysis(user_id: str) -> HRVAnalysisResult:
             return HRVAnalysisResult()
         
         latest = history[0]
-        metrics = latest.hrv_metrics or {}
         
+        # Use direct fields from HRVMeasurement dataclass
         return HRVAnalysisResult(
-            recording_time=latest.recorded_at.isoformat() if latest.recorded_at else None,
-            duration_minutes=metrics.get("duration_min"),
-            total_beats=metrics.get("n_beats"),
-            artifact_percentage=metrics.get("artifact_pct"),
+            recording_time=latest.recording_start_utc or latest.measurement_date,
+            duration_minutes=latest.recording_duration_min,
+            total_beats=None,  # Not stored in HRVMeasurement
+            artifact_percentage=latest.artifact_percentage,
             time_domain=HRVTimeDomain(
-                mean_hr=metrics.get("mean_hr"),
-                sdnn=metrics.get("sdnn"),
-                rmssd=metrics.get("rmssd"),
-                pnn50=metrics.get("pnn50"),
-                cvnn=metrics.get("cvnn"),
-                mean_rr=metrics.get("mean_rr"),
+                mean_hr=latest.mean_hr_bpm,
+                sdnn=latest.sdnn_ms,
+                rmssd=latest.rmssd_ms,
+                pnn50=latest.pnn50_pct,
+                cvnn=None,  # Not stored
+                mean_rr=latest.mean_rr_ms,
             ),
             frequency_domain=HRVFrequencyDomain(
-                vlf_power=metrics.get("vlf_power"),
-                lf_power=metrics.get("lf_power"),
-                hf_power=metrics.get("hf_power"),
-                total_power=metrics.get("total_power"),
-                lf_hf_ratio=metrics.get("lf_hf_ratio"),
+                vlf_power=latest.vlf_power_ms2,
+                lf_power=latest.lf_power_ms2,
+                hf_power=latest.hf_power_ms2,
+                total_power=latest.total_power_ms2,
+                lf_hf_ratio=latest.lf_hf_ratio,
             ),
             nonlinear=HRVNonlinear(
-                sd1=metrics.get("sd1"),
-                sd2=metrics.get("sd2"),
-                dfa_alpha1=metrics.get("dfa_alpha1"),
-                sample_entropy=metrics.get("sample_entropy"),
+                sd1=latest.sd1_ms,
+                sd2=latest.sd2_ms,
+                dfa_alpha1=latest.dfa_alpha1,
+                sample_entropy=latest.sample_entropy,
             ),
             hrf=HRFMetrics(
-                pip=metrics.get("pip"),
-                ials=metrics.get("ials"),
-                pss=metrics.get("pss"),
+                pip=None,  # Not stored in HRVMeasurement
+                ials=None,
+                pss=None,
             ),
         )
     except Exception as exc:
@@ -967,6 +967,7 @@ async def get_hrv_timeseries(
 ) -> RRTimeSeriesResponse:
     """Get RR interval time series with deviation zones for visualization."""
     try:
+        import json
         import numpy as np
         from user_database import UserDatabase
         
@@ -979,7 +980,14 @@ async def get_hrv_timeseries(
             return RRTimeSeriesResponse()
         
         latest = history[0]
-        rr_data = latest.rr_intervals_ms or []
+        
+        # Parse RR intervals from JSON field
+        rr_data: List[float] = []
+        if latest.rr_intervals_json:
+            try:
+                rr_data = json.loads(latest.rr_intervals_json)
+            except (json.JSONDecodeError, TypeError):
+                pass
         
         if not rr_data:
             return RRTimeSeriesResponse()
@@ -988,7 +996,20 @@ async def get_hrv_timeseries(
         
         # Generate timestamps (cumulative from RR intervals)
         cumulative_ms = np.cumsum(rr_array)
-        start_time = latest.recorded_at or datetime.now(timezone.utc)
+        
+        # Parse start time from available fields
+        start_time = datetime.now(timezone.utc)
+        if latest.recording_start_utc:
+            try:
+                start_time = datetime.fromisoformat(latest.recording_start_utc.replace("Z", "+00:00"))
+            except ValueError:
+                pass
+        elif latest.measurement_date:
+            try:
+                start_time = datetime.fromisoformat(latest.measurement_date.replace("Z", "+00:00"))
+            except ValueError:
+                pass
+        
         timestamps = [
             (start_time + timedelta(milliseconds=float(ms))).isoformat()
             for ms in cumulative_ms
@@ -1378,6 +1399,7 @@ async def get_hrv_windowed(
 ) -> WindowedMetricsResponse:
     """Get windowed HRV analysis over time with trend detection."""
     try:
+        import json
         import numpy as np
         import pandas as pd
         from user_database import UserDatabase
@@ -1390,7 +1412,14 @@ async def get_hrv_windowed(
             return WindowedMetricsResponse()
         
         latest = history[0]
-        rr_data = latest.rr_intervals_ms or []
+        
+        # Parse RR intervals from JSON field
+        rr_data: List[float] = []
+        if latest.rr_intervals_json:
+            try:
+                rr_data = json.loads(latest.rr_intervals_json)
+            except (json.JSONDecodeError, TypeError):
+                pass
         
         if len(rr_data) < 100:
             return WindowedMetricsResponse()
@@ -1399,7 +1428,19 @@ async def get_hrv_windowed(
         
         # Create DataFrame with cumulative timestamps
         cumulative_ms = np.cumsum(rr_array)
-        start_time = latest.recorded_at or datetime.now(timezone.utc)
+        
+        # Parse start time from available fields
+        start_time = datetime.now(timezone.utc)
+        if latest.recording_start_utc:
+            try:
+                start_time = datetime.fromisoformat(latest.recording_start_utc.replace("Z", "+00:00"))
+            except ValueError:
+                pass
+        elif latest.measurement_date:
+            try:
+                start_time = datetime.fromisoformat(latest.measurement_date.replace("Z", "+00:00"))
+            except ValueError:
+                pass
         
         df = pd.DataFrame({
             "timestamp": [start_time + timedelta(milliseconds=float(ms)) for ms in cumulative_ms],
@@ -1640,15 +1681,15 @@ async def get_hrv_readiness(user_id: str) -> ReadinessResponse:
         if not history:
             return ReadinessResponse(recommendations=["No HRV data available. Record morning HRV for baseline."])
         
-        # Extract RMSSD values (primary readiness metric)
+        # Extract RMSSD values (primary readiness metric) from HRVMeasurement fields
         rmssd_values = []
         dates = []
         for h in reversed(history):  # Oldest first
-            metrics = h.hrv_metrics or {}
-            rmssd = metrics.get("rmssd")
+            # Use direct field from HRVMeasurement
+            rmssd = h.rmssd_ms
             if rmssd is not None:
                 rmssd_values.append(rmssd)
-                dates.append(h.recorded_at.strftime("%Y-%m-%d") if h.recorded_at else "")
+                dates.append(h.measurement_date or "")
         
         if not rmssd_values:
             return ReadinessResponse(recommendations=["No RMSSD data available"])
@@ -1690,11 +1731,11 @@ async def get_hrv_readiness(user_id: str) -> ReadinessResponse:
         else:
             trend = "stable"
         
-        # Components
-        latest_metrics = history[0].hrv_metrics or {}
+        # Components - use direct fields from HRVMeasurement
+        latest = history[0]
         components = []
         
-        rmssd_val = latest_metrics.get("rmssd", 0)
+        rmssd_val = latest.rmssd_ms or 0
         components.append(ReadinessComponent(
             name="RMSSD",
             value=rmssd_val,
@@ -1703,7 +1744,7 @@ async def get_hrv_readiness(user_id: str) -> ReadinessResponse:
             status="good" if rmssd_val > 30 else "warning" if rmssd_val > 20 else "poor",
         ))
         
-        hf_power = latest_metrics.get("hf_power", 0)
+        hf_power = latest.hf_power_ms2 or 0
         components.append(ReadinessComponent(
             name="HF Power",
             value=hf_power,
@@ -2060,9 +2101,9 @@ async def get_population_norms(
                 # Get user's latest HRV
                 history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
                 if history:
-                    metrics = history[0].hrv_metrics or {}
-                    user_rmssd = metrics.get("rmssd")
-                    user_sdnn = metrics.get("sdnn")
+                    # Use direct fields from HRVMeasurement
+                    user_rmssd = history[0].rmssd_ms
+                    user_sdnn = history[0].sdnn_ms
                     
                     # Calculate percentile
                     norm = next((n for n in norms if n.age_range == age_group), None)
@@ -2505,12 +2546,22 @@ async def run_correlation_analysis(request: CorrelationRequest) -> Comprehensive
             db = UserDatabase()
             history = await asyncio.to_thread(db.get_hrv_history, request.user_id, limit=30)
             if history:
-                # Build daily HRV dataframe
+                # Build daily HRV dataframe from HRVMeasurement fields
                 hrv_records = []
                 for h in history:
-                    if h.hrv_metrics and h.recorded_at:
-                        record = {"date": h.recorded_at.date()}
-                        record.update(h.hrv_metrics)
+                    if h.rmssd_ms is not None and h.measurement_date:
+                        try:
+                            date_val = datetime.fromisoformat(h.measurement_date.replace("Z", "+00:00")).date()
+                        except ValueError:
+                            continue
+                        record = {
+                            "date": date_val,
+                            "rmssd": h.rmssd_ms,
+                            "sdnn": h.sdnn_ms,
+                            "mean_hr": h.mean_hr_bpm,
+                            "lf_hf_ratio": h.lf_hf_ratio,
+                            "pnn50": h.pnn50_pct,
+                        }
                         hrv_records.append(record)
                 if hrv_records:
                     hrv_df = pd.DataFrame(hrv_records)
@@ -2772,39 +2823,46 @@ async def export_hrv_data(
         if not history:
             raise HTTPException(status_code=404, detail="No HRV data found for user")
         
-        # Prepare data
+        # Prepare data using HRVMeasurement fields
         records = []
         for h in history:
             record = {
-                "date": h.recorded_at.isoformat() if h.recorded_at else None,
-                "duration_min": h.hrv_metrics.get("duration_min") if h.hrv_metrics else None,
+                "date": h.recording_start_utc or h.measurement_date,
+                "duration_min": h.recording_duration_min,
             }
             
-            if h.hrv_metrics:
-                if request.include_frequency:
-                    record.update({
-                        "rmssd": h.hrv_metrics.get("rmssd"),
-                        "sdnn": h.hrv_metrics.get("sdnn"),
-                        "pnn50": h.hrv_metrics.get("pnn50"),
-                        "mean_hr": h.hrv_metrics.get("mean_hr"),
-                    })
-                if request.include_frequency:
-                    record.update({
-                        "lf_power": h.hrv_metrics.get("lf_power"),
-                        "hf_power": h.hrv_metrics.get("hf_power"),
-                        "lf_hf_ratio": h.hrv_metrics.get("lf_hf_ratio"),
-                    })
-                if request.include_nonlinear:
-                    record.update({
-                        "sd1": h.hrv_metrics.get("sd1"),
-                        "sd2": h.hrv_metrics.get("sd2"),
-                        "dfa_alpha1": h.hrv_metrics.get("dfa_alpha1"),
-                    })
-                if request.include_hrf:
-                    record.update({
-                        "pip": h.hrv_metrics.get("pip"),
-                        "ials": h.hrv_metrics.get("ials"),
-                    })
+            # Always include time domain metrics
+            record.update({
+                "rmssd": h.rmssd_ms,
+                "sdnn": h.sdnn_ms,
+                "pnn50": h.pnn50_pct,
+                "mean_hr": h.mean_hr_bpm,
+                "mean_rr": h.mean_rr_ms,
+            })
+            
+            if request.include_frequency:
+                record.update({
+                    "lf_power": h.lf_power_ms2,
+                    "hf_power": h.hf_power_ms2,
+                    "vlf_power": h.vlf_power_ms2,
+                    "lf_hf_ratio": h.lf_hf_ratio,
+                    "total_power": h.total_power_ms2,
+                })
+            
+            if request.include_nonlinear:
+                record.update({
+                    "sd1": h.sd1_ms,
+                    "sd2": h.sd2_ms,
+                    "dfa_alpha1": h.dfa_alpha1,
+                    "dfa_alpha2": h.dfa_alpha2,
+                    "sample_entropy": h.sample_entropy,
+                })
+            
+            if request.include_hrf:
+                record.update({
+                    "pip": None,  # Not stored in HRVMeasurement
+                    "ials": None,
+                })
             
             records.append(record)
         
@@ -2838,10 +2896,20 @@ async def export_hrv_data(
             content_type = "text/csv"
             filename = f"hrv_export_{user_id}_{now.strftime('%Y%m%d')}.csv"
         
-        # Calculate date range
-        dates = [h.recorded_at for h in history if h.recorded_at]
-        if dates:
-            date_range = f"{min(dates).strftime('%Y-%m-%d')} to {max(dates).strftime('%Y-%m-%d')}"
+        # Calculate date range from measurement_date strings
+        date_strs = [h.measurement_date for h in history if h.measurement_date]
+        if date_strs:
+            # Parse date strings and find range
+            parsed_dates = []
+            for d in date_strs:
+                try:
+                    parsed_dates.append(datetime.fromisoformat(d.replace("Z", "+00:00")))
+                except ValueError:
+                    pass
+            if parsed_dates:
+                date_range = f"{min(parsed_dates).strftime('%Y-%m-%d')} to {max(parsed_dates).strftime('%Y-%m-%d')}"
+            else:
+                date_range = "N/A"
         else:
             date_range = "N/A"
         
