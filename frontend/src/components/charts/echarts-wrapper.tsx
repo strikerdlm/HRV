@@ -198,12 +198,12 @@ export function EChartsWrapper({
       ...option,
     };
 
-    // Apply dark colors to axes
+    // Apply dark colors and clean styling to axes
     if (option.xAxis) {
-      baseOption.xAxis = applyAxisStyles(option.xAxis);
+      baseOption.xAxis = applyAxisStyles(option.xAxis, true);
     }
     if (option.yAxis) {
-      baseOption.yAxis = applyAxisStyles(option.yAxis);
+      baseOption.yAxis = applyAxisStyles(option.yAxis, false);
     }
 
     return baseOption;
@@ -230,10 +230,40 @@ export function EChartsWrapper({
   );
 }
 
-// Apply dark colors to axis configuration (per project rules)
-function applyAxisStyles(axis: any): any {
+// Apply dark colors and clean styling to axis configuration (per project rules)
+function applyAxisStyles(axis: any, isXAxis: boolean = false): any {
   if (Array.isArray(axis)) {
-    return axis.map((a) => applyAxisStyles(a));
+    return axis.map((a) => applyAxisStyles(a, isXAxis));
+  }
+
+  // Calculate smart interval for x-axis to prevent label overlap
+  const axisLabelDefaults: Record<string, unknown> = {
+    color: SCIENTIFIC_COLORS.textPrimary,
+    fontSize: 11,
+    hideOverlap: true,  // ECharts 5+ feature to hide overlapping labels
+  };
+
+  // For x-axis with category data, add auto-interval and rotation
+  if (isXAxis) {
+    const dataLength = axis.data?.length || 0;
+    
+    // Smart interval: show fewer labels when there's lots of data
+    if (dataLength > 100) {
+      axisLabelDefaults.interval = Math.ceil(dataLength / 10) - 1;
+      axisLabelDefaults.rotate = 0; // Keep horizontal when showing few
+    } else if (dataLength > 50) {
+      axisLabelDefaults.interval = Math.ceil(dataLength / 15) - 1;
+      axisLabelDefaults.rotate = 45;
+      axisLabelDefaults.align = "right";
+    } else if (dataLength > 20) {
+      axisLabelDefaults.interval = Math.ceil(dataLength / 10) - 1;
+      axisLabelDefaults.rotate = 0;
+    }
+    
+    // For time/date labels, use more spacing
+    if (axis.type === "time") {
+      axisLabelDefaults.hideOverlap = true;
+    }
   }
 
   return {
@@ -245,13 +275,14 @@ function applyAxisStyles(axis: any): any {
       ...(axis.axisLine || {}),
     },
     axisLabel: {
-      color: SCIENTIFIC_COLORS.textPrimary,
+      ...axisLabelDefaults,
       ...(axis.axisLabel || {}),
     },
     axisTick: {
       lineStyle: {
         color: SCIENTIFIC_COLORS.axisLine,
       },
+      alignWithLabel: true,
       ...(axis.axisTick || {}),
     },
     splitLine: {
