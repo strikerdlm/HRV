@@ -101,7 +101,16 @@ function UnifiedTimelineChart({ days }: { days: number }) {
         type: "category",
         data: data.dates,
         gridIndex: 1,
-        axisLabel: { color: SCIENTIFIC_COLORS.textPrimary, rotate: 45 },
+        axisLabel: {
+          color: SCIENTIFIC_COLORS.textPrimary,
+          rotate: 45,
+          interval: Math.max(0, Math.ceil(data.dates.length / 12) - 1),
+          showMinLabel: true,
+          showMaxLabel: true,
+          fontSize: 10,
+          align: "right",
+        },
+        axisTick: { alignWithLabel: true },
       },
     ],
     yAxis: [
