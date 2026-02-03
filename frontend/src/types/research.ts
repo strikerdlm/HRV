@@ -701,3 +701,158 @@ export const FRAGMENTATION_COLORS: Record<HRFResponse["fragmentation_level"], st
   elevated: "#f39c12",
   high: "#e74c3c",
 };
+
+// ---------------------------------------------------------------------------
+// Enhanced NOAA Data Types (Phase 6 - Correlations)
+// ---------------------------------------------------------------------------
+
+export interface NOAADatasetInfo {
+  key: string;
+  title: string;
+  description: string;
+  value_columns: string[];
+  units: Record<string, string>;
+  cadence_minutes: number | null;
+  rows_available: number;
+  latest_value: Record<string, unknown> | null;
+  time_range: string | null;
+}
+
+export interface NOAADataResponse {
+  fetched_at: string;
+  sources: string[];
+  datasets: Record<string, NOAADatasetInfo>;
+  kp_data: Array<{ timestamp: string; kp: number | null }>;
+  dst_data: Array<{ timestamp: string; dst: number | null }>;
+  solar_wind_data: Array<{ timestamp: string; speed: number | null; density: number | null }>;
+  errors: Record<string, string>;
+}
+
+// ---------------------------------------------------------------------------
+// RR Upload Types (Phase 6 - Correlations)
+// ---------------------------------------------------------------------------
+
+export interface RRUploadRequest {
+  rr_intervals_ms: number[];
+  recording_timestamp?: string;
+  source?: string;
+}
+
+export interface RRUploadResponse {
+  success: boolean;
+  n_intervals: number;
+  duration_minutes: number;
+  mean_rr_ms: number;
+  mean_hr_bpm: number;
+  sdnn: number | null;
+  rmssd: number | null;
+  pnn50: number | null;
+  artifact_percentage: number;
+  quality_status: "good" | "moderate" | "poor";
+  session_id: string;
+  message: string;
+}
+
+// ---------------------------------------------------------------------------
+// Enhanced Correlation Analysis Types (Phase 6)
+// ---------------------------------------------------------------------------
+
+export interface DetailedCorrelation {
+  solar_metric: string;
+  solar_metric_name: string;
+  physio_metric: string;
+  physio_metric_name: string;
+  lag_hours: number;
+  r: number;
+  r_squared: number;
+  p_value: number;
+  n_samples: number;
+  significance: SignificanceLevel;
+  strength: CorrelationStrength;
+  direction: "positive" | "negative";
+  solar_values: number[];
+  hrv_values: number[];
+  ci_lower: number;
+  ci_upper: number;
+  interpretation: string;
+}
+
+export interface LagAnalysis {
+  solar_metric: string;
+  hrv_metric: string;
+  lags: number[];
+  correlations: number[];
+  p_values: number[];
+  optimal_lag: number;
+  optimal_r: number;
+  optimal_p: number;
+}
+
+export interface TimelineDataPoint {
+  date: string;
+  kp?: number;
+  rmssd?: number;
+  dst?: number;
+  [key: string]: string | number | undefined;
+}
+
+export interface ComprehensiveCorrelationResponse {
+  analysis_date: string;
+  data_start: string;
+  data_end: string;
+  n_days: number;
+  n_hrv_samples: number;
+  n_solar_samples: number;
+  
+  // Matrix data for heatmap
+  correlation_matrix: number[][];
+  p_value_matrix: number[][];
+  solar_labels: string[];
+  hrv_labels: string[];
+  
+  // Detailed results
+  significant_correlations: DetailedCorrelation[];
+  all_correlations: DetailedCorrelation[];
+  
+  // Lag analysis
+  lag_analyses: LagAnalysis[];
+  optimal_lag_hours: number | null;
+  
+  // Timeline for overlay plot
+  timeline_data: TimelineDataPoint[];
+  
+  // Insights
+  pattern_insights: string[];
+  recommendations: string[];
+  methodology_notes: string[];
+}
+
+export interface CorrelationRequest {
+  session_id?: string;
+  user_id?: string;
+  start_date?: string;
+  end_date?: string;
+  max_lag_hours?: number;
+  solar_metrics?: string[];
+  hrv_metrics?: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Significance Color Map
+// ---------------------------------------------------------------------------
+
+export const SIGNIFICANCE_COLORS: Record<SignificanceLevel, string> = {
+  not_significant: "#64748b",
+  marginal: "#f59e0b",
+  significant: "#22c55e",
+  highly_significant: "#3b82f6",
+  very_highly_significant: "#8b5cf6",
+};
+
+export const STRENGTH_COLORS: Record<CorrelationStrength, string> = {
+  negligible: "#94a3b8",
+  weak: "#60a5fa",
+  moderate: "#fbbf24",
+  strong: "#22c55e",
+  very_strong: "#ef4444",
+};
