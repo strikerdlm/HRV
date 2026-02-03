@@ -2301,8 +2301,8 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
         
         rr_array = np.array(data.rr_intervals_ms, dtype=float)
         
-        # Clean data
-        cleaned, mask = await asyncio.to_thread(clean_rr_intervals, rr_array)
+        # Clean data - returns (cleaned_rr_ms, valid_mask, summary_dict)
+        cleaned, mask, summary = await asyncio.to_thread(clean_rr_intervals, rr_array)
         
         if len(cleaned) < 30:
             raise HTTPException(
@@ -2314,7 +2314,8 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
         mean_rr = float(np.mean(cleaned))
         mean_hr = 60000.0 / mean_rr
         duration_min = float(np.sum(cleaned)) / 60000.0
-        artifact_pct = (1 - len(cleaned) / len(rr_array)) * 100 if len(rr_array) > 0 else 0
+        # Use artifact percentage from the cleaning summary
+        artifact_pct = summary.get("flagged_pct", 0.0)
         
         # Compute HRV metrics
         metrics = await asyncio.to_thread(compute_comprehensive_hrv, cleaned)
