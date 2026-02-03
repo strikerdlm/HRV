@@ -131,48 +131,146 @@ function NormsBarChart({ norms, metric }: { norms: AgeNorm[]; metric: string }) 
   return <EChartsWrapper option={option} height={350} />;
 }
 
-// Percentile Box Plot
+// Percentile Box Plot - Custom rendering for reliable display
 function PercentileBoxPlot({ norms }: { norms: AgeNorm[] }) {
+  const metricLabel = norms[0]?.metric === "rmssd" ? "RMSSD (ms)" : 
+                      norms[0]?.metric === "sdnn" ? "SDNN (ms)" : 
+                      norms[0]?.metric ?? "Value";
+  
+  // Calculate y-axis bounds
+  const allValues = norms.flatMap(n => [n.p5, n.p95]);
+  const minY = Math.floor(Math.min(...allValues) * 0.9);
+  const maxY = Math.ceil(Math.max(...allValues) * 1.1);
+  
   const option: Record<string, unknown> = {
     title: {
       text: "Percentile Distribution by Age Group",
-      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 14 },
+      subtext: "Box: P25-P75 (IQR) | Whiskers: P5-P95 | Line: Median (P50)",
+      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 14, fontWeight: "bold" },
+      subtextStyle: { color: SCIENTIFIC_COLORS.textSecondary, fontSize: 10 },
     },
-    grid: { left: 60, right: 30, top: 50, bottom: 40 },
+    grid: { left: 70, right: 30, top: 70, bottom: 50 },
     xAxis: {
       type: "category",
       data: norms.map((n) => n.age_range),
-      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary },
+      name: "Age Group",
+      nameLocation: "middle",
+      nameGap: 30,
+      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 11 },
+      nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+      axisTick: { alignWithLabel: true },
     },
     yAxis: {
       type: "value",
-      name: norms[0]?.metric ?? "Value",
+      name: metricLabel,
+      min: minY,
+      max: maxY,
       axisLabel: { color: SCIENTIFIC_COLORS.textPrimary },
       nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+      splitLine: { lineStyle: { color: "rgba(0,0,0,0.1)" } },
     },
     series: [
+      // P5-P95 whisker line (vertical line)
       {
-        type: "boxplot",
-        data: norms.map((n) => [n.p5, n.p25, n.p50, n.p75, n.p95]),
-        itemStyle: {
-          color: "rgba(52, 152, 219, 0.3)",
-          borderColor: SCIENTIFIC_COLORS.primary,
+        type: "custom",
+        name: "P5-P95 Range",
+        renderItem: (
+          params: { dataIndex: number },
+          api: { 
+            value: (idx: number) => number; 
+            coord: (val: [number, number]) => [number, number];
+            size: (val: [number, number]) => [number, number];
+          }
+        ) => {
+          const idx = params.dataIndex;
+          const norm = norms[idx];
+          if (!norm) return { type: "group", children: [] };
+          
+          const x = api.coord([idx, 0])[0];
+          const yP5 = api.coord([idx, norm.p5])[1];
+          const yP25 = api.coord([idx, norm.p25])[1];
+          const yP50 = api.coord([idx, norm.p50])[1];
+          const yP75 = api.coord([idx, norm.p75])[1];
+          const yP95 = api.coord([idx, norm.p95])[1];
+          
+          const boxWidth = 40;
+          const whiskerWidth = 20;
+
+          return {
+            type: "group",
+            children: [
+              // Lower whisker (P5)
+              {
+                type: "line",
+                shape: { x1: x - whiskerWidth / 2, y1: yP5, x2: x + whiskerWidth / 2, y2: yP5 },
+                style: { stroke: SCIENTIFIC_COLORS.textSecondary, lineWidth: 2 },
+              },
+              // Upper whisker (P95)
+              {
+                type: "line",
+                shape: { x1: x - whiskerWidth / 2, y1: yP95, x2: x + whiskerWidth / 2, y2: yP95 },
+                style: { stroke: SCIENTIFIC_COLORS.textSecondary, lineWidth: 2 },
+              },
+              // Vertical line from P5 to P25
+              {
+                type: "line",
+                shape: { x1: x, y1: yP5, x2: x, y2: yP25 },
+                style: { stroke: SCIENTIFIC_COLORS.textSecondary, lineWidth: 1, lineDash: [3, 3] },
+              },
+              // Vertical line from P75 to P95
+              {
+                type: "line",
+                shape: { x1: x, y1: yP75, x2: x, y2: yP95 },
+                style: { stroke: SCIENTIFIC_COLORS.textSecondary, lineWidth: 1, lineDash: [3, 3] },
+              },
+              // Box (P25 to P75)
+              {
+                type: "rect",
+                shape: {
+                  x: x - boxWidth / 2,
+                  y: Math.min(yP25, yP75),
+                  width: boxWidth,
+                  height: Math.abs(yP75 - yP25),
+                },
+                style: {
+                  fill: "rgba(52, 152, 219, 0.3)",
+                  stroke: SCIENTIFIC_COLORS.primary,
+                  lineWidth: 2,
+                },
+              },
+              // Median line (P50)
+              {
+                type: "line",
+                shape: { x1: x - boxWidth / 2, y1: yP50, x2: x + boxWidth / 2, y2: yP50 },
+                style: { stroke: SCIENTIFIC_COLORS.danger, lineWidth: 2 },
+              },
+            ],
+          };
         },
+        data: norms.map((_, i) => i),
+        z: 10,
       },
     ],
     tooltip: {
-      trigger: "item",
-      formatter: (params: { name: string; value: number[] }) =>
-        `<strong>${params.name}</strong><br/>
-         P5: ${params.value[0]}<br/>
-         P25: ${params.value[1]}<br/>
-         P50: ${params.value[2]}<br/>
-         P75: ${params.value[3]}<br/>
-         P95: ${params.value[4]}`,
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: (params: Array<{ dataIndex: number }>) => {
+        if (params[0]) {
+          const norm = norms[params[0].dataIndex];
+          if (norm) {
+            return `<strong style="font-size: 13px">${norm.age_range}</strong><br/>
+                    <span style="color: ${SCIENTIFIC_COLORS.danger}">●</span> <b>Median (P50):</b> ${norm.p50.toFixed(0)}<br/>
+                    <span style="color: ${SCIENTIFIC_COLORS.primary}">■</span> <b>IQR (P25-P75):</b> ${norm.p25.toFixed(0)} - ${norm.p75.toFixed(0)}<br/>
+                    <span style="color: ${SCIENTIFIC_COLORS.textSecondary}">┃</span> <b>Range (P5-P95):</b> ${norm.p5.toFixed(0)} - ${norm.p95.toFixed(0)}<br/>
+                    <b>Mean ± SD:</b> ${norm.mean.toFixed(1)} ± ${norm.std.toFixed(1)}`;
+          }
+        }
+        return "";
+      },
     },
   };
 
-  return <EChartsWrapper option={option} height={300} />;
+  return <EChartsWrapper option={option} height={350} />;
 }
 
 // Norm Table
