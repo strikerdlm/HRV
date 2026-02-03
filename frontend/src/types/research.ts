@@ -724,7 +724,17 @@ export interface NOAADataResponse {
   datasets: Record<string, NOAADatasetInfo>;
   kp_data: Array<{ timestamp: string; kp: number | null }>;
   dst_data: Array<{ timestamp: string; dst: number | null }>;
-  solar_wind_data: Array<{ timestamp: string; speed: number | null; density: number | null }>;
+  solar_wind_data: Array<{
+    timestamp: string;
+    speed?: number | null;
+    density?: number | null;
+    bz?: number | null;
+    bt?: number | null;
+    temperature?: number | null;
+  }>;
+  f107_data?: Array<{ timestamp: string; f107: number | null }>;
+  xray_data?: Array<{ timestamp: string; flux: number | null; class: string | null }>;
+  proton_data?: Array<{ timestamp: string; flux_10mev: number | null; flux_100mev: number | null }>;
   errors: Record<string, string>;
 }
 
