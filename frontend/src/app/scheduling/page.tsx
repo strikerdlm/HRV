@@ -41,6 +41,13 @@ import {
   Loader2,
   PlayCircle,
   StopCircle,
+  MapPin,
+  GripVertical,
+  Copy,
+  MoreVertical,
+  UserPlus,
+  UserMinus,
+  Sparkles,
 } from "lucide-react";
 import { PageWrapper } from "@/components/layout";
 import {
@@ -1690,96 +1697,524 @@ function AddCrewMemberDialog({
 }
 
 // Schedule Activity Card
+// ---------------------------------------------------------------------------
+// Enhanced Schedule Activity Card with Edit Mode
+// ---------------------------------------------------------------------------
 function ScheduleActivityCard({
   activity,
   onStatusChange,
+  onUpdate,
+  onDelete,
+  onDuplicate,
+  crewMembers,
 }: {
   activity: ScheduleActivity;
   onStatusChange: (id: string, status: ScheduleActivity["status"]) => void;
+  onUpdate: (activity: ScheduleActivity) => void;
+  onDelete: (id: string) => void;
+  onDuplicate: (activity: ScheduleActivity) => void;
+  crewMembers: CrewMember[];
 }) {
+  const [isEditing, setIsEditing] = React.useState(false);
+  const [editData, setEditData] = React.useState(activity);
+  const [showMenu, setShowMenu] = React.useState(false);
+  const [isSaving, setIsSaving] = React.useState(false);
+  const [showSuccess, setShowSuccess] = React.useState(false);
+
   const categoryColor = CATEGORY_COLORS[activity.category] || CATEGORY_COLORS.work;
+
+  // Reset edit data when activity changes
+  React.useEffect(() => {
+    setEditData(activity);
+  }, [activity]);
+
+  const handleSave = async () => {
+    setIsSaving(true);
+    // Simulate save delay for animation
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    onUpdate(editData);
+    setIsSaving(false);
+    setShowSuccess(true);
+    setTimeout(() => {
+      setShowSuccess(false);
+      setIsEditing(false);
+    }, 800);
+  };
+
+  const handleCancel = () => {
+    setEditData(activity);
+    setIsEditing(false);
+  };
+
+  const toggleCrewMember = (crewName: string) => {
+    setEditData((prev) => ({
+      ...prev,
+      assignedCrew: prev.assignedCrew.includes(crewName)
+        ? prev.assignedCrew.filter((c) => c !== crewName)
+        : [...prev.assignedCrew, crewName],
+    }));
+  };
+
+  const getStatusGradient = () => {
+    switch (activity.status) {
+      case "completed":
+        return "from-emerald-500/10 via-green-500/5 to-transparent border-emerald-500/30";
+      case "in_progress":
+        return "from-amber-500/10 via-yellow-500/5 to-transparent border-amber-500/30";
+      case "cancelled":
+        return "from-red-500/10 via-rose-500/5 to-transparent border-red-500/30";
+      default:
+        return "from-slate-500/5 via-transparent to-transparent border-border";
+    }
+  };
+
+  const getPriorityGlow = () => {
+    switch (activity.priority) {
+      case "critical":
+        return "shadow-red-500/20";
+      case "high":
+        return "shadow-orange-500/20";
+      default:
+        return "";
+    }
+  };
 
   return (
     <motion.div
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, x: -100 }}
       layout
+      className="group"
     >
-      <div className="flex items-stretch gap-4 p-4 rounded-lg border bg-card hover:bg-accent/30 transition-colors">
-        {/* Time Column */}
-        <div className="flex-shrink-0 w-24 flex flex-col justify-center">
-          <p className="text-sm font-medium">{formatTime(activity.startTime)}</p>
-          <p className="text-xs text-muted-foreground">
-            to {formatTime(activity.endTime)}
-          </p>
-        </div>
+      <motion.div
+        className={`
+          relative overflow-hidden rounded-xl border
+          bg-gradient-to-r ${getStatusGradient()}
+          transition-all duration-300
+          ${isEditing ? "ring-2 ring-primary shadow-lg shadow-primary/20" : "hover:shadow-lg"}
+          ${activity.priority === "critical" || activity.priority === "high" ? `shadow-md ${getPriorityGlow()}` : ""}
+        `}
+        animate={showSuccess ? { scale: [1, 1.02, 1] } : {}}
+      >
+        {/* Success overlay */}
+        <AnimatePresence>
+          {showSuccess && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="absolute inset-0 bg-green-500/20 backdrop-blur-sm z-10 flex items-center justify-center"
+            >
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                className="bg-green-500 rounded-full p-3"
+              >
+                <Check className="h-6 w-6 text-white" />
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        <Separator orientation="vertical" className="h-auto" />
+        {/* Edit Mode */}
+        <AnimatePresence mode="wait">
+          {isEditing ? (
+            <motion.div
+              key="edit"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="p-4 space-y-4"
+            >
+              {/* Edit Header */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <motion.div
+                    animate={{ rotate: [0, 360] }}
+                    transition={{ duration: 0.5 }}
+                    className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center"
+                  >
+                    <Edit className="h-4 w-4 text-primary" />
+                  </motion.div>
+                  <span className="font-semibold text-sm">Edit Activity</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={handleCancel} disabled={isSaving}>
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              </div>
 
-        {/* Content */}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h4 className="font-medium truncate">{activity.title}</h4>
-              {activity.description && (
-                <p className="text-sm text-muted-foreground line-clamp-1">
-                  {activity.description}
+              {/* Title & Description */}
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Title</Label>
+                  <Input
+                    value={editData.title}
+                    onChange={(e) => setEditData({ ...editData, title: e.target.value })}
+                    className="mt-1"
+                    placeholder="Activity title"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Description</Label>
+                  <Input
+                    value={editData.description || ""}
+                    onChange={(e) => setEditData({ ...editData, description: e.target.value })}
+                    className="mt-1"
+                    placeholder="Activity description"
+                  />
+                </div>
+              </div>
+
+              {/* Time Selection */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" /> Start Time
+                  </Label>
+                  <Input
+                    type="time"
+                    value={editData.startTime}
+                    onChange={(e) => setEditData({ ...editData, startTime: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="h-3 w-3" /> End Time
+                  </Label>
+                  <Input
+                    type="time"
+                    value={editData.endTime}
+                    onChange={(e) => setEditData({ ...editData, endTime: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+              </div>
+
+              {/* Location */}
+              <div>
+                <Label className="text-xs text-muted-foreground flex items-center gap-1">
+                  <MapPin className="h-3 w-3" /> Location
+                </Label>
+                <Input
+                  value={editData.location || ""}
+                  onChange={(e) => setEditData({ ...editData, location: e.target.value })}
+                  className="mt-1"
+                  placeholder="e.g., Medical Bay, Science Module"
+                />
+              </div>
+
+              {/* Category & Priority */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Category</Label>
+                  <Select
+                    value={editData.category}
+                    onValueChange={(value) => setEditData({ ...editData, category: value as ActivityCategory })}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(CATEGORY_COLORS).map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          <span className="capitalize">{cat}</span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Priority</Label>
+                  <Select
+                    value={editData.priority}
+                    onValueChange={(value) => setEditData({ ...editData, priority: value as ScheduleActivity["priority"] })}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="critical">🔴 Critical</SelectItem>
+                      <SelectItem value="high">🟠 High</SelectItem>
+                      <SelectItem value="medium">🟡 Medium</SelectItem>
+                      <SelectItem value="low">🟢 Low</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Crew Assignment */}
+              <div>
+                <Label className="text-xs text-muted-foreground flex items-center gap-1 mb-2">
+                  <Users className="h-3 w-3" /> Assigned Crew
+                </Label>
+                <div className="flex flex-wrap gap-2">
+                  {crewMembers.map((member) => {
+                    const isAssigned = editData.assignedCrew.includes(member.role);
+                    return (
+                      <motion.button
+                        key={member.id}
+                        type="button"
+                        onClick={() => toggleCrewMember(member.role)}
+                        className={`
+                          px-3 py-1.5 rounded-full text-xs font-medium
+                          flex items-center gap-1.5 transition-all
+                          ${isAssigned
+                            ? "bg-primary text-primary-foreground shadow-md shadow-primary/30"
+                            : "bg-muted hover:bg-muted/80 text-muted-foreground"
+                          }
+                        `}
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                      >
+                        {isAssigned ? (
+                          <UserMinus className="h-3 w-3" />
+                        ) : (
+                          <UserPlus className="h-3 w-3" />
+                        )}
+                        {member.role}
+                        <span className="text-[10px] opacity-70">
+                          ({member.user.full_name?.split(" ")[0] || member.user.username})
+                        </span>
+                      </motion.button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Save/Cancel Actions */}
+              <div className="flex items-center justify-end gap-2 pt-2 border-t">
+                <Button variant="outline" onClick={handleCancel} disabled={isSaving}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSave} disabled={isSaving} className="min-w-[100px]">
+                  {isSaving ? (
+                    <motion.div
+                      animate={{ rotate: 360 }}
+                      transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
+                    >
+                      <Loader2 className="h-4 w-4" />
+                    </motion.div>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4 mr-2" />
+                      Save
+                    </>
+                  )}
+                </Button>
+              </div>
+            </motion.div>
+          ) : (
+            /* View Mode */
+            <motion.div
+              key="view"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="flex items-stretch"
+            >
+              {/* Drag Handle & Status Indicator */}
+              <div className="flex items-center px-2 opacity-0 group-hover:opacity-100 transition-opacity cursor-grab">
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
+              </div>
+
+              {/* Time Column */}
+              <div className="flex-shrink-0 w-20 flex flex-col justify-center py-4">
+                <motion.p
+                  className="text-sm font-bold"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                >
+                  {formatTime(activity.startTime)}
+                </motion.p>
+                <p className="text-xs text-muted-foreground">
+                  to {formatTime(activity.endTime)}
                 </p>
-              )}
-            </div>
-            <Badge className={`${PRIORITY_COLORS[activity.priority]} shrink-0`}>
-              {activity.priority}
-            </Badge>
-          </div>
+                <div className="mt-1">
+                  <Badge
+                    variant="outline"
+                    className={`text-[10px] ${
+                      activity.status === "completed"
+                        ? "bg-green-500/10 text-green-600 border-green-500/30"
+                        : activity.status === "in_progress"
+                        ? "bg-yellow-500/10 text-yellow-600 border-yellow-500/30"
+                        : ""
+                    }`}
+                  >
+                    {activity.status.replace("_", " ")}
+                  </Badge>
+                </div>
+              </div>
 
-          <div className="flex items-center gap-2 mt-2 flex-wrap">
-            <Badge variant="outline" className={categoryColor}>
-              {activity.category}
-            </Badge>
-            {activity.location && (
-              <Badge variant="outline" className="text-xs">
-                📍 {activity.location}
-              </Badge>
-            )}
-            <div className="flex items-center gap-1 text-xs text-muted-foreground">
-              <Users className="h-3 w-3" />
-              {activity.assignedCrew.join(", ")}
-            </div>
-          </div>
-        </div>
+              {/* Colored Bar */}
+              <div
+                className="w-1 my-3 rounded-full"
+                style={{
+                  background: categoryColor.includes("text-")
+                    ? undefined
+                    : `linear-gradient(180deg, ${categoryColor.split(" ")[0].replace("bg-", "var(--")}), transparent)`,
+                  backgroundColor: categoryColor.includes("text-") ? undefined : undefined,
+                }}
+              />
 
-        {/* Status Controls */}
-        <div className="flex-shrink-0 flex flex-col justify-center gap-1">
-          {activity.status === "scheduled" && (
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-8"
-              onClick={() => onStatusChange(activity.id, "in_progress")}
-            >
-              <Play className="h-3 w-3 mr-1" />
-              Start
-            </Button>
+              {/* Content */}
+              <div className="flex-1 min-w-0 p-4">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-semibold truncate">{activity.title}</h4>
+                    {activity.description && (
+                      <p className="text-sm text-muted-foreground line-clamp-1 mt-0.5">
+                        {activity.description}
+                      </p>
+                    )}
+                  </div>
+                  <Badge className={`${PRIORITY_COLORS[activity.priority]} shrink-0 text-xs`}>
+                    {activity.priority}
+                  </Badge>
+                </div>
+
+                <div className="flex items-center gap-2 mt-3 flex-wrap">
+                  <Badge variant="outline" className={`${categoryColor} text-xs`}>
+                    {activity.category}
+                  </Badge>
+                  {activity.location && (
+                    <Badge variant="outline" className="text-xs gap-1">
+                      <MapPin className="h-2.5 w-2.5" />
+                      {activity.location}
+                    </Badge>
+                  )}
+                  <div className="flex items-center gap-1">
+                    {activity.assignedCrew.map((crew) => (
+                      <motion.div
+                        key={crew}
+                        className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary"
+                        whileHover={{ scale: 1.1, y: -2 }}
+                        title={crew}
+                      >
+                        {crew}
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Actions */}
+              <div className="flex-shrink-0 flex items-center gap-2 pr-4">
+                {/* Status Change Button */}
+                {activity.status === "scheduled" && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="h-9 px-3 rounded-lg bg-primary/10 hover:bg-primary/20 text-primary text-sm font-medium flex items-center gap-1.5 transition-colors"
+                    onClick={() => onStatusChange(activity.id, "in_progress")}
+                  >
+                    <Play className="h-3.5 w-3.5" />
+                    Start
+                  </motion.button>
+                )}
+                {activity.status === "in_progress" && (
+                  <motion.button
+                    whileHover={{ scale: 1.05 }}
+                    whileTap={{ scale: 0.95 }}
+                    className="h-9 px-3 rounded-lg bg-green-500 hover:bg-green-600 text-white text-sm font-medium flex items-center gap-1.5 transition-colors shadow-md shadow-green-500/30"
+                    onClick={() => onStatusChange(activity.id, "completed")}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                    Done
+                  </motion.button>
+                )}
+                {activity.status === "completed" && (
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    className="h-9 px-3 rounded-lg bg-green-500/10 text-green-600 text-sm font-medium flex items-center gap-1.5"
+                  >
+                    <CheckCircle className="h-3.5 w-3.5" />
+                    Complete
+                  </motion.div>
+                )}
+
+                {/* Edit Button */}
+                <motion.button
+                  whileHover={{ scale: 1.1, rotate: 10 }}
+                  whileTap={{ scale: 0.9 }}
+                  className="h-9 w-9 rounded-lg bg-muted/50 hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                  onClick={() => setIsEditing(true)}
+                >
+                  <Edit className="h-4 w-4" />
+                </motion.button>
+
+                {/* More Actions */}
+                <div className="relative">
+                  <motion.button
+                    whileHover={{ scale: 1.1 }}
+                    whileTap={{ scale: 0.9 }}
+                    className="h-9 w-9 rounded-lg bg-muted/50 hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                    onClick={() => setShowMenu(!showMenu)}
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </motion.button>
+                  
+                  <AnimatePresence>
+                    {showMenu && (
+                      <motion.div
+                        initial={{ opacity: 0, scale: 0.9, y: -10 }}
+                        animate={{ opacity: 1, scale: 1, y: 0 }}
+                        exit={{ opacity: 0, scale: 0.9, y: -10 }}
+                        className="absolute right-0 top-full mt-2 z-50 w-40 rounded-lg border bg-popover shadow-xl overflow-hidden"
+                      >
+                        <button
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2 transition-colors"
+                          onClick={() => {
+                            onDuplicate(activity);
+                            setShowMenu(false);
+                          }}
+                        >
+                          <Copy className="h-4 w-4" />
+                          Duplicate
+                        </button>
+                        <button
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-muted flex items-center gap-2 transition-colors"
+                          onClick={() => {
+                            setIsEditing(true);
+                            setShowMenu(false);
+                          }}
+                        >
+                          <Edit className="h-4 w-4" />
+                          Edit
+                        </button>
+                        <Separator />
+                        <button
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-red-500/10 text-red-600 flex items-center gap-2 transition-colors"
+                          onClick={() => {
+                            onDelete(activity.id);
+                            setShowMenu(false);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                          Delete
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+            </motion.div>
           )}
-          {activity.status === "in_progress" && (
-            <Button
-              size="sm"
-              variant="default"
-              className="h-8"
-              onClick={() => onStatusChange(activity.id, "completed")}
-            >
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Complete
-            </Button>
-          )}
-          {activity.status === "completed" && (
-            <Badge variant="success" className="justify-center">
-              <CheckCircle className="h-3 w-3 mr-1" />
-              Done
-            </Badge>
-          )}
-        </div>
-      </div>
+        </AnimatePresence>
+
+        {/* Progress indicator for in_progress status */}
+        {activity.status === "in_progress" && (
+          <motion.div
+            className="absolute bottom-0 left-0 h-1 bg-gradient-to-r from-amber-500 via-yellow-500 to-amber-500"
+            initial={{ width: "0%" }}
+            animate={{ width: "100%" }}
+            transition={{ duration: 60, repeat: Infinity }}
+          />
+        )}
+      </motion.div>
     </motion.div>
   );
 }
@@ -3033,6 +3468,38 @@ export default function SchedulingPage() {
     });
   };
 
+  // Update existing activity
+  const handleUpdateActivity = (updatedActivity: ScheduleActivity) => {
+    setActivities((prev) => {
+      const updated = prev.map((a) =>
+        a.id === updatedActivity.id ? updatedActivity : a
+      );
+      // Re-sort in case time changed
+      updated.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      return updated;
+    });
+  };
+
+  // Delete activity
+  const handleDeleteActivity = (activityId: string) => {
+    setActivities((prev) => prev.filter((a) => a.id !== activityId));
+  };
+
+  // Duplicate activity
+  const handleDuplicateActivity = (activity: ScheduleActivity) => {
+    const duplicated: ScheduleActivity = {
+      ...activity,
+      id: `activity-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      title: `${activity.title} (Copy)`,
+      status: "scheduled",
+    };
+    setActivities((prev) => {
+      const updated = [...prev, duplicated];
+      updated.sort((a, b) => a.startTime.localeCompare(b.startTime));
+      return updated;
+    });
+  };
+
   // Open crew detail modal
   const handleCrewClick = (member: CrewMember) => {
     setSelectedCrewMember(member);
@@ -3333,6 +3800,10 @@ export default function SchedulingPage() {
                           key={activity.id}
                           activity={activity}
                           onStatusChange={handleActivityStatusChange}
+                          onUpdate={handleUpdateActivity}
+                          onDelete={handleDeleteActivity}
+                          onDuplicate={handleDuplicateActivity}
+                          crewMembers={crewMembers}
                         />
                       ))}
                     </AnimatePresence>
