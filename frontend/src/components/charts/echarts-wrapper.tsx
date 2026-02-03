@@ -23,6 +23,7 @@ import {
   VisualMapComponent,
   MarkLineComponent,
   MarkAreaComponent,
+  GraphicComponent,
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { EChartsOption } from "echarts";
@@ -46,6 +47,7 @@ echarts.use([
   VisualMapComponent,
   MarkLineComponent,
   MarkAreaComponent,
+  GraphicComponent,
   CanvasRenderer,
 ]);
 
