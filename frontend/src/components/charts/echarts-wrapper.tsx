@@ -12,6 +12,9 @@ import {
   ScatterChart,
   HeatmapChart,
   PieChart,
+  CustomChart,
+  BoxplotChart,
+  CandlestickChart,
 } from "echarts/charts";
 import {
   GridComponent,
@@ -24,6 +27,7 @@ import {
   MarkLineComponent,
   MarkAreaComponent,
   GraphicComponent,
+  DatasetComponent,
 } from "echarts/components";
 import { CanvasRenderer } from "echarts/renderers";
 import type { EChartsOption } from "echarts";
@@ -38,6 +42,9 @@ echarts.use([
   ScatterChart,
   HeatmapChart,
   PieChart,
+  CustomChart,
+  BoxplotChart,
+  CandlestickChart,
   GridComponent,
   TooltipComponent,
   TitleComponent,
@@ -48,6 +55,7 @@ echarts.use([
   MarkLineComponent,
   MarkAreaComponent,
   GraphicComponent,
+  DatasetComponent,
   CanvasRenderer,
 ]);
 
