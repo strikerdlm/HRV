@@ -66,7 +66,7 @@ const demoTests: ANSTestResult[] = [
   },
 ];
 
-// Test Result Gauge
+// Test Result Gauge - Clean minimal design following plot rules
 function TestGauge({ test }: { test: ANSTestResult }) {
   const value = test.value ?? 0;
   const hasData = test.value !== null;
@@ -90,16 +90,15 @@ function TestGauge({ test }: { test: ANSTestResult }) {
     series: [
       {
         type: "gauge",
-        center: ["50%", "65%"],
+        center: ["50%", "68%"],
         radius: "95%",
         startAngle: 180,
         endAngle: 0,
         min: 0,
         max: gaugeMax,
-        splitNumber: 5,
         axisLine: {
           lineStyle: {
-            width: 20,
+            width: 16,
             color: [
               [min / gaugeMax, SCIENTIFIC_COLORS.danger],
               [max / gaugeMax, SCIENTIFIC_COLORS.success],
@@ -108,35 +107,67 @@ function TestGauge({ test }: { test: ANSTestResult }) {
           },
         },
         pointer: {
-          icon: "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
-          length: "60%",
-          width: 6,
-          offsetCenter: [0, "-10%"],
-          itemStyle: { color: hasData ? getColor() : "#94a3b8" },
+          length: "68%",
+          width: 5,
+          offsetCenter: [0, "5%"],
+          itemStyle: {
+            color: hasData ? getColor() : "#94a3b8",
+            shadowColor: "rgba(0, 0, 0, 0.25)",
+            shadowBlur: 6,
+            shadowOffsetY: 2,
+          },
         },
         anchor: {
           show: true,
           showAbove: true,
-          size: 16,
-          itemStyle: { borderWidth: 3, borderColor: hasData ? getColor() : "#94a3b8", color: "#fff" },
+          size: 14,
+          itemStyle: {
+            borderWidth: 3,
+            borderColor: hasData ? getColor() : "#94a3b8",
+            color: "#fff",
+            shadowColor: "rgba(0, 0, 0, 0.15)",
+            shadowBlur: 4,
+          },
         },
-        axisTick: { show: true, splitNumber: 2, length: 6, distance: 5, lineStyle: { color: "#64748b", width: 1 } },
-        splitLine: { show: true, length: 12, distance: 5, lineStyle: { color: "#475569", width: 2 } },
-        axisLabel: { distance: 25, color: "#1e293b", fontSize: 11, fontWeight: "600" },
+        axisTick: { show: false },
+        splitLine: { show: false },
+        axisLabel: {
+          show: true,
+          distance: -28,
+          color: "#1a1a1a",
+          fontSize: 10,
+          fontWeight: "600",
+          formatter: (v: number) => {
+            // Only show min, normal range boundaries, and max
+            const tolerance = gaugeMax * 0.05;
+            if (Math.abs(v) < tolerance) return "0";
+            if (Math.abs(v - min) < tolerance) return min.toFixed(1);
+            if (Math.abs(v - max) < tolerance) return max.toFixed(1);
+            if (Math.abs(v - gaugeMax) < tolerance) return gaugeMax.toFixed(1);
+            return "";
+          },
+        },
+        progress: {
+          show: true,
+          overlap: false,
+          roundCap: true,
+          clip: false,
+        },
         detail: {
           valueAnimation: true,
           formatter: () => (hasData ? value.toFixed(2) : "—"),
-          fontSize: 32,
+          fontSize: 26,
           fontWeight: "bold",
+          fontFamily: "system-ui, -apple-system, sans-serif",
           color: hasData ? getColor() : "#94a3b8",
-          offsetCenter: [0, "25%"],
+          offsetCenter: [0, "32%"],
         },
         data: [{ value }],
       },
     ],
   };
 
-  return <EChartsWrapper option={option} height={220} showToolbox={false} />;
+  return <EChartsWrapper option={option} height={180} showToolbox={false} />;
 }
 
 // Status Icon
