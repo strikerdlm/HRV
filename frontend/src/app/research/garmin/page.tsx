@@ -16,6 +16,11 @@ import {
   CheckCircle,
   Loader2,
   Settings,
+  TrendingUp,
+  BarChart3,
+  Zap,
+  Sun,
+  Brain,
 } from "lucide-react";
 import { PageWrapper } from "@/components/layout";
 import {
@@ -28,314 +33,603 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
-import type { GarminMetrics } from "@/types/research";
-import { formatDateTime } from "@/lib/utils";
+import { getCurrentSpaceWeather } from "@/lib/research-api";
+import type { GarminMetrics, SpaceWeatherSnapshot } from "@/types/research";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8180";
 
-// Metric Card Component
+// ---------------------------------------------------------------------------
+// Publication-Quality Colors (following plot rules)
+// ---------------------------------------------------------------------------
+const CHART_COLORS = {
+  hrv: "#2563eb",        // Blue
+  rhr: "#dc2626",        // Red
+  spo2: "#0891b2",       // Cyan
+  sleep: "#7c3aed",      // Purple
+  stress: "#f97316",     // Orange
+  bodyBattery: "#22c55e", // Green
+  respiration: "#14b8a6", // Teal
+  steps: "#8b5cf6",      // Violet
+  text: "#1a1a1a",
+  subtext: "#64748b",
+  grid: "rgba(44, 62, 80, 0.1)",
+};
+
+// ---------------------------------------------------------------------------
+// Clean Gauge Component (following plot rules)
+// ---------------------------------------------------------------------------
+function CleanGauge({
+  value,
+  min = 0,
+  max = 100,
+  unit = "",
+  thresholds,
+  label,
+}: {
+  value: number | null;
+  min?: number;
+  max?: number;
+  unit?: string;
+  thresholds: Array<[number, string]>; // [[ratio, color], ...]
+  label: string;
+}) {
+  const displayValue = value ?? 0;
+  const hasData = value !== null;
+  
+  const getColor = () => {
+    const ratio = (displayValue - min) / (max - min);
+    for (let i = thresholds.length - 1; i >= 0; i--) {
+      if (ratio >= thresholds[i][0]) return thresholds[i][1];
+    }
+    return thresholds[0][1];
+  };
+
+  const option: Record<string, unknown> = {
+    series: [
+      {
+        type: "gauge",
+        center: ["50%", "68%"],
+        radius: "95%",
+        startAngle: 180,
+        endAngle: 0,
+        min,
+        max,
+        axisLine: {
+          lineStyle: {
+            width: 16,
+            color: thresholds,
+          },
+        },
+        pointer: {
+          length: "68%",
+          width: 5,
+          offsetCenter: [0, "5%"],
+          itemStyle: {
+            color: hasData ? getColor() : "#94a3b8",
+            shadowColor: "rgba(0, 0, 0, 0.25)",
+            shadowBlur: 6,
+          },
+        },
+        anchor: {
+          show: true,
+          showAbove: true,
+          size: 14,
+          itemStyle: {
+            borderWidth: 3,
+            borderColor: hasData ? getColor() : "#94a3b8",
+            color: "#fff",
+          },
+        },
+        axisTick: { show: false },
+        splitLine: { show: false },
+        axisLabel: {
+          show: true,
+          distance: -28,
+          color: CHART_COLORS.text,
+          fontSize: 10,
+          fontWeight: "600",
+          formatter: (v: number) => {
+            if (v === min || v === max) return v.toString();
+            const mid = (min + max) / 2;
+            if (Math.abs(v - mid) < (max - min) * 0.1) return v.toFixed(0);
+            return "";
+          },
+        },
+        progress: { show: true, overlap: false, roundCap: true, clip: false },
+        detail: {
+          valueAnimation: true,
+          formatter: () => hasData ? `${displayValue.toFixed(unit === "ms" ? 1 : 0)}${unit}` : "—",
+          fontSize: 24,
+          fontWeight: "bold",
+          color: hasData ? getColor() : "#94a3b8",
+          offsetCenter: [0, "32%"],
+        },
+        title: {
+          show: true,
+          offsetCenter: [0, "55%"],
+          fontSize: 11,
+          fontWeight: "500",
+          color: CHART_COLORS.subtext,
+        },
+        data: [{ value: displayValue, name: label }],
+      },
+    ],
+  };
+
+  return <EChartsWrapper option={option} height={160} showToolbox={false} />;
+}
+
+// ---------------------------------------------------------------------------
+// Time Series Chart Builder (following plot rules)
+// ---------------------------------------------------------------------------
+function buildTimeSeriesChart(
+  dates: string[],
+  series: Array<{
+    name: string;
+    data: (number | null)[];
+    color: string;
+    yAxisIndex?: number;
+  }>,
+  yAxisConfigs: Array<{
+    name: string;
+    position: "left" | "right";
+    color: string;
+  }>,
+  title: string
+): Record<string, unknown> {
+  // Format dates for display
+  const formattedDates = dates.map((d) => {
+    const date = new Date(d);
+    return `${date.getMonth() + 1}/${date.getDate()}`;
+  });
+
+  return {
+    title: {
+      text: title,
+      left: "center",
+      top: 8,
+      textStyle: { color: CHART_COLORS.text, fontSize: 14, fontWeight: "bold" },
+    },
+    tooltip: {
+      trigger: "axis",
+      backgroundColor: "rgba(255, 255, 255, 0.95)",
+      borderColor: "#e2e8f0",
+      textStyle: { color: CHART_COLORS.text, fontSize: 11 },
+    },
+    legend: {
+      data: series.map((s) => s.name),
+      top: 30,
+      textStyle: { color: CHART_COLORS.text, fontSize: 10 },
+    },
+    grid: {
+      left: 50,
+      right: yAxisConfigs.length > 1 ? 50 : 25,
+      top: 65,
+      bottom: 35,
+      containLabel: true,
+    },
+    xAxis: {
+      type: "category",
+      data: formattedDates,
+      axisLabel: {
+        color: CHART_COLORS.text,
+        fontSize: 10,
+        interval: Math.max(0, Math.floor(dates.length / 7)),
+      },
+      axisLine: { lineStyle: { color: "#2c3e50" } },
+      axisTick: { show: false },
+    },
+    yAxis: yAxisConfigs.map((config, idx) => ({
+      type: "value",
+      name: config.name,
+      position: config.position,
+      nameTextStyle: { color: config.color, fontSize: 10, fontWeight: "bold" },
+      axisLabel: {
+        color: config.color,
+        fontSize: 9,
+        formatter: (v: number) => v.toFixed(0),
+      },
+      axisLine: { show: false },
+      splitLine: idx === 0 ? { lineStyle: { color: CHART_COLORS.grid, type: "dashed" } } : { show: false },
+    })),
+    series: series.map((s) => ({
+      name: s.name,
+      type: "line",
+      data: s.data,
+      smooth: true,
+      yAxisIndex: s.yAxisIndex ?? 0,
+      lineStyle: { color: s.color, width: 2 },
+      symbol: "circle",
+      symbolSize: 4,
+      itemStyle: { color: s.color },
+    })),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Correlation Scatter Chart
+// ---------------------------------------------------------------------------
+function buildCorrelationChart(
+  xData: (number | null)[],
+  yData: (number | null)[],
+  xLabel: string,
+  yLabel: string,
+  title: string
+): Record<string, unknown> {
+  // Pair up valid data points
+  const points: [number, number][] = [];
+  for (let i = 0; i < Math.min(xData.length, yData.length); i++) {
+    if (xData[i] !== null && yData[i] !== null) {
+      points.push([xData[i] as number, yData[i] as number]);
+    }
+  }
+
+  // Calculate Pearson correlation
+  let correlation = 0;
+  if (points.length > 2) {
+    const xVals = points.map((p) => p[0]);
+    const yVals = points.map((p) => p[1]);
+    const xMean = xVals.reduce((a, b) => a + b, 0) / xVals.length;
+    const yMean = yVals.reduce((a, b) => a + b, 0) / yVals.length;
+    const num = xVals.reduce((sum, x, i) => sum + (x - xMean) * (yVals[i] - yMean), 0);
+    const denX = Math.sqrt(xVals.reduce((sum, x) => sum + (x - xMean) ** 2, 0));
+    const denY = Math.sqrt(yVals.reduce((sum, y) => sum + (y - yMean) ** 2, 0));
+    if (denX > 0 && denY > 0) correlation = num / (denX * denY);
+  }
+
+  const corrColor = Math.abs(correlation) > 0.5 ? CHART_COLORS.hrv : CHART_COLORS.subtext;
+
+  return {
+    title: {
+      text: title,
+      subtext: `r = ${correlation.toFixed(3)} (n=${points.length})`,
+      left: "center",
+      top: 5,
+      textStyle: { color: CHART_COLORS.text, fontSize: 13, fontWeight: "bold" },
+      subtextStyle: { color: corrColor, fontSize: 11 },
+    },
+    tooltip: {
+      trigger: "item",
+      formatter: (p: { value: [number, number] }) =>
+        `${xLabel}: ${p.value[0].toFixed(1)}<br/>${yLabel}: ${p.value[1].toFixed(1)}`,
+    },
+    grid: { left: 50, right: 25, top: 55, bottom: 40, containLabel: true },
+    xAxis: {
+      type: "value",
+      name: xLabel,
+      nameLocation: "middle",
+      nameGap: 25,
+      nameTextStyle: { color: CHART_COLORS.text, fontSize: 11 },
+      axisLabel: { color: CHART_COLORS.text, fontSize: 9 },
+      splitLine: { lineStyle: { color: CHART_COLORS.grid, type: "dashed" } },
+    },
+    yAxis: {
+      type: "value",
+      name: yLabel,
+      nameLocation: "middle",
+      nameGap: 35,
+      nameTextStyle: { color: CHART_COLORS.text, fontSize: 11 },
+      axisLabel: { color: CHART_COLORS.text, fontSize: 9 },
+      splitLine: { lineStyle: { color: CHART_COLORS.grid, type: "dashed" } },
+    },
+    series: [
+      {
+        type: "scatter",
+        data: points,
+        symbolSize: 8,
+        itemStyle: {
+          color: CHART_COLORS.hrv,
+          opacity: 0.7,
+        },
+      },
+    ],
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Metric Summary Card
+// ---------------------------------------------------------------------------
 function MetricCard({
   title,
   value,
   unit,
   icon: Icon,
   color,
-  description,
+  trend,
 }: {
   title: string;
   value: number | string | null | undefined;
   unit?: string;
   icon: React.ElementType;
   color: string;
-  description?: string;
+  trend?: "up" | "down" | "stable";
 }) {
   return (
-    <Card>
-      <CardContent className="pt-4">
+    <Card className="bg-gradient-to-br from-white to-slate-50 dark:from-slate-900 dark:to-slate-800">
+      <CardContent className="pt-4 pb-3">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
             <div className={`p-2 rounded-lg ${color}`}>
-              <Icon className="h-5 w-5 text-white" />
+              <Icon className="h-4 w-4 text-white" />
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">{title}</p>
-              <p className="text-2xl font-bold">
-                {value !== null && value !== undefined ? value : "N/A"}
+              <p className="text-xs text-muted-foreground">{title}</p>
+              <p className="text-xl font-bold">
+                {value !== null && value !== undefined ? value : "—"}
                 {unit && value !== null && (
-                  <span className="text-sm font-normal ml-1">{unit}</span>
+                  <span className="text-xs font-normal ml-1">{unit}</span>
                 )}
               </p>
-              {description && (
-                <p className="text-xs text-muted-foreground mt-1">
-                  {description}
-                </p>
-              )}
             </div>
           </div>
+          {trend && (
+            <TrendingUp
+              className={`h-4 w-4 ${
+                trend === "up"
+                  ? "text-success"
+                  : trend === "down"
+                  ? "text-danger rotate-180"
+                  : "text-muted-foreground rotate-90"
+              }`}
+            />
+          )}
         </div>
       </CardContent>
     </Card>
   );
 }
 
-// Body Battery Gauge - Elegant design with large arc and thin needle
-function BodyBatteryGauge({
-  high,
-  low,
+// ---------------------------------------------------------------------------
+// Space Weather Correlation Panel
+// ---------------------------------------------------------------------------
+function SpaceWeatherPanel({
+  spaceWeather,
+  loading,
 }: {
-  high: number | null | undefined;
-  low: number | null | undefined;
+  spaceWeather: SpaceWeatherSnapshot | null;
+  loading: boolean;
 }) {
-  const highValue = high ?? 0;
-  const hasData = high !== null;
-  
-  const getBatteryColor = (v: number) => {
-    if (v >= 75) return SCIENTIFIC_COLORS.success;
-    if (v >= 50) return SCIENTIFIC_COLORS.primary;
-    if (v >= 25) return SCIENTIFIC_COLORS.warning;
-    return SCIENTIFIC_COLORS.danger;
+  if (loading) {
+    return (
+      <Card>
+        <CardContent className="pt-6 flex items-center justify-center h-32">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const kp = spaceWeather?.data.kp_index ?? null;
+  const dst = spaceWeather?.data.dst_index ?? null;
+  const solarWind = spaceWeather?.data.solar_wind_speed ?? null;
+
+  const getKpStatus = (k: number | null) => {
+    if (k === null) return { label: "Unknown", color: "text-muted-foreground" };
+    if (k < 4) return { label: "Quiet", color: "text-success" };
+    if (k < 5) return { label: "Unsettled", color: "text-warning" };
+    return { label: "Storm", color: "text-danger" };
   };
 
-  const option: Record<string, unknown> = {
-    series: [
-      {
-        type: "gauge" as const,
-        center: ["50%", "65%"],
-        radius: "95%",
-        startAngle: 180,
-        endAngle: 0,
-        min: 0,
-        max: 100,
-        splitNumber: 10,
-        axisLine: {
-          lineStyle: {
-            width: 25,
-            color: [
-              [0.25, SCIENTIFIC_COLORS.danger],
-              [0.5, SCIENTIFIC_COLORS.warning],
-              [0.75, SCIENTIFIC_COLORS.primary],
-              [1, SCIENTIFIC_COLORS.success],
-            ],
-          },
-        },
-        pointer: {
-          icon: "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
-          length: "65%",
-          width: 6,
-          offsetCenter: [0, "-10%"],
-          itemStyle: {
-            color: hasData ? getBatteryColor(highValue) : "#94a3b8",
-          },
-        },
-        anchor: {
-          show: true,
-          showAbove: true,
-          size: 18,
-          itemStyle: {
-            borderWidth: 3,
-            borderColor: hasData ? getBatteryColor(highValue) : "#94a3b8",
-            color: "#fff",
-          },
-        },
-        axisTick: {
-          show: true,
-          splitNumber: 2,
-          length: 8,
-          distance: 5,
-          lineStyle: { color: "#64748b", width: 1 },
-        },
-        splitLine: {
-          show: true,
-          length: 15,
-          distance: 5,
-          lineStyle: { color: "#475569", width: 2 },
-        },
-        axisLabel: {
-          distance: 30,
-          color: "#1e293b",
-          fontSize: 12,
-          fontWeight: "600",
-        },
-        detail: {
-          valueAnimation: true,
-          formatter: () => hasData ? `${highValue}%` : "—",
-          fontSize: 38,
-          fontWeight: "bold",
-          color: hasData ? getBatteryColor(highValue) : "#94a3b8",
-          offsetCenter: [0, "30%"],
-        },
-        data: [{ value: highValue }],
-      },
-    ],
-  };
-
-  return (
-    <Card className="h-full">
-      <CardHeader className="pb-0">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Battery className="h-5 w-5 text-success" />
-          Body Battery
-        </CardTitle>
-        <CardDescription>
-          High: {high ?? "—"}% | Low: {low ?? "—"}%
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="pt-0">
-        <EChartsWrapper
-          option={option}
-          height={260}
-          showToolbox={false}
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-// Sleep Quality Visualization
-function SleepCard({ metrics }: { metrics: GarminMetrics | null }) {
-  const sleepHours = metrics?.sleep_duration_hours;
-  const sleepScore = metrics?.sleep_score;
-  const efficiency = metrics?.sleep_efficiency;
+  const kpStatus = getKpStatus(kp);
 
   return (
     <Card>
       <CardHeader className="pb-2">
-        <CardTitle className="flex items-center gap-2 text-lg">
-          <Moon className="h-5 w-5 text-primary" />
-          Sleep Analysis
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <Sun className="h-4 w-4 text-warning" />
+          Space Weather Correlation
         </CardTitle>
-        <CardDescription>Last night&apos;s sleep metrics</CardDescription>
+        <CardDescription className="text-xs">
+          Geomagnetic activity may influence HRV and sleep patterns (Nature Scientific Reports, 2018)
+        </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="grid grid-cols-3 gap-4">
-          <div className="text-center p-3 rounded-lg bg-muted/50">
-            <p className="text-2xl font-bold">
-              {sleepHours?.toFixed(1) ?? "N/A"}
+      <CardContent>
+        <div className="grid grid-cols-3 gap-3">
+          <div className="text-center p-2 rounded-lg bg-muted/50">
+            <p className="text-xs text-muted-foreground">Kp Index</p>
+            <p className={`text-lg font-bold ${kpStatus.color}`}>
+              {kp?.toFixed(1) ?? "—"}
             </p>
-            <p className="text-xs text-muted-foreground">Hours</p>
+            <p className={`text-xs ${kpStatus.color}`}>{kpStatus.label}</p>
           </div>
-          <div className="text-center p-3 rounded-lg bg-muted/50">
-            <p className="text-2xl font-bold">{sleepScore ?? "N/A"}</p>
-            <p className="text-xs text-muted-foreground">Score</p>
+          <div className="text-center p-2 rounded-lg bg-muted/50">
+            <p className="text-xs text-muted-foreground">Dst</p>
+            <p className="text-lg font-bold">{dst?.toFixed(0) ?? "—"}</p>
+            <p className="text-xs text-muted-foreground">nT</p>
           </div>
-          <div className="text-center p-3 rounded-lg bg-muted/50">
-            <p className="text-2xl font-bold">
-              {efficiency
-                ? `${(efficiency * 100).toFixed(0)}%`
-                : "N/A"}
-            </p>
-            <p className="text-xs text-muted-foreground">Efficiency</p>
+          <div className="text-center p-2 rounded-lg bg-muted/50">
+            <p className="text-xs text-muted-foreground">Solar Wind</p>
+            <p className="text-lg font-bold">{solarWind?.toFixed(0) ?? "—"}</p>
+            <p className="text-xs text-muted-foreground">km/s</p>
           </div>
         </div>
-
-        {/* Sleep Stages */}
-        {(metrics?.sleep_deep_minutes ||
-          metrics?.sleep_rem_minutes ||
-          metrics?.sleep_light_minutes) && (
-          <div className="space-y-2">
-            <p className="text-sm font-medium">Sleep Stages</p>
-            <div className="flex gap-2">
-              <Badge variant="secondary" className="bg-indigo-500/10">
-                Deep: {metrics?.sleep_deep_minutes ?? "N/A"} min
-              </Badge>
-              <Badge variant="secondary" className="bg-purple-500/10">
-                REM: {metrics?.sleep_rem_minutes ?? "N/A"} min
-              </Badge>
-              <Badge variant="secondary" className="bg-blue-500/10">
-                Light: {metrics?.sleep_light_minutes ?? "N/A"} min
-              </Badge>
-            </div>
-          </div>
-        )}
+        <p className="text-xs text-muted-foreground mt-3 italic">
+          Higher Kp associated with decreased HRV in sensitive individuals
+        </p>
       </CardContent>
     </Card>
   );
 }
 
-// Connection Status
-function ConnectionStatus({
-  status,
-  onSync,
-  syncing,
+// ---------------------------------------------------------------------------
+// Settings Dialog Component
+// ---------------------------------------------------------------------------
+function SettingsDialog({
+  userId,
+  setUserId,
+  autoSync,
+  setAutoSync,
+  syncDays,
+  setSyncDays,
 }: {
-  status: "connected" | "disconnected" | "error";
-  onSync: () => void;
-  syncing: boolean;
+  userId: string;
+  setUserId: (id: string) => void;
+  autoSync: boolean;
+  setAutoSync: (auto: boolean) => void;
+  syncDays: number;
+  setSyncDays: (days: number) => void;
 }) {
-  const statusConfig = {
-    connected: {
-      icon: CheckCircle,
-      color: "text-success",
-      bg: "bg-success/10",
-      label: "Connected",
-    },
-    disconnected: {
-      icon: AlertCircle,
-      color: "text-warning",
-      bg: "bg-warning/10",
-      label: "Disconnected",
-    },
-    error: {
-      icon: AlertCircle,
-      color: "text-danger",
-      bg: "bg-danger/10",
-      label: "Error",
-    },
+  const [tempUserId, setTempUserId] = React.useState(userId);
+  const [tempDays, setTempDays] = React.useState(syncDays);
+
+  const handleSave = () => {
+    setUserId(tempUserId);
+    setSyncDays(tempDays);
+    if (typeof window !== "undefined") {
+      localStorage.setItem("garmin_user_id", tempUserId);
+      localStorage.setItem("garmin_auto_sync", autoSync.toString());
+      localStorage.setItem("garmin_sync_days", tempDays.toString());
+    }
   };
 
-  const config = statusConfig[status];
-  const Icon = config.icon;
-
   return (
-    <Card>
-      <CardContent className="pt-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-lg ${config.bg}`}>
-              <Icon className={`h-5 w-5 ${config.color}`} />
-            </div>
-            <div>
-              <p className="font-medium">Garmin Connect</p>
-              <p className="text-sm text-muted-foreground">{config.label}</p>
-            </div>
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm">
+          <Settings className="h-4 w-4 mr-2" />
+          Settings
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Watch className="h-5 w-5" />
+            Garmin Connect Settings
+          </DialogTitle>
+          <DialogDescription>
+            Configure your Garmin Connect integration. Credentials are stored on the backend (.env file).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-4">
+          <div className="space-y-2">
+            <Label htmlFor="userId">User ID</Label>
+            <Input
+              id="userId"
+              value={tempUserId}
+              onChange={(e) => setTempUserId(e.target.value)}
+              placeholder="Enter your user ID"
+            />
+            <p className="text-xs text-muted-foreground">
+              Identifier for storing your data locally
+            </p>
           </div>
-          <Button onClick={onSync} disabled={syncing} size="sm">
-            {syncing ? (
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-            ) : (
-              <RefreshCw className="h-4 w-4 mr-2" />
-            )}
-            {syncing ? "Syncing..." : "Sync Data"}
+          
+          <div className="space-y-2">
+            <Label htmlFor="syncDays">Sync Days</Label>
+            <Input
+              id="syncDays"
+              type="number"
+              min={1}
+              max={90}
+              value={tempDays}
+              onChange={(e) => setTempDays(parseInt(e.target.value) || 30)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Number of days to sync from Garmin Connect (1-90)
+            </p>
+          </div>
+          
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Auto-Sync on Load</Label>
+              <p className="text-xs text-muted-foreground">
+                Automatically sync data when page loads
+              </p>
+            </div>
+            <Switch
+              checked={autoSync}
+              onCheckedChange={(checked) => {
+                setAutoSync(checked);
+                if (typeof window !== "undefined") {
+                  localStorage.setItem("garmin_auto_sync", checked.toString());
+                }
+              }}
+            />
+          </div>
+          
+          <Separator />
+          
+          <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+            <h4 className="text-sm font-medium">Backend Configuration</h4>
+            <p className="text-xs text-muted-foreground">
+              Ensure the following environment variables are set in your backend <code className="bg-muted px-1 rounded">.env</code> file:
+            </p>
+            <pre className="text-xs bg-muted p-2 rounded font-mono">
+              GARMIN_EMAIL=your@email.com{"\n"}
+              GARMIN_PASSWORD=your_password
+            </pre>
+            <p className="text-xs text-muted-foreground italic">
+              Note: If MFA is enabled, you may need to pre-generate auth tokens.
+            </p>
+          </div>
+          
+          <Button onClick={handleSave} className="w-full">
+            Save Settings
           </Button>
         </div>
-      </CardContent>
-    </Card>
+      </DialogContent>
+    </Dialog>
   );
 }
 
+// ---------------------------------------------------------------------------
+// Main Page Component
+// ---------------------------------------------------------------------------
 export default function GarminPage() {
   const [metrics, setMetrics] = React.useState<GarminMetrics | null>(null);
   const [history, setHistory] = React.useState<GarminMetrics[]>([]);
-  const [loading, setLoading] = React.useState(false);
+  const [loading, setLoading] = React.useState(true);
   const [syncing, setSyncing] = React.useState(false);
   const [connectionStatus, setConnectionStatus] = React.useState<
     "connected" | "disconnected" | "error"
   >("disconnected");
-  const [userId, setUserId] = React.useState("default");
   const [error, setError] = React.useState<string | null>(null);
+  const [spaceWeather, setSpaceWeather] = React.useState<SpaceWeatherSnapshot | null>(null);
+  const [spaceWeatherLoading, setSpaceWeatherLoading] = React.useState(false);
+  
+  // Settings state with localStorage persistence
+  const [userId, setUserId] = React.useState("default");
+  const [autoSync, setAutoSync] = React.useState(false);
+  const [syncDays, setSyncDays] = React.useState(30);
+  const [initialLoadDone, setInitialLoadDone] = React.useState(false);
 
+  // Load settings from localStorage on mount
+  React.useEffect(() => {
+    if (typeof window !== "undefined") {
+      const savedUserId = localStorage.getItem("garmin_user_id");
+      const savedAutoSync = localStorage.getItem("garmin_auto_sync");
+      const savedSyncDays = localStorage.getItem("garmin_sync_days");
+      
+      if (savedUserId) setUserId(savedUserId);
+      if (savedAutoSync) setAutoSync(savedAutoSync === "true");
+      if (savedSyncDays) setSyncDays(parseInt(savedSyncDays) || 30);
+      
+      setInitialLoadDone(true);
+    }
+  }, []);
+
+  // Fetch Garmin metrics
   const fetchMetrics = React.useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      // Fetch latest metrics
       const response = await fetch(
         `${API_BASE}/api/research/garmin/latest/${userId}`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        }
+        { method: "GET", headers: { "Content-Type": "application/json" } }
       );
 
       if (!response.ok) {
@@ -345,20 +639,16 @@ export default function GarminPage() {
       const data: GarminMetrics = await response.json();
       setMetrics(data);
 
-      // Check if we have actual data
       if (data.date || data.steps || data.resting_hr) {
         setConnectionStatus("connected");
       } else {
         setConnectionStatus("disconnected");
       }
 
-      // Fetch history
+      // Fetch history using configured syncDays for correlation analysis
       const historyResponse = await fetch(
-        `${API_BASE}/api/research/garmin/history/${userId}?days=7`,
-        {
-          method: "GET",
-          headers: { "Content-Type": "application/json" },
-        }
+        `${API_BASE}/api/research/garmin/history/${userId}?days=${syncDays}`,
+        { method: "GET", headers: { "Content-Type": "application/json" } }
       );
 
       if (historyResponse.ok) {
@@ -372,9 +662,23 @@ export default function GarminPage() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, syncDays]);
 
-  const syncData = async () => {
+  // Fetch space weather for correlation
+  const fetchSpaceWeather = React.useCallback(async () => {
+    setSpaceWeatherLoading(true);
+    try {
+      const data = await getCurrentSpaceWeather();
+      setSpaceWeather(data);
+    } catch (err) {
+      console.error("Failed to fetch space weather:", err);
+    } finally {
+      setSpaceWeatherLoading(false);
+    }
+  }, []);
+
+  // Sync data from Garmin Connect
+  const syncData = React.useCallback(async () => {
     setSyncing(true);
     setError(null);
     try {
@@ -383,7 +687,7 @@ export default function GarminPage() {
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ days: 14 }),
+          body: JSON.stringify({ days: syncDays }),
         }
       );
 
@@ -394,10 +698,7 @@ export default function GarminPage() {
         );
       }
 
-      const result = await response.json();
       setConnectionStatus("connected");
-
-      // Refresh metrics after sync
       await fetchMetrics();
     } catch (err) {
       console.error("Failed to sync Garmin data:", err);
@@ -406,283 +707,680 @@ export default function GarminPage() {
     } finally {
       setSyncing(false);
     }
-  };
+  }, [userId, syncDays, fetchMetrics]);
 
+  // Auto-load data on mount (after settings loaded from localStorage)
   React.useEffect(() => {
+    if (!initialLoadDone) return;
+    
     fetchMetrics();
-  }, [fetchMetrics]);
+    fetchSpaceWeather();
+  }, [initialLoadDone, fetchMetrics, fetchSpaceWeather]);
+
+  // Auto-sync feature: sync from Garmin Connect when autoSync is enabled
+  React.useEffect(() => {
+    if (!initialLoadDone || !autoSync) return;
+    
+    // Check if we need to sync (no data or stale data)
+    const shouldAutoSync = !metrics?.date;
+    if (shouldAutoSync) {
+      syncData();
+    }
+  }, [initialLoadDone, autoSync, metrics?.date, syncData]);
+
+  // Prepare time series data
+  const dates = React.useMemo(
+    () => history.map((m) => m.date || "").filter(Boolean).reverse(),
+    [history]
+  );
+  
+  const hrvData = React.useMemo(
+    () => history.map((m) => m.hrv_overnight).reverse(),
+    [history]
+  );
+  
+  const rhrData = React.useMemo(
+    () => history.map((m) => m.resting_hr).reverse(),
+    [history]
+  );
+  
+  const spo2Data = React.useMemo(
+    () => history.map((m) => m.spo2_avg).reverse(),
+    [history]
+  );
+  
+  const sleepData = React.useMemo(
+    () => history.map((m) => m.sleep_duration_hours).reverse(),
+    [history]
+  );
+  
+  const stressData = React.useMemo(
+    () => history.map((m) => m.stress_avg).reverse(),
+    [history]
+  );
+  
+  const respirationData = React.useMemo(
+    () => history.map((m) => m.respiration_sleep).reverse(),
+    [history]
+  );
 
   return (
     <PageWrapper
-      title="Garmin Integration"
-      description="Vivosmart 5 and compatible devices - Health metrics analysis"
+      title="Garmin Connect"
+      description="Physiological data for research analysis and correlation studies"
     >
       <div className="space-y-6">
-        {/* Connection Status */}
+        {/* Connection Status Header */}
         <motion.div
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
+          className="flex items-center justify-between flex-wrap gap-4"
         >
-          <ConnectionStatus
-            status={connectionStatus}
-            onSync={syncData}
-            syncing={syncing}
-          />
+          <div className="flex items-center gap-3">
+            <Badge
+              variant="outline"
+              className={
+                connectionStatus === "connected"
+                  ? "border-success text-success"
+                  : connectionStatus === "error"
+                  ? "border-danger text-danger"
+                  : ""
+              }
+            >
+              {connectionStatus === "connected" && <CheckCircle className="h-3 w-3 mr-1" />}
+              {connectionStatus === "error" && <AlertCircle className="h-3 w-3 mr-1" />}
+              {connectionStatus === "connected"
+                ? "Connected"
+                : connectionStatus === "error"
+                ? "Error"
+                : "Disconnected"}
+            </Badge>
+            <Badge variant="secondary">{userId}</Badge>
+            {autoSync && (
+              <Badge variant="outline" className="border-primary text-primary">
+                <RefreshCw className="h-3 w-3 mr-1" />
+                Auto-sync
+              </Badge>
+            )}
+            {metrics?.date && (
+              <Badge variant="outline">Last: {metrics.date}</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <SettingsDialog
+              userId={userId}
+              setUserId={setUserId}
+              autoSync={autoSync}
+              setAutoSync={setAutoSync}
+              syncDays={syncDays}
+              setSyncDays={setSyncDays}
+            />
+            <Button onClick={fetchMetrics} disabled={loading} variant="outline" size="sm">
+              <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+            <Button onClick={syncData} disabled={syncing}>
+              {syncing ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Watch className="h-4 w-4 mr-2" />
+              )}
+              Sync from Garmin
+            </Button>
+          </div>
         </motion.div>
 
         {/* Error Display */}
         {error && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <Card className="border-destructive">
-              <CardContent className="pt-4">
-                <div className="flex items-start gap-3">
-                  <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
-                  <div>
-                    <p className="font-medium text-destructive">Sync Error</p>
-                    <p className="text-sm text-muted-foreground">{error}</p>
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Ensure GARMIN_EMAIL and GARMIN_PASSWORD are set in your
-                      backend .env file.
+          <Card className="border-destructive">
+            <CardContent className="pt-4">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="h-5 w-5 text-destructive mt-0.5" />
+                <div>
+                  <p className="font-medium text-destructive">Sync Error</p>
+                  <p className="text-sm text-muted-foreground">{error}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Ensure GARMIN_EMAIL and GARMIN_PASSWORD are set in backend .env
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Main Content Tabs */}
+        <Tabs defaultValue="overview" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-flex">
+            <TabsTrigger value="overview" className="gap-2">
+              <Watch className="h-4 w-4" />
+              <span className="hidden sm:inline">Overview</span>
+            </TabsTrigger>
+            <TabsTrigger value="trends" className="gap-2">
+              <TrendingUp className="h-4 w-4" />
+              <span className="hidden sm:inline">Trends</span>
+            </TabsTrigger>
+            <TabsTrigger value="correlations" className="gap-2">
+              <BarChart3 className="h-4 w-4" />
+              <span className="hidden sm:inline">Correlations</span>
+            </TabsTrigger>
+            <TabsTrigger value="sleep" className="gap-2">
+              <Moon className="h-4 w-4" />
+              <span className="hidden sm:inline">Sleep</span>
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Overview Tab */}
+          <TabsContent value="overview" className="space-y-6">
+            {/* Quick Metrics Grid */}
+            <div className="grid gap-3 grid-cols-2 md:grid-cols-4">
+              <MetricCard
+                title="HRV (Overnight)"
+                value={metrics?.hrv_overnight?.toFixed(1)}
+                unit="ms"
+                icon={Activity}
+                color="bg-blue-500"
+              />
+              <MetricCard
+                title="Resting HR"
+                value={metrics?.resting_hr}
+                unit="bpm"
+                icon={Heart}
+                color="bg-red-500"
+              />
+              <MetricCard
+                title="SpO2"
+                value={metrics?.spo2_avg?.toFixed(0)}
+                unit="%"
+                icon={Wind}
+                color="bg-cyan-500"
+              />
+              <MetricCard
+                title="Stress"
+                value={metrics?.stress_avg?.toFixed(0)}
+                icon={Brain}
+                color="bg-orange-500"
+              />
+            </div>
+
+            {/* Gauges Row */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <Card>
+                <CardHeader className="pb-0 pt-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-blue-500" />
+                    HRV RMSSD
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 pb-2">
+                  <CleanGauge
+                    value={metrics?.hrv_overnight ?? null}
+                    min={10}
+                    max={100}
+                    unit="ms"
+                    thresholds={[
+                      [0, SCIENTIFIC_COLORS.danger],
+                      [0.3, SCIENTIFIC_COLORS.warning],
+                      [0.5, SCIENTIFIC_COLORS.primary],
+                      [0.7, SCIENTIFIC_COLORS.success],
+                    ]}
+                    label="Parasympathetic"
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-0 pt-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Battery className="h-4 w-4 text-green-500" />
+                    Body Battery
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 pb-2">
+                  <CleanGauge
+                    value={metrics?.body_battery_high ?? null}
+                    min={0}
+                    max={100}
+                    unit="%"
+                    thresholds={[
+                      [0, SCIENTIFIC_COLORS.danger],
+                      [0.25, SCIENTIFIC_COLORS.warning],
+                      [0.5, SCIENTIFIC_COLORS.primary],
+                      [0.75, SCIENTIFIC_COLORS.success],
+                    ]}
+                    label="Energy Reserve"
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-0 pt-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Moon className="h-4 w-4 text-purple-500" />
+                    Sleep Score
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 pb-2">
+                  <CleanGauge
+                    value={metrics?.sleep_score ?? null}
+                    min={0}
+                    max={100}
+                    thresholds={[
+                      [0, SCIENTIFIC_COLORS.danger],
+                      [0.4, SCIENTIFIC_COLORS.warning],
+                      [0.7, SCIENTIFIC_COLORS.success],
+                    ]}
+                    label="Quality"
+                  />
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-0 pt-3">
+                  <CardTitle className="text-sm flex items-center gap-2">
+                    <Wind className="h-4 w-4 text-cyan-500" />
+                    SpO2
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0 pb-2">
+                  <CleanGauge
+                    value={metrics?.spo2_avg ?? null}
+                    min={85}
+                    max={100}
+                    unit="%"
+                    thresholds={[
+                      [0, SCIENTIFIC_COLORS.danger],
+                      [0.6, SCIENTIFIC_COLORS.warning],
+                      [0.85, SCIENTIFIC_COLORS.success],
+                    ]}
+                    label="Oxygen Saturation"
+                  />
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Space Weather Panel */}
+            <SpaceWeatherPanel
+              spaceWeather={spaceWeather}
+              loading={spaceWeatherLoading}
+            />
+
+            {/* Additional Metrics */}
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-base">Additional Metrics</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">Sleep Duration</p>
+                    <p className="text-lg font-semibold">
+                      {metrics?.sleep_duration_hours?.toFixed(1) ?? "—"} h
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">Respiration (Sleep)</p>
+                    <p className="text-lg font-semibold">
+                      {metrics?.respiration_sleep?.toFixed(1) ?? "—"} br/min
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">Steps</p>
+                    <p className="text-lg font-semibold">
+                      {metrics?.steps?.toLocaleString() ?? "—"}
+                    </p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">VO2max</p>
+                    <p className="text-lg font-semibold">
+                      {metrics?.vo2max?.toFixed(0) ?? "—"} mL/kg/min
                     </p>
                   </div>
                 </div>
               </CardContent>
             </Card>
-          </motion.div>
-        )}
+          </TabsContent>
 
-        {/* User Selection */}
-        <motion.div
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-        >
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Settings className="h-5 w-5" />
-                Configuration
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4">
-                <div className="flex-1">
-                  <label className="text-sm text-muted-foreground">
-                    User ID
-                  </label>
-                  <Input
-                    value={userId}
-                    onChange={(e) => setUserId(e.target.value)}
-                    placeholder="Enter user ID"
-                    className="mt-1"
+          {/* Trends Tab */}
+          <TabsContent value="trends" className="space-y-6">
+            {dates.length > 0 ? (
+              <>
+                {/* HRV & RHR Time Series */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription className="text-xs">
+                      Higher HRV indicates better parasympathetic tone; lower RHR suggests cardiovascular efficiency
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <EChartsWrapper
+                      option={buildTimeSeriesChart(
+                        dates,
+                        [
+                          { name: "HRV (ms)", data: hrvData, color: CHART_COLORS.hrv },
+                          { name: "RHR (bpm)", data: rhrData, color: CHART_COLORS.rhr, yAxisIndex: 1 },
+                        ],
+                        [
+                          { name: "ms", position: "left", color: CHART_COLORS.hrv },
+                          { name: "bpm", position: "right", color: CHART_COLORS.rhr },
+                        ],
+                        "HRV & Resting Heart Rate"
+                      )}
+                      height={300}
+                      showToolbox={false}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Sleep & SpO2 */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription className="text-xs">
+                      Sleep duration and nocturnal SpO2 - desaturation events may affect HRV
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <EChartsWrapper
+                      option={buildTimeSeriesChart(
+                        dates,
+                        [
+                          { name: "Sleep (h)", data: sleepData, color: CHART_COLORS.sleep },
+                          { name: "SpO2 (%)", data: spo2Data, color: CHART_COLORS.spo2, yAxisIndex: 1 },
+                        ],
+                        [
+                          { name: "Hours", position: "left", color: CHART_COLORS.sleep },
+                          { name: "%", position: "right", color: CHART_COLORS.spo2 },
+                        ],
+                        "Sleep Duration & SpO2"
+                      )}
+                      height={300}
+                      showToolbox={false}
+                    />
+                  </CardContent>
+                </Card>
+
+                {/* Stress & Respiration */}
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardDescription className="text-xs">
+                      Stress levels and sleep respiration rate - elevated respiration may indicate sleep disturbance
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <EChartsWrapper
+                      option={buildTimeSeriesChart(
+                        dates,
+                        [
+                          { name: "Stress", data: stressData, color: CHART_COLORS.stress },
+                          { name: "Resp (br/min)", data: respirationData, color: CHART_COLORS.respiration, yAxisIndex: 1 },
+                        ],
+                        [
+                          { name: "Score", position: "left", color: CHART_COLORS.stress },
+                          { name: "br/min", position: "right", color: CHART_COLORS.respiration },
+                        ],
+                        "Stress & Sleep Respiration"
+                      )}
+                      height={300}
+                      showToolbox={false}
+                    />
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card>
+                <CardContent className="pt-6 flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <TrendingUp className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                    <p className="text-muted-foreground">Sync data to view trends</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Correlations Tab */}
+          <TabsContent value="correlations" className="space-y-6">
+            {dates.length > 5 ? (
+              <>
+                <div className="grid gap-4 md:grid-cols-2">
+                  {/* HRV vs Sleep */}
+                  <Card>
+                    <CardContent className="pt-4">
+                      <EChartsWrapper
+                        option={buildCorrelationChart(
+                          sleepData,
+                          hrvData,
+                          "Sleep (h)",
+                          "HRV (ms)",
+                          "Sleep Duration vs HRV"
+                        )}
+                        height={280}
+                        showToolbox={false}
+                      />
+                    </CardContent>
+                  </Card>
+
+                  {/* HRV vs Stress */}
+                  <Card>
+                    <CardContent className="pt-4">
+                      <EChartsWrapper
+                        option={buildCorrelationChart(
+                          stressData,
+                          hrvData,
+                          "Stress",
+                          "HRV (ms)",
+                          "Stress vs HRV"
+                        )}
+                        height={280}
+                        showToolbox={false}
+                      />
+                    </CardContent>
+                  </Card>
+
+                  {/* SpO2 vs Sleep */}
+                  <Card>
+                    <CardContent className="pt-4">
+                      <EChartsWrapper
+                        option={buildCorrelationChart(
+                          sleepData,
+                          spo2Data,
+                          "Sleep (h)",
+                          "SpO2 (%)",
+                          "Sleep vs SpO2"
+                        )}
+                        height={280}
+                        showToolbox={false}
+                      />
+                    </CardContent>
+                  </Card>
+
+                  {/* RHR vs HRV */}
+                  <Card>
+                    <CardContent className="pt-4">
+                      <EChartsWrapper
+                        option={buildCorrelationChart(
+                          rhrData,
+                          hrvData,
+                          "RHR (bpm)",
+                          "HRV (ms)",
+                          "Resting HR vs HRV"
+                        )}
+                        height={280}
+                        showToolbox={false}
+                      />
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {/* Scientific Context */}
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Correlation Analysis Notes</CardTitle>
+                  </CardHeader>
+                  <CardContent className="text-sm text-muted-foreground space-y-2">
+                    <p>
+                      • <strong>HRV-Sleep correlation</strong>: Higher sleep quality and duration 
+                      typically associate with improved HRV (Shaffer &amp; Ginsberg, 2017)
+                    </p>
+                    <p>
+                      • <strong>HRV-Stress correlation</strong>: Negative correlation expected; 
+                      chronic stress suppresses parasympathetic activity (Thayer et al., 2012)
+                    </p>
+                    <p>
+                      • <strong>SpO2 variations</strong>: Nocturnal desaturations may predict 
+                      reduced HRV the following day (sleep-disordered breathing effect)
+                    </p>
+                    <p>
+                      • <strong>Solar activity influence</strong>: Geomagnetic storms (Kp≥5) 
+                      associated with decreased HRV in susceptible individuals (Sci Rep, 2018)
+                    </p>
+                  </CardContent>
+                </Card>
+              </>
+            ) : (
+              <Card>
+                <CardContent className="pt-6 flex items-center justify-center h-64">
+                  <div className="text-center">
+                    <BarChart3 className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                    <p className="text-muted-foreground">Need at least 5 days of data for correlations</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          {/* Sleep Tab */}
+          <TabsContent value="sleep" className="space-y-6">
+            {/* Sleep Summary */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <MetricCard
+                title="Duration"
+                value={metrics?.sleep_duration_hours?.toFixed(1)}
+                unit="h"
+                icon={Moon}
+                color="bg-purple-500"
+              />
+              <MetricCard
+                title="Sleep Score"
+                value={metrics?.sleep_score}
+                icon={Zap}
+                color="bg-indigo-500"
+              />
+              <MetricCard
+                title="Efficiency"
+                value={metrics?.sleep_efficiency ? `${(metrics.sleep_efficiency * 100).toFixed(0)}` : null}
+                unit="%"
+                icon={Activity}
+                color="bg-violet-500"
+              />
+              <MetricCard
+                title="Respiration"
+                value={metrics?.respiration_sleep?.toFixed(1)}
+                unit="br/min"
+                icon={Wind}
+                color="bg-teal-500"
+              />
+            </div>
+
+            {/* Sleep Stages */}
+            {(metrics?.sleep_deep_minutes || metrics?.sleep_rem_minutes || metrics?.sleep_light_minutes) && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Sleep Architecture</CardTitle>
+                  <CardDescription className="text-xs">
+                    Deep sleep critical for physical recovery; REM for cognitive consolidation
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center p-4 rounded-lg bg-indigo-500/10 border border-indigo-500/30">
+                      <p className="text-3xl font-bold text-indigo-500">
+                        {metrics?.sleep_deep_minutes ?? "—"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Deep (min)</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Target: 60-90 min
+                      </p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-purple-500/10 border border-purple-500/30">
+                      <p className="text-3xl font-bold text-purple-500">
+                        {metrics?.sleep_rem_minutes ?? "—"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">REM (min)</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Target: 90-120 min
+                      </p>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-blue-500/10 border border-blue-500/30">
+                      <p className="text-3xl font-bold text-blue-500">
+                        {metrics?.sleep_light_minutes ?? "—"}
+                      </p>
+                      <p className="text-sm text-muted-foreground">Light (min)</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        ~50% of total
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Sleep & HRV Relationship */}
+            {dates.length > 0 && (
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardDescription className="text-xs">
+                    Sleep quality directly impacts overnight HRV recovery
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <EChartsWrapper
+                    option={buildTimeSeriesChart(
+                      dates,
+                      [
+                        { name: "Sleep Score", data: history.map((m) => m.sleep_score).reverse(), color: CHART_COLORS.sleep },
+                        { name: "HRV (ms)", data: hrvData, color: CHART_COLORS.hrv, yAxisIndex: 1 },
+                      ],
+                      [
+                        { name: "Score", position: "left", color: CHART_COLORS.sleep },
+                        { name: "ms", position: "right", color: CHART_COLORS.hrv },
+                      ],
+                      "Sleep Score & HRV Recovery"
+                    )}
+                    height={300}
+                    showToolbox={false}
                   />
-                </div>
-                <Button
-                  onClick={fetchMetrics}
-                  disabled={loading}
-                  className="mt-6"
-                >
-                  {loading ? (
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  ) : (
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                  )}
-                  Refresh
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
 
-        {/* Main Metrics Grid */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <MetricCard
-              title="Resting HR"
-              value={metrics?.resting_hr}
-              unit="bpm"
-              icon={Heart}
-              color="bg-danger"
-              description="Overnight average"
-            />
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.25 }}
-          >
-            <MetricCard
-              title="HRV (Overnight)"
-              value={metrics?.hrv_overnight?.toFixed(1)}
-              unit="ms"
-              icon={Activity}
-              color="bg-primary"
-              description="RMSSD during sleep"
-            />
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <MetricCard
-              title="SpO2"
-              value={metrics?.spo2_avg?.toFixed(0)}
-              unit="%"
-              icon={Wind}
-              color="bg-info"
-              description="Blood oxygen average"
-            />
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.35 }}
-          >
-            <MetricCard
-              title="Steps"
-              value={metrics?.steps?.toLocaleString()}
-              icon={Footprints}
-              color="bg-success"
-            />
-          </motion.div>
-        </div>
-
-        {/* Body Battery & Sleep */}
-        <div className="grid gap-6 md:grid-cols-2">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
-            <BodyBatteryGauge
-              high={metrics?.body_battery_high}
-              low={metrics?.body_battery_low}
-            />
-          </motion.div>
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.45 }}
-          >
-            <SleepCard metrics={metrics} />
-          </motion.div>
-        </div>
-
-        {/* Additional Metrics */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>Additional Metrics</CardTitle>
-              <CardDescription>
-                Stress, respiration, and activity data
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="p-3 rounded-lg bg-muted/50">
-                  <p className="text-xs text-muted-foreground">
-                    Avg Stress
-                  </p>
-                  <p className="text-lg font-semibold">
-                    {metrics?.stress_avg?.toFixed(0) ?? "N/A"}
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/50">
-                  <p className="text-xs text-muted-foreground">
-                    Respiration (Awake)
-                  </p>
-                  <p className="text-lg font-semibold">
-                    {metrics?.respiration_awake?.toFixed(1) ?? "N/A"}{" "}
-                    <span className="text-sm font-normal">br/min</span>
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/50">
-                  <p className="text-xs text-muted-foreground">
-                    Respiration (Sleep)
-                  </p>
-                  <p className="text-lg font-semibold">
-                    {metrics?.respiration_sleep?.toFixed(1) ?? "N/A"}{" "}
-                    <span className="text-sm font-normal">br/min</span>
-                  </p>
-                </div>
-                <div className="p-3 rounded-lg bg-muted/50">
-                  <p className="text-xs text-muted-foreground">
-                    VO2 Max
-                  </p>
-                  <p className="text-lg font-semibold">
-                    {metrics?.vo2max?.toFixed(0) ?? "N/A"}{" "}
-                    <span className="text-sm font-normal">mL/kg/min</span>
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Scientific Context */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.55 }}
-        >
-          <Card>
-            <CardHeader>
-              <CardTitle>Scientific Context</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div>
-                <h4 className="font-medium">Overnight HRV & Recovery</h4>
-                <p className="text-muted-foreground">
-                  Overnight RMSSD reflects parasympathetic activity during
-                  restorative sleep. Higher values typically indicate better
-                  recovery and cardiovascular health (Plews et al., 2013).
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <h4 className="font-medium">Body Battery Algorithm</h4>
-                <p className="text-muted-foreground">
-                  Garmin&apos;s Body Battery combines HRV, stress, sleep
-                  quality, and activity data using Firstbeat Analytics
-                  algorithms to estimate energy levels throughout the day.
-                </p>
-              </div>
-              <Separator />
-              <div>
-                <h4 className="font-medium">SpO2 & Sleep Quality</h4>
-                <p className="text-muted-foreground">
-                  Nocturnal SpO2 dips may indicate sleep-disordered breathing.
-                  Consistent readings above 95% during sleep suggest healthy
-                  oxygenation (Haba-Rubio et al., 2016).
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </motion.div>
-
-        {/* Data Date */}
-        {metrics?.date && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.6 }}
-            className="text-center"
-          >
-            <Badge variant="outline">Data from: {metrics.date}</Badge>
-          </motion.div>
-        )}
+        {/* Scientific References */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Scientific Context</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <p>
+              • <strong>HRV-Solar Activity</strong>: Long-term studies show autonomic nervous system 
+              responds to geomagnetic changes, with higher solar wind intensity associated with 
+              biological stress response (McCraty et al., Nature Sci Rep, 2018)
+            </p>
+            <p>
+              • <strong>Overnight RMSSD</strong>: Reflects parasympathetic activity during sleep; 
+              higher values indicate better cardiovascular recovery (Plews et al., 2013)
+            </p>
+            <p>
+              • <strong>SpO2 &amp; Sleep Quality</strong>: Nocturnal desaturations (&lt;90%) may indicate 
+              sleep-disordered breathing affecting HRV (Haba-Rubio et al., 2016)
+            </p>
+            <Separator className="my-3" />
+            <p className="text-xs italic">
+              Data synchronized from Garmin Connect via python-garminconnect library.
+              Credentials stored securely in backend environment variables.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </PageWrapper>
   );
