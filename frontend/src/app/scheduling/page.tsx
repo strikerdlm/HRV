@@ -580,13 +580,13 @@ function EditCrewMemberDialog({
       occupation: formData.occupation || null,
       height_cm: formData.height_cm ? parseFloat(formData.height_cm) : null,
       weight_kg: formData.weight_kg ? parseFloat(formData.weight_kg) : null,
-      resting_hr_bpm: formData.resting_hr_bpm ? parseFloat(formData.resting_hr_bpm) : null,
-      max_hr_bpm: formData.max_hr_bpm ? parseFloat(formData.max_hr_bpm) : null,
+      resting_hr_bpm: formData.resting_hr_bpm ? parseInt(formData.resting_hr_bpm, 10) : null,
+      max_hr_bpm: formData.max_hr_bpm ? parseInt(formData.max_hr_bpm, 10) : null,
       vo2max_ml_kg_min: formData.vo2max_ml_kg_min ? parseFloat(formData.vo2max_ml_kg_min) : null,
       activity_level: formData.activity_level || null,
       smoking_status: formData.smoking_status || null,
       alcohol_use: formData.alcohol_use || null,
-      caffeine_intake_mg: formData.caffeine_intake_mg ? parseFloat(formData.caffeine_intake_mg) : null,
+      caffeine_intake_mg: formData.caffeine_intake_mg ? parseInt(formData.caffeine_intake_mg, 10) : null,
       medical_conditions: formData.medical_conditions
         ? formData.medical_conditions.split(",").map((s) => s.trim()).filter(Boolean)
         : [],
@@ -1575,9 +1575,12 @@ export default function SchedulingPage() {
     if (!editingMember) return;
 
     try {
+      // Extract role and status (not part of UserProfile API)
+      const { role, status, ...profileData } = data;
+      
       const updatedUser = await updateUser(editingMember.user.user_id, {
         ...editingMember.user,
-        ...data,
+        ...profileData,
       });
 
       setCrewMembers((prev) =>
@@ -1586,8 +1589,8 @@ export default function SchedulingPage() {
             ? {
                 ...m,
                 user: updatedUser,
-                role: data.role,
-                status: data.status as CrewMember["status"],
+                role: role,
+                status: status as CrewMember["status"],
               }
             : m
         )
@@ -1598,11 +1601,13 @@ export default function SchedulingPage() {
           u.user_id === editingMember.user.user_id ? updatedUser : u
         )
       );
+      
+      setEditingMember(null);
     } catch (error) {
       console.error("Failed to update crew member:", error);
+      // Show error to user
+      alert(`Failed to update profile: ${error instanceof Error ? error.message : "Unknown error"}`);
     }
-
-    setEditingMember(null);
   };
 
   const handleDeleteCrewMember = async (memberId: string) => {
