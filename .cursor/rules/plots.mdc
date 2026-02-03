@@ -11,6 +11,37 @@ This project uses **Apache ECharts** for all visualizations following Nature Res
 **Colors**: Use `SCIENTIFIC_COLORS` palette from `user_profile_tab.py`
 **Style**: Age-stratified norms, reference zones, EWMA trends, scientific citations
 
+## ⚠️ CRITICAL: Anti-Clutter Rules
+
+**NEVER create cluttered, overlapping, or unreadable charts!**
+
+### Title Guidelines
+- **Single-line titles only**: Short, descriptive (e.g., "Kp Index" not "Kp Index Time Series Chart")
+- **NO subtitles in title config**: Put descriptions in Card headers or below the chart
+- **Center alignment**: `left: "center"` for titles
+
+### Axis Label Guidelines
+- **X-axis**: Use `interval` to limit labels (max 8-10 visible labels)
+- **Y-axis**: Use `formatter` to ensure clean number display
+- **Rotate sparingly**: Max 30° rotation, prefer 0° when possible
+- **Font size**: 10-11px for axis labels, never smaller than 9px
+
+### Grid Margins (CRITICAL)
+```typescript
+grid: {
+  left: 50,    // Space for Y-axis labels
+  right: 30,   // Space for legends/toolbox
+  top: 50,     // Space for title (60 if subtitle)
+  bottom: 60,  // Space for X-axis + dataZoom
+  containLabel: true  // ALWAYS include this!
+}
+```
+
+### DataZoom Positioning
+- Place slider OUTSIDE grid area: `bottom: 5` or `bottom: 10`
+- Set `height: 20` max for sliders
+- Avoid overlapping with axis labels
+
 ## ⚠️ CRITICAL: Dynamic Axis Bounds
 
 **NEVER use hardcoded axis min/max values that might clip data!**
@@ -31,11 +62,11 @@ hr_min, hr_max = _auto_axis_bounds(
 
 ## Key Requirements
 
-1. **Dynamic axis scaling**: Use `_auto_axis_bounds()` — no hardcoded limits that clip data!
-2. **Every chart MUST have**: Title, subtitle (methodology), axis labels with units, legend, tooltip
-3. **Reference zones**: Shaded bands for normal ranges (using stacked area technique)
-4. **Trend lines**: 7-day EWMA smoothing for time series
-5. **Citations**: Evidence-based references below each chart
+1. **Anti-clutter**: Clean titles, spaced labels, no overlapping elements
+2. **Dynamic axis scaling**: Use `_auto_axis_bounds()` — no hardcoded limits that clip data!
+3. **Every chart MUST have**: Clear title, axis labels with units, tooltip
+4. **Reference zones**: Shaded bands for normal ranges (using stacked area technique)
+5. **Trend lines**: 7-day EWMA smoothing for time series
 6. **Export**: SVG, PDF, PNG (300+ DPI), HTML, CSV/JSON
 
 ## Standard Heights
