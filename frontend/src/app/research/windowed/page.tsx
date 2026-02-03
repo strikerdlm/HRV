@@ -43,25 +43,37 @@ function WindowedChart({ data, metric }: { data: WindowedMetricsResponse; metric
   };
 
   const info = metricInfo[metric];
+  
+  // Calculate optimal label interval - show max 8 labels for clean display
+  const numWindows = data.timestamps.length;
+  const labelInterval = Math.max(0, Math.ceil(numWindows / 8) - 1);
 
   const option: Record<string, unknown> = {
     title: {
       text: `${info.name} Over Time`,
       textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 14 },
     },
-    grid: { left: 60, right: 30, top: 50, bottom: 60 },
+    grid: { left: 60, right: 30, top: 50, bottom: 70 },
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
-      { type: "slider", start: 0, end: 100, height: 20, bottom: 10 },
+      { type: "slider", start: 0, end: 100, height: 20, bottom: 5 },
     ],
     xAxis: {
       type: "category",
-      data: data.timestamps.map((t, i) => i + 1),
+      data: data.timestamps.map((_, i) => i + 1),
       name: "Window",
       nameLocation: "middle",
-      nameGap: 25,
-      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary },
+      nameGap: 40,
+      axisLabel: {
+        color: SCIENTIFIC_COLORS.textPrimary,
+        interval: labelInterval,
+        showMinLabel: true,
+        showMaxLabel: true,
+        fontSize: 11,
+        hideOverlap: true,
+      },
       nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+      axisTick: { alignWithLabel: true, interval: labelInterval },
     },
     yAxis: {
       type: "value",
@@ -115,8 +127,9 @@ function WindowedChart({ data, metric }: { data: WindowedMetricsResponse; metric
       },
     },
     legend: {
-      bottom: 35,
-      textStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+      top: 25,
+      right: 10,
+      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 11 },
     },
   };
 
@@ -125,20 +138,36 @@ function WindowedChart({ data, metric }: { data: WindowedMetricsResponse; metric
 
 // Combined metrics chart
 function CombinedChart({ data }: { data: WindowedMetricsResponse }) {
+  // Calculate optimal label interval - show max 10 labels for wider chart
+  const numWindows = data.timestamps.length;
+  const labelInterval = Math.max(0, Math.ceil(numWindows / 10) - 1);
+
   const option: Record<string, unknown> = {
     title: {
       text: "All Metrics Overview",
       textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 14 },
     },
-    grid: { left: 60, right: 60, top: 50, bottom: 60 },
+    grid: { left: 60, right: 60, top: 50, bottom: 70 },
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
-      { type: "slider", start: 0, end: 100, height: 20, bottom: 10 },
+      { type: "slider", start: 0, end: 100, height: 20, bottom: 5 },
     ],
     xAxis: {
       type: "category",
-      data: data.timestamps.map((t, i) => i + 1),
-      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary },
+      data: data.timestamps.map((_, i) => i + 1),
+      name: "Window",
+      nameLocation: "middle",
+      nameGap: 40,
+      axisLabel: {
+        color: SCIENTIFIC_COLORS.textPrimary,
+        interval: labelInterval,
+        showMinLabel: true,
+        showMaxLabel: true,
+        fontSize: 11,
+        hideOverlap: true,
+      },
+      nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+      axisTick: { alignWithLabel: true, interval: labelInterval },
     },
     yAxis: [
       {
@@ -187,8 +216,9 @@ function CombinedChart({ data }: { data: WindowedMetricsResponse }) {
     ],
     tooltip: { trigger: "axis" },
     legend: {
-      bottom: 35,
-      textStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+      top: 25,
+      right: 10,
+      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 11 },
     },
   };
 
