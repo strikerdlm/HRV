@@ -49,14 +49,18 @@ function DeviationBadge({ zone }: { zone: DeviationZone }) {
 }
 
 function RRIntervalChart({ data }: { data: RRTimeSeriesResponse }) {
+  // Calculate smart interval for x-axis labels to prevent clutter
+  const totalBeats = data.total_beats || data.timestamps.length;
+  const labelInterval = Math.max(1, Math.ceil(totalBeats / 10) - 1);
+
   const option: Record<string, unknown> = {
     title: {
       text: "RR Intervals Over Time",
-      subtext: `${data.total_beats} beats | ${(data.duration_seconds ?? 0 / 60).toFixed(1)} min`,
+      subtext: `${data.total_beats} beats | ${((data.duration_seconds ?? 0) / 60).toFixed(1)} min`,
       textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 14 },
       subtextStyle: { color: SCIENTIFIC_COLORS.textSecondary },
     },
-    grid: { left: 70, right: 30, top: 70, bottom: 60 },
+    grid: { left: 70, right: 30, top: 70, bottom: 70 },
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
       { type: "slider", start: 0, end: 100, height: 20, bottom: 10 },
@@ -66,9 +70,16 @@ function RRIntervalChart({ data }: { data: RRTimeSeriesResponse }) {
       data: data.timestamps.map((_, i) => i + 1),
       name: "Beat Number",
       nameLocation: "middle",
-      nameGap: 35,
-      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary },
+      nameGap: 40,
+      axisLabel: {
+        color: SCIENTIFIC_COLORS.textPrimary,
+        interval: labelInterval,
+        showMinLabel: true,
+        showMaxLabel: true,
+        fontSize: 11,
+      },
       nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary },
+      axisTick: { alignWithLabel: true },
     },
     yAxis: {
       type: "value",
