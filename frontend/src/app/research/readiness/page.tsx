@@ -120,7 +120,16 @@ function TrendChart({ data }: { data: ReadinessResponse }) {
     xAxis: {
       type: "category",
       data: data.trend_dates,
-      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 10 },
+      axisLabel: {
+        color: SCIENTIFIC_COLORS.textPrimary,
+        fontSize: 10,
+        interval: Math.max(0, Math.ceil(data.trend_dates.length / 7) - 1),
+        rotate: data.trend_dates.length > 10 ? 45 : 0,
+        align: data.trend_dates.length > 10 ? "right" : "center",
+        showMinLabel: true,
+        showMaxLabel: true,
+      },
+      axisTick: { alignWithLabel: true },
     },
     yAxis: {
       type: "value",
