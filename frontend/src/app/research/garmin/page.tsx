@@ -97,79 +97,84 @@ function CleanGauge({
     return thresholds[0][1];
   };
 
+  // Publication-quality gauge: clean, uncluttered, clear typography
   const option: Record<string, unknown> = {
     series: [
       {
         type: "gauge",
-        center: ["50%", "68%"],
-        radius: "95%",
+        center: ["50%", "60%"],
+        radius: "90%",
         startAngle: 180,
         endAngle: 0,
         min,
         max,
         axisLine: {
           lineStyle: {
-            width: 16,
+            width: 14,
             color: thresholds,
           },
         },
         pointer: {
-          length: "68%",
-          width: 5,
-          offsetCenter: [0, "5%"],
+          length: "60%",
+          width: 4,
+          offsetCenter: [0, "0%"],
           itemStyle: {
             color: hasData ? getColor() : "#94a3b8",
-            shadowColor: "rgba(0, 0, 0, 0.25)",
-            shadowBlur: 6,
+            shadowColor: "rgba(0, 0, 0, 0.2)",
+            shadowBlur: 4,
           },
         },
         anchor: {
           show: true,
           showAbove: true,
-          size: 14,
+          size: 10,
           itemStyle: {
-            borderWidth: 3,
+            borderWidth: 2,
             borderColor: hasData ? getColor() : "#94a3b8",
             color: "#fff",
           },
         },
         axisTick: { show: false },
         splitLine: { show: false },
+        // CRITICAL: Only show min and max to prevent clutter
         axisLabel: {
           show: true,
-          distance: -28,
+          distance: 6,
           color: CHART_COLORS.text,
-          fontSize: 10,
+          fontSize: 9,
           fontWeight: "600",
           formatter: (v: number) => {
-            if (v === min || v === max) return v.toString();
-            const mid = (min + max) / 2;
-            if (Math.abs(v - mid) < (max - min) * 0.1) return v.toFixed(0);
+            // Only show min and max values - no middle numbers
+            if (v === min) return min.toString();
+            if (v === max) return max.toString();
             return "";
           },
         },
-        progress: { show: true, overlap: false, roundCap: true, clip: false },
+        progress: { show: false },
         detail: {
           valueAnimation: true,
-          formatter: () => hasData ? `${displayValue.toFixed(unit === "ms" ? 1 : 0)}${unit}` : "—",
-          fontSize: 24,
+          formatter: () => hasData ? `${displayValue.toFixed(unit === "ms" ? 1 : 0)}` : "—",
+          fontSize: 20,
           fontWeight: "bold",
           color: hasData ? getColor() : "#94a3b8",
-          offsetCenter: [0, "32%"],
+          offsetCenter: [0, "30%"],
         },
+        // Title/label shown BELOW the gauge value
         title: {
-          show: true,
-          offsetCenter: [0, "55%"],
-          fontSize: 11,
-          fontWeight: "500",
-          color: CHART_COLORS.subtext,
+          show: false, // Hide to prevent overlap - label shown in card header
         },
         data: [{ value: displayValue, name: label }],
       },
     ],
   };
 
-  return <EChartsWrapper option={option} height={160} showToolbox={false} />;
+  return (
+    <div className="relative">
+      <EChartsWrapper option={option} height={140} showToolbox={false} />
+      {/* Clean label below gauge */}
+      <p className="text-xs text-muted-foreground text-center -mt-3 pb-1">{label}</p>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -626,20 +631,30 @@ export default function GarminPage() {
     setLoading(true);
     setError(null);
     try {
+      console.log(`[Garmin] Fetching metrics for user: ${userId}`);
+      
       // Fetch latest metrics
       const response = await fetch(
         `${API_BASE}/api/research/garmin/latest/${userId}`,
-        { method: "GET", headers: { "Content-Type": "application/json" } }
+        { 
+          method: "GET", 
+          headers: { "Content-Type": "application/json" },
+        }
       );
 
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[Garmin] API error: ${response.status}`, errorText);
         throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data: GarminMetrics = await response.json();
+      console.log("[Garmin] Received metrics:", data);
       setMetrics(data);
 
-      if (data.date || data.steps || data.resting_hr) {
+      // Check if we have actual data (not just empty response)
+      const hasData = data.date || data.steps || data.resting_hr || data.hrv_overnight;
+      if (hasData) {
         setConnectionStatus("connected");
       } else {
         setConnectionStatus("disconnected");
@@ -653,6 +668,7 @@ export default function GarminPage() {
 
       if (historyResponse.ok) {
         const historyData: GarminMetrics[] = await historyResponse.json();
+        console.log(`[Garmin] Received ${historyData.length} history records`);
         setHistory(historyData);
       }
     } catch (err) {
@@ -682,6 +698,8 @@ export default function GarminPage() {
     setSyncing(true);
     setError(null);
     try {
+      console.log(`[Garmin] Starting sync for user: ${userId}, days: ${syncDays}`);
+      
       const response = await fetch(
         `${API_BASE}/api/research/garmin/sync/${userId}`,
         {
@@ -692,18 +710,36 @@ export default function GarminPage() {
       );
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(
-          errorData.detail || `HTTP ${response.status}: ${response.statusText}`
-        );
+        const errorText = await response.text();
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errorData = JSON.parse(errorText);
+          errorMessage = errorData.detail || errorMessage;
+        } catch {
+          // Use default error message
+        }
+        console.error("[Garmin] Sync error:", errorMessage);
+        throw new Error(errorMessage);
       }
 
+      const result = await response.json();
+      console.log("[Garmin] Sync result:", result);
+      
       setConnectionStatus("connected");
       await fetchMetrics();
     } catch (err) {
       console.error("Failed to sync Garmin data:", err);
       setConnectionStatus("error");
-      setError(err instanceof Error ? err.message : "Sync failed");
+      const errorMsg = err instanceof Error ? err.message : "Sync failed";
+      
+      // Provide more helpful error messages
+      if (errorMsg.includes("GARMIN_EMAIL") || errorMsg.includes("not configured")) {
+        setError("Garmin credentials not configured. Please set GARMIN_EMAIL and GARMIN_PASSWORD in backend .env file.");
+      } else if (errorMsg.includes("authentication") || errorMsg.includes("401")) {
+        setError("Garmin authentication failed. Check your credentials or generate new auth tokens if MFA is enabled.");
+      } else {
+        setError(errorMsg);
+      }
     } finally {
       setSyncing(false);
     }
@@ -829,6 +865,28 @@ export default function GarminPage() {
             </Button>
           </div>
         </motion.div>
+
+        {/* Setup Guide - Show when no data and user ID is default */}
+        {!metrics?.date && userId === "default" && !error && (
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardContent className="pt-4">
+              <div className="flex items-start gap-3">
+                <Settings className="h-5 w-5 text-blue-500 mt-0.5" />
+                <div className="space-y-2">
+                  <p className="font-medium text-blue-900">Setup Required</p>
+                  <p className="text-sm text-blue-700">
+                    Configure your Garmin Connect integration to start syncing data:
+                  </p>
+                  <ol className="text-sm text-blue-700 list-decimal list-inside space-y-1">
+                    <li>Click <strong>Settings</strong> to set your User ID</li>
+                    <li>Ensure <code className="bg-blue-100 px-1 rounded text-xs">GARMIN_EMAIL</code> and <code className="bg-blue-100 px-1 rounded text-xs">GARMIN_PASSWORD</code> are set in your backend <code className="bg-blue-100 px-1 rounded text-xs">.env</code> file</li>
+                    <li>Click <strong>Sync from Garmin</strong> to fetch your data</li>
+                  </ol>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Error Display */}
         {error && (
