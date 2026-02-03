@@ -7,6 +7,28 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.17] - 2026-02-03
+
+### Added
+- **Enhanced Garmin Connect Integration** (TypeScript/Next.js frontend):
+  - **Auto-load credentials**: Settings dialog with localStorage persistence for user ID, sync days (1-90), and auto-sync toggle
+  - **Auto-sync on load**: Optional automatic data synchronization when page loads (configurable)
+  - **Multi-day time series charts**: 30-day trends for HRV, RHR, Sleep, SpO2, Stress, and Respiration
+  - **Correlation scatter plots**: HRV vs Sleep, HRV vs Stress, SpO2 vs Sleep, RHR vs HRV with Pearson r calculation
+  - **Space Weather correlation panel**: Live Kp, Dst, and solar wind display with scientific context
+  - **Publication-quality gauges**: Clean half-circle gauges for HRV, Body Battery, Sleep Score, SpO2
+  - **Sleep architecture visualization**: Deep/REM/Light sleep breakdown with targets
+  - **Tabbed interface**: Overview, Trends, Correlations, and Sleep analysis tabs
+- **Scientific context for correlations**: References to McCraty et al. (2018), Shaffer & Ginsberg (2017), Thayer et al. (2012)
+
+### Fixed
+- **Garmin history API**: Now returns all physiological fields (respiration, efficiency, distance, calories) instead of subset
+
+### Technical Notes
+- Frontend uses `getCurrentSpaceWeather()` API for real-time geomagnetic data correlation
+- All charts follow publication rules: no cluttered titles, dynamic axis scaling, dark font colors
+- Settings persist in browser localStorage for seamless user experience
+
 ## [1.9.16] - 2026-02-02
 
 ### Added
