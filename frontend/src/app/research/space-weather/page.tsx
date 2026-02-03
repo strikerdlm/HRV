@@ -160,11 +160,8 @@ function KpGauge({ value }: { value: number | null }) {
           },
         },
         pointer: {
-          icon: "path://M2090.36389,615.30999 L2## drop-shaped pointer
-            2## Clean pointer path
-            2090.36389,615.30999 L2## rest of path",
-          length: "75%",
-          width: 10,
+          length: "70%",
+          width: 6,
           offsetCenter: [0, "5%"],
           itemStyle: {
             color: hasData ? level.color : "#94a3b8",
