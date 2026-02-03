@@ -11,6 +11,7 @@ import {
   RadarChart,
   ScatterChart,
   HeatmapChart,
+  PieChart,
 } from "echarts/charts";
 import {
   GridComponent,
@@ -35,6 +36,7 @@ echarts.use([
   RadarChart,
   ScatterChart,
   HeatmapChart,
+  PieChart,
   GridComponent,
   TooltipComponent,
   TitleComponent,
