@@ -83,6 +83,7 @@ const researchNavHRV = [
   { id: "nonlinear", label: "Nonlinear", icon: Network, href: "/research/nonlinear" },
   { id: "hrf", label: "HRF Analysis", icon: Zap, href: "/research/hrf" },
   { id: "windowed", label: "Windowed", icon: Layers, href: "/research/windowed" },
+  { id: "vt", label: "VT Estimation", icon: Target, href: "/research/ventilatory-threshold" },
 ];
 
 // Research navigation items - Clinical Tools
