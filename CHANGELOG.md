@@ -7,6 +7,43 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.10.0] - 2026-02-05
+
+### Added
+- **HRV-Based Ventilatory Threshold Estimation (Experimental)**:
+  - New `vt_analysis.py` module implementing DFA-α1 based VT detection
+  - Core DFA-α1 computation (short-term scaling exponent, window 4-16 beats)
+  - Time-varying DFA-α1 with configurable 120s sliding window (Kubios standard)
+  - Multi-parameter VT detection: 60% DFA-α1 + 30% HR Reserve + 10% Respiratory frequency
+  - Confidence scoring and signal quality assessment
+  - Exercise intensity zone classification (Zone 1/2/3)
+  - Artifact correction with Kubios-style ±20% median threshold
+  - Synthetic demo data generator for 20-min graded exercise test
+- **Research Frontend Page** (`/research/ventilatory-threshold`):
+  - Publication-quality DFA-α1 time series chart with intensity zone shading
+  - Heart rate progression with VT1/VT2 vertical markers
+  - DFA-α1 vs Heart Rate scatter plot (color-coded by zone)
+  - Multi-parameter integrated score visualization
+  - Personalized intensity zone cards with training guidance
+  - Scientific explanation collapsible with methodology details
+  - Full scientific references (Eronen et al., 2024; Gronwald et al., 2020; Rogers et al., 2021)
+  - Client-side demo fallback when API is unavailable
+- **Research API Endpoints**:
+  - `GET /api/research/vt/demo` — Run VT analysis on synthetic exercise data
+  - `POST /api/research/vt/analyze` — Analyze uploaded RR interval data
+- **Integrated Physiological Model Enhancement**:
+  - VT-derived fitness score integrated as bounded modifier (±5 pts) in readiness model
+  - `estimate_vt_readiness_contribution()` function for aerobic capacity assessment
+  - `predict_operational_performance()` now accepts `vt_fitness_score` parameter
+- **Navigation**: VT Estimation added to Research sidebar and Research Hub page
+- **Scientific Background**: New highlight card on Research Hub for DFA-α1 VT research
+
+### Technical Notes
+- DFA-α1 computed using pure NumPy (no external nolds dependency for core)
+- All ECharts follow project publication rules: dark fonts, dynamic axis bounds, scientific colors
+- VT analysis validated against Eronen et al. (2024) n=64 study parameters
+- Readiness model VT contribution is experimental with explicit bounded constraints
+
 ## [1.9.17] - 2026-02-03
 
 ### Added
