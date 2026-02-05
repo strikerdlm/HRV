@@ -2926,3 +2926,209 @@ async def export_hrv_data(
     except Exception as exc:
         _LOGGER.error(f"Error exporting data for {user_id}: {exc}")
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+# ---------------------------------------------------------------------------
+# Ventilatory Threshold (VT) - Experimental
+# ---------------------------------------------------------------------------
+
+
+class VTDetectionRequest(BaseModel):
+    """Request for VT detection from RR intervals."""
+
+    rr_intervals_ms: List[float] = Field(
+        ..., min_length=100, description="RR intervals in milliseconds"
+    )
+    hr_rest: float = Field(60.0, ge=30, le=120, description="Resting HR (bpm)")
+    hr_max: float = Field(185.0, ge=120, le=230, description="Max HR (bpm)")
+    method: str = Field("multiparameter", description="Detection method: dfa_only or multiparameter")
+
+
+class VTThresholdData(BaseModel):
+    """Single ventilatory threshold result."""
+
+    time_seconds: float
+    heart_rate_bpm: float
+    dfa_alpha1: float
+    hr_relative: float
+    confidence: float
+    index: int
+
+
+class VTIntensityZone(BaseModel):
+    """Exercise intensity zone."""
+
+    zone: str
+    zone_label: str
+    zone_description: str
+    hr_min: float
+    hr_max: float
+    dfa_range: str
+    training_guidance: str
+
+
+class VTQualityData(BaseModel):
+    """Quality metrics for VT analysis."""
+
+    artifact_percentage: float
+    total_beats: int
+    clean_beats: int
+    n_windows: int
+    min_dfa: float
+    max_dfa: float
+    dfa_range: float
+    monotonic_decrease: bool
+
+
+class VTAnalysisResponse(BaseModel):
+    """Complete VT analysis response."""
+
+    vt1: Optional[VTThresholdData] = None
+    vt2: Optional[VTThresholdData] = None
+    timeseries_time: List[float] = Field(default_factory=list)
+    timeseries_dfa: List[float] = Field(default_factory=list)
+    timeseries_hr: List[float] = Field(default_factory=list)
+    timeseries_hr_mean: List[float] = Field(default_factory=list)
+    timeseries_integrated_score: List[float] = Field(default_factory=list)
+    respiratory_frequency_hz: Optional[float] = None
+    quality: Optional[VTQualityData] = None
+    method: str = "multiparameter"
+    intensity_zones: List[VTIntensityZone] = Field(default_factory=list)
+    interpretation: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+
+
+@router.get("/vt/demo", response_model=VTAnalysisResponse)
+async def get_vt_demo() -> VTAnalysisResponse:
+    """Run VT analysis on synthetic incremental exercise data (demo mode).
+
+    Generates realistic RR interval data simulating a graded exercise test
+    and detects VT1 and VT2 using the multi-parameter algorithm.
+    """
+    try:
+        from vt_analysis import (
+            VTMethod,
+            detect_ventilatory_thresholds,
+            generate_demo_exercise_data,
+        )
+        import numpy as np
+
+        rr_intervals, hr_rest, hr_max = generate_demo_exercise_data(
+            duration_minutes=20, hr_rest=65.0, hr_max=185.0, seed=42
+        )
+
+        result = detect_ventilatory_thresholds(
+            rr_intervals=rr_intervals,
+            hr_rest=hr_rest,
+            hr_max=hr_max,
+            method=VTMethod.MULTIPARAMETER,
+        )
+
+        return _vt_result_to_response(result)
+
+    except Exception as exc:
+        _LOGGER.error("Error in VT demo analysis: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/vt/analyze", response_model=VTAnalysisResponse)
+async def analyze_vt(request: VTDetectionRequest) -> VTAnalysisResponse:
+    """Detect ventilatory thresholds from uploaded RR interval data.
+
+    Accepts RR intervals in milliseconds and returns VT1/VT2 estimates
+    with time series, quality metrics, and intensity zones.
+    """
+    try:
+        from vt_analysis import (
+            VTMethod,
+            detect_ventilatory_thresholds,
+        )
+        import numpy as np
+
+        rr_arr = np.array(request.rr_intervals_ms, dtype=np.float64)
+
+        method = VTMethod.MULTIPARAMETER
+        if request.method == "dfa_only":
+            method = VTMethod.DFA_ONLY
+
+        result = detect_ventilatory_thresholds(
+            rr_intervals=rr_arr,
+            hr_rest=request.hr_rest,
+            hr_max=request.hr_max,
+            method=method,
+        )
+
+        return _vt_result_to_response(result)
+
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        _LOGGER.error("Error in VT analysis: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+def _vt_result_to_response(result: Any) -> VTAnalysisResponse:
+    """Convert internal VTAnalysisResult to API response model."""
+    vt1_data = None
+    if result.vt1 is not None:
+        vt1_data = VTThresholdData(
+            time_seconds=result.vt1.time_seconds,
+            heart_rate_bpm=result.vt1.heart_rate_bpm,
+            dfa_alpha1=result.vt1.dfa_alpha1,
+            hr_relative=result.vt1.hr_relative,
+            confidence=result.vt1.confidence,
+            index=result.vt1.index,
+        )
+
+    vt2_data = None
+    if result.vt2 is not None:
+        vt2_data = VTThresholdData(
+            time_seconds=result.vt2.time_seconds,
+            heart_rate_bpm=result.vt2.heart_rate_bpm,
+            dfa_alpha1=result.vt2.dfa_alpha1,
+            hr_relative=result.vt2.hr_relative,
+            confidence=result.vt2.confidence,
+            index=result.vt2.index,
+        )
+
+    quality_data = None
+    if result.quality is not None:
+        quality_data = VTQualityData(
+            artifact_percentage=result.quality.artifact_percentage,
+            total_beats=result.quality.total_beats,
+            clean_beats=result.quality.clean_beats,
+            n_windows=result.quality.n_windows,
+            min_dfa=result.quality.min_dfa,
+            max_dfa=result.quality.max_dfa,
+            dfa_range=result.quality.dfa_range,
+            monotonic_decrease=result.quality.monotonic_decrease,
+        )
+
+    zones_data = [
+        VTIntensityZone(
+            zone=z.zone.value,
+            zone_label=z.zone_label,
+            zone_description=z.zone_description,
+            hr_min=z.hr_min,
+            hr_max=z.hr_max,
+            dfa_range=z.dfa_range,
+            training_guidance=z.training_guidance,
+        )
+        for z in result.intensity_zones
+    ]
+
+    return VTAnalysisResponse(
+        vt1=vt1_data,
+        vt2=vt2_data,
+        timeseries_time=result.timeseries_time,
+        timeseries_dfa=result.timeseries_dfa,
+        timeseries_hr=result.timeseries_hr,
+        timeseries_hr_mean=result.timeseries_hr_mean,
+        timeseries_integrated_score=result.timeseries_integrated_score,
+        respiratory_frequency_hz=result.respiratory_frequency_hz,
+        quality=quality_data,
+        method=result.method,
+        intensity_zones=zones_data,
+        interpretation=result.interpretation,
+        warnings=result.warnings,
+    )
