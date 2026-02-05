@@ -49,6 +49,17 @@ const researchModules = [
     features: ["SDNN/RMSSD", "LF/HF Power", "DFA α1", "Fragmentation"],
   },
   {
+    id: "vt-estimation",
+    title: "Ventilatory Threshold",
+    description:
+      "DFA-α1 based aerobic/anaerobic threshold estimation — experimental multi-parameter detection",
+    icon: TrendingUp,
+    href: "/research/ventilatory-threshold",
+    color: "text-purple-500",
+    bgColor: "bg-purple-500/10",
+    features: ["DFA-α1", "VT1/VT2", "Intensity Zones", "Multi-Parameter"],
+  },
+  {
     id: "correlations",
     title: "Solar-HRV Correlations",
     description:
@@ -90,6 +101,12 @@ const scientificHighlights = [
     citation: "PROOF-AF Study, 2025",
     finding:
       "HRF metrics (PIP, IALS) predict atrial fibrillation independently of traditional HRV.",
+  },
+  {
+    title: "DFA-α1 Ventilatory Thresholds",
+    citation: "Eronen et al., 2024",
+    finding:
+      "Multi-parameter HRV algorithm achieves VT2 correlation r=0.93 vs CPET gold standard (n=64).",
   },
 ];
 
