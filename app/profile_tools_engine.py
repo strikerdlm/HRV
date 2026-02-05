@@ -396,12 +396,18 @@ def _fuse_operational_readiness_score(
     recovery_score: Optional[float],
     parasympathetic_index: Optional[float],
     stress_index: Optional[float],
+    vt_fitness_score: Optional[float] = None,
 ) -> Tuple[float, List[str]]:
     """Fuse SAFTE effectiveness and HRV-derived signals into a readiness score.
 
     Design goals:
     - Deterministic, bounded, explainable.
     - Conservative: low SAFTE effectiveness or poor HRV recovery should pull the score down.
+
+    The VT fitness score (from DFA-α1 ventilatory threshold analysis) provides
+    a small, bounded modifier reflecting aerobic fitness and autonomic reserve.
+    It is experimental and contributes up to ±5 points (Eronen et al., 2024;
+    Rogers et al., 2021).
 
     Returns:
         (readiness_score_0_100, triggers)
@@ -440,6 +446,22 @@ def _fuse_operational_readiness_score(
             fused += 3.0
             triggers.append(f"High parasympathetic index ({pns:.1f}/10) provides a small readiness bonus.")
 
+    # VT fitness modifier (experimental): bounded ±5 points.
+    # Reflects aerobic capacity and autonomic reserve from DFA-α1 VT analysis.
+    # Reference: Eronen et al. (2024), Rogers et al. (2021).
+    if vt_fitness_score is not None:
+        vt = _clamp_0_100(vt_fitness_score)
+        # Center around 70 (neutral). Above 70 gives bonus, below 70 penalty.
+        vt_modifier = (vt - 70.0) / 30.0 * 5.0  # maps [0,100] → [-11.7, +5]
+        vt_modifier = max(-5.0, min(5.0, vt_modifier))  # hard clamp ±5
+        fused += vt_modifier
+        if abs(vt_modifier) >= 1.0:
+            direction = "bonus" if vt_modifier > 0 else "penalty"
+            triggers.append(
+                f"VT fitness score ({vt:.0f}/100) applies {direction} of "
+                f"{abs(vt_modifier):.1f} pts (aerobic capacity modifier, experimental)."
+            )
+
     return _clamp_0_100(fused), triggers
 
 
@@ -468,6 +490,7 @@ def predict_operational_performance(
     chronotype_offset: float = 0.0,
     resting_hr: Optional[float] = None,
     workload_intensity: float = 0.5,
+    vt_fitness_score: Optional[float] = None,
 ) -> OperationalPerformance:
     """Predict operational performance readiness from SAFTE + HRV.
 
@@ -483,6 +506,8 @@ def predict_operational_performance(
         chronotype_offset: Chronotype offset (negative=morning type).
         resting_hr: Optional resting HR (bpm), used in recovery scoring and HRV analysis context.
         workload_intensity: Workload intensity (0-1) that slightly degrades effectiveness.
+        vt_fitness_score: Optional VT-derived fitness score (0-100) from DFA-α1 analysis.
+            Reflects aerobic capacity and autonomic reserve (experimental).
 
     Returns:
         OperationalPerformance with readiness score, category, and scheduling guidance.
@@ -535,6 +560,7 @@ def predict_operational_performance(
         recovery_score=recovery.score if recovery is not None else None,
         parasympathetic_index=hrv_analysis.parasympathetic_index if hrv_analysis is not None else None,
         stress_index=hrv_analysis.stress_index if hrv_analysis is not None else None,
+        vt_fitness_score=vt_fitness_score,
     )
     level, label = _classify_operational_readiness(score)
 
@@ -555,6 +581,7 @@ def predict_operational_performance(
             recovery_score=recovery.score if recovery is not None else None,
             parasympathetic_index=hrv_analysis.parasympathetic_index if hrv_analysis is not None else None,
             stress_index=hrv_analysis.stress_index if hrv_analysis is not None else None,
+            vt_fitness_score=vt_fitness_score,
         )
         if fused_i > best_score:
             best_score = fused_i
