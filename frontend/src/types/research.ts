@@ -866,3 +866,65 @@ export const STRENGTH_COLORS: Record<CorrelationStrength, string> = {
   strong: "#22c55e",
   very_strong: "#ef4444",
 };
+
+// ---------------------------------------------------------------------------
+// Ventilatory Threshold Types (Experimental)
+// ---------------------------------------------------------------------------
+
+export interface VTThresholdData {
+  time_seconds: number;
+  heart_rate_bpm: number;
+  dfa_alpha1: number;
+  hr_relative: number;
+  confidence: number;
+  index: number;
+}
+
+export interface VTIntensityZone {
+  zone: string;
+  zone_label: string;
+  zone_description: string;
+  hr_min: number;
+  hr_max: number;
+  dfa_range: string;
+  training_guidance: string;
+}
+
+export interface VTQualityData {
+  artifact_percentage: number;
+  total_beats: number;
+  clean_beats: number;
+  n_windows: number;
+  min_dfa: number;
+  max_dfa: number;
+  dfa_range: number;
+  monotonic_decrease: boolean;
+}
+
+export interface VTAnalysisResponse {
+  vt1: VTThresholdData | null;
+  vt2: VTThresholdData | null;
+  timeseries_time: number[];
+  timeseries_dfa: number[];
+  timeseries_hr: number[];
+  timeseries_hr_mean: number[];
+  timeseries_integrated_score: number[];
+  respiratory_frequency_hz: number | null;
+  quality: VTQualityData | null;
+  method: string;
+  intensity_zones: VTIntensityZone[];
+  interpretation: string[];
+  warnings: string[];
+}
+
+export const VT_ZONE_COLORS: Record<string, string> = {
+  zone_1: "#27ae60",  // Green - aerobic
+  zone_2: "#f39c12",  // Orange - threshold
+  zone_3: "#e74c3c",  // Red - high intensity
+};
+
+export const DFA_ZONE_COLORS = {
+  belowVT1: "rgba(39, 174, 96, 0.12)",   // Green zone
+  vt1ToVT2: "rgba(243, 156, 18, 0.12)",  // Orange zone
+  aboveVT2: "rgba(231, 76, 60, 0.12)",   // Red zone
+};
