@@ -1033,3 +1033,81 @@ export async function runCorrelationAnalysis(
     };
   }
 }
+
+
+// ---------------------------------------------------------------------------
+// Ventilatory Threshold (VT) - Experimental
+// ---------------------------------------------------------------------------
+
+import type { VTAnalysisResponse } from "@/types/research";
+
+/**
+ * Run VT demo analysis with synthetic exercise data
+ */
+export async function getVTDemo(): Promise<VTAnalysisResponse> {
+  try {
+    const response = await fetch(`${API_BASE}/api/research/vt/demo`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching VT demo:", error);
+    return _emptyVTResponse();
+  }
+}
+
+/**
+ * Analyze VT from uploaded RR interval data
+ */
+export async function analyzeVT(
+  rrIntervals: number[],
+  hrRest: number = 60,
+  hrMax: number = 185,
+  method: string = "multiparameter",
+): Promise<VTAnalysisResponse> {
+  try {
+    const response = await fetch(`${API_BASE}/api/research/vt/analyze`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        rr_intervals_ms: rrIntervals,
+        hr_rest: hrRest,
+        hr_max: hrMax,
+        method,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error analyzing VT:", error);
+    return _emptyVTResponse();
+  }
+}
+
+function _emptyVTResponse(): VTAnalysisResponse {
+  return {
+    vt1: null,
+    vt2: null,
+    timeseries_time: [],
+    timeseries_dfa: [],
+    timeseries_hr: [],
+    timeseries_hr_mean: [],
+    timeseries_integrated_score: [],
+    respiratory_frequency_hz: null,
+    quality: null,
+    method: "multiparameter",
+    intensity_zones: [],
+    interpretation: ["Unable to load data. API may be unavailable."],
+    warnings: [],
+  };
+}
