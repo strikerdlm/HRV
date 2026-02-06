@@ -5942,10 +5942,86 @@ If you're interested in contributing to any of these developments:
 | Docker deployment | Q4 2025 | ✅ Completed |
 | ExMC Clinical Assessment | Q4 2025 | 🔄 In Progress |
 | Ventilatory Threshold (DFA-α1) | Q1 2026 | ✅ Completed |
+| Trajectory Risk / Allostatic Load | Q1 2026 | ✅ Completed |
 | Baroreflex sensitivity | Q1 2026 | Planned |
 | Advanced nonlinear | Q1 2026 | Planned |
 | ExMC CDSS / AI support | Q1 2026 | Planned |
 | Mobile app | Q4 2026 | Conceptual |
+
+---
+
+## Physiological Trajectory Risk Module (Allostatic Load Alarm)
+
+### Overview
+
+The Trajectory Risk Module adds a **longitudinal layer** to the readiness model that the single-day snapshot misses. An operator can look "fine" today — adequate sleep, normal resting HRV — but be on a multi-day downward trajectory: lnRMSSD declining 5% per day, resting HR creeping upward, sleep quality eroding. The daily readiness score might still say "GO" because each individual day is within population norms. The trajectory module catches this by computing EWMA-smoothed trends and Smallest Worthwhile Change (SWC) exceedance across multiple metrics simultaneously.
+
+### Scientific Basis
+
+This module implements the **allostatic load** concept (McEwen, 1998): cumulative physiological "wear and tear" predicts functional decline independently of any single acute measurement. Key evidence:
+
+- **EWMA-based HRV monitoring** detects overreaching before performance decline (Plews et al., 2013; Bellenger et al., 2016)
+- **SWC = 0.5 × CV** of lnRMSSD identifies meaningful vs. noise changes (Buchheit, 2014)
+- **Multi-metric trajectory analysis** outperforms single-metric snapshot for readiness (Moreno-Gutiérrez et al., 2021: 73% accuracy combining HRV + wellness in soccer)
+- **Sleep-debt potentiation**: declining sleep quality amplifies HRV decline non-linearly (Tobaldini et al., 2017)
+
+### How It Works
+
+**Metrics tracked (4 parallel streams):**
+
+| Metric | Source | Higher = Better | Purpose |
+|---|---|---|---|
+| lnRMSSD | Morning HRV | Yes | Vagal autonomic reserve |
+| Resting HR | Wearable | No | Sympathetic activation |
+| Sleep Quality | Wearable/self-report | Yes | Recovery adequacy |
+| DFA-α1 (rest) | HRV nonlinear | Yes | Cardiac complexity |
+
+**Algorithm:**
+1. **EWMA smoothing** (span=7, α≈0.25) applied to each daily metric series
+2. **Baseline computation** from first 7 days of data (mean, SD, CV)
+3. **SWC exceedance test**: |EWMA_current - EWMA_baseline| > 0.5 × baseline_SD
+4. **Z-score computation**: deviation from baseline in standard deviation units
+5. **PSI (Physiological Strain Index)**: composite 0-100 using sigmoid-mapped z-scores with SWC amplification
+6. **Risk classification**: 5-tier system based on PSI + count of declining metrics + SWC exceedances
+7. **Compound risk detection**: simultaneous sleep + HRV decline triggers 1.3× penalty amplifier
+
+### Risk Classification
+
+| Risk Level | PSI Range | Description | Action |
+|---|---|---|---|
+| **IMPROVING** | <25, no decline | Positive adaptation trajectory | Continue current program |
+| **STABLE** | <50, minor fluctuation | Normal day-to-day variation | Monitor normally |
+| **WATCH** | ≥50 or 1 SWC exceeded | One metric deviating meaningfully | Ensure adequate recovery |
+| **ELEVATED** | ≥70 or 2+ SWC exceeded | Multi-metric degradation | Reduce load 24-48h |
+| **CRITICAL** | ≥85 or 3+ SWC exceeded | Severe sustained decline | Immediate workload reduction; PVT validation |
+
+### Integration with Readiness Model
+
+The trajectory module outputs a **bounded modifier (±8 points)** that fuses into the operational readiness score:
+
+- **IMPROVING**: +2 to +5 bonus (positive adaptation)
+- **STABLE**: 0 (neutral)
+- **WATCH**: -2 to -4 penalty
+- **ELEVATED**: -4 to -6 penalty
+- **CRITICAL**: -6 to -8 penalty
+
+When sleep + HRV decline simultaneously (compound risk), the penalty is amplified by 1.3×, capped at -8 points. This models the non-linear Fatigue-Hypoxia feedback loop identified in the IRM literature review.
+
+### Minimum Data Requirements
+
+- **5 days** minimum for any trajectory assessment
+- **7 days** for full baseline establishment
+- **14+ days** for highest confidence assessments
+- Data confidence degrades proportionally below 14 days
+
+### References
+
+- Bellenger, C.R., et al. (2016). Monitoring athletic training status through autonomic HRV measures. *Sports Med*, 46, 1461-1486. doi: 10.1007/s40279-016-0487-7
+- Buchheit, M. (2014). Monitoring training status with HR measures. *Front Physiol*, 5, 73. doi: 10.3389/fphys.2014.00073
+- McEwen, B.S. (1998). Protective and damaging effects of stress mediators. *NEJM*, 338, 171-179. doi: 10.1056/NEJM199801153380307
+- Plews, D.J., et al. (2013). Training adaptation and HRV in elite athletes. *J Strength Cond Res*, 27(12), 3159-3165.
+- Tobaldini, E., et al. (2017). Sleep deprivation and autonomic nervous system. *Sleep Med Rev*, 35, 62-73. doi: 10.1016/j.smrv.2016.08.003
+- Juster, R.P., et al. (2010). Allostatic load biomarkers. *Neurosci Biobehav Rev*, 35, 2-16. doi: 10.1016/j.neubiorev.2009.10.002
 
 ---
 
