@@ -397,6 +397,7 @@ def _fuse_operational_readiness_score(
     parasympathetic_index: Optional[float],
     stress_index: Optional[float],
     vt_fitness_score: Optional[float] = None,
+    trajectory_modifier: Optional[float] = None,
 ) -> Tuple[float, List[str]]:
     """Fuse SAFTE effectiveness and HRV-derived signals into a readiness score.
 
@@ -408,6 +409,12 @@ def _fuse_operational_readiness_score(
     a small, bounded modifier reflecting aerobic fitness and autonomic reserve.
     It is experimental and contributes up to ±5 points (Eronen et al., 2024;
     Rogers et al., 2021).
+
+    The trajectory modifier (from allostatic load / trajectory risk analysis)
+    detects multi-day physiological degradation and applies a bounded ±8 point
+    adjustment. This is the longitudinal layer that catches degradation before
+    the daily snapshot does (McEwen, 1998; Plews et al., 2013; Bellenger et al.,
+    2016).
 
     Returns:
         (readiness_score_0_100, triggers)
@@ -462,6 +469,19 @@ def _fuse_operational_readiness_score(
                 f"{abs(vt_modifier):.1f} pts (aerobic capacity modifier, experimental)."
             )
 
+    # Trajectory modifier (allostatic load alarm): bounded ±8 points.
+    # Detects multi-day physiological degradation that the daily snapshot misses.
+    # Reference: McEwen (1998), Plews et al. (2013), Bellenger et al. (2016).
+    if trajectory_modifier is not None:
+        traj_mod = max(-8.0, min(5.0, float(trajectory_modifier)))
+        fused += traj_mod
+        if abs(traj_mod) >= 1.0:
+            direction = "bonus" if traj_mod > 0 else "penalty"
+            triggers.append(
+                f"Trajectory risk applies {direction} of {abs(traj_mod):.1f} pts "
+                f"(multi-day allostatic load modifier)."
+            )
+
     return _clamp_0_100(fused), triggers
 
 
@@ -491,6 +511,7 @@ def predict_operational_performance(
     resting_hr: Optional[float] = None,
     workload_intensity: float = 0.5,
     vt_fitness_score: Optional[float] = None,
+    trajectory_modifier: Optional[float] = None,
 ) -> OperationalPerformance:
     """Predict operational performance readiness from SAFTE + HRV.
 
@@ -508,6 +529,8 @@ def predict_operational_performance(
         workload_intensity: Workload intensity (0-1) that slightly degrades effectiveness.
         vt_fitness_score: Optional VT-derived fitness score (0-100) from DFA-α1 analysis.
             Reflects aerobic capacity and autonomic reserve (experimental).
+        trajectory_modifier: Optional trajectory risk modifier (±8 pts) from multi-day
+            allostatic load analysis. See trajectory_risk.py.
 
     Returns:
         OperationalPerformance with readiness score, category, and scheduling guidance.
@@ -561,6 +584,7 @@ def predict_operational_performance(
         parasympathetic_index=hrv_analysis.parasympathetic_index if hrv_analysis is not None else None,
         stress_index=hrv_analysis.stress_index if hrv_analysis is not None else None,
         vt_fitness_score=vt_fitness_score,
+        trajectory_modifier=trajectory_modifier,
     )
     level, label = _classify_operational_readiness(score)
 
@@ -582,6 +606,7 @@ def predict_operational_performance(
             parasympathetic_index=hrv_analysis.parasympathetic_index if hrv_analysis is not None else None,
             stress_index=hrv_analysis.stress_index if hrv_analysis is not None else None,
             vt_fitness_score=vt_fitness_score,
+            trajectory_modifier=trajectory_modifier,
         )
         if fused_i > best_score:
             best_score = fused_i
