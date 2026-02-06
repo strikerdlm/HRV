@@ -30,6 +30,7 @@ import type {
 } from "@/types/research";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8180";
+console.log("API_BASE:", API_BASE);
 
 /**
  * Get current space weather data and impact predictions
