@@ -9,7 +9,9 @@ import {
   BadgeCheck,
   BarChart3,
   BookOpen,
+  CheckCircle,
   ChevronDown,
+  FileText,
   FlaskConical,
   Heart,
   Info,
@@ -32,9 +34,11 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { AnimatePresence } from "framer-motion";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
-import { getVTDemo, analyzeVT } from "@/lib/research-api";
+import { getVTDemo, analyzeVT, parseRRFile } from "@/lib/research-api";
 import type { VTAnalysisResponse } from "@/types/research";
 import { VT_ZONE_COLORS, DFA_ZONE_COLORS } from "@/types/research";
 
@@ -630,6 +634,276 @@ function ScienceExplanation() {
 }
 
 // ---------------------------------------------------------------------------
+// Upload Panel Component (functional with exercise-data warnings)
+// ---------------------------------------------------------------------------
+function VTUploadPanel({
+  onResult,
+  loading,
+  setLoading,
+}: {
+  onResult: (result: VTAnalysisResponse) => void;
+  loading: boolean;
+  setLoading: (v: boolean) => void;
+}) {
+  const [dragActive, setDragActive] = React.useState(false);
+  const [hrRest, setHrRest] = React.useState<number>(60);
+  const [hrMax, setHrMax] = React.useState<number>(185);
+  const [method, setMethod] = React.useState<string>("multiparameter");
+  const [uploadStatus, setUploadStatus] = React.useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [parsedCount, setParsedCount] = React.useState<number | null>(null);
+  const inputRef = React.useRef<HTMLInputElement>(null);
+
+  const processFile = React.useCallback(
+    async (file: File) => {
+      setUploadStatus(null);
+      setParsedCount(null);
+      setLoading(true);
+
+      try {
+        const text = await file.text();
+        const rr = parseRRFile(text);
+
+        if (rr.length < 100) {
+          setUploadStatus({
+            type: "error",
+            message: `Found only ${rr.length} valid RR intervals. VT detection requires at least 100 beats (≥ 5 min graded exercise test recommended).`,
+          });
+          setLoading(false);
+          return;
+        }
+
+        setParsedCount(rr.length);
+
+        // Validate plausible exercise RR values (200–1500 ms)
+        const outOfRange = rr.filter((v) => v < 200 || v > 1500).length;
+        if (outOfRange > rr.length * 0.25) {
+          setUploadStatus({
+            type: "error",
+            message: `${outOfRange} of ${rr.length} intervals are outside physiological range (200–1500 ms). Check that values are in milliseconds.`,
+          });
+          setLoading(false);
+          return;
+        }
+
+        const result = await analyzeVT(rr, hrRest, hrMax, method);
+
+        if (result.timeseries_time.length === 0) {
+          setUploadStatus({
+            type: "error",
+            message: "Analysis returned empty results. Ensure the file contains RR data from a graded exercise test with progressively increasing intensity.",
+          });
+        } else {
+          setUploadStatus({
+            type: "success",
+            message: `Successfully analyzed ${rr.length} RR intervals (${(rr.reduce((a, b) => a + b, 0) / 60000).toFixed(1)} min). VT detection complete.`,
+          });
+          onResult(result);
+        }
+      } catch (error) {
+        setUploadStatus({
+          type: "error",
+          message:
+            "Failed to analyze RR data: " +
+            (error instanceof Error ? error.message : "Unknown error. Is the backend running?"),
+        });
+      } finally {
+        setLoading(false);
+      }
+    },
+    [hrRest, hrMax, method, onResult, setLoading],
+  );
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragActive(false);
+    if (e.dataTransfer.files?.[0]) {
+      processFile(e.dataTransfer.files[0]);
+    }
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files?.[0]) {
+      processFile(e.target.files[0]);
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* ---- Exercise Data Requirement Warning ---- */}
+      <div className="p-4 rounded-lg bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+        <div className="flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
+          <div className="space-y-2">
+            <p className="font-semibold text-amber-800 dark:text-amber-200 text-sm">
+              Exercise RR Data Required
+            </p>
+            <p className="text-xs text-amber-700 dark:text-amber-300 leading-relaxed">
+              VT estimation requires RR intervals recorded <strong>during a graded (incremental) exercise test</strong> with
+              progressively increasing intensity — e.g., a ramp protocol on a treadmill or cycle ergometer.
+              <strong> Resting HRV recordings will not produce valid results.</strong>
+            </p>
+            <div className="mt-2 text-xs text-amber-700 dark:text-amber-300 space-y-1">
+              <p className="font-medium">For accurate results, your recording should have:</p>
+              <ul className="list-disc ml-5 space-y-0.5">
+                <li><strong>Duration:</strong> 8–25 min graded exercise test (ramp or step protocol)</li>
+                <li><strong>HR range:</strong> From resting (~60 bpm) to near-maximal (~85–100% HRmax)</li>
+                <li><strong>Signal quality:</strong> Chest-strap HRM (Polar H10, Garmin HRM-Pro) recommended — wrist-based optical HR is <strong>not</strong> suitable (poor beat-to-beat accuracy)</li>
+                <li><strong>Artifact rate:</strong> &lt;5% for reliable DFA-α1 computation</li>
+                <li><strong>Sampling:</strong> Beat-to-beat RR intervals in milliseconds (not averaged HR)</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ---- Physiological Parameters ---- */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Heart className="h-4 w-4 text-red-500" />
+            Physiological Parameters
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Set your resting and maximum heart rate for accurate threshold placement.
+            These are used to normalize HR reserve in the multi-parameter algorithm.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="hr-rest" className="text-xs font-medium">
+                Resting HR (bpm)
+              </Label>
+              <Input
+                id="hr-rest"
+                type="number"
+                min={30}
+                max={120}
+                value={hrRest}
+                onChange={(e) => setHrRest(Number(e.target.value))}
+                className="h-9"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Measured lying down after 5 min rest
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="hr-max" className="text-xs font-medium">
+                Max HR (bpm)
+              </Label>
+              <Input
+                id="hr-max"
+                type="number"
+                min={120}
+                max={230}
+                value={hrMax}
+                onChange={(e) => setHrMax(Number(e.target.value))}
+                className="h-9"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                Known max or 220 − age estimate
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="vt-method" className="text-xs font-medium">
+                Detection Method
+              </Label>
+              <select
+                id="vt-method"
+                aria-label="Detection Method"
+                title="Detection Method"
+                value={method}
+                onChange={(e) => setMethod(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              >
+                <option value="multiparameter">Multi-Parameter (recommended)</option>
+                <option value="dfa_only">DFA-α1 Only</option>
+              </select>
+              <p className="text-[10px] text-muted-foreground">
+                Multi-parameter = DFA-α1 60% + HR reserve 30% + resp. 10%
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ---- File Drop Zone ---- */}
+      <Card>
+        <CardContent className="pt-6">
+          <div
+            className={`border-2 border-dashed rounded-lg p-6 text-center transition-colors cursor-pointer ${
+              dragActive ? "border-primary bg-primary/5" : "border-muted hover:border-muted-foreground/40"
+            }`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setDragActive(true);
+            }}
+            onDragLeave={() => setDragActive(false)}
+            onDrop={handleDrop}
+            onClick={() => inputRef.current?.click()}
+          >
+            <input
+              ref={inputRef}
+              type="file"
+              accept=".txt,.csv"
+              className="hidden"
+              aria-label="Upload RR interval file"
+              title="Upload RR interval file"
+              onChange={handleChange}
+            />
+            <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
+            <p className="text-sm font-medium">Drop exercise RR file here or click to browse</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Accepts .txt or .csv — one RR interval (ms) per line, comma-separated, or space-separated
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Or use the <strong>Run Demo</strong> button above for a synthetic 20-min graded exercise test
+            </p>
+          </div>
+
+          {/* Loading indicator */}
+          {loading && (
+            <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Running VT analysis on uploaded RR data...
+            </div>
+          )}
+
+          {/* Parsed count */}
+          {parsedCount !== null && !loading && uploadStatus?.type !== "error" && (
+            <p className="text-xs text-muted-foreground mt-3">
+              Parsed <strong>{parsedCount}</strong> RR intervals from file.
+            </p>
+          )}
+
+          {/* Status messages */}
+          {uploadStatus?.type === "success" && (
+            <div className="mt-4 p-3 bg-emerald-50 dark:bg-emerald-950/20 rounded-lg border border-emerald-200 dark:border-emerald-800">
+              <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300 font-medium text-sm">
+                <CheckCircle className="h-4 w-4" />
+                {uploadStatus.message}
+              </div>
+            </div>
+          )}
+
+          {uploadStatus?.type === "error" && (
+            <div className="mt-4 p-3 bg-red-50 dark:bg-red-950/20 rounded-lg border border-red-200 dark:border-red-800">
+              <div className="flex items-start gap-2 text-red-700 dark:text-red-300 text-sm">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <span>{uploadStatus.message}</span>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main Page Component
 // ---------------------------------------------------------------------------
 export default function VentilatoryThresholdPage() {
@@ -652,6 +926,10 @@ export default function VentilatoryThresholdPage() {
     } finally {
       setLoading(false);
     }
+  }, []);
+
+  const handleVTResult = React.useCallback((result: VTAnalysisResponse) => {
+    setData(result);
   }, []);
 
   React.useEffect(() => {
@@ -695,7 +973,7 @@ export default function VentilatoryThresholdPage() {
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={() => setShowUpload(!showUpload)}>
               <Upload className="h-4 w-4 mr-2" />
-              Upload RR Data
+              {showUpload ? "Hide Upload" : "Upload RR Data"}
             </Button>
             <Button onClick={fetchDemo} disabled={loading} size="sm">
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
@@ -704,25 +982,24 @@ export default function VentilatoryThresholdPage() {
           </div>
         </motion.div>
 
-        {/* Upload Panel (collapsible) */}
-        {showUpload && (
-          <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}>
-            <Card className="border-dashed border-2">
-              <CardContent className="pt-6">
-                <div className="text-center py-8">
-                  <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-                  <p className="text-sm font-medium">Upload RR Interval File</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Supported: .txt (one RR per line, ms), .csv, .fit files from Garmin/Polar
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Or use the Demo button for a synthetic 20-min incremental exercise test
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        )}
+        {/* Upload Panel (collapsible, fully functional) */}
+        <AnimatePresence>
+          {showUpload && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden"
+            >
+              <VTUploadPanel
+                onResult={handleVTResult}
+                loading={loading}
+                setLoading={setLoading}
+              />
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {data && (
           <>
