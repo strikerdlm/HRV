@@ -7,6 +7,33 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.11.0] - 2026-02-05
+
+### Added
+- **Physiological Trajectory Risk Module (Allostatic Load Alarm)**:
+  - New `trajectory_risk.py` implementing multi-day degradation detection
+  - EWMA-smoothed 7-day trends for lnRMSSD, resting HR, sleep quality, and DFA-α1
+  - Smallest Worthwhile Change (SWC) threshold detection (Plews et al., 2013; Buchheit, 2014)
+  - Composite Physiological Strain Index (PSI, 0-100) for allostatic load quantification
+  - 5-tier risk classification: IMPROVING → STABLE → WATCH → ELEVATED → CRITICAL
+  - Compound risk detection: simultaneous sleep + HRV decline triggers amplified alarm
+    (models the Fatigue-Hypoxia feedback loop from McEwen, 1998; Tobaldini et al., 2017)
+  - Bounded readiness modifier (±8 pts) for fusion into operational readiness model
+  - `compute_trajectory_readiness_modifier()` convenience function for direct model integration
+  - Clinical recommendations per risk tier (PVT validation, OTS screening, recovery protocols)
+- **Readiness Model Integration**:
+  - `_fuse_operational_readiness_score()` now accepts `trajectory_modifier` parameter
+  - `predict_operational_performance()` now accepts `trajectory_modifier` parameter
+  - Longitudinal layer: catches multi-day degradation before the daily snapshot does
+  - All existing tests pass — fully backward compatible (trajectory is optional)
+
+### Technical Notes
+- EWMA span=7 (α≈0.25) matches Plews et al. methodology for training adaptation monitoring
+- SWC = 0.5 × CV_lnRMSSD (Buchheit, 2014) identifies meaningful vs. noise changes
+- PSI uses sigmoid mapping of z-scores with SWC-amplification for declining metrics
+- Compound risk (sleep + HRV co-decline) applies 1.3× penalty amplifier, capped at -8 pts
+- This addresses Gap #5 (Missing Allostatic Load) from the IRM architecture review
+
 ## [1.10.0] - 2026-02-05
 
 ### Added
