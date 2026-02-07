@@ -30,7 +30,7 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { EChartsWrapper } from "@/components/charts";
-import { submitVitalsAndAssess } from "@/lib/research-api";
+import { submitVitalsAndAssess, computeJetLag } from "@/lib/research-api";
 import type {
   EnhancedReadinessResponse,
   SMSMatrixData,
@@ -310,6 +310,143 @@ function ModelExplainer({
         </motion.div>
       ))}
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Props
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Jet Lag Section (self-contained with its own state)
+// ---------------------------------------------------------------------------
+
+function JetLagSection() {
+  const [tzInput, setTzInput] = React.useState("5");
+  const [dirInput, setDirInput] = React.useState("east");
+  const [daysInput, setDaysInput] = React.useState("1");
+  const [result, setResult] = React.useState<any>(null);
+
+  const handleCompute = React.useCallback(async () => {
+    const tz = parseInt(tzInput) || 0;
+    const days = parseFloat(daysInput) || 0;
+    const data = await computeJetLag(tz, dirInput, days);
+    setResult(data);
+  }, [tzInput, dirInput, daysInput]);
+
+  const curveOption = React.useMemo((): any => {
+    if (!result?.recovery_curve) return {};
+    return {
+      grid: { left: 50, right: 20, top: 10, bottom: 40, containLabel: true },
+      xAxis: {
+        type: "category",
+        data: result.recovery_curve.map((p: any) => `Day ${p.day}`),
+        axisLabel: { color: "#1a1a1a", fontSize: 9, interval: Math.max(0, Math.floor(result.recovery_curve.length / 8)) },
+      },
+      yAxis: {
+        type: "value",
+        min: 60,
+        max: 105,
+        axisLabel: { color: "#1a1a1a", fontSize: 9, formatter: "{value}%" },
+        splitLine: { lineStyle: { color: "rgba(44,62,80,0.1)" } },
+      },
+      series: [{
+        type: "line",
+        data: result.recovery_curve.map((p: any) => p.performance),
+        smooth: true,
+        lineStyle: { width: 3, color: "#3498db" },
+        areaStyle: { color: "rgba(52,152,219,0.1)" },
+        markLine: {
+          silent: true,
+          data: [{ yAxis: 100, lineStyle: { color: "#27ae60", type: "dashed" }, label: { show: false } }],
+        },
+      }],
+    };
+  }, [result]);
+
+  return (
+    <CollapsibleSection
+      title="Travel / Jet Lag Performance Impact"
+      icon={<Plane className="h-5 w-5 text-indigo-500" />}
+      defaultOpen={false}
+    >
+      <p className="text-xs text-muted-foreground mb-3">
+        Circadian resynchronization model based on Waterhouse et al. (2007) and Arendt (2009).
+        Eastward travel is harder: ~0.67 h/day recovery vs ~1.0 h/day westward.
+      </p>
+      <div className="grid grid-cols-3 gap-2 mb-3">
+        <div>
+          <label className="text-[10px] text-muted-foreground">Time Zones</label>
+          <input
+            type="number"
+            min={0}
+            max={12}
+            value={tzInput}
+            onChange={(e) => setTzInput(e.target.value)}
+            className="w-full h-8 text-sm border rounded px-2"
+          />
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground">Direction</label>
+          <select
+            value={dirInput}
+            onChange={(e) => setDirInput(e.target.value)}
+            className="w-full h-8 text-sm border rounded px-2 bg-background"
+          >
+            <option value="east">Eastward</option>
+            <option value="west">Westward</option>
+          </select>
+        </div>
+        <div>
+          <label className="text-[10px] text-muted-foreground">Days Since</label>
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={daysInput}
+            onChange={(e) => setDaysInput(e.target.value)}
+            className="w-full h-8 text-sm border rounded px-2"
+          />
+        </div>
+      </div>
+      <button
+        onClick={handleCompute}
+        className="w-full h-8 text-sm bg-primary text-primary-foreground rounded hover:bg-primary/90 mb-3"
+        type="button"
+      >
+        Compute Jet Lag Impact
+      </button>
+
+      {result && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="p-2 rounded-lg border">
+              <p className="text-[10px] text-muted-foreground">Performance</p>
+              <p className="text-xl font-bold" style={{ color: result.performance_pct >= 90 ? "#27ae60" : result.performance_pct >= 80 ? "#f39c12" : "#e74c3c" }}>
+                {result.performance_pct}%
+              </p>
+            </div>
+            <div className="p-2 rounded-lg border">
+              <p className="text-[10px] text-muted-foreground">Days to Recover</p>
+              <p className="text-xl font-bold">{result.days_to_resync}</p>
+            </div>
+            <div className="p-2 rounded-lg border">
+              <p className="text-[10px] text-muted-foreground">Readiness Mod</p>
+              <p className="text-xl font-bold" style={{ color: result.readiness_modifier < -3 ? "#e74c3c" : result.readiness_modifier < 0 ? "#f39c12" : "#27ae60" }}>
+                {result.readiness_modifier >= 0 ? "+" : ""}{result.readiness_modifier} pts
+              </p>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">{result.description}</p>
+          {result.recovery_curve && result.recovery_curve.length > 0 && (
+            <EChartsWrapper option={curveOption} height={200} showToolbox={false} />
+          )}
+          <p className="text-[9px] text-muted-foreground">
+            Waterhouse et al. (2007). Lancet, 369, 1117. PMID: 17398311 | Arendt (2009). Sleep Med Rev, 13(4). PMID: 19153053
+          </p>
+        </div>
+      )}
+    </CollapsibleSection>
   );
 }
 
@@ -643,6 +780,9 @@ export function CrewPerformanceModal({
               readinessLabel={readinessLabel}
             />
           </CollapsibleSection>
+
+          {/* Jet Lag / Travel Assessment */}
+          <JetLagSection />
 
           {/* Activity Risk Context */}
           <CollapsibleSection
