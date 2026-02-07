@@ -3,12 +3,11 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
-import { Plane, Wind, Eye, Thermometer, Gauge, Cloud, Search, RefreshCw } from "lucide-react";
+import { Plane, Wind, Eye, Thermometer, Gauge, Cloud, Search, RefreshCw, Navigation } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { EChartsWrapper } from "@/components/charts";
 import { fetchMETAR, fetchWeather } from "@/lib/research-api";
 import type { METARResponse, WeatherResponse } from "@/types/research";
 import { RISK_LEVEL_COLORS } from "@/types/research";
@@ -24,45 +23,110 @@ const DEFAULT_STATIONS = [
 ];
 
 // ---------------------------------------------------------------------------
-// Wind compass gauge (no title per plot rules)
+// SVG Wind Compass (large, clear, with degree markings)
 // ---------------------------------------------------------------------------
 
-function buildWindGauge(deg: number, speed: number, unit: string): Record<string, unknown> {
-  return {
-    series: [{
-      type: "gauge",
-      min: 0,
-      max: 360,
-      splitNumber: 8,
-      radius: "90%",
-      startAngle: 90,
-      endAngle: -270,
-      axisLine: { lineStyle: { width: 8, color: [[1, "rgba(52,73,94,0.15)"]] } },
-      pointer: { length: "65%", width: 5, itemStyle: { color: "#e74c3c" } },
-      axisTick: { show: false },
-      splitLine: { length: 10, lineStyle: { color: "#1a1a1a", width: 1.5 } },
-      axisLabel: {
-        color: "#1a1a1a",
-        fontSize: 9,
-        distance: 14,
-        formatter: (v: number) => {
-          const dirs: Record<number, string> = { 0: "N", 45: "NE", 90: "E", 135: "SE", 180: "S", 225: "SW", 270: "W", 315: "NW" };
-          return dirs[v] || "";
-        },
-      },
-      detail: {
-        valueAnimation: true,
-        formatter: `${speed} ${unit}\n{deg}`,
-        color: "#1a1a1a",
-        fontSize: 12,
-        fontWeight: "bold",
-        offsetCenter: [0, "75%"],
-        rich: { deg: { fontSize: 9, color: "#888" } },
-      },
-      data: [{ value: deg, name: `${deg}deg` }],
-      title: { show: false },
-    }],
-  };
+function WindCompass({ deg, speed, gust, unit }: { deg: number; speed: number; gust?: number | null; unit: string }) {
+  const r = 90; // radius of compass
+  const cx = 110;
+  const cy = 110;
+  const tickR = r - 2;
+  const labelR = r - 18;
+  const arrowLen = r - 25;
+
+  // Cardinal and intercardinal directions
+  const directions = [
+    { angle: 0, label: "N", major: true },
+    { angle: 45, label: "NE", major: false },
+    { angle: 90, label: "E", major: true },
+    { angle: 135, label: "SE", major: false },
+    { angle: 180, label: "S", major: true },
+    { angle: 225, label: "SW", major: false },
+    { angle: 270, label: "W", major: true },
+    { angle: 315, label: "NW", major: false },
+  ];
+
+  // Degree tick marks every 10 degrees
+  const ticks: Array<{ angle: number; len: number }> = [];
+  for (let a = 0; a < 360; a += 10) {
+    ticks.push({ angle: a, len: a % 30 === 0 ? 10 : 5 });
+  }
+
+  // Convert wind direction to radians (meteorological: 0=N, clockwise)
+  const arrowRad = ((deg - 90) * Math.PI) / 180;
+  const ax = cx + arrowLen * Math.cos(arrowRad);
+  const ay = cy + arrowLen * Math.sin(arrowRad);
+
+  // Arrow head
+  const headSize = 8;
+  const headAngle1 = arrowRad + Math.PI * 0.85;
+  const headAngle2 = arrowRad - Math.PI * 0.85;
+  const h1x = ax + headSize * Math.cos(headAngle1);
+  const h1y = ay + headSize * Math.sin(headAngle1);
+  const h2x = ax + headSize * Math.cos(headAngle2);
+  const h2y = ay + headSize * Math.sin(headAngle2);
+
+  // Speed color
+  const speedColor = speed >= 25 ? "#e74c3c" : speed >= 15 ? "#f39c12" : "#2c3e50";
+
+  return (
+    <div className="flex flex-col items-center">
+      <svg width="220" height="220" viewBox="0 0 220 220">
+        {/* Outer circle */}
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#2c3e50" strokeWidth="2" opacity="0.2" />
+        <circle cx={cx} cy={cy} r={r - 1} fill="none" stroke="#2c3e50" strokeWidth="0.5" opacity="0.1" />
+
+        {/* Degree ticks */}
+        {ticks.map(({ angle, len }) => {
+          const rad = ((angle - 90) * Math.PI) / 180;
+          const x1 = cx + tickR * Math.cos(rad);
+          const y1 = cy + tickR * Math.sin(rad);
+          const x2 = cx + (tickR - len) * Math.cos(rad);
+          const y2 = cy + (tickR - len) * Math.sin(rad);
+          return (
+            <line key={angle} x1={x1} y1={y1} x2={x2} y2={y2}
+              stroke="#2c3e50" strokeWidth={len > 5 ? 1.5 : 0.8} opacity={len > 5 ? 0.6 : 0.3} />
+          );
+        })}
+
+        {/* Direction labels */}
+        {directions.map(({ angle, label, major }) => {
+          const rad = ((angle - 90) * Math.PI) / 180;
+          const lx = cx + labelR * Math.cos(rad);
+          const ly = cy + labelR * Math.sin(rad);
+          return (
+            <text key={label} x={lx} y={ly}
+              textAnchor="middle" dominantBaseline="central"
+              fill="#1a1a1a" fontSize={major ? 13 : 10} fontWeight={major ? "bold" : "normal"}>
+              {label}
+            </text>
+          );
+        })}
+
+        {/* Wind arrow */}
+        <line x1={cx} y1={cy} x2={ax} y2={ay}
+          stroke={speedColor} strokeWidth="3" strokeLinecap="round" />
+        <polygon points={`${ax},${ay} ${h1x},${h1y} ${h2x},${h2y}`}
+          fill={speedColor} />
+
+        {/* Center dot */}
+        <circle cx={cx} cy={cy} r="4" fill={speedColor} />
+
+        {/* Center text: speed */}
+        <text x={cx} y={cy + 28} textAnchor="middle" fill="#1a1a1a" fontSize="18" fontWeight="bold">
+          {speed} {unit}
+        </text>
+        {gust && (
+          <text x={cx} y={cy + 42} textAnchor="middle" fill="#e74c3c" fontSize="11" fontWeight="bold">
+            G{gust} {unit}
+          </text>
+        )}
+        <text x={cx} y={cy - 22} textAnchor="middle" fill="#2c3e50" fontSize="11">
+          {deg === 0 ? "VRB" : `${deg}`}
+        </text>
+      </svg>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -209,15 +273,9 @@ export function METARDashboard() {
               </div>
             </div>
 
-            {/* Wind compass gauge */}
-            <div className="mt-3 flex justify-center">
-              <div className="w-40">
-                <EChartsWrapper
-                  option={buildWindGauge(windDir, windSpd, "kt") as any}
-                  height={150}
-                  showToolbox={false}
-                />
-              </div>
+            {/* Wind Compass — large SVG with degree markings */}
+            <div className="mt-3">
+              <WindCompass deg={windDir} speed={windSpd} gust={windGust} unit="kt" />
             </div>
 
             {/* Environment indices from weather data */}
