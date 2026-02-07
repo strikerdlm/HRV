@@ -735,26 +735,26 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
 
-        {/* Environmental Monitoring + METAR */}
+        {/* Crew Radar (left) + METAR (right) */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.15 }}
           className="grid gap-6 md:grid-cols-2"
         >
-          <ICEStationMonitor />
+          <CrewRadarChart crewGauges={crewGauges} />
           <METARDashboard />
         </motion.div>
 
-        {/* Extreme Environment + Crew Radar */}
+        {/* ICE Station + Extreme Environment */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.2 }}
           className="grid gap-6 md:grid-cols-2"
         >
+          <ICEStationMonitor />
           <ExtremeWeatherCalc />
-          <CrewRadarChart crewGauges={crewGauges} />
         </motion.div>
 
         {/* Alerts + Actions */}
