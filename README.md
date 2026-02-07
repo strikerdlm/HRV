@@ -5,7 +5,7 @@
 **A Research-Grade Heart Rate Variability Operations Console for Aerospace Medicine**
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.11.0-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.12.0-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi)](https://fastapi.tiangolo.com)
@@ -307,12 +307,21 @@ These modules implement the gold-standard HRV analysis pipeline as defined by th
 | **Advanced HRV Analytics**        | ML pattern recognition, statistical tests (Shapiro-Wilk, t-tests, Mann-Whitney U), 7-day forecasting, anomaly detection, and clinical decision support |
 | **Wearable Predictive Analytics** | Body Battery forecasting (Holt-Winters), Allostatic Load Index, circadian rhythm analysis, stress prediction, recovery analysis                        |
 
+### Physiological SMS Risk Assessment
+
+| Module | What It Does | Why It Matters |
+|---|---|---|
+| **BP Readiness Modifier** | Classifies resting blood pressure (ACC/AHA 2017) into Optimal/Elevated/Stage1/Stage2/Hypotension, applying a bounded +/-4 point readiness modifier | Resting BP provides complementary autonomic information to HRV (Porta et al., 2012). Hypotension flags G-LOC risk for pilots. |
+| **Temperature Modifier** | Classifies basal oral temperature into Normal/LowGrade/Fever/Hypothermia, applying a bounded +/-3 point modifier | Core body temperature combined with HRV predicts fatigue with 86% accuracy (Zhang et al., 2025). Fever is disqualifying for EVA/flight. |
+| **EVA SMS Risk Matrix** | 5x5 risk matrix (ICAO Doc 9859) mapping readiness + physiological flags to Acceptable/Tolerable/Undesirable/Intolerable | SMS approach adapted for spacewalk operations with hard disqualifiers for fever, severe hypertension, and critical PSI. |
+| **Military Flight SMS** | 4x5 risk matrix (MIL-STD-882E) with G-LOC risk assessment and USAF crew rest compliance | Standard Practice for System Safety applied to high-performance flight with specific flags for hypotension + low HRV. |
+
 ### Biofeedback and Real-Time
 
-| Module                        | What It Does                                        |
-| ----------------------------- | --------------------------------------------------- |
-| **HRV Biofeedback**     | Paced breathing guide with coherence score tracking |
-| **Real-Time Streaming** | Live HRV computation from BLE heart rate monitors   |
+| Module | What It Does |
+|---|---|
+| **HRV Biofeedback** | Paced breathing guide with coherence score tracking |
+| **Real-Time Streaming** | Live HRV computation from BLE heart rate monitors |
 
 ---
 
@@ -327,6 +336,7 @@ HRV/
 │   ├── hrv_core.py               # Core HRV computation engine
 │   ├── vt_analysis.py            # Ventilatory threshold (DFA-alpha1)
 │   ├── trajectory_risk.py        # Allostatic load / trajectory risk
+│   ├── physiological_sms.py      # BP/temp modifiers + SMS risk matrices
 │   ├── noaa_space.py             # NOAA space weather data ingestion
 │   ├── space_weather_impact.py   # Impact predictions & Polar H10 timing
 │   ├── radiation_exposure.py     # Evidence-based radiation dose models
@@ -544,6 +554,22 @@ All metrics, thresholds, and interpretations in this project are grounded in pee
 - Vieira, C. L. Z., Alvares, D., Blomberg, A., & Schwartz, J. (2022). Geomagnetic disturbances driven by solar activity enhance total and cardiovascular mortality risk in 263 U.S. cities. *Science of The Total Environment, 839*, 156312.
 - Alabdulgader, A., McCraty, R., Atkinson, M., Dobyns, Y., Vainoras, A., Ragulskis, M., & Stolc, V. (2018). Long-term study of heart rate variability responses to changes in the solar and geomagnetic environment. *Scientific Reports, 8*(1), 2663.
 - Vencloviene, J., Babarskiene, R., & Slapikas, R. (2020). The association between solar wind conditions and acute myocardial infarction risk. *International Journal of Environmental Research and Public Health, 17*(9), 3153.
+
+### Physiological SMS and Combined Autonomic Assessment
+
+- Porta, A., Castiglioni, P., Di Rienzo, M., et al. (2012). Short-term complexity indexes of heart period and systolic arterial pressure variabilities provide complementary information. *Journal of Applied Physiology, 113*(12), 1810-1820. [PMID: 23104699](https://pubmed.ncbi.nlm.nih.gov/23104699/)
+
+- Lucini, D., Solaro, N., & Pagani, M. (2014). May autonomic indices from cardiovascular variability help identify hypertension? *Journal of Hypertension, 32*(2), 363-373. [PMID: 24232167](https://pubmed.ncbi.nlm.nih.gov/24232167/)
+
+- Zhang, R., Hua, Z., Chen, C., Liu, G., & Wen, W. (2020). Analysis of autonomic nervous pattern in hypertension based on short-term HRV. *Biomedizinische Technik, 65*(4), 437-447. [PMID: 32769220](https://pubmed.ncbi.nlm.nih.gov/32769220/)
+
+- Crowe, M., Meehan, M. T., & Jones, R. (2025). Comparison of rectal and gastrointestinal core temperatures during heat tolerance testing. *Medicina, 61*(6), 1111. [DOI: 10.3390/medicina61061111](https://doi.org/10.3390/medicina61061111)
+
+- Zhang, Z., Guo, S., Xu, W., & Li, L. (2025). Research of physiological monitoring models in the military domain. *Proceedings of ICCNEA 2025*. [DOI: 10.1109/ICCNEA66167.2025.11211893](https://doi.org/10.1109/ICCNEA66167.2025.11211893)
+
+- International Civil Aviation Organization. (2018). *Safety Management Manual* (Doc 9859, 4th ed.). [ICAO Store](https://store.icao.int/en/safety-management-manual-doc-9859)
+
+- US Department of Defense. (2012). *MIL-STD-882E: Standard Practice for System Safety*. [PDF](https://safety.army.mil/Portals/0/Documents/ON-DUTY/SYSTEMSAFETY/Standard/MIL-STD-882E-change-1.pdf)
 
 ### Heart Rate Fragmentation
 
