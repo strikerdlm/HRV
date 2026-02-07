@@ -1111,3 +1111,128 @@ function _emptyVTResponse(): VTAnalysisResponse {
     warnings: [],
   };
 }
+
+// ---------------------------------------------------------------------------
+// Physiological SMS Risk Assessment API
+// ---------------------------------------------------------------------------
+
+import type {
+  VitalsInput,
+  EnhancedReadinessResponse,
+  SMSMatrixEndpointResponse,
+} from "@/types/research";
+
+/**
+ * Submit vitals (BP + temperature) and get enhanced readiness with SMS matrices.
+ */
+export async function submitVitalsAndAssess(
+  userId: string,
+  vitals: VitalsInput,
+): Promise<EnhancedReadinessResponse> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/research/readiness/${userId}/vitals`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(vitals),
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error submitting vitals:", error);
+    return _emptyReadinessResponse();
+  }
+}
+
+/**
+ * Get EVA SMS risk classification and heatmap matrix.
+ */
+export async function getEVASMS(
+  sbp?: number,
+  dbp?: number,
+  tempC?: number,
+  readinessScore: number = 80,
+): Promise<SMSMatrixEndpointResponse | null> {
+  try {
+    const params = new URLSearchParams();
+    if (sbp != null) params.set("sbp", String(sbp));
+    if (dbp != null) params.set("dbp", String(dbp));
+    if (tempC != null) params.set("temp_c", String(tempC));
+    params.set("readiness_score", String(readinessScore));
+
+    const response = await fetch(
+      `${API_BASE}/api/research/sms/eva?${params.toString()}`,
+      { method: "GET", headers: { "Content-Type": "application/json" } },
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching EVA SMS:", error);
+    return null;
+  }
+}
+
+/**
+ * Get Military Flight SMS risk classification and heatmap matrix.
+ */
+export async function getFlightSMS(
+  sbp?: number,
+  dbp?: number,
+  tempC?: number,
+  readinessScore: number = 80,
+  crewRestCompliant?: boolean,
+): Promise<SMSMatrixEndpointResponse | null> {
+  try {
+    const params = new URLSearchParams();
+    if (sbp != null) params.set("sbp", String(sbp));
+    if (dbp != null) params.set("dbp", String(dbp));
+    if (tempC != null) params.set("temp_c", String(tempC));
+    params.set("readiness_score", String(readinessScore));
+    if (crewRestCompliant != null) {
+      params.set("crew_rest_compliant", String(crewRestCompliant));
+    }
+
+    const response = await fetch(
+      `${API_BASE}/api/research/sms/flight?${params.toString()}`,
+      { method: "GET", headers: { "Content-Type": "application/json" } },
+    );
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching Flight SMS:", error);
+    return null;
+  }
+}
+
+function _emptyReadinessResponse(): EnhancedReadinessResponse {
+  return {
+    readiness_score: 0,
+    readiness_label: "NO-GO",
+    bp_classification: null,
+    bp_modifier: null,
+    bp_rationale: null,
+    temp_classification: null,
+    temp_modifier: null,
+    temp_rationale: null,
+    modifiers: [],
+    triggers: ["Unable to connect to API. Check that the backend is running."],
+    eva_sms: null,
+    flight_sms: null,
+    eva_matrix: null,
+    flight_matrix: null,
+  };
+}
