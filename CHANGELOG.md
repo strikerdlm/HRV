@@ -7,6 +7,44 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2026-02-07
+
+### Added
+- **Physiological SMS Risk Assessment Module**:
+  - New `physiological_sms.py` implementing BP and temperature readiness modifiers
+  - Blood pressure modifier (bounded ±4 pts) per ACC/AHA 2017 guidelines:
+    Optimal (+2), Elevated (0), Stage 1 HTN (-2), Stage 2 HTN (-4), Hypotension (-3)
+  - Body temperature modifier (bounded ±3 pts):
+    Normal (0), Low-grade (-1), Mild fever (-2), Fever (-3), Hypothermia (-3)
+  - EVA Readiness SMS risk matrix (5×5, ICAO Doc 9859 adapted) with hard disqualifiers
+  - Military Flight SMS risk matrix (4×5, MIL-STD-882E aligned) with G-LOC risk assessment
+  - G-LOC risk detection: hypotension + low RMSSD or resting tachycardia
+  - USAF crew rest compliance integration (AFMAN 11-202V3)
+  - Heatmap data builders for ECharts visualization
+- **Readiness Model Enhancement**:
+  - `_fuse_operational_readiness_score()` now accepts `bp_modifier` and `temperature_modifier`
+  - Backward compatible — new parameters are optional
+- **User Profile Schema Extension**:
+  - New columns: `baseline_sbp_mmhg`, `baseline_dbp_mmhg`, `basal_temperature_c`,
+    `bp_measurement_time`, `temp_measurement_time` (safe additive SQLite migration)
+- **API Endpoints**:
+  - `POST /api/research/readiness/{user_id}/vitals` — Submit vitals, get enhanced readiness
+  - `GET /api/research/sms/eva` — EVA SMS risk classification with heatmap data
+  - `GET /api/research/sms/flight` — Flight SMS risk classification with heatmap data
+- **TypeScript/Next.js Frontend Pages**:
+  - Research page: `/research/physiological-readiness` — Vitals form, modifier waterfall chart,
+    dual SMS heatmaps (EVA + Flight), scientific citations
+  - Operational page: `/scheduling/readiness` — Go/No-Go decision panels for EVA and
+    military flight, large readiness score banner, compact SMS matrices
+
+### Technical Notes
+- BP classification follows ACC/AHA 2017 Hypertension Clinical Practice Guidelines
+- Temperature thresholds align with clinical fever definitions and circadian variation ranges
+- SMS matrices follow ICAO Doc 9859 (4th ed.) and MIL-STD-882E (DoD System Safety)
+- Scientific basis: Porta et al. (2012), Lucini et al. (2014), Zhang et al. (2020),
+  Crowe et al. (2025), Kim & Lee (2017), Zhang et al. (2025)
+- 36 unit tests covering all classification categories, boundaries, and matrix shapes
+
 ## [1.11.0] - 2026-02-05
 
 ### Added
