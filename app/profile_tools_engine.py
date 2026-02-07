@@ -400,6 +400,7 @@ def _fuse_operational_readiness_score(
     trajectory_modifier: Optional[float] = None,
     bp_modifier: Optional[float] = None,
     temperature_modifier: Optional[float] = None,
+    jetlag_modifier: Optional[float] = None,
 ) -> Tuple[float, List[str]]:
     """Fuse SAFTE effectiveness and HRV-derived signals into a readiness score.
 
@@ -516,6 +517,18 @@ def _fuse_operational_readiness_score(
             triggers.append(
                 f"Body temperature applies {direction} of {abs(temp_mod):.1f} pts "
                 f"(thermoregulatory readiness modifier)."
+            )
+
+    # Jet lag modifier: bounded ±6 points.
+    # Reflects circadian disruption from time zone travel.
+    # Reference: Waterhouse et al. (2007), Arendt (2009).
+    if jetlag_modifier is not None:
+        jl_mod = max(-6.0, min(0.0, float(jetlag_modifier)))
+        fused += jl_mod
+        if abs(jl_mod) >= 1.0:
+            triggers.append(
+                f"Jet lag applies penalty of {abs(jl_mod):.1f} pts "
+                f"(circadian desynchronization modifier)."
             )
 
     return _clamp_0_100(fused), triggers
