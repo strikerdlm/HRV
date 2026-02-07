@@ -6025,6 +6025,68 @@ When sleep + HRV decline simultaneously (compound risk), the penalty is amplifie
 
 ---
 
+## Environmental Monitoring, METAR Weather, and Extreme Environment Calculators
+
+### ICE Station Environmental Monitor
+
+The dashboard includes a simulated Isolated Confined Environment (ICE) research station monitoring panel with 8 environmental sensors critical for habitability assessment in Antarctic and space analog missions.
+
+**Key Sensors and Thresholds:**
+
+| Sensor | Normal Range | Danger Threshold | Health Impact |
+|---|---|---|---|
+| Temperature | 18-24 C | <16 or >28 C | Cognitive performance, thermal comfort |
+| Relative Humidity | 30-60% | <20 or >70% | Respiratory health, condensation |
+| CO2 | 400-1000 ppm | >1500 ppm | Cognitive impairment at >1000 ppm (Satish et al., 2012) |
+| Barometric Pressure | 980-1030 hPa | <950 hPa | Altitude-equivalent headache |
+| PM2.5 | 0-25 ug/m3 | >50 ug/m3 | Respiratory irritation |
+| Noise | 30-50 dB | >70 dB | Sleep disruption, stress response |
+| Light Level | 300-500 lux | <100 lux | Circadian disruption in polar winter |
+| O2 Level | 20.5-21.0% | <19.5% | Hypoxia risk in sealed habitats |
+
+### METAR Aviation Weather Dashboard
+
+Real-time decoded METAR data from any ICAO station worldwide using the FAA AviationWeather.gov API (free, no API key required). Includes wind compass gauge, decoded fields, flight category (VFR/MVFR/IFR/LIFR), and raw METAR text.
+
+Default stations: SKBO (Bogota), SAWE (Marambio, Antarctica), SCRM (King George Island).
+
+### Wind Chill and Frostbite Calculator
+
+Implements the NWS 2001 formula (Osczevski & Bluestein, 2005):
+
+`WC = 13.12 + 0.6215*Ta - 11.37*V^0.16 + 0.3965*Ta*V^0.16`
+
+Where Ta = air temperature (C), V = wind speed at 10m (km/h). Frostbite time estimated from NWS lookup tables.
+
+### WBGT Heat Stress Calculator
+
+Implements the ISO 7243:2017 simplified estimation (Steadman, 1979):
+
+`WBGT = 0.567*Ta + 0.393*e + 3.94`
+
+Where e = water vapor pressure (hPa) from temperature and humidity. Includes NIOSH-aligned work/rest guidance.
+
+### Jet Lag Circadian Performance Model
+
+Based on Waterhouse et al. (2007) and Arendt (2009):
+
+- Eastward resynchronization rate: ~0.67 h/day (phase advance, harder)
+- Westward resynchronization rate: ~1.0 h/day (phase delay, easier)
+- Performance follows exponential recovery: `factor = 1.0 - penalty * exp(-day / tau)`
+- Readiness modifier bounded to +/-6 points
+- Interactive recovery curve chart in the crew performance modal
+
+**References:**
+- Osczevski, R., & Bluestein, M. (2005). BAMS, 86(10), 1453-1458.
+- ISO 7243:2017. WBGT heat stress assessment.
+- Steadman, R.G. (1979). J Appl Meteor, 18, 861-873.
+- Satish, U., et al. (2012). Environ Health Perspect, 120(12), 1671-1677. DOI: 10.1289/ehp.1104789
+- Waterhouse, J., et al. (2007). Lancet, 369, 1117-1129. PMID: 17398311
+- Arendt, J. (2009). Sleep Med Rev, 13(4), 249-256. PMID: 19153053
+- Burgess, H.J., et al. (2003). J Biol Rhythms, 18(4), 318-328. PMID: 12932084
+
+---
+
 ## Physiological SMS Risk Assessment
 
 ### Overview
