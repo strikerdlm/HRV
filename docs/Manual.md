@@ -6025,6 +6025,83 @@ When sleep + HRV decline simultaneously (compound risk), the penalty is amplifie
 
 ---
 
+## Physiological SMS Risk Assessment
+
+### Overview
+
+The Physiological SMS Risk Assessment module integrates baseline blood pressure and basal body temperature into the operational readiness model as bounded modifiers, and provides Safety Management System (SMS)-style risk matrices for two critical activity types: Extravehicular Activity (EVA) and high-performance military flight.
+
+This module addresses the need for a comprehensive, multi-vital readiness assessment that goes beyond HRV alone. Resting blood pressure provides complementary autonomic information under sympathetic control (Porta et al., 2012), while basal body temperature reflects circadian phase, infection status, and thermoregulatory health (Kim & Lee, 2017; Zhang et al., 2025).
+
+### Blood Pressure Readiness Modifier
+
+Resting blood pressure is classified per ACC/AHA 2017 Hypertension Clinical Practice Guidelines. The modifier is bounded to +/-4 points to prevent overpowering the base SAFTE + HRV readiness model.
+
+| SBP / DBP Range | Classification | Modifier | Rationale |
+|---|---|---|---|
+| SBP 90-120, DBP 60-80 | Optimal | +2 | ACC/AHA optimal range; positive cardiovascular indicator |
+| SBP 120-129, DBP < 80 | Elevated | 0 | Neutral; within tolerable range |
+| SBP 130-139 or DBP 80-89 | Stage 1 HTN | -2 | Increased cardiovascular load |
+| SBP >= 140 or DBP >= 90 | Stage 2 HTN | -4 | EVA/flight disqualifying risk factor |
+| SBP < 90 or DBP < 60 | Hypotension | -3 | Orthostatic/syncope and G-LOC risk |
+
+### Temperature Readiness Modifier
+
+Basal oral body temperature is classified against standard clinical ranges. The modifier is bounded to +/-3 points.
+
+| Oral Temperature | Classification | Modifier | Rationale |
+|---|---|---|---|
+| 36.1 - 37.2 C | Normal | 0 | Euthermia, within circadian variation |
+| 37.3 - 37.7 C | Low-grade elevation | -1 | Possible early illness or post-exercise |
+| 37.8 - 38.2 C | Mild fever | -2 | Active inflammation; reduced tolerance |
+| > 38.3 C | Fever | -3 | Disqualifying for EVA/flight |
+| 35.0 - 36.0 C | Mild hypothermia | -1 | Cold exposure or hypothyroidism concern |
+| < 35.0 C | Hypothermia | -3 | Medical emergency |
+
+### EVA Readiness SMS Matrix (ICAO Doc 9859)
+
+A 5x5 risk matrix adapted from the ICAO Safety Management Manual for spacewalk operations:
+
+- **Severity** (5 levels): Maps from the fused readiness score (0-100)
+- **Likelihood** (5 levels): Maps from physiological flags (BP disqualifiers, temperature disqualifiers, PSI score, trajectory risk)
+- **Risk levels**: Acceptable, Tolerable, Undesirable, Intolerable
+- **Hard disqualifiers**: Fever > 37.8 C, SBP > 160, PSI > 85 — any one forces Intolerable
+
+### Military Flight SMS Matrix (MIL-STD-882E)
+
+A 4x5 risk matrix per DoD Standard Practice for System Safety:
+
+- **Severity** (4 levels): Negligible, Marginal, Critical, Catastrophic (per MIL-STD-882E Table I)
+- **Likelihood** (5 levels): Improbable, Remote, Occasional, Probable, Frequent (per Table II)
+- **Risk levels**: Low, Medium, Serious, High (per Table III)
+- **G-LOC risk flag**: Triggered by hypotension + low RMSSD or resting tachycardia
+- **Crew rest integration**: USAF AFMAN 11-202V3 compliance status
+
+### API Endpoints
+
+- `POST /api/research/readiness/{user_id}/vitals` — Submit BP + temperature, get enhanced readiness with dual SMS
+- `GET /api/research/sms/eva` — EVA SMS risk classification with heatmap matrix data
+- `GET /api/research/sms/flight` — Military Flight SMS classification with heatmap matrix data
+
+### Frontend Pages
+
+- **Research**: `/research/physiological-readiness` — Vitals form, modifier waterfall chart, dual SMS heatmaps, scientific citations
+- **Operational**: `/scheduling/readiness` — Go/No-Go decision panels, large readiness banner, compact SMS matrices
+
+### References
+
+- Porta, A., et al. (2012). Short-term complexity indexes of HP and SAP variabilities provide complementary information. *J Appl Physiol, 113*(12), 1810-1820. PMID: 23104699
+- Lucini, D., Solaro, N., & Pagani, M. (2014). Autonomic indices from cardiovascular variability help identify hypertension. *J Hypertens, 32*(2), 363-373. PMID: 24232167
+- Zhang, R., et al. (2020). Analysis of autonomic nervous pattern in hypertension based on short-term HRV. *Biomed Tech, 65*(4), 437-447. PMID: 32769220
+- Crowe, M., et al. (2025). Comparison of rectal and gastrointestinal core temperatures during heat tolerance testing. *Medicina, 61*(6), 1111. DOI: 10.3390/medicina61061111
+- Kim, S., & Lee, J.-Y. (2017). Prediction of body core temperature with HRV. Semantic Scholar: 6f60ddec.
+- Zhang, Z., et al. (2025). Research of physiological monitoring models in the military domain. DOI: 10.1109/ICCNEA66167.2025.11211893
+- Goutham, D., & Saravanasankar, S. (2025). AI-driven fatigue prediction using wearable sensor data and gradient-boosted ML models. DOI: 10.1109/ICRISET64803.2025.11254790
+- ICAO. (2018). *Safety Management Manual* (Doc 9859, 4th ed.).
+- US DoD. (2012). *MIL-STD-882E: Standard Practice for System Safety*.
+
+---
+
 ## Ventilatory Threshold Estimation (Experimental)
 
 ### Overview
