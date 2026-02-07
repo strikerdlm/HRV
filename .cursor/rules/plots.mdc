@@ -77,6 +77,41 @@ hr_min, hr_max = _auto_axis_bounds(
 | Gauge    | 280px  |
 | Radar    | 280px  |
 
+## Gauge Style (CRITICAL for Frontend TypeScript App)
+
+**For the modern TypeScript/Next.js frontend**, gauges MUST use the **two-ring SVG circular progress** style (matching the IHPI Score gauges), NOT the old-fashioned speedometer-style ECharts gauges.
+
+### Required Gauge Style
+- **Thin circular ring** (strokeWidth 6-8px) as background (light opacity)
+- **Colored progress arc** on top using strokeDasharray
+- **Large bold number** centered inside the ring
+- **Color determined by value**: green (#27ae60) for good, yellow (#f39c12) for caution, red (#e74c3c) for danger
+- **Small label text** below the gauge (metric name + unit)
+- **No tick marks, no pointer, no split lines, no axis labels**
+- Use pure SVG `<circle>` elements, NOT ECharts gauge series
+
+### SVG Ring Gauge Pattern
+```tsx
+<div className="relative w-24 h-24 mx-auto">
+  <svg className="w-full h-full transform -rotate-90">
+    <circle cx="48" cy="48" r="40" fill="none"
+      stroke="currentColor" strokeWidth="8"
+      className="text-muted/30" />
+    <circle cx="48" cy="48" r="40" fill="none"
+      stroke="currentColor" strokeWidth="8"
+      strokeDasharray={`${(value / max) * 251.2} 251.2`}
+      className={colorClass} strokeLinecap="round" />
+  </svg>
+  <div className="absolute inset-0 flex items-center justify-center">
+    <span className="text-2xl font-bold">{value}</span>
+  </div>
+</div>
+```
+
+### When to Use ECharts vs SVG Gauges
+- **SVG Ring Gauges**: Dashboard overview cards, small status indicators, ICE station sensors, space weather indices
+- **ECharts**: Heatmaps, radar charts, line charts, bar charts, scatter plots — NOT for simple value gauges
+
 ## Color Semantics
 
 | Meaning        | Color                        |
