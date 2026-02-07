@@ -44,6 +44,9 @@ import { EChartsWrapper } from "@/components/charts";
 import { IHPIGauge } from "@/components/ihpi-gauge";
 import { CrewPerformanceModal } from "@/components/crew-performance-modal";
 import type { CrewMemberForModal } from "@/components/crew-performance-modal";
+import { ICEStationMonitor } from "@/components/ice-station-monitor";
+import { METARDashboard } from "@/components/metar-dashboard";
+import { ExtremeWeatherCalc } from "@/components/extreme-weather-calc";
 
 // ---------------------------------------------------------------------------
 // Stat card
@@ -102,84 +105,58 @@ function StatCard({
 }
 
 // ---------------------------------------------------------------------------
-// Space Weather Gauges (ECharts)
+// SVG Ring Gauge helper (matching IHPI gauge style per plot rules)
+// ---------------------------------------------------------------------------
+
+function SWRingGauge({
+  value,
+  max,
+  unit,
+  label,
+  getColor,
+}: {
+  value: number;
+  max: number;
+  unit: string;
+  label: string;
+  getColor: (v: number) => string;
+}) {
+  const pct = Math.max(0, Math.min(1, value / max));
+  const circ = 2 * Math.PI * 36;
+  const color = getColor(value);
+
+  return (
+    <div className="flex flex-col items-center">
+      <div className="relative w-24 h-24">
+        <svg className="w-full h-full transform -rotate-90" viewBox="0 0 96 96">
+          <circle cx="48" cy="48" r="36" fill="none" stroke={color} strokeWidth="7" opacity="0.15" />
+          <circle cx="48" cy="48" r="36" fill="none" stroke={color} strokeWidth="7"
+            strokeDasharray={`${pct * circ} ${circ}`} strokeLinecap="round" />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-xl font-bold" style={{ color }}>{value}</span>
+          <span className="text-[9px] text-muted-foreground">{unit}</span>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground mt-1 font-medium">{label}</p>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Space Weather Gauges (SVG ring style per plot rules)
 // ---------------------------------------------------------------------------
 
 function SpaceWeatherGauges({ data }: { data: SpaceWeatherSnapshot | null }) {
   const kp = data?.kp_index ?? 0;
   const solarWind = data?.solar_wind_speed ?? 0;
+  const f107 = data?.f10_7_flux ?? 0;
+  const dst = data?.dst_index ?? 0;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- gauge color stops need loose typing
-  const kpGaugeOption = React.useMemo((): any => ({
-    series: [{
-      type: "gauge",
-      min: 0,
-      max: 9,
-      splitNumber: 9,
-      radius: "90%",
-      axisLine: {
-        lineStyle: {
-          width: 12,
-          color: [
-            [0.33, "#27ae60"],
-            [0.55, "#f39c12"],
-            [0.77, "#e67e22"],
-            [1, "#e74c3c"],
-          ],
-        },
-      },
-      pointer: { length: "60%", width: 5, itemStyle: { color: "#2c3e50" } },
-      axisTick: { length: 6, lineStyle: { color: "#1a1a1a" } },
-      splitLine: { length: 10, lineStyle: { color: "#1a1a1a", width: 2 } },
-      axisLabel: { color: "#1a1a1a", fontSize: 9, distance: 15 },
-      detail: {
-        valueAnimation: true,
-        formatter: "{value}",
-        color: "#1a1a1a",
-        fontSize: 22,
-        fontWeight: "bold",
-        offsetCenter: [0, "70%"],
-      },
-      data: [{ value: kp, name: "Kp" }],
-      title: { show: false },
-    }],
-  }), [kp]);
-
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const windGaugeOption = React.useMemo((): any => ({
-    series: [{
-      type: "gauge",
-      min: 0,
-      max: 1000,
-      splitNumber: 5,
-      radius: "90%",
-      axisLine: {
-        lineStyle: {
-          width: 12,
-          color: [
-            [0.4, "#27ae60"],
-            [0.6, "#f39c12"],
-            [0.8, "#e67e22"],
-            [1, "#e74c3c"],
-          ],
-        },
-      },
-      pointer: { length: "60%", width: 5, itemStyle: { color: "#2c3e50" } },
-      axisTick: { length: 6, lineStyle: { color: "#1a1a1a" } },
-      splitLine: { length: 10, lineStyle: { color: "#1a1a1a", width: 2 } },
-      axisLabel: { color: "#1a1a1a", fontSize: 9, distance: 15 },
-      detail: {
-        valueAnimation: true,
-        formatter: "{value} km/s",
-        color: "#1a1a1a",
-        fontSize: 16,
-        fontWeight: "bold",
-        offsetCenter: [0, "70%"],
-      },
-      data: [{ value: solarWind, name: "Solar Wind" }],
-      title: { show: false },
-    }],
-  }), [solarWind]);
+  const kpColor = (v: number) => v >= 6 ? "#e74c3c" : v >= 4 ? "#f39c12" : "#27ae60";
+  const windColor = (v: number) => v >= 600 ? "#e74c3c" : v >= 400 ? "#f39c12" : "#27ae60";
+  const f107Color = (v: number) => v >= 200 ? "#e74c3c" : v >= 150 ? "#f39c12" : "#27ae60";
+  const dstColor = (v: number) => v <= -100 ? "#e74c3c" : v <= -50 ? "#f39c12" : "#27ae60";
 
   return (
     <Card>
@@ -189,31 +166,18 @@ function SpaceWeatherGauges({ data }: { data: SpaceWeatherSnapshot | null }) {
             <Sun className="h-5 w-5 text-warning" />
             Space Weather
           </CardTitle>
-          <Badge variant={kp >= 6 ? "destructive" : kp >= 4 ? "warning" as "secondary" : "success" as "secondary"}>
+          <Badge variant={kp >= 6 ? "destructive" : kp >= 4 ? "secondary" : "secondary"}
+            className={kp >= 6 ? "" : kp >= 4 ? "bg-yellow-100 text-yellow-800" : "bg-green-100 text-green-800"}>
             {kp >= 6 ? "Storm" : kp >= 4 ? "Active" : "Quiet"}
           </Badge>
         </div>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 gap-2">
-          <div className="text-center">
-            <EChartsWrapper option={kpGaugeOption} height={160} showToolbox={false} />
-            <p className="text-xs text-muted-foreground -mt-2">Kp Index</p>
-          </div>
-          <div className="text-center">
-            <EChartsWrapper option={windGaugeOption} height={160} showToolbox={false} />
-            <p className="text-xs text-muted-foreground -mt-2">Solar Wind</p>
-          </div>
-        </div>
-        <div className="grid grid-cols-2 gap-3 mt-2 text-center">
-          <div className="p-2 rounded bg-muted/30">
-            <p className="text-[10px] text-muted-foreground">F10.7 Flux</p>
-            <p className="text-sm font-bold">{data?.f10_7_flux?.toFixed(0) ?? "N/A"} <span className="text-xs font-normal">SFU</span></p>
-          </div>
-          <div className="p-2 rounded bg-muted/30">
-            <p className="text-[10px] text-muted-foreground">Dst Index</p>
-            <p className="text-sm font-bold">{data?.dst_index?.toFixed(0) ?? "N/A"} <span className="text-xs font-normal">nT</span></p>
-          </div>
+        <div className="grid grid-cols-4 gap-2">
+          <SWRingGauge value={Math.round(kp * 10) / 10} max={9} unit="" label="Kp Index" getColor={kpColor} />
+          <SWRingGauge value={Math.round(solarWind)} max={1000} unit="km/s" label="Solar Wind" getColor={windColor} />
+          <SWRingGauge value={Math.round(f107)} max={300} unit="SFU" label="F10.7 Flux" getColor={f107Color} />
+          <SWRingGauge value={Math.round(dst)} max={100} unit="nT" label="Dst Index" getColor={() => dstColor(dst)} />
         </div>
       </CardContent>
     </Card>
@@ -771,48 +735,65 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
 
-        {/* Visualizations Row: Space Weather Gauges + Crew Radar */}
+        {/* Environmental Monitoring + METAR */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3, delay: 0.15 }}
           className="grid gap-6 md:grid-cols-2"
         >
-          <SpaceWeatherGauges data={spaceWeather} />
+          <ICEStationMonitor />
+          <METARDashboard />
+        </motion.div>
+
+        {/* Extreme Environment + Crew Radar */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.2 }}
+          className="grid gap-6 md:grid-cols-2"
+        >
+          <ExtremeWeatherCalc />
           <CrewRadarChart crewGauges={crewGauges} />
         </motion.div>
 
-        {/* Alerts + PROGSS + Actions */}
+        {/* Alerts + Actions */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {/* System Alerts */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.2 }}
+            transition={{ duration: 0.3, delay: 0.25 }}
             className="lg:col-span-2"
           >
             <SystemAlertsPanel crewAlerts={crewAlerts} spaceWeatherAlerts={swAlerts} />
           </motion.div>
 
-          {/* Quick Actions */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.25 }}
-          >
-            <QuickActions />
-          </motion.div>
-
-          {/* PROGSS Checklist */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.3, delay: 0.3 }}
-            className="lg:col-span-3"
           >
-            <PROGSSDashboard />
+            <QuickActions />
           </motion.div>
         </div>
+
+        {/* PROGSS Checklist */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.35 }}
+        >
+          <PROGSSDashboard />
+        </motion.div>
+
+        {/* Space Weather (moved to bottom) */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.4 }}
+        >
+          <SpaceWeatherGauges data={spaceWeather} />
+        </motion.div>
       </div>
 
       {/* Performance Modal */}
