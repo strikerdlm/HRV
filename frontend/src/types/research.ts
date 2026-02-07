@@ -1020,3 +1020,71 @@ export const READINESS_LABEL_COLORS: Record<string, string> = {
   MARGINAL: "#e67e22",
   "NO-GO": "#e74c3c",
 };
+
+// ---------------------------------------------------------------------------
+// METAR / Weather / Environment Types
+// ---------------------------------------------------------------------------
+
+export interface METARResponse {
+  icao: string;
+  metar: Record<string, unknown> | null;
+  error: string | null;
+}
+
+export interface WeatherIndices {
+  wind_chill_c: number;
+  frostbite_minutes: number | null;
+  cold_risk: string;
+  cold_description: string;
+  wbgt_c: number;
+  heat_index_c: number;
+  heat_risk: string;
+  heat_description: string;
+  work_rest_guidance: string;
+}
+
+export interface WeatherResponse {
+  city: string;
+  weather: Record<string, unknown> | null;
+  indices: WeatherIndices | null;
+  error: string | null;
+}
+
+export interface ICEStationReadings {
+  temperature_c: number;
+  humidity_pct: number;
+  co2_ppm: number;
+  pressure_hpa: number;
+  pm25_ugm3: number;
+  noise_db: number;
+  light_lux: number;
+  o2_pct: number;
+}
+
+export interface ICEStationResponse {
+  station: string;
+  timestamp: string;
+  readings: ICEStationReadings;
+  thresholds: Record<string, Record<string, number | string>>;
+}
+
+export interface JetLagResponse {
+  time_zones: number;
+  direction: string;
+  days_since: number;
+  resync_rate: number;
+  days_to_resync: number;
+  performance_pct: number;
+  readiness_modifier: number;
+  phase: string;
+  description: string;
+  recovery_curve: Array<{ day: number; performance: number }>;
+}
+
+export const RISK_LEVEL_COLORS: Record<string, string> = {
+  Low: "#27ae60",
+  Moderate: "#f39c12",
+  High: "#e67e22",
+  "Very High": "#e74c3c",
+  Extreme: "#8e44ad",
+};
