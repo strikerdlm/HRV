@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -3411,3 +3412,216 @@ async def get_nasa_hrp_matrix() -> Dict[str, Any]:
         raise HTTPException(status_code=500, detail="physiological_sms module not found")
 
     return build_nasa_hrp_heatmap_data()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Environmental Monitoring, METAR, Weather, and Jet Lag Endpoints
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class EnvironmentCalcRequest(BaseModel):
+    """Input for environment calculator endpoint."""
+
+    temp_c: float = Field(..., description="Air temperature in Celsius")
+    rh_pct: float = Field(50.0, ge=0, le=100, description="Relative humidity %")
+    wind_kmh: float = Field(0.0, ge=0, description="Wind speed in km/h")
+
+
+class JetLagRequest(BaseModel):
+    """Input for jet lag performance endpoint."""
+
+    time_zones: int = Field(..., ge=0, le=12, description="Time zones crossed")
+    direction: str = Field("east", description="Travel direction: east or west")
+    days_since: float = Field(0.0, ge=0, description="Days since arrival")
+
+
+@router.get("/metar/{icao}")
+async def get_metar(icao: str) -> Dict[str, Any]:
+    """Fetch decoded METAR from FAA AviationWeather.gov (free, no API key).
+
+    Proxies to: https://aviationweather.gov/api/data/metar?ids={ICAO}&format=json
+    """
+    import httpx
+
+    icao_clean = icao.strip().upper()[:4]
+    if len(icao_clean) != 4 or not icao_clean.isalpha():
+        raise HTTPException(status_code=400, detail="ICAO code must be 4 letters (e.g., SKBO)")
+
+    url = f"https://aviationweather.gov/api/data/metar?ids={icao_clean}&format=json"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url, headers={"User-Agent": "MissionControl-FlightSurgeon/1.13"})
+
+        if resp.status_code == 204:
+            return {"icao": icao_clean, "metar": None, "error": "No METAR available for this station"}
+        if resp.status_code != 200:
+            return {"icao": icao_clean, "metar": None, "error": f"AviationWeather API returned {resp.status_code}"}
+
+        data = resp.json()
+        if isinstance(data, list) and len(data) > 0:
+            return {"icao": icao_clean, "metar": data[0], "error": None}
+        return {"icao": icao_clean, "metar": None, "error": "No data returned"}
+
+    except Exception as exc:
+        _LOGGER.error("METAR fetch error for %s: %s", icao_clean, exc)
+        return {"icao": icao_clean, "metar": None, "error": str(exc)}
+
+
+@router.get("/weather/{city}")
+async def get_weather(city: str) -> Dict[str, Any]:
+    """Fetch weather from OpenWeatherMap and compute environment indices.
+
+    Uses OPENWEATHER_API_KEY from environment. Returns weather data plus
+    computed wind chill, WBGT, and heat index.
+    """
+    import httpx
+
+    api_key = os.environ.get("OPENWEATHER_API_KEY", "")
+    if not api_key:
+        raise HTTPException(status_code=500, detail="OPENWEATHER_API_KEY not configured in .env")
+
+    url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&units=metric&appid={api_key}"
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.get(url)
+
+        if resp.status_code != 200:
+            return {"city": city, "weather": None, "indices": None, "error": f"OpenWeatherMap returned {resp.status_code}"}
+
+        weather = resp.json()
+
+        # Compute environment indices
+        try:
+            from environment_calculators import (
+                compute_wind_chill_full,
+                compute_wbgt_full,
+            )
+
+            ta = weather.get("main", {}).get("temp", 20.0)
+            rh = weather.get("main", {}).get("humidity", 50.0)
+            wind_ms = weather.get("wind", {}).get("speed", 0.0)
+            wind_kmh = wind_ms * 3.6
+
+            wc = compute_wind_chill_full(ta, wind_kmh)
+            wbgt = compute_wbgt_full(ta, rh)
+
+            indices = {
+                "wind_chill_c": wc.wind_chill_c,
+                "frostbite_minutes": wc.frostbite_minutes,
+                "cold_risk": wc.risk_category,
+                "cold_description": wc.description,
+                "wbgt_c": wbgt.wbgt_c,
+                "heat_index_c": wbgt.heat_index_c,
+                "heat_risk": wbgt.risk_category,
+                "heat_description": wbgt.description,
+                "work_rest_guidance": wbgt.work_rest_guidance,
+            }
+        except Exception as calc_exc:
+            _LOGGER.warning("Environment calc failed: %s", calc_exc)
+            indices = None
+
+        return {"city": city, "weather": weather, "indices": indices, "error": None}
+
+    except Exception as exc:
+        _LOGGER.error("Weather fetch error for %s: %s", city, exc)
+        return {"city": city, "weather": None, "indices": None, "error": str(exc)}
+
+
+@router.get("/environment/ice-station")
+async def get_ice_station_data() -> Dict[str, Any]:
+    """Get simulated ICE research station environmental readings."""
+    try:
+        from environment_calculators import generate_ice_station_data
+    except ImportError:
+        raise HTTPException(status_code=500, detail="environment_calculators module not found")
+
+    from datetime import datetime as _dt
+
+    hour = _dt.now().hour
+    reading = generate_ice_station_data(hour)
+
+    return {
+        "station": "Marambio ICE Research Station (Simulated)",
+        "timestamp": _dt.now().isoformat(),
+        "readings": {
+            "temperature_c": reading.temperature_c,
+            "humidity_pct": reading.humidity_pct,
+            "co2_ppm": reading.co2_ppm,
+            "pressure_hpa": reading.pressure_hpa,
+            "pm25_ugm3": reading.pm25_ugm3,
+            "noise_db": reading.noise_db,
+            "light_lux": reading.light_lux,
+            "o2_pct": reading.o2_pct,
+        },
+        "thresholds": {
+            "temperature_c": {"min": 16, "max": 28, "unit": "C"},
+            "humidity_pct": {"min": 20, "max": 70, "unit": "%"},
+            "co2_ppm": {"warning": 1000, "danger": 1500, "unit": "ppm"},
+            "pressure_hpa": {"min": 950, "unit": "hPa"},
+            "pm25_ugm3": {"warning": 25, "danger": 50, "unit": "ug/m3"},
+            "noise_db": {"warning": 50, "danger": 70, "unit": "dB"},
+            "light_lux": {"min": 100, "unit": "lux"},
+            "o2_pct": {"min": 19.5, "unit": "%"},
+        },
+    }
+
+
+@router.post("/environment/calculators")
+async def compute_environment_indices(req: EnvironmentCalcRequest) -> Dict[str, Any]:
+    """Compute wind chill, WBGT, heat index from temperature/humidity/wind."""
+    try:
+        from environment_calculators import compute_wind_chill_full, compute_wbgt_full
+    except ImportError:
+        raise HTTPException(status_code=500, detail="environment_calculators module not found")
+
+    wc = compute_wind_chill_full(req.temp_c, req.wind_kmh)
+    wbgt = compute_wbgt_full(req.temp_c, req.rh_pct)
+
+    return {
+        "input": {"temp_c": req.temp_c, "rh_pct": req.rh_pct, "wind_kmh": req.wind_kmh},
+        "wind_chill": {
+            "value_c": wc.wind_chill_c,
+            "frostbite_minutes": wc.frostbite_minutes,
+            "risk": wc.risk_category,
+            "description": wc.description,
+        },
+        "heat_stress": {
+            "wbgt_c": wbgt.wbgt_c,
+            "heat_index_c": wbgt.heat_index_c,
+            "risk": wbgt.risk_category,
+            "description": wbgt.description,
+            "work_rest_guidance": wbgt.work_rest_guidance,
+        },
+    }
+
+
+@router.post("/performance/jetlag")
+async def compute_jetlag_impact(req: JetLagRequest) -> Dict[str, Any]:
+    """Compute jet lag impact on performance and readiness."""
+    try:
+        from environment_calculators import compute_jet_lag_performance
+    except ImportError:
+        raise HTTPException(status_code=500, detail="environment_calculators module not found")
+
+    result = compute_jet_lag_performance(req.time_zones, req.direction, req.days_since)
+
+    # Generate recovery curve data for charting (30 days)
+    from environment_calculators import compute_jet_lag_performance as _jl
+    curve_days = min(30, int(result.days_to_full_resync) + 5)
+    recovery_curve = []
+    for day_i in range(curve_days + 1):
+        pt = _jl(req.time_zones, req.direction, float(day_i))
+        recovery_curve.append({"day": day_i, "performance": round(pt.performance_factor * 100, 1)})
+
+    return {
+        "time_zones": result.time_zones_crossed,
+        "direction": result.direction,
+        "days_since": result.days_since_travel,
+        "resync_rate": result.resync_rate_h_per_day,
+        "days_to_resync": result.days_to_full_resync,
+        "performance_pct": round(result.performance_factor * 100, 1),
+        "readiness_modifier": result.readiness_modifier,
+        "phase": result.phase,
+        "description": result.description,
+        "recovery_curve": recovery_curve,
+    }
