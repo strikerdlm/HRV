@@ -3184,6 +3184,7 @@ class EnhancedReadinessResponse(BaseModel):
     flight_sms: Optional[SMSClassificationResponse] = None
     eva_matrix: Optional[Dict[str, Any]] = None
     flight_matrix: Optional[Dict[str, Any]] = None
+    nasa_hrp_matrix: Optional[Dict[str, Any]] = None
 
 
 def _get_sms_classifications(
@@ -3208,6 +3209,7 @@ def _get_sms_classifications(
             classify_flight_risk,
             build_eva_sms_heatmap_data,
             build_flight_sms_heatmap_data,
+            build_nasa_hrp_heatmap_data,
         )
     except ImportError:
         _LOGGER.error("physiological_sms module not available")
@@ -3240,6 +3242,7 @@ def _get_sms_classifications(
         "flight_sms": flight_sms,
         "eva_matrix": build_eva_sms_heatmap_data(),
         "flight_matrix": build_flight_sms_heatmap_data(),
+        "nasa_hrp_matrix": build_nasa_hrp_heatmap_data(),
     }
 
 
@@ -3333,6 +3336,7 @@ async def submit_vitals_and_assess(
         ),
         eva_matrix=result["eva_matrix"],
         flight_matrix=result["flight_matrix"],
+        nasa_hrp_matrix=result["nasa_hrp_matrix"],
     )
 
 
@@ -3392,3 +3396,18 @@ async def get_flight_sms_matrix(
             "likelihood_index": list(result["flight_matrix"]["likelihood_labels"]).index(flight_sms.likelihood),
         },
     }
+
+
+@router.get("/sms/nasa-hrp")
+async def get_nasa_hrp_matrix() -> Dict[str, Any]:
+    """Get NASA Human Research Program 5x5 LxC risk matrix data.
+
+    Based on the NASA Human Research Roadmap Likelihood x Consequence
+    framework (Antonsen et al., 2022; NASA STD-3001).
+    """
+    try:
+        from physiological_sms import build_nasa_hrp_heatmap_data
+    except ImportError:
+        raise HTTPException(status_code=500, detail="physiological_sms module not found")
+
+    return build_nasa_hrp_heatmap_data()
