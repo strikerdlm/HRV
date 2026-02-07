@@ -647,3 +647,73 @@ def build_flight_sms_heatmap_data() -> dict:
         "risk_levels": ["Low", "Medium", "Serious", "High"],
         "risk_colors": ["#27ae60", "#f39c12", "#e67e22", "#e74c3c"],
     }
+
+
+# ---------------------------------------------------------------------------
+# NASA Human Research Program (HRP) Risk Matrix
+# ---------------------------------------------------------------------------
+# Based on the NASA Human Research Roadmap Likelihood x Consequence (LxC)
+# framework for managing risks to crew health and performance during
+# exploration missions.
+#
+# References:
+#   - NASA. (2024). Human Research Roadmap: Risks.
+#     https://humanresearchroadmap.nasa.gov/Risks/
+#   - Antonsen, E. L., et al. (2022). Updates to the NASA Human System
+#     Risk Board Process. NPJ Microgravity, 8, 27.
+#     DOI: 10.1038/s41526-022-00213-2
+#   - NASA STD-3001, Vol. 1 & 2: Crew Health and Performance Standards.
+# ---------------------------------------------------------------------------
+
+# Likelihood levels (5, per NASA HRP LxC)
+_NASA_LIKELIHOOD_ORDER: Tuple[str, ...] = (
+    "Not Likely", "Unlikely", "Possible", "Likely", "Very Likely",
+)
+
+# Consequence levels (5, per NASA HRP LxC)
+_NASA_CONSEQUENCE_ORDER: Tuple[str, ...] = (
+    "Negligible", "Marginal", "Significant", "Critical", "Catastrophic",
+)
+
+# 5x5 NASA HRP risk matrix — maps Consequence (rows) x Likelihood (cols)
+# to risk acceptance categories
+_NASA_HRP_RISK_MATRIX: dict[str, Tuple[str, ...]] = {
+    "Negligible":   ("Accepted", "Accepted", "Accepted", "Controlled", "Controlled"),
+    "Marginal":     ("Accepted", "Accepted", "Controlled", "Controlled", "Watched"),
+    "Significant":  ("Accepted", "Controlled", "Controlled", "Watched", "Watched"),
+    "Critical":     ("Controlled", "Controlled", "Watched", "Watched", "Uncontrolled"),
+    "Catastrophic": ("Controlled", "Watched", "Watched", "Uncontrolled", "Uncontrolled"),
+}
+
+
+def build_nasa_hrp_heatmap_data() -> dict:
+    """Build NASA HRP 5x5 LxC risk matrix data for ECharts heatmap.
+
+    The NASA Human Research Program uses a Likelihood x Consequence (LxC)
+    framework to classify risks to crew health during exploration missions.
+    Risks are categorized as Accepted, Controlled, Watched, or Uncontrolled.
+
+    References:
+        Antonsen et al. (2022). NPJ Microgravity, 8, 27.
+        NASA Human Research Roadmap: https://humanresearchroadmap.nasa.gov/
+
+    Returns:
+        Dict with severity_labels, likelihood_labels, data, risk_levels,
+        risk_colors.
+    """
+    risk_value_map = {
+        "Accepted": 0, "Controlled": 1, "Watched": 2, "Uncontrolled": 3,
+    }
+    data: List[List[int]] = []
+    for row_idx, consequence in enumerate(_NASA_CONSEQUENCE_ORDER):
+        for col_idx, _lik in enumerate(_NASA_LIKELIHOOD_ORDER):
+            risk = _NASA_HRP_RISK_MATRIX[consequence][col_idx]
+            data.append([col_idx, row_idx, risk_value_map[risk]])
+
+    return {
+        "severity_labels": list(_NASA_CONSEQUENCE_ORDER),
+        "likelihood_labels": list(_NASA_LIKELIHOOD_ORDER),
+        "data": data,
+        "risk_levels": ["Accepted", "Controlled", "Watched", "Uncontrolled"],
+        "risk_colors": ["#27ae60", "#3498db", "#f39c12", "#e74c3c"],
+    }
