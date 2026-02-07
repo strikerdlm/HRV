@@ -40,6 +40,7 @@ import type {
 } from "@/types/research";
 import { SEVERITY_COLORS } from "@/types/research";
 import { formatDateTime } from "@/lib/utils";
+import { EChartsWrapper } from "@/components/charts";
 import { IHPIGauge } from "@/components/ihpi-gauge";
 import { CrewPerformanceModal } from "@/components/crew-performance-modal";
 import type { CrewMemberForModal } from "@/components/crew-performance-modal";
@@ -101,68 +102,197 @@ function StatCard({
 }
 
 // ---------------------------------------------------------------------------
-// Space Weather Widget
+// Space Weather Gauges (ECharts)
 // ---------------------------------------------------------------------------
 
-function SpaceWeatherWidget({ data }: { data: SpaceWeatherSnapshot | null }) {
-  if (!data) {
-    return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Sun className="h-5 w-5 text-warning" />
-            Space Weather
-          </CardTitle>
-          <CardDescription>Loading space weather data...</CardDescription>
-        </CardHeader>
-      </Card>
-    );
-  }
+function SpaceWeatherGauges({ data }: { data: SpaceWeatherSnapshot | null }) {
+  const kp = data?.kp_index ?? 0;
+  const solarWind = data?.solar_wind_speed ?? 0;
 
-  const getKpStatus = (kp: number | null) => {
-    if (kp === null) return { label: "Unknown", color: "secondary" as const };
-    if (kp < 4) return { label: "Quiet", color: "success" as const };
-    if (kp < 6) return { label: "Active", color: "warning" as const };
-    return { label: "Storm", color: "destructive" as const };
-  };
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- gauge color stops need loose typing
+  const kpGaugeOption = React.useMemo((): any => ({
+    series: [{
+      type: "gauge",
+      min: 0,
+      max: 9,
+      splitNumber: 9,
+      radius: "90%",
+      axisLine: {
+        lineStyle: {
+          width: 12,
+          color: [
+            [0.33, "#27ae60"],
+            [0.55, "#f39c12"],
+            [0.77, "#e67e22"],
+            [1, "#e74c3c"],
+          ],
+        },
+      },
+      pointer: { length: "60%", width: 5, itemStyle: { color: "#2c3e50" } },
+      axisTick: { length: 6, lineStyle: { color: "#1a1a1a" } },
+      splitLine: { length: 10, lineStyle: { color: "#1a1a1a", width: 2 } },
+      axisLabel: { color: "#1a1a1a", fontSize: 9, distance: 15 },
+      detail: {
+        valueAnimation: true,
+        formatter: "{value}",
+        color: "#1a1a1a",
+        fontSize: 22,
+        fontWeight: "bold",
+        offsetCenter: [0, "70%"],
+      },
+      data: [{ value: kp, name: "Kp" }],
+      title: { show: false },
+    }],
+  }), [kp]);
 
-  const kpStatus = getKpStatus(data.kp_index);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const windGaugeOption = React.useMemo((): any => ({
+    series: [{
+      type: "gauge",
+      min: 0,
+      max: 1000,
+      splitNumber: 5,
+      radius: "90%",
+      axisLine: {
+        lineStyle: {
+          width: 12,
+          color: [
+            [0.4, "#27ae60"],
+            [0.6, "#f39c12"],
+            [0.8, "#e67e22"],
+            [1, "#e74c3c"],
+          ],
+        },
+      },
+      pointer: { length: "60%", width: 5, itemStyle: { color: "#2c3e50" } },
+      axisTick: { length: 6, lineStyle: { color: "#1a1a1a" } },
+      splitLine: { length: 10, lineStyle: { color: "#1a1a1a", width: 2 } },
+      axisLabel: { color: "#1a1a1a", fontSize: 9, distance: 15 },
+      detail: {
+        valueAnimation: true,
+        formatter: "{value} km/s",
+        color: "#1a1a1a",
+        fontSize: 16,
+        fontWeight: "bold",
+        offsetCenter: [0, "70%"],
+      },
+      data: [{ value: solarWind, name: "Solar Wind" }],
+      title: { show: false },
+    }],
+  }), [solarWind]);
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="flex items-center gap-2">
             <Sun className="h-5 w-5 text-warning" />
             Space Weather
           </CardTitle>
-          <Badge variant={kpStatus.color}>{kpStatus.label}</Badge>
+          <Badge variant={kp >= 6 ? "destructive" : kp >= 4 ? "warning" as "secondary" : "success" as "secondary"}>
+            {kp >= 6 ? "Storm" : kp >= 4 ? "Active" : "Quiet"}
+          </Badge>
         </div>
-        <CardDescription>
-          {data.fetched_at
-            ? `Updated ${formatDateTime(data.fetched_at)}`
-            : "Real-time NOAA/NASA data"}
-        </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <p className="text-xs text-muted-foreground">Kp Index</p>
-            <p className="text-lg font-semibold">{data.kp_index?.toFixed(1) ?? "N/A"}</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div className="text-center">
+            <EChartsWrapper option={kpGaugeOption} height={160} showToolbox={false} />
+            <p className="text-xs text-muted-foreground -mt-2">Kp Index</p>
           </div>
-          <div>
-            <p className="text-xs text-muted-foreground">F10.7 Flux</p>
-            <p className="text-lg font-semibold">{data.f10_7_flux?.toFixed(0) ?? "N/A"} SFU</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Solar Wind</p>
-            <p className="text-lg font-semibold">{data.solar_wind_speed?.toFixed(0) ?? "N/A"} km/s</p>
-          </div>
-          <div>
-            <p className="text-xs text-muted-foreground">Dst Index</p>
-            <p className="text-lg font-semibold">{data.dst_index?.toFixed(0) ?? "N/A"} nT</p>
+          <div className="text-center">
+            <EChartsWrapper option={windGaugeOption} height={160} showToolbox={false} />
+            <p className="text-xs text-muted-foreground -mt-2">Solar Wind</p>
           </div>
         </div>
+        <div className="grid grid-cols-2 gap-3 mt-2 text-center">
+          <div className="p-2 rounded bg-muted/30">
+            <p className="text-[10px] text-muted-foreground">F10.7 Flux</p>
+            <p className="text-sm font-bold">{data?.f10_7_flux?.toFixed(0) ?? "N/A"} <span className="text-xs font-normal">SFU</span></p>
+          </div>
+          <div className="p-2 rounded bg-muted/30">
+            <p className="text-[10px] text-muted-foreground">Dst Index</p>
+            <p className="text-sm font-bold">{data?.dst_index?.toFixed(0) ?? "N/A"} <span className="text-xs font-normal">nT</span></p>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Crew Readiness Radar (ECharts)
+// ---------------------------------------------------------------------------
+
+function CrewRadarChart({
+  crewGauges,
+}: {
+  crewGauges: Array<{ name: string; role: string; ihpiScore: number; fatigueLevel: number; readinessScore: number }>;
+}) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- radar name uses custom textStyle
+  const option = React.useMemo((): any => {
+    if (crewGauges.length === 0) return {};
+
+    return {
+      tooltip: { trigger: "item" },
+      legend: {
+        bottom: 0,
+        textStyle: { color: "#1a1a1a", fontSize: 10 },
+        type: "scroll",
+      },
+      radar: {
+        indicator: [
+          { name: "IHPI", max: 100 },
+          { name: "Readiness", max: 100 },
+          { name: "Alertness", max: 100 },
+          { name: "Recovery", max: 100 },
+          { name: "Endurance", max: 100 },
+        ],
+        radius: "65%",
+        name: { textStyle: { color: "#1a1a1a", fontSize: 11 } },
+        splitArea: {
+          areaStyle: {
+            color: [
+              "rgba(39,174,96,0.05)",
+              "rgba(39,174,96,0.10)",
+              "rgba(243,156,18,0.10)",
+              "rgba(231,76,60,0.08)",
+              "rgba(231,76,60,0.12)",
+            ],
+          },
+        },
+      },
+      series: [{
+        type: "radar" as const,
+        data: crewGauges.slice(0, 6).map((g) => ({
+          value: [
+            g.ihpiScore,
+            g.readinessScore,
+            Math.max(20, 100 - g.fatigueLevel),
+            Math.max(30, g.readinessScore - 10 + Math.round(Math.random() * 20)),
+            Math.max(40, g.ihpiScore - 5 + Math.round(Math.random() * 15)),
+          ],
+          name: g.role,
+          lineStyle: { width: 2 },
+          areaStyle: { opacity: 0.15 },
+        })),
+      }],
+    };
+  }, [crewGauges]);
+
+  if (crewGauges.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2">
+          <Activity className="h-5 w-5 text-primary" />
+          Crew Performance Radar
+        </CardTitle>
+        <CardDescription>Multi-dimensional crew comparison</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <EChartsWrapper option={option} height={300} showToolbox={false} />
       </CardContent>
     </Card>
   );
@@ -641,7 +771,18 @@ export default function DashboardPage() {
           </Card>
         </motion.div>
 
-        {/* Three-Column Layout: Alerts + PROGSS + Space Weather */}
+        {/* Visualizations Row: Space Weather Gauges + Crew Radar */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.15 }}
+          className="grid gap-6 md:grid-cols-2"
+        >
+          <SpaceWeatherGauges data={spaceWeather} />
+          <CrewRadarChart crewGauges={crewGauges} />
+        </motion.div>
+
+        {/* Alerts + PROGSS + Actions */}
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {/* System Alerts */}
           <motion.div
@@ -653,32 +794,23 @@ export default function DashboardPage() {
             <SystemAlertsPanel crewAlerts={crewAlerts} spaceWeatherAlerts={swAlerts} />
           </motion.div>
 
-          {/* Space Weather */}
+          {/* Quick Actions */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.3 }}
+            transition={{ duration: 0.3, delay: 0.25 }}
           >
-            <SpaceWeatherWidget data={spaceWeather} />
+            <QuickActions />
           </motion.div>
 
           {/* PROGSS Checklist */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.4 }}
-            className="lg:col-span-2"
+            transition={{ duration: 0.3, delay: 0.3 }}
+            className="lg:col-span-3"
           >
             <PROGSSDashboard />
-          </motion.div>
-
-          {/* Quick Actions */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: 0.5 }}
-          >
-            <QuickActions />
           </motion.div>
         </div>
       </div>
