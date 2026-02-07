@@ -1237,3 +1237,76 @@ function _emptyReadinessResponse(): EnhancedReadinessResponse {
     nasa_hrp_matrix: null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Environment / METAR / Weather / Jet Lag API
+// ---------------------------------------------------------------------------
+
+import type {
+  METARResponse,
+  WeatherResponse,
+  ICEStationResponse,
+  JetLagResponse,
+} from "@/types/research";
+
+export async function fetchMETAR(icao: string): Promise<METARResponse> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/research/metar/${icao}`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  } catch (error) {
+    console.error("METAR fetch error:", error);
+    return { icao, metar: null, error: String(error) };
+  }
+}
+
+export async function fetchWeather(city: string): Promise<WeatherResponse> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/research/weather/${city}`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  } catch (error) {
+    console.error("Weather fetch error:", error);
+    return { city, weather: null, indices: null, error: String(error) };
+  }
+}
+
+export async function fetchICEStation(): Promise<ICEStationResponse | null> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/research/environment/ice-station`, {
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  } catch (error) {
+    console.error("ICE station fetch error:", error);
+    return null;
+  }
+}
+
+export async function computeJetLag(
+  timeZones: number,
+  direction: string,
+  daysSince: number,
+): Promise<JetLagResponse | null> {
+  try {
+    const resp = await fetch(`${API_BASE}/api/research/performance/jetlag`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        time_zones: timeZones,
+        direction,
+        days_since: daysSince,
+      }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return await resp.json();
+  } catch (error) {
+    console.error("Jet lag compute error:", error);
+    return null;
+  }
+}
