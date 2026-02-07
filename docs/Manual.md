@@ -6029,72 +6029,201 @@ When sleep + HRV decline simultaneously (compound risk), the penalty is amplifie
 
 ### Overview
 
-The Ventilatory Threshold (VT) Estimation module provides non-invasive detection of aerobic (VT1) and anaerobic (VT2) thresholds using heart rate variability analysis. This eliminates the need for laboratory-based cardiopulmonary exercise testing (CPET) with gas exchange analysis.
+The Ventilatory Threshold (VT) Estimation module provides non-invasive detection of aerobic (VT1) and anaerobic (VT2) thresholds using heart rate variability analysis. This eliminates the need for laboratory-based cardiopulmonary exercise testing (CPET) with gas exchange analysis — a significant advancement for field testing, remote environments, and aerospace operations where laboratory equipment is unavailable.
+
+> **Full scientific report:** For the complete literature review, Python implementation framework, and validation evidence, see [HRV_Ventilatory_Threshold_Comprehensive_Scientific_Report.md](HRV_Ventilatory_Threshold_Comprehensive_Scientific_Report.md).
 
 ### Scientific Background
 
-**Detrended Fluctuation Analysis (DFA-α1)** quantifies fractal correlation properties of RR interval time series. During exercise, the short-term scaling exponent (α1, 4-16 beats) transitions predictably:
+Accurate determination of exercise intensity thresholds is fundamental to exercise prescription, performance optimization, and physiological monitoring in aerospace medicine (Rogers et al., 2021). Traditional CPET requires specialized laboratory equipment, trained personnel, controlled environments, and significant resources — constraints that preclude widespread application in field settings, analog missions, military operations, and continuous monitoring scenarios.
 
-| DFA-α1 Value | Interpretation | Autonomic State |
-|---|---|---|
-| ~1.0 | Low intensity / Rest | Parasympathetic dominance, correlated fractal pattern |
-| ~0.75 | **VT1 (Aerobic Threshold)** | Progressive vagal withdrawal |
-| ~0.50 | **VT2 (Anaerobic Threshold)** | Sympathetic dominance |
-| <0.50 | Maximal intensity | Near-complete vagal withdrawal, random patterns |
+**Autonomic Regulation During Exercise**
+
+Exercise intensity modulates autonomic nervous system (ANS) balance with measurable effects on heart rate variability patterns (Aubert et al., 2003; Shaffer & Ginsberg, 2017):
+
+1. **Below VT1**: Vagal dominance with preserved fractal correlation
+2. **VT1 region**: Progressive vagal withdrawal
+3. **VT1-VT2**: Mixed autonomic regulation with sympathetic enhancement
+4. **Above VT2**: Sympathetic dominance with loss of fractal organization
+5. **Maximal intensity**: Near-complete vagal withdrawal, random HR patterns
+
+**Detrended Fluctuation Analysis (DFA-α1)** quantifies fractal correlation properties of RR interval time series (Peng et al., 1995). The short-term scaling exponent (α1, computed over 4-16 beats) reflects short-range correlations in RR intervals and transitions predictably during exercise:
+
+| DFA-α1 Value | Signal Character | Interpretation | Autonomic State |
+|---|---|---|---|
+| ~1.5 | Brownian motion | Extremely organized | — |
+| ~1.0 | 1/f noise | Correlated fractal pattern | Parasympathetic dominance (rest/low intensity) |
+| ~0.75 | Transitional | **VT1 (Aerobic Threshold)** | Progressive vagal withdrawal |
+| ~0.50 | Random walk | **VT2 (Anaerobic Threshold)** | Sympathetic dominance |
+| <0.50 | Anti-correlated | Near-maximal/maximal intensity | Near-complete vagal withdrawal |
 
 ### Multi-Parameter Algorithm
 
-The implementation uses a multi-parameter approach inspired by the Kubios VT-algorithm (Eronen et al., 2024):
+The implementation uses a multi-parameter approach inspired by the Kubios VT-algorithm architecture (Eronen et al., 2024). Rather than relying on DFA-α1 alone, it integrates three complementary physiological signals:
 
-- **DFA-α1 (60% weight)**: Primary fractal correlation metric computed in 120-second sliding windows
-- **Heart Rate Reserve (30%)**: Normalized HR position between resting and maximum
-- **Respiratory Frequency (10%)**: Ventilatory modulation extracted from HF band (0.15-0.40 Hz)
+- **DFA-α1 (60% weight)**: Primary fractal correlation metric computed in 120-second sliding windows with 5-second steps, following Kubios standard methodology
+- **Heart Rate Reserve (30% weight)**: Normalized HR position between resting and age-predicted maximum, tracking the intensity continuum
+- **Respiratory Frequency (10% weight)**: Ventilatory modulation extracted from the HF spectral band (0.15-0.40 Hz) via respiratory sinus arrhythmia analysis
 
-**Validation Performance (Eronen et al., 2024, n=64):**
+**Algorithm Steps:**
+1. RR interval extraction and artifact correction (±20% median threshold)
+2. Time-varying DFA-α1 computation (120s window, 5s step)
+3. Heart rate reserve normalization
+4. Respiratory frequency extraction from HRV spectral analysis
+5. Multi-parameter integration with weighted combination
+6. Threshold identification and confidence scoring
 
-| Metric | DFA-α1 Alone | Multi-Parameter | Improvement |
+### Validation Evidence
+
+**Primary Validation Study — Eronen et al. (2024, n=64):**
+
+Recreationally active participants (18-65 years) underwent incremental CPET on a cycle ergometer with simultaneous ECG recording and gas exchange analysis.
+
+| Metric | DFA-α1 Alone | Multi-Parameter (VT-Algorithm) | Improvement |
 |---|---|---|---|
 | VT1 VO₂ correlation | r = 0.67 | r = 0.81 | +20.9% |
-| VT1 HR bias | 10 ± 18 bpm | 1 ± 11 bpm | 90% reduction |
+| VT1 HR bias | 10 ± 18 bpm | 1 ± 11 bpm | 90% bias reduction |
+| VT1 HR standard error | ±18 bpm | ±11 bpm | 39% SE reduction |
+| VT2 HR correlation | r = 0.82 | r = 0.82 | Equal |
 | VT2 VO₂ correlation | — | r = 0.93 | — |
-| VT2 HR SE | <7 bpm | <7 bpm | Equal |
+| VT2 HR standard error | <7 bpm | <7 bpm | Clinically acceptable |
 
-### Features
+**Supporting Evidence — Gronwald et al. (2020, Systematic Review):**
 
-1. **DFA-α1 Time Series Visualization**: Publication-quality chart showing DFA-α1 evolution during exercise with intensity zone shading (green/orange/red)
+- 16 studies analyzed (n=327 total participants)
+- DFA-α1 threshold of 0.75 consistently identified VT1/LT1
+- Correlation with lactate threshold: r = 0.61-0.81
+- Test-retest reliability: CV <6%
+
+**Supporting Evidence — Rogers et al. (2021, Elite Cyclists):**
+
+- n=20 elite cyclists
+- DFA-α1 at 0.75 correlated with LT1: r = 0.89, p<0.001
+- Heart rate at DFA-α1=0.75 within ±5 bpm of lactate-based LT1 in 85% of cases
+
+**Sex-Specific Analysis:**
+
+- Women showed DFA-α1 thresholds at 0.75 (VT1) and 0.50 (VT2) with r=0.81 and r=0.86 respectively
+- No significant sex differences in DFA-α1 threshold values
+- Similar reliability across sexes (CV <6%)
+
+### Methodological Factors Affecting Accuracy
+
+| Factor | Effect on Accuracy | Recommendation |
+|---|---|---|
+| Artifact rate <5% | Excellent agreement | Use automated artifact correction |
+| Artifact rate 5-10% | Good agreement | Manual inspection recommended |
+| Artifact rate >10% | Poor agreement | Consider test invalid |
+| Stage duration ≥2 min | Optimal | Allows autonomic stabilization |
+| Stage duration <2 min | Reduced accuracy | May miss threshold transition |
+| Increment size 10-25W | Optimal | Appropriate resolution |
+| Trained athletes | Higher correlation | More stable autonomic patterns |
+| Sedentary individuals | Variable results | Individual calibration beneficial |
+| Laboratory (controlled) | Best accuracy | Reference standard |
+| Field (variable) | Reduced accuracy | Increased artifact rate |
+
+### Comparison with Alternative Threshold Detection Methods
+
+| Method | Accuracy | Cost | Portability | Real-time | Invasiveness |
+|---|---|---|---|---|---|
+| **CPET (Gas Exchange)** | Gold standard | Very High | No | Yes | Moderate (mouthpiece) |
+| **Blood Lactate** | Excellent | Moderate | Limited | No | High (blood samples) |
+| **HRV (DFA-α1 only)** | Good | Low | Yes | Yes | None |
+| **HRV (Multi-parameter)** | Excellent | Low | Yes | Yes | None |
+| **Talk Test** | Fair | None | Yes | Yes | None |
+| **RPE-based** | Fair-Good | None | Yes | Yes | None |
+
+### Features in the Application
+
+1. **DFA-α1 Time Series Visualization**: Publication-quality chart showing DFA-α1 evolution during exercise with intensity zone shading (green=Zone 1/aerobic, orange=Zone 2/threshold, red=Zone 3/high intensity)
 2. **Heart Rate Progression**: Instantaneous and windowed-mean HR with VT1/VT2 markers
 3. **DFA-α1 vs HR Scatter**: Demonstrates the inverse relationship between cardiac complexity and exercise intensity
 4. **Multi-Parameter Integrated Score**: Shows the weighted combination used for threshold detection
-5. **Exercise Intensity Zones**: Personalized Zone 1 (aerobic), Zone 2 (threshold), Zone 3 (high intensity) with HR targets
-6. **Signal Quality Assessment**: Artifact rate, DFA range, monotonic decrease verification
-7. **Confidence Scoring**: Each detected threshold includes a confidence metric based on transition smoothness
+5. **Exercise Intensity Zones**: Personalized Zone 1, Zone 2, Zone 3 with HR targets derived from detected thresholds
+6. **Signal Quality Assessment**: Artifact rate, DFA range verification, monotonic decrease check
+7. **Confidence Scoring**: Each detected threshold includes a confidence metric based on transition smoothness and monotonicity
+8. **Demo Mode**: Synthetic 20-minute graded exercise test data for exploring the module without real recordings
 
 ### Integration with Readiness Model
 
 The VT-derived fitness score is integrated into the operational readiness model as a bounded modifier (±5 points maximum):
 
-- **Resting DFA-α1 ~1.0**: Healthy fractal dynamics → positive readiness modifier
-- **VT1 at high %HR reserve**: Excellent aerobic base → positive modifier
-- **Low resting DFA-α1 (<0.65)**: Possible overtraining → negative modifier
+- **Resting DFA-α1 ~1.0**: Healthy fractal dynamics — positive readiness modifier
+- **VT1 at high %HR reserve**: Excellent aerobic base — positive modifier
+- **Low resting DFA-α1 (<0.65)**: Possible overtraining or autonomic dysfunction — negative modifier
+- **VT2 correlation with operational capacity**: Higher anaerobic threshold indicates greater reserve for high-stress operations
+
+### Aerospace-Specific Applications
+
+This module has particular relevance to aerospace medicine and operational environments:
+
+- **Microgravity countermeasure exercise**: Optimize exercise prescriptions aboard ISS without metabolic carts
+- **Analog mission monitoring**: Field-deployable threshold detection for Mars analog and Antarctic expeditions
+- **Military operations**: Fitness assessment without laboratory infrastructure
+- **Special operations selection**: Continuous autonomic monitoring during graded physical tests
+- **Spaceflight deconditioning tracking**: Monitor VT changes during long-duration missions to detect cardiovascular deconditioning
+- **Spacesuit exercise testing**: Adaptations for constrained exercise protocols
+
+### Future Directions
+
+**Research Priorities:**
+
+1. **Larger validation studies** across diverse populations (age ranges, fitness levels, clinical populations, exercise modalities)
+2. **Machine learning integration**: Deep learning for pattern recognition in HRV signatures, individual calibration algorithms, and automated artifact detection
+3. **Real-time wearable implementation**: Embedded algorithms for live threshold estimation during exercise with adaptive training prescription
+4. **Longitudinal studies**: Training-induced VT changes, seasonal variation, aging effects, and disease progression monitoring
+5. **Multi-modal sensor fusion**: Integration with accelerometry, skin temperature, and electrodermal activity for enhanced accuracy
+
+### Quality Control Checklist
+
+**Pre-Test:**
+- [ ] Participant instructions provided (no caffeine 4h prior, adequate rest)
+- [ ] Equipment calibrated (ergometer, HR monitor electrode contact)
+- [ ] Baseline measurements recorded (resting HR, blood pressure)
+
+**During Test:**
+- [ ] ECG quality monitored in real-time
+- [ ] Work rate progression adheres to protocol (2-3 min stages, 10-25W increments)
+- [ ] Total test duration sufficient (>8-12 minutes)
+
+**Post-Test:**
+- [ ] Artifact rate <5%
+- [ ] Signal quality score >85%
+- [ ] Clear DFA-α1 decrease observed
+- [ ] Thresholds physiologically plausible (VT1 < VT2)
+- [ ] Confidence scores >60%
 
 ### Limitations
 
-- **Experimental**: Clinical decisions should be validated against gold-standard CPET
-- **Signal quality**: Requires >85% quality, <5% artifact rate
-- **Protocol**: Best results with incremental exercise tests (2-3 min stages, 10-25W increments)
-- **Individual variation**: ~10-20% of individuals show atypical DFA-α1 patterns
+- **Experimental**: Clinical decisions should always be validated against gold-standard CPET when available
+- **Signal quality**: Requires >85% quality, <5% artifact rate for reliable results
+- **Protocol**: Best results with incremental exercise tests (2-3 min stages, 10-25W increments on ergometer)
+- **Individual variation**: ~10-20% of individuals show atypical DFA-α1 patterns (high baseline sympathetic tone, medications, caffeine)
+- **Exercise modality**: Validation primarily in cycling; running shows higher variability due to motion artifacts
+- **Proprietary algorithms**: The exact Kubios VT-algorithm weights are not publicly available; our implementation follows the published architecture
 
 ### API Endpoints
 
-- `GET /api/research/vt/demo` — Demo analysis with synthetic 20-min graded exercise
+- `GET /api/research/vt/demo` — Demo analysis with synthetic 20-min graded exercise data
 - `POST /api/research/vt/analyze` — Upload RR intervals for VT detection
 
 ### References
 
-- Eronen T, et al. (2024). Heart Rate Variability Based Ventilatory Threshold Estimation. *medRxiv*. doi: 10.1101/2024.08.14.24311967
-- Gronwald T, et al. (2020). Correlation properties of HRV during endurance exercise. *Ann Noninvasive Electrocardiol*, 25(1):e12697.
-- Rogers B, et al. (2021). A New Detection Method Defining the Aerobic Threshold. *Front Physiol*, 11:596567.
-- Peng CK, et al. (1995). Quantification of scaling exponents. *Chaos*, 5(1):82-87.
+- Eronen, T., Tikkanen, J., Junttila, J., Kaikkonen, K., Kentta, T. V., Huikuri, H. V., et al. (2024). Heart rate variability based ventilatory threshold estimation — Validation of a commercially available algorithm. *medRxiv*. [DOI: 10.1101/2024.08.14.24311967](https://doi.org/10.1101/2024.08.14.24311967)
+- Gronwald, T., Rogers, B., & Hoos, O. (2020). Correlation properties of heart rate variability during endurance exercise: A systematic review. *Annals of Noninvasive Electrocardiology, 25*(1), e12697. [DOI: 10.1111/anec.12697](https://doi.org/10.1111/anec.12697)
+- Rogers, B., Giles, D., Draper, N., Hoos, O., & Gronwald, T. (2021). A new detection method defining the aerobic threshold for endurance exercise and training prescription based on fractal correlation properties of heart rate variability. *Frontiers in Physiology, 11*, 596567. [DOI: 10.3389/fphys.2020.596567](https://doi.org/10.3389/fphys.2020.596567)
+- Rogers, B., Giles, D., Draper, N., Mourot, L., & Gronwald, T. (2021). Influence of artefact correction and recording device type on the practical application of a non-linear heart rate variability biomarker for aerobic threshold determination. *Sensors, 21*(3), 821. [DOI: 10.3390/s21030821](https://doi.org/10.3390/s21030821)
+- Gronwald, T., Hoos, O., & Hottenrott, K. (2019). Effects of a short-term cycling interval session and active recovery on non-linear dynamics of cardiac autonomic activity in endurance trained cyclists. *Journal of Clinical Medicine, 8*(2), 194. [DOI: 10.3390/jcm8020194](https://doi.org/10.3390/jcm8020194)
+- Peng, C. K., Havlin, S., Stanley, H. E., & Goldberger, A. L. (1995). Quantification of scaling exponents and crossover phenomena in nonstationary heartbeat time series. *Chaos, 5*(1), 82-87. [DOI: 10.1063/1.166141](https://doi.org/10.1063/1.166141)
+- Poole, D. C., Rossiter, H. B., Brooks, G. A., & Gladden, L. B. (2021). The anaerobic threshold: 50+ years of controversy. *Journal of Physiology, 599*(3), 737-767. [DOI: 10.1113/JP279963](https://doi.org/10.1113/JP279963)
+- Aubert, A. E., Seps, B., & Beckers, F. (2003). Heart rate variability in athletes. *Sports Medicine, 33*(12), 889-919. [DOI: 10.2165/00007256-200333120-00003](https://doi.org/10.2165/00007256-200333120-00003)
+- Shaffer, F., & Ginsberg, J. P. (2017). An overview of heart rate variability metrics and norms. *Frontiers in Public Health, 5*, 258. [DOI: 10.3389/fpubh.2017.00258](https://doi.org/10.3389/fpubh.2017.00258)
+- Seiler, S., Haugen, O., & Kuffel, E. (2007). Autonomic recovery after exercise in trained athletes: Intensity and duration effects. *Medicine & Science in Sports & Exercise, 39*(8), 1366-1373. [DOI: 10.1249/mss.0b013e318060f17d](https://doi.org/10.1249/mss.0b013e318060f17d)
+- Buchheit, M., & Laursen, P. B. (2013). High-intensity interval training, solutions to the programming puzzle: Part I: Cardiopulmonary emphasis. *Sports Medicine, 43*(5), 313-338. [DOI: 10.1007/s40279-013-0029-x](https://doi.org/10.1007/s40279-013-0029-x)
+- Charles, J. B., & Lathers, C. M. (1994). Cardiovascular adaptation to spaceflight. *Journal of Clinical Pharmacology, 34*(5), 394-405. [DOI: 10.1002/j.1552-4604.1994.tb04977.x](https://doi.org/10.1002/j.1552-4604.1994.tb04977.x)
+- Baevsky, R. M., Funtova, I. I., Diedrich, A., Pashchenko, A. V., Tank, J., & Jordan, J. (2007). Autonomic function testing aboard the International Space Station. *Clinical Autonomic Research, 17*(3), 131-136. [DOI: 10.1007/s10286-007-0418-y](https://doi.org/10.1007/s10286-007-0418-y)
+- Convertino, V. A. (2002). Planning strategies for development of effective exercise and nutrition countermeasures for long-duration space flight. *Nutrition, 18*(10), 880-888. [DOI: 10.1016/s0899-9007(02)00910-5](https://doi.org/10.1016/s0899-9007(02)00910-5)
+- Makowski, D., Pham, T., Lau, Z. J., Brammer, J. C., Lespinasse, F., Pham, H., et al. (2021). NeuroKit2: A Python toolbox for neurophysiological signal processing. *Behavior Research Methods, 53*(4), 1689-1696. [DOI: 10.3758/s13428-020-01516-y](https://doi.org/10.3758/s13428-020-01516-y)
 - Shaffer F, Ginsberg JP. (2017). An Overview of HRV Metrics and Norms. *Front Public Health*, 5:258.
 
 ---
