@@ -1243,6 +1243,16 @@ class UserDatabase:
                     cursor.execute(f"ALTER TABLE users ADD COLUMN {_col} {_type}")
                 except sqlite3.OperationalError:
                     pass  # Column already exists
+
+            # Migration: Add crew role and status columns for operational scheduling
+            for _col, _type in (
+                ("crew_role", "TEXT"),
+                ("crew_status", "TEXT"),
+            ):
+                try:
+                    cursor.execute(f"ALTER TABLE users ADD COLUMN {_col} {_type}")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
             
             # Clinical scales table
             cursor.execute("""
