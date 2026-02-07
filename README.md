@@ -5,7 +5,7 @@
 **A Research-Grade Heart Rate Variability Operations Console for Aerospace Medicine**
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.12.0-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.13.0-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi)](https://fastapi.tiangolo.com)
@@ -316,6 +316,16 @@ These modules implement the gold-standard HRV analysis pipeline as defined by th
 | **EVA SMS Risk Matrix** | 5x5 risk matrix (ICAO Doc 9859) mapping readiness + physiological flags to Acceptable/Tolerable/Undesirable/Intolerable | SMS approach adapted for spacewalk operations with hard disqualifiers for fever, severe hypertension, and critical PSI. |
 | **Military Flight SMS** | 4x5 risk matrix (MIL-STD-882E) with G-LOC risk assessment and USAF crew rest compliance | Standard Practice for System Safety applied to high-performance flight with specific flags for hypotension + low HRV. |
 
+### Environmental Monitoring and Weather
+
+| Module | What It Does | Why It Matters |
+|---|---|---|
+| **ICE Station Monitor** | Simulated Antarctic research station with 8 environmental sensors (temp, humidity, CO2, pressure, PM2.5, noise, light, O2) | Monitors habitability of isolated confined environments. CO2 >1000 ppm impairs cognition (Satish et al., 2012). |
+| **METAR Aviation Weather** | Real-time decoded METAR from any ICAO station worldwide via FAA AviationWeather.gov API | Provides pilots and flight surgeons with standard aviation weather in decoded, visual format with wind compass. |
+| **Wind Chill / Frostbite** | NWS 2001 formula (Osczevski & Bluestein) with frostbite time estimation | Calculates when exposed skin will freeze, critical for Antarctic EVA and outdoor military operations. |
+| **WBGT Heat Stress** | ISO 7243:2017 simplified estimation with work/rest guidance | Determines safe work durations in hot environments with NIOSH-aligned risk categories. |
+| **Jet Lag Performance** | Circadian resynchronization model (Waterhouse et al., 2007; Arendt, 2009) with exponential recovery curve | Quantifies performance degradation from time zone travel. Eastward is ~50% harder to recover from than westward. |
+
 ### Biofeedback and Real-Time
 
 | Module | What It Does |
@@ -337,6 +347,7 @@ HRV/
 │   ├── vt_analysis.py            # Ventilatory threshold (DFA-alpha1)
 │   ├── trajectory_risk.py        # Allostatic load / trajectory risk
 │   ├── physiological_sms.py      # BP/temp modifiers + SMS risk matrices
+│   ├── environment_calculators.py # Wind chill, WBGT, heat index, jet lag
 │   ├── noaa_space.py             # NOAA space weather data ingestion
 │   ├── space_weather_impact.py   # Impact predictions & Polar H10 timing
 │   ├── radiation_exposure.py     # Evidence-based radiation dose models
@@ -570,6 +581,24 @@ All metrics, thresholds, and interpretations in this project are grounded in pee
 - International Civil Aviation Organization. (2018). *Safety Management Manual* (Doc 9859, 4th ed.). [ICAO Store](https://store.icao.int/en/safety-management-manual-doc-9859)
 
 - US Department of Defense. (2012). *MIL-STD-882E: Standard Practice for System Safety*. [PDF](https://safety.army.mil/Portals/0/Documents/ON-DUTY/SYSTEMSAFETY/Standard/MIL-STD-882E-change-1.pdf)
+
+### Environmental Science and Extreme Weather
+
+- Osczevski, R., & Bluestein, M. (2005). The new wind chill equivalent temperature chart. *Bulletin of the American Meteorological Society, 86*(10), 1453-1458.
+
+- International Organization for Standardization. (2017). *ISO 7243:2017 -- Ergonomics of the thermal environment -- Assessment of heat stress using the WBGT index*.
+
+- Steadman, R. G. (1979). The assessment of sultriness. Part I: A temperature-humidity index based on human physiology and clothing science. *Journal of Applied Meteorology, 18*, 861-873.
+
+- Satish, U., Mendell, M. J., Shekhar, K., et al. (2012). Is CO2 an indoor pollutant? Direct effects of low-to-moderate CO2 concentrations on human decision-making performance. *Environmental Health Perspectives, 120*(12), 1671-1677. [DOI: 10.1289/ehp.1104789](https://doi.org/10.1289/ehp.1104789)
+
+### Jet Lag and Circadian Disruption
+
+- Waterhouse, J., Reilly, T., Atkinson, G., & Edwards, B. (2007). Jet lag: trends and coping strategies. *The Lancet, 369*(9567), 1117-1129. [PMID: 17398311](https://pubmed.ncbi.nlm.nih.gov/17398311/)
+
+- Arendt, J. (2009). Managing jet lag: Some of the problems and possible new solutions. *Sleep Medicine Reviews, 13*(4), 249-256. [PMID: 19153053](https://pubmed.ncbi.nlm.nih.gov/19153053/)
+
+- Burgess, H. J., Crowley, S. J., Gazda, C. J., Fogg, L. F., & Eastman, C. I. (2003). Preflight adjustment to eastward travel: 3 days of advancing sleep with and without morning bright light. *Journal of Biological Rhythms, 18*(4), 318-328. [PMID: 12932084](https://pubmed.ncbi.nlm.nih.gov/12932084/)
 
 ### Heart Rate Fragmentation
 
