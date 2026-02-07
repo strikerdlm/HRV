@@ -1230,6 +1230,19 @@ class UserDatabase:
                 cursor.execute("ALTER TABLE users ADD COLUMN language TEXT DEFAULT 'en'")
             except sqlite3.OperationalError:
                 pass  # Column already exists
+
+            # Migration: Add baseline vitals columns (BP + temperature) for readiness model
+            for _col, _type in (
+                ("baseline_sbp_mmhg", "REAL"),
+                ("baseline_dbp_mmhg", "REAL"),
+                ("basal_temperature_c", "REAL"),
+                ("bp_measurement_time", "TEXT"),
+                ("temp_measurement_time", "TEXT"),
+            ):
+                try:
+                    cursor.execute(f"ALTER TABLE users ADD COLUMN {_col} {_type}")
+                except sqlite3.OperationalError:
+                    pass  # Column already exists
             
             # Clinical scales table
             cursor.execute("""
