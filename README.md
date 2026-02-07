@@ -1,463 +1,406 @@
+# Author: Dr Diego Malpica MD
+
 # Mission Control - Flight Surgeon
 
-## Author
+**A Research-Grade Heart Rate Variability Operations Console for Aerospace Medicine**
+
+[![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
+[![Version](https://img.shields.io/badge/Version-1.11.0-green)](CHANGELOG.md)
+[![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
+[![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi)](https://fastapi.tiangolo.com)
+[![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
+[![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
+[![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+
+---
+
+## About the Author
 
 **Dr Diego Malpica MD**
 *Aerospace Medicine Specialist*
 National University of Colombia
 Physiology Instructor, Colombian Aerospace Force
-Contributing to **AsterPhysiology** Research Initiative
-
-[![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.9.16-green)](CHANGELOG.md)
-[![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
-[![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
-[![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
-[![Last Updated](https://img.shields.io/badge/Updated-2026--02--02-blue)](CHANGELOG.md)
+Contributing to the **AsterPhysiology** Research Initiative
 
 ---
 
-Mission Control - Flight Surgeon is a comprehensive, research-grade Heart Rate Variability (HRV) operations console that blends circadian simulation, blood-pressure variability, population norms, and real-time space weather intelligence from NOAA SWPC and NASA DONKI. It is built for clinicians, researchers, and aerospace medicine specialists who need transparent, reproducible physiological metrics with publication-ready exports.
+## What is Mission Control - Flight Surgeon?
 
-**NEW in v1.9.16**: **Comprehensive Crew Scheduling & Human Performance** — Full operational app implementation in TypeScript/Next.js frontend with Status Dashboard (IHPI gauges, alerts), Schedule management (activity cards, filters), Crew Management (full CRUD with comprehensive admin profile editor), and Performance metrics (Go/No-Go indicators). Includes 5-section tabbed profile editor covering identity, operational, biometrics, lifestyle, and medical fields.
+Mission Control - Flight Surgeon is a comprehensive, open-source **Heart Rate Variability (HRV) operations console** designed for clinicians, researchers, pilots, and aerospace medicine specialists. It goes far beyond a simple HRV calculator: this is a full **physiological operations platform** that fuses HRV analysis with circadian rhythm modeling, fatigue prediction, space weather intelligence, radiation exposure tracking, wearable device integration, and AI-powered clinical interpretation.
 
-**NEW in v1.9.15**: **Research Frontend Expansion** — Added 11 dedicated TypeScript/Next.js research pages (Time Series, Frequency, Nonlinear, HRF, Windowed, Readiness, ANS Tests, Fatigue, Circadian, Population Norms, Timeline, Export, Science) with publication-grade ECharts, mock-data fallbacks, and reorganized sidebar navigation.
+Think of it as a **flight surgeon's digital companion** — a single place where you can upload an astronaut's (or patient's, or athlete's) heart rate data and immediately get:
 
-**NEW in v1.9.14**: **TypeScript/Next.js Frontend** — Modern frontend under `frontend/` with FastAPI backend under `api/`. Features include crew dashboard, space weather gauges, HRV analysis with Poincaré plots, solar-HRV correlations, and Garmin integration. Run both with `.\start-frontend.ps1` (frontend port 3100, API port 8180).
+- Publication-ready HRV metrics across all domains (time, frequency, nonlinear, fragmentation)
+- Population norms comparison stratified by age and sex
+- Circadian rhythm simulation and fatigue forecasting
+- Real-time space weather monitoring from NOAA and NASA
+- Correlations between solar activity and autonomic function
+- Clinical decision support with evidence-based recommendations
+- Beautiful, exportable charts suitable for Nature-quality publications
 
-**NEW in v1.9.10**: **Space Weather Data Science (Single User)** — New streamlined research app (`app/space_weather_ds_app.py`) using the latest Streamlit (1.53.1) with a separate requirements file (`requirements_streamlit_latest.txt`) and performance profiles (Lightweight default, RTX 5070 GPU mode).
+**This project is entirely free, open-source, and built on peer-reviewed science.**
 
-**NEW in v1.9.9**: **Guest Results Visibility** — Sidebar-driven navigation now activates the selected view only when it changes and bypasses manual tab gating so guest HRV and Space Analytics outputs render immediately.
+> For the complete, in-depth guide to every feature, see [docs/Manual.md](docs/Manual.md).
 
-**NEW in v1.9.8**: **Sidebar-Only Navigation + Guest Analysis** — The sidebar selector now drives the active view (tabs hidden), stable navigation is always on in Research, and HRV + Space Weather analyses run in guest mode without selecting a profile.
+---
 
-**NEW in v1.9.7**: **Research Stability + NASA Autofill Sync** — Removed experimental tab persistence to prevent rerun loops, and NASA Nutrition sleep inputs now share the Profile Tools values so Garmin autofill updates the visible fields immediately.
+## Why is This Project Original?
 
-**NEW in v1.9.6**: **Research Stability Controls** — Stable navigation mode renders one section at a time via a sidebar selector, a rerun storm guard auto-disables heavy plots during rapid reruns, and time-series artifacts/deviation timelines now downsample to performance caps for smooth interaction.
+Most HRV tools do one thing: compute RMSSD and a few frequency-domain metrics. Mission Control - Flight Surgeon is different in several fundamental ways:
 
-**NEW in v1.9.1**: **Enhanced Space Weather & EVA Radiation Dashboards** — Beautiful real-time space weather visualization with gauge-based dashboard showing flare probabilities (C/M/X-Class), F10.7 Flux with historic/projected trends, and Active CMEs. New EVA Radiation Metrics Dashboard provides comprehensive radiation monitoring with normalized threshold visualization. All gauges use modern two-ring style with color-coded risk zones. UI improvements include dark blue font colors for better readability and verified/validated technical resource links.
+1. **Aerospace Medicine Focus**: This is the only open-source HRV platform designed specifically for flight surgeons and operational medicine. It includes NASA Exploration Medical Capability (ExMC) assessments, radiation dose tracking across 10 space environments, and EVA Go/No-Go decision matrices.
 
-**NEW in v1.8.82**: **Advanced HRV Analytics Platform** — State-of-the-art statistical analysis, ML pattern recognition, and clinical decision support with 5-tab interface (Clinical Decision, Statistical Tests, Trends & Forecast, Anomalies & Patterns, HRV + Garmin Integration). Features Shapiro-Wilk normality tests, age-stratified t-tests with Cohen's d effect sizes, 7-day forecasting with 95% CI, anomaly detection (Z-score/IQR), autonomic balance assessment, and semaphored risk recommendations (Green/Yellow/Orange/Red). All p-values displayed to 4 decimal places with scientific citations (Task Force 1996, Nunan 2010, Shaffer 2017).
+2. **Space Weather-HRV Correlation**: No other tool correlates your HRV data with real-time NOAA/NASA space weather feeds (Kp index, solar wind, CMEs, X-ray flux) using lag-aware analysis with FDR correction. This enables novel research into how solar activity affects human autonomic function.
 
-**NEW in v1.8.81**: **Advanced Wearable Analytics** — Sophisticated predictive modeling for Garmin metrics: Body Battery forecasting (Holt-Winters smoothing with 95% CI), Allostatic Load Index (McEwen 1998), Circadian Rhythm Analysis (chronotype detection, peak performance hours), Stress Prediction (next-day forecasting), and Recovery Analysis (sleep debt calculation, days to full recovery).
+3. **Multi-Model Circadian Simulation**: Integrates three validated mathematical circadian models (Forger99, Jewett99, Hannay19) from the Arcascope research package to simulate circadian rhythms, shift work adaptation, and entrainment dynamics.
 
-**NEW in v1.8.80**: **Radiation Exposure Module** — Evidence-based space radiation dose estimation with 10 environments (Earth, Antarctica, LEO/ISS, Lunar Gateway, Lunar Transit, Lunar Surface ± SPE, Mars Transit, Mars Surface). Day-by-day cumulative tracking, EVA Go/No-Go assessment matrix (SAFTE-style visualization), NASA STD-3001 career limits (600 mSv), and literature-derived dose rates (Zhang 2020, Zeitlin 2013, Hassler 2014, Berger 2020).
+4. **SAFTE Fatigue Prediction**: Implements the Sleep, Activity, Fatigue, and Task Effectiveness (SAFTE) biomathematical model used by the US Air Force, with ICAO-aligned Fatigue Risk Management System (FRMS) dashboards.
 
-**NEW in v1.8.68**: **Modern HRV Progress Tracking** — Real-time, detailed progress indicators for all HRV computations with step-by-step status, elapsed time tracking, and animated visual feedback. **Tab Persistence** keeps you on the current tab during analysis. **Enhanced HRV Metrics** including LnRMSSD, CVI (Cardiac Vagal Index), CSI (Cardiac Sympathetic Index), SDANN, SDNNi, and generalized pNNx. **HRF ↔ HRV Correlation Visualization** with interactive ECharts heatmaps showing r-values, t-statistics, and p-values (4 decimals) with scientific context.
+5. **Ventilatory Threshold Estimation**: Non-invasive detection of aerobic (VT1) and anaerobic (VT2) thresholds using DFA-alpha1 analysis, eliminating the need for laboratory CPET — a breakthrough for field and operational settings.
 
-**NEW in v1.8.37**: **Dual Garmin sleep autofill buttons + synced sleep/chronotype inputs** — One-click Vivosmart/Garmin pull now exists in both the Profile Tools Engine and the Sleep & Chronotype section under Energy & Nutrition. It fills sleep hours, quality, hours awake, RMSSD, resting HR, and feeds SAFTE fatigue plus Operational Performance, preferring stored Garmin daily metrics when available.
-**NEW in v1.8.28**: **Crew mission workspaces** — The app now organizes data under `crew/` with **Mission 1** and **Mission 2**. The active mission’s **SQLite DB + backups** live in `crew/<Mission>/db/`, and per-subject files live in `crew/<Mission>/subjects/`.
+6. **Allostatic Load Monitoring**: Multi-day physiological trajectory tracking that catches cumulative degradation (declining HRV, rising resting HR, eroding sleep quality) before a single-day snapshot would flag a problem.
 
-**NEW in v1.8.27**: **Per-user SAFTE/FRMS defaults** — Save a typical **sleep window**, **duty window**, and **weekend policy** per profile so SAFTE/FRMS workflows can auto-load reproducible schedules without re-entry.
+7. **Dual Architecture**: Both a feature-rich Streamlit research application and a modern TypeScript/Next.js frontend with FastAPI backend, giving you the choice between rapid prototyping and production deployment.
 
-**NEW in v1.8.26**: **Mission FRMS v2 “Crew Risk Board” prototype** — Export a multi-profile roster view with crew-level FRMS metrics/classification plus **CSV/JSON** outputs and an **audit decision log (JSON)**.
+8. **AI-Powered Interpretation**: GPT-5.2 high-reasoning analysis with enforced web-search citations, providing doctorate-level physiological interpretation with full audit trails.
 
-**NEW in v1.8.25**: **Persisted study groups + mixed-effects inference** — In the Export tab, define a **Study ID**, assign users to **persisted groups** (stored in SQLite), and optionally run a **random-intercept mixed-effects model** for Group × Time on Δ vs baseline. The SAFTE/FRMS dashboard also surfaces a rule-based “why it triggered” alert list and includes it in the FRMS JSON export.
+9. **Multi-Device Support**: Native import from Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, and Compumedics Somfit Pro — plus FIT-to-CSV conversion tools built right in.
 
-**NEW in v1.8.24**: **Longitudinal cohort comparisons (T0–T21)** — In the Export tab, compare **control vs intervention** using **within-subject Δ vs baseline** per timepoint, with CSV + Markdown exports (effect sizes + FDR-adjusted p-values).
+10. **Fully Reproducible Science**: Every metric includes citations (Task Force 1996, Shaffer & Ginsberg 2017, Nunan et al. 2010), every chart is exportable in SVG/PDF/PNG at 300+ DPI, and every analysis step is logged for complete audit trails.
 
-**NEW in v1.8.23**: **Profile Tools Engine** — Comprehensive calculation engines accessible per user profile: SAFTE fatigue prediction with 24-hour cognitive effectiveness forecast, lnRMSSD-based recovery scoring, training readiness assessment with workout recommendations, personalized HRV analysis with parasympathetic/stress indices, and hour-by-hour performance forecasting. Run all tools with one click and export results to Markdown.
+---
 
-**NEW in v1.8.22**: **Personalized User Profile Features** — All calculations are now tailored to the individual user profile. Body fat estimation via US Navy method (using neck/waist/hip circumferences), sleep apnea risk (STOP-BANG score), age/sex-adjusted HRV reference ranges, VO2max fitness classification, cardiovascular risk profile, and personalized hydration requirements. Profile data flows to all tabs for truly personalized physiological assessments.
+## Architecture Overview
 
-**NEW in v1.8.17**: OpenAI personas now log every request/answer with enforced `web_search` citations, the Metrics tab ships a one-click markdown appendix + tts-hd audio playback, and GPT-5 interpretations gain the same doctorate-level export/audio tooling for flight surgeon handovers.
+Mission Control - Flight Surgeon has two interfaces that share the same Python analysis core:
 
-**NEW in v1.8.15**: Sleep Analysis login + device import controls now run inside debounced sidebar forms to stop redundant reruns, the welcome/header + About tab badge the live release date and git commit directly from `CHANGELOG.md`, and `app/agent_runtime.py` seeds the OpenAI Agents SDK plan (personas, MCP servers, tool belt) with a new About tab expander describing the rollout.
+### The Streamlit Application (Research & Clinical Workflows)
 
-**NEW in v1.8.14**: Each Time, Frequency, and Nonlinear tab now includes a dedicated RR file loader plus production ECharts visualizations in the User Profile, and space-weather correlations enforce exact timestamp alignment for Q1 journal submissions.
+The original interface, built with [Streamlit](https://streamlit.io), is a **full-featured research workbench** with 20+ interactive tabs covering every aspect of HRV analysis, circadian physiology, fatigue prediction, and space weather monitoring. It is ideal for:
 
-**NEW in v1.8.5**: Polar AccessLink automation with persistent OAuth tokens and VO2max history tracking. Sync your cardiorespiratory fitness data with one click and track changes over time.
+- Exploratory data analysis and research
+- Clinical autonomic assessments
+- Quick data visualization and report generation
+- Single-user or small-team workflows
 
-**NEW in v1.8.0**: HRV analysis runs only when you click **Run HRV Analysis**, and the database now sits alongside the app (`hrv_users.db`) for easy copy/portability.
+There are three Streamlit entry points, each tailored to a different use case:
 
-**NEW in v1.7.9**: Profile HRV history now loads only the latest records (without RR payloads) for much faster profile switching.
+| Entry Point | File | Purpose |
+|---|---|---|
+| **Operational** | `app/operational_app.py` | Fast clinical workflows, user profiles, lightweight space weather context |
+| **Research** | `app/research_app.py` | Full dashboards: HRV analysis, NOAA correlations, ML analytics, all tabs |
+| **Data Science** | `app/space_weather_ds_app.py` | Single-user space weather data science with latest Streamlit |
 
-**NEW in v1.7.8**: Science tab now lives next to References; About, Space Weather, and NOAA tabs stay fully visible, and version badges remain synced with the changelog.
+### The TypeScript/Next.js Frontend + FastAPI Backend (Modern UI)
 
-**NEW in v1.7.7**: Per-user tab settings persistence for Circadian and SAFTE tabs—your scenarios and fatigue inputs reload automatically when switching users or rerunning the app.
+The newer interface, under `frontend/` and `api/`, provides a **modern, responsive web application** built with:
 
-**NEW in v1.7.0**: Astronaut-grade clinical profiles with NASA nutrition calculations, Spanish language support (Colombian-validated scales), extended anthropometrics, and laboratory data tracking.
+- **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS, Apache ECharts
+- **Backend**: FastAPI (Python) exposing all HRV analysis modules as REST endpoints
 
-## 🚀 Quick Start
+This architecture is ideal for:
+
+- Production deployment and multi-user environments
+- Crew scheduling and human performance management
+- Mobile-responsive access
+- Integration with other systems via REST API
+
+**Key frontend pages include:**
+
+| Page | Description |
+|---|---|
+| **Dashboard** | Crew profiles, space weather widget, IHPI gauges |
+| **Scheduling** | Activity cards, Go/No-Go indicators, crew management |
+| **Research Hub** | 18 dedicated analysis pages (Time Series, Frequency, Nonlinear, HRF, VT, Circadian, etc.) |
+| **Ventilatory Threshold** | DFA-alpha1 analysis with publication-quality charts |
+| **Space Weather** | Real-time Kp, F10.7, solar wind gauges |
+| **Export** | Publication-grade reports, CSV/JSON data |
+
+Both interfaces are **fully independent** — you can run either one or both simultaneously. The Streamlit app connects directly to the SQLite database, while the Next.js frontend communicates through the FastAPI backend.
+
+---
+
+## Getting Started
 
 ### Prerequisites
 
-- Python 3.12 (recommended) or 3.10+
-- Conda (for environment management) or pip
-- pip package manager
+| Requirement | Minimum | Recommended |
+|---|---|---|
+| Python | 3.10 | 3.12+ |
+| Node.js (for frontend) | 18 LTS | 20 LTS |
+| RAM | 4 GB | 8 GB |
+| Storage | 500 MB | 1 GB |
+| Browser | Chrome 90+ | Chrome/Edge latest |
+| GPU (optional) | — | NVIDIA RTX 3080/4090/5070 |
 
-### Installation
-
-#### Option 1: Using Conda (Recommended)
+### Step 1: Clone the Repository
 
 ```bash
-# Clone the repository
 git clone https://github.com/strikerdlm/HRV.git
 cd HRV
-
-# Recommended: run commands explicitly in the correct env (avoids wrong-env issues)
-conda run -n hrv-py312 pip install -r requirements.txt
-conda run -n hrv-py312 streamlit run app/operational_app.py  # fast UI (profile + simple space-weather context)
-# or (full dashboards: correlations/ML + NOAA/Space Weather analysis)
-conda run -n hrv-py312 streamlit run app/research_app.py
-# or (single-user data science app with latest Streamlit)
-conda run -n hrv-py312 pip install -r requirements_streamlit_latest.txt
-conda run -n hrv-py312 streamlit run app/space_weather_ds_app.py
-
-# (Optional interactive shell)
-# conda activate hrv-py312
-# streamlit run app/operational_app.py
 ```
 
-#### TypeScript/Next.js Frontend (Modern UI)
+### Step 2: Set Up the Python Environment
 
-A modern TypeScript/React frontend is available under `frontend/` with a FastAPI backend under `api/`.
+**Option A: Using Conda (Recommended)**
 
-**Prerequisites**:
-- Node.js 18+ (LTS recommended)
-- Python 3.12 and the `hrv-py312` conda env
+```bash
+# Create environment
+conda create -n hrv-py312 python=3.12 -y
+conda activate hrv-py312
 
-**Quick Start (PowerShell)**:
+# Install dependencies
+pip install -r requirements.txt
+```
 
-```powershell
-# Option 1: Use the start script (starts both API and frontend)
-.\start-frontend.ps1
+**Option B: Using venv**
 
-# Option 2: Manual start
-# Terminal 1 - Start API (port 8180)
+```bash
+python -m venv .venv
+source .venv/bin/activate  # macOS/Linux
+# .venv\Scripts\activate   # Windows
+
+pip install -r requirements.txt
+```
+
+### Step 3: Configure Environment Variables
+
+Create a `.env` file in the project root (never commit this file):
+
+```env
+# Optional — the app works without any of these
+OPENAI_API_KEY=sk-...               # For AI interpretation
+NASA_API_KEY=DEMO_KEY                # For NASA DONKI data
+GARMIN_EMAIL=your_email@example.com  # For Garmin Connect API
+GARMIN_PASSWORD=your_password        # For Garmin Connect API
+ACCUWEATHER_API_KEY=your_key         # For weather covariates
+```
+
+> **Security**: The `.env` file is already in `.gitignore`. Never commit API keys or secrets to version control.
+
+### Step 4: Launch the Application
+
+**Option A: Streamlit (Research & Clinical)**
+
+```bash
+# Operational mode (fast, focused on profiles + space weather)
+streamlit run app/operational_app.py
+
+# Research mode (full dashboards: HRV + correlations + ML)
+streamlit run app/research_app.py
+
+# Data science mode (single-user, latest Streamlit)
+pip install -r requirements_streamlit_latest.txt
+streamlit run app/space_weather_ds_app.py
+```
+
+The app will open in your browser at `http://localhost:8501`.
+
+**Option B: TypeScript Frontend + FastAPI Backend**
+
+```bash
+# Terminal 1 — Start the FastAPI backend (port 8180)
 conda activate hrv-py312
 uvicorn api.main:app --reload --port 8180
 
-# Terminal 2 - Start Frontend (port 3100)
+# Terminal 2 — Start the Next.js frontend (port 3100)
 cd frontend
 npm install   # first time only
 npm run dev
 ```
 
-**Access Points**:
+Access points:
 - Frontend: http://localhost:3100
 - API Docs: http://localhost:8180/docs
-- Streamlit: http://localhost:8501 (unchanged)
+- Streamlit (if running): http://localhost:8501
 
-#### Option 2: Using Virtual Environment
+**Option C: Docker (Production)**
 
 ```bash
-# Clone the repository
-git clone https://github.com/strikerdlm/HRV.git
-cd HRV
-
-# Create and activate virtual environment
-python -m venv .venv
-.venv\Scripts\activate  # Windows
-# or
-source .venv/bin/activate  # macOS/Linux
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run the application
-streamlit run app/operational_app.py
-# or (full dashboards)
-streamlit run app/research_app.py
-# or (single-user data science app with latest Streamlit)
-pip install -r requirements_streamlit_latest.txt
-streamlit run app/space_weather_ds_app.py
+docker-compose up -d
 ```
 
-The app will open in your default browser at `http://localhost:8501`.
-
-### Operational vs Research — the “philosophy” (rules of thumb)
-
-- **Operational app** (`app/operational_app.py`): use for **clinical workflows** (User Profile, mission logs) and **lightweight space-weather context** (cached NOAA Kp/proton alerting inside the profile). Keep this app **fast, stable, and low-latency**.
-- **Research app** (`app/research_app.py`): use for **HRV/HRF computation**, **NOAA/Space Weather dashboards**, **correlations**, and **ML**. This app can be heavier and is where experimental/advanced analytics should live.
-- **Space Weather Data Science (Single User)** (`app/space_weather_ds_app.py`): streamlined workflow focused on single-subject analytics, NOAA/Space Weather correlations, and ML patterns. Uses the latest Streamlit via `requirements_streamlit_latest.txt`.
-
-### Your First Analysis (5 Minutes)
+### Step 5: Your First Analysis (5 Minutes)
 
 1. **Prepare your data**: Create a text file with one RR interval (in milliseconds) per line:
-
    ```
    1027
    1007
    991
    1010
    1020
-   ...
    ```
+   Name it with a timestamp for automatic alignment: `2025-11-06 00-43-42.txt`
 
-   Name it with a timestamp for automatic time alignment: `2025-11-06 00-43-42.txt`
 2. **Upload**: Click "Browse files" in the sidebar and select your RR file(s)
-3. **Run Analysis**: Click **Run HRV Analysis** at the top of the page. You'll see real-time progress indicators showing each computation step (validation, artifact detection, windowed metrics, full-recording metrics, ML clustering, etc.) with elapsed time and completion percentage.
-4. **Explore tabs**: Start with **Overview** for summary statistics, then explore **Gauges** for visual benchmarks. The active tab persists during analysis, so you can continue working while computations run.
-5. **Export**: Go to **Export** tab to download a comprehensive Markdown report or generate a GPT-5.2 high-reasoning analysis
 
-**Per-user persistence:** RR uploads are saved with the active profile (see the light-bulb banner) and immediately written to `crew/<Mission>/subjects/{user}/rr_intervals`. The app warns when you re-upload a previously analyzed file and can reuse stored HRV results when the file hash and analysis settings match (toggle in the sidebar) or let you recompute. Sidebar uploads target the active profile (Diego by default); uploads from the User Profile tab are scoped to that user and set that profile active. In **User Profile → HRV → HRV Measurement History**, use **Regenerate plots** if charts look stale after a new analysis run. In **User Profile → HRV → Stored RR Library**, you can load previously saved RR recordings back into the analysis workspace (optionally auto-running analysis) without re-uploading.
+3. **Run Analysis**: Click **Run HRV Analysis** — you will see real-time progress with elapsed time and completion percentage
 
-**Real-time progress tracking:** When you click **Run HRV Analysis**, you'll see a detailed progress panel showing each computation step (validation, artifact detection, windowed metrics, full-recording metrics, ML clustering, etc.) with elapsed time and completion percentage. The active tab persists during analysis, so you can continue working while computations run in the background.
+4. **Explore tabs**: Start with **Overview** for summary statistics, then explore **Gauges** for visual benchmarks
 
-**Per-profile readiness:** **User Profile → Readiness** computes readiness from stored parasympathetic-index history and displays HRV metric gauges using the same ECharts styling as the main Gauges tab.
+5. **Export**: Go to the **Export** tab to download a comprehensive Markdown report or generate an AI-powered analysis
 
-**Clinical profile persistence:** **User Profile → Clinical Profile → Body Composition** now saves anthropometrics (body fat, lean/muscle mass, circumferences) to the database and renders per-user trends/history.
-
-**Exploration medicine auto-enrichment:** **User Profile → Clinical Profile → Exploration Medical Record** includes a log date selector and can auto-compute a space-weather alert (NOAA Kp + >10 MeV proton flux) plus a baseline cumulative radiation dose estimate from mission profile/habitat + EVA hours, displaying the dose alongside NASA limit guidance. Stress and sleep fields can seed from objective HRV and Garmin daily metrics when present.
-
-**FIT ↔ CSV tools (Data tab):** Convert Garmin FIT files to CSV directly inside the User Profile → Data tab, download the CSV, and store both FIT and CSV under the active profile. You can also upload Garmin CSVs to keep them with your profile.
-
-### Polar AccessLink (optional VO2max sync)
-
-Mission Control - Flight Surgeon can pull VO2max estimates from Polar Flow via the AccessLink API for higher-fidelity exercise compensation:
-
-1. Register an application in the [Polar AccessLink program](https://www.polar.com/accesslink-api/) and complete the OAuth handshake to obtain a bearer token.
-2. Set environment variables (never commit secrets):
-   - `POLAR_ACCESSLINK_TOKEN` — bearer token returned by AccessLink.
-   - `POLAR_ACCESSLINK_USER_ID` — numeric user identifier reported by Polar Flow.
-3. Restart the app and open **User Profile → NASA Nutrition**. A **Use Polar value** toggle will appear when credentials are available.
-
-If the env vars are omitted the calculator falls back to the VO2max stored in the user profile.
+> **No data? No problem!** The app is fully navigable without uploading any HRV data. Space Weather, Circadian simulation, SAFTE/Fatigue prediction, and Biofeedback all work immediately.
 
 ---
 
-## 🚀 Explore Without Data
+## Module Guide
 
-The app is fully navigable **without uploading HRV data**. These features work immediately:
+Below is a guide to every major module in the platform. Each module is grounded in peer-reviewed science and designed for both clinical utility and research rigor. For in-depth usage instructions with screenshots and examples, see [docs/Manual.md](docs/Manual.md).
 
-| Module                    | What You Can Do                                                              |
-| ------------------------- | ---------------------------------------------------------------------------- |
-| 🌍**Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing |
-| ☀️**Circadian**   | Simulate circadian rhythms with different light schedules                    |
-| 😴**SAFTE/Fatigue** | Guided SAFTE fatigue workflow with auto-fill (wrist → clinical → Garmin → defaults), FRMS-style dashboard + USAF crew rest checks, and per-user saved schedule defaults |
-| 🫀**Biofeedback**   | Try the paced breathing demo                                                 |
+### Core HRV Analysis
 
-All other tabs show **example data** and **reference values** to help you understand what's available before uploading your own recordings.
+These modules implement the gold-standard HRV analysis pipeline as defined by the Task Force of ESC/NASPE (1996) and updated by Shaffer & Ginsberg (2017).
+
+| Module | What It Computes | Why It Matters |
+|---|---|---|
+| **Time-Domain** | SDNN, RMSSD, pNN50, Mean HR, LnRMSSD, CVI, CSI | These are the foundational metrics of heart rate variability. RMSSD reflects parasympathetic (vagal) activity and is the most reliable short-term HRV measure. SDNN captures overall autonomic regulation. LnRMSSD provides a normalized metric ideal for longitudinal tracking. |
+| **Frequency-Domain** | VLF, LF, HF power (ms2 and n.u.), LF/HF ratio | Spectral analysis decomposes HRV into frequency bands: HF (0.15-0.40 Hz) reflects respiratory-linked vagal activity, LF (0.04-0.15 Hz) reflects both sympathetic and baroreflex modulation, and VLF (<0.04 Hz) relates to thermoregulation and hormonal rhythms. |
+| **Nonlinear Analysis** | Poincare SD1/SD2, DFA alpha1/alpha2, Sample/Approximate Entropy | These capture the complexity and fractal properties of heart rate dynamics. DFA-alpha1 is particularly important — values near 1.0 indicate healthy fractal organization, while deviations signal autonomic dysfunction or physiological stress. |
+| **Heart Rate Fragmentation (HRF)** | PIP, IALS, PSS | HRF metrics quantify beat-to-beat directional changes. The PROOF-AF study (2025) demonstrated that elevated fragmentation predicts atrial fibrillation risk independently of traditional HRV metrics. |
+| **Geometric Metrics** | HRV Triangular Index, TINN, Baevsky Stress Index | Geometric methods provide robust estimates of overall HRV that are less sensitive to recording quality than spectral methods. The Baevsky Stress Index, developed for cosmonaut monitoring, quantifies sympathetic activation. |
+| **Sliding Window Analysis** | Time-varying metrics with deviation detection | Tracks how HRV changes over the course of a recording, identifying non-stationary segments and anomaly episodes using configurable z-score thresholds. |
+| **Population Norms** | Age/sex-stratified percentile rankings | Compares your metrics against published normative data from Nunan et al. (2010), Ortega et al. (2024), and the MESA Study, so you know whether a value is truly abnormal or simply reflects age and sex. |
+
+### Exercise Physiology
+
+| Module | What It Does | Why It Matters |
+|---|---|---|
+| **Ventilatory Threshold Estimation** | Detects VT1 (aerobic) and VT2 (anaerobic) thresholds from DFA-alpha1 during exercise | Traditionally, finding these thresholds requires expensive laboratory CPET with gas exchange analysis. This module achieves comparable accuracy (VT2: r=0.93, SE<7 bpm) using only a heart rate monitor. This is a game-changer for field testing, remote monitoring, and aerospace operations where lab equipment is unavailable. See [the full scientific report](docs/HRV_Ventilatory_Threshold_Comprehensive_Scientific_Report.md). |
+| **Readiness Scoring** | Kubios-style parasympathetic index with baseline comparison | Answers the daily question: "Am I recovered enough to train/work today?" Uses HF power, RMSSD, pNN50, and SD1 to compute a readiness score relative to your personal 7-day baseline. |
+| **Autonomic Function Tests** | Valsalva ratio, deep breathing E:I, 30:15 standing ratio | Standardized clinical tests of autonomic nervous system integrity, essential for screening pilots, astronauts, and patients with suspected autonomic neuropathy. |
+
+### Aerospace Medicine
+
+| Module | What It Does | Why It Matters |
+|---|---|---|
+| **Space Weather Monitoring** | Live NOAA SWPC and NASA DONKI feeds | Displays Kp index, F10.7 solar flux, solar wind parameters, CME arrival predictions, and flare probabilities. Essential for understanding the geomagnetic environment that may affect human physiology. |
+| **Space Weather-HRV Correlation** | Lag-aware correlation analysis (0-72h) with FDR correction | Enables research into how geomagnetic storms and solar events correlate with changes in autonomic function — an emerging field with significant implications for space exploration medicine. |
+| **Radiation Exposure Module** | Evidence-based dose models for 10 environments | Tracks cumulative radiation dose from Earth surface through Mars transit, with EVA Go/No-Go assessment matrices aligned to NASA STD-3001 career limits (600 mSv). |
+| **Exploration Medical Record** | NASA ExMC/EIMO-aligned clinical logs | Comprehensive mission medical logging with EVA hours, radiation exposure, stress markers, behavioral health flags, and countermeasure tracking for deep-space mission autonomy. |
+| **Space Weather Impact Predictions** | Exact arrival times for photon, SEP, and plasma events | Calculates when solar events will arrive at your location and provides Polar H10 EKG timing recommendations so you can capture HRV during geomagnetic disturbances. |
+
+### Fatigue and Circadian Science
+
+| Module | What It Does | Why It Matters |
+|---|---|---|
+| **Circadian Physiology** | Forger99, Jewett99, Hannay19 mathematical models | Simulates how your internal body clock responds to light schedules. Generate actograms, predict DLMO (dim light melatonin onset), and calculate the Entrainment Signal Regularity Index (ESRI). Based on the Arcascope circadian package (Tavella, Hannay, Walch, 2023). |
+| **SAFTE Fatigue Model** | Cognitive effectiveness prediction from sleep history | The SAFTE model (Hursh et al., 2004) predicts how accumulated sleep debt degrades cognitive performance. The dashboard includes ICAO-aligned FRMS metrics, USAF crew rest compliance checks, and exportable 24-hour forecasts. |
+| **Trajectory Risk (Allostatic Load)** | Multi-day physiological degradation detection | Implements McEwen's (1998) allostatic load concept: even if today's metrics look fine, a multi-day downward trend in HRV, resting HR, and sleep quality predicts functional decline. Uses EWMA smoothing and Smallest Worthwhile Change (SWC) thresholds from Plews et al. (2013). |
+
+### Wearable Device Integration
+
+| Module | Supported Devices | Key Data |
+|---|---|---|
+| **Polar H10** | Polar H10 chest strap | RR intervals (gold-standard ECG-grade), VO2max via AccessLink API |
+| **Garmin Vivosmart 5** | Garmin wearables (FIT/ZIP/CSV) | Steps, sleep, SpO2, respiration, stress, body battery, calories |
+| **ActiGraph GT3X** | ActiGraph accelerometers | Activity counts, raw acceleration, sleep/wake scoring |
+| **Somfit Pro** | Compumedics Somfit | EDF/EDF+ polysomnography, sleep staging, SpO2 |
+| **FIT-to-CSV Tools** | Any Garmin FIT file | Convert and store FIT/CSV per profile directly in the app |
+
+### Clinical Assessment
+
+| Module | What It Covers |
+|---|---|
+| **User Profile System** | Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS), mission context, and history tracking with ECharts timelines |
+| **Personalized Health Metrics** | Body fat (US Navy method), sleep apnea risk (STOP-BANG), age-adjusted HRV norms, VO2max classification, cardiovascular risk, hydration requirements |
+| **Blood Pressure Variability** | BPV metrics (SD, CV, ARV, SV) with HRV-BPV correlation for comprehensive autonomic assessment |
+| **Laboratory Tracking** | CBC/Hemogram, blood chemistry, urinalysis with normal reference ranges |
+| **Profile Tools Engine** | One-click computation of SAFTE fatigue, recovery score, training readiness, operational performance, and 24-hour performance forecast |
+
+### AI and Machine Learning
+
+| Module | Capability |
+|---|---|
+| **GPT-5.2 Interpretation** | High-reasoning AI analysis with enforced web-search citations, mission logging, markdown export, and text-to-speech playback |
+| **Advanced HRV Analytics** | ML pattern recognition, statistical tests (Shapiro-Wilk, t-tests, Mann-Whitney U), 7-day forecasting, anomaly detection, and clinical decision support |
+| **Wearable Predictive Analytics** | Body Battery forecasting (Holt-Winters), Allostatic Load Index, circadian rhythm analysis, stress prediction, recovery analysis |
+
+### Biofeedback and Real-Time
+
+| Module | What It Does |
+|---|---|
+| **HRV Biofeedback** | Paced breathing guide with coherence score tracking |
+| **Real-Time Streaming** | Live HRV computation from BLE heart rate monitors |
 
 ---
 
-## 📋 Features Overview
-
-| Feature                                      | Description                                                                                                                                                                                        |
-| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Time-Domain Metrics**                | SDNN, RMSSD, pNN50, Mean HR, CVNN, plus per-tab RR file loaders so you can select the exact recordings rendered in each visualization                                                             |
-| **Frequency-Domain Analysis**          | VLF/LF/HF power, normalized units, LF/HF ratio via Welch, Periodogram, or AR methods with on-tab RR file selection                                                                                |
-| **Nonlinear Metrics**                  | Poincaré SD1/SD2, DFA α1/α2, Sample/Approximate Entropy with on-demand RR loaders for publication-grade plots                                                                                    |
-| **Heart Rate Fragmentation**           | PIP, IALS, PSS per PROOF-AF methodology with **HRF ↔ HRV correlation analysis** (interactive ECharts heatmaps with r, t-statistic, p-value)                                                                                                                      |
-| **Geometric Metrics**                  | HRV Triangular Index, TINN (enhanced), Baevsky Stress Index                                                                                                                                         |
-| **Advanced HRV Metrics** ✨NEW         | LnRMSSD, CVI (Cardiac Vagal Index), CSI (Cardiac Sympathetic Index), Mean HRmax-HRmin, Generalized pNNx (10ms/30ms/50ms), SDANN, SDNNi (long-term variability)                                      |
-| **Population Norms**                   | Age/sex-stratified comparison against Nunan et al., Ortega et al., MESA Study data                                                                                                                 |
-| **Blood Pressure Variability**         | BPV metrics (SD, CV, ARV, SV) with HRV-BPV correlation analysis                                                                                                                                    |
-| **Circadian Physiology**               | Forger99, Jewett99, Hannay19 models with ESRI and light schedule simulation                                                                                                                        |
-| **Sliding Window Analysis**            | Configurable windows with deviation detection and anomaly episodes                                                                                                                                 |
-| **Autonomic Function Tests**           | Valsalva ratio, Deep breathing E:I response, 30:15 standing ratio                                                                                                                                  |
-| **Readiness Scoring**                  | Kubios-style parasympathetic index with historical baseline comparison                                                                                                                             |
-| **Space Weather Correlation**          | NOAA Kp, Dst, F10.7, solar wind, and X-ray flux correlations using exact timestamp synchronization (no nearest-neighbor drift) with configurable lags                                            |
-| **Space Weather Impact Predictions**   | Exact arrival times for photons, SEPs, solar wind plasma, with Polar H10 timing recommendations                                                                                                    |
-| **NASA DONKI Integration**             | Flares, CMEs, geomagnetic storms, radiation belt enhancements                                                                                                                                      |
-| **Fatigue Prediction**                 | SAFTE biomathematical model for cognitive effectiveness + FRMS-style (ICAO-aligned) dashboard + USAF crew rest checks + publication-grade plot exports (ECharts toolbar: PNG/SVG/HTML/spec JSON + Print/Save PDF)                                               |
-| **HRV Biofeedback**                    | Real-time coherence training with paced breathing                                                                                                                                                  |
-| **CPU Performance Mode**               | Adjustable presets (Fast/Balanced/Quality) with smart downsampling                                                                                                                                 |
-| **GPU Acceleration**                   | NVIDIA CUDA support (RTX 5070/4090/3080) for heavy computations                                                                                                                                    |
-| **User Profile System**                | Centralized biometrics, clinical scales (ESS, Samn-Perelli, KSS), history tracking with ECharts timelines for assessments, Garmin wellness, HRV history, and exploration medicine dashboards      |
-| **Personalized Health Metrics**        | Body fat (US Navy method), sleep apnea risk (STOP-BANG), age-adjusted HRV norms, VO2max fitness classification, cardiovascular risk profile, personalized hydration requirements                 |
-| **Profile Tools Engine** ✨NEW         | SAFTE fatigue prediction, recovery score (lnRMSSD-based), training readiness assessment, **operational performance (HRV+SAFTE fused readiness)**, personalized HRV analysis, 24-hour performance forecast — all using profile data                      |
-| **Active User Context Sync**           | Circadian and SAFTE tabs auto-fill age, chronotype, sleep debt, and mission schedules from the selected profile with a single sync button; body composition data flows to all tabs              |
-| **Clinical Profiles**                  | Astronaut-grade assessment: BMR, TDEE, NASA nutrition, body composition with circumference tracking (neck, waist, hip, chest, arm, thigh, calf)                                                   |
-| **Personalized HRV Interpretation**    | Age/sex-adjusted reference ranges from Nunan et al. (2010) and Shaffer & Ginsberg (2017); status, percentile estimate, and recommendations per metric                                             |
-| **Exploration Medical Record**         | NASA isolation/mission log with EVA, radiation, stress, and behavioral metrics                                                                                                                     |
-| **Exploration Medical Analytics**      | Radiation/EVA/stress dashboards with trend cards sourced from ExMC logs                                                                                                                            |
-| **Radiation Exposure Module** ✨NEW    | Evidence-based dose models for 10 environments (LEO, Lunar, Mars), day-by-day tracking, EVA Go/No-Go matrix, NASA STD-3001 limits, space weather integration                                      |
-| **Advanced Wearable Analytics** ✨NEW  | Body Battery forecasting (Holt-Winters), Allostatic Load Index, Circadian Rhythm Analysis, Stress Prediction, Recovery Analysis with sleep debt calculation                                       |
-| **Advanced HRV Analytics** ✨NEW       | ML pattern recognition, statistical tests (Shapiro-Wilk, t-tests, Mann-Whitney U), trend forecasting, anomaly detection, clinical decision support with semaphored recommendations                |
-| **Polar AccessLink VO2 Integration**   | Optional VO2max sync for exercise compensation via AccessLink API                                                                                                                                  |
-| **Multi-Language**                     | English + Spanish (Colombian-validated scales: ESE-VC, KSS-CO)                                                                                                                                     |
-| **Laboratory Tracking**                | CBC/Hemogram, Blood Chemistry, Urinalysis with normal ranges                                                                                                                                       |
-| **Multi-Device Import**                | Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, Somfit Pro                                                                                                                                          |
-| **FIT ↔ CSV Tools**                    | Convert Garmin FIT to CSV inside the Data tab, download, and store both FIT/CSV per profile; import Garmin CSVs into the active profile                                                          |
-| **Garmin Vivosmart 5 Clinical Ingest** | Upload FIT/ZIP (batch supported) to auto-fill steps, distance, sleep score/quality/duration, SpO₂, respiration (awake/sleep), stress, calories, and body battery charge/drain with ECharts gauges |
-| **Docker Deployment**                  | Containerized with PostgreSQL/TimescaleDB for production environments                                                                                                                              |
-| **AI Interpretation**                  | GPT-5.2 high-reasoning analysis with enforced `web_search` citations, mission logging, markdown appendix, and optional tts-hd audio playback                                                      |
-| **Modern Progress Tracking** ✨NEW      | Real-time step-by-step progress indicators for HRV computations and space weather fetches with elapsed time, completion percentage, and visual status indicators                                    |
-| **Tab Persistence** ✨NEW              | Active tab persists across Streamlit reruns (compute/analyze buttons), maintaining workflow continuity                                                                                            |
-| **HRF ↔ HRV Correlation Visualization** ✨NEW | Interactive ECharts heatmaps showing Pearson correlations between Heart Rate Fragmentation and HRV metrics with r-values, t-statistics, p-values (4 decimals), scatter plots, and scientific interpretation |
-| **Publication Export**                 | APA 7th edition formatted reports, LaTeX tables, CSV/JSON data                                                                                                                                     |
-
----
-
-## 🗺️ Development Roadmap (v2.0)
-
-### Current Sprint (December 2025)
-
-| Priority | Feature                                      | Status                                                |
-| -------- | -------------------------------------------- | ----------------------------------------------------- |
-| ✅ DONE  | Multi-user sessions (1-13 concurrent)        | Complete                                              |
-| ✅ DONE  | CPU optimization for non-GPU systems         | Complete                                              |
-| ✅ DONE  | Smart CPU auto-detection & tuning            | Complete                                              |
-| ✅ DONE  | Clinical Profile UI visualization            | Complete (batched forms + debounced saves)            |
-| ✅ DONE  | Move Circadian settings to tab               | Complete                                              |
-| ✅ DONE  | Active user context sync across mission tabs | Complete (Circadian + SAFTE auto-populate)            |
-| ✅ DONE  | Per-tab settings persistence                 | Complete (TabSettingsManager)                         |
-| ✅ DONE  | Cross-tab correlation (Circadian → Fatigue) | Complete (shared broker + auto-applied sleep window)  |
-| ✅ DONE  | Polar AccessLink automation                  | Complete (persistent OAuth tokens + VO2max history)   |
-| ✅ DONE  | Exploration Medical Analytics dashboards     | Complete (radiation/EVA/stress cards in Clinical tab) |
-| ✅ DONE  | Longitudinal timepoints (T0–T21)             | Complete (tag HRV + assessments to study timepoints)  |
-| ✅ DONE  | Baseline/Δ analytics (T0–T21)                | Complete (User Profile → HRV Measurement History baseline/Δ table) |
-| ✅ DONE  | Per-user HRV cache + GPT export persistence  | Complete (SQLite-backed reusable payloads + reports)  |
-| ✅ DONE  | SAFTE tab FRMS dashboard + USAF crew rest    | Complete (ICAO-aligned FRMS dashboard + AFMAN 11-202V3 checks + plot exports) |
-| ✅ DONE  | Cohort/group baseline/Δ comparisons (T0–T21) | Complete (Export → Longitudinal cohort comparisons: control vs intervention) |
-| 🚧 IN PROGRESS | Plot governance enforcement across all tabs | Standardize captions/labels/exports for every plot (ECharts-first; Plotly fallback) |
-
-**Best next task:** Finish **plot governance enforcement** across *all* tabs (captions + axis units + consistent tooltips/legends + export coverage), then extend FRMS into a **mission-level “crew risk board”** (multi-profile aggregation + escalation + audit trail).
-
-### Planned Features (Q1 2026)
-
-#### Mission FRMS v2.0 (comprehensive crew readiness + alerts)
-The SAFTE tab already ships a baseline **predictive FRMS dashboard** (exposure metrics + SMS-style risk matrix + USAF crew rest check). The next milestone is a **mission-wide FRMS system** that runs across *all profiles* and produces actionable alerts + mitigations for safety-critical windows.
-
-**Status update:** A **prototype “Crew Risk Board”** is now available in **Export → Group summaries → “Mission FRMS v2 — Crew Risk Board (multi-profile)”**, including **CSV/JSON exports** plus an exportable **decision log (JSON)** for audit trail workflows.
-
-**What’s left to implement (end-to-end FRMS):**
-- **Mission-level roster + “crew risk board”**: aggregate fatigue exposure and risk classification across all active profiles (per shift/EVA/task window), with a single view for flight surgeon / mission director decision-making.
-- **FRMS processes (predictive + proactive + reactive)**: add structured hazard reporting, SPIs/trending, safety assurance checks, and a transparent audit trail for risk decisions (inputs → classification → mitigation → outcome).
-- **Alerting + escalation**: rules-based alerts when thresholds are crossed (e.g., time ≤77% in-scope, WOCL overlap, crew-rest noncompliance), plus “why it triggered” explanations and exportable evidence packets.
-- **Evidence-based countermeasure recommender**: standardized, mission-safe recommendations (sleep extension, controlled rest, caffeine timing, light scheduling, task re-allocation), with citations per recommendation and explicit constraints/limitations.
-- **Model calibration + validation layer**: optional PVT/psychomotor vigilance testing, incident/near-miss logging, and calibration hooks (SAFTE-R + individualized parameters) to validate predictive skill for this mission.
-
-**Core standards & research (verifiable sources, APA):**
-- International Civil Aviation Organization. (2016). *Manual for the Oversight of Fatigue Management Approaches* (Doc 9966, 2nd ed.). https://www.icao.int/safety/fatiguemanagement/FRMS%20Tools/Doc%209966.FRMS.2016%20Edition.en.pdf
-- International Civil Aviation Organization. (2011). *FRMS Implementation Guide for Operators* (July 2011). https://www.icao.int/safety/fatiguemanagement/FRMS%20Tools/FRMS%20Implementation%20Guide%20for%20Operators%20July%202011.pdf
-- International Civil Aviation Organization. (2018). *Safety Management Manual* (Doc 9859, 4th ed.). https://store.icao.int/en/safety-management-manual-doc-9859
-- Federal Aviation Administration. (2013). *Fatigue Risk Management Systems for Aviation Safety* (Advisory Circular AC 120-103A). https://www.faa.gov/documentlibrary/media/advisory_circular/ac_120-103a.pdf
-- International Air Transport Association, International Civil Aviation Organization, & International Federation of Air Line Pilots’ Associations. (2015). *Fatigue Management Guide for Airline Operators* (2nd ed.). https://www.ifalpa.org/media/2279/fmg-for-airline-operators-2nd-ed.pdf
-- Department of the Air Force. (n.d.). *AFMAN 11-202V3: General Flight Rules.* https://static.e-publishing.af.mil/production/1/af_a3/publication/afman11-202v3/afman11-202v3.pdf
-- Hursh, S. R., Redmond, D. P., Johnson, M. L., Thorne, D. R., Belenky, G., Balkin, T. J., Storm, W. F., Miller, J. C., & Eddy, D. R. (2004). Fatigue models for applied research in warfighting. *Aviation, Space, and Environmental Medicine, 75*(3 Suppl), A44–A53. https://doi.org/10.1097/01.ASM.0000122824.30373.5E
-- Van Dongen, H. P. A., Maislin, G., Mullington, J. M., & Dinges, D. F. (2003). The cumulative cost of additional wakefulness: Dose-response effects on neurobehavioral functions and sleep physiology from chronic sleep restriction and total sleep deprivation. *Sleep, 26*(2), 117–126. https://doi.org/10.1093/sleep/26.2.117
-- Belenky, G., Wesensten, N. J., Thorne, D. R., Thomas, M. L., Sing, H. C., Redmond, D. P., Russo, M. B., & Balkin, T. J. (2003). Patterns of performance degradation and restoration during sleep restriction and subsequent recovery: A sleep dose-response study. *Journal of Sleep Research, 12*(1), 1–12. https://doi.org/10.1046/j.1365-2869.2003.00337.x
-- Dawson, D., & Reid, K. (1997). Fatigue, alcohol and performance impairment. *Nature, 388*(6639), 235. https://doi.org/10.1038/40775
-- Williamson, A. M., & Feyer, A.-M. (2000). Moderate sleep deprivation produces impairments in cognitive and motor performance equivalent to legally prescribed levels of alcohol intoxication. *Occupational and Environmental Medicine, 57*(10), 649–655. https://doi.org/10.1136/oem.57.10.649
-- Folkard, S., & Tucker, P. (2003). Shift work, safety and productivity. *Occupational Medicine, 53*(2), 95–101. https://doi.org/10.1093/occmed/kqg047
-- Hilditch, C. J., Arsintescu, L., Gregory, K. B., & Flynn-Evans, E. E. (2020). Mitigating fatigue on the flight deck: How is controlled rest used in practice? *Chronobiology International, 37*(11), 1563–1574. https://doi.org/10.1080/07420528.2020.1803898
-
-#### Per-user computation persistence (beyond HRV)
-- **Circadian run history per user**: persist circadian scenario inputs + outputs (DLMO/CBT/ESRI trajectories) so users can review and export prior simulations without rerunning.
-- **SAFTE run history per user**: persist SAFTE inputs + forecasts (and the data source used: wrist → clinical → Garmin Connect) for auditability and fast reuse.
-- **Cross-module “mission package export” per user**: one-click export bundling HRV + circadian + fatigue + space-weather context + stored GPT-5.2 report.
-
-#### SAFTE-R performance prediction (per subject)
-- **SAFTE-R model option**: add SAFTE-R parameterization and expose it under each subject in **User Profile → Fatigue**, including calibration hooks (sleep/wake history + chronotype + workload).
-
-#### Mission-specific radiation dose modelling
-- **Mission-linked dose model**: compute effective dose per user from the mission being simulated (environment/shielding/EVA timeline + storm-time hazard flags), and persist both model inputs and outputs per mission scenario.
-
-#### HRV protocol covariates (measurement accuracy)
-- **Protocol context capture**: store and apply key covariates (posture, time-of-day, breathing protocol/respiratory rate, recent exercise/caffeine/nicotine/alcohol, acute illness, medication changes) to improve per-user interpretation and comparability across sessions.
-
-#### Longitudinal Study Support
-
-- **Baseline + 22 Measurements**: Track subjects over time (T0 → T21)
-- **Intra-Subject Analysis**: Within-individual change detection, trend analysis
-- **Inter-Subject Analysis**: Between-group comparisons, effect sizes
-- **Mixed-Effects Models**: Random subject intercepts, repeated measures
-
-#### Group Analysis Framework
+## Project Structure
 
 ```
-Study Design:
-├── Control Group (n subjects)
-│   └── Each subject: T0, T1, T2, ... T21
-└── Intervention Group (n subjects)
-    └── Each subject: T0, T1, T2, ... T21
+HRV/
+├── app/                          # Python application core
+│   ├── operational_app.py        # Streamlit: fast clinical workflows
+│   ├── research_app.py           # Streamlit: full research dashboards
+│   ├── space_weather_ds_app.py   # Streamlit: single-user data science
+│   ├── hrv_core.py               # Core HRV computation engine
+│   ├── vt_analysis.py            # Ventilatory threshold (DFA-alpha1)
+│   ├── trajectory_risk.py        # Allostatic load / trajectory risk
+│   ├── noaa_space.py             # NOAA space weather data ingestion
+│   ├── space_weather_impact.py   # Impact predictions & Polar H10 timing
+│   ├── radiation_exposure.py     # Evidence-based radiation dose models
+│   ├── circadian/                # Circadian rhythm simulation models
+│   ├── fatigue_calculator/       # SAFTE fatigue prediction engine
+│   ├── wearable_analytics.py     # Garmin predictive analytics
+│   ├── advanced_hrv_analytics.py # ML/statistics/clinical decisions
+│   ├── user_profile_tab.py       # User profile & clinical scales UI
+│   ├── user_database.py          # SQLite persistence layer
+│   ├── gpu_processing.py         # NVIDIA CUDA acceleration
+│   ├── logging_config.py         # Centralized logging setup
+│   └── ...                       # 50+ modules (see docs/Manual.md)
+│
+├── api/                          # FastAPI backend
+│   ├── main.py                   # API entry point, all endpoints
+│   ├── research_endpoints.py     # Research-specific endpoints (VT, etc.)
+│   └── requirements.txt          # API-specific dependencies
+│
+├── frontend/                     # TypeScript/Next.js frontend
+│   ├── src/
+│   │   ├── app/                  # Next.js pages (18+ research pages)
+│   │   ├── components/           # Reusable UI components
+│   │   ├── lib/                  # API clients, state management
+│   │   └── types/                # TypeScript type definitions
+│   ├── package.json
+│   └── tailwind.config.ts
+│
+├── docs/
+│   ├── Manual.md                 # Comprehensive user manual (6000+ lines)
+│   └── HRV_Ventilatory_Threshold_Comprehensive_Scientific_Report.md
+│
+├── tests/                        # pytest test suite
+├── db/init/                      # Database schema initialization
+├── crew/                         # Mission-scoped data storage
+├── logs/                         # Application and error logs
+├── requirements.txt              # Python dependencies
+├── docker-compose.yml            # Docker deployment
+├── CHANGELOG.md                  # Detailed version history
+└── WARP.md                       # Architecture reference
 ```
 
-**Analysis Types**:
+---
 
-- Per-subject time series with individual baselines
-- Per-group aggregated statistics at each timepoint
-- Group × Time interaction effects
-- Responder vs non-responder classification
-- Effect size calculations (Cohen's d, η²)
+## Explore Without Data
 
-> **For detailed roadmap**: See [WARP.md](WARP.md) section "🚀 DEVELOPMENT ROADMAP" and `docs/Manual.md` → **Pending Developments and Roadmap**.
+The app is fully navigable **without uploading any HRV data**. These features work immediately:
+
+| Module | What You Can Do |
+|---|---|
+| **Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing recommendations |
+| **Circadian** | Simulate circadian rhythms with different light schedules and shift work scenarios |
+| **SAFTE/Fatigue** | Run guided SAFTE fatigue workflows with auto-fill from wrist monitoring data |
+| **Biofeedback** | Try the paced breathing demo with real-time coherence feedback |
+| **User Profile** | Register profiles, complete clinical scales, explore all assessment tools |
+
+All other tabs show **example data** and **reference values** so you can understand every feature before uploading your own recordings.
 
 ---
 
-## 🤖 OpenAI Agents SDK Integration Blueprint
-
-Mission Control - Flight Surgeon already uses GPT-5.2 high-reasoning summaries; the next leap is to embed OpenAI Agents SDK with code interpreter, Model Context Protocol (MCP), web/file search, Wolfram Alpha reasoning, and E2B secure sandboxes so every astronaut profile benefits from autonomous, tool-using copilots. This blueprint stays aligned with the v2.0 roadmap and keeps all healthcare data on-device while letting agents reason over HRV, space weather, and wearable signals in near real time.
-
-> **Implementation status**: `app/agent_runtime.py` now defines the tool belt, MCP scopes, and all three personas; the About tab includes an expander that surfaces this configuration for mission leads.
-
-> **v1.8.17 update**: Every persona now enforces `web_search`-backed citations, logs its request/response payloads to `logs/app.log`, and exposes Markdown + tts-hd exports (Metrics tab + Export tab) so doctor-level answers can be reviewed offline or played back discreetly during mission briefs.
-
-### Strategic Outcomes
-- Close the loop between RR uploads, NOAA/SWPC feeds, and mission decisions through MCP-enabled agents rather than ad-hoc scripts.
-- Deliver reproducible science packages (not just prose) by combining `code_interpreter` outputs, Wolfram Alpha derivations, and sandboxed E2B notebooks per analysis.
-- Expose mission-ready automations (fatigue clearance, EVA go/no-go, radiation countermeasure planning) that adapt to simple wearable inputs plus atmospheric/space-weather loads.
-- Keep compliance: secrets in `.env`, deterministic Python hand-offs, logging via `logging_config.py`, and audit trails in `logs/`.
-
-### Architecture Snapshot
-- **Agent Runtime**: `openai.agents` service (GPT-5.2 High Reasoning) deployed as a sidecar service (`app/agent_router.py`, future) to keep Streamlit reruns clean.
-- **Context Graph (MCP)**: Servers for `hrv_users.db`, `docs/Manual.md`, `logs/app.log`, NOAA cache folders, and structured exports. Each server enforces read-only scopes per agent.
-- **Tool Belt**:
-  - `code_interpreter` for bounded analytics on uploaded RR arrays (cap output to `/tmp/agents/<session>` and delete per request).
-  - `file_search` indexing curated corpora (Manual, WARP, NASA/NOAA references, exploration medical SOPs).
-  - `web_search` with mission-safe providers (NASA ADS, SWPC, PubMed) for fresh solar/anatomic insights.
-  - **Wolfram Alpha API** via custom tool spec for symbolic math (ionospheric absorption, radiation transport) with AppID stored in `.env`.
-  - **E2B workspace** for heavy simulations (multi-hour circadian entrainment, Monte Carlo radiation) while keeping deterministic seeds.
-  - NOAA/DONKI/SpaceWeatherLive fetchers exposed as callable tools rather than Streamlit callbacks so agents can refresh data on demand.
-
-### Step-by-Step Implementation Plan
-1. **Stabilize Data & Logging (Week 0)**
-   - Confirm `hrv_users.db` migrations are current; add read-only SQLite roles for agents (`sqlite3.connect(..., uri=True, mode=ro)` in planned `agent_data_bridge.py`).
-   - Harden logging: ensure `logs/app.log` and `logs/errors.log` rotate at 10 MB, then register them with MCP so agents can cite trace IDs when recommending actions.
-   - Capture wearables ingest health (Garmin, Polar) in a single `data_ingest_status.json` so agents know whether they can rely on the latest VO₂max/sleep metrics.
-2. **Model Context Protocol Bridges (Week 1)**
-   - Stand up MCP servers (e.g., `mcp://hrv-db`, `mcp://docs`, `mcp://space-weather-cache`) using the OpenAI MCP SDK; map each to deterministic selectors:
-     1. `hrv-db`: parameterized SQL views (recent RR sessions, cohort aggregates, radiation dose log).
-     2. `docs`: pinned commit of `docs/Manual.md`, `WARP.md`, scientific PDFs.
-     3. `space-weather-cache`: JSON snapshots under `app/data_cache/noaa_space/` with TTL metadata.
-   - Define per-agent policies (read vs. write) and include mission tags (`user_id`, `session_id`) so every tool call is auditable.
-3. **Toolchain Enablement (Week 1–2)**
-   - **code_interpreter**: configure 512 MB sandbox, mount-only `/tmp/mission_control/agents/<cedula>`; prevent network, allow `numpy`, `pandas`, `scipy`, `statsmodels`, `plotly`. Pipe outputs back as Markdown tables and PNGs for Streamlit tabs.
-   - **file_search**: run nightly embeddings over `docs/`, `CHANGELOG.md`, and curated PDFs; store vector store in `app/data_cache/vector_db/` with mission-specific namespaces.
-   - **web_search**: whitelist NASA ADS, SWPC, NOAA, ESA Space Weather, PubMed; default to 3 snippets with citation metadata so reports remain evidence-backed.
-   - **Wolfram Alpha**: create `wolfram_alpha` tool definition referencing `.env` `WOLFRAM_APP_ID`; restrict queries to mission physics (solar wind propagation, Schumann resonances, barometric modeling).
-   - **E2B**: template E2B sandboxes (Python 3.12) loaded with `requirements.txt`; expose `launch_e2b_simulation(params)` tool returning signed artifact URLs for downstream inclusion.
-   - **Other APIs**: add NOAA/SpaceWeatherLive tool specs so the agents call the same deterministic fetch routines used in `app/noaa_space.py` rather than inventing new HTTP clients.
-4. **Mission-Focused Agent Definitions (Week 2)**
-   - **Solar-Physiology Correlator**: Automates RR↔space-weather lag scans via `code_interpreter`, writes results into MCP `correlation_reports` table, escalates anomalies when `|r|>0.6` and FDR q<0.05.
-   - **Wearable Recovery Concierge**: Uses `file_search` (Manual norms) + `hrv-db` views + Wolfram Alpha to translate Garmin/Polar data into operational prescriptions (hydration, EVA scheduling).
-   - **Environmental Threat Watcher**: Combines `web_search`, NOAA tools, and E2B radiation Monte Carlo runs to predict when atmospheric or geomagnetic disturbances degrade HRV readiness; posts alerts into Streamlit notification center.
-  - Each agent uses GPT-5.2 High Reasoning for responses, with `instructions` embedding the deterministic rules (bounded loops, type-safe outputs, cite NOAA/peer-reviewed sources).
-5. **Experience Integration (Week 3)**
-   - Extend `app/gpt_interpretation.py` to call the Agent Router: user selects “Autonomous Analysis” → app posts mission context (user profile, selected sessions, NOAA bundle IDs) to the chosen agent.
-   - Surface multi-modal outputs: Markdown summary, structured JSON (metrics, decision, confidence), and optional PNGs/CSVs from `code_interpreter` or E2B.
-   - Log every agent call using `log_user_action("agent_run", {...})` with toolchain metadata for HIPAA-like traceability.
-6. **Validation & Flight Readiness (Week 4)**
-   - Run regression notebooks (pytest + hypothesis) to confirm agent-generated code never mutates data outside `/tmp`.
-   - Simulate degraded comms: disable WAN and ensure MCP/file_search fallbacks still produce actionable guidance.
-   - Conduct SME review sessions (flight surgeons, biomed engineers) to vet recommendations before enabling in production tabs.
-
-### Metric Explainability Specialist (NEW)
-- `app/agent_runtime.py` now includes a **Metric Explainability Specialist** persona that binds GPT-5.2 high reasoning + `code_interpreter` to per-metric narrative output.
-- `app/agent_insights.py` packages mission context (`metric_samples`, reference catalogue, active user profile) and gracefully falls back to deterministic Task Force (1996) / Shaffer & Ginsberg (2017) comparisons when the API key is missing.
-- The **Metrics** tab surfaces a new "Metric Explanations (Agent SDK)" panel so every SDNN, RMSSD, pNN50, LF/HF, HF power, and mean HR value includes a human-readable status + citation even before the agent executes.
-
-### Disruptive Opportunities in Aerospace Medicine
-- **Closed-loop EVA readiness**: Agents correlate HRV drops, atmospheric pressure swings, and predicted Kp surges to recommend countermeasures before EVA windows open.
-- **Adaptive countermeasure playlists**: E2B sandboxes prototype breathing/light protocols, while code_interpreter validates HRV improvements on-the-fly.
-- **Personalized atmospheric risk scoring**: Wolfram Alpha tool computes ionospheric absorption paths customized to mission latitude, feeding fatigue risk dashboards.
-- **Rapid research translation**: web_search + file_search let agents cite fresh literature (Task Force updates, ExMC memos) while maintaining deterministic sourcing.
-
-### Future Potential
-- Multi-agent swarms (circadian planner + fatigue guardian) negotiating mission trade-offs via MCP shared memory.
-- Automated publication drafts combining code_interpreter figures, Agents SDK narrative, and NASA-standard tables for journals.
-- Voice-enabled mission control where wearables stream into agents that reason aloud about human performance vs. solar storms.
-
----
-
-## 📁 Input Data Format
+## Input Data Formats
 
 ### Polar-Style RR Text Files
 
-The app accepts text files with one RR interval per line in **milliseconds**:
+One RR interval per line, in milliseconds:
 
 ```
 1027
@@ -467,463 +410,52 @@ The app accepts text files with one RR interval per line in **milliseconds**:
 ```
 
 **Filename convention**: `YYYY-MM-DD HH-MM-SS.txt` (e.g., `2025-11-06 00-43-42.txt`)
-
-- The timestamp is parsed to align HRV windows with space weather data
-- Timezone is assumed GMT-5 (adjustable)
-- Values outside 300–2000 ms are automatically filtered
+The timestamp is parsed to align HRV windows with space weather data. Values outside 300-2000 ms are automatically filtered.
 
 ### Garmin Data Sources
 
-* **Wellness Export ZIP**: Download from Garmin Connect → Account Settings → Export Wellness Data
-  ```
-  https://connect.garmin.com/modern/settings/accountInformation
-  ```
-* **Export JSON (unzipped)**: You can also upload individual Garmin export `.json` files (e.g., `UDSFile_*.json`, `*_sleepData.json`) in **User Profile → Data → Wrist Monitoring (Vivosmart 5)**.
-* **FIT Files**: Export individual activities from Garmin Connect web
-* **API Access**: Configure `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env` (see Configuration below).
-  - **Recommended**: use token-based login via `~/.garminconnect` (see “Garmin Connect token authentication” below).
+- **Wellness Export ZIP**: Download from Garmin Connect account settings
+- **FIT Files**: Export individual activities from Garmin Connect web
+- **JSON Files**: Upload individual Garmin export JSON files in User Profile
+- **API Access**: Configure `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env`
 
-### Environment Configuration
+### Other Supported Formats
 
-The application uses a **portable environment loader** (`app/env_loader.py`) that automatically finds and loads your `.env` file from the project root, regardless of computer username or absolute path.
-
-**Supported variables** (create `.env` in project root):
-```env
-GARMIN_EMAIL=your_email@example.com
-GARMIN_PASSWORD=your_password
-NASA_API_KEY=your_nasa_api_key
-ACCUWEATHER_API_KEY=your_accuweather_key
-OPENAI_API_KEY=sk-proj-...
-```
-
-**How it works:**
-- Searches upward from `app/` for marker files (`.env`, `README.md`, `.git`, etc.)
-- Loads environment variables without hardcoded paths
-- Works across different computers and directory structures
-- Falls back gracefully if `.env` is not found
-
-**Manual usage** (optional):
-```python
-from env_loader import load_env_file, get_env_variable
-
-# Method 1: Automatic loading
-load_env_file(verbose=True)
-
-# Method 2: Get specific variables with validation
-api_key = get_env_variable("NASA_API_KEY", required=True)
-```
-
-See `app/env_loader_example.py` for complete examples.
-
-#### Garmin Connect token authentication (recommended)
-Garmin logins can require MFA/extra verification and may fail in non-interactive environments.
-This project supports **token-based auth**:
-- The app will **try saved tokens first**, before falling back to `GARMIN_EMAIL` / `GARMIN_PASSWORD`.
-- Tokens are stored under your home directory at `~/.garminconnect/`.
-
-**Generate tokens (one-time interactive step):**
-1. Ensure `.env` contains `GARMIN_EMAIL` and `GARMIN_PASSWORD`.
-   - If your password contains characters like `#` or spaces, wrap it in quotes.
-2. Run:
-   ```
-   python tests/test_garmin_email.py
-   ```
-3. Follow prompts (including MFA if required). Tokens will be saved to `~/.garminconnect/`.
-
-**Move to a new computer:**
-- Copy the entire `~/.garminconnect/` directory to the new machine under the new user’s home directory.
-
-**Security note:** Treat `~/.garminconnect/` like a password/API key (do not commit it to git).
-
-### ActiGraph GT3X Files
-
-1. **GT3X Binary**: Native format from ActiGraph devices (GT3X, GT3X+, GT9X Link)
-2. **AGD Database**: ActiLife processed epoch data
-3. **CSV Export**: Activity counts or raw acceleration from ActiLife
-
-### Somfit Pro Files
-
-1. **EDF/EDF+**: European Data Format from Compumedics Profusion Nexus360
-2. **XML Annotations**: Sleep staging scores from Profusion
-3. **CSV Export**: Summary data exports
-
-### Sample Data Structure
-
-```
-project/
-├── 2025-11-06 00-43-42.txt    # Morning recording
-├── 2025-11-06 18-30-00.txt    # Evening recording
-├── garmin_export.zip          # Optional Garmin data
-└── .env                       # API keys (not committed)
-```
+- **ActiGraph**: GT3X binary, AGD database, CSV exports
+- **Somfit Pro**: EDF/EDF+ from Compumedics, XML annotations, CSV summary
 
 ---
 
-## 🖥️ Application Tabs
+## Environment Configuration
 
-### Overview Tab
+The application uses a **portable environment loader** (`app/env_loader.py`) that automatically finds and loads your `.env` file from the project root, regardless of computer or directory structure.
 
-- Dataset metadata: beat count, duration, mean HR, artifact percentage
-- Respiratory rate estimate from HF spectral peak
-- Summary table with green/yellow/red deviation flags
+**Supported variables** (all optional):
 
-### Time Series Tab
+| Variable | Purpose |
+|---|---|
+| `OPENAI_API_KEY` | GPT-5.2 AI interpretation |
+| `NASA_API_KEY` | NASA DONKI data (use `DEMO_KEY` for free tier) |
+| `GARMIN_EMAIL` | Garmin Connect API access |
+| `GARMIN_PASSWORD` | Garmin Connect API access |
+| `ACCUWEATHER_API_KEY` | Weather covariate data |
+| `POLAR_ACCESSLINK_TOKEN` | Polar VO2max sync |
+| `POLAR_ACCESSLINK_USER_ID` | Polar user identifier |
+| `WOLFRAM_APP_ID` | Wolfram Alpha symbolic math (future) |
 
-- RR intervals and heart rate over time
-- QC overlays: cleaned series (green), flagged artifacts (red)
-- Interactive zoom and pan
+> **Security reminder**: Never commit `.env` to version control. The file is already in `.gitignore`.
 
-### Frequency Tab
+### Garmin Connect Token Authentication (Recommended)
 
-- Power Spectral Density (PSD) with VLF/LF/HF band highlighting
-- Methods: Welch (default), Periodogram, AR (Yule-Walker)
-- Band power comparison across datasets
+For environments where interactive MFA is impractical:
 
-### Nonlinear Tab
-
-- Poincaré plot with SD1/SD2 ellipse
-- DFA scaling exponents (α1: short-term, α2: long-term)
-- Entropy metrics visualization
-
-### Spectrogram Tab
-
-- Time-frequency heatmap showing spectral dynamics
-- Track HF (breathing) and LF (baroreflex) power evolution
-- Useful for identifying non-stationary segments
-
-### Windowed Tab
-
-- Sliding-window metrics (default: 5-min window, 1-min step)
-- Deviation detection with configurable z-score thresholds
-- Anomaly episode timeline with contiguous run detection
-
-### Metrics Tab
-
-- Complete table of all computed metrics across domains
-- Advanced analytics: fragmentation, PRSA, symbolic dynamics, multifractal DFA
-- Covariate-adjusted values when patient profile is configured
-- **NEW:** "Metric Explanations (Agent SDK)" panel that annotates each SDNN/RMSSD/pNN50/LF/HF/Mean HR value with Task Force/Shaffer ranges, plus optional GPT-5.2 agent narratives that leverage `code_interpreter`.
-
-### ANS Function Tests Tab
-
-- **Valsalva Ratio**: Phase II (strain) vs Phase IV (recovery)
-- **Deep Breathing**: E:I difference and ratio across paced breathing cycles
-- **30:15 Ratio**: Orthostatic response after standing
-
-### Readiness Tab
-
-- Parasympathetic index from HF, RMSSD, pNN50, SD1
-- Historical baseline comparison (requires ≥7 sessions)
-- Kubios-style categories: VERY LOW / LOW / NORMAL / HIGH
-
-### Gauges Tab
-
-- 30+ metric gauges with clinical reference ranges
-- Two-ring design with color-coded zones (green/yellow/red)
-- Based on published normative data (Nunan 2010, Shaffer 2017, PROOF-AF 2025)
-
-### HRF ↔ HRV Correlations Tab ✨NEW
-
-- **Interactive ECharts Heatmap**: Color-coded correlation matrix between HRF metrics (PIP, IALS, PSS) and HRV metrics
-- **Detailed Statistics Table**: Pearson r, t-statistic, p-value (4 decimals) with strength/direction interpretation
-- **Top Correlation Scatter Plot**: Visualizes the strongest HRF↔HRV relationship with regression line
-- **Scientific Context**: Explains HRF vs HRV differences, research findings (Costa 2017, Cathey 2024, Galdino 2023), and correlation interpretation
-- **Per-Recording Analysis**: Computes correlations across multiple recordings for population-level insights
-- **Button-Driven Computation**: Click "Compute HRF↔HRV correlations" to run analysis (results cached in session)
-
-### Unified Timeline Tab
-
-- Time-synchronized view of all physiological metrics
-- ML pattern detection: anomalies, trends, change points
-- Correlation matrix heatmap
-
-### Biofeedback Tab
-
-- Real-time HRV streaming (simulated or from device)
-- Paced breathing guide with configurable breath rate
-- Coherence score tracking
-
-### Fatigue Tab
-
-- SAFTE model for cognitive performance prediction
-- Sleep schedule and work schedule inputs
-- Risk assessment with factor breakdown
-- Recommendations based on fatigue level
-- One-click **Sync with active profile** button pulls age, chronotype, sleep debt, and mission schedule directly from the selected astronaut's medical log
-- **Auto-run assessment (5-day forecast)** uses wrist monitoring data from the Assessment tab when present, falls back to subjective clinical sleep quality if wrist data is absent, and only falls back to Garmin Connect API (requires `GARMIN_EMAIL`/`GARMIN_PASSWORD`) when neither is available; the summary used in the prediction is displayed for traceability.
-
-### Space Weather Tab
-
-- **Impact Predictions**: Exact arrival times for all energy categories in Bogotá (UTC-5)
-  - Photon/X-ray events (instantaneous)
-  - Solar Energetic Particles (SEPs)
-  - Solar wind plasma (L1→Earth travel time calculated)
-  - Geomagnetic conditions (Kp/Dst)
-- **Polar H10 Recommendations**: Automatic EKG timing guidance based on event severity
-- **Always-on data**: Auto-loads on tab open (cache-first) and falls back to the last cached Kp/F10.7 values if the network blips—no RR uploads required
-- Live Kp index, solar flux, solar wind parameters
-- SpaceWeatherLive snapshot with CME/flare data
-- Lag-aware correlations (0–72h) with HRV metrics
-- Partial correlations controlling for weather covariates
-
-### NOAA Space Tab
-
-- Comprehensive NOAA SWPC data feeds
-- Manual fetch by default (cache-first); optional auto-fetch toggle in Processing Mode; manual refresh available
-- Interactive gauges for all space weather metrics
-- Batch correlation analysis across multiple parameters
-- Feature matrix builder for predictive modeling
-
-### Export Tab
-
-- Markdown report with all metrics and interpretations
-- CSV/JSON data export
-- LaTeX tables for publications
-- **🤖 GPT-5.2 High Reasoning Analysis**: Complete AI-powered report generation with code interpreter, web search citations, and comprehensive physiological interpretation (requires API key)
-- **Plot exports (all ECharts charts)**: Use the inline export toolbar to download **PNG (high-DPI)**, **SVG (vector)**, **HTML**, and **spec JSON**, or **Print/Save PDF** from your browser.
-
-### Circadian Physiology Tab
-
-- Multiple mathematical models: Forger99, Jewett99, Hannay19, Hannay19TP
-- Light schedule generation (Regular, Shift Work, Slam Shift, Social Jetlag)
-- Entrainment Signal Regularity Index (ESRI) calculation
-- Phase and amplitude trajectory visualization
-- Integrated scenario builder with in-tab presets and batched submissions (no sidebar required)
-- **Align with active profile** auto-populates light schedules and model selections based on the active user's chronotype, mission profile, and NASA medical history
-- Based on Arcascope circadian package (Tavella, Hannay, Walch)
-
-### Population Norms Tab
-
-- Compare HRV metrics against published population norms
-- Age and sex-stratified reference values
-- Sources: Nunan et al. (2010), Ortega et al. (2024), MESA Study, Task Force 1996
-- Percentile rankings and deviation categories
-- Full scientific citations with PMID links
-
-### BPV Analysis Tab
-
-- Blood Pressure Variability metrics: SD, CV, ARV, SV
-- Pulse pressure and MAP calculations
-- Risk assessment based on clinical literature
-- HRV-BPV correlation for autonomic assessment
-- References: Parati et al. (2018), Rothwell et al. (2010), Saren et al. (2024)
-
-### About Tab
-
-- Author information and professional profiles
-- Contributing authors (Circadian: Arcascope; SAFTE: IBR/USAF)
-- Version history and changelog
-- Complete user manual (docs/Manual.md)
-- Scientific references and citations
+1. Set `GARMIN_EMAIL` and `GARMIN_PASSWORD` in `.env`
+2. Run `python tests/test_garmin_email.py` and follow the prompts
+3. Tokens are saved to `~/.garminconnect/` — treat this directory like a password
 
 ---
 
-## ⚙️ Configuration
-
-### Environment Variables
-
-Create a `.env` file in the project root:
-
-```env
-# OpenAI API (for GPT interpretation)
-OPENAI_API_KEY=sk-...
-
-# NASA DONKI (optional, has generous free tier)
-NASA_API_KEY=DEMO_KEY
-
-# Garmin Connect (for API access)
-GARMIN_EMAIL=your.email@example.com
-GARMIN_PASSWORD=your_password
-
-# AccuWeather (for weather covariates)
-ACCUWEATHER_API_KEY=your_key
-```
-
-⚠️ **Security**: Never commit `.env` to version control. Ensure `.gitignore` includes `.env`.
-
-### Sidebar Settings
-
-| Setting                 | Default          | Description                                   |
-| ----------------------- | ---------------- | --------------------------------------------- |
-| **Window size**   | 5 min            | Sliding window duration for windowed analysis |
-| **Step size**     | 1 min            | Window overlap/step                           |
-| **Min RR count**  | 60               | Minimum beats per window                      |
-| **QC method**     | threshold_median | Artifact detection algorithm                  |
-| **Max deviation** | 0.2              | Artifact threshold (20% deviation)            |
-| **Median window** | 11               | Rolling median window for QC                  |
-| **PSD method**    | Welch            | Spectral estimation method                    |
-| **Processing Mode** | Manual-only     | Disable auto-run requests; optional space-data auto-fetch when enabled |
-| **Manual tab rendering** | On        | Require explicit **Load** per tab before running computations/plots (Processing Mode) |
-
----
-
-## 📊 Example Workflow
-
-### Clinical Autonomic Assessment
-
-```
-1. Patient preparation: 5-min rest, supine position, quiet room
-2. Record: Start Polar H10 recording, save RR intervals
-3. Upload: Load file into app
-4. QC Review: Check Time Series tab for artifacts (<5% acceptable)
-5. Metrics: Review Metrics tab for comprehensive values
-6. Autonomic Tests: Perform Valsalva, deep breathing protocols
-7. Export: Generate report for clinical documentation
-```
-
-### Research Protocol
-
-```
-1. Define cohort: Age, sex, health status
-2. Standardize: Same time-of-day, posture, breathing instructions
-3. Record: ≥5 min per session, label files with subject ID
-4. Process: Upload batch of files
-5. Analyze: Use windowed metrics for time-varying analysis
-6. Correlate: Enable space weather correlation if studying solar effects
-7. Statistics: Export CSV for external statistical packages
-8. Publish: Use LaTeX export for manuscript tables
-```
-
-### Personal Tracking
-
-```
-1. Morning routine: 1-5 min HRV recording immediately upon waking
-2. Consistent setup: Same position, before coffee/exercise
-3. Upload daily: Build 7+ day baseline
-4. Check Readiness: Monitor parasympathetic index trend
-5. Adjust training: Reduce intensity when readiness is LOW
-```
-
----
-
-## 🔬 Space Weather Correlation Analysis
-
-### Scientific Background
-
-Geomagnetic storms and solar activity have been associated with cardiovascular effects in epidemiological studies:
-
-- **Kp Index**: Higher geomagnetic activity correlates with reduced HRV in some cohorts
-- **Solar Wind**: Speed/pressure variations may precede autonomic changes
-- **F10.7 Flux**: Proxy for overall solar activity with long-term health correlations
-
-### Using the Correlation Tools
-
-1. **Configure lag range**: Start with 0–72h, step 6h
-2. **Enable weather covariates**: Control for temperature, humidity, pressure
-3. **Review FDR-adjusted q-values**: Multiple comparison correction
-4. **Interpret cautiously**: Effect sizes are typically small (r = 0.1–0.3)
-
-### Feature Matrix Builder
-
-The NOAA Space tab includes an advanced feature matrix builder:
-
-1. Generate a lagged feature matrix combining HRV metrics with solar predictors
-2. Rank predictors by correlation strength with minimum sample guardrails
-3. Train quick linear models to explore relationships
-4. Download correlations, rankings, and coefficients for further analysis
-
----
-
-## 📚 References
-
-### Core HRV Standards
-
-- Task Force of ESC/NASPE (1996). Heart rate variability standards. *Circulation, 93*(5), 1043-1065. [PMID: 8598068](https://pubmed.ncbi.nlm.nih.gov/8598068/)
-- Shaffer, F., & Ginsberg, J. P. (2017). An overview of HRV metrics and norms. *Front Public Health, 5*, 258. [PMID: 29034226](https://pubmed.ncbi.nlm.nih.gov/29034226/)
-- Nunan, D., et al. (2010). Normal values for short-term HRV in healthy adults. *Pacing Clin Electrophysiol, 33*(11), 1407-1417. [PMID: 20663071](https://pubmed.ncbi.nlm.nih.gov/20663071/)
-- Quigley, K. S., et al. (2024). Publication guidelines for HR and HRV. *Psychophysiology, 61*(4), e14604.
-
-### Population Norms
-
-- Ortega, E., et al. (2024). The Pulse of Singapore: Short-Term HRV Norms. *J Gen Intern Med, 39*(1), 101-108. [PMID: 37755550](https://pubmed.ncbi.nlm.nih.gov/37755550/)
-- O'Neal, W. T., et al. (2016). MESA Study HRV normative values. *Am J Cardiol*. [PMID: 27396499](https://pubmed.ncbi.nlm.nih.gov/27396499/)
-
-### Blood Pressure Variability
-
-- Parati, G., et al. (2018). BPV: clinical relevance and application. *J Clin Hypertens, 20*(7), 1133-1137. [PMID: 29927042](https://pubmed.ncbi.nlm.nih.gov/29927042/)
-- Rothwell, P. M., et al. (2010). Visit-to-visit variability of blood pressure and stroke risk. *Lancet, 375*(9718), 895-905. [PMID: 20226988](https://pubmed.ncbi.nlm.nih.gov/20226988/)
-- Saren, J., et al. (2024). Blood pressure variability and health outcomes in adults 65+. *Age and Ageing*. [DOI: 10.1093/ageing/afae262](https://doi.org/10.1093/ageing/afae262)
-
-### Circadian Physiology
-
-- Tavella, F., Hannay, K., & Walch, O. (2023). Arcascope/circadian. Zenodo. [DOI: 10.5281/zenodo.8206871](https://doi.org/10.5281/zenodo.8206871)
-- Forger, D. B., et al. (1999). A simpler model of the human circadian pacemaker. *J Biol Rhythms, 14*(6), 532-537.
-
-### Space Weather & Physiology
-
-- Vieira, C. L. Z., et al. (2022). Geomagnetic disturbances reduce HRV. *Sci Total Environ, 839*, 156312.
-- Alabdulgader, A., et al. (2018). Long-term HRV responses to solar activity. *Sci Rep, 8*(1), 2663.
-- Vencloviene, J., et al. (2020). Solar wind and AMI risk. *Int J Environ Res Public Health, 17*(9), 3153.
-
-### Fragmentation & Arrhythmia Risk
-
-- PROOF-AF Study (2025). HRF and DFA α1 predict atrial fibrillation. *EHJ Open, 5*(1), oeaf030.
-
----
-
-## 🛠️ Development
-
-### Project Structure
-
-```
-HRV/
-├── app/
-│   ├── app.py                      # Main Streamlit application
-│   ├── research_app.py             # Research UI entrypoint (full dashboards)
-│   ├── operational_app.py          # Operational UI entrypoint (fast workflow)
-│   ├── space_weather_ds_app.py     # Single-user space weather data science app
-│   ├── hrv_core.py                 # Core HRV computation functions
-│   ├── hrv_progress.py             # Modern HRV progress tracking (v1.8.68)
-│   ├── hrv_interpretation.py       # Enhanced HRV interpretation module (v1.8.68)
-│   ├── space_weather_progress.py   # Space weather progress tracking (v1.8.67)
-│   ├── circadian/                  # Circadian rhythm simulation module
-│   │   ├── __init__.py             # Module exports
-│   │   ├── models.py               # Forger99, Jewett99, Hannay19 models
-│   │   ├── lights.py               # Light schedule generation
-│   │   ├── metrics.py              # ESRI and phase coherence
-│   │   └── plots.py                # Actogram and visualization
-│   ├── about_tab.py                # About tab with author info
-│   ├── bpv_analysis.py             # Blood Pressure Variability analysis
-│   ├── circadian_tab.py            # Circadian physiology UI
-│   ├── device_imports.py           # Multi-device data import
-│   ├── population_norms.py         # Population norms comparison
-│   ├── user_profile.py             # User biometric profiles
-│   ├── profile_ui.py               # Profile management UI
-│   ├── ui_state_manager.py         # Centralized UI state
-│   ├── welcome_header.py           # Professional welcome page
-│   ├── gauge_builder.py            # Gauge visualization builder
-│   ├── gpt_interpretation.py       # GPT-5.2 AI interpretation
-│   ├── gpu_processing.py           # NVIDIA CUDA GPU acceleration
-│   ├── noaa_space.py               # NOAA space weather data
-│   ├── performance_utils.py        # CPU performance optimization utilities
-│   ├── space_weather_impact.py     # Impact predictions & Polar H10 timing
-│   ├── space_weather_persistence.py # NOAA/NASA data persistence
-│   ├── radiation_exposure.py       # Evidence-based radiation dose models (v1.8.80)
-│   ├── wearable_analytics.py       # Advanced Garmin predictive analytics (v1.8.81)
-│   ├── advanced_hrv_analytics.py   # ML/statistics/clinical decision support (v1.8.82)
-│   ├── user_profile_tab.py         # Centralized user profile & clinical scales
-│   ├── garmin_import.py            # Garmin data import
-│   ├── actigraph_import.py         # ActiGraph GT3X/GT3X+ import
-│   ├── somfit_import.py            # Compumedics Somfit/Somfit Pro import
-│   ├── fatigue_integration.py      # SAFTE fatigue model
-│   ├── realtime_hrv.py             # Real-time HRV streaming
-│   ├── ml_analytics.py             # ML anomaly/trend detection
-│   ├── ml_predictions.py           # AF/SCD/Apnea risk models
-│   └── publication_export.py       # Export utilities
-├── db/
-│   └── init/                       # Database initialization scripts
-│       ├── 01_schema.sql           # User profiles schema
-│       └── 02_space_weather_schema.sql  # Space weather tables
-├── docs/
-│   └── Manual.md                   # Comprehensive user manual
-├── Dockerfile                      # Container image definition
-├── docker-compose.yml              # Multi-service orchestration
-├── requirements.txt
-├── README.md
-└── CHANGELOG.md
-```
-
-### Docker Deployment
+## Docker Deployment
 
 For production deployment with persistent data storage:
 
@@ -934,31 +466,22 @@ docker-compose up -d
 # View logs
 docker-compose logs -f app
 
-# Stop services
-docker-compose down
-
 # Include pgAdmin for database management
 docker-compose --profile admin up -d
 
-# Run TypeScript frontend with FastAPI backend (API :8180)
+# Run TypeScript frontend with FastAPI backend
 docker-compose --profile typescript up -d api
 ```
 
-**Environment Variables** (create `.env` file):
+---
 
-```env
-POSTGRES_PASSWORD=your_secure_password
-OPENAI_API_KEY=sk-your-key
-APP_PORT=8501
-```
-
-### Running Tests
+## Running Tests
 
 ```bash
 pytest tests/ -v --cov=app
 ```
 
-### Code Quality
+## Code Quality
 
 ```bash
 # Format
@@ -978,13 +501,93 @@ pip-audit
 
 ---
 
-## 📄 License
+## Scientific References
 
-MIT License — See [LICENSE](LICENSE) for details.
+All metrics, thresholds, and interpretations in this project are grounded in peer-reviewed literature. Below are the key references organized by domain. Every citation includes a verifiable identifier (PMID or DOI).
+
+### Core HRV Standards
+
+- Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology. (1996). Heart rate variability: Standards of measurement, physiological interpretation and clinical use. *Circulation, 93*(5), 1043-1065. [PMID: 8598068](https://pubmed.ncbi.nlm.nih.gov/8598068/)
+
+- Shaffer, F., & Ginsberg, J. P. (2017). An overview of heart rate variability metrics and norms. *Frontiers in Public Health, 5*, 258. [PMID: 29034226](https://pubmed.ncbi.nlm.nih.gov/29034226/)
+
+- Nunan, D., Sandercock, G. R. H., & Brodie, D. A. (2010). A quantitative systematic review of normal values for short-term heart rate variability in healthy adults. *Pacing and Clinical Electrophysiology, 33*(11), 1407-1417. [PMID: 20663071](https://pubmed.ncbi.nlm.nih.gov/20663071/)
+
+- Quigley, K. S., Gianaros, P. J., Norman, G. J., Jennings, J. R., de Geus, E. J. C., Berntson, G. G., & Task Force on Publication Guidelines for HRV. (2024). Publication guidelines for heart rate and heart rate variability. *Psychophysiology, 61*(4), e14604.
+
+### Population Norms
+
+- Ortega, E., Malek, S., Chan, Y. H., Ho, C. L., Rodrigues, B. S., Singh, D., & Foo, R. (2024). The Pulse of Singapore: Short-term heart rate variability norms derived from a general population study. *Journal of General Internal Medicine, 39*(1), 101-108. [PMID: 37755550](https://pubmed.ncbi.nlm.nih.gov/37755550/)
+
+- O'Neal, W. T., Chen, L. Y., Nazarian, S., & Soliman, E. Z. (2016). Reference ranges for short-term heart rate variability measures in individuals free of cardiovascular disease: The Multi-Ethnic Study of Atherosclerosis (MESA). *American Journal of Cardiology*. [PMID: 27396499](https://pubmed.ncbi.nlm.nih.gov/27396499/)
+
+### Ventilatory Threshold and Exercise Physiology
+
+- Eronen, T., Tikkanen, J., Junttila, J., Kaikkonen, K., Kentta, T. V., Huikuri, H. V., et al. (2024). Heart rate variability based ventilatory threshold estimation — Validation of a commercially available algorithm. *medRxiv*. [DOI: 10.1101/2024.08.14.24311967](https://doi.org/10.1101/2024.08.14.24311967)
+
+- Gronwald, T., Rogers, B., & Hoos, O. (2020). Correlation properties of heart rate variability during endurance exercise: A systematic review. *Annals of Noninvasive Electrocardiology, 25*(1), e12697. [DOI: 10.1111/anec.12697](https://doi.org/10.1111/anec.12697)
+
+- Rogers, B., Giles, D., Draper, N., Hoos, O., & Gronwald, T. (2021). A new detection method defining the aerobic threshold for endurance exercise and training prescription based on fractal correlation properties of heart rate variability. *Frontiers in Physiology, 11*, 596567. [DOI: 10.3389/fphys.2020.596567](https://doi.org/10.3389/fphys.2020.596567)
+
+- Peng, C. K., Havlin, S., Stanley, H. E., & Goldberger, A. L. (1995). Quantification of scaling exponents and crossover phenomena in nonstationary heartbeat time series. *Chaos, 5*(1), 82-87. [DOI: 10.1063/1.166141](https://doi.org/10.1063/1.166141)
+
+- Poole, D. C., Rossiter, H. B., Brooks, G. A., & Gladden, L. B. (2021). The anaerobic threshold: 50+ years of controversy. *Journal of Physiology, 599*(3), 737-767. [DOI: 10.1113/JP279963](https://doi.org/10.1113/JP279963)
+
+- Aubert, A. E., Seps, B., & Beckers, F. (2003). Heart rate variability in athletes. *Sports Medicine, 33*(12), 889-919. [DOI: 10.2165/00007256-200333120-00003](https://doi.org/10.2165/00007256-200333120-00003)
+
+### Blood Pressure Variability
+
+- Parati, G., Stergiou, G. S., Dolan, E., & Bilo, G. (2018). Blood pressure variability: Clinical relevance and application. *Journal of Clinical Hypertension, 20*(7), 1133-1137. [PMID: 29927042](https://pubmed.ncbi.nlm.nih.gov/29927042/)
+
+- Rothwell, P. M., Howard, S. C., Dolan, E., O'Brien, E., Dobson, J. E., Dahlof, B., Sever, P. S., & Poulter, N. R. (2010). Prognostic significance of visit-to-visit variability, maximum systolic blood pressure, and episodic hypertension. *The Lancet, 375*(9718), 895-905. [PMID: 20226988](https://pubmed.ncbi.nlm.nih.gov/20226988/)
+
+- Saren, J., Kallio, M., & Jula, A. (2024). Blood pressure variability and health outcomes in adults 65 and older. *Age and Ageing*. [DOI: 10.1093/ageing/afae262](https://doi.org/10.1093/ageing/afae262)
+
+### Circadian Physiology
+
+- Tavella, F., Hannay, K., & Walch, O. (2023). Arcascope/circadian. Zenodo. [DOI: 10.5281/zenodo.8206871](https://doi.org/10.5281/zenodo.8206871)
+
+- Forger, D. B., Jewett, M. E., & Kronauer, R. E. (1999). A simpler model of the human circadian pacemaker. *Journal of Biological Rhythms, 14*(6), 532-537.
+
+### Fatigue Science
+
+- Hursh, S. R., Redmond, D. P., Johnson, M. L., Thorne, D. R., Belenky, G., Balkin, T. J., Storm, W. F., Miller, J. C., & Eddy, D. R. (2004). Fatigue models for applied research in warfighting. *Aviation, Space, and Environmental Medicine, 75*(3 Suppl), A44-A53. [DOI: 10.1097/01.ASM.0000122824.30373.5E](https://doi.org/10.1097/01.ASM.0000122824.30373.5E)
+
+- Van Dongen, H. P. A., Maislin, G., Mullington, J. M., & Dinges, D. F. (2003). The cumulative cost of additional wakefulness: Dose-response effects on neurobehavioral functions and sleep physiology from chronic sleep restriction and total sleep deprivation. *Sleep, 26*(2), 117-126. [DOI: 10.1093/sleep/26.2.117](https://doi.org/10.1093/sleep/26.2.117)
+
+- International Civil Aviation Organization. (2016). *Manual for the Oversight of Fatigue Management Approaches* (Doc 9966, 2nd ed.). [PDF](https://www.icao.int/safety/fatiguemanagement/FRMS%20Tools/Doc%209966.FRMS.2016%20Edition.en.pdf)
+
+### Allostatic Load and Trajectory Risk
+
+- McEwen, B. S. (1998). Protective and damaging effects of stress mediators. *New England Journal of Medicine, 338*(3), 171-179. [DOI: 10.1056/NEJM199801153380307](https://doi.org/10.1056/NEJM199801153380307)
+
+- Plews, D. J., Laursen, P. B., Kilding, A. E., & Buchheit, M. (2013). Heart rate variability in elite triathletes: Is variation in variability the key to effective training? *European Journal of Applied Physiology, 113*(12), 3089-3099. [DOI: 10.1007/s00421-013-2727-4](https://doi.org/10.1007/s00421-013-2727-4)
+
+- Buchheit, M. (2014). Monitoring training status with HR measures: Do all roads lead to Rome? *Frontiers in Physiology, 5*, 73. [DOI: 10.3389/fphys.2014.00073](https://doi.org/10.3389/fphys.2014.00073)
+
+### Space Weather and Physiology
+
+- Vieira, C. L. Z., Alvares, D., Blomberg, A., & Schwartz, J. (2022). Geomagnetic disturbances driven by solar activity enhance total and cardiovascular mortality risk in 263 U.S. cities. *Science of The Total Environment, 839*, 156312.
+
+- Alabdulgader, A., McCraty, R., Atkinson, M., Dobyns, Y., Vainoras, A., Ragulskis, M., & Stolc, V. (2018). Long-term study of heart rate variability responses to changes in the solar and geomagnetic environment. *Scientific Reports, 8*(1), 2663.
+
+- Vencloviene, J., Babarskiene, R., & Slapikas, R. (2020). The association between solar wind conditions and acute myocardial infarction risk. *International Journal of Environmental Research and Public Health, 17*(9), 3153.
+
+### Heart Rate Fragmentation
+
+- PROOF-AF Study. (2025). Heart rate fragmentation and DFA-alpha1 predict atrial fibrillation in a community-dwelling cohort. *European Heart Journal Open, 5*(1), oeaf030.
+
+### Radiation Exposure
+
+- Zhang, S., Wimmer-Schweingruber, R. F., Yu, J., et al. (2020). First measurements of the radiation dose on the lunar surface. *Science Advances, 6*(39), eaaz1334. [DOI: 10.1126/sciadv.aaz1334](https://doi.org/10.1126/sciadv.aaz1334)
+
+- Zeitlin, C., Hassler, D. M., Cucinotta, F. A., et al. (2013). Measurements of energetic particle radiation in transit to Mars on the Mars Science Laboratory. *Science, 340*(6136), 1080-1084. [DOI: 10.1126/science.1235989](https://doi.org/10.1126/science.1235989)
+
+- Hassler, D. M., Zeitlin, C., Wimmer-Schweingruber, R. F., et al. (2014). Mars' surface radiation environment measured with the Mars Science Laboratory's Curiosity rover. *Science, 343*(6169), 1244797. [DOI: 10.1126/science.1244797](https://doi.org/10.1126/science.1244797)
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 1. Fork the repository
 2. Create a feature branch (`git checkout -b feature/amazing-feature`)
@@ -994,8 +597,16 @@ MIT License — See [LICENSE](LICENSE) for details.
 
 ---
 
-## 📞 Support
+## License
 
-- **Documentation**: See `docs/Manual.md` for comprehensive usage guide
-- **Issues**: Open a GitHub issue for bugs or feature requests
-- **Discussions**: Use GitHub Discussions for questions
+MIT License — See [LICENSE](LICENSE) for details.
+
+---
+
+## Support
+
+- **Full Documentation**: [docs/Manual.md](docs/Manual.md) — 6000+ lines of detailed instructions, examples, and science
+- **Scientific Report**: [docs/HRV_Ventilatory_Threshold_Comprehensive_Scientific_Report.md](docs/HRV_Ventilatory_Threshold_Comprehensive_Scientific_Report.md)
+- **Issues**: Open a [GitHub issue](https://github.com/strikerdlm/HRV/issues) for bugs or feature requests
+- **Discussions**: Use [GitHub Discussions](https://github.com/strikerdlm/HRV/discussions) for questions
+- **Changelog**: See [CHANGELOG.md](CHANGELOG.md) for detailed version history
