@@ -978,6 +978,7 @@ export interface EnhancedReadinessResponse {
   flight_sms: SMSClassificationResponse | null;
   eva_matrix: SMSMatrixData | null;
   flight_matrix: SMSMatrixData | null;
+  nasa_hrp_matrix: SMSMatrixData | null;
 }
 
 export interface SMSMatrixEndpointResponse {
@@ -1006,6 +1007,11 @@ export const SMS_RISK_COLORS: Record<string, string> = {
   Medium: "#f39c12",
   Serious: "#e67e22",
   High: "#e74c3c",
+  // NASA HRP (LxC)
+  Accepted: "#27ae60",
+  Controlled: "#3498db",
+  Watched: "#f39c12",
+  Uncontrolled: "#e74c3c",
 };
 
 export const READINESS_LABEL_COLORS: Record<string, string> = {
