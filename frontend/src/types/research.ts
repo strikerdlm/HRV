@@ -928,3 +928,89 @@ export const DFA_ZONE_COLORS = {
   vt1ToVT2: "rgba(243, 156, 18, 0.12)",  // Orange zone
   aboveVT2: "rgba(231, 76, 60, 0.12)",   // Red zone
 };
+
+// ---------------------------------------------------------------------------
+// Physiological SMS Risk Assessment Types
+// ---------------------------------------------------------------------------
+
+export interface VitalsInput {
+  sbp_mmhg: number | null;
+  dbp_mmhg: number | null;
+  temperature_c: number | null;
+}
+
+export interface SMSClassificationResponse {
+  severity: string;
+  likelihood: string;
+  risk_level: string;
+  rationale: string;
+  disqualifiers: string[];
+  activity_type: string;
+}
+
+export interface ModifierDetail {
+  name: string;
+  value: number;
+  category: string;
+  rationale: string;
+}
+
+export interface SMSMatrixData {
+  severity_labels: string[];
+  likelihood_labels: string[];
+  data: number[][];
+  risk_levels: string[];
+  risk_colors: string[];
+}
+
+export interface EnhancedReadinessResponse {
+  readiness_score: number;
+  readiness_label: string;
+  bp_classification: string | null;
+  bp_modifier: number | null;
+  bp_rationale: string | null;
+  temp_classification: string | null;
+  temp_modifier: number | null;
+  temp_rationale: string | null;
+  modifiers: ModifierDetail[];
+  triggers: string[];
+  eva_sms: SMSClassificationResponse | null;
+  flight_sms: SMSClassificationResponse | null;
+  eva_matrix: SMSMatrixData | null;
+  flight_matrix: SMSMatrixData | null;
+}
+
+export interface SMSMatrixEndpointResponse {
+  classification: {
+    severity: string;
+    likelihood: string;
+    risk_level: string;
+    rationale: string;
+    disqualifiers: string[];
+  };
+  matrix: SMSMatrixData;
+  position: {
+    severity_index: number;
+    likelihood_index: number;
+  };
+}
+
+export const SMS_RISK_COLORS: Record<string, string> = {
+  // EVA (ICAO Doc 9859)
+  Acceptable: "#27ae60",
+  Tolerable: "#f39c12",
+  Undesirable: "#e67e22",
+  Intolerable: "#e74c3c",
+  // Flight (MIL-STD-882E)
+  Low: "#27ae60",
+  Medium: "#f39c12",
+  Serious: "#e67e22",
+  High: "#e74c3c",
+};
+
+export const READINESS_LABEL_COLORS: Record<string, string> = {
+  GO: "#27ae60",
+  CAUTION: "#f39c12",
+  MARGINAL: "#e67e22",
+  "NO-GO": "#e74c3c",
+};
