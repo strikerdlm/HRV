@@ -1234,5 +1234,6 @@ function _emptyReadinessResponse(): EnhancedReadinessResponse {
     flight_sms: null,
     eva_matrix: null,
     flight_matrix: null,
+    nasa_hrp_matrix: null,
   };
 }
