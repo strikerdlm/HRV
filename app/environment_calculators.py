@@ -318,6 +318,132 @@ def compute_wbgt_full(temp_c: float, rh_pct: float) -> WBGTResult:
 
 
 # ===================================================================
+# FITS — Fighter Index of Thermal Stress (USAF SAM-TR-78-6)
+# ===================================================================
+
+@dataclass(frozen=True, slots=True)
+class FITSResult:
+    """Fighter Index of Thermal Stress result."""
+
+    fits_c: float
+    zone: str  # "Normal", "Caution", "Danger"
+    description: str
+    operational_guidance: str
+
+
+def _psychrometric_wet_bulb(temp_c: float, rh_pct: float) -> float:
+    """Estimate psychrometric wet bulb temperature from temp and RH.
+
+    Uses the Stull (2011) approximation valid for RH 5-99% and T 20-50 C:
+        Twb = T * atan(0.151977*(RH+8.313659)^0.5) + atan(T+RH)
+              - atan(RH-1.676331) + 0.00391838*(RH)^1.5 * atan(0.023101*RH)
+              - 4.686035
+    """
+    t = float(temp_c)
+    rh = max(5.0, min(99.0, float(rh_pct)))
+    twb = (
+        t * math.atan(0.151977 * (rh + 8.313659) ** 0.5)
+        + math.atan(t + rh)
+        - math.atan(rh - 1.676331)
+        + 0.00391838 * rh ** 1.5 * math.atan(0.023101 * rh)
+        - 4.686035
+    )
+    return round(twb, 2)
+
+
+def compute_fits(
+    temp_c: float,
+    rh_pct: float,
+    *,
+    direct_sun: bool = True,
+) -> FITSResult:
+    """Compute Fighter Index of Thermal Stress (FITS).
+
+    FITS estimates cockpit WBGT during low-level fighter/trainer flight
+    from ground weather data. Developed by Stribley & Nunneley (1978)
+    at the USAF School of Aerospace Medicine.
+
+    Equations (SAM-TR-78-6, Eqs. 9-10):
+        FITS_DS = 0.8281 * Tpwb + 0.3549 * Tdb + 5.08  (direct sun)
+        FITS_MO = 0.8281 * Tpwb + 0.3549 * Tdb + 2.23  (moderate overcast)
+
+    Zones (cockpit WBGT equivalent):
+        Normal:  FITS < 32 C
+        Caution: 32 <= FITS < 38 C
+        Danger:  FITS >= 38 C
+
+    Args:
+        temp_c: Ground dry bulb temperature in Celsius.
+        rh_pct: Relative humidity in percent (0-100).
+        direct_sun: True for clear sky/light overcast, False for moderate
+                    overcast with no shadows visible.
+
+    Returns:
+        FITSResult with FITS value, zone, and operational guidance.
+
+    Reference:
+        Stribley, R.F., & Nunneley, S.A. (1978). Fighter Index of
+        Thermal Stress: Development of Interim Guidance for Hot-Weather
+        USAF Operations. SAM-TR-78-6. Brooks AFB, TX.
+    """
+    ta = float(temp_c)
+    rh = max(0.0, min(100.0, float(rh_pct)))
+
+    if not math.isfinite(ta) or not math.isfinite(rh):
+        raise ValueError("Temperature and humidity must be finite numbers.")
+
+    twb = _psychrometric_wet_bulb(ta, rh)
+    offset = 5.08 if direct_sun else 2.23
+    fits = 0.8281 * twb + 0.3549 * ta + offset
+    fits = round(fits, 1)
+
+    if fits >= 38.0:
+        zone = "Danger"
+        desc = (
+            f"FITS={fits} C (Danger Zone). Cockpit WBGT exceeds 38 C. "
+            "Progressive heat storage and dehydration will impair crew "
+            "performance and acceleration tolerance."
+        )
+        guidance = (
+            "Cancel low-level flights (<915 m AGL). "
+            "Limit ground period to 45 min. "
+            "Minimum 2-hr cool recovery between flights. "
+            "Cancel all nonessential flights if FITS > 46 C."
+        )
+    elif fits >= 32.0:
+        zone = "Caution"
+        desc = (
+            f"FITS={fits} C (Caution Zone). Cockpit conditions are tolerable "
+            "for low-level flight if precautions are taken. Cumulative "
+            "fatigue and decreased learning may occur."
+        )
+        guidance = (
+            "Alert all aircrew to heat conditions. "
+            "Limit ground operations (preflight + standby) to 90 min. "
+            "Minimum 2-hr cool recovery between flights. "
+            "Ensure ample fluid intake."
+        )
+    else:
+        zone = "Normal"
+        desc = (
+            f"FITS={fits} C (Normal Zone). Cockpit conditions are subjectively "
+            "hot but usually safe with standard precautions."
+        )
+        guidance = (
+            "Follow general hot-weather precautions. "
+            "Allow acclimatization for personnel newly arrived from cooler climates. "
+            "Maintain adequate fluid intake."
+        )
+
+    return FITSResult(
+        fits_c=fits,
+        zone=zone,
+        description=desc,
+        operational_guidance=guidance,
+    )
+
+
+# ===================================================================
 # Jet Lag Performance Model
 # ===================================================================
 
