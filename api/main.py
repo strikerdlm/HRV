@@ -114,6 +114,8 @@ class UserProfile(BaseModel):
     medical_conditions: list[str] = Field(default_factory=list)
     medications: list[str] = Field(default_factory=list)
     language: str = "en"
+    crew_role: Optional[str] = None
+    crew_status: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
 
@@ -353,6 +355,8 @@ def _profile_to_dict(profile: Any) -> dict[str, Any]:
         "medical_conditions": getattr(profile, "medical_conditions", []) or [],
         "medications": getattr(profile, "medications", []) or [],
         "language": getattr(profile, "language", "en"),
+        "crew_role": getattr(profile, "crew_role", None),
+        "crew_status": getattr(profile, "crew_status", None),
         "created_at": str(getattr(profile, "created_at", "")) if getattr(profile, "created_at", None) else None,
         "updated_at": str(getattr(profile, "updated_at", "")) if getattr(profile, "updated_at", None) else None,
     }
@@ -473,6 +477,8 @@ async def update_user(user_id: str, request: UserProfile) -> UserProfile:
             medical_conditions=request.medical_conditions if request.medical_conditions else getattr(existing, "medical_conditions", []) or [],
             medications=request.medications if request.medications else getattr(existing, "medications", []) or [],
             language=request.language or existing.language,
+            crew_role=request.crew_role if request.crew_role is not None else getattr(existing, "crew_role", None),
+            crew_status=request.crew_status if request.crew_status is not None else getattr(existing, "crew_status", None),
             created_at=existing.created_at,
             updated_at=None,  # Will be set by update_user
         )
