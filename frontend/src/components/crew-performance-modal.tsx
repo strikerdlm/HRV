@@ -524,7 +524,8 @@ export function CrewPerformanceModal({
                     "Safety Risk Probability",
                     "Severity of Occurrence",
                   )}
-                  height={380}
+                  height={400}
+                  showToolbox={false}
                 />
                 {assessment.eva_sms.disqualifiers.length > 0 && (
                   <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
@@ -573,7 +574,8 @@ export function CrewPerformanceModal({
                     "Mishap Probability Level",
                     "Mishap Severity Category",
                   )}
-                  height={350}
+                  height={370}
+                  showToolbox={false}
                 />
                 {assessment.flight_sms.disqualifiers.length > 0 && (
                   <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
@@ -613,7 +615,8 @@ export function CrewPerformanceModal({
                     "Likelihood",
                     "Consequence",
                   )}
-                  height={380}
+                  height={400}
+                  showToolbox={false}
                 />
                 <p className="text-[10px] text-muted-foreground mt-2">
                   Ref: Antonsen, E. L., et al. (2022). Updates to the NASA Human System Risk Board Process. <i>NPJ Microgravity, 8</i>, 27. DOI: 10.1038/s41526-022-00213-2 | NASA Human Research Roadmap: humanresearchroadmap.nasa.gov
