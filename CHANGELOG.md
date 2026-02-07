@@ -7,6 +7,57 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.13.0] - 2026-02-07
+
+### Added
+- **Environmental Monitoring Dashboard**:
+  - ICE Station Monitor with 8 simulated sensors (temp, humidity, CO2, pressure,
+    PM2.5, noise, light, O2) for Antarctic/analog research station monitoring
+  - ECharts gauge visualizations for CO2 and O2 with color-coded risk zones
+  - Auto-refresh every 60 seconds
+- **METAR Aviation Weather Dashboard**:
+  - Real-time decoded METAR from any ICAO station via FAA AviationWeather.gov
+    API (free, no API key required)
+  - Station selector with default stations (SKBO Bogota, SAWE Marambio, SCRM
+    King George Island Antarctica)
+  - Wind compass gauge, decoded fields (temp, dewpoint, wind, visibility, altimeter)
+  - Flight category badge (VFR/MVFR/IFR/LIFR)
+  - Raw METAR text display
+  - Auto-refresh every 10 minutes
+- **Extreme Environment Calculators**:
+  - Wind Chill Temperature (NWS 2001 formula, Osczevski & Bluestein 2005)
+  - Frostbite Time estimation from NWS lookup table interpolation
+  - WBGT Heat Stress Index (ISO 7243:2017 / Steadman 1979 simplified)
+  - Heat Index (NWS/Rothfusz regression)
+  - Cold risk classification: Low/Moderate/High/Very High/Extreme
+  - Heat risk classification with work/rest guidance per NIOSH
+  - OpenWeatherMap integration for auto-computed indices from real weather data
+- **Jet Lag Performance Model**:
+  - Circadian resynchronization model based on Waterhouse et al. (2007) and
+    Arendt (2009)
+  - Eastward (~0.67 h/day) vs westward (~1.0 h/day) asymmetry
+  - Exponential recovery curve with configurable inputs
+  - Performance factor (0-100%) with readiness modifier (bounded +/-6 pts)
+  - Interactive recovery curve chart in crew performance modal
+  - Integrated into operational readiness model
+- **Dashboard Reorganization**:
+  - Environmental monitoring and METAR sections added above alerts
+  - Extreme weather calculator paired with crew radar chart
+  - Space Weather gauges moved to bottom of dashboard
+- **API Endpoints**:
+  - `GET /api/research/metar/{icao}` -- Proxy to AviationWeather.gov
+  - `GET /api/research/weather/{city}` -- OpenWeatherMap with computed indices
+  - `GET /api/research/environment/ice-station` -- Simulated ICE station data
+  - `POST /api/research/environment/calculators` -- Wind chill + WBGT from inputs
+  - `POST /api/research/performance/jetlag` -- Jet lag impact with recovery curve
+
+### Technical Notes
+- Wind chill uses NWS 2001 formula: WC = 13.12 + 0.6215*Ta - 11.37*V^0.16 + 0.3965*Ta*V^0.16
+- WBGT uses Steadman (1979) simplified: WBGT = 0.567*Ta + 0.393*e + 3.94
+- Jet lag model: performance_factor = 1.0 - penalty * exp(-day / tau)
+- 31 unit tests covering all calculators with boundary and edge cases
+- httpx added for async API proxying (METAR + OpenWeatherMap)
+
 ## [1.12.0] - 2026-02-07
 
 ### Added
