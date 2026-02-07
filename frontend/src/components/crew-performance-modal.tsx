@@ -68,24 +68,17 @@ const ACTIVITY_RISK_EXPLANATION: Record<string, string> = {
 };
 
 // ---------------------------------------------------------------------------
-// Full-Size Interactive SMS Heatmap
+// Full-Size Interactive SMS Heatmap (NO title per project plot rules)
 // ---------------------------------------------------------------------------
 
 function buildFullHeatmap(
-  title: string,
-  subtitle: string,
   matrix: SMSMatrixData,
   posRow: number,
   posCol: number,
+  xLabel: string,
+  yLabel: string,
 ): Record<string, unknown> {
   return {
-    title: {
-      text: title,
-      subtext: subtitle,
-      left: "center",
-      textStyle: { color: "#1a1a1a", fontWeight: "bold", fontSize: 15 },
-      subtextStyle: { color: "#2c3e50", fontSize: 11 },
-    },
     tooltip: {
       position: "top",
       formatter: (p: { data: number[] }) => {
@@ -95,31 +88,31 @@ function buildFullHeatmap(
         const risk = matrix.risk_levels[val];
         const isPosition = row === posRow && col === posCol;
         return `<div style="padding:4px 8px">
-          <b style="font-size:13px">${sev}</b> severity x <b>${lik}</b> likelihood<br/>
+          <b style="font-size:13px">${sev}</b> x <b>${lik}</b><br/>
           <span style="font-size:14px;font-weight:bold;color:${matrix.risk_colors[val]}">${risk}</span>
           ${isPosition ? '<br/><b style="color:#2c3e50">Current crew position</b>' : ''}
         </div>`;
       },
     },
-    grid: { left: 100, right: 30, top: 70, bottom: 70, containLabel: true },
+    grid: { left: 90, right: 20, top: 15, bottom: 65, containLabel: true },
     xAxis: {
       type: "category",
       data: matrix.likelihood_labels,
-      name: "Likelihood (Probability)",
+      name: xLabel,
       nameLocation: "middle",
-      nameGap: 45,
-      nameTextStyle: { color: "#1a1a1a", fontWeight: "bold", fontSize: 12 },
-      axisLabel: { color: "#1a1a1a", fontSize: 11, rotate: 15 },
+      nameGap: 42,
+      nameTextStyle: { color: "#1a1a1a", fontWeight: "bold", fontSize: 11 },
+      axisLabel: { color: "#1a1a1a", fontSize: 10, rotate: 15 },
       splitArea: { show: true },
     },
     yAxis: {
       type: "category",
       data: matrix.severity_labels,
-      name: "Severity (Consequence)",
+      name: yLabel,
       nameLocation: "middle",
-      nameGap: 80,
-      nameTextStyle: { color: "#1a1a1a", fontWeight: "bold", fontSize: 12 },
-      axisLabel: { color: "#1a1a1a", fontSize: 11 },
+      nameGap: 72,
+      nameTextStyle: { color: "#1a1a1a", fontWeight: "bold", fontSize: 11 },
+      axisLabel: { color: "#1a1a1a", fontSize: 10 },
       splitArea: { show: true },
     },
     visualMap: {
@@ -128,15 +121,15 @@ function buildFullHeatmap(
       max: matrix.risk_levels.length - 1,
       orient: "horizontal",
       left: "center",
-      bottom: 5,
+      bottom: 0,
       pieces: matrix.risk_levels.map((label, i) => ({
         value: i,
         label,
         color: matrix.risk_colors[i],
       })),
-      textStyle: { color: "#1a1a1a", fontSize: 11 },
-      itemWidth: 18,
-      itemHeight: 18,
+      textStyle: { color: "#1a1a1a", fontSize: 10 },
+      itemWidth: 16,
+      itemHeight: 16,
     },
     series: [
       {
@@ -147,7 +140,7 @@ function buildFullHeatmap(
           show: true,
           formatter: (p: { data: number[] }) => matrix.risk_levels[p.data[2]],
           color: "#1a1a1a",
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: "bold",
         },
         itemStyle: { borderWidth: 2, borderColor: "#fff" },
@@ -159,7 +152,7 @@ function buildFullHeatmap(
         name: "Crew Position",
         type: "scatter",
         data: [[posCol, posRow]],
-        symbolSize: 28,
+        symbolSize: 26,
         symbol: "circle",
         itemStyle: {
           color: "#2c3e50",
@@ -501,16 +494,16 @@ export function CrewPerformanceModal({
 
           <Separator />
 
-          {/* SMS Risk Matrices — Interactive, Full Size */}
+          {/* SMS Risk Matrices — Interactive, Full Size, NO titles on plots */}
           <CollapsibleSection
-            title="EVA Readiness Matrix (ICAO Doc 9859)"
+            title="Safety Risk Assessment — ICAO Doc 9859 (EVA)"
             icon={<Shield className="h-5 w-5 text-blue-600" />}
             defaultOpen={true}
           >
             {assessment?.eva_sms && assessment?.eva_matrix ? (
               <>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-sm">Current Risk Level:</span>
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <span className="text-sm">Risk Index:</span>
                   <Badge
                     className="text-sm px-3 py-1"
                     style={{
@@ -520,44 +513,46 @@ export function CrewPerformanceModal({
                   >
                     {assessment.eva_sms.risk_level}
                   </Badge>
-                  <span className="text-sm text-muted-foreground ml-2">
-                    ({assessment.eva_sms.severity} severity, {assessment.eva_sms.likelihood} likelihood)
+                  <span className="text-xs text-muted-foreground">
+                    Severity: {assessment.eva_sms.severity} | Probability: {assessment.eva_sms.likelihood}
                   </span>
                 </div>
                 <EChartsWrapper
                   option={buildFullHeatmap(
-                    "EVA Risk Assessment Matrix",
-                    "Based on ICAO Doc 9859 Safety Management Manual (4th ed.)",
                     assessment.eva_matrix,
                     assessment.eva_matrix.severity_labels.indexOf(assessment.eva_sms.severity),
                     assessment.eva_matrix.likelihood_labels.indexOf(assessment.eva_sms.likelihood),
+                    "Safety Risk Probability",
+                    "Severity of Occurrence",
                   )}
-                  height={420}
+                  height={380}
                 />
                 {assessment.eva_sms.disqualifiers.length > 0 && (
                   <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
-                    <p className="text-xs font-semibold text-red-700 mb-1">EVA Disqualifiers:</p>
+                    <p className="text-xs font-semibold text-red-700 mb-1">Disqualifiers:</p>
                     {assessment.eva_sms.disqualifiers.map((d, i) => (
                       <p key={i} className="text-xs text-red-600">{d}</p>
                     ))}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground mt-2">{assessment.eva_sms.rationale}</p>
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  Ref: ICAO. (2018). Safety Management Manual (Doc 9859, 4th ed.), Table 2-13.
+                </p>
               </>
             ) : (
-              <p className="text-sm text-muted-foreground py-4 text-center">Loading EVA matrix...</p>
+              <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>
             )}
           </CollapsibleSection>
 
           <CollapsibleSection
-            title="Military Flight Risk Matrix (MIL-STD-882E)"
+            title="Mishap Risk Assessment — MIL-STD-882E (Flight)"
             icon={<Plane className="h-5 w-5 text-amber-600" />}
             defaultOpen={true}
           >
             {assessment?.flight_sms && assessment?.flight_matrix ? (
               <>
-                <div className="flex items-center gap-2 mb-3">
-                  <span className="text-sm">Current Risk Level:</span>
+                <div className="flex items-center gap-2 mb-3 flex-wrap">
+                  <span className="text-sm">Risk Assessment Code:</span>
                   <Badge
                     className="text-sm px-3 py-1"
                     style={{
@@ -567,32 +562,66 @@ export function CrewPerformanceModal({
                   >
                     {assessment.flight_sms.risk_level}
                   </Badge>
-                  <span className="text-sm text-muted-foreground ml-2">
-                    ({assessment.flight_sms.severity} severity, {assessment.flight_sms.likelihood} likelihood)
+                  <span className="text-xs text-muted-foreground">
+                    Severity: {assessment.flight_sms.severity} | Probability: {assessment.flight_sms.likelihood}
                   </span>
                 </div>
                 <EChartsWrapper
                   option={buildFullHeatmap(
-                    "Flight Risk Assessment Matrix",
-                    "Based on MIL-STD-882E DoD Standard Practice for System Safety",
                     assessment.flight_matrix,
                     assessment.flight_matrix.severity_labels.indexOf(assessment.flight_sms.severity),
                     assessment.flight_matrix.likelihood_labels.indexOf(assessment.flight_sms.likelihood),
+                    "Mishap Probability Level",
+                    "Mishap Severity Category",
                   )}
-                  height={380}
+                  height={350}
                 />
                 {assessment.flight_sms.disqualifiers.length > 0 && (
                   <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded">
-                    <p className="text-xs font-semibold text-red-700 mb-1">Flight Disqualifiers:</p>
+                    <p className="text-xs font-semibold text-red-700 mb-1">Disqualifiers:</p>
                     {assessment.flight_sms.disqualifiers.map((d, i) => (
                       <p key={i} className="text-xs text-red-600">{d}</p>
                     ))}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground mt-2">{assessment.flight_sms.rationale}</p>
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  Ref: US DoD. (2012). MIL-STD-882E, Tables I-III.
+                </p>
               </>
             ) : (
-              <p className="text-sm text-muted-foreground py-4 text-center">Loading flight matrix...</p>
+              <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>
+            )}
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            title="Human System Risk — NASA HRP LxC (Exploration)"
+            icon={<Zap className="h-5 w-5 text-purple-600" />}
+            defaultOpen={false}
+          >
+            {assessment?.nasa_hrp_matrix ? (
+              <>
+                <p className="text-xs text-muted-foreground mb-3">
+                  The NASA Human Research Program manages risks to crew health and performance
+                  during exploration missions using a 5x5 Likelihood x Consequence (LxC)
+                  framework. Risks are classified as Accepted, Controlled, Watched, or
+                  Uncontrolled based on current mitigation effectiveness.
+                </p>
+                <EChartsWrapper
+                  option={buildFullHeatmap(
+                    assessment.nasa_hrp_matrix,
+                    2, // default center position
+                    2,
+                    "Likelihood",
+                    "Consequence",
+                  )}
+                  height={380}
+                />
+                <p className="text-[10px] text-muted-foreground mt-2">
+                  Ref: Antonsen, E. L., et al. (2022). Updates to the NASA Human System Risk Board Process. <i>NPJ Microgravity, 8</i>, 27. DOI: 10.1038/s41526-022-00213-2 | NASA Human Research Roadmap: humanresearchroadmap.nasa.gov
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground py-4 text-center">Loading...</p>
             )}
           </CollapsibleSection>
 
