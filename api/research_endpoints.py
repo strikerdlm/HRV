@@ -3132,3 +3132,263 @@ def _vt_result_to_response(result: Any) -> VTAnalysisResponse:
         interpretation=result.interpretation,
         warnings=result.warnings,
     )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Physiological SMS Risk Assessment Endpoints
+# ═══════════════════════════════════════════════════════════════════════════
+
+
+class VitalsInput(BaseModel):
+    """Input model for baseline vitals submission."""
+
+    sbp_mmhg: Optional[float] = Field(None, ge=40, le=300, description="Systolic BP (mmHg)")
+    dbp_mmhg: Optional[float] = Field(None, ge=20, le=200, description="Diastolic BP (mmHg)")
+    temperature_c: Optional[float] = Field(None, ge=25.0, le=45.0, description="Oral temperature (C)")
+
+
+class SMSClassificationResponse(BaseModel):
+    """SMS risk classification result."""
+
+    severity: str
+    likelihood: str
+    risk_level: str
+    rationale: str
+    disqualifiers: List[str] = []
+    activity_type: str
+
+
+class ModifierDetail(BaseModel):
+    """Individual modifier contribution."""
+
+    name: str
+    value: float
+    category: str
+    rationale: str
+
+
+class EnhancedReadinessResponse(BaseModel):
+    """Enhanced readiness score with BP/temperature modifiers and SMS classifications."""
+
+    readiness_score: float
+    readiness_label: str
+    bp_classification: Optional[str] = None
+    bp_modifier: Optional[float] = None
+    bp_rationale: Optional[str] = None
+    temp_classification: Optional[str] = None
+    temp_modifier: Optional[float] = None
+    temp_rationale: Optional[str] = None
+    modifiers: List[ModifierDetail] = []
+    triggers: List[str] = []
+    eva_sms: Optional[SMSClassificationResponse] = None
+    flight_sms: Optional[SMSClassificationResponse] = None
+    eva_matrix: Optional[Dict[str, Any]] = None
+    flight_matrix: Optional[Dict[str, Any]] = None
+
+
+def _get_sms_classifications(
+    sbp: Optional[float],
+    dbp: Optional[float],
+    temp_c: Optional[float],
+    readiness_score: float = 80.0,
+    psi_score: Optional[float] = None,
+    crew_rest_compliant: Optional[bool] = None,
+    resting_hr_bpm: Optional[float] = None,
+    rmssd_ms: Optional[float] = None,
+) -> dict:
+    """Compute BP/temp modifiers and SMS classifications.
+
+    Returns a dict with all classification data.
+    """
+    try:
+        from physiological_sms import (
+            compute_bp_readiness_modifier,
+            compute_temperature_readiness_modifier,
+            classify_eva_risk,
+            classify_flight_risk,
+            build_eva_sms_heatmap_data,
+            build_flight_sms_heatmap_data,
+        )
+    except ImportError:
+        _LOGGER.error("physiological_sms module not available")
+        raise HTTPException(status_code=500, detail="physiological_sms module not found")
+
+    bp_class = compute_bp_readiness_modifier(sbp, dbp)
+    temp_class = compute_temperature_readiness_modifier(temp_c)
+
+    eva_sms = classify_eva_risk(
+        readiness_score=readiness_score,
+        bp_class=bp_class,
+        temp_class=temp_class,
+        psi_score=psi_score,
+    )
+
+    flight_sms = classify_flight_risk(
+        readiness_score=readiness_score,
+        bp_class=bp_class,
+        temp_class=temp_class,
+        psi_score=psi_score,
+        crew_rest_compliant=crew_rest_compliant,
+        resting_hr_bpm=resting_hr_bpm,
+        rmssd_ms=rmssd_ms,
+    )
+
+    return {
+        "bp_class": bp_class,
+        "temp_class": temp_class,
+        "eva_sms": eva_sms,
+        "flight_sms": flight_sms,
+        "eva_matrix": build_eva_sms_heatmap_data(),
+        "flight_matrix": build_flight_sms_heatmap_data(),
+    }
+
+
+@router.post("/readiness/{user_id}/vitals")
+async def submit_vitals_and_assess(
+    user_id: str,
+    vitals: VitalsInput,
+) -> EnhancedReadinessResponse:
+    """Submit baseline vitals and get enhanced readiness with SMS classifications.
+
+    This endpoint accepts blood pressure and temperature readings,
+    computes readiness modifiers, and returns dual SMS matrices
+    (EVA + Military Flight).
+    """
+    result = _get_sms_classifications(
+        sbp=vitals.sbp_mmhg,
+        dbp=vitals.dbp_mmhg,
+        temp_c=vitals.temperature_c,
+        readiness_score=80.0,  # Default base; in production fuse with SAFTE+HRV
+    )
+
+    bp_class = result["bp_class"]
+    temp_class = result["temp_class"]
+    eva_sms = result["eva_sms"]
+    flight_sms = result["flight_sms"]
+
+    # Build modifier details
+    modifiers: List[ModifierDetail] = []
+    if vitals.sbp_mmhg is not None:
+        modifiers.append(ModifierDetail(
+            name="Blood Pressure",
+            value=bp_class.modifier,
+            category=bp_class.category,
+            rationale=bp_class.rationale,
+        ))
+    if vitals.temperature_c is not None:
+        modifiers.append(ModifierDetail(
+            name="Body Temperature",
+            value=temp_class.modifier,
+            category=temp_class.category,
+            rationale=temp_class.rationale,
+        ))
+
+    # Compute adjusted readiness
+    base_score = 80.0
+    adjusted = base_score + bp_class.modifier + temp_class.modifier
+    adjusted = max(0.0, min(100.0, adjusted))
+
+    # Readiness label
+    if adjusted >= 85:
+        label = "GO"
+    elif adjusted >= 70:
+        label = "CAUTION"
+    elif adjusted >= 50:
+        label = "MARGINAL"
+    else:
+        label = "NO-GO"
+
+    triggers: List[str] = []
+    if bp_class.disqualifying:
+        triggers.append(f"BP DISQUALIFIER: {bp_class.category}")
+    if temp_class.disqualifying:
+        triggers.append(f"TEMP DISQUALIFIER: {temp_class.category}")
+
+    return EnhancedReadinessResponse(
+        readiness_score=adjusted,
+        readiness_label=label,
+        bp_classification=bp_class.category,
+        bp_modifier=bp_class.modifier,
+        bp_rationale=bp_class.rationale,
+        temp_classification=temp_class.category,
+        temp_modifier=temp_class.modifier,
+        temp_rationale=temp_class.rationale,
+        modifiers=modifiers,
+        triggers=triggers,
+        eva_sms=SMSClassificationResponse(
+            severity=eva_sms.severity,
+            likelihood=eva_sms.likelihood,
+            risk_level=eva_sms.risk_level,
+            rationale=eva_sms.rationale,
+            disqualifiers=list(eva_sms.disqualifiers),
+            activity_type=eva_sms.activity_type,
+        ),
+        flight_sms=SMSClassificationResponse(
+            severity=flight_sms.severity,
+            likelihood=flight_sms.likelihood,
+            risk_level=flight_sms.risk_level,
+            rationale=flight_sms.rationale,
+            disqualifiers=list(flight_sms.disqualifiers),
+            activity_type=flight_sms.activity_type,
+        ),
+        eva_matrix=result["eva_matrix"],
+        flight_matrix=result["flight_matrix"],
+    )
+
+
+@router.get("/sms/eva")
+async def get_eva_sms_matrix(
+    sbp: Optional[float] = Query(None, ge=40, le=300),
+    dbp: Optional[float] = Query(None, ge=20, le=200),
+    temp_c: Optional[float] = Query(None, ge=25.0, le=45.0),
+    readiness_score: float = Query(80.0, ge=0, le=100),
+) -> Dict[str, Any]:
+    """Get EVA SMS risk classification and heatmap matrix data."""
+    result = _get_sms_classifications(
+        sbp=sbp, dbp=dbp, temp_c=temp_c, readiness_score=readiness_score,
+    )
+    eva_sms = result["eva_sms"]
+    return {
+        "classification": {
+            "severity": eva_sms.severity,
+            "likelihood": eva_sms.likelihood,
+            "risk_level": eva_sms.risk_level,
+            "rationale": eva_sms.rationale,
+            "disqualifiers": list(eva_sms.disqualifiers),
+        },
+        "matrix": result["eva_matrix"],
+        "position": {
+            "severity_index": list(result["eva_matrix"]["severity_labels"]).index(eva_sms.severity),
+            "likelihood_index": list(result["eva_matrix"]["likelihood_labels"]).index(eva_sms.likelihood),
+        },
+    }
+
+
+@router.get("/sms/flight")
+async def get_flight_sms_matrix(
+    sbp: Optional[float] = Query(None, ge=40, le=300),
+    dbp: Optional[float] = Query(None, ge=20, le=200),
+    temp_c: Optional[float] = Query(None, ge=25.0, le=45.0),
+    readiness_score: float = Query(80.0, ge=0, le=100),
+    crew_rest_compliant: Optional[bool] = Query(None),
+) -> Dict[str, Any]:
+    """Get Military Flight SMS risk classification and heatmap matrix data."""
+    result = _get_sms_classifications(
+        sbp=sbp, dbp=dbp, temp_c=temp_c, readiness_score=readiness_score,
+        crew_rest_compliant=crew_rest_compliant,
+    )
+    flight_sms = result["flight_sms"]
+    return {
+        "classification": {
+            "severity": flight_sms.severity,
+            "likelihood": flight_sms.likelihood,
+            "risk_level": flight_sms.risk_level,
+            "rationale": flight_sms.rationale,
+            "disqualifiers": list(flight_sms.disqualifiers),
+        },
+        "matrix": result["flight_matrix"],
+        "position": {
+            "severity_index": list(result["flight_matrix"]["severity_labels"]).index(flight_sms.severity),
+            "likelihood_index": list(result["flight_matrix"]["likelihood_labels"]).index(flight_sms.likelihood),
+        },
+    }
