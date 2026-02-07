@@ -398,6 +398,8 @@ def _fuse_operational_readiness_score(
     stress_index: Optional[float],
     vt_fitness_score: Optional[float] = None,
     trajectory_modifier: Optional[float] = None,
+    bp_modifier: Optional[float] = None,
+    temperature_modifier: Optional[float] = None,
 ) -> Tuple[float, List[str]]:
     """Fuse SAFTE effectiveness and HRV-derived signals into a readiness score.
 
@@ -415,6 +417,14 @@ def _fuse_operational_readiness_score(
     adjustment. This is the longitudinal layer that catches degradation before
     the daily snapshot does (McEwen, 1998; Plews et al., 2013; Bellenger et al.,
     2016).
+
+    The BP modifier (bounded ±4 pts) reflects resting blood pressure status
+    per ACC/AHA 2017 guidelines. Hypertension penalizes readiness; optimal BP
+    provides a small bonus (Porta et al., 2012; Crowe et al., 2025).
+
+    The temperature modifier (bounded ±3 pts) reflects basal body temperature
+    status. Fever or hypothermia penalizes readiness (Kim & Lee, 2017;
+    Zhang et al., 2025).
 
     Returns:
         (readiness_score_0_100, triggers)
@@ -480,6 +490,32 @@ def _fuse_operational_readiness_score(
             triggers.append(
                 f"Trajectory risk applies {direction} of {abs(traj_mod):.1f} pts "
                 f"(multi-day allostatic load modifier)."
+            )
+
+    # Blood pressure modifier: bounded ±4 points.
+    # Reflects resting BP status per ACC/AHA 2017 guidelines.
+    # Reference: Porta et al. (2012), Crowe et al. (2025).
+    if bp_modifier is not None:
+        bp_mod = max(-4.0, min(2.0, float(bp_modifier)))
+        fused += bp_mod
+        if abs(bp_mod) >= 1.0:
+            direction = "bonus" if bp_mod > 0 else "penalty"
+            triggers.append(
+                f"Blood pressure applies {direction} of {abs(bp_mod):.1f} pts "
+                f"(cardiovascular readiness modifier)."
+            )
+
+    # Temperature modifier: bounded ±3 points.
+    # Reflects basal body temperature and thermoregulatory status.
+    # Reference: Kim & Lee (2017), Zhang et al. (2025).
+    if temperature_modifier is not None:
+        temp_mod = max(-3.0, min(0.0, float(temperature_modifier)))
+        fused += temp_mod
+        if abs(temp_mod) >= 1.0:
+            direction = "bonus" if temp_mod > 0 else "penalty"
+            triggers.append(
+                f"Body temperature applies {direction} of {abs(temp_mod):.1f} pts "
+                f"(thermoregulatory readiness modifier)."
             )
 
     return _clamp_0_100(fused), triggers
