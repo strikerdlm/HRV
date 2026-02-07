@@ -95,6 +95,8 @@ import { Progress } from "@/components/ui/progress";
 import { listUsers, createUser, updateUser, deleteUser } from "@/lib/api";
 import type { UserProfile, ActivityCategory, RiskLevel } from "@/types";
 import { useAppStore } from "@/lib/store";
+import { CrewPerformanceModal } from "@/components/crew-performance-modal";
+import type { CrewMemberForModal } from "@/components/crew-performance-modal";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -3311,6 +3313,10 @@ export default function SchedulingPage() {
   const [selectedCrewMember, setSelectedCrewMember] = React.useState<CrewMember | null>(null);
   const [crewDetailOpen, setCrewDetailOpen] = React.useState(false);
   
+  // Performance Modal state (SMS matrices)
+  const [perfModalMember, setPerfModalMember] = React.useState<CrewMemberForModal | null>(null);
+  const [perfModalOpen, setPerfModalOpen] = React.useState(false);
+  
   // PROGSS Checklist state
   const [progssStatuses, setProgssStatuses] = React.useState<Record<string, PROGSSCheckStatus>>({});
   const [missionDay, setMissionDay] = React.useState(1);
@@ -3393,12 +3399,14 @@ export default function SchedulingPage() {
     if (!editingMember) return;
 
     try {
-      // Extract role and status (not part of UserProfile API)
+      // Include role and status in the API payload for backend persistence
       const { role, status, ...profileData } = data;
       
       const updatedUser = await updateUser(editingMember.user.user_id, {
         ...editingMember.user,
         ...profileData,
+        crew_role: role,
+        crew_status: status,
       });
 
       setCrewMembers((prev) =>
@@ -3500,10 +3508,28 @@ export default function SchedulingPage() {
     });
   };
 
-  // Open crew detail modal
+  // Open crew performance modal (SMS matrices)
   const handleCrewClick = (member: CrewMember) => {
-    setSelectedCrewMember(member);
-    setCrewDetailOpen(true);
+    setPerfModalMember({
+      id: member.user.user_id,
+      name: member.user.full_name || member.user.username,
+      role: member.role,
+      status: member.status,
+      ihpiScore: member.ihpiScore,
+      fatigueLevel: member.fatigueLevel,
+      sleepDebt: member.sleepDebt,
+      readinessScore: member.readinessScore,
+      sbp: member.user.resting_hr_bpm ? undefined : undefined, // Uses default in modal
+      dbp: undefined,
+      tempC: undefined,
+      currentActivity: activities.find((a) =>
+        a.status === "in_progress" && a.assignedCrew.includes(member.role),
+      )?.title,
+      activityCategory: activities.find((a) =>
+        a.status === "in_progress" && a.assignedCrew.includes(member.role),
+      )?.category,
+    });
+    setPerfModalOpen(true);
   };
 
   // Handle edit from crew detail modal
@@ -4024,6 +4050,12 @@ export default function SchedulingPage() {
         open={crewDetailOpen}
         onOpenChange={setCrewDetailOpen}
         onEdit={handleEditFromDetail}
+      />
+
+      <CrewPerformanceModal
+        member={perfModalMember}
+        open={perfModalOpen}
+        onOpenChange={setPerfModalOpen}
       />
     </PageWrapper>
   );
