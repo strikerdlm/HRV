@@ -30,6 +30,8 @@ export interface UserProfile {
   medical_conditions: string[];
   medications: string[];
   language: string;
+  crew_role: string | null;
+  crew_status: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
