@@ -7,6 +7,72 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.15.0] - 2026-02-09
+
+### Added
+- **NASA Flight Surgeon Console** (`frontend/src/components/flight-surgeon-console.tsx`):
+  - Comprehensive crew health monitoring panel for analog missions (Antarctica,
+    high altitude, extreme environments) based on NASA-STD-3001 Vol. 2, Rev B (2019)
+  - **Nutrition Tab**: Mifflin-St Jeor BMR calculation (Frankenfield et al., 2005),
+    Total Energy Expenditure (TEE) with environmental multipliers:
+    - Physical Activity Level (PAL) per NASA JSC-63555 (5 levels: sedentary to very active)
+    - Cold exposure metabolic factor per Castellani & Young (2007): 5 levels from
+      thermoneutral (x1.0) to extreme cold < -25 C (x1.40)
+    - Altitude metabolic factor per Butterfield et al. (1992): 6 levels from
+      sea level (x1.0) to extreme >5500m (x1.30)
+    - Macronutrient breakdown per NASA-STD-3001: Protein 12-15%, Carbs 50-55%, Fat 25-35%
+    - Key micronutrient targets for analog missions (Vitamin D, Calcium, Iron,
+      Potassium, Omega-3, etc.) per Smith & Zwart (2008)
+  - **Water Requirements Tab**: Daily water calculator with 4 adjustment factors:
+    - Baseline: ~33 mL/kg/day (IOM, 2004)
+    - Activity: 0-1400 mL/h based on exercise intensity (Sawka et al., 2007)
+    - Altitude: +250-1000 mL above 1500m (Butterfield, 1999)
+    - Cold exposure: +200-800 mL (Freund & Sawka, 1996)
+    - Electrolyte replacement guide (Na+, K+, Cl-, Mg2+)
+  - **Altitude Physiology Tab**: SpO2 and resting HR estimation at altitude,
+    VO2max reduction estimates, acclimatization timeline, AMS checklist using
+    Lake Louise Score (Roach et al., 2018), cold injury prevention (WMS 2019)
+  - **Overview Tab**: Flight Surgeon assessment summary with color-coded risk
+    indicators, daily monitoring protocol (10-item checklist), crew-care
+    thresholds for weight loss, urine SG, SpO2, HR, RMSSD, sleep
+  - **5 Scientific ECharts Plots** in expandable floating panes:
+    1. Energy Expenditure Breakdown (donut/pie chart)
+    2. Macronutrient Radar (current targets vs NASA max ranges)
+    3. Water Requirement Stacked Bar (baseline + activity + altitude + cold)
+    4. Altitude Physiology dual-axis line (SpO2 + HR vs altitude 0-6000m)
+    5. Environmental Stress Heatmap (6 stressors x 5 mission phases)
+  - Floating panes with expand-to-fullscreen capability, smooth animations
+  - All calculations with full scientific citations and references
+
+### Fixed
+- **ESLint 9.x Compatibility**: Added `eslint.config.mjs` flat config for
+  `eslint-config-next@16` compatibility with ESLint 9.39
+- **React Purity Violation**: Replaced `Math.random()` calls inside
+  `CrewRadarChart` render with deterministic pseudo-variation function
+  to prevent unstable re-renders
+- **Unused Imports**: Cleaned up unused imports (Zap, ChevronDown,
+  ImpactPrediction, SEVERITY_COLORS, formatDateTime) from main dashboard
+- **Unescaped Entities**: Fixed unescaped double quotes in correlations
+  page using proper HTML entities (&ldquo;/&rdquo;)
+
+### Scientific References Added
+- NASA. (2019). NASA-STD-3001 Vol. 2, Rev B. Human Factors, Habitability,
+  and Environmental Health.
+- Lane, H.W. & Schoeller, D.A. (2000). Nutrition in Spaceflight and
+  Weightlessness Models. CRC Press.
+- Smith, S.M. & Zwart, S.R. (2008). Nutritional Biochemistry of Spaceflight.
+  Adv Clin Chem, 46, 87-130.
+- Smith, S.M. et al. (2005). J Nutr, 135(3), 437-443.
+- Castellani, J.W. & Young, A.J. (2007). J Appl Physiol, 99(4).
+- Butterfield, G.E. et al. (1992). J Appl Physiol, 72(4), 1741-1748.
+- Bartsch, P. & Saltin, B. (2008). Scand J Med Sci Sports, 18(S1), 1-10.
+  DOI: 10.1111/j.1600-0838.2008.00827.x
+- Mifflin, M.D. et al. (1990). Am J Clin Nutr, 51(2), 241-247.
+- Roach, R.C. et al. (2018). High Alt Med Biol, 19(1), 4-6.
+- Luks, A.M. et al. (2019). Wilderness Environ Med, 30(4S), S4-S14.
+- IOM. (2004). Dietary Reference Intakes for Water.
+- Freund, B.J. & Sawka, M.N. (1996). Arctic Med Res, 55(suppl 1).
+
 ## [1.14.0] - 2026-02-09
 
 ### Added
