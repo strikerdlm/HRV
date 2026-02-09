@@ -3473,14 +3473,51 @@ async def get_weather(city: str) -> Dict[str, Any]:
 
     Uses OPENWEATHER_API_KEY from environment. Returns weather data plus
     computed wind chill, WBGT, and heat index.
+
+    Accepts either an ICAO code (e.g. SKBO) or a city name (e.g. Bogota).
+    When an ICAO code is provided, it is resolved to a city name via a
+    built-in lookup table.
     """
     import httpx
 
+    # -- Resolve ICAO codes to city names for OpenWeatherMap ----------------
+    _ICAO_TO_CITY: Dict[str, str] = {
+        "SKBO": "Bogota,CO",
+        "SAWE": "Marambio Base,AQ",
+        "SCRM": "King George Island,AQ",
+        "KJFK": "New York,US",
+        "EGLL": "London,GB",
+        "RJTT": "Tokyo,JP",
+        "LFPG": "Paris,FR",
+        "EDDF": "Frankfurt,DE",
+        "OMDB": "Dubai,AE",
+        "SBGR": "Sao Paulo,BR",
+        "LEMD": "Madrid,ES",
+        "MMMX": "Mexico City,MX",
+        "FAOR": "Johannesburg,ZA",
+        "YSSY": "Sydney,AU",
+        "VIDP": "Delhi,IN",
+        "VHHH": "Hong Kong,HK",
+        "ZBAA": "Beijing,CN",
+        "RKSI": "Seoul,KR",
+        "UUEE": "Moscow,RU",
+        "CYYZ": "Toronto,CA",
+        "KLAX": "Los Angeles,US",
+    }
+
+    query_city = _ICAO_TO_CITY.get(city.upper(), city)
+
     api_key = os.environ.get("OPENWEATHER_API_KEY", "")
     if not api_key:
-        raise HTTPException(status_code=500, detail="OPENWEATHER_API_KEY not configured in .env")
+        _LOGGER.warning("OPENWEATHER_API_KEY not configured in .env")
+        return {
+            "city": city,
+            "weather": None,
+            "indices": None,
+            "error": "OPENWEATHER_API_KEY not configured – add it to .env",
+        }
 
-    url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&units=metric&appid={api_key}"
+    url = f"https://api.openweathermap.org/data/2.5/weather?q={query_city}&units=metric&appid={api_key}"
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(url)
