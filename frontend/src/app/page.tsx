@@ -48,6 +48,7 @@ import { ICEStationMonitor } from "@/components/ice-station-monitor";
 import { METARDashboard } from "@/components/metar-dashboard";
 import { ExtremeWeatherCalc } from "@/components/extreme-weather-calc";
 import { HydrationThermoregulationPanel } from "@/components/hydration-thermoregulation";
+import { FlightSurgeonConsole } from "@/components/flight-surgeon-console";
 
 // ---------------------------------------------------------------------------
 // Stat card
@@ -871,6 +872,15 @@ export default function DashboardPage() {
           transition={{ duration: 0.3, delay: 0.4 }}
         >
           <SpaceWeatherGauges data={spaceWeather} />
+        </motion.div>
+
+        {/* Flight Surgeon Console (below Space Weather) */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.45 }}
+        >
+          <FlightSurgeonConsole />
         </motion.div>
       </div>
 
