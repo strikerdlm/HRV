@@ -7,6 +7,74 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2026-02-09
+
+### Added
+- **Hydration & Thermoregulation Physiology Module** (`app/hydration_thermoregulation.py`):
+  - Sweat rate prediction across 6 activity levels (sedentary to very hard)
+    based on Sawka et al. (2007) ACSM Position Stand and Shapiro et al. (1982)
+  - WBGT-based heat stress adjustment factor (ISO 7243:2017)
+  - Core body temperature estimation integrating exercise, heat stress, and
+    dehydration contributions per Gonzalez-Alonso et al. (1999) and
+    Montain & Coyle (1992) (~0.18 C rise per 1% body mass loss)
+  - Physiological Strain Index (PhSI) per Moran et al. (1998), scale 0-10
+  - Performance decrement model (aerobic, cognitive, strength) based on
+    Cheuvront & Kenefick (2014) meta-analysis
+  - Dehydration classification: Euhydrated / Mild / Moderate / Significant /
+    Severe / Dangerous per body mass loss percentage
+  - Integrated hydration-readiness modifier (bounded -10 to 0 pts) for
+    IHPI fusion
+  - Comprehensive assessment function combining all sub-models
+- **Frontend Hydration & Thermoregulation Dashboard**
+  (`frontend/src/components/hydration-thermoregulation.tsx`):
+  - Interactive HydrationThermoregulationPanel with 6 SVG ring gauges
+    (sweat rate, dehydration %, core temp, PhSI, performance, fluid target)
+  - Activity level selector, WBGT, body mass, fluid intake, HR inputs
+  - Expandable sections for dehydration details, core temperature & heat strain,
+    performance impact bars, and fluid replacement guidance
+  - Compact HydrationDashboardGauges widget for embedding
+  - All gauges follow existing SVG ring gauge style (matching SWRingGauge/IHPI)
+- **Operational Dashboard Integration** (main `page.tsx`):
+  - Hydration & Thermoregulation panel added after ICE Station / Extreme
+    Environment section
+  - Heat Stress & Readiness Impact info card with physiological mechanisms,
+    sweat rate reference table, and IHPI integration description
+  - Hydration modifier integrated into crew IHPI gauge data
+- **Readiness Dashboard Integration**:
+  - Hydration gauges added to Scheduling Readiness page
+  - Full HydrationThermoregulationPanel added to Research Physiological
+    Readiness page with expanded scientific references
+- **Gauge Builder Thresholds** (`app/gauge_builder.py`):
+  - Added 6 new gauge threshold configurations: sweat_rate_ml_h,
+    dehydration_pct, core_temp_c, phsi_value, overall_performance_pct,
+    fluid_replacement_ml_h
+- **Scientific References Added**:
+  - Sawka, M.N., et al. (2007). ACSM position stand: Exercise and fluid
+    replacement. Med Sci Sports Exerc, 39(2), 377-390.
+    DOI: 10.1249/mss.0b013e31802ca597
+  - Cheuvront, S.N., & Kenefick, R.W. (2014). Dehydration: Physiology,
+    assessment, and performance effects. Compr Physiol, 4(1), 257-285.
+    DOI: 10.1002/cphy.c130017
+  - Gonzalez-Alonso, J., et al. (1999). Influence of body temperature on
+    fatigue during prolonged exercise. J Appl Physiol, 86(3), 1032-1039.
+    DOI: 10.1152/jappl.1999.86.3.1032
+  - Moran, D.S., et al. (1998). A physiological strain index to evaluate
+    heat stress. Am J Physiol, 275(1), R129-R134.
+    DOI: 10.1152/ajpregu.1998.275.1.R129
+  - Montain, S.J., & Coyle, E.F. (1992). Influence of graded dehydration
+    on hyperthermia. J Appl Physiol, 73(4), 1340-1350.
+    DOI: 10.1152/jappl.1992.73.4.1340
+  - Sawka, M.N., et al. (2015). Hypohydration and human performance.
+    Sports Med, 45(S1), S51-S60. DOI: 10.1007/s40279-015-0395-7
+  - Shapiro, Y., et al. (1982). Predicting sweat loss response. Eur J Appl
+    Physiol, 48(1), 83-96. DOI: 10.1007/BF00421168
+  - Casa, D.J., et al. (2015). NATA position statement: Exertional heat
+    illnesses. J Athl Train, 50(9), 986-1000.
+    DOI: 10.4085/1062-6050-50.9.07
+- **Test Suite** (`tests/test_hydration_thermoregulation.py`):
+  - 40 pytest cases covering sweat rate, dehydration, core temperature,
+    PhSI, performance decrement, comprehensive assessment, and edge cases
+
 ## [1.13.0] - 2026-02-07
 
 ### Added
