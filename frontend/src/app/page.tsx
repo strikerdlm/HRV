@@ -14,11 +14,9 @@ import {
   AlertTriangle,
   Shield,
   Thermometer,
-  Zap,
   Radio,
   CheckCircle2,
   Target,
-  ChevronDown,
 } from "lucide-react";
 import { PageWrapper } from "@/components/layout";
 import {
@@ -36,10 +34,7 @@ import { getCurrentSpaceWeather } from "@/lib/research-api";
 import type { UserProfile, SpaceWeatherSnapshot } from "@/types";
 import type {
   SpaceWeatherSnapshot as ResearchSpaceWeather,
-  ImpactPrediction,
 } from "@/types/research";
-import { SEVERITY_COLORS } from "@/types/research";
-import { formatDateTime } from "@/lib/utils";
 import { EChartsWrapper } from "@/components/charts";
 import { IHPIGauge } from "@/components/ihpi-gauge";
 import { CrewPerformanceModal } from "@/components/crew-performance-modal";
@@ -199,6 +194,10 @@ function CrewRadarChart({
   const option = React.useMemo((): any => {
     if (crewGauges.length === 0) return {};
 
+    // Deterministic pseudo-variation based on index (avoids Math.random in render)
+    const deterministicOffset = (idx: number, seed: number) =>
+      ((idx * 7 + seed * 13) % 17);
+
     return {
       tooltip: { trigger: "item" },
       legend: {
@@ -230,13 +229,13 @@ function CrewRadarChart({
       },
       series: [{
         type: "radar" as const,
-        data: crewGauges.slice(0, 6).map((g) => ({
+        data: crewGauges.slice(0, 6).map((g, idx) => ({
           value: [
             g.ihpiScore,
             g.readinessScore,
             Math.max(20, 100 - g.fatigueLevel),
-            Math.max(30, g.readinessScore - 10 + Math.round(Math.random() * 20)),
-            Math.max(40, g.ihpiScore - 5 + Math.round(Math.random() * 15)),
+            Math.max(30, g.readinessScore - 10 + deterministicOffset(idx, 3)),
+            Math.max(40, g.ihpiScore - 5 + deterministicOffset(idx, 7)),
           ],
           name: g.role,
           lineStyle: { width: 2 },
@@ -624,7 +623,7 @@ export default function DashboardPage() {
   const [users, setUsers] = React.useState<UserProfile[]>([]);
   const [spaceWeather, setSpaceWeather] = React.useState<SpaceWeatherSnapshot | null>(null);
   const [researchSW, setResearchSW] = React.useState<ResearchSpaceWeather | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [_loading, setLoading] = React.useState(true);
 
   // Performance modal state
   const [perfModalMember, setPerfModalMember] = React.useState<CrewMemberForModal | null>(null);

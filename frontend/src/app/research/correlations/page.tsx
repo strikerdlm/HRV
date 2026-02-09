@@ -1022,7 +1022,7 @@ export default function CorrelationsPage() {
                 <h3 className="text-lg font-medium mb-2">Ready for Analysis</h3>
                 <p className="text-muted-foreground max-w-md mx-auto">
                   Upload RR interval data or use stored HRV recordings, then click
-                  "Run Correlation Analysis" to discover relationships between space weather
+                  &ldquo;Run Correlation Analysis&rdquo; to discover relationships between space weather
                   and your physiological parameters.
                 </p>
               </CardContent>
