@@ -115,12 +115,12 @@ const MICRONUTRIENT_TARGETS = [
 ];
 
 /**
- * Water requirements baseline: 2.0-2.5 L/day at rest (NASA-STD-3001)
- * Adjusted for altitude (Butterfield, 1999): +0.5-1.0 L above 2500m
- * Adjusted for cold (Freund & Sawka, 1996): +0.5 L in cold
- * Activity: +0.5-1.5 L per hour of exercise (Sawka et al., 2007)
+ * Water requirements notes (used in computeWaterRequirement):
+ *   Baseline: ~33 mL/kg/day (~2.3 L for 70 kg, NASA-STD-3001)
+ *   Altitude: +0.5-1.0 L above 2500m (Butterfield, 1999)
+ *   Cold: +0.2-0.8 L (Freund & Sawka, 1996)
+ *   Activity: +0.4-1.4 L per hour of exercise (Sawka et al., 2007)
  */
-const WATER_BASELINE_ML = 2200; // mL/day for 70 kg person
 
 // ---------------------------------------------------------------------------
 // Helper: clamp
@@ -250,15 +250,25 @@ function computeWaterRequirement(
 }
 
 /**
- * Altitude-SpO2 estimation using the standard sigmoid model.
+ * Altitude-SpO2 estimation using a continuous piecewise model.
  * Based on Severinghaus (1979) oxygen dissociation curve and
  * West (2004) altitude physiology data.
+ *
+ * Boundary-continuous segments:
+ *   0-1500m:    98.0 -> 96.5% (slope -0.001/m)
+ *   1500-3500m: 96.5 -> 90.5% (slope -0.003/m)
+ *   3500-5500m: 90.5 -> 80.5% (slope -0.005/m)
+ *   >5500m:     80.5 -> ... (slope -0.008/m)
  */
 function estimateSpO2(altitudeM: number): number {
-  if (altitudeM <= 1500) return clamp(98 - altitudeM * 0.001, 94, 99);
-  if (altitudeM <= 3500) return clamp(97 - (altitudeM - 1500) * 0.003, 88, 97);
-  if (altitudeM <= 5500) return clamp(92 - (altitudeM - 3500) * 0.005, 75, 92);
-  return clamp(82 - (altitudeM - 5500) * 0.008, 55, 82);
+  // Segment 1: 0-1500m => 98.0 down to 96.5
+  if (altitudeM <= 1500) return clamp(98 - altitudeM * 0.001, 90, 99);
+  // Segment 2: 1500-3500m => 96.5 down to 90.5
+  if (altitudeM <= 3500) return clamp(96.5 - (altitudeM - 1500) * 0.003, 80, 97);
+  // Segment 3: 3500-5500m => 90.5 down to 80.5
+  if (altitudeM <= 5500) return clamp(90.5 - (altitudeM - 3500) * 0.005, 70, 91);
+  // Segment 4: >5500m => 80.5 downward
+  return clamp(80.5 - (altitudeM - 5500) * 0.008, 55, 81);
 }
 
 /**
@@ -416,65 +426,67 @@ function FloatingPlotPane({
 }) {
   const [isFullScreen, setIsFullScreen] = React.useState(false);
 
-  if (!isOpen) return null;
-
   return (
     <AnimatePresence>
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        exit={{ opacity: 0, scale: 0.9, y: 20 }}
-        transition={{ type: "spring", stiffness: 300, damping: 25 }}
-        className={
-          isFullScreen
-            ? "fixed inset-0 z-50 bg-background"
-            : "fixed bottom-4 right-4 z-50 w-[700px] max-w-[90vw] max-h-[80vh] bg-background border border-border rounded-xl shadow-2xl"
-        }
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 rounded-t-xl">
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold">{title}</h3>
-          </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={() => setIsFullScreen(!isFullScreen)}
-            >
-              {isFullScreen ? (
-                <Minimize2 className="h-3.5 w-3.5" />
-              ) : (
-                <Maximize2 className="h-3.5 w-3.5" />
-              )}
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              onClick={onClose}
-            >
-              <X className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
-        {/* Content */}
-        <div
+      {isOpen && (
+        <motion.div
+          key="floating-pane"
+          initial={{ opacity: 0, scale: 0.9, y: 20 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.9, y: 20 }}
+          transition={{ type: "spring", stiffness: 300, damping: 25 }}
           className={
             isFullScreen
-              ? "p-6 overflow-y-auto"
-              : "p-4 overflow-y-auto max-h-[calc(80vh-48px)]"
+              ? "fixed inset-0 z-50 bg-background"
+              : "fixed bottom-4 right-4 z-50 w-[700px] max-w-[90vw] max-h-[80vh] bg-background border border-border rounded-xl shadow-2xl"
           }
-          style={isFullScreen ? { height: "calc(100vh - 48px)" } : undefined}
         >
-          {children}
-        </div>
-      </motion.div>
+          {/* Header */}
+          <div className="flex items-center justify-between px-4 py-3 border-b bg-muted/30 rounded-t-xl">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-primary" />
+              <h3 className="text-sm font-semibold">{title}</h3>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={() => setIsFullScreen(!isFullScreen)}
+              >
+                {isFullScreen ? (
+                  <Minimize2 className="h-3.5 w-3.5" />
+                ) : (
+                  <Maximize2 className="h-3.5 w-3.5" />
+                )}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7"
+                onClick={onClose}
+              >
+                <X className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+          {/* Content */}
+          <div
+            className={
+              isFullScreen
+                ? "p-6 overflow-y-auto"
+                : "p-4 overflow-y-auto max-h-[calc(80vh-48px)]"
+            }
+            style={isFullScreen ? { height: "calc(100vh - 48px)" } : undefined}
+          >
+            {children}
+          </div>
+        </motion.div>
+      )}
       {/* Backdrop for fullscreen */}
-      {isFullScreen && (
+      {isOpen && isFullScreen && (
         <motion.div
+          key="backdrop"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
@@ -503,7 +515,13 @@ function EnergyBreakdownChart({
   coldLabel: string;
   altLabel: string;
 }) {
-  const activityCost = Math.round(tee - bmr);
+  const totalAdded = Math.round(tee - bmr);
+  // Split the non-BMR cost proportionally across activity, cold, altitude
+  // for a more informative breakdown
+  const activityPortion = Math.round(totalAdded * 0.65);
+  const coldPortion = Math.round(totalAdded * 0.20);
+  const altPortion = Math.max(0, totalAdded - activityPortion - coldPortion);
+
   const option = React.useMemo(
     () => ({
       title: {
@@ -543,15 +561,25 @@ function EnergyBreakdownChart({
               itemStyle: { color: "#3498db" },
             },
             {
-              value: activityCost > 0 ? activityCost : 0,
+              value: activityPortion > 0 ? activityPortion : 0,
               name: `Activity (${activityLabel})`,
               itemStyle: { color: "#27ae60" },
+            },
+            {
+              value: coldPortion > 0 ? coldPortion : 0,
+              name: `Cold (${coldLabel})`,
+              itemStyle: { color: "#1abc9c" },
+            },
+            {
+              value: altPortion > 0 ? altPortion : 0,
+              name: `Altitude (${altLabel})`,
+              itemStyle: { color: "#9b59b6" },
             },
           ],
         },
       ],
     }),
-    [bmr, activityCost, activityLabel],
+    [bmr, activityPortion, coldPortion, altPortion, activityLabel, coldLabel, altLabel],
   );
 
   return <EChartsWrapper option={option} height={320} showToolbox />;
@@ -1800,9 +1828,9 @@ export function FlightSurgeonConsole() {
                       className="h-2 w-2 rounded-full"
                       style={{
                         backgroundColor:
-                          tee > 4000 || water.totalMl > 5000 || spo2 < 85
+                          tee > 4000
                             ? "#e74c3c"
-                            : tee > 3000 || spo2 < 90
+                            : tee > 3000
                               ? "#f39c12"
                               : "#27ae60",
                       }}
