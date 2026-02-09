@@ -15,6 +15,14 @@ import {
 } from "lucide-react";
 import { PageWrapper } from "@/components/layout";
 import {
+  APP_VERSION,
+  APP_VERSION_DATE,
+  PYTHON_VERSION,
+  FRONTEND_FRAMEWORK,
+  API_PORT,
+  FRONTEND_PORT,
+} from "@/lib/version";
+import {
   Card,
   CardContent,
   CardHeader,
@@ -53,7 +61,7 @@ const features = [
 ];
 
 const technologies = [
-  { name: "Next.js 14", category: "Frontend" },
+  { name: "Next.js 16", category: "Frontend" },
   { name: "TypeScript", category: "Language" },
   { name: "Tailwind CSS", category: "Styling" },
   { name: "shadcn/ui", category: "Components" },
@@ -158,25 +166,25 @@ export default function AboutPage() {
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">
                     Version
                   </p>
-                  <p className="font-mono font-semibold">1.9.16</p>
+                  <p className="font-mono font-semibold">{APP_VERSION}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">
                     Last Updated
                   </p>
-                  <p className="font-mono font-semibold">2026-02-02</p>
+                  <p className="font-mono font-semibold">{APP_VERSION_DATE}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">
                     Python
                   </p>
-                  <p className="font-mono font-semibold">3.12</p>
+                  <p className="font-mono font-semibold">{PYTHON_VERSION}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">
                     Frontend
                   </p>
-                  <p className="font-mono font-semibold">Next.js 16</p>
+                  <p className="font-mono font-semibold">{FRONTEND_FRAMEWORK}</p>
                 </div>
               </div>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4">
@@ -196,13 +204,13 @@ export default function AboutPage() {
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">
                     API Port
                   </p>
-                  <p className="font-mono font-semibold">8180</p>
+                  <p className="font-mono font-semibold">{API_PORT}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">
                     Frontend Port
                   </p>
-                  <p className="font-mono font-semibold">3100</p>
+                  <p className="font-mono font-semibold">{FRONTEND_PORT}</p>
                 </div>
               </div>
             </CardContent>
