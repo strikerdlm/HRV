@@ -82,7 +82,12 @@ frontend/
 │   ├── components/
 │   │   ├── ui/                 # shadcn/ui components
 │   │   ├── layout/             # Layout components (Sidebar, Header)
-│   │   └── charts/             # ECharts wrappers
+│   │   ├── charts/             # ECharts wrappers
+│   │   ├── flight-surgeon-console.tsx  # NASA Flight Surgeon Console
+│   │   ├── hydration-thermoregulation.tsx  # Hydration & Thermoregulation
+│   │   ├── extreme-weather-calc.tsx  # Extreme Weather Assessment
+│   │   ├── ice-station-monitor.tsx  # ICE Station Monitor
+│   │   └── metar-dashboard.tsx  # METAR Weather Dashboard
 │   ├── lib/
 │   │   ├── api.ts              # Operational API client
 │   │   ├── research-api.ts     # Research API client
@@ -196,6 +201,14 @@ npm run start
 - **Experiments**: Create and manage science protocols (max 10)
 - **User Profiles**: Create, view, and manage crew profiles
 - **About**: Author info, version, technology stack, references
+- **Flight Surgeon Console** (NEW):
+  - Nutritional requirements calculator (BMR + TEE with cold/altitude/activity factors)
+  - Water requirements calculator with environmental adjustments
+  - Altitude physiology monitor (SpO2, HR, AMS checklist)
+  - 5 expandable scientific plots (energy breakdown, macronutrient radar,
+    water stacked bar, altitude physiology, environmental stress heatmap)
+  - Based on NASA-STD-3001 Vol. 2, adapted for analog missions
+    (Antarctica, high-altitude stations, extreme environments)
 
 ### Research Features (NEW)
 
