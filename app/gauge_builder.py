@@ -185,6 +185,43 @@ _BB_LEVEL_NORMAL: Final[float] = 50.0
 _BB_LEVEL_HIGH: Final[float] = 75.0
 _BB_LEVEL_MAX: Final[float] = 100.0
 
+# Hydration / Thermoregulation
+# Sweat rate (mL/h) — Sawka et al. (2007)
+_SWEAT_RATE_LOW: Final[float] = 200.0
+_SWEAT_RATE_NORMAL: Final[float] = 600.0
+_SWEAT_RATE_HIGH: Final[float] = 1500.0
+_SWEAT_RATE_MAX: Final[float] = 3000.0
+
+# Dehydration (% body mass loss) — Cheuvront & Kenefick (2014)
+_DEHY_LOW: Final[float] = 1.0
+_DEHY_NORMAL: Final[float] = 2.0
+_DEHY_HIGH: Final[float] = 4.0
+_DEHY_MAX: Final[float] = 8.0
+
+# Core temperature (C) — Gonzalez-Alonso et al. (1999)
+_CORE_TEMP_LOW: Final[float] = 36.5
+_CORE_TEMP_NORMAL: Final[float] = 37.5
+_CORE_TEMP_HIGH: Final[float] = 39.0
+_CORE_TEMP_MAX: Final[float] = 41.0
+
+# Physiological Strain Index (0-10) — Moran et al. (1998)
+_PHSI_LOW: Final[float] = 3.0
+_PHSI_NORMAL: Final[float] = 5.0
+_PHSI_HIGH: Final[float] = 7.0
+_PHSI_MAX: Final[float] = 10.0
+
+# Performance remaining (%) — Cheuvront & Kenefick (2014)
+_PERF_LOW: Final[float] = 60.0
+_PERF_NORMAL: Final[float] = 80.0
+_PERF_HIGH: Final[float] = 95.0
+_PERF_MAX: Final[float] = 100.0
+
+# Fluid replacement recommendation (mL/h)
+_FLUID_REC_LOW: Final[float] = 200.0
+_FLUID_REC_NORMAL: Final[float] = 500.0
+_FLUID_REC_HIGH: Final[float] = 900.0
+_FLUID_REC_MAX: Final[float] = 1500.0
+
 
 # ---------------------------------------------------------------------------
 # Data classes
@@ -322,6 +359,14 @@ _GAUGE_THRESHOLDS: dict[str, GaugeThresholds] = {
     "body_battery_avg": GaugeThresholds(_BB_LEVEL_LOW, _BB_LEVEL_NORMAL, _BB_LEVEL_HIGH, _BB_LEVEL_MAX, ""),
     "body_battery_charge": GaugeThresholds(_BB_ENERGY_LOW, _BB_ENERGY_NORMAL, _BB_ENERGY_HIGH, _BB_ENERGY_MAX, "", invert_colors=False),
     "body_battery_drain": GaugeThresholds(_BB_ENERGY_LOW, _BB_ENERGY_NORMAL, _BB_ENERGY_HIGH, _BB_ENERGY_MAX, "", invert_colors=True),
+
+    # Hydration / Thermoregulation gauges
+    "sweat_rate_ml_h": GaugeThresholds(_SWEAT_RATE_LOW, _SWEAT_RATE_NORMAL, _SWEAT_RATE_HIGH, _SWEAT_RATE_MAX, "mL/h", invert_colors=True),
+    "dehydration_pct": GaugeThresholds(_DEHY_LOW, _DEHY_NORMAL, _DEHY_HIGH, _DEHY_MAX, "%BM", invert_colors=True),
+    "core_temp_c": GaugeThresholds(_CORE_TEMP_LOW, _CORE_TEMP_NORMAL, _CORE_TEMP_HIGH, _CORE_TEMP_MAX, "C", invert_colors=True),
+    "phsi_value": GaugeThresholds(_PHSI_LOW, _PHSI_NORMAL, _PHSI_HIGH, _PHSI_MAX, "", invert_colors=True),
+    "overall_performance_pct": GaugeThresholds(_PERF_LOW, _PERF_NORMAL, _PERF_HIGH, _PERF_MAX, "%"),
+    "fluid_replacement_ml_h": GaugeThresholds(_FLUID_REC_LOW, _FLUID_REC_NORMAL, _FLUID_REC_HIGH, _FLUID_REC_MAX, "mL/h"),
 }
 
 
