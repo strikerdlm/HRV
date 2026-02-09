@@ -5,6 +5,7 @@ import * as React from "react";
 import {
   AlertTriangle,
   CheckCircle,
+  Droplets,
   Heart,
   Plane,
   Shield,
@@ -31,6 +32,10 @@ import type {
   SMSMatrixData,
 } from "@/types/research";
 import { SMS_RISK_COLORS, READINESS_LABEL_COLORS } from "@/types/research";
+import {
+  HydrationDashboardGauges,
+  computeHydrationReadinessModifier,
+} from "@/components/hydration-thermoregulation";
 
 const DEFAULT_USER_ID = "demo-user";
 
@@ -328,6 +333,32 @@ export default function OperationalReadinessPage() {
               />
             )}
           </div>
+
+          {/* Hydration & Thermoregulation Impact on Readiness */}
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Droplets className="h-5 w-5 text-blue-500" />
+                Hydration & Thermoregulation Readiness Impact
+              </CardTitle>
+              <CardDescription>
+                Estimated dehydration, core temperature, and performance decrement
+                as modifiers for the fused readiness score.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <HydrationDashboardGauges />
+              <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded">
+                <p className="text-xs text-blue-800">
+                  <strong>Integration:</strong> Hydration-thermoregulation modifier
+                  (bounded -10 to 0 pts) is applied to the fused readiness score.
+                  A dehydration &ge;2% body mass loss with WBGT &ge;28 C triggers
+                  a &ldquo;Caution&rdquo; flag on EVA and flight readiness. Core temperature
+                  &ge;39 C or PhSI &ge;7 applies additional penalization.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* SMS Matrix Visualizations */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">

@@ -6,6 +6,7 @@ import {
   Activity,
   AlertTriangle,
   BookOpen,
+  Droplets,
   Heart,
   Shield,
   Thermometer,
@@ -26,6 +27,9 @@ import { Label } from "@/components/ui/label";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
 import { submitVitalsAndAssess } from "@/lib/research-api";
 import { useAppStore } from "@/lib/store";
+import {
+  HydrationThermoregulationPanel,
+} from "@/components/hydration-thermoregulation";
 import type {
   EnhancedReadinessResponse,
   SMSMatrixData,
@@ -448,6 +452,11 @@ export default function PhysiologicalReadinessPage() {
             )}
           </div>
 
+          {/* Hydration & Thermoregulation Assessment */}
+          <div className="mt-6">
+            <HydrationThermoregulationPanel />
+          </div>
+
           {/* Scientific References */}
           <Card className="mt-6">
             <CardHeader>
@@ -463,6 +472,11 @@ export default function PhysiologicalReadinessPage() {
               <p>Crowe, M., et al. (2025). Resting HR and SBP predict heat tolerance in military. <i>Medicina, 61</i>(6). DOI: 10.3390/medicina61061111</p>
               <p>Kim, S., & Lee, J.-Y. (2017). Prediction of body core temperature with HRV. Semantic Scholar: 6f60ddec.</p>
               <p>Zhang, Z., et al. (2025). Physiological monitoring models in military domain. DOI: 10.1109/ICCNEA66167.2025.11211893</p>
+              <p>Sawka, M.N., et al. (2007). ACSM position stand: Exercise and fluid replacement. <i>Med Sci Sports Exerc, 39</i>(2), 377-390. DOI: 10.1249/mss.0b013e31802ca597</p>
+              <p>Cheuvront, S.N., & Kenefick, R.W. (2014). Dehydration: Physiology, assessment, and performance effects. <i>Compr Physiol, 4</i>(1), 257-285. DOI: 10.1002/cphy.c130017</p>
+              <p>Gonzalez-Alonso, J., et al. (1999). Influence of body temperature on fatigue during prolonged exercise. <i>J Appl Physiol, 86</i>(3), 1032-1039. DOI: 10.1152/jappl.1999.86.3.1032</p>
+              <p>Moran, D.S., et al. (1998). A physiological strain index to evaluate heat stress. <i>Am J Physiol, 275</i>(1), R129-R134. DOI: 10.1152/ajpregu.1998.275.1.R129</p>
+              <p>Montain, S.J., & Coyle, E.F. (1992). Influence of graded dehydration on hyperthermia. <i>J Appl Physiol, 73</i>(4), 1340-1350. DOI: 10.1152/jappl.1992.73.4.1340</p>
               <p>ICAO. (2018). <i>Safety Management Manual</i> (Doc 9859, 4th ed.).</p>
               <p>US DoD. (2012). <i>MIL-STD-882E: Standard Practice for System Safety</i>.</p>
             </CardContent>
