@@ -47,6 +47,7 @@ import type { CrewMemberForModal } from "@/components/crew-performance-modal";
 import { ICEStationMonitor } from "@/components/ice-station-monitor";
 import { METARDashboard } from "@/components/metar-dashboard";
 import { ExtremeWeatherCalc } from "@/components/extreme-weather-calc";
+import { HydrationThermoregulationPanel } from "@/components/hydration-thermoregulation";
 
 // ---------------------------------------------------------------------------
 // Stat card
@@ -571,6 +572,8 @@ function buildCrewGaugeData(users: UserProfile[]): Array<{
   sleepDebt: number;
   readinessScore: number;
   smsRiskLevel: string;
+  hydrationStatus: string;
+  hydrationModifier: number;
 }> {
   const roles = ["CDR", "PLT", "MS1", "MS2", "MS3", "MS4"];
   return users.map((u, i) => {
@@ -578,7 +581,17 @@ function buildCrewGaugeData(users: UserProfile[]): Array<{
     const baseScore = 75 + Math.round(Math.random() * 20);
     const fatigue = Math.round(15 + Math.random() * 30);
     const sleepDebt = +(Math.random() * 3).toFixed(1);
-    const readiness = Math.max(50, baseScore - Math.round(fatigue * 0.3));
+
+    // Hydration-thermoregulation modifier (simulated for dashboard)
+    // In production, this would come from real-time physiological data
+    const hydrationModifier = Math.round(-Math.random() * 4 * 10) / 10;
+    const hydrationStatuses = ["Well Hydrated", "Mildly Dehydrated", "Moderately Dehydrated"];
+    const hydrationStatus = hydrationModifier > -1 ? hydrationStatuses[0]
+      : hydrationModifier > -3 ? hydrationStatuses[1]
+      : hydrationStatuses[2];
+
+    // Integrate hydration modifier into readiness
+    const readiness = Math.max(50, baseScore - Math.round(fatigue * 0.3) + Math.round(hydrationModifier));
 
     // SMS risk level based on readiness
     let smsRisk = "Acceptable";
@@ -596,6 +609,8 @@ function buildCrewGaugeData(users: UserProfile[]): Array<{
       sleepDebt: sleepDebt,
       readinessScore: readiness,
       smsRiskLevel: smsRisk,
+      hydrationStatus,
+      hydrationModifier,
     };
   });
 }
@@ -755,6 +770,69 @@ export default function DashboardPage() {
         >
           <ICEStationMonitor />
           <ExtremeWeatherCalc />
+        </motion.div>
+
+        {/* Hydration & Thermoregulation */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.3, delay: 0.22 }}
+          className="grid gap-6 md:grid-cols-2"
+        >
+          <HydrationThermoregulationPanel />
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center gap-2">
+                <Thermometer className="h-5 w-5 text-orange-500" />
+                Heat Stress & Readiness Impact
+              </CardTitle>
+              <CardDescription>
+                Dehydration and thermoregulatory effects on crew readiness
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-xs font-semibold text-blue-800 mb-1">Physiological Mechanisms</p>
+                  <p className="text-[10px] text-blue-700 leading-relaxed">
+                    Dehydration reduces plasma volume, impairing cardiovascular function
+                    and thermoregulation. Each 1% body mass loss elevates core temperature
+                    by ~0.1-0.23 C during exercise (Montain & Coyle, 1992). Beyond 2% loss,
+                    aerobic performance declines 3-5% per additional 1% deficit, with cognitive
+                    impairment measurable at executive function and attention tasks.
+                  </p>
+                </div>
+                <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                  <p className="text-xs font-semibold text-orange-800 mb-1">Sweat Rate Ranges</p>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-[10px] text-orange-700">
+                    <span>Sedentary (rest):</span><span className="font-semibold">0.1-0.3 L/h</span>
+                    <span>Light (walking):</span><span className="font-semibold">0.3-0.5 L/h</span>
+                    <span>Moderate (brisk):</span><span className="font-semibold">0.5-1.0 L/h</span>
+                    <span>Vigorous (jog):</span><span className="font-semibold">1.0-1.5 L/h</span>
+                    <span>Hard (running):</span><span className="font-semibold">1.5-2.0 L/h</span>
+                    <span>Very Hard (sprint):</span><span className="font-semibold">2.0-2.5 L/h</span>
+                  </div>
+                  <p className="text-[9px] text-orange-600 mt-1">
+                    Heat stress (WBGT &gt;28 C) amplifies rates by 20-80%. Sawka et al. (2007).
+                  </p>
+                </div>
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <p className="text-xs font-semibold text-green-800 mb-1">IHPI Integration</p>
+                  <p className="text-[10px] text-green-700 leading-relaxed">
+                    Hydration-thermoregulation modifier (bounded -10 to 0 pts) integrates into
+                    the readiness score. PhSI &ge;7 applies additional penalty. Modifier is
+                    computed from weighted performance decrement: aerobic (40%), cognitive (35%),
+                    strength (25%).
+                  </p>
+                </div>
+                <p className="text-[9px] text-muted-foreground">
+                  References: Sawka et al. (2007) ACSM Position Stand; Cheuvront & Kenefick (2014)
+                  Compr Physiol; Gonzalez-Alonso et al. (1999) J Appl Physiol; Moran et al. (1998)
+                  Am J Physiol.
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         </motion.div>
 
         {/* Alerts + Actions */}
