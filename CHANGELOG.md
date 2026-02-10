@@ -7,6 +7,51 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.16.0] - 2026-02-10
+
+### Added
+- **Reservoir-Based SAFTE Model** (`frontend/src/lib/safte-model.ts`):
+  - Shared module implementing the correct SAFTE equations (Hursh et al. 2004 / DRDC Peng & Bouak 2015)
+  - Reservoir dynamics: `R_t = R_{t-1} - K·Δt` (wake), `R_t += f·(R_c-R)·Δt` (sleep)
+  - Fatigue-amplified circadian: `circ% = (a1 + a2·(1 - R/R_c)) × C_t`
+  - Two-harmonic drive: `C_t = cos(2π(t-18)/24) + 0.5·cos(4π(t-3)/24)`
+  - Multi-day predictions (1–7 days) with sleep/wake cycling from Garmin data
+  - Used by both Research and Operational tabs
+- **FAST-Style Multi-Day Forecast** (research fatigue page):
+  - Day selector (1d, 2d, 3d, 5d, 7d) with instant re-computation
+  - BAC equivalence thresholds: 90% Normal, 77% Elevated Risk (2.5× cost, FRA validation),
+    60% Impairment (≈0.08% BAC, Dawson & Reid 1997), 50% Critical (+65% accident risk)
+  - Sleep bands from Garmin-derived schedule, day/night shading
+  - Color-coded effectiveness line via `visualMap` (green >90%, yellow 77–90%, red <77%)
+  - Nadir/peak annotations, confidence band (±4%), DataZoom slider
+- **FAST-Style Fatigue Risk Metrics Panel**:
+  - Summary row: Min/Avg Effectiveness, Peak BAC Equiv., Risk Hours, Sleep Debt
+  - Blood Alcohol Concentration Equivalence chart (Dawson & Reid 1997 mapping)
+  - Cognitive Lapse Probability chart (Van Dongen et al. 2003 PVT adaptation)
+- **SAFTE Process Decomposition Chart**: Dual-axis Process S (reservoir) and Process C (circadian)
+- **Integrated Physiological Model Card**: Log-linear fusion display (SAFTE + HRV/HRF + Workload + Environment)
+- **Garmin Sleep Schedule Integration**:
+  - Backend extracts `sleep_start_utc`, `sleep_efficiency`, `sleep_score` from Garmin data
+  - New `FatigueResponse` fields: `avg_sleep_duration_h`, `typical_bedtime_h`, `avg_sleep_efficiency`
+  - Frontend SAFTE model uses Garmin-derived bedtime and sleep duration instead of defaults
+  - Backend falls back to `default` user data when requested user has no Garmin records
+
+### Changed
+- **Plot Standards**: All ECharts titles removed from inside plots — titles are in Card headers
+  per publication rules (Q1 scientific journal ready, no clutter)
+- **Operational Dashboard**: Fatigue levels now computed via SAFTE model instead of random values
+- **Scheduling Page**: Fatigue levels now use `currentSAFTEEffectiveness()` from shared SAFTE module
+- **Y-Axis**: Forecast chart always includes 60% threshold so BAC/risk zones are visible
+
+### Fixed
+- **Wind Compass NaN**: Added `toFiniteNum()` helper to handle non-numeric METAR wind directions
+  (e.g., "VRB" for variable wind) that caused `NaN` in SVG coordinates
+
+### Documentation
+- **TECHNICAL_DOCUMENTATION.md**: Complete rewrite (v1.0 → v2.0) with correct reservoir equations,
+  all three SAFTE variants, architecture diagram, parameter tables, validation data, and references
+- **BiomathematicalModel.md**: Cleaned 409 lines of OCR artifacts (page stamps, blank pages)
+
 ## [1.15.0] - 2026-02-09
 
 ### Added
