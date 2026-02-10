@@ -5,7 +5,7 @@
 **A Research-Grade Heart Rate Variability Operations Console for Aerospace Medicine**
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.13.0-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.16.0-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi)](https://fastapi.tiangolo.com)
@@ -52,7 +52,7 @@ Most HRV tools do one thing: compute RMSSD and a few frequency-domain metrics. M
 1. **Aerospace Medicine Focus**: This is the only open-source HRV platform designed specifically for flight surgeons and operational medicine. It includes NASA Exploration Medical Capability (ExMC) assessments, radiation dose tracking across 10 space environments, and EVA Go/No-Go decision matrices.
 2. **Space Weather-HRV Correlation**: No other tool correlates your HRV data with real-time NOAA/NASA space weather feeds (Kp index, solar wind, CMEs, X-ray flux) using lag-aware analysis with FDR correction. This enables novel research into how solar activity affects human autonomic function.
 3. **Multi-Model Circadian Simulation**: Integrates three validated mathematical circadian models (Forger99, Jewett99, Hannay19) from the Arcascope research package to simulate circadian rhythms, shift work adaptation, and entrainment dynamics.
-4. **SAFTE Fatigue Prediction**: Implements the Sleep, Activity, Fatigue, and Task Effectiveness (SAFTE) biomathematical model used by the US Air Force, with ICAO-aligned Fatigue Risk Management System (FRMS) dashboards.
+4. **SAFTE Fatigue Prediction with FAST-Style Visualization**: Implements the reservoir-based SAFTE biomathematical model (Hursh et al. 2004 / DRDC Peng & Bouak 2015) with multi-day forecasting (1–7 days), Garmin Connect sleep schedule integration, BAC equivalence thresholds (Dawson & Reid 1997), cognitive lapse probability (Van Dongen et al. 2003), and ICAO-aligned FRMS dashboards. Inspired by the FAST (Fatigue Avoidance Scheduling Tool) used by the US Air Force, FAA, and FRA.
 5. **Ventilatory Threshold Estimation**: Non-invasive detection of aerobic (VT1) and anaerobic (VT2) thresholds using DFA-alpha1 analysis, eliminating the need for laboratory CPET — a breakthrough for field and operational settings.
 6. **Allostatic Load Monitoring**: Multi-day physiological trajectory tracking that catches cumulative degradation (declining HRV, rising resting HR, eroding sleep quality) before a single-day snapshot would flag a problem.
 7. **Dual Architecture**: Both a feature-rich Streamlit research application and a modern TypeScript/Next.js frontend with FastAPI backend, giving you the choice between rapid prototyping and production deployment.
@@ -276,7 +276,10 @@ These modules implement the gold-standard HRV analysis pipeline as defined by th
 | Module                                      | What It Does                                          | Why It Matters                                                                                                                                                                                                                                                                     |
 | ------------------------------------------- | ----------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Circadian Physiology**              | Forger99, Jewett99, Hannay19 mathematical models      | Simulates how your internal body clock responds to light schedules. Generate actograms, predict DLMO (dim light melatonin onset), and calculate the Entrainment Signal Regularity Index (ESRI). Based on the Arcascope circadian package (Tavella, Hannay, Walch, 2023).           |
-| **SAFTE Fatigue Model**               | Cognitive effectiveness prediction from sleep history | The SAFTE model (Hursh et al., 2004) predicts how accumulated sleep debt degrades cognitive performance. The dashboard includes ICAO-aligned FRMS metrics, USAF crew rest compliance checks, and exportable 24-hour forecasts.                                                     |
+| **SAFTE Fatigue Model**               | Reservoir-based cognitive effectiveness prediction    | Full SAFTE implementation (Hursh et al. 2004 / DRDC 2015) with reservoir dynamics, fatigue-amplified circadian drive, and sleep inertia. Multi-day forecasting (1–7 days) with Garmin Connect sleep schedule integration. Shared module used by both Research and Operational tabs.  |
+| **FAST-Style Risk Metrics**           | BAC equivalence, lapse probability, risk-hour analysis | Inspired by FAST (Fatigue Avoidance Scheduling Tool): BAC mapping (Dawson & Reid 1997), PVT lapse probability (Van Dongen et al. 2003), and color-coded risk zones validated by FRA (77% = 2.5x accident cost, 50% = +65% accident risk). Publication-quality plots with no internal titles. |
+| **Integrated Physiological Model**    | Log-linear fusion: SAFTE + HRV/HRF + Workload + Environment | Multiplicative fusion architecture: P(t) = σ(Σ αᵢ·log Fᵢ) combining schedule-based SAFTE, quality-gated autonomic physiology (lnRMSSD, PIP), workload context, and environmental modifiers. Fail-closed behavior when HRV quality is insufficient. |
+| **Process Decomposition**             | Separate visualization of Process S and Process C     | Dual-axis chart showing the homeostatic sleep reservoir (linear depletion/exponential recovery) and two-harmonic circadian drive independently — the Borbely (1982) two-process model components that produce the effectiveness curve.                                             |
 | **Trajectory Risk (Allostatic Load)** | Multi-day physiological degradation detection         | Implements McEwen's (1998) allostatic load concept: even if today's metrics look fine, a multi-day downward trend in HRV, resting HR, and sleep quality predicts functional decline. Uses EWMA smoothing and Smallest Worthwhile Change (SWC) thresholds from Plews et al. (2013). |
 
 ### Wearable Device Integration
@@ -370,13 +373,17 @@ HRV/
 │   ├── src/
 │   │   ├── app/                  # Next.js pages (18+ research pages)
 │   │   ├── components/           # Reusable UI components
-│   │   ├── lib/                  # API clients, state management
+│   │   ├── lib/                  # API clients, state management, SAFTE model
 │   │   └── types/                # TypeScript type definitions
 │   ├── package.json
 │   └── tailwind.config.ts
 │
 ├── docs/
 │   ├── Manual.md                 # Comprehensive user manual (6000+ lines)
+│   ├── Fatigue Biomathematical model/
+│   │   ├── BiomathematicalModel.md     # DRDC Peng & Bouak (2015) full report
+│   │   └── TECHNICAL_DOCUMENTATION.md  # Implementation docs (v2.0)
+│   ├── Discussion about integrated model.md  # Integrated performance model design
 │   └── HRV_Ventilatory_Threshold_Comprehensive_Scientific_Report.md
 │
 ├── tests/                        # pytest test suite
@@ -399,7 +406,7 @@ The app is fully navigable **without uploading any HRV data**. These features wo
 | ----------------------- | -------------------------------------------------------------------------------------------- |
 | **Space Weather** | Fetch live NASA/NOAA data, see CME arrival predictions, get Polar H10 timing recommendations |
 | **Circadian**     | Simulate circadian rhythms with different light schedules and shift work scenarios           |
-| **SAFTE/Fatigue** | Run guided SAFTE fatigue workflows with auto-fill from wrist monitoring data                 |
+| **SAFTE/Fatigue** | Run 1–7 day SAFTE forecasts with Garmin sleep data, BAC equivalence, lapse probability, and FAST-style risk metrics |
 | **Biofeedback**   | Try the paced breathing demo with real-time coherence feedback                               |
 | **User Profile**  | Register profiles, complete clinical scales, explore all assessment tools                    |
 
@@ -551,7 +558,11 @@ All metrics, thresholds, and interpretations in this project are grounded in pee
 ### Fatigue Science
 
 - Hursh, S. R., Redmond, D. P., Johnson, M. L., Thorne, D. R., Belenky, G., Balkin, T. J., Storm, W. F., Miller, J. C., & Eddy, D. R. (2004). Fatigue models for applied research in warfighting. *Aviation, Space, and Environmental Medicine, 75*(3 Suppl), A44-A53. [DOI: 10.1097/01.ASM.0000122824.30373.5E](https://doi.org/10.1097/01.ASM.0000122824.30373.5E)
+- Peng, H., & Bouak, F. (2015). Development of bio-mathematical models for human performance under fatigue. *Defence Research and Development Canada Scientific Report*, DRDC-RDDC-2015-R280.
 - Van Dongen, H. P. A., Maislin, G., Mullington, J. M., & Dinges, D. F. (2003). The cumulative cost of additional wakefulness: Dose-response effects on neurobehavioral functions and sleep physiology from chronic sleep restriction and total sleep deprivation. *Sleep, 26*(2), 117-126. [DOI: 10.1093/sleep/26.2.117](https://doi.org/10.1093/sleep/26.2.117)
+- Dawson, D., & Reid, K. (1997). Fatigue, alcohol and performance impairment. *Nature, 388*(6639), 235. [DOI: 10.1038/40775](https://doi.org/10.1038/40775)
+- Hursh, S. R., Raslear, T. G., Kaye, A. S., & Fanzone, J. F. (2006). Validation and calibration of a fatigue assessment tool for railroad work schedules. *U.S. DOT/FRA Technical Report DOT/FRA/ORD-06/21*.
+- Borbely, A. A. (1982). A two process model of sleep regulation. *Human Neurobiology, 1*(3), 195-204.
 - International Civil Aviation Organization. (2016). *Manual for the Oversight of Fatigue Management Approaches* (Doc 9966, 2nd ed.). [PDF](https://www.icao.int/safety/fatiguemanagement/FRMS%20Tools/Doc%209966.FRMS.2016%20Edition.en.pdf)
 
 ### Allostatic Load and Trajectory Risk
