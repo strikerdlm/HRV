@@ -13,6 +13,19 @@ import type { METARResponse, WeatherResponse } from "@/types/research";
 import { RISK_LEVEL_COLORS } from "@/types/research";
 
 // ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Safely coerce an unknown METAR field to a finite number, or return `fallback`. */
+function toFiniteNum(v: unknown, fallback: number): number;
+function toFiniteNum(v: unknown, fallback: null): number | null;
+function toFiniteNum(v: unknown, fallback: number | null): number | null {
+  if (v == null) return fallback;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : fallback;
+}
+
+// ---------------------------------------------------------------------------
 // Default stations
 // ---------------------------------------------------------------------------
 
@@ -52,19 +65,22 @@ function WindCompass({ deg, speed, gust, unit }: { deg: number; speed: number; g
     ticks.push({ angle: a, len: a % 30 === 0 ? 10 : 5 });
   }
 
+  // Guard: only compute arrow geometry when deg is a valid finite number
+  const validDeg = Number.isFinite(deg);
+
   // Convert wind direction to radians (meteorological: 0=N, clockwise)
-  const arrowRad = ((deg - 90) * Math.PI) / 180;
-  const ax = cx + arrowLen * Math.cos(arrowRad);
-  const ay = cy + arrowLen * Math.sin(arrowRad);
+  const arrowRad = validDeg ? ((deg - 90) * Math.PI) / 180 : 0;
+  const ax = validDeg ? cx + arrowLen * Math.cos(arrowRad) : cx;
+  const ay = validDeg ? cy + arrowLen * Math.sin(arrowRad) : cy;
 
   // Arrow head
   const headSize = 8;
   const headAngle1 = arrowRad + Math.PI * 0.85;
   const headAngle2 = arrowRad - Math.PI * 0.85;
-  const h1x = ax + headSize * Math.cos(headAngle1);
-  const h1y = ay + headSize * Math.sin(headAngle1);
-  const h2x = ax + headSize * Math.cos(headAngle2);
-  const h2y = ay + headSize * Math.sin(headAngle2);
+  const h1x = validDeg ? ax + headSize * Math.cos(headAngle1) : cx;
+  const h1y = validDeg ? ay + headSize * Math.sin(headAngle1) : cy;
+  const h2x = validDeg ? ax + headSize * Math.cos(headAngle2) : cx;
+  const h2y = validDeg ? ay + headSize * Math.sin(headAngle2) : cy;
 
   // Speed color
   const speedColor = speed >= 25 ? "#e74c3c" : speed >= 15 ? "#f39c12" : "#2c3e50";
@@ -103,11 +119,15 @@ function WindCompass({ deg, speed, gust, unit }: { deg: number; speed: number; g
           );
         })}
 
-        {/* Wind arrow */}
-        <line x1={cx} y1={cy} x2={ax} y2={ay}
-          stroke={speedColor} strokeWidth="3" strokeLinecap="round" />
-        <polygon points={`${ax},${ay} ${h1x},${h1y} ${h2x},${h2y}`}
-          fill={speedColor} />
+        {/* Wind arrow (hidden when direction is invalid / VRB) */}
+        {validDeg && (
+          <>
+            <line x1={cx} y1={cy} x2={ax} y2={ay}
+              stroke={speedColor} strokeWidth="3" strokeLinecap="round" />
+            <polygon points={`${ax},${ay} ${h1x},${h1y} ${h2x},${h2y}`}
+              fill={speedColor} />
+          </>
+        )}
 
         {/* Center dot */}
         <circle cx={cx} cy={cy} r="4" fill={speedColor} />
@@ -122,7 +142,7 @@ function WindCompass({ deg, speed, gust, unit }: { deg: number; speed: number; g
           </text>
         )}
         <text x={cx} y={cy - 22} textAnchor="middle" fill="#2c3e50" fontSize="11">
-          {deg === 0 ? "VRB" : `${deg}`}
+          {!validDeg || deg === 0 ? "VRB" : `${deg}°`}
         </text>
       </svg>
     </div>
@@ -173,9 +193,9 @@ export function METARDashboard() {
   // Extract METAR fields
   const temp = m?.temp ?? m?.temperature ?? null;
   const dewp = m?.dewp ?? m?.dewpoint ?? null;
-  const windDir = m?.wdir ?? m?.windDirection ?? 0;
-  const windSpd = m?.wspd ?? m?.windSpeed ?? 0;
-  const windGust = m?.wgst ?? m?.windGust ?? null;
+  const windDir = toFiniteNum(m?.wdir ?? m?.windDirection, 0);
+  const windSpd = toFiniteNum(m?.wspd ?? m?.windSpeed, 0);
+  const windGust = toFiniteNum(m?.wgst ?? m?.windGust, null);
   const vis = m?.visib ?? m?.visibility ?? null;
   const altim = m?.altim ?? m?.altimeter ?? null;
   const fltCat = m?.fltCat ?? m?.flightCategory ?? null;
