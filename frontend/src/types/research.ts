@@ -493,6 +493,10 @@ export interface FatigueResponse {
   risk_color: "green" | "yellow" | "red";
   recommendations: string[];
   next_optimal_sleep: string | null;
+  // Garmin-derived sleep schedule for SAFTE model input
+  avg_sleep_duration_h: number | null;
+  typical_bedtime_h: number | null;
+  avg_sleep_efficiency: number | null;
 }
 
 // ---------------------------------------------------------------------------
