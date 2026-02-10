@@ -1805,6 +1805,12 @@ class FatigueResponse(BaseModel):
     
     # Recommendations
     recommendations: List[str] = Field(default_factory=list)
+    
+    # Garmin-derived sleep schedule (for frontend SAFTE model)
+    avg_sleep_duration_h: Optional[float] = None  # 7-day average sleep hours
+    typical_bedtime_h: Optional[float] = None      # Median bedtime (24 h decimal)
+    avg_sleep_efficiency: Optional[float] = None   # 7-day average efficiency (0-1)
+    next_optimal_sleep: Optional[str] = None       # Recommended bedtime HH:MM
     next_optimal_sleep: Optional[str] = None
 
 
@@ -1816,14 +1822,30 @@ async def get_fatigue_prediction(user_id: str) -> FatigueResponse:
         
         db = UserDatabase()
         
-        # Try to get Garmin sleep data
+        # Try to get Garmin sleep data (fall back to 'default' if user has none)
         garmin_data = await asyncio.to_thread(db.get_garmin_daily_metrics, user_id, 7)
+        if not garmin_data:
+            garmin_data = await asyncio.to_thread(db.get_garmin_daily_metrics, "default", 7)
         
-        # Calculate sleep debt from last 7 days
+        # Extract sleep metrics from last 7 days of Garmin data
         sleep_hours = []
+        bedtime_hours = []
+        efficiencies = []
         for g in garmin_data:
             if g.sleep_duration_hours:
                 sleep_hours.append(g.sleep_duration_hours)
+            if hasattr(g, "sleep_start_utc") and g.sleep_start_utc:
+                try:
+                    from datetime import datetime as _dt
+                    st = _dt.fromisoformat(g.sleep_start_utc.replace("Z", "+00:00"))
+                    bt_decimal = st.hour + st.minute / 60.0
+                    bedtime_hours.append(bt_decimal)
+                except (ValueError, AttributeError):
+                    pass
+            if hasattr(g, "sleep_efficiency") and g.sleep_efficiency is not None:
+                eff_val = g.sleep_efficiency
+                # Normalize: Garmin may return 0-100 or 0-1
+                efficiencies.append(eff_val / 100.0 if eff_val > 1.5 else eff_val)
         
         optimal = 8.0
         if sleep_hours:
@@ -1832,6 +1854,17 @@ async def get_fatigue_prediction(user_id: str) -> FatigueResponse:
         else:
             avg_sleep = optimal
             sleep_debt = 0
+        
+        # Derive typical bedtime (median of available data)
+        typical_bedtime: float | None = None
+        if bedtime_hours:
+            sorted_bt = sorted(bedtime_hours)
+            mid = len(sorted_bt) // 2
+            typical_bedtime = sorted_bt[mid]
+        
+        avg_efficiency: float | None = None
+        if efficiencies:
+            avg_efficiency = sum(efficiencies) / len(efficiencies)
         
         # Simple effectiveness model (inspired by SAFTE)
         base_effectiveness = 100
@@ -1888,6 +1921,13 @@ async def get_fatigue_prediction(user_id: str) -> FatigueResponse:
         if not recs:
             recs.append("Adequate rest levels - normal operations appropriate")
         
+        # Format next optimal sleep as HH:MM
+        next_sleep_str: str | None = None
+        if typical_bedtime is not None:
+            _bh = int(typical_bedtime)
+            _bm = int((typical_bedtime - _bh) * 60)
+            next_sleep_str = f"{_bh:02d}:{_bm:02d}"
+        
         return FatigueResponse(
             effectiveness_pct=effectiveness,
             fatigue_level=fatigue_level,
@@ -1898,6 +1938,10 @@ async def get_fatigue_prediction(user_id: str) -> FatigueResponse:
             risk_level=risk,
             risk_color=color,
             recommendations=recs,
+            avg_sleep_duration_h=round(avg_sleep, 1),
+            typical_bedtime_h=round(typical_bedtime, 1) if typical_bedtime else None,
+            avg_sleep_efficiency=round(avg_efficiency, 2) if avg_efficiency else None,
+            next_optimal_sleep=next_sleep_str,
         )
     except Exception as exc:
         _LOGGER.error(f"Error computing fatigue for {user_id}: {exc}")
