@@ -173,7 +173,10 @@ function ForecastChart({
   const effValues = forecast.effectiveness;
   const rawMin = Math.min(...effValues);
   const rawMax = Math.max(...effValues);
-  const yMin = Math.max(0, Math.floor((rawMin - 8) / 5) * 5);
+  // ALWAYS include the 60% BAC-equivalence threshold in the visible range
+  // so that risk zones are visible even for well-rested users.
+  const dataMin = Math.min(rawMin, 58);
+  const yMin = Math.max(0, Math.floor((dataMin - 5) / 5) * 5);
   const yMax = Math.min(100, Math.ceil((rawMax + 5) / 5) * 5);
   const minIdx = effValues.indexOf(rawMin);
   const maxIdx = effValues.indexOf(rawMax);
@@ -248,13 +251,8 @@ function ForecastChart({
       : Math.max(0, Math.floor(xLabels.length / 14) - 1);
 
   const option: Record<string, unknown> = {
-    title: {
-      text: `SAFTE Cognitive Effectiveness — ${predictionDays}-Day Forecast`,
-      left: "center",
-      top: 6,
-      textStyle: { color: "#1a1a1a", fontSize: 13, fontWeight: "bold" },
-    },
-    grid: { left: 55, right: 30, top: 48, bottom: 58, containLabel: true },
+    // Title is in Card header per publication rules — no title inside plot
+    grid: { left: 55, right: 30, top: 20, bottom: 58, containLabel: true },
     xAxis: {
       type: "category",
       data: xLabels,
@@ -405,13 +403,8 @@ function ProcessDecompositionChart({
   });
 
   const option: Record<string, unknown> = {
-    title: {
-      text: "Process Decomposition (S + C)",
-      left: "center",
-      top: 4,
-      textStyle: { color: "#1a1a1a", fontSize: 13, fontWeight: "bold" },
-    },
-    grid: { left: 55, right: 55, top: 48, bottom: 55, containLabel: true },
+    // Title is in Card header per publication rules
+    grid: { left: 55, right: 55, top: 20, bottom: 55, containLabel: true },
     legend: {
       bottom: 4,
       textStyle: { color: "#1a1a1a", fontSize: 10 },
@@ -494,6 +487,187 @@ function ProcessDecompositionChart({
   };
 
   return <EChartsWrapper option={option} height={300} showToolbox={false} />;
+}
+
+// ---------------------------------------------------------------------------
+// FAST-Style Derived Metrics Panel (BAC, Lapse Index, Sleep Debt, Risk Hours)
+// Based on: FRA validation data (Hursh et al. 2006), Dawson & Reid (1997)
+// ---------------------------------------------------------------------------
+function DerivedMetricsPanel({
+  forecast,
+  sleepDebt,
+  currentHour,
+}: {
+  forecast: SAFTEForecast;
+  sleepDebt: number;
+  currentHour: number;
+}) {
+  const eff = forecast.effectiveness;
+  const minEff = Math.min(...eff);
+  const avgEff = eff.reduce((a, b) => a + b, 0) / eff.length;
+
+  // BAC equivalence: Dawson & Reid (1997) — 22h awake ≈ 0.08% BAC
+  // Linear interpolation: BAC ≈ (100 - E) * 0.08 / 40
+  const bacEquiv = Math.max(0, ((100 - minEff) * 0.08) / 40);
+
+  // Lapse probability: Adapted from Van Dongen et al. (2003) PVT data
+  // Lapses increase exponentially below 77% effectiveness
+  const lapseProbAtMin = minEff < 77
+    ? Math.min(100, Math.round(100 * (1 - Math.exp(-0.05 * (77 - minEff)))))
+    : Math.round(Math.max(0, (77 - minEff) * 0.5));
+
+  // Hours in risk zone (below 77%)
+  const riskHours = eff.filter((e) => e < 77).length * 0.5;
+
+  // Hours in critical zone (below 60%)
+  const criticalHours = eff.filter((e) => e < 60).length * 0.5;
+
+  // X labels for the BAC timeline
+  const xLabels = forecast.hours.map((h) => {
+    const totalMin = Math.round(currentHour * 60 + h * 60) % (24 * 60);
+    const hh = Math.floor(totalMin / 60);
+    const mm = totalMin % 60;
+    const dayNum = Math.floor(h / 24) + 1;
+    const timeStr = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    return forecast.hours.length > 48 ? `D${dayNum} ${timeStr}` : timeStr;
+  });
+
+  // BAC equivalence time series
+  const bacSeries = eff.map((e) => {
+    const b = Math.max(0, ((100 - e) * 0.08) / 40);
+    return Math.round(b * 1000) / 1000;
+  });
+
+  // Lapse probability time series
+  const lapseSeries = eff.map((e) => {
+    if (e >= 90) return 0;
+    if (e >= 77) return Math.round((90 - e) * 1.5);
+    return Math.min(100, Math.round(100 * (1 - Math.exp(-0.05 * (77 - e))) + 20));
+  });
+
+  // --- BAC Equivalence Chart ---
+  const bacOption: Record<string, unknown> = {
+    // Title in surrounding UI — no title inside plot
+    grid: { left: 55, right: 25, top: 18, bottom: 50, containLabel: true },
+    xAxis: {
+      type: "category", data: xLabels, boundaryGap: false,
+      axisLabel: { color: "#1a1a1a", fontSize: 8, interval: Math.max(0, Math.floor(xLabels.length / 8) - 1) },
+      axisLine: { lineStyle: { color: "#2c3e50" } }, axisTick: { show: false },
+    },
+    yAxis: {
+      type: "value", name: "BAC (%)", nameLocation: "middle", nameGap: 38,
+      nameTextStyle: { color: "#1a1a1a", fontSize: 10, fontWeight: "bold" },
+      axisLabel: { color: "#1a1a1a", fontSize: 9, formatter: "{value}%" },
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: "rgba(44, 62, 80, 0.06)", type: "dashed" } },
+      min: 0,
+    },
+    series: [{
+      name: "BAC Equiv.",
+      type: "line", data: bacSeries, smooth: 0.3, symbol: "none",
+      lineStyle: { width: 2, color: SCIENTIFIC_COLORS.danger },
+      areaStyle: {
+        color: { type: "linear", x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: "rgba(231, 76, 60, 0.15)" },
+            { offset: 1, color: "rgba(231, 76, 60, 0)" },
+          ],
+        },
+      },
+      markLine: {
+        silent: true, symbol: "none",
+        data: [{
+          yAxis: 0.08,
+          label: { formatter: "Legal limit 0.08%", position: "insideEndTop", color: SCIENTIFIC_COLORS.danger, fontSize: 8 },
+          lineStyle: { color: SCIENTIFIC_COLORS.danger, opacity: 0.5, type: "dashed", width: 1 },
+        }],
+      },
+    }],
+    tooltip: {
+      trigger: "axis", backgroundColor: "rgba(255,255,255,0.97)",
+      borderColor: "#e2e8f0", borderRadius: 8,
+      textStyle: { color: "#1a1a1a", fontSize: 11 },
+      formatter: (params: unknown) => {
+        const arr = params as Array<{ name: string; value: number }>;
+        if (!arr[0]) return "";
+        return `<b>${arr[0].name}</b><br/>BAC: <span style="color:${SCIENTIFIC_COLORS.danger};font-weight:700">${arr[0].value.toFixed(3)}%</span>`;
+      },
+    },
+    dataZoom: [{ type: "inside", start: 0, end: 100 }],
+  };
+
+  // --- Lapse Probability Chart ---
+  const lapseOption: Record<string, unknown> = {
+    // Title in surrounding UI — no title inside plot
+    grid: { left: 55, right: 25, top: 18, bottom: 50, containLabel: true },
+    xAxis: {
+      type: "category", data: xLabels, boundaryGap: false,
+      axisLabel: { color: "#1a1a1a", fontSize: 8, interval: Math.max(0, Math.floor(xLabels.length / 8) - 1) },
+      axisLine: { lineStyle: { color: "#2c3e50" } }, axisTick: { show: false },
+    },
+    yAxis: {
+      type: "value", name: "Lapse P (%)", nameLocation: "middle", nameGap: 38,
+      nameTextStyle: { color: "#1a1a1a", fontSize: 10, fontWeight: "bold" },
+      min: 0, max: 100,
+      axisLabel: { color: "#1a1a1a", fontSize: 9, formatter: "{value}%" },
+      axisLine: { show: false },
+      splitLine: { lineStyle: { color: "rgba(44, 62, 80, 0.06)", type: "dashed" } },
+    },
+    visualMap: {
+      show: false, type: "piecewise", dimension: 1, seriesIndex: 0,
+      pieces: [
+        { gte: 50, color: SCIENTIFIC_COLORS.danger },
+        { gte: 20, lt: 50, color: SCIENTIFIC_COLORS.warning },
+        { lt: 20, color: SCIENTIFIC_COLORS.success },
+      ],
+    },
+    series: [{
+      name: "Lapse P",
+      type: "line", data: lapseSeries, smooth: 0.3, symbol: "none",
+      lineStyle: { width: 2 },
+      areaStyle: { opacity: 0.08 },
+    }],
+    tooltip: {
+      trigger: "axis", backgroundColor: "rgba(255,255,255,0.97)",
+      borderColor: "#e2e8f0", borderRadius: 8,
+      textStyle: { color: "#1a1a1a", fontSize: 11 },
+    },
+    dataZoom: [{ type: "inside", start: 0, end: 100 }],
+  };
+
+  return (
+    <div className="space-y-4">
+      {/* Summary metrics row */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        {[
+          { label: "Min Effectiveness", value: `${minEff.toFixed(0)}%`, color: minEff < 60 ? SCIENTIFIC_COLORS.danger : minEff < 77 ? SCIENTIFIC_COLORS.warning : SCIENTIFIC_COLORS.success },
+          { label: "Avg Effectiveness", value: `${avgEff.toFixed(0)}%`, color: avgEff < 60 ? SCIENTIFIC_COLORS.danger : avgEff < 77 ? SCIENTIFIC_COLORS.warning : SCIENTIFIC_COLORS.success },
+          { label: "Peak BAC Equiv.", value: `${bacEquiv.toFixed(3)}%`, color: bacEquiv >= 0.08 ? SCIENTIFIC_COLORS.danger : bacEquiv >= 0.04 ? SCIENTIFIC_COLORS.warning : SCIENTIFIC_COLORS.success },
+          { label: "Risk Hours (<77%)", value: `${riskHours.toFixed(1)} h`, color: riskHours > 4 ? SCIENTIFIC_COLORS.danger : riskHours > 1 ? SCIENTIFIC_COLORS.warning : SCIENTIFIC_COLORS.success },
+          { label: "Sleep Debt", value: `${sleepDebt.toFixed(1)} h`, color: sleepDebt > 4 ? SCIENTIFIC_COLORS.danger : sleepDebt > 2 ? SCIENTIFIC_COLORS.warning : SCIENTIFIC_COLORS.success },
+        ].map((m) => (
+          <div key={m.label} className="p-3 rounded-lg border text-center">
+            <p className="text-[10px] text-muted-foreground">{m.label}</p>
+            <p className="text-lg font-bold" style={{ color: m.color }}>{m.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* BAC and Lapse charts — titles outside per publication rules */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div>
+          <p className="text-xs font-semibold text-foreground mb-1">Blood Alcohol Concentration Equivalence</p>
+          <p className="text-[10px] text-muted-foreground mb-2">Dawson &amp; Reid (1997): cognitive impairment mapping</p>
+          <EChartsWrapper option={bacOption} height={260} showToolbox={false} />
+        </div>
+        <div>
+          <p className="text-xs font-semibold text-foreground mb-1">Cognitive Lapse Probability</p>
+          <p className="text-[10px] text-muted-foreground mb-2">Van Dongen et al. (2003): PVT lapse prediction</p>
+          <EChartsWrapper option={lapseOption} height={260} showToolbox={false} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -668,7 +842,12 @@ export default function FatiguePage() {
       // -----------------------------------------------------------------
       const baseEff = result.effectiveness_pct ?? 76;
       const sleepDebt = result.sleep_debt_hours ?? 2.5;
-      const safteForecast = generateSAFTEForecast(baseEff, sleepDebt, predictionDays);
+      // Use Garmin-derived sleep schedule when available, otherwise defaults
+      const bedtime = result.typical_bedtime_h ?? 23;
+      const sleepDur = result.avg_sleep_duration_h ?? 7;
+      const safteForecast = generateSAFTEForecast(
+        baseEff, sleepDebt, predictionDays, bedtime, sleepDur,
+      );
       setForecast(safteForecast);
       const forecast = safteForecast;
 
@@ -896,11 +1075,40 @@ export default function FatiguePage() {
               </motion.div>
             )}
 
+            {/* FAST-Style Derived Metrics */}
+            {forecast && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+              >
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <AlertTriangle className="h-5 w-5 text-danger" />
+                      FAST-Style Fatigue Risk Metrics
+                    </CardTitle>
+                    <CardDescription className="text-xs">
+                      BAC equivalence (Dawson & Reid, 1997), lapse probability (Van Dongen et al., 2003),
+                      and risk-hour analysis derived from the SAFTE effectiveness curve
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-2">
+                    <DerivedMetricsPanel
+                      forecast={forecast}
+                      sleepDebt={data.sleep_debt_hours ?? 0}
+                      currentHour={new Date().getHours()}
+                    />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
+
             {/* Integrated Physiological Model */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
+              transition={{ delay: 0.45 }}
             >
               <Card>
                 <CardHeader className="pb-2">
