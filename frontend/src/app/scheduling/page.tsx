@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { currentSAFTEEffectiveness } from "@/lib/safte-model";
 import {
   Calendar,
   Clock,
@@ -3335,7 +3336,7 @@ export default function SchedulingPage() {
         role: ROLES[idx % ROLES.length],
         status: idx === 0 ? "on_duty" : idx === 2 ? "rest" : "on_duty",
         ihpiScore: Math.round(70 + Math.random() * 25),
-        fatigueLevel: Math.round(20 + Math.random() * 30),
+        fatigueLevel: Math.round(100 - currentSAFTEEffectiveness(Math.round(Math.random() * 3 * 10) / 10)),
         sleepDebt: Math.round(Math.random() * 3 * 10) / 10,
         lastSleep: "22:00",
         readinessScore: Math.round(60 + Math.random() * 35),
