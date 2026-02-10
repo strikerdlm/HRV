@@ -3,6 +3,7 @@
 
 import * as React from "react";
 import { motion } from "framer-motion";
+import { currentSAFTEEffectiveness } from "@/lib/safte-model";
 import {
   Users,
   FlaskConical,
@@ -577,10 +578,13 @@ function buildCrewGaugeData(users: UserProfile[]): Array<{
 }> {
   const roles = ["CDR", "PLT", "MS1", "MS2", "MS3", "MS4"];
   return users.map((u, i) => {
-    // Derive a plausible IHPI from available profile data
+    // Derive IHPI using SAFTE model for fatigue + simulated sleep debt
+    // Each crew member gets a slightly different sleep debt for variation
     const baseScore = 75 + Math.round(Math.random() * 20);
-    const fatigue = Math.round(15 + Math.random() * 30);
     const sleepDebt = +(Math.random() * 3).toFixed(1);
+    // SAFTE-computed fatigue: 100 - effectiveness (higher = more fatigued)
+    const safteEff = currentSAFTEEffectiveness(sleepDebt);
+    const fatigue = Math.round(100 - safteEff);
 
     // Hydration-thermoregulation modifier (simulated for dashboard)
     // In production, this would come from real-time physiological data
