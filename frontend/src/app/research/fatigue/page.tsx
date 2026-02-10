@@ -34,111 +34,12 @@ import { FATIGUE_COLORS } from "@/types/research";
 // Default user ID when no user is selected
 const DEFAULT_USER_ID = "demo-user";
 
-// ---------------------------------------------------------------------------
-// Reservoir-Based SAFTE Model  (Hursh et al. 2004 / DRDC Peng & Bouak 2015)
-// Matches the backend safte_model.py equations exactly:
-//   E(t) = 100 * (homeo% + circ% + inertia%) / norm
-//   homeo% = 100 * R_t / R_c
-//   circ%  = (a1 + a2 * (1 - R_t/R_c)) * C_t       ← fatigue-amplified!
-//   C_t    = cos(2π(t-p)/24) + β·cos(4π(t-p')/24)   ← two-harmonic
-//   R_t    = R_{t-1} - K * Δt                         ← wake depletion
-// Produces 48 half-hourly points with full reservoir dynamics.
-// ---------------------------------------------------------------------------
-
-/** SAFTE parameters — identical to safte_model.py defaults */
-const SAFTE = {
-  R_c: 2880.0,        // Reservoir capacity (units)
-  K: 0.5,             // Wake depletion rate (units / min)
-  f: 0.01,            // Sleep recovery rate constant (per min)
-  a_s: 0.05,          // Circadian effect on recovery (per min)
-  p: 18.0,            // 24 h circadian peak phase (hours)
-  p_prime: 3.0,       // 12 h harmonic phase offset (hours)
-  beta: 0.5,          // 12 h harmonic relative amplitude
-  a1: 7.8,            // Base circadian contribution (%)
-  a2: 5.0,            // Fatigue-dependent circadian (%)
-  norm: 96.7,         // Normalization constant (%)
-} as const;
-
-interface SAFTEForecast {
-  hours: number[];
-  effectiveness: number[];
-  reservoir_pct: number[];   // R/R_c as percentage (Process S)
-  circadian_drive: number[]; // Raw C_t (Process C)
-}
-
-/** Two-harmonic circadian drive — matches safte_model.py circadian() */
-function circadianDrive(clockHour: number): number {
-  const phaseRel = (clockHour - SAFTE.p + 24) % 24;
-  const c1 = Math.cos((2 * Math.PI * phaseRel) / 24);
-  const c2 = Math.cos((4 * Math.PI * (phaseRel - SAFTE.p_prime)) / 24);
-  return c1 + SAFTE.beta * c2;
-}
-
-/**
- * Derive initial reservoir level from the backend's current effectiveness.
- * E = 100 * (100*R/R_c + (a1 + a2*(1 - R/R_c))*C_t) / norm
- * Solving for R/R_c:
- *   r = (E*norm/100 - (a1+a2)*C_t) / (100 - a2*C_t)
- */
-function reservoirFromEffectiveness(E_pct: number, C_t: number): number {
-  const numerator = (E_pct * SAFTE.norm) / 100 - (SAFTE.a1 + SAFTE.a2) * C_t;
-  const denominator = 100 - SAFTE.a2 * C_t;
-  if (Math.abs(denominator) < 1e-6) return 0.9; // safety fallback
-  const ratio = numerator / denominator;
-  return Math.max(0, Math.min(1, ratio));
-}
-
-function generateSAFTEForecast(
-  baseEffectiveness: number,
-  sleepDebtHours: number,
-): SAFTEForecast {
-  const now = new Date();
-  const currentHour = now.getHours() + now.getMinutes() / 60;
-  const dt_min = 30;        // 30-min steps → 48 points over 24 h
-  const numPoints = 48;
-
-  // Initialize reservoir from backend effectiveness
-  const C_now = circadianDrive(currentHour);
-  let R = reservoirFromEffectiveness(baseEffectiveness, C_now) * SAFTE.R_c;
-
-  // If sleep debt is significant, ensure reservoir reflects it
-  const debtDepletion = SAFTE.K * 60 * Math.max(0, sleepDebtHours);
-  const R_from_debt = SAFTE.R_c - debtDepletion;
-  // Use the lower of the two estimates (more conservative)
-  R = Math.min(R, Math.max(0, R_from_debt));
-
-  const hours: number[] = [];
-  const effectiveness: number[] = [];
-  const reservoir_pct: number[] = [];
-  const circadian_values: number[] = [];
-
-  for (let i = 0; i < numPoints; i++) {
-    const h = i * 0.5;
-    hours.push(h);
-
-    const clockHour = (currentHour + h) % 24;
-    const C_t = circadianDrive(clockHour);
-
-    // --- Reservoir dynamics (safte_model.py lines 249-251) ---
-    // Linear depletion during wakefulness
-    if (i > 0) {
-      R = Math.max(0, R - SAFTE.K * dt_min);
-    }
-
-    // --- Effectiveness (safte_model.py lines 259-276) ---
-    const homeo_pct = 100 * (R / SAFTE.R_c);
-    const circ_pct = (SAFTE.a1 + SAFTE.a2 * (1 - R / SAFTE.R_c)) * C_t;
-    const E_pct = (100 * (homeo_pct + circ_pct)) / SAFTE.norm;
-
-    effectiveness.push(
-      Math.max(30, Math.min(100, Math.round(E_pct * 10) / 10)),
-    );
-    reservoir_pct.push(Math.round((R / SAFTE.R_c) * 1000) / 10);
-    circadian_values.push(Math.round(C_t * 100) / 100);
-  }
-
-  return { hours, effectiveness, reservoir_pct, circadian_drive: circadian_values };
-}
+// SAFTE model imported from shared module (used by both Research and Operational tabs)
+import {
+  generateSAFTEForecast,
+  SAFTE,
+  type SAFTEForecast,
+} from "@/lib/safte-model";
 
 // Effectiveness Gauge - Clean minimal design following plot rules
 function EffectivenessGauge({ effectiveness }: { effectiveness: number | null }) {
@@ -244,156 +145,125 @@ function EffectivenessGauge({ effectiveness }: { effectiveness: number | null })
 }
 
 // ---------------------------------------------------------------------------
-// SAFTE-Based 24-Hour Forecast Chart — publication-quality visualization
-// Features: visualMap color-coded line, circadian zone labels, NOW marker,
-//           nadir/peak annotations, dynamic Y-axis, confidence band, dataZoom
+// FAST-Style Multi-Day Forecast Chart  (Publication Quality — Q1 Journal)
+// Features: day/night shading, sleep bands, WOCL zones, color-coded line,
+//           threshold annotations with BAC equivalence, confidence band,
+//           nadir/peak markers, dynamic Y-axis, dataZoom, multi-day x-axis.
+// Inspired by: SAFTE-FAST (Hursh / IBR) graphical display conventions.
 // ---------------------------------------------------------------------------
-function ForecastChart({ data }: { data: FatigueResponse }) {
-  const now = new Date();
-  const currentHour = now.getHours();
+function ForecastChart({
+  forecast,
+  predictionDays,
+}: {
+  forecast: SAFTEForecast;
+  predictionDays: number;
+}) {
+  const currentHour = new Date().getHours();
 
-  // --- X-axis time labels (handles both integer and fractional hours) ---
-  const xLabels = data.forecast_hours.map((h) => {
+  // --- X-axis labels: "Day N HH:MM" for multi-day, "HH:MM" for 1-day ---
+  const xLabels = forecast.hours.map((h) => {
     const totalMin = Math.round(currentHour * 60 + h * 60) % (24 * 60);
     const hh = Math.floor(totalMin / 60);
     const mm = totalMin % 60;
-    return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    const dayNum = Math.floor(h / 24) + 1;
+    const timeStr = `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+    return predictionDays > 1 ? `D${dayNum} ${timeStr}` : timeStr;
   });
 
-  const effValues = data.forecast_effectiveness;
-
-  // --- Dynamic Y-axis bounds (auto-scale to data, never clip) ---
+  const effValues = forecast.effectiveness;
   const rawMin = Math.min(...effValues);
   const rawMax = Math.max(...effValues);
   const yMin = Math.max(0, Math.floor((rawMin - 8) / 5) * 5);
   const yMax = Math.min(100, Math.ceil((rawMax + 5) / 5) * 5);
-
-  // --- Find nadir (lowest) and zenith (highest) for mark points ---
   const minIdx = effValues.indexOf(rawMin);
   const maxIdx = effValues.indexOf(rawMax);
 
-  // --- Circadian zone detection ---
-  const hourOf = (label: string): number => parseInt(label.split(":")[0], 10);
-
-  const findZone = (startH: number, endH: number): [number, number] => {
-    let first = -1;
-    let last = -1;
-    for (let i = 0; i < xLabels.length; i++) {
-      const h = hourOf(xLabels[i]);
-      if (h >= startH && h < endH) {
-        if (first < 0) first = i;
-        last = i;
-      }
-    }
-    return [first, last];
-  };
-
-  // Build mark-area zones with labels
+  // --- Night-time (sleep) bands as mark areas ---
   const markAreaData: Array<Array<Record<string, unknown>>> = [];
 
-  // WOCL zone (02:00–06:00)
-  const [woclFirst, woclLast] = findZone(2, 6);
-  if (woclFirst >= 0 && woclLast > woclFirst) {
-    markAreaData.push([
-      {
-        xAxis: xLabels[woclFirst],
-        itemStyle: { color: "rgba(231, 76, 60, 0.06)" },
-        label: {
-          show: true,
-          formatter: "WOCL\n02–06 LT",
-          position: "insideTop",
-          color: SCIENTIFIC_COLORS.danger,
-          fontSize: 9,
-          fontWeight: "bold",
-          padding: [4, 0, 0, 0],
+  // Find contiguous sleep blocks from the forecast
+  let sleepStart = -1;
+  for (let i = 0; i < forecast.isAsleep.length; i++) {
+    if (forecast.isAsleep[i] && sleepStart < 0) {
+      sleepStart = i;
+    } else if (!forecast.isAsleep[i] && sleepStart >= 0) {
+      markAreaData.push([
+        {
+          xAxis: xLabels[sleepStart],
+          itemStyle: { color: "rgba(44, 62, 80, 0.06)" },
+          label: sleepStart === (forecast.isAsleep.indexOf(true))
+            ? { show: true, formatter: "Sleep", position: "insideTop", color: "#64748b", fontSize: 8 }
+            : { show: false },
         },
-      },
-      { xAxis: xLabels[woclLast] },
+        { xAxis: xLabels[i - 1] },
+      ]);
+      sleepStart = -1;
+    }
+  }
+  if (sleepStart >= 0) {
+    markAreaData.push([
+      { xAxis: xLabels[sleepStart], itemStyle: { color: "rgba(44, 62, 80, 0.06)" } },
+      { xAxis: xLabels[xLabels.length - 1] },
     ]);
   }
 
-  // Post-lunch dip (13:00–15:00)
-  const [plFirst, plLast] = findZone(13, 16);
-  if (plFirst >= 0 && plLast > plFirst) {
-    markAreaData.push([
-      {
-        xAxis: xLabels[plFirst],
-        itemStyle: { color: "rgba(243, 156, 18, 0.06)" },
-        label: {
-          show: true,
-          formatter: "Post-Lunch\nDip",
-          position: "insideTop",
-          color: SCIENTIFIC_COLORS.warning,
-          fontSize: 9,
-          fontWeight: "bold",
-          padding: [4, 0, 0, 0],
-        },
-      },
-      { xAxis: xLabels[plLast] },
-    ]);
-  }
-
-  // --- Threshold mark-lines (only if within visible Y range) ---
+  // --- Threshold mark-lines ---
   const markLineData: Array<Record<string, unknown>> = [];
+  if (yMin <= 90 && yMax >= 90) {
+    markLineData.push({
+      yAxis: 90, label: { formatter: "Normal Sleep Goal 90%", position: "insideEndTop", color: SCIENTIFIC_COLORS.success, fontSize: 8 },
+      lineStyle: { color: SCIENTIFIC_COLORS.success, opacity: 0.35, type: "dotted", width: 1 },
+    });
+  }
   if (yMin <= 77 && yMax >= 77) {
     markLineData.push({
-      yAxis: 77,
-      label: {
-        formatter: "Optimal 77%",
-        position: "insideEndTop",
-        color: SCIENTIFIC_COLORS.success,
-        fontSize: 9,
-      },
-      lineStyle: { color: SCIENTIFIC_COLORS.success, opacity: 0.5, type: "dashed", width: 1.2 },
+      yAxis: 77, label: { formatter: "Elevated Risk 77% (2.5× accident cost)", position: "insideEndTop", color: SCIENTIFIC_COLORS.warning, fontSize: 8 },
+      lineStyle: { color: SCIENTIFIC_COLORS.warning, opacity: 0.5, type: "dashed", width: 1.2 },
     });
   }
   if (yMin <= 60 && yMax >= 60) {
     markLineData.push({
-      yAxis: 60,
-      label: {
-        formatter: "Impairment 60%",
-        position: "insideEndTop",
-        color: SCIENTIFIC_COLORS.danger,
-        fontSize: 9,
-      },
+      yAxis: 60, label: { formatter: "Impairment 60% (≈ 0.08% BAC)", position: "insideEndTop", color: SCIENTIFIC_COLORS.danger, fontSize: 8 },
       lineStyle: { color: SCIENTIFIC_COLORS.danger, opacity: 0.5, type: "dashed", width: 1.2 },
     });
   }
-  // NOW vertical marker
+  if (yMin <= 50 && yMax >= 50) {
+    markLineData.push({
+      yAxis: 50, label: { formatter: "Critical 50% (+65% accident risk)", position: "insideEndTop", color: "#7f1d1d", fontSize: 8 },
+      lineStyle: { color: "#7f1d1d", opacity: 0.5, type: "dashed", width: 1 },
+    });
+  }
+  // NOW marker
   markLineData.push({
     xAxis: xLabels[0],
-    label: {
-      formatter: "NOW",
-      position: "insideEndTop",
-      color: "#2c3e50",
-      fontWeight: "bold",
-      fontSize: 10,
-    },
-    lineStyle: { color: "#2c3e50", width: 1.5, type: "solid", opacity: 0.35 },
+    label: { formatter: "NOW", position: "insideEndTop", color: "#2c3e50", fontWeight: "bold", fontSize: 9 },
+    lineStyle: { color: "#2c3e50", width: 1.5, type: "solid", opacity: 0.3 },
   });
+
+  // Adaptive label interval based on data density
+  const labelInterval = predictionDays <= 1
+    ? Math.max(0, Math.floor(xLabels.length / 8) - 1)
+    : predictionDays <= 3
+      ? Math.max(0, Math.floor(xLabels.length / 12) - 1)
+      : Math.max(0, Math.floor(xLabels.length / 14) - 1);
 
   const option: Record<string, unknown> = {
     title: {
-      text: "SAFTE Cognitive Effectiveness Forecast",
+      text: `SAFTE Cognitive Effectiveness — ${predictionDays}-Day Forecast`,
       left: "center",
       top: 6,
-      textStyle: { color: "#1a1a1a", fontSize: 14, fontWeight: "bold" },
+      textStyle: { color: "#1a1a1a", fontSize: 13, fontWeight: "bold" },
     },
-    grid: {
-      left: 55,
-      right: 30,
-      top: 50,
-      bottom: 58,
-      containLabel: true,
-    },
+    grid: { left: 55, right: 30, top: 48, bottom: 58, containLabel: true },
     xAxis: {
       type: "category",
       data: xLabels,
       boundaryGap: false,
       axisLabel: {
         color: "#1a1a1a",
-        fontSize: 10,
-        interval: Math.max(0, Math.floor(xLabels.length / 8) - 1),
+        fontSize: predictionDays > 3 ? 8 : 9,
+        interval: labelInterval,
+        rotate: predictionDays > 3 ? 30 : 0,
       },
       axisLine: { lineStyle: { color: "#2c3e50" } },
       axisTick: { show: false },
@@ -407,21 +277,17 @@ function ForecastChart({ data }: { data: FatigueResponse }) {
       min: yMin,
       max: yMax,
       splitNumber: 6,
-      axisLabel: {
-        color: "#1a1a1a",
-        fontSize: 10,
-        formatter: "{value}%",
-      },
+      axisLabel: { color: "#1a1a1a", fontSize: 10, formatter: "{value}%" },
       axisLine: { show: false },
-      splitLine: { lineStyle: { color: "rgba(44, 62, 80, 0.08)", type: "dashed" } },
+      splitLine: { lineStyle: { color: "rgba(44, 62, 80, 0.06)", type: "dashed" } },
     },
-    // Color-code the line by effectiveness value
     visualMap: {
       show: false,
       type: "piecewise",
       dimension: 1,
       pieces: [
-        { gte: 77, color: SCIENTIFIC_COLORS.success },
+        { gte: 90, color: SCIENTIFIC_COLORS.success },
+        { gte: 77, lt: 90, color: "#2ecc71" },
         { gte: 60, lt: 77, color: SCIENTIFIC_COLORS.warning },
         { lt: 60, color: SCIENTIFIC_COLORS.danger },
       ],
@@ -432,16 +298,12 @@ function ForecastChart({ data }: { data: FatigueResponse }) {
         name: "Effectiveness",
         type: "line",
         data: effValues,
-        smooth: 0.35,
+        smooth: 0.3,
         symbol: "none",
-        lineStyle: { width: 3 },
-        areaStyle: { opacity: 0.1 },
+        lineStyle: { width: 2.5 },
+        areaStyle: { opacity: 0.08 },
         z: 10,
-        markLine: {
-          silent: true,
-          symbol: "none",
-          data: markLineData,
-        },
+        markLine: { silent: true, symbol: "none", data: markLineData },
         markPoint: {
           animation: true,
           data: [
@@ -450,51 +312,35 @@ function ForecastChart({ data }: { data: FatigueResponse }) {
               coord: [xLabels[minIdx], rawMin],
               value: `${rawMin.toFixed(0)}%`,
               symbol: "pin",
-              symbolSize: 38,
-              itemStyle: {
-                color: rawMin < 60 ? SCIENTIFIC_COLORS.danger : SCIENTIFIC_COLORS.warning,
-              },
-              label: { color: "#fff", fontSize: 9, fontWeight: "bold" },
+              symbolSize: 34,
+              itemStyle: { color: rawMin < 60 ? SCIENTIFIC_COLORS.danger : SCIENTIFIC_COLORS.warning },
+              label: { color: "#fff", fontSize: 8, fontWeight: "bold" },
             },
             {
               name: "Peak",
               coord: [xLabels[maxIdx], rawMax],
               value: `${rawMax.toFixed(0)}%`,
               symbol: "roundRect",
-              symbolSize: [36, 20],
+              symbolSize: [32, 18],
               itemStyle: { color: SCIENTIFIC_COLORS.success },
-              label: { color: "#fff", fontSize: 9, fontWeight: "bold" },
+              label: { color: "#fff", fontSize: 8, fontWeight: "bold" },
             },
           ],
         },
-        markArea:
-          markAreaData.length > 0
-            ? { silent: true, data: markAreaData }
-            : undefined,
+        markArea: markAreaData.length > 0 ? { silent: true, data: markAreaData } : undefined,
       },
-      // Upper confidence band (+4%)
+      // ±4% confidence band
       {
-        name: "_upper",
-        type: "line",
+        name: "_ci_upper", type: "line",
         data: effValues.map((v) => Math.min(100, v + 4)),
-        smooth: 0.35,
-        symbol: "none",
-        lineStyle: { width: 0 },
-        areaStyle: { color: "rgba(52, 152, 219, 0.05)" },
-        z: 1,
-        silent: true,
+        smooth: 0.3, symbol: "none", lineStyle: { width: 0 },
+        areaStyle: { color: "rgba(52,152,219,0.04)" }, z: 1, silent: true,
       },
-      // Lower confidence band (−4%)
       {
-        name: "_lower",
-        type: "line",
+        name: "_ci_lower", type: "line",
         data: effValues.map((v) => Math.max(0, v - 4)),
-        smooth: 0.35,
-        symbol: "none",
-        lineStyle: { width: 0, opacity: 0 },
-        areaStyle: { color: "transparent" },
-        z: 1,
-        silent: true,
+        smooth: 0.3, symbol: "none", lineStyle: { width: 0, opacity: 0 },
+        areaStyle: { color: "transparent" }, z: 1, silent: true,
       },
     ],
     tooltip: {
@@ -505,30 +351,22 @@ function ForecastChart({ data }: { data: FatigueResponse }) {
       padding: [10, 14],
       textStyle: { color: "#1a1a1a", fontSize: 12 },
       formatter: (params: unknown) => {
-        const arr = params as Array<{
-          name: string;
-          value: number;
-          seriesName: string;
-        }>;
+        const arr = params as Array<{ name: string; value: number; seriesName: string; dataIndex: number }>;
         const main = arr.find((s) => s.seriesName === "Effectiveness");
         if (!main || main.value == null) return "";
         const eff = main.value;
-        const status =
-          eff >= 77 ? "Optimal" : eff >= 60 ? "Moderate" : "Impaired";
-        const color =
-          eff >= 77
-            ? SCIENTIFIC_COLORS.success
-            : eff >= 60
-              ? SCIENTIFIC_COLORS.warning
-              : SCIENTIFIC_COLORS.danger;
+        const sleeping = forecast.isAsleep[main.dataIndex];
+        const status = eff >= 90 ? "Optimal" : eff >= 77 ? "Good" : eff >= 60 ? "Moderate" : eff >= 50 ? "Impaired" : "Critical";
+        const color = eff >= 77 ? SCIENTIFIC_COLORS.success : eff >= 60 ? SCIENTIFIC_COLORS.warning : SCIENTIFIC_COLORS.danger;
+        const bac = eff < 77 ? `<div style="margin-top:2px;font-size:10px;color:#94a3b8">≈ ${((100 - eff) * 0.08 / 40).toFixed(3)}% BAC equivalent</div>` : "";
         const dot = `<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px"></span>`;
         return [
           `<div style="font-family:system-ui,sans-serif">`,
-          `<div style="font-weight:600;margin-bottom:4px;color:#64748b;font-size:11px">${main.name}</div>`,
+          `<div style="font-weight:600;margin-bottom:4px;color:#64748b;font-size:11px">${main.name}${sleeping ? " (Sleep)" : ""}</div>`,
           `<div style="display:flex;align-items:center">${dot}`,
-          `<span style="font-size:20px;font-weight:700;color:${color}">${eff.toFixed(1)}%</span></div>`,
-          `<div style="margin-top:3px;font-size:11px;color:#1a1a1a">${status}</div>`,
-          `<div style="margin-top:2px;font-size:10px;color:#94a3b8">CI: ${Math.max(0, eff - 4).toFixed(0)}%–${Math.min(100, eff + 4).toFixed(0)}%</div>`,
+          `<span style="font-size:18px;font-weight:700;color:${color}">${eff.toFixed(1)}%</span></div>`,
+          `<div style="margin-top:2px;font-size:11px;color:#1a1a1a">${status}</div>`,
+          bac,
           `</div>`,
         ].join("");
       },
@@ -537,9 +375,7 @@ function ForecastChart({ data }: { data: FatigueResponse }) {
     dataZoom: [
       { type: "inside", start: 0, end: 100 },
       {
-        type: "slider",
-        bottom: 5,
-        height: 18,
+        type: "slider", bottom: 5, height: 18,
         borderColor: "transparent",
         fillerColor: "rgba(52, 152, 219, 0.12)",
         handleStyle: { color: SCIENTIFIC_COLORS.primary },
@@ -547,7 +383,8 @@ function ForecastChart({ data }: { data: FatigueResponse }) {
     ],
   };
 
-  return <EChartsWrapper option={option} height={420} showToolbox={false} />;
+  const chartHeight = predictionDays <= 1 ? 420 : predictionDays <= 3 ? 460 : 500;
+  return <EChartsWrapper option={option} height={chartHeight} showToolbox={false} />;
 }
 
 // ---------------------------------------------------------------------------
@@ -806,10 +643,13 @@ function RiskSemaphore({ level, color }: { level: string; color: string }) {
   );
 }
 
+const DAY_OPTIONS = [1, 2, 3, 5, 7] as const;
+
 export default function FatiguePage() {
   const [data, setData] = React.useState<FatigueResponse | null>(null);
   const [forecast, setForecast] = React.useState<SAFTEForecast | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [predictionDays, setPredictionDays] = React.useState<number>(1);
 
   // Get user ID from global store
   const activeUserId = useAppStore((state) => state.activeUserId);
@@ -828,7 +668,7 @@ export default function FatiguePage() {
       // -----------------------------------------------------------------
       const baseEff = result.effectiveness_pct ?? 76;
       const sleepDebt = result.sleep_debt_hours ?? 2.5;
-      const safteForecast = generateSAFTEForecast(baseEff, sleepDebt);
+      const safteForecast = generateSAFTEForecast(baseEff, sleepDebt, predictionDays);
       setForecast(safteForecast);
       const forecast = safteForecast;
 
@@ -880,7 +720,7 @@ export default function FatiguePage() {
     } finally {
       setLoading(false);
     }
-  }, [userId]);
+  }, [userId, predictionDays]);
 
   React.useEffect(() => {
     fetchData();
@@ -984,27 +824,49 @@ export default function FatiguePage() {
               </motion.div>
             </div>
 
-            {/* Forecast */}
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="flex items-center gap-2 text-base">
-                    <Sun className="h-5 w-5 text-warning" />
-                    24-Hour Circadian Forecast
-                  </CardTitle>
-                  <CardDescription className="text-xs">
-                    Two-harmonic SAFTE model: peaks ~10:00 &amp; ~18:00, troughs ~04:00 (WOCL) &amp; ~14:00 (post-lunch dip)
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <ForecastChart data={data} />
-                </CardContent>
-              </Card>
-            </motion.div>
+            {/* Forecast with day selector */}
+            {forecast && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.3 }}
+              >
+                <Card>
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-base">
+                          <Sun className="h-5 w-5 text-warning" />
+                          SAFTE Circadian Forecast
+                        </CardTitle>
+                        <CardDescription className="text-xs mt-1">
+                          Reservoir-based SAFTE model (Hursh et al. 2004) — sleep recovery, circadian modulation, BAC equivalence thresholds
+                        </CardDescription>
+                      </div>
+                      {/* Day Selector */}
+                      <div className="flex items-center gap-1 border rounded-lg p-0.5">
+                        {DAY_OPTIONS.map((d) => (
+                          <button
+                            key={d}
+                            onClick={() => setPredictionDays(d)}
+                            className={`px-2.5 py-1 text-xs font-medium rounded-md transition-colors ${
+                              predictionDays === d
+                                ? "bg-primary text-primary-foreground shadow-sm"
+                                : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            }`}
+                          >
+                            {d}d
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="pt-0">
+                    <ForecastChart forecast={forecast} predictionDays={predictionDays} />
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
             {/* Process Decomposition */}
             {forecast && (
