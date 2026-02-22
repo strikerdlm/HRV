@@ -65,9 +65,12 @@ import { QualityPanel } from "@/components/research/quality-panel";
 import type { HRVAnalysisResult, HRFMetrics, RRUploadResponse } from "@/types/research";
 import {
   analyzeRRIntervals,
+  getRRTracingCatalog,
+  getRRTracingDetail,
   parseRRFile as parseRRIntervalsFromFile,
   uploadRRData,
 } from "@/lib/research-api";
+import { useAppStore } from "@/lib/store";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -82,7 +85,13 @@ interface StoredTracing {
   source: string;
   analysis: RRUploadResponse | null;
   fullAnalysis: HRVAnalysisResult | null;
+  measurementId?: string;
+  fileHash?: string;
+  nIntervals?: number;
+  fromDatabase?: boolean;
 }
+
+const DEFAULT_USER_ID = "demo-user";
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -208,7 +217,7 @@ function FileDropZone({
         accept=".txt,.csv,.json"
         onChange={(e) => e.target.files && onFileDrop(e.target.files)}
         className="hidden"
-        multiple={false}
+        multiple
         aria-label="Upload RR interval file"
         title="Upload RR interval file"
       />
@@ -239,7 +248,7 @@ function FileDropZone({
             >
               <FileUp className="h-12 w-12 text-primary mb-4" />
             </motion.div>
-            <p className="text-lg font-medium text-primary">Drop file here!</p>
+            <p className="text-lg font-medium text-primary">Drop file(s) here!</p>
           </motion.div>
         ) : (
           <motion.div
@@ -254,7 +263,7 @@ function FileDropZone({
             </div>
             <p className="text-lg font-medium mb-2">Upload RR Interval Data</p>
             <p className="text-sm text-muted-foreground mb-4">
-              Drag & drop or click to browse
+              Drag & drop one or more files, or click to browse
             </p>
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Badge variant="outline">.txt</Badge>
@@ -286,6 +295,7 @@ function TracingCard({
   onAnalyze: () => void;
 }) {
   const [showMenu, setShowMenu] = React.useState(false);
+  const beatCount = tracing.rrIntervals.length > 0 ? tracing.rrIntervals.length : (tracing.nIntervals ?? 0);
 
   const getQualityColor = () => {
     if (!tracing.analysis) return "bg-muted";
@@ -330,7 +340,7 @@ function TracingCard({
           </p>
           <div className="flex items-center gap-2 mt-2 flex-wrap">
             <Badge variant="outline" className="text-[10px]">
-              {tracing.rrIntervals.length} beats
+              {beatCount} beats
             </Badge>
             {tracing.analysis && (
               <>
@@ -681,6 +691,9 @@ function RRTachogram({ rr, onClose }: { rr: number[]; onClose: () => void }) {
 // ---------------------------------------------------------------------------
 
 export default function HRVAnalysisPage() {
+  const activeUserId = useAppStore((state) => state.activeUserId);
+  const userId = activeUserId ?? DEFAULT_USER_ID;
+
   // State
   const [tracings, setTracings] = React.useState<StoredTracing[]>([]);
   const [selectedTracing, setSelectedTracing] = React.useState<StoredTracing | null>(null);
@@ -691,26 +704,82 @@ export default function HRVAnalysisPage() {
   const [uploadError, setUploadError] = React.useState<string | null>(null);
   const [showUploadDialog, setShowUploadDialog] = React.useState(false);
 
-  // Load tracings from localStorage
+  // Load tracings from localStorage + backend catalog
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      const saved = localStorage.getItem("hrv_tracings");
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          setTracings(parsed);
-          // Auto-select first tracing if available
-          const firstTracing = parsed.length > 0 ? (parsed[0] as StoredTracing) : null;
-          if (firstTracing) {
-            setSelectedTracing((prev) => prev ?? firstTracing);
-            setCurrentAnalysis((prev) => prev ?? firstTracing.fullAnalysis ?? null);
+    let cancelled = false;
+
+    const loadTracings = async () => {
+      let localTracings: StoredTracing[] = [];
+      if (typeof window !== "undefined") {
+        const saved = localStorage.getItem("hrv_tracings");
+        if (saved) {
+          try {
+            const parsed = JSON.parse(saved);
+            if (Array.isArray(parsed)) {
+              localTracings = parsed as StoredTracing[];
+            }
+          } catch (e) {
+            console.error("Failed to parse local tracings:", e);
           }
-        } catch (e) {
-          console.error("Failed to load tracings:", e);
         }
       }
-    }
-  }, []);
+
+      const remote = await getRRTracingCatalog(userId, 500);
+      const remoteTracings: StoredTracing[] = remote.tracings.map((item) => ({
+        id: `db-${item.measurement_id}`,
+        name: (item.source_file || "RR tracing").replace(/\.[^/.]+$/, ""),
+        timestamp: item.recording_start_utc || item.measurement_date,
+        rrIntervals: [],
+        sessionId: item.measurement_id,
+        source: item.source_file || "database",
+        analysis: null,
+        fullAnalysis: null,
+        measurementId: item.measurement_id,
+        fileHash: item.file_hash ?? undefined,
+        nIntervals: item.n_intervals,
+        fromDatabase: true,
+      }));
+
+      const merged = new Map<string, StoredTracing>();
+      for (const tracing of [...remoteTracings, ...localTracings]) {
+        const key = tracing.fileHash || tracing.measurementId || tracing.id;
+        const existing = merged.get(key);
+        if (!existing) {
+          merged.set(key, tracing);
+          continue;
+        }
+        merged.set(key, {
+          ...existing,
+          ...tracing,
+          rrIntervals:
+            tracing.rrIntervals.length > 0 ? tracing.rrIntervals : existing.rrIntervals,
+          fullAnalysis: tracing.fullAnalysis ?? existing.fullAnalysis,
+        });
+      }
+
+      const mergedList = Array.from(merged.values()).sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+      );
+      if (cancelled) {
+        return;
+      }
+
+      setTracings(mergedList);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("hrv_tracings", JSON.stringify(mergedList));
+      }
+      const firstTracing = mergedList.length > 0 ? mergedList[0] : null;
+      if (firstTracing) {
+        setSelectedTracing((prev) => prev ?? firstTracing);
+        setCurrentAnalysis((prev) => prev ?? firstTracing.fullAnalysis ?? null);
+      }
+    };
+
+    void loadTracings();
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   // Save tracings to localStorage
   const saveTracings = (newTracings: StoredTracing[]) => {
@@ -722,61 +791,110 @@ export default function HRVAnalysisPage() {
 
   // Handle file upload
   const handleFileDrop = async (files: FileList) => {
-    const file = files[0];
-    if (!file) return;
+    const selectedFiles = Array.from(files);
+    if (selectedFiles.length === 0) return;
 
     setIsUploading(true);
     setUploadError(null);
 
     try {
-      const content = await file.text();
-      console.log("File content length:", content.length);
-      
-      const rrIntervals = parseRRIntervalsFromFile(content);
-      console.log("Parsed RR intervals:", rrIntervals.length);
+      const importedTracings: StoredTracing[] = [];
+      const failedImports: string[] = [];
 
-      if (rrIntervals.length < 30) {
-        throw new Error(`File must contain at least 30 valid RR intervals (200-2000ms). Found: ${rrIntervals.length}`);
+      for (const [index, file] of selectedFiles.entries()) {
+        try {
+          const content = await file.text();
+          const rrIntervals = parseRRIntervalsFromFile(content);
+
+          if (rrIntervals.length < 30) {
+            throw new Error(
+              `needs at least 30 valid RR intervals (200-2000 ms), found ${rrIntervals.length}`,
+            );
+          }
+
+          let uploadResponse: RRUploadResponse | null = null;
+          const recordingTimestamp = new Date().toISOString();
+          try {
+            uploadResponse = await uploadRRData({
+              rr_intervals_ms: rrIntervals,
+              recording_timestamp: recordingTimestamp,
+              source: file.name,
+              user_id: userId,
+            });
+          } catch (error) {
+            console.log("Backend upload failed, using local analysis:", error);
+          }
+
+          importedTracings.push({
+            id:
+              uploadResponse?.measurement_id
+                ? `db-${uploadResponse.measurement_id}`
+                : `tracing-${Date.now()}-${index}`,
+            name: file.name.replace(/\.[^/.]+$/, ""),
+            timestamp: recordingTimestamp,
+            rrIntervals,
+            sessionId: uploadResponse?.session_id ?? uploadResponse?.measurement_id ?? undefined,
+            source: file.name,
+            analysis: uploadResponse,
+            fullAnalysis: null,
+            measurementId: uploadResponse?.measurement_id ?? undefined,
+            fileHash: uploadResponse?.file_hash ?? undefined,
+            nIntervals: rrIntervals.length,
+            fromDatabase: Boolean(uploadResponse?.measurement_id),
+          });
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "unable to parse file";
+          failedImports.push(`${file.name}: ${message}`);
+        }
       }
 
-      // Try to upload to backend for analysis
-      let uploadResponse: RRUploadResponse | null = null;
-      try {
-        uploadResponse = await uploadRRData({
-          rr_intervals_ms: rrIntervals,
-          recording_timestamp: new Date().toISOString(),
-          source: file.name,
-        });
-        console.log("Backend response:", uploadResponse);
-      } catch (e) {
-        console.log("Backend upload failed, using local analysis:", e);
+      if (importedTracings.length === 0) {
+        throw new Error(failedImports[0] ?? "No valid RR tracing files were imported");
       }
 
-      // Create tracing record
-      const newTracing: StoredTracing = {
-        id: `tracing-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        name: file.name.replace(/\.[^/.]+$/, ""),
-        timestamp: new Date().toISOString(),
-        rrIntervals: rrIntervals,
-        sessionId: uploadResponse?.session_id,
-        source: file.name,
-        analysis: uploadResponse,
-        fullAnalysis: null,
-      };
-
-      // Update state with functional update to avoid race conditions
       setTracings((prevTracings) => {
-        const updated = [newTracing, ...prevTracings];
+        const merged = new Map<string, StoredTracing>();
+        for (const tracing of [...importedTracings, ...prevTracings]) {
+          const key = tracing.fileHash || tracing.measurementId || tracing.id;
+          const existing = merged.get(key);
+          if (!existing) {
+            merged.set(key, tracing);
+            continue;
+          }
+          merged.set(key, {
+            ...existing,
+            ...tracing,
+            rrIntervals:
+              tracing.rrIntervals.length > 0 ? tracing.rrIntervals : existing.rrIntervals,
+            fullAnalysis: tracing.fullAnalysis ?? existing.fullAnalysis,
+          });
+        }
+
+        const updated = Array.from(merged.values()).sort(
+          (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
+        );
         if (typeof window !== "undefined") {
           localStorage.setItem("hrv_tracings", JSON.stringify(updated));
         }
         return updated;
       });
-      
-      setSelectedTracing(newTracing);
-      setShowUploadDialog(false);
+
+      const primaryTracing = importedTracings[0];
+      setSelectedTracing(primaryTracing);
+      void handleAnalyze(primaryTracing);
+
+      if (failedImports.length === 0) {
+        setUploadError(null);
+        setShowUploadDialog(false);
+      } else {
+        const preview = failedImports.slice(0, 3).join(" | ");
+        const more = failedImports.length > 3 ? ` (+${failedImports.length - 3} more)` : "";
+        setUploadError(
+          `Imported ${importedTracings.length}/${selectedFiles.length} files. Failed: ${preview}${more}`,
+        );
+      }
+
       setIsUploading(false);
-      void handleAnalyze(newTracing);
     } catch (e) {
       console.error("Upload error:", e);
       setUploadError(e instanceof Error ? e.message : "Failed to parse file");
@@ -793,13 +911,44 @@ export default function HRVAnalysisPage() {
       // Small delay for UI feedback
       await new Promise((resolve) => setTimeout(resolve, 500));
 
-      // Validate RR intervals
-      if (!tracing.rrIntervals || tracing.rrIntervals.length < 30) {
+      let rrForAnalysis = tracing.rrIntervals;
+      let cachedAnalysis = tracing.fullAnalysis;
+      let resolvedFileHash = tracing.fileHash;
+      let resolvedMeasurementId = tracing.measurementId;
+
+      if (
+        (!rrForAnalysis || rrForAnalysis.length < 30 || !cachedAnalysis) &&
+        tracing.measurementId
+      ) {
+        const detail = await getRRTracingDetail(userId, tracing.measurementId);
+        if (detail.rr_intervals_ms.length >= 30) {
+          rrForAnalysis = detail.rr_intervals_ms;
+        }
+        if (detail.cached_analysis) {
+          cachedAnalysis = detail.cached_analysis;
+        }
+        if (detail.tracing?.file_hash) {
+          resolvedFileHash = detail.tracing.file_hash;
+        }
+        if (detail.tracing?.measurement_id) {
+          resolvedMeasurementId = detail.tracing.measurement_id;
+        }
+      }
+
+      if (!cachedAnalysis && (!rrForAnalysis || rrForAnalysis.length < 30)) {
         throw new Error("Insufficient RR intervals for analysis");
       }
 
-      // Generate analysis from backend.
-      const analysis = await analyzeRRIntervals(tracing.rrIntervals, "welch");
+      // Generate analysis from backend (or reuse cached detail analysis).
+      const analysis =
+        cachedAnalysis ??
+        (await analyzeRRIntervals(rrForAnalysis, "welch", {
+          user_id: userId,
+          source: tracing.source,
+          recording_timestamp: tracing.timestamp,
+          measurement_id: resolvedMeasurementId,
+          file_hash: resolvedFileHash,
+        }));
       
       if (!analysis) {
         throw new Error("Failed to generate analysis");
@@ -813,8 +962,12 @@ export default function HRVAnalysisPage() {
           t.id === tracing.id
             ? {
                 ...t,
+                rrIntervals: rrForAnalysis,
                 fullAnalysis: analysis,
-                sessionId: t.sessionId ?? tracing.analysis?.session_id,
+                sessionId: t.sessionId ?? tracing.analysis?.session_id ?? resolvedMeasurementId,
+                measurementId: resolvedMeasurementId,
+                fileHash: resolvedFileHash,
+                nIntervals: rrForAnalysis.length || t.nIntervals,
               }
             : t
         );
@@ -827,8 +980,12 @@ export default function HRVAnalysisPage() {
       
       setSelectedTracing({
         ...tracing,
+        rrIntervals: rrForAnalysis,
         fullAnalysis: analysis,
-        sessionId: tracing.sessionId ?? tracing.analysis?.session_id,
+        sessionId: tracing.sessionId ?? tracing.analysis?.session_id ?? resolvedMeasurementId,
+        measurementId: resolvedMeasurementId,
+        fileHash: resolvedFileHash,
+        nIntervals: rrForAnalysis.length || tracing.nIntervals,
       });
     } catch (e) {
       console.error("Analysis failed:", e);
@@ -836,7 +993,7 @@ export default function HRVAnalysisPage() {
     } finally {
       setIsAnalyzing(false);
     }
-  }, []);
+  }, [userId]);
 
   // Handle delete
   const handleDelete = (tracingId: string) => {
@@ -894,7 +1051,7 @@ export default function HRVAnalysisPage() {
                     Upload RR Interval Data
                   </DialogTitle>
                   <DialogDescription>
-                    Upload a file containing RR intervals in milliseconds
+                    Upload one or more files containing RR intervals in milliseconds
                   </DialogDescription>
                 </DialogHeader>
                 <div className="py-4">
