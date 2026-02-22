@@ -49,6 +49,8 @@ export interface IHPIGaugeProps {
   sleepDebt: number;
   readinessScore: number;
   smsRiskLevel?: string;
+  flightFatigueBand?: "low" | "moderate" | "high";
+  flightFatigueModel?: string;
   onClick?: () => void;
 }
 
@@ -65,6 +67,8 @@ export function IHPIGauge({
   sleepDebt,
   readinessScore,
   smsRiskLevel,
+  flightFatigueBand,
+  flightFatigueModel,
   onClick,
 }: IHPIGaugeProps) {
   const score = ihpiScore;
@@ -140,6 +144,24 @@ export function IHPIGauge({
           }}>
             SMS: {smsRiskLevel}
           </p>
+        )}
+        <p
+          className="text-[11px] font-medium mt-0.5"
+          style={{
+            color:
+              flightFatigueBand === "low"
+                ? "#16a34a"
+                : flightFatigueBand === "moderate"
+                  ? "#ca8a04"
+                  : flightFatigueBand === "high"
+                    ? "#dc2626"
+                    : "#64748b",
+          }}
+        >
+          Flight fatigue: {flightFatigueBand ? flightFatigueBand.toUpperCase() : "INSUFFICIENT DATA"}
+        </p>
+        {flightFatigueModel && (
+          <p className="text-[10px] text-muted-foreground">{flightFatigueModel}</p>
         )}
         {onClick && (
           <p className="text-xs text-primary mt-1 font-medium">Click for details</p>
