@@ -57,6 +57,61 @@ function buildFallbackContext(): AnalysisContext {
   };
 }
 
+function extractApiErrorMessage(payload: unknown): string | null {
+  if (payload == null) {
+    return null;
+  }
+  if (typeof payload === "string") {
+    const trimmed = payload.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (Array.isArray(payload)) {
+    const parts = payload
+      .map((item) => extractApiErrorMessage(item))
+      .filter((msg): msg is string => Boolean(msg));
+    return parts.length > 0 ? parts.join("; ") : null;
+  }
+  if (typeof payload === "object") {
+    const obj = payload as Record<string, unknown>;
+    if ("detail" in obj) {
+      const detailMsg = extractApiErrorMessage(obj.detail);
+      if (detailMsg) {
+        return detailMsg;
+      }
+    }
+    if (typeof obj.message === "string" && obj.message.trim()) {
+      return obj.message.trim();
+    }
+    if (typeof obj.error === "string" && obj.error.trim()) {
+      return obj.error.trim();
+    }
+    if (typeof obj.msg === "string" && obj.msg.trim()) {
+      if (Array.isArray(obj.loc)) {
+        const path = obj.loc.map((segment) => String(segment)).join(".");
+        return path ? `${path}: ${obj.msg.trim()}` : obj.msg.trim();
+      }
+      return obj.msg.trim();
+    }
+    try {
+      return JSON.stringify(obj);
+    } catch {
+      return String(obj);
+    }
+  }
+  return String(payload);
+}
+
+async function readApiErrorMessage(response: Response): Promise<string> {
+  const baseMessage = `HTTP ${response.status}: ${response.statusText}`;
+  try {
+    const payload = await response.json();
+    const detail = extractApiErrorMessage(payload);
+    return detail ? `${baseMessage} - ${detail}` : baseMessage;
+  } catch {
+    return baseMessage;
+  }
+}
+
 /**
  * Get current space weather data and impact predictions
  */
@@ -296,10 +351,7 @@ export async function syncGarminData(
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail || `HTTP ${response.status}: ${response.statusText}`
-      );
+      throw new Error(await readApiErrorMessage(response));
     }
 
     const result = await response.json();
@@ -977,8 +1029,7 @@ export async function uploadRRData(data: RRUploadRequest): Promise<RRUploadRespo
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      throw new Error(await readApiErrorMessage(response));
     }
 
     return await response.json();
@@ -1007,10 +1058,7 @@ export async function analyzeRRIntervals(
     );
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(
-        errorData.detail || `HTTP ${response.status}: ${response.statusText}`,
-      );
+      throw new Error(await readApiErrorMessage(response));
     }
 
     return await response.json();
@@ -1209,8 +1257,7 @@ export async function runCorrelationAnalysis(
     });
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.detail || `HTTP ${response.status}: ${response.statusText}`);
+      throw new Error(await readApiErrorMessage(response));
     }
 
     return await response.json();
