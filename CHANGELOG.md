@@ -13,6 +13,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Flight-fatigue quality context propagation** (`api/research_endpoints.py`, `frontend/src/app/research/flight-fatigue/page.tsx`, `frontend/src/lib/research-api.ts`, `frontend/src/types/research.ts`):
   - `FlightFatigueResponse` now carries `AnalysisContext` metadata from the backend.
   - Flight Fatigue page now renders `QualityPanel` for protocol/confidence context and caveat messaging.
+- **Persistent RR tracing catalog APIs** (`api/research_endpoints.py`, `frontend/src/lib/research-api.ts`, `frontend/src/types/research.ts`):
+  - Added `/api/research/hrv/tracings/{user_id}` and `/api/research/hrv/tracings/{user_id}/{measurement_id}` for loading stored RR recordings and optional cached full analyses.
+  - Added frontend client contracts and loaders for tracing catalog/detail retrieval.
 - **Offline model artifacts + calibration registry** (`api/research_model_registry.py`, `api/model_artifacts/vigilance_model.json`, `api/model_artifacts/flight_fatigue_model.json`, `api/train_research_models.py`):
   - Introduced explicit train/infer split with runtime artifact loading for vigilance and flight-fatigue scoring.
   - Added reproducible offline training utility for artifact regeneration.
@@ -34,6 +37,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Preserved transparent missing-feature behavior and rationale outputs for operational traceability.
 - **Artifact-driven inference wiring** (`api/research_endpoints.py`):
   - Vigilance and flight-fatigue endpoints now read coefficients/thresholds from runtime artifacts instead of hardcoded endpoint constants.
+- **Cross-page RR tracing selection** (`frontend/src/components/research/rr-tracing-loader.tsx`, `frontend/src/components/layout/header.tsx`, `frontend/src/lib/store.ts`, `frontend/src/lib/research-api.ts`):
+  - Added a global research-header RR tracing loader and persisted selection state.
+  - HRV research API calls now forward `measurement_id`/`file_hash` selectors so multiple pages analyze the same stored tracing.
 
 ### Fixed
 - **Deterministic dashboard behavior** (`frontend/src/app/page.tsx`):
@@ -42,6 +48,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Replaced random synthetic scatter generation with deterministic pairwise points derived from uploaded RR intervals when available.
 - **Fatigue model schema cleanup** (`api/research_endpoints.py`):
   - Removed duplicate `next_optimal_sleep` field declaration in `FatigueResponse`.
+- **RR persistence and dedupe in research API** (`api/research_endpoints.py`, `frontend/src/app/research/hrv-analysis/page.tsx`):
+  - `/api/research/hrv/upload` now persists new RR recordings to SQLite, reuses existing records for duplicate hashes, and returns tracing metadata (`measurement_id`, `file_hash`, `cached`).
+  - `/api/research/hrv/analyze` now persists computed analyses into DB cache and reuses cached outputs for identical tracing+settings requests.
+  - HRV Analysis page now merges backend tracing catalog with local traces and can load database tracings/cached analysis on demand.
 
 ### Documentation
 - Updated `README.md`, `frontend/README.md`, and `docs/Manual.md` to reflect:
