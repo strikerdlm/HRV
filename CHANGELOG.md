@@ -55,6 +55,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Frequency-domain PSD plotting across methods** (`api/research_endpoints.py`, `app/hrv_core.py`):
   - `/api/research/hrv/frequency/{user_id}` now returns `frequencies` and `psd` arrays for Welch, Periodogram, and AR methods (not only Lomb-Scargle), restoring PSD chart rendering for all selector options.
   - AR PSD curve generation is now explicitly supported in `psd_curve()` for consistent method-specific plotting.
+- **Batch RR upload responsiveness + manual analysis flow** (`frontend/src/app/research/hrv-analysis/page.tsx`, `api/research_endpoints.py`):
+  - Multi-file RR upload now completes without auto-triggering comprehensive analysis; users explicitly run analysis by clicking `Analyze` on a tracing.
+  - `/api/research/hrv/upload` now uses a lightweight time-domain metric pass for faster ingestion while preserving persisted tracing IDs/hashes and deduplication.
+- **Upload fetch error handling in dev UI** (`frontend/src/lib/research-api.ts`):
+  - Removed noisy `console.error` emission for expected network upload failures and replaced it with a normalized thrown message so Turbopack does not surface a console TypeError overlay for caught upload failures.
 
 ### Documentation
 - Updated `README.md`, `frontend/README.md`, and `docs/Manual.md` to reflect:
