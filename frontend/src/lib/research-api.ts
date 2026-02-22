@@ -27,9 +27,34 @@ import type {
   ExportResponse,
   HRVAnalysisResult,
   GarminMetrics,
+  AnalysisContext,
+  WorkloadResponse,
+  WorkloadSegment,
+  VigilanceResponse,
+  FlightFatigueResponse,
+  FusionResponse,
 } from "@/types/research";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8180";
+
+function buildFallbackContext(): AnalysisContext {
+  return {
+    device_type: "unknown",
+    posture: "unknown",
+    respiration_available: false,
+    recording_window_sec: null,
+    preprocessing: {
+      artifact_filter_level: "unknown",
+      pct_flagged: 0,
+      pct_interpolated: 0,
+      pct_excluded: 0,
+    },
+    stationarity: { passed: false, reason: "No valid recording loaded" },
+    frequency_validity: [],
+    confidence: "poor",
+    confidence_reasons: ["Data unavailable"],
+  };
+}
 
 /**
  * Get current space weather data and impact predictions
@@ -339,7 +364,7 @@ export async function getHRVTimeSeries(
  */
 export async function getHRVFrequency(
   userId: string,
-  method: "welch" | "periodogram" | "ar" = "welch"
+  method: "welch" | "periodogram" | "ar" | "lomb" = "welch"
 ): Promise<FrequencyDomainResponse> {
   try {
     const response = await fetch(
@@ -371,6 +396,9 @@ export async function getHRVFrequency(
       window_length: null,
       autonomic_balance: "balanced",
       clinical_notes: ["Error fetching frequency domain data"],
+      frequency_validity_score: 0,
+      method_validity_note: "Frequency-domain unavailable",
+      context: buildFallbackContext(),
     };
   }
 }
@@ -413,6 +441,15 @@ export async function getHRVNonlinear(userId: string): Promise<NonlinearResponse
       approximate_entropy: null,
       complexity_state: "normal",
       interpretation: ["Error fetching nonlinear data"],
+      rcmse_tau: [],
+      rcmse_curve: [],
+      rcmse_ei: null,
+      mmdfa_scales: [],
+      mmdfa_curve: [],
+      mfi: null,
+      min_samples_required: 400,
+      advanced_metrics_enabled: false,
+      context: buildFallbackContext(),
     };
   }
 }
@@ -461,6 +498,7 @@ export async function getHRVWindowed(
       window_size_seconds: windowSize,
       step_size_seconds: stepSize,
       n_windows: 0,
+      context: buildFallbackContext(),
     };
   }
 }
@@ -580,6 +618,10 @@ export async function getFatiguePrediction(userId: string): Promise<FatigueRespo
       risk_color: "green",
       recommendations: ["Error fetching fatigue data"],
       next_optimal_sleep: null,
+      avg_sleep_duration_h: null,
+      typical_bedtime_h: null,
+      avg_sleep_efficiency: null,
+      context: buildFallbackContext(),
     };
   }
 }
@@ -942,6 +984,152 @@ export async function uploadRRData(data: RRUploadRequest): Promise<RRUploadRespo
   } catch (error) {
     console.error("Error uploading RR data:", error);
     throw error;
+  }
+}
+
+/**
+ * Run comprehensive HRV analysis from RR intervals.
+ * Uses the same backend engine as stored analyses.
+ */
+export async function analyzeRRIntervals(
+  rrIntervalsMs: number[],
+  method: "welch" | "periodogram" | "ar" | "lomb" = "welch",
+): Promise<HRVAnalysisResult> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/research/hrv/analyze?method=${method}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(rrIntervalsMs),
+      },
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(
+        errorData.detail || `HTTP ${response.status}: ${response.statusText}`,
+      );
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error("Error analyzing RR intervals:", error);
+    throw error;
+  }
+}
+
+export async function computeWorkloadFeatures(payload: {
+  rr_intervals_ms: number[];
+  segments: WorkloadSegment[];
+  task_name?: string;
+}): Promise<WorkloadResponse> {
+  try {
+    const response = await fetch(`${API_BASE}/api/research/workload/compute`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error computing workload features:", error);
+    return {
+      delta_lnrmssd: null,
+      delta_hf: null,
+      delta_lf_hf: null,
+      recovery_slope: null,
+      threshold_flags: ["Unable to compute workload features"],
+      high_workload_probability: 0.5,
+      confidence: "poor",
+      context: buildFallbackContext(),
+    };
+  }
+}
+
+export async function getVigilanceTracking(
+  userId: string,
+  windowSize: number = 30,
+  stepSize: number = 10,
+): Promise<VigilanceResponse> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/research/vigilance/${userId}?window_size=${windowSize}&step_size=${stepSize}`,
+      {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching vigilance tracking:", error);
+    return {
+      window_size_seconds: windowSize,
+      step_size_seconds: stepSize,
+      model_version: "fallback",
+      low_vigilance_windows: 0,
+      total_windows: 0,
+      predictions: [],
+      context: buildFallbackContext(),
+    };
+  }
+}
+
+export async function getFlightFatigueClassification(
+  userId: string,
+): Promise<FlightFatigueResponse> {
+  try {
+    const response = await fetch(`${API_BASE}/api/research/flight-fatigue/${userId}`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching flight fatigue classification:", error);
+    return {
+      risk_band: "moderate",
+      model_version: "fallback",
+      probabilities: { low: 0.33, moderate: 0.34, high: 0.33 },
+      rationale: ["Insufficient data for classifier; using neutral fallback"],
+      required_features: ["rmssd", "sleep_debt_hours", "effectiveness_pct"],
+      missing_features: ["unknown"],
+      context: buildFallbackContext(),
+    };
+  }
+}
+
+export async function getIntegratedFusion(
+  userId: string,
+): Promise<FusionResponse> {
+  try {
+    const response = await fetch(`${API_BASE}/api/research/fusion/${userId}`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching integrated fusion output:", error);
+    return {
+      schedule_factor: { value: 0.75, confidence: "moderate", note: "Fallback from SAFTE estimate" },
+      autonomic_factor: { value: 1.0, confidence: "poor", note: "No autonomic input" },
+      workload_factor: { value: 1.0, confidence: "poor", note: "No workload input" },
+      environment_factor: { value: 1.0, confidence: "poor", note: "No environment input" },
+      performance_probability: 0.6,
+      uncertainty_interval: [0.4, 0.8],
+      confidence: "poor",
+      rationale: ["Fallback fusion response due to unavailable backend data"],
+    };
   }
 }
 
