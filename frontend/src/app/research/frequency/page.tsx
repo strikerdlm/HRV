@@ -23,6 +23,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
+import { QualityPanel } from "@/components/research/quality-panel";
 import { getHRVFrequency } from "@/lib/research-api";
 import { useAppStore } from "@/lib/store";
 import type { FrequencyDomainResponse } from "@/types/research";
@@ -30,10 +31,14 @@ import type { FrequencyDomainResponse } from "@/types/research";
 // Default user ID when no user is selected
 const DEFAULT_USER_ID = "demo-user";
 
-// LF/HF Ratio Gauge
+// LF/HF Ratio Ring Gauge
 function LFHFGauge({ ratio }: { ratio: number | null }) {
-  const value = ratio ?? 1;
+  const value = ratio ?? 0;
   const hasData = ratio !== null;
+  const max = 5;
+  const clamped = Math.max(0, Math.min(value, max));
+  const circumference = 2 * Math.PI * 40;
+  const dash = (clamped / max) * circumference;
 
   const getColor = (r: number) => {
     if (r < 0.5) return SCIENTIFIC_COLORS.info; // Parasympathetic dominant
@@ -41,61 +46,44 @@ function LFHFGauge({ ratio }: { ratio: number | null }) {
     return SCIENTIFIC_COLORS.warning; // Sympathetic dominant
   };
 
-  const option: Record<string, unknown> = {
-    series: [
-      {
-        type: "gauge",
-        center: ["50%", "65%"],
-        radius: "95%",
-        startAngle: 180,
-        endAngle: 0,
-        min: 0,
-        max: 5,
-        splitNumber: 5,
-        axisLine: {
-          lineStyle: {
-            width: 25,
-            color: [
-              [0.2, SCIENTIFIC_COLORS.info],
-              [0.5, SCIENTIFIC_COLORS.success],
-              [1, SCIENTIFIC_COLORS.warning],
-            ],
-          },
-        },
-        pointer: {
-          icon: "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
-          length: "65%",
-          width: 6,
-          offsetCenter: [0, "-10%"],
-          itemStyle: { color: hasData ? getColor(value) : "#94a3b8" },
-        },
-        anchor: {
-          show: true,
-          showAbove: true,
-          size: 18,
-          itemStyle: {
-            borderWidth: 3,
-            borderColor: hasData ? getColor(value) : "#94a3b8",
-            color: "#fff",
-          },
-        },
-        axisTick: { show: true, splitNumber: 2, length: 8, distance: 5, lineStyle: { color: "#64748b", width: 1 } },
-        splitLine: { show: true, length: 15, distance: 5, lineStyle: { color: "#475569", width: 2 } },
-        axisLabel: { distance: 30, color: "#1e293b", fontSize: 12, fontWeight: "600" },
-        detail: {
-          valueAnimation: true,
-          formatter: () => (hasData ? value.toFixed(2) : "—"),
-          fontSize: 38,
-          fontWeight: "bold",
-          color: hasData ? getColor(value) : "#94a3b8",
-          offsetCenter: [0, "30%"],
-        },
-        data: [{ value }],
-      },
-    ],
-  };
-
-  return <EChartsWrapper option={option} height={260} showToolbox={false} />;
+  return (
+    <div className="flex flex-col items-center justify-center py-3">
+      <div className="relative w-28 h-28">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 96 96">
+          <circle
+            cx="48"
+            cy="48"
+            r="40"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="8"
+            className="text-muted/30"
+          />
+          <circle
+            cx="48"
+            cy="48"
+            r="40"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="8"
+            strokeDasharray={`${dash} ${circumference}`}
+            className={hasData ? "" : "text-muted/50"}
+            style={{ color: hasData ? getColor(value) : "#94a3b8" }}
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span
+            className="text-2xl font-bold"
+            style={{ color: hasData ? getColor(value) : "#94a3b8" }}
+          >
+            {hasData ? value.toFixed(2) : "—"}
+          </span>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground mt-2">Reference range: 0.5 to 2.0</p>
+    </div>
+  );
 }
 
 // PSD Line Chart
@@ -306,8 +294,10 @@ function MetricBadge({ label, value, unit, color }: { label: string; value: numb
 
 export default function FrequencyPage() {
   const [data, setData] = React.useState<FrequencyDomainResponse | null>(null);
+  const [compareData, setCompareData] = React.useState<FrequencyDomainResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
-  const [method, setMethod] = React.useState<"welch" | "periodogram" | "ar">("welch");
+  const [method, setMethod] = React.useState<"welch" | "periodogram" | "ar" | "lomb">("welch");
+  const [compareMethods, setCompareMethods] = React.useState(false);
 
   // Get user ID from global store
   const activeUserId = useAppStore((state) => state.activeUserId);
@@ -316,40 +306,22 @@ export default function FrequencyPage() {
   const fetchData = React.useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getHRVFrequency(userId, method);
-      if (!result.vlf && !result.lf && !result.hf) {
-        // Generate demo data
-        const demoData: FrequencyDomainResponse = {
-          frequencies: Array.from({ length: 100 }, (_, i) => i * 0.005),
-          psd: Array.from({ length: 100 }, (_, i) => {
-            const f = i * 0.005;
-            if (f < 0.04) return 500 + Math.random() * 200;
-            if (f < 0.15) return 800 + Math.random() * 400 - (f - 0.04) * 3000;
-            if (f < 0.4) return 600 + Math.random() * 300 - (f - 0.15) * 2000;
-            return 50 + Math.random() * 50;
-          }),
-          vlf: { power_ms2: 1240, power_pct: 42, peak_hz: 0.025, normalized_units: null },
-          lf: { power_ms2: 980, power_pct: 33, peak_hz: 0.08, normalized_units: 57.6 },
-          hf: { power_ms2: 720, power_pct: 25, peak_hz: 0.22, normalized_units: 42.4 },
-          total_power: 2940,
-          lf_hf_ratio: 1.36,
-          lf_nu: 57.6,
-          hf_nu: 42.4,
-          method: "welch",
-          window_length: 256,
-          autonomic_balance: "balanced",
-          clinical_notes: [],
-        };
-        setData(demoData);
+      const primary = await getHRVFrequency(userId, method);
+      setData(primary);
+
+      if (compareMethods) {
+        const alternateMethod = method === "lomb" ? "welch" : "lomb";
+        const secondary = await getHRVFrequency(userId, alternateMethod);
+        setCompareData(secondary);
       } else {
-        setData(result);
+        setCompareData(null);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, [userId, method]);
+  }, [userId, method, compareMethods]);
 
   React.useEffect(() => {
     fetchData();
@@ -388,6 +360,17 @@ export default function FrequencyPage() {
                 <Badge variant="outline">
                   Total Power: {data.total_power?.toFixed(0) ?? "—"} ms²
                 </Badge>
+                <Badge
+                  variant={
+                    (data.frequency_validity_score ?? 0) >= 0.75
+                      ? "success"
+                      : (data.frequency_validity_score ?? 0) >= 0.5
+                        ? "warning"
+                        : "destructive"
+                  }
+                >
+                  Validity: {((data.frequency_validity_score ?? 0) * 100).toFixed(0)}%
+                </Badge>
               </>
             )}
           </div>
@@ -400,7 +383,16 @@ export default function FrequencyPage() {
               <option value="welch">Welch</option>
               <option value="periodogram">Periodogram</option>
               <option value="ar">Autoregressive</option>
+              <option value="lomb">Lomb-Scargle</option>
             </select>
+            <label className="flex items-center gap-2 px-3 py-2 rounded-md border text-xs">
+              <input
+                type="checkbox"
+                checked={compareMethods}
+                onChange={(e) => setCompareMethods(e.target.checked)}
+              />
+              Compare with {method === "lomb" ? "Welch" : "Lomb"}
+            </label>
             <Button onClick={fetchData} disabled={loading}>
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
               Analyze
@@ -410,6 +402,8 @@ export default function FrequencyPage() {
 
         {data && (
           <>
+            <QualityPanel context={data.context} />
+
             {/* PSD Chart */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -431,6 +425,37 @@ export default function FrequencyPage() {
                 </CardContent>
               </Card>
             </motion.div>
+
+            {compareMethods && compareData && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15 }}
+              >
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Method Comparison</CardTitle>
+                    <CardDescription>
+                      Comparing {data.method.toUpperCase()} against {compareData.method.toUpperCase()} with method-specific validity.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 lg:grid-cols-2">
+                    <div className="space-y-2">
+                      <Badge variant="outline">
+                        {data.method.toUpperCase()} validity {(100 * (data.frequency_validity_score ?? 0)).toFixed(0)}%
+                      </Badge>
+                      <PSDChart data={data} />
+                    </div>
+                    <div className="space-y-2">
+                      <Badge variant="outline">
+                        {compareData.method.toUpperCase()} validity {(100 * (compareData.frequency_validity_score ?? 0)).toFixed(0)}%
+                      </Badge>
+                      <PSDChart data={compareData} />
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
             {/* Band Powers and Gauge */}
             <div className="grid gap-6 lg:grid-cols-2">
