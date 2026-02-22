@@ -192,7 +192,6 @@ function CrewRadarChart({
 }: {
   crewGauges: Array<{ name: string; role: string; ihpiScore: number; fatigueLevel: number; readinessScore: number }>;
 }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- radar name uses custom textStyle
   const option = React.useMemo((): any => {
     if (crewGauges.length === 0) return {};
 
