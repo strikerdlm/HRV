@@ -600,7 +600,6 @@ function MacroRadarChart({
   fatG: number;
   tee: number;
 }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- radar name uses custom textStyle
   const option: any = React.useMemo(
     () => ({
       title: {
@@ -685,7 +684,6 @@ function WaterRequirementChart({
   coldMl: number;
   totalMl: number;
 }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tooltip formatter uses custom param shape
   const option: any = React.useMemo(
     () => ({
       title: {
@@ -788,7 +786,6 @@ function WaterRequirementChart({
 // ---------------------------------------------------------------------------
 
 function AltitudePhysiologyChart({ restingHR }: { restingHR: number }) {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tooltip formatter uses custom param shape
   const option: any = React.useMemo(() => {
     const altitudes = [0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500, 5000, 5500, 6000];
     const spo2Values = altitudes.map((a) => estimateSpO2(a));
@@ -910,7 +907,6 @@ function AltitudePhysiologyChart({ restingHR }: { restingHR: number }) {
 // ---------------------------------------------------------------------------
 
 function EnvironmentalStressChart() {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any -- heatmap tooltip uses custom param shape
   const option: any = React.useMemo(() => {
     const stressors = ["Cold", "Altitude", "Isolation", "Radiation", "Workload", "Sleep Disruption"];
     const phases = ["Pre-Mission", "Early (Wk 1-2)", "Mid (Wk 3-6)", "Late (Wk 7+)", "Post"];
