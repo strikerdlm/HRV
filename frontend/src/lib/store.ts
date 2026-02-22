@@ -9,6 +9,14 @@ import { persist, createJSONStorage } from "zustand/middleware";
 /** Application mode - mirrors Python backend separation */
 export type AppMode = "operational" | "research";
 
+export interface RRTracingSelection {
+  user_id: string;
+  measurement_id: string;
+  file_hash: string | null;
+  source_file: string | null;
+  selected_at: string;
+}
+
 interface AppState {
   // App mode - separates operational and research functionality
   appMode: AppMode;
@@ -25,6 +33,11 @@ interface AppState {
   // Active user
   activeUserId: string | null;
   setActiveUserId: (userId: string | null) => void;
+
+  // Globally selected RR tracing (applies across research pages)
+  rrTracingSelection: RRTracingSelection | null;
+  setRRTracingSelection: (selection: RRTracingSelection | null) => void;
+  clearRRTracingSelection: () => void;
 
   // Sidebar state (sidebarOpen = !sidebarCollapsed for clarity)
   sidebarOpen: boolean;
@@ -59,6 +72,11 @@ export const useAppStore = create<AppState>()(
       activeUserId: null,
       setActiveUserId: (userId) => set({ activeUserId: userId }),
 
+      // RR tracing selection
+      rrTracingSelection: null,
+      setRRTracingSelection: (selection) => set({ rrTracingSelection: selection }),
+      clearRRTracingSelection: () => set({ rrTracingSelection: null }),
+
       // Sidebar state
       sidebarOpen: true,
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
@@ -81,6 +99,7 @@ export const useAppStore = create<AppState>()(
         activeMission: state.activeMission,
         debugMode: state.debugMode,
         activeUserId: state.activeUserId,
+        rrTracingSelection: state.rrTracingSelection,
         sidebarOpen: state.sidebarOpen,
         theme: state.theme,
       }),
