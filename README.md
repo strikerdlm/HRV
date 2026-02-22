@@ -120,8 +120,11 @@ The frontend + API stack now includes a dedicated HRV-cognition workflow for ope
 - **Quality/context propagation** (`AnalysisContext`) shown in-page through a reusable `QualityPanel` (stationarity, method validity, confidence, caveats).
 - **Frequency method parity** with Welch and Lomb-Scargle comparison plus method-specific validity scoring.
 - **Cognitive workload module** (`/research/workload`) with baseline/task/recovery annotation and reactivity metrics (`ΔlnRMSSD`, `ΔHF`, `ΔLF/HF`).
-- **Vigilance tracker** (`/research/vigilance`) using sliding windows and SAFTE overlay for low-vigilance flagging.
-- **Flight fatigue classifier** (`/research/flight-fatigue`) integrated into operational cards/modals with transparent missing-feature fallbacks.
+- **Vigilance tracker** (`/research/vigilance`) using calibrated sliding-window HRV scoring + SAFTE overlay for low-vigilance flagging.
+- **Flight fatigue classifier** (`/research/flight-fatigue`) with calibrated multifeature risk probabilities and transparent missing-feature fallbacks.
+- **Offline train / online infer split** for vigilance + flight-fatigue via JSON model artifacts (`api/model_artifacts/*`) and runtime loader.
+- **Calibration transparency endpoint** at `/api/research/models/calibration-report` to expose model versioning/metrics/references.
+- **In-app scientific traceability** with per-page metric interpretation + citation cards in workload, vigilance, and flight-fatigue modules.
 - **Advanced nonlinear outputs** (RCMSE/MM-DFA) with strict data sufficiency gating.
 - **Integrated physiological fusion** exposed with uncertainty intervals instead of a single deterministic score.
 
