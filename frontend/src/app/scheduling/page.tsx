@@ -2817,6 +2817,22 @@ function PROGSSChecklist({
     );
   };
 
+  const confettiParticles = React.useMemo(() => {
+    const colors = ["#22c55e", "#eab308", "#3b82f6", "#ec4899", "#8b5cf6", "#f97316"];
+    return Array.from({ length: 20 }, (_, i) => {
+      const angle = (i / 20) * Math.PI * 2;
+      const radius = 120 + ((missionDay * 17 + i * 29) % 160);
+      return {
+        id: i,
+        color: colors[i % colors.length],
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+        rotate: (i * 47 + missionDay * 13) % 360,
+        delay: (i % 6) * 0.08,
+      };
+    });
+  }, [missionDay]);
+
   return (
     <Card className="overflow-hidden relative">
       {/* Celebration overlay */}
@@ -2845,23 +2861,23 @@ function PROGSSChecklist({
               <p className="text-white/80">Mission Day {missionDay} checklist finished</p>
             </motion.div>
             {/* Confetti */}
-            {[...Array(20)].map((_, i) => (
+            {confettiParticles.map((particle) => (
               <motion.div
-                key={i}
+                key={particle.id}
                 className="absolute w-3 h-3 rounded-full"
                 style={{
-                  background: ["#22c55e", "#eab308", "#3b82f6", "#ec4899", "#8b5cf6", "#f97316"][i % 6],
+                  background: particle.color,
                   left: "50%",
                   top: "50%",
                 }}
                 initial={{ x: 0, y: 0, scale: 0 }}
                 animate={{
-                  x: (Math.random() - 0.5) * 400,
-                  y: (Math.random() - 0.5) * 400,
+                  x: particle.x,
+                  y: particle.y,
                   scale: [0, 1, 0],
-                  rotate: Math.random() * 360,
+                  rotate: particle.rotate,
                 }}
-                transition={{ duration: 2, delay: Math.random() * 0.5 }}
+                transition={{ duration: 2, delay: particle.delay }}
               />
             ))}
           </motion.div>
