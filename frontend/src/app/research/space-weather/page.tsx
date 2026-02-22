@@ -1237,21 +1237,24 @@ export default function SpaceWeatherPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [timeRange, setTimeRange] = React.useState<string>("7");
 
-  const informationalPatterns = [
-    "No ENLIL record",
-    "No solar wind plasma",
-    "No CME",
-    "not found",
-    "No data available",
-    "no recent",
-  ];
+  const informationalPatterns = React.useMemo(
+    () => [
+      "No ENLIL record",
+      "No solar wind plasma",
+      "No CME",
+      "not found",
+      "No data available",
+      "no recent",
+    ],
+    [],
+  );
 
-  const isInformationalMessage = (msg: string): boolean => {
+  const isInformationalMessage = React.useCallback((msg: string): boolean => {
     const lowerMsg = msg.toLowerCase();
     return informationalPatterns.some((pattern) =>
       lowerMsg.includes(pattern.toLowerCase())
     );
-  };
+  }, [informationalPatterns]);
 
   const fetchAllData = React.useCallback(async (forceRefresh: boolean = false) => {
     setLoading(true);
@@ -1285,7 +1288,7 @@ export default function SpaceWeatherPage() {
     } finally {
       setLoading(false);
     }
-  }, [timeRange]);
+  }, [timeRange, isInformationalMessage]);
 
   React.useEffect(() => {
     fetchAllData(false);
