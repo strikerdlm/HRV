@@ -659,6 +659,7 @@ async def analyze_rr_intervals(
         from hrv_core import (
             clean_rr_intervals,
             compute_comprehensive_hrv,
+            compute_frequency_domain_metrics,
         )
         from hrv_fragmentation import compute_hrf_metrics
         
@@ -697,8 +698,15 @@ async def analyze_rr_intervals(
         metrics = await asyncio.to_thread(
             compute_comprehensive_hrv,
             cleaned,
-            psd_method=method,
         )
+        # Ensure requested PSD method is honored for spectral outputs.
+        freq_metrics = await asyncio.to_thread(
+            compute_frequency_domain_metrics,
+            cleaned,
+            method,
+        )
+        if freq_metrics:
+            metrics.update(freq_metrics)
         
         # Compute HRF
         hrf = await asyncio.to_thread(compute_hrf_metrics, cleaned)
