@@ -385,7 +385,7 @@ export default function SciencePage() {
               </div>
               {filteredRefs.length === 0 && (
                 <p className="text-center text-muted-foreground py-8">
-                  No references found matching "{searchQuery}"
+                  No references found matching &quot;{searchQuery}&quot;
                 </p>
               )}
             </CardContent>
