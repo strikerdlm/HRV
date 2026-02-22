@@ -61,8 +61,13 @@ import {
 } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
+import { QualityPanel } from "@/components/research/quality-panel";
 import type { HRVAnalysisResult, HRFMetrics, RRUploadResponse } from "@/types/research";
-import { uploadRRData } from "@/lib/research-api";
+import {
+  analyzeRRIntervals,
+  parseRRFile as parseRRIntervalsFromFile,
+  uploadRRData,
+} from "@/lib/research-api";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -73,6 +78,7 @@ interface StoredTracing {
   name: string;
   timestamp: string;
   rrIntervals: number[];
+  sessionId?: string;
   source: string;
   analysis: RRUploadResponse | null;
   fullAnalysis: HRVAnalysisResult | null;
@@ -125,35 +131,6 @@ const METRIC_EXPLANATIONS: Record<string, { title: string; explanation: string; 
 // Utility Functions
 // ---------------------------------------------------------------------------
 
-function parseRRFile(content: string): number[] {
-  // Try to parse as JSON array first
-  try {
-    const parsed = JSON.parse(content);
-    if (Array.isArray(parsed)) {
-      return parsed.map(Number).filter((n) => !isNaN(n) && n > 200 && n < 2000);
-    }
-    if (parsed.rr_intervals) {
-      return parsed.rr_intervals.map(Number).filter((n: number) => !isNaN(n) && n > 200 && n < 2000);
-    }
-  } catch {
-    // Not JSON, try text parsing
-  }
-
-  // Parse as text (one value per line or comma/space separated)
-  const lines = content.split(/[\n\r,\s]+/).filter(Boolean);
-  const intervals: number[] = [];
-  
-  for (const line of lines) {
-    const num = parseFloat(line.trim());
-    // Valid RR intervals are typically between 200ms and 2000ms (30-300 bpm)
-    if (!isNaN(num) && num > 200 && num < 2000) {
-      intervals.push(num);
-    }
-  }
-  
-  return intervals;
-}
-
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
   return date.toLocaleString("en-US", {
@@ -163,80 +140,6 @@ function formatDate(dateString: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
-}
-
-function generateMockAnalysis(rr: number[]): HRVAnalysisResult {
-  const meanRR = rr.reduce((a, b) => a + b, 0) / rr.length;
-  const meanHR = 60000 / meanRR;
-  
-  // Calculate actual SDNN
-  const squaredDiffs = rr.map((r) => Math.pow(r - meanRR, 2));
-  const sdnn = Math.sqrt(squaredDiffs.reduce((a, b) => a + b, 0) / rr.length);
-  
-  // Calculate actual RMSSD
-  const successiveDiffs = [];
-  for (let i = 1; i < rr.length; i++) {
-    successiveDiffs.push(Math.pow(rr[i] - rr[i - 1], 2));
-  }
-  const rmssd = Math.sqrt(successiveDiffs.reduce((a, b) => a + b, 0) / successiveDiffs.length);
-  
-  // Calculate pNN50
-  let nn50 = 0;
-  for (let i = 1; i < rr.length; i++) {
-    if (Math.abs(rr[i] - rr[i - 1]) > 50) nn50++;
-  }
-  const pnn50 = (nn50 / (rr.length - 1)) * 100;
-
-  return {
-    recording_time: new Date().toISOString(),
-    duration_minutes: (rr.length * meanRR) / 60000,
-    total_beats: rr.length,
-    artifact_percentage: Math.random() * 3,
-    time_domain: {
-      mean_hr: meanHR,
-      sdnn: sdnn,
-      rmssd: rmssd,
-      pnn50: pnn50,
-      pnn20: pnn50 * 1.5,
-      cvnn: (sdnn / meanRR) * 100,
-      mean_rr: meanRR,
-      sdsd: rmssd * 0.98,
-      nn50: nn50,
-      nn20: Math.round(nn50 * 1.5),
-    },
-    frequency_domain: {
-      vlf_power: 800 + Math.random() * 400,
-      lf_power: 600 + Math.random() * 400,
-      hf_power: 400 + Math.random() * 400,
-      total_power: 2000 + Math.random() * 800,
-      lf_nu: 50 + Math.random() * 15,
-      hf_nu: 35 + Math.random() * 15,
-      lf_hf_ratio: 1 + Math.random() * 1,
-      vlf_peak: 0.02 + Math.random() * 0.02,
-      lf_peak: 0.07 + Math.random() * 0.03,
-      hf_peak: 0.2 + Math.random() * 0.1,
-    },
-    nonlinear: {
-      sd1: rmssd / Math.sqrt(2),
-      sd2: Math.sqrt(2 * Math.pow(sdnn, 2) - Math.pow(rmssd, 2) / 2),
-      sd1_sd2_ratio: 0.3 + Math.random() * 0.2,
-      dfa_alpha1: 0.8 + Math.random() * 0.4,
-      dfa_alpha2: 0.8 + Math.random() * 0.3,
-      sample_entropy: 1.2 + Math.random() * 0.5,
-      approximate_entropy: 1.0 + Math.random() * 0.4,
-    },
-    hrf: {
-      pip: 45 + Math.random() * 15,
-      pip_h: 25 + Math.random() * 10,
-      pip_s: 20 + Math.random() * 10,
-      ials: 0.3 + Math.random() * 0.1,
-      pss: 40 + Math.random() * 15,
-      pas: 25 + Math.random() * 10,
-      quality_ok: true,
-    },
-    quality_score: 0.85 + Math.random() * 0.1,
-    analysis_method: "welch",
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -437,6 +340,11 @@ function TracingCard({
                 <Badge variant="outline" className="text-[10px]">
                   {tracing.analysis.mean_hr_bpm.toFixed(0)} bpm
                 </Badge>
+                {tracing.sessionId && (
+                  <Badge variant="outline" className="text-[10px]">
+                    Session saved
+                  </Badge>
+                )}
               </>
             )}
           </div>
@@ -580,23 +488,42 @@ function PSDChart({ data }: { data: HRVAnalysisResult }) {
 }
 
 // Poincaré Plot
-function PoincarePlot({ data }: { data: HRVAnalysisResult }) {
+function PoincarePlot({
+  data,
+  rrIntervals,
+}: {
+  data: HRVAnalysisResult;
+  rrIntervals: number[];
+}) {
   const nl = data.nonlinear;
   const points = React.useMemo(() => {
     const result: [number, number][] = [];
+
+    if (rrIntervals.length >= 2) {
+      const capped = rrIntervals.slice(0, 1200);
+      for (let i = 0; i < capped.length - 1; i += 1) {
+        result.push([capped[i], capped[i + 1]]);
+      }
+      return result;
+    }
+
+    // Deterministic fallback shape when pairwise RR data is unavailable.
     const meanRR = data.time_domain.mean_rr ?? 900;
     const sd1 = nl.sd1 ?? 30;
     const sd2 = nl.sd2 ?? 60;
-    for (let i = 0; i < 200; i++) {
-      const angle = Math.random() * 2 * Math.PI;
-      const r1 = Math.random() * sd1;
-      const r2 = Math.random() * sd2;
+    for (let i = 0; i < 180; i += 1) {
+      const angle = (i / 180) * 2 * Math.PI;
+      const amp1 = 0.75 + 0.25 * Math.sin(i * 0.21);
+      const amp2 = 0.7 + 0.3 * Math.cos(i * 0.17);
+      const r1 = sd1 * amp1;
+      const r2 = sd2 * amp2;
       const x = meanRR + r2 * Math.cos(angle) * 0.707 - r1 * Math.sin(angle) * 0.707;
       const y = meanRR + r2 * Math.cos(angle) * 0.707 + r1 * Math.sin(angle) * 0.707;
       result.push([x, y]);
     }
+
     return result;
-  }, [nl.sd1, nl.sd2, data.time_domain.mean_rr]);
+  }, [rrIntervals, nl.sd1, nl.sd2, data.time_domain.mean_rr]);
 
   const option: Record<string, unknown> = {
     title: {
@@ -806,7 +733,7 @@ export default function HRVAnalysisPage() {
       const content = await file.text();
       console.log("File content length:", content.length);
       
-      const rrIntervals = parseRRFile(content);
+      const rrIntervals = parseRRIntervalsFromFile(content);
       console.log("Parsed RR intervals:", rrIntervals.length);
 
       if (rrIntervals.length < 30) {
@@ -832,6 +759,7 @@ export default function HRVAnalysisPage() {
         name: file.name.replace(/\.[^/.]+$/, ""),
         timestamp: new Date().toISOString(),
         rrIntervals: rrIntervals,
+        sessionId: uploadResponse?.session_id,
         source: file.name,
         analysis: uploadResponse,
         fullAnalysis: null,
@@ -849,11 +777,7 @@ export default function HRVAnalysisPage() {
       setSelectedTracing(newTracing);
       setShowUploadDialog(false);
       setIsUploading(false);
-
-      // Auto-analyze after state updates
-      setTimeout(() => {
-        handleAnalyze(newTracing);
-      }, 100);
+      void handleAnalyze(newTracing);
     } catch (e) {
       console.error("Upload error:", e);
       setUploadError(e instanceof Error ? e.message : "Failed to parse file");
@@ -875,8 +799,8 @@ export default function HRVAnalysisPage() {
         throw new Error("Insufficient RR intervals for analysis");
       }
 
-      // Generate analysis
-      const analysis = generateMockAnalysis(tracing.rrIntervals);
+      // Generate analysis from backend.
+      const analysis = await analyzeRRIntervals(tracing.rrIntervals, "welch");
       
       if (!analysis) {
         throw new Error("Failed to generate analysis");
@@ -887,7 +811,13 @@ export default function HRVAnalysisPage() {
       // Update tracing with analysis - use functional update to avoid stale state
       setTracings((prevTracings) => {
         const updated = prevTracings.map((t) =>
-          t.id === tracing.id ? { ...t, fullAnalysis: analysis } : t
+          t.id === tracing.id
+            ? {
+                ...t,
+                fullAnalysis: analysis,
+                sessionId: t.sessionId ?? tracing.analysis?.session_id,
+              }
+            : t
         );
         // Save to localStorage
         if (typeof window !== "undefined") {
@@ -896,7 +826,11 @@ export default function HRVAnalysisPage() {
         return updated;
       });
       
-      setSelectedTracing({ ...tracing, fullAnalysis: analysis });
+      setSelectedTracing({
+        ...tracing,
+        fullAnalysis: analysis,
+        sessionId: tracing.sessionId ?? tracing.analysis?.session_id,
+      });
     } catch (e) {
       console.error("Analysis failed:", e);
       setUploadError(e instanceof Error ? e.message : "Analysis failed");
@@ -1018,6 +952,8 @@ export default function HRVAnalysisPage() {
                         setSelectedTracing(tracing);
                         if (tracing.fullAnalysis) {
                           setCurrentAnalysis(tracing.fullAnalysis);
+                        } else {
+                          setCurrentAnalysis(null);
                         }
                       }}
                       onDelete={() => handleDelete(tracing.id)}
@@ -1078,6 +1014,8 @@ export default function HRVAnalysisPage() {
 
             {currentAnalysis ? (
               <>
+                <QualityPanel context={currentAnalysis.context} />
+
                 {/* Time Domain */}
                 <motion.div
                   initial={{ opacity: 0, y: 20 }}
@@ -1192,7 +1130,10 @@ export default function HRVAnalysisPage() {
                         <CardDescription>Poincaré plot & fractal indices</CardDescription>
                       </CardHeader>
                       <CardContent>
-                        <PoincarePlot data={currentAnalysis} />
+                        <PoincarePlot
+                          data={currentAnalysis}
+                          rrIntervals={selectedTracing?.rrIntervals ?? []}
+                        />
                         <Separator className="my-4" />
                         <div className="grid grid-cols-3 gap-3">
                           <div className="text-center">
