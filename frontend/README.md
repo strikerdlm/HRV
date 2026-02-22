@@ -124,6 +124,9 @@ frontend/
 | `/api/research/space-weather/noaa` | GET | NOAA data by source |
 | `/api/research/hrv/latest/{user_id}` | GET | Latest HRV analysis for user |
 | `/api/research/hrv/analyze` | POST | Analyze RR intervals |
+| `/api/research/hrv/upload` | POST | Upload RR tracing with dedupe-aware persistence |
+| `/api/research/hrv/tracings/{user_id}` | GET | List stored RR tracings for picker/load workflows |
+| `/api/research/hrv/tracings/{user_id}/{measurement_id}` | GET | Load one stored RR tracing (RR values + cached analysis) |
 | `/api/research/hrv/frequency/{user_id}` | GET | Frequency-domain analysis (Welch/Periodogram/AR/Lomb) |
 | `/api/research/hrv/nonlinear/{user_id}` | GET | Nonlinear metrics with advanced RCMSE/MM-DFA gates |
 | `/api/research/hrv/windowed/{user_id}` | GET | Sliding-window HRV trends and anomaly flags |
@@ -238,6 +241,8 @@ npm run start
   - Nonlinear analysis with Poincaré plot (SD1, SD2, DFA α1, entropy)
   - Advanced nonlinear outputs (RCMSE/MM-DFA) when data sufficiency gates pass
   - Heart Rate Fragmentation (HRF): PIP, IALS, PSS, PAS
+  - Global RR tracing loader in the research header for cross-page analysis consistency
+  - Database-backed RR tracing catalog/detail APIs with dedupe-aware storage and cached analysis reuse
 - **Cognitive Workload**:
   - Segment annotation (baseline/task/recovery) on RR trace
   - Reactivity metrics: `ΔlnRMSSD`, `ΔHF`, `ΔLF/HF`, recovery slope
