@@ -274,43 +274,111 @@ export default function WorkloadPage() {
         </Card>
 
         {result && (
-          <Card>
-            <CardHeader>
-              <CardTitle>Workload Outputs</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-3 md:grid-cols-4">
-                <div className="rounded-lg border p-3 text-center">
-                  <p className="text-xs text-muted-foreground">ΔlnRMSSD</p>
-                  <p className="text-xl font-bold">{result.delta_lnrmssd?.toFixed(3) ?? "—"}</p>
+          <>
+            <Card>
+              <CardHeader>
+                <CardTitle>Workload Outputs</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid gap-3 md:grid-cols-4">
+                  <div className="rounded-lg border p-3 text-center">
+                    <p
+                      className="text-xs text-muted-foreground"
+                      title="Log RMSSD change task vs baseline; negative values indicate vagal withdrawal"
+                    >
+                      ΔlnRMSSD
+                    </p>
+                    <p className="text-xl font-bold">{result.delta_lnrmssd?.toFixed(3) ?? "—"}</p>
+                  </div>
+                  <div className="rounded-lg border p-3 text-center">
+                    <p
+                      className="text-xs text-muted-foreground"
+                      title="High-frequency surrogate change task vs baseline; lower values suggest reduced parasympathetic modulation"
+                    >
+                      ΔHF
+                    </p>
+                    <p className="text-xl font-bold">{result.delta_hf?.toFixed(2) ?? "—"}</p>
+                  </div>
+                  <div className="rounded-lg border p-3 text-center">
+                    <p
+                      className="text-xs text-muted-foreground"
+                      title="Task-minus-baseline LF/HF surrogate; positive values suggest relative sympathetic shift"
+                    >
+                      ΔLF/HF
+                    </p>
+                    <p className="text-xl font-bold">{result.delta_lf_hf?.toFixed(2) ?? "—"}</p>
+                  </div>
+                  <div className="rounded-lg border p-3 text-center">
+                    <p
+                      className="text-xs text-muted-foreground"
+                      title="Calibrated screening probability from multifeature workload model; not a diagnostic label"
+                    >
+                      High-workload probability
+                    </p>
+                    <p className="text-xl font-bold">{(result.high_workload_probability * 100).toFixed(0)}%</p>
+                  </div>
                 </div>
-                <div className="rounded-lg border p-3 text-center">
-                  <p className="text-xs text-muted-foreground">ΔHF</p>
-                  <p className="text-xl font-bold">{result.delta_hf?.toFixed(2) ?? "—"}</p>
-                </div>
-                <div className="rounded-lg border p-3 text-center">
-                  <p className="text-xs text-muted-foreground">ΔLF/HF</p>
-                  <p className="text-xl font-bold">{result.delta_lf_hf?.toFixed(2) ?? "—"}</p>
-                </div>
-                <div className="rounded-lg border p-3 text-center">
-                  <p className="text-xs text-muted-foreground">High-workload probability</p>
-                  <p className="text-xl font-bold">{(result.high_workload_probability * 100).toFixed(0)}%</p>
-                </div>
-              </div>
-              {result.threshold_flags.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {result.threshold_flags.map((flag) => (
-                    <Badge key={flag} variant="warning">{flag}</Badge>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">
-                  No threshold flags triggered for the current annotations.
+                {result.threshold_flags.length > 0 ? (
+                  <div className="flex flex-wrap gap-2">
+                    {result.threshold_flags.map((flag) => (
+                      <Badge key={flag} variant="warning">{flag}</Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    No threshold flags triggered for the current annotations.
+                  </p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>How to Interpret These Metrics</CardTitle>
+                <CardDescription>
+                  Workload output should be interpreted relative to each individual baseline and data quality context.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm text-muted-foreground">
+                <p>
+                  - <strong>ΔlnRMSSD</strong>: negative values usually indicate vagal withdrawal under higher cognitive demand.
                 </p>
-              )}
-            </CardContent>
-          </Card>
+                <p>
+                  - <strong>ΔHF</strong>: decreases are consistent with reduced parasympathetic modulation during task load.
+                </p>
+                <p>
+                  - <strong>ΔLF/HF</strong>: increases can reflect sympathetic dominance, but this index is respiration- and effort-confounded.
+                </p>
+                <p>
+                  - <strong>High-workload probability</strong>: screening output for operational triage, not a stand-alone diagnostic label.
+                </p>
+                <p>
+                  - <strong>Recovery slope</strong>: values closer to baseline recovery imply better autonomic resilience after the task.
+                </p>
+              </CardContent>
+            </Card>
+          </>
         )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Scientific References</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <p>
+              - Task Force of ESC/NASPE (1996). HRV standards and measurement constraints.
+              <span className="ml-1 text-primary">doi:10.1161/01.CIR.93.5.1043</span>
+            </p>
+            <p>
+              - Soares ABF et al. (2024). HRV changes in military pilots under operational load.
+              <span className="ml-1 text-primary">doi:10.1093/milmed/usae390</span>
+            </p>
+            <p>
+              - Majumdar A et al. (2024). Systematic review of pilot mental workload using HRV.
+              <span className="ml-1 text-primary">doi:10.3390/s24123723</span>
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </PageWrapper>
   );
