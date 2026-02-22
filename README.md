@@ -127,6 +127,8 @@ The frontend + API stack now includes a dedicated HRV-cognition workflow for ope
 - **In-app scientific traceability** with per-page metric interpretation + citation cards in workload, vigilance, and flight-fatigue modules.
 - **Advanced nonlinear outputs** (RCMSE/MM-DFA) with strict data sufficiency gating.
 - **Integrated physiological fusion** exposed with uncertainty intervals instead of a single deterministic score.
+- **Persistent RR tracing catalog** (`/api/research/hrv/tracings/{user_id}` + detail endpoint) with dedupe-aware upload/analyze storage.
+- **Global RR tracing loader** in the research header so all HRV pages can analyze the same selected recording.
 
 ## Getting Started
 

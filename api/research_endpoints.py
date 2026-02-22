@@ -12,6 +12,8 @@ This module provides comprehensive endpoints for:
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 import logging
 import os
 import sys
@@ -597,19 +599,21 @@ async def get_noaa_data(
 
 
 @router.get("/hrv/latest/{user_id}", response_model=HRVAnalysisResult)
-async def get_latest_hrv_analysis(user_id: str) -> HRVAnalysisResult:
+async def get_latest_hrv_analysis(
+    user_id: str,
+    measurement_id: Optional[str] = Query(default=None),
+    file_hash: Optional[str] = Query(default=None),
+) -> HRVAnalysisResult:
     """Get latest HRV analysis for a user."""
     try:
-        from user_database import UserDatabase
-        
-        db = UserDatabase()
-        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
-        
-        if not history:
+        latest = await _resolve_measurement_for_user(
+            user_id,
+            measurement_id=measurement_id,
+            file_hash=file_hash,
+        )
+        if latest is None:
             return HRVAnalysisResult()
-        
-        latest = history[0]
-        
+
         # Use direct fields from HRVMeasurement dataclass
         return HRVAnalysisResult(
             recording_time=latest.recording_start_utc or latest.measurement_date,
@@ -665,6 +669,11 @@ async def analyze_rr_intervals(
         
         rr_intervals: List[float]
         payload_method: Optional[str] = None
+        payload_user_id: Optional[str] = None
+        payload_source: Optional[str] = None
+        payload_recording_timestamp: Optional[str] = None
+        payload_file_hash: Optional[str] = None
+        payload_measurement_id: Optional[str] = None
         if isinstance(payload, list):
             rr_intervals = [float(v) for v in payload]
         elif isinstance(payload, dict):
@@ -678,6 +687,21 @@ async def analyze_rr_intervals(
                     detail="Request body must include rr_intervals_ms or rr_intervals",
                 )
             payload_method = payload.get("method")
+            raw_user_id = payload.get("user_id")
+            if raw_user_id is not None:
+                payload_user_id = str(raw_user_id).strip() or None
+            raw_source = payload.get("source")
+            if raw_source is not None:
+                payload_source = str(raw_source).strip() or None
+            raw_timestamp = payload.get("recording_timestamp")
+            if raw_timestamp is not None:
+                payload_recording_timestamp = str(raw_timestamp).strip() or None
+            raw_file_hash = payload.get("file_hash")
+            if raw_file_hash is not None:
+                payload_file_hash = str(raw_file_hash).strip() or None
+            raw_measurement_id = payload.get("measurement_id")
+            if raw_measurement_id is not None:
+                payload_measurement_id = str(raw_measurement_id).strip() or None
         else:
             raise HTTPException(
                 status_code=400,
@@ -686,6 +710,9 @@ async def analyze_rr_intervals(
 
         if payload_method and isinstance(payload_method, str):
             method = payload_method
+        method = str(method).strip().lower() or "welch"
+        if method not in {"welch", "periodogram", "ar", "lomb"}:
+            method = "welch"
 
         # Clean and validate - returns (cleaned_rr_ms, valid_mask, summary_dict)
         rr_array = np.array(rr_intervals, dtype=float)
@@ -693,6 +720,34 @@ async def analyze_rr_intervals(
         
         if len(cleaned) < 30:
             raise HTTPException(status_code=400, detail="Not enough valid RR intervals (min 30)")
+
+        cleaned_rr_ms = [float(v) for v in cleaned.tolist()]
+        resolved_file_hash = payload_file_hash or _compute_rr_data_hash(cleaned_rr_ms)
+        analysis_settings = {
+            "endpoint": "hrv_analyze",
+            "method": method,
+            "schema_version": "v1",
+        }
+
+        # Cache hit short-circuit for deterministic reruns.
+        if payload_user_id:
+            from user_database import UserDatabase
+
+            db = UserDatabase()
+            await _ensure_user_exists(db, payload_user_id)
+            settings_hash = db.compute_settings_hash(analysis_settings)
+            cached_payload = await asyncio.to_thread(
+                db.get_hrv_analysis_cache_payload,
+                user_id=payload_user_id,
+                file_hash=resolved_file_hash,
+                analysis_settings_hash=settings_hash,
+            )
+            if isinstance(cached_payload, dict) and cached_payload:
+                try:
+                    return HRVAnalysisResult(**cached_payload)
+                except Exception:
+                    # Corrupted or stale cache payload; continue with fresh compute.
+                    pass
         
         # Compute comprehensive metrics
         metrics = await asyncio.to_thread(
@@ -728,12 +783,12 @@ async def analyze_rr_intervals(
             ),
         )
         context = _build_analysis_context(
-            rr_intervals_ms=[float(v) for v in cleaned.tolist()],
+            rr_intervals_ms=cleaned_rr_ms,
             artifact_pct=float(artifact_pct),
             frequency_validity=[freq_validity],
         )
-        
-        return HRVAnalysisResult(
+
+        result = HRVAnalysisResult(
             duration_minutes=len(cleaned) * np.mean(cleaned) / 60000,
             total_beats=len(cleaned),
             artifact_percentage=artifact_pct,
@@ -770,6 +825,72 @@ async def analyze_rr_intervals(
             analysis_method=method,
             context=context,
         )
+
+        if payload_user_id:
+            from user_database import HRVMeasurement, UserDatabase
+            import uuid
+
+            db = UserDatabase()
+            await _ensure_user_exists(db, payload_user_id)
+            existing = await asyncio.to_thread(
+                db.get_measurement_by_hash,
+                payload_user_id,
+                resolved_file_hash,
+            )
+            if existing is None:
+                measurement = HRVMeasurement(
+                    measurement_id=payload_measurement_id or str(uuid.uuid4()),
+                    user_id=payload_user_id,
+                    measurement_date=_safe_iso_date(payload_recording_timestamp),
+                    device_name="RR Upload",
+                    source_file=payload_source,
+                    file_hash=resolved_file_hash,
+                    recording_start_utc=payload_recording_timestamp,
+                    recording_duration_min=result.duration_minutes,
+                    mean_rr_ms=result.time_domain.mean_rr,
+                    sdnn_ms=result.time_domain.sdnn,
+                    rmssd_ms=result.time_domain.rmssd,
+                    pnn50_pct=result.time_domain.pnn50,
+                    mean_hr_bpm=result.time_domain.mean_hr,
+                    vlf_power_ms2=result.frequency_domain.vlf_power,
+                    lf_power_ms2=result.frequency_domain.lf_power,
+                    hf_power_ms2=result.frequency_domain.hf_power,
+                    lf_hf_ratio=result.frequency_domain.lf_hf_ratio,
+                    total_power_ms2=result.frequency_domain.total_power,
+                    sd1_ms=result.nonlinear.sd1,
+                    sd2_ms=result.nonlinear.sd2,
+                    dfa_alpha1=result.nonlinear.dfa_alpha1,
+                    dfa_alpha2=result.nonlinear.dfa_alpha2,
+                    sample_entropy=result.nonlinear.sample_entropy,
+                    rr_intervals_json=json.dumps(cleaned_rr_ms, separators=(",", ":")),
+                    artifact_percentage=result.artifact_percentage,
+                    quality_score=result.quality_score,
+                    analysis_settings_json=json.dumps(
+                        analysis_settings,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                )
+                try:
+                    await asyncio.to_thread(db.save_hrv_measurement, measurement)
+                except Exception as exc:
+                    _LOGGER.warning("Failed to persist HRV measurement for %s: %s", payload_user_id, exc)
+
+            try:
+                await asyncio.to_thread(
+                    db.save_hrv_analysis_cache,
+                    user_id=payload_user_id,
+                    file_hash=resolved_file_hash,
+                    analysis_settings=analysis_settings,
+                    payload=result.model_dump(),
+                    source_file=payload_source,
+                    recording_date=_safe_iso_date(payload_recording_timestamp),
+                )
+            except Exception as exc:
+                _LOGGER.warning("Failed to persist HRV analysis cache for %s: %s", payload_user_id, exc)
+
+        return result
     except HTTPException:
         raise
     except Exception as exc:
@@ -1180,31 +1301,21 @@ class RRTimeSeriesResponse(BaseModel):
 async def get_hrv_timeseries(
     user_id: str,
     limit: int = Query(default=1000, ge=100, le=10000),
+    measurement_id: Optional[str] = Query(default=None),
+    file_hash: Optional[str] = Query(default=None),
 ) -> RRTimeSeriesResponse:
     """Get RR interval time series with deviation zones for visualization."""
     try:
-        import json
         import numpy as np
-        from user_database import UserDatabase
-        
-        db = UserDatabase()
-        
-        # Get user's RR data from latest recording
-        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
-        
-        if not history:
+        latest = await _resolve_measurement_for_user(
+            user_id,
+            measurement_id=measurement_id,
+            file_hash=file_hash,
+        )
+        if latest is None:
             return RRTimeSeriesResponse()
-        
-        latest = history[0]
-        
-        # Parse RR intervals from JSON field
-        rr_data: List[float] = []
-        if latest.rr_intervals_json:
-            try:
-                rr_data = json.loads(latest.rr_intervals_json)
-            except (json.JSONDecodeError, TypeError):
-                pass
-        
+
+        rr_data = _extract_rr_sequence(latest)
         if not rr_data:
             return RRTimeSeriesResponse()
         
@@ -1343,22 +1454,24 @@ class FrequencyDomainResponse(BaseModel):
 async def get_hrv_frequency(
     user_id: str,
     method: str = Query(default="welch", description="PSD method: welch, periodogram, ar, lomb"),
+    measurement_id: Optional[str] = Query(default=None),
+    file_hash: Optional[str] = Query(default=None),
 ) -> FrequencyDomainResponse:
     """Get frequency domain HRV analysis with PSD and band powers."""
     try:
         import numpy as np
         from scipy import signal
-        from user_database import UserDatabase
         from hrv_core import compute_frequency_domain_metrics
-        
-        db = UserDatabase()
-        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
-        
-        if not history:
+
+        latest = await _resolve_measurement_for_user(
+            user_id,
+            measurement_id=measurement_id,
+            file_hash=file_hash,
+        )
+        if latest is None:
             return FrequencyDomainResponse()
-        
-        latest = history[0]
-        rr_data = latest.rr_intervals_ms or []
+
+        rr_data = _extract_rr_sequence(latest)
         
         if len(rr_data) < 100:
             context = _build_analysis_context(
@@ -1590,21 +1703,25 @@ class NonlinearResponse(BaseModel):
 
 
 @router.get("/hrv/nonlinear/{user_id}", response_model=NonlinearResponse)
-async def get_hrv_nonlinear(user_id: str) -> NonlinearResponse:
+async def get_hrv_nonlinear(
+    user_id: str,
+    measurement_id: Optional[str] = Query(default=None),
+    file_hash: Optional[str] = Query(default=None),
+) -> NonlinearResponse:
     """Get nonlinear HRV analysis including Poincare, DFA, and entropy."""
     try:
         import numpy as np
-        from user_database import UserDatabase
         from hrv_core import compute_poincare_metrics, compute_dfa_metrics, compute_entropy_metrics
-        
-        db = UserDatabase()
-        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
-        
-        if not history:
+
+        latest = await _resolve_measurement_for_user(
+            user_id,
+            measurement_id=measurement_id,
+            file_hash=file_hash,
+        )
+        if latest is None:
             return NonlinearResponse()
-        
-        latest = history[0]
-        rr_data = latest.rr_intervals_ms or []
+
+        rr_data = _extract_rr_sequence(latest)
         
         if len(rr_data) < 30:
             return NonlinearResponse(
@@ -1805,31 +1922,24 @@ async def get_hrv_windowed(
     user_id: str,
     window_size: int = Query(default=300, ge=60, le=600, description="Window size in seconds"),
     step_size: int = Query(default=60, ge=30, le=300, description="Step size in seconds"),
+    measurement_id: Optional[str] = Query(default=None),
+    file_hash: Optional[str] = Query(default=None),
 ) -> WindowedMetricsResponse:
     """Get windowed HRV analysis over time with trend detection."""
     try:
-        import json
         import numpy as np
         import pandas as pd
-        from user_database import UserDatabase
         from hrv_core import compute_windowed_hrv
-        
-        db = UserDatabase()
-        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
-        
-        if not history:
+
+        latest = await _resolve_measurement_for_user(
+            user_id,
+            measurement_id=measurement_id,
+            file_hash=file_hash,
+        )
+        if latest is None:
             return WindowedMetricsResponse()
-        
-        latest = history[0]
-        
-        # Parse RR intervals from JSON field
-        rr_data: List[float] = []
-        if latest.rr_intervals_json:
-            try:
-                rr_data = json.loads(latest.rr_intervals_json)
-            except (json.JSONDecodeError, TypeError):
-                pass
-        
+
+        rr_data = _extract_rr_sequence(latest)
         if len(rr_data) < 100:
             return WindowedMetricsResponse(
                 context=_build_analysis_context(
@@ -1866,15 +1976,19 @@ async def get_hrv_windowed(
         windowed_df = await asyncio.to_thread(
             compute_windowed_hrv,
             df,
-            window_size_sec=window_size,
-            step_size_sec=step_size,
+            rr_col="rr_ms",
+            timestamp_col="timestamp",
+            window=f"{int(window_size)}s",
+            step=f"{int(step_size)}s",
         )
         
         if windowed_df is None or windowed_df.empty:
             return WindowedMetricsResponse()
         
         # Extract data
-        timestamps = windowed_df["window_start"].dt.strftime("%Y-%m-%dT%H:%M:%SZ").tolist()
+        timestamp_col = "start" if "start" in windowed_df.columns else "window_start"
+        timestamp_series = pd.to_datetime(windowed_df[timestamp_col], errors="coerce", utc=True)
+        timestamps = timestamp_series.dt.strftime("%Y-%m-%dT%H:%M:%SZ").fillna("").tolist()
         
         def safe_list(col: str) -> List[Optional[float]]:
             if col in windowed_df.columns:
@@ -2173,26 +2287,108 @@ def _extract_segment(rr_ms: List[float], segment: SegmentAnnotation) -> List[flo
     return rr_ms[start:end]
 
 
-async def _latest_rr_for_user(user_id: str) -> List[float]:
-    """Get latest RR sequence from user history with bounded parsing."""
-    import json
+def _safe_iso_date(raw: Optional[str]) -> str:
+    """Convert optional datetime string into an ISO date; fallback to today."""
+    if raw:
+        try:
+            return datetime.fromisoformat(raw.replace("Z", "+00:00")).date().isoformat()
+        except ValueError:
+            pass
+    return datetime.now(timezone.utc).date().isoformat()
+
+
+def _normalize_rr_sequence(values: List[float], *, max_len: int = 250_000) -> List[float]:
+    """Bounded RR normalization for stable hashing/storage."""
+    normalized: List[float] = []
+    for value in values[:max_len]:
+        try:
+            rr = float(value)
+        except (TypeError, ValueError):
+            continue
+        if 200.0 <= rr <= 2500.0:
+            normalized.append(rr)
+    return normalized
+
+
+def _compute_rr_data_hash(rr_ms: List[float]) -> str:
+    """Stable SHA-256 over normalized RR payload."""
+    normalized = _normalize_rr_sequence(rr_ms)
+    payload = json.dumps(normalized, separators=(",", ":"), ensure_ascii=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _extract_rr_sequence(measurement: Any) -> List[float]:
+    """Extract RR sequence from persisted measurement JSON."""
+    raw_json = getattr(measurement, "rr_intervals_json", None)
+    if not raw_json:
+        return []
+    try:
+        parsed = json.loads(raw_json)
+    except (TypeError, json.JSONDecodeError):
+        return []
+    if not isinstance(parsed, list):
+        return []
+    return _normalize_rr_sequence(parsed)
+
+
+async def _ensure_user_exists(db: Any, user_id: str) -> None:
+    """Create a minimal profile when API is called with a new user id."""
+    if not user_id:
+        return
+    existing = await asyncio.to_thread(db.get_user, user_id)
+    if existing is not None:
+        return
+    from user_database import UserProfile
+
+    profile = UserProfile(
+        user_id=user_id,
+        username=user_id,
+        full_name=user_id,
+        language="en",
+    )
+    await asyncio.to_thread(db.create_user, profile)
+
+
+async def _resolve_measurement_for_user(
+    user_id: str,
+    *,
+    measurement_id: Optional[str] = None,
+    file_hash: Optional[str] = None,
+) -> Optional[Any]:
+    """Resolve a measurement by explicit selector; fallback to latest."""
     from user_database import UserDatabase
 
     db = UserDatabase()
+    if measurement_id:
+        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=5000)
+        for row in history:
+            if row.measurement_id == measurement_id:
+                return row
+    if file_hash:
+        row = await asyncio.to_thread(db.get_measurement_by_hash, user_id, file_hash)
+        if row is not None:
+            return row
     history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
     if not history:
+        return None
+    return history[0]
+
+
+async def _latest_rr_for_user(
+    user_id: str,
+    *,
+    measurement_id: Optional[str] = None,
+    file_hash: Optional[str] = None,
+) -> List[float]:
+    """Get RR sequence for selected/latest tracing."""
+    measurement = await _resolve_measurement_for_user(
+        user_id,
+        measurement_id=measurement_id,
+        file_hash=file_hash,
+    )
+    if measurement is None:
         return []
-    latest = history[0]
-    if latest.rr_intervals_ms:
-        return [float(v) for v in latest.rr_intervals_ms]
-    if latest.rr_intervals_json:
-        try:
-            parsed = json.loads(latest.rr_intervals_json)
-            if isinstance(parsed, list):
-                return [float(v) for v in parsed]
-        except Exception:
-            return []
-    return []
+    return _extract_rr_sequence(measurement)
 
 
 @router.get("/models/calibration-report", response_model=CalibrationReportResponse)
@@ -2320,6 +2516,8 @@ async def get_vigilance_tracking(
     user_id: str,
     window_size: int = Query(default=30, ge=20, le=180),
     step_size: int = Query(default=10, ge=5, le=60),
+    measurement_id: Optional[str] = Query(default=None),
+    file_hash: Optional[str] = Query(default=None),
 ) -> VigilanceResponse:
     """Windowed vigilance state tracking with SAFTE overlay."""
     try:
@@ -2332,7 +2530,11 @@ async def get_vigilance_tracking(
             for idx, feature in enumerate(vigilance_model.feature_order)
         }
 
-        rr_ms = await _latest_rr_for_user(user_id)
+        rr_ms = await _latest_rr_for_user(
+            user_id,
+            measurement_id=measurement_id,
+            file_hash=file_hash,
+        )
         context = _build_analysis_context(rr_ms, artifact_pct=0.0)
         if len(rr_ms) < 100:
             return VigilanceResponse(
@@ -2505,7 +2707,11 @@ async def get_vigilance_tracking(
 
 
 @router.get("/flight-fatigue/{user_id}", response_model=FlightFatigueResponse)
-async def get_flight_fatigue(user_id: str) -> FlightFatigueResponse:
+async def get_flight_fatigue(
+    user_id: str,
+    measurement_id: Optional[str] = Query(default=None),
+    file_hash: Optional[str] = Query(default=None),
+) -> FlightFatigueResponse:
     """Three-level flight fatigue risk classification with feature transparency."""
     try:
         import math
@@ -2514,9 +2720,17 @@ async def get_flight_fatigue(user_id: str) -> FlightFatigueResponse:
         model_version = fatigue_model.model_version
 
         fatigue = await get_fatigue_prediction(user_id)
-        rr_ms = await _latest_rr_for_user(user_id)
+        rr_ms = await _latest_rr_for_user(
+            user_id,
+            measurement_id=measurement_id,
+            file_hash=file_hash,
+        )
         context = _build_analysis_context(rr_ms, artifact_pct=0.0)
-        latest_hrv = await get_latest_hrv_analysis(user_id)
+        latest_hrv = await get_latest_hrv_analysis(
+            user_id,
+            measurement_id=measurement_id,
+            file_hash=file_hash,
+        )
 
         rmssd = _rmssd(rr_ms) if rr_ms else None
         sdnn = _sdnn(rr_ms) if rr_ms else None
@@ -2661,15 +2875,29 @@ async def get_flight_fatigue(user_id: str) -> FlightFatigueResponse:
 
 
 @router.get("/fusion/{user_id}", response_model=FusionResponse)
-async def get_integrated_fusion(user_id: str) -> FusionResponse:
+async def get_integrated_fusion(
+    user_id: str,
+    measurement_id: Optional[str] = Query(default=None),
+    file_hash: Optional[str] = Query(default=None),
+) -> FusionResponse:
     """Integrated performance fusion with uncertainty."""
     try:
         import math
 
         fatigue = await get_fatigue_prediction(user_id)
-        rr_ms = await _latest_rr_for_user(user_id)
+        rr_ms = await _latest_rr_for_user(
+            user_id,
+            measurement_id=measurement_id,
+            file_hash=file_hash,
+        )
         rmssd = _rmssd(rr_ms) if rr_ms else None
-        vigilance = await get_vigilance_tracking(user_id)
+        vigilance = await get_vigilance_tracking(
+            user_id,
+            window_size=30,
+            step_size=10,
+            measurement_id=measurement_id,
+            file_hash=file_hash,
+        )
         space_weather = await get_current_space_weather()
 
         schedule_val = max(0.05, min(1.2, (fatigue.effectiveness_pct or 70) / 100.0))
@@ -2806,20 +3034,24 @@ class HRFResponse(BaseModel):
 
 
 @router.get("/hrv/hrf/{user_id}", response_model=HRFResponse)
-async def get_hrv_hrf(user_id: str) -> HRFResponse:
+async def get_hrv_hrf(
+    user_id: str,
+    measurement_id: Optional[str] = Query(default=None),
+    file_hash: Optional[str] = Query(default=None),
+) -> HRFResponse:
     """Get Heart Rate Fragmentation analysis."""
     try:
         import numpy as np
-        from user_database import UserDatabase
-        
-        db = UserDatabase()
-        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
-        
-        if not history:
+
+        latest = await _resolve_measurement_for_user(
+            user_id,
+            measurement_id=measurement_id,
+            file_hash=file_hash,
+        )
+        if latest is None:
             return HRFResponse()
-        
-        latest = history[0]
-        rr_data = latest.rr_intervals_ms or []
+
+        rr_data = _extract_rr_sequence(latest)
         
         if len(rr_data) < 100:
             return HRFResponse(quality_ok=False, clinical_notes=["Insufficient data for HRF analysis"])
@@ -2919,7 +3151,11 @@ class ReadinessResponse(BaseModel):
 
 
 @router.get("/hrv/readiness/{user_id}", response_model=ReadinessResponse)
-async def get_hrv_readiness(user_id: str) -> ReadinessResponse:
+async def get_hrv_readiness(
+    user_id: str,
+    measurement_id: Optional[str] = Query(default=None),
+    file_hash: Optional[str] = Query(default=None),
+) -> ReadinessResponse:
     """Get readiness score based on HRV baseline comparison."""
     try:
         import numpy as np
@@ -2983,8 +3219,15 @@ async def get_hrv_readiness(user_id: str) -> ReadinessResponse:
         else:
             trend = "stable"
         
-        # Components - use direct fields from HRVMeasurement
-        latest = history[0]
+        # Components can target an explicitly selected tracing.
+        latest = (
+            await _resolve_measurement_for_user(
+                user_id,
+                measurement_id=measurement_id,
+                file_hash=file_hash,
+            )
+            or history[0]
+        )
         components = []
         
         rmssd_val = latest.rmssd_ms or 0
@@ -3634,7 +3877,10 @@ class RRUploadResponse(BaseModel):
     
     # Session ID for correlation analysis
     session_id: str
-    
+    measurement_id: Optional[str] = None
+    file_hash: Optional[str] = None
+    cached: bool = False
+
     message: str
 
 
@@ -3644,6 +3890,8 @@ class RRData(BaseModel):
     rr_intervals_ms: List[float] = Field(..., min_length=30, description="RR intervals in milliseconds")
     recording_timestamp: Optional[str] = None
     source: str = "uploaded"
+    user_id: Optional[str] = None
+    measurement_id: Optional[str] = None
 
 
 @router.post("/hrv/upload", response_model=RRUploadResponse)
@@ -3653,8 +3901,8 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
     Accepts RR intervals in milliseconds. Returns HRV metrics and a session ID
     for use in correlation analysis.
     """
-    import uuid
     import numpy as np
+    import uuid
     
     try:
         from hrv_core import clean_rr_intervals, compute_comprehensive_hrv
@@ -3669,6 +3917,8 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
                 status_code=400,
                 detail=f"Insufficient valid RR intervals after cleaning: {len(cleaned)} (need ≥30)"
             )
+
+        cleaned_rr_ms = [float(v) for v in cleaned.tolist()]
         
         # Calculate basic metrics
         mean_rr = float(np.mean(cleaned))
@@ -3688,15 +3938,77 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
         else:
             quality = "good"
         
-        # Generate session ID
+        rr_hash = _compute_rr_data_hash(cleaned_rr_ms)
         session_id = str(uuid.uuid4())
+        persisted_measurement_id: Optional[str] = data.measurement_id
+        reused_cached = False
+
+        if data.user_id:
+            from user_database import HRVMeasurement, UserDatabase
+
+            db = UserDatabase()
+            await _ensure_user_exists(db, data.user_id)
+            existing = await asyncio.to_thread(
+                db.get_measurement_by_hash,
+                data.user_id,
+                rr_hash,
+            )
+            if existing is not None:
+                reused_cached = True
+                persisted_measurement_id = existing.measurement_id
+            else:
+                measurement = HRVMeasurement(
+                    measurement_id=data.measurement_id or str(uuid.uuid4()),
+                    user_id=data.user_id,
+                    measurement_date=_safe_iso_date(data.recording_timestamp),
+                    device_name="RR Upload",
+                    source_file=data.source,
+                    file_hash=rr_hash,
+                    recording_start_utc=data.recording_timestamp,
+                    recording_duration_min=duration_min,
+                    mean_rr_ms=mean_rr,
+                    sdnn_ms=metrics.get("sdnn"),
+                    rmssd_ms=metrics.get("rmssd"),
+                    pnn50_pct=metrics.get("pnn50"),
+                    mean_hr_bpm=mean_hr,
+                    vlf_power_ms2=metrics.get("vlf_power"),
+                    lf_power_ms2=metrics.get("lf_power"),
+                    hf_power_ms2=metrics.get("hf_power"),
+                    lf_hf_ratio=metrics.get("lf_hf_ratio"),
+                    total_power_ms2=metrics.get("total_power"),
+                    sd1_ms=metrics.get("sd1"),
+                    sd2_ms=metrics.get("sd2"),
+                    dfa_alpha1=metrics.get("dfa_alpha1"),
+                    dfa_alpha2=metrics.get("dfa_alpha2"),
+                    sample_entropy=metrics.get("sample_entropy"),
+                    rr_intervals_json=json.dumps(cleaned_rr_ms, separators=(",", ":")),
+                    artifact_percentage=artifact_pct,
+                    quality_score=None,
+                    analysis_settings_json=json.dumps(
+                        {"endpoint": "hrv_upload", "schema_version": "v1"},
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ),
+                    created_at=datetime.now(timezone.utc).isoformat(),
+                )
+                try:
+                    await asyncio.to_thread(db.save_hrv_measurement, measurement)
+                    persisted_measurement_id = measurement.measurement_id
+                except Exception as exc:
+                    _LOGGER.warning("Failed to persist uploaded RR tracing for %s: %s", data.user_id, exc)
+                    persisted_measurement_id = measurement.measurement_id
+        else:
+            persisted_measurement_id = data.measurement_id or str(uuid.uuid4())
         
         # Store in temporary cache (could be Redis in production)
         # For now, we'll use a global dict (not ideal but simple)
         _RR_SESSION_CACHE[session_id] = {
-            "rr_ms": cleaned.tolist(),
+            "rr_ms": cleaned_rr_ms,
             "timestamp": data.recording_timestamp or datetime.now(timezone.utc).isoformat(),
             "metrics": metrics,
+            "measurement_id": persisted_measurement_id,
+            "file_hash": rr_hash,
+            "user_id": data.user_id,
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         
@@ -3712,12 +4024,176 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
             artifact_percentage=artifact_pct,
             quality_status=quality,
             session_id=session_id,
-            message=f"Successfully processed {len(cleaned)} RR intervals ({duration_min:.1f} min recording)",
+            measurement_id=persisted_measurement_id,
+            file_hash=rr_hash,
+            cached=reused_cached,
+            message=(
+                "RR tracing already exists in database. Reused cached record."
+                if reused_cached
+                else f"Successfully processed {len(cleaned)} RR intervals ({duration_min:.1f} min recording)"
+            ),
         )
     except HTTPException:
         raise
     except Exception as exc:
         _LOGGER.error(f"Error processing RR upload: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+class StoredRRTracing(BaseModel):
+    """Persisted RR tracing metadata for frontend selection."""
+
+    measurement_id: str
+    user_id: str
+    source_file: Optional[str] = None
+    file_hash: Optional[str] = None
+    measurement_date: str
+    recording_start_utc: Optional[str] = None
+    recording_duration_min: Optional[float] = None
+    n_intervals: int = 0
+    artifact_percentage: Optional[float] = None
+    quality_status: str = "unknown"
+    created_at: Optional[str] = None
+    has_cached_analysis: bool = False
+
+
+class RRTracingCatalogResponse(BaseModel):
+    """Catalog of stored RR tracings for a user."""
+
+    user_id: str
+    tracings: List[StoredRRTracing] = Field(default_factory=list)
+
+
+class RRTracingDetailResponse(BaseModel):
+    """Stored RR tracing with raw RR values and optional cached full analysis."""
+
+    tracing: Optional[StoredRRTracing] = None
+    rr_intervals_ms: List[float] = Field(default_factory=list)
+    cached_analysis: Optional[HRVAnalysisResult] = None
+
+
+def _quality_status_from_artifact(artifact_percentage: Optional[float]) -> str:
+    """Map artifact burden into frontend-friendly quality labels."""
+    if artifact_percentage is None:
+        return "unknown"
+    if artifact_percentage > 20:
+        return "poor"
+    if artifact_percentage > 10:
+        return "moderate"
+    return "good"
+
+
+@router.get("/hrv/tracings/{user_id}", response_model=RRTracingCatalogResponse)
+async def get_hrv_tracing_catalog(
+    user_id: str,
+    limit: int = Query(default=200, ge=1, le=2000),
+) -> RRTracingCatalogResponse:
+    """List persisted RR tracings and cached-analysis availability."""
+    try:
+        from user_database import UserDatabase
+
+        db = UserDatabase()
+        history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=limit)
+        cache_entries = await asyncio.to_thread(
+            db.get_hrv_analysis_cache_entries,
+            user_id,
+            limit=max(200, int(limit) * 4),
+        )
+        cached_hashes = {
+            str(entry.file_hash)
+            for entry in cache_entries
+            if entry.file_hash
+        }
+
+        tracings: List[StoredRRTracing] = []
+        for meas in history:
+            rr_data = _extract_rr_sequence(meas)
+            meas_hash = str(meas.file_hash) if meas.file_hash else None
+            tracings.append(
+                StoredRRTracing(
+                    measurement_id=meas.measurement_id,
+                    user_id=meas.user_id,
+                    source_file=meas.source_file,
+                    file_hash=meas_hash,
+                    measurement_date=meas.measurement_date,
+                    recording_start_utc=meas.recording_start_utc,
+                    recording_duration_min=meas.recording_duration_min,
+                    n_intervals=len(rr_data),
+                    artifact_percentage=meas.artifact_percentage,
+                    quality_status=_quality_status_from_artifact(meas.artifact_percentage),
+                    created_at=meas.created_at,
+                    has_cached_analysis=bool(meas_hash and meas_hash in cached_hashes),
+                )
+            )
+        return RRTracingCatalogResponse(user_id=user_id, tracings=tracings)
+    except Exception as exc:
+        _LOGGER.error("Error listing RR tracing catalog for %s: %s", user_id, exc)
+        return RRTracingCatalogResponse(user_id=user_id, tracings=[])
+
+
+@router.get("/hrv/tracings/{user_id}/{measurement_id}", response_model=RRTracingDetailResponse)
+async def get_hrv_tracing_detail(
+    user_id: str,
+    measurement_id: str,
+) -> RRTracingDetailResponse:
+    """Load a single RR tracing, including raw RR and cached full analysis."""
+    try:
+        from user_database import UserDatabase
+
+        db = UserDatabase()
+        measurement = await _resolve_measurement_for_user(
+            user_id,
+            measurement_id=measurement_id,
+        )
+        if measurement is None:
+            raise HTTPException(status_code=404, detail="RR tracing not found")
+
+        rr_data = _extract_rr_sequence(measurement)
+        tracing = StoredRRTracing(
+            measurement_id=measurement.measurement_id,
+            user_id=measurement.user_id,
+            source_file=measurement.source_file,
+            file_hash=measurement.file_hash,
+            measurement_date=measurement.measurement_date,
+            recording_start_utc=measurement.recording_start_utc,
+            recording_duration_min=measurement.recording_duration_min,
+            n_intervals=len(rr_data),
+            artifact_percentage=measurement.artifact_percentage,
+            quality_status=_quality_status_from_artifact(measurement.artifact_percentage),
+            created_at=measurement.created_at,
+            has_cached_analysis=False,
+        )
+
+        cached_analysis: Optional[HRVAnalysisResult] = None
+        if measurement.file_hash:
+            analysis_settings = {
+                "endpoint": "hrv_analyze",
+                "method": "welch",
+                "schema_version": "v1",
+            }
+            settings_hash = db.compute_settings_hash(analysis_settings)
+            payload = await asyncio.to_thread(
+                db.get_hrv_analysis_cache_payload,
+                user_id=user_id,
+                file_hash=str(measurement.file_hash),
+                analysis_settings_hash=settings_hash,
+            )
+            if isinstance(payload, dict) and payload:
+                try:
+                    cached_analysis = HRVAnalysisResult(**payload)
+                    tracing.has_cached_analysis = True
+                except Exception:
+                    cached_analysis = None
+
+        return RRTracingDetailResponse(
+            tracing=tracing,
+            rr_intervals_ms=rr_data,
+            cached_analysis=cached_analysis,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        _LOGGER.error("Error loading RR tracing detail for %s/%s: %s", user_id, measurement_id, exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
