@@ -22,6 +22,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
+import { QualityPanel } from "@/components/research/quality-panel";
 import { getHRVNonlinear } from "@/lib/research-api";
 import { useAppStore } from "@/lib/store";
 import type { NonlinearResponse } from "@/types/research";
@@ -111,8 +112,12 @@ function PoincareChart({ data }: { data: NonlinearResponse }) {
 
 // DFA Gauge
 function DFAGauge({ alpha1, alpha2 }: { alpha1: number | null; alpha2: number | null }) {
-  const value = alpha1 ?? 1;
+  const value = alpha1 ?? 0;
   const hasData = alpha1 !== null;
+  const max = 2;
+  const clamped = Math.max(0, Math.min(value, max));
+  const circumference = 2 * Math.PI * 40;
+  const dash = (clamped / max) * circumference;
 
   const getColor = (a: number) => {
     if (a < 0.65) return SCIENTIFIC_COLORS.danger;
@@ -121,58 +126,47 @@ function DFAGauge({ alpha1, alpha2 }: { alpha1: number | null; alpha2: number | 
     return SCIENTIFIC_COLORS.danger;
   };
 
-  const option: Record<string, unknown> = {
-    series: [
-      {
-        type: "gauge",
-        center: ["50%", "65%"],
-        radius: "95%",
-        startAngle: 180,
-        endAngle: 0,
-        min: 0,
-        max: 2,
-        splitNumber: 4,
-        axisLine: {
-          lineStyle: {
-            width: 25,
-            color: [
-              [0.325, SCIENTIFIC_COLORS.danger],
-              [0.5, SCIENTIFIC_COLORS.success],
-              [0.675, SCIENTIFIC_COLORS.warning],
-              [1, SCIENTIFIC_COLORS.danger],
-            ],
-          },
-        },
-        pointer: {
-          icon: "path://M12.8,0.7l12,40.1H0.7L12.8,0.7z",
-          length: "65%",
-          width: 6,
-          offsetCenter: [0, "-10%"],
-          itemStyle: { color: hasData ? getColor(value) : "#94a3b8" },
-        },
-        anchor: {
-          show: true,
-          showAbove: true,
-          size: 18,
-          itemStyle: { borderWidth: 3, borderColor: hasData ? getColor(value) : "#94a3b8", color: "#fff" },
-        },
-        axisTick: { show: true, splitNumber: 2, length: 8, distance: 5, lineStyle: { color: "#64748b", width: 1 } },
-        splitLine: { show: true, length: 15, distance: 5, lineStyle: { color: "#475569", width: 2 } },
-        axisLabel: { distance: 30, color: "#1e293b", fontSize: 12, fontWeight: "600" },
-        detail: {
-          valueAnimation: true,
-          formatter: () => (hasData ? value.toFixed(2) : "—"),
-          fontSize: 38,
-          fontWeight: "bold",
-          color: hasData ? getColor(value) : "#94a3b8",
-          offsetCenter: [0, "30%"],
-        },
-        data: [{ value }],
-      },
-    ],
-  };
-
-  return <EChartsWrapper option={option} height={260} showToolbox={false} />;
+  return (
+    <div className="flex flex-col items-center justify-center py-3">
+      <div className="relative w-28 h-28">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 96 96">
+          <circle
+            cx="48"
+            cy="48"
+            r="40"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="8"
+            className="text-muted/30"
+          />
+          <circle
+            cx="48"
+            cy="48"
+            r="40"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="8"
+            strokeDasharray={`${dash} ${circumference}`}
+            className={hasData ? "" : "text-muted/50"}
+            style={{ color: hasData ? getColor(value) : "#94a3b8" }}
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span
+            className="text-2xl font-bold"
+            style={{ color: hasData ? getColor(value) : "#94a3b8" }}
+          >
+            {hasData ? value.toFixed(2) : "—"}
+          </span>
+          <span className="text-[10px] text-muted-foreground">α1</span>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground mt-2">
+        α2: {alpha2 !== null ? alpha2.toFixed(2) : "—"}
+      </p>
+    </div>
+  );
 }
 
 // Entropy Display
@@ -221,6 +215,55 @@ function MetricCard({
   );
 }
 
+function AdvancedCurveChart({
+  title,
+  xLabel,
+  yLabel,
+  xValues,
+  yValues,
+  color,
+}: {
+  title: string;
+  xLabel: string;
+  yLabel: string;
+  xValues: number[];
+  yValues: number[];
+  color: string;
+}) {
+  const option: Record<string, unknown> = {
+    title: {
+      text: title,
+      left: "center",
+      textStyle: { color: "#1a1a1a", fontSize: 13, fontWeight: "bold" },
+    },
+    grid: { left: 55, right: 20, top: 45, bottom: 50, containLabel: true },
+    xAxis: {
+      type: "value",
+      name: xLabel,
+      axisLabel: { color: "#1a1a1a" },
+      nameTextStyle: { color: "#1a1a1a" },
+    },
+    yAxis: {
+      type: "value",
+      name: yLabel,
+      axisLabel: { color: "#1a1a1a" },
+      nameTextStyle: { color: "#1a1a1a" },
+    },
+    tooltip: { trigger: "axis" },
+    series: [
+      {
+        type: "line",
+        data: xValues.map((x, idx) => [x, yValues[idx] ?? 0]),
+        smooth: true,
+        symbolSize: 6,
+        lineStyle: { color, width: 2 },
+        itemStyle: { color },
+      },
+    ],
+  };
+  return <EChartsWrapper option={option} height={260} showToolbox={false} />;
+}
+
 export default function NonlinearPage() {
   const [data, setData] = React.useState<NonlinearResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -233,44 +276,7 @@ export default function NonlinearPage() {
     setLoading(true);
     try {
       const result = await getHRVNonlinear(userId);
-      if (result.rr_n.length === 0) {
-        // Generate demo data
-        const meanRR = 870;
-        const sd1 = 32;
-        const sd2 = 78;
-        const n = 400;
-        const rr_n: number[] = [];
-        const rr_n1: number[] = [];
-        
-        for (let i = 0; i < n; i++) {
-          const angle = Math.random() * 2 * Math.PI;
-          const r1 = Math.random() * sd1;
-          const r2 = Math.random() * sd2;
-          const x = meanRR + r2 * Math.cos(angle) * 0.707 - r1 * Math.sin(angle) * 0.707;
-          const y = meanRR + r2 * Math.cos(angle) * 0.707 + r1 * Math.sin(angle) * 0.707;
-          rr_n.push(x);
-          rr_n1.push(y);
-        }
-
-        const demoData: NonlinearResponse = {
-          rr_n,
-          rr_n1,
-          sd1,
-          sd2,
-          sd1_sd2_ratio: sd1 / sd2,
-          ellipse: { center_x: meanRR, center_y: meanRR, width: 2 * sd2, height: 2 * sd1, angle: 45 },
-          dfa_alpha1: 1.05,
-          dfa_alpha2: 0.92,
-          dfa_alpha1_interpretation: "Normal fractal scaling (healthy heart)",
-          sample_entropy: 1.42,
-          approximate_entropy: 1.18,
-          complexity_state: "normal",
-          interpretation: ["Nonlinear dynamics within normal range", "DFA α1 indicates healthy fractal correlation"],
-        };
-        setData(demoData);
-      } else {
-        setData(result);
-      }
+      setData(result);
     } catch (err) {
       console.error(err);
     } finally {
@@ -315,6 +321,8 @@ export default function NonlinearPage() {
 
         {data && (
           <>
+            <QualityPanel context={data.context} />
+
             {/* Poincare Plot */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -411,6 +419,52 @@ export default function NonlinearPage() {
                 </Card>
               </motion.div>
             </div>
+
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.35 }}
+            >
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <Sparkles className="h-5 w-5 text-warning" />
+                    Advanced Cognitive Discriminators (RCMSE + MM-DFA)
+                  </CardTitle>
+                  <CardDescription>
+                    Enabled only when data sufficiency and QC gates pass (minimum {data.min_samples_required ?? 400} RR samples).
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {data.advanced_metrics_enabled ? (
+                    <div className="grid gap-6 lg:grid-cols-2">
+                      <AdvancedCurveChart
+                        title={`RCMSE (Ei: ${data.rcmse_ei?.toFixed(3) ?? "—"})`}
+                        xLabel="Scale (tau)"
+                        yLabel="Entropy"
+                        xValues={data.rcmse_tau ?? []}
+                        yValues={data.rcmse_curve ?? []}
+                        color={SCIENTIFIC_COLORS.warning}
+                      />
+                      <AdvancedCurveChart
+                        title={`MM-DFA (MFI: ${data.mfi?.toFixed(3) ?? "—"})`}
+                        xLabel="Scale"
+                        yLabel="Fluctuation"
+                        xValues={data.mmdfa_scales ?? []}
+                        yValues={data.mmdfa_curve ?? []}
+                        color={SCIENTIFIC_COLORS.info}
+                      />
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-lg border bg-muted/40">
+                      <p className="text-sm text-muted-foreground">
+                        Advanced metrics are gated off due to insufficient clean data or failed stationarity/QC checks.
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </motion.div>
 
             {/* Interpretation */}
             {data.interpretation.length > 0 && (
