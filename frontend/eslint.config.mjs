@@ -1,13 +1,6 @@
 // Author: Dr Diego Malpica MD
 import eslintConfigNext from "eslint-config-next";
 
-const eslintConfig = [
-  ...eslintConfigNext,
-  {
-    rules: {
-      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
-    },
-  },
-];
+const config = [...eslintConfigNext];
 
-export default eslintConfig;
+export default config;
