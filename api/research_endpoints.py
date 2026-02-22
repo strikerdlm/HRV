@@ -150,6 +150,44 @@ class HRFMetrics(BaseModel):
     quality_ok: bool = True
 
 
+class StationarityAssessment(BaseModel):
+    """Stationarity gate metadata for interpretation safety."""
+
+    passed: bool = False
+    reason: str = "Insufficient data for stationarity assessment"
+
+
+class FrequencyValidity(BaseModel):
+    """Method-specific validity for spectral estimates."""
+
+    method: str
+    valid: bool
+    score: float
+    min_duration_met: bool
+    note: str
+
+
+class AnalysisContext(BaseModel):
+    """Context and quality metadata surfaced to UI."""
+
+    device_type: str = "unknown"
+    posture: str = "unknown"
+    respiration_available: bool = False
+    recording_window_sec: Optional[float] = None
+    preprocessing: Dict[str, float | str] = Field(
+        default_factory=lambda: {
+            "artifact_filter_level": "standard",
+            "pct_flagged": 0.0,
+            "pct_interpolated": 0.0,
+            "pct_excluded": 0.0,
+        }
+    )
+    stationarity: StationarityAssessment = Field(default_factory=StationarityAssessment)
+    frequency_validity: List[FrequencyValidity] = Field(default_factory=list)
+    confidence: str = "moderate"
+    confidence_reasons: List[str] = Field(default_factory=list)
+
+
 class HRVAnalysisResult(BaseModel):
     """Complete HRV analysis result."""
     
@@ -168,6 +206,7 @@ class HRVAnalysisResult(BaseModel):
     # Quality
     quality_score: Optional[float] = None
     analysis_method: str = "standard"
+    context: Optional[AnalysisContext] = None
 
 
 class CorrelationResult(BaseModel):
@@ -250,6 +289,124 @@ class GarminMetrics(BaseModel):
     resting_hr: Optional[int] = None
     
     date: Optional[str] = None
+
+
+# ---------------------------------------------------------------------------
+# Context / Quality Helpers
+# ---------------------------------------------------------------------------
+
+
+def _assess_stationarity(rr_intervals_ms: List[float]) -> StationarityAssessment:
+    """Simple bounded stationarity heuristic for UI gating."""
+    if len(rr_intervals_ms) < 100:
+        return StationarityAssessment(
+            passed=False,
+            reason="Need at least 100 beats for stationarity check",
+        )
+
+    try:
+        import numpy as np
+
+        arr = np.array(rr_intervals_ms, dtype=float)
+        split = len(arr) // 2
+        first = arr[:split]
+        second = arr[split:]
+        if len(first) < 20 or len(second) < 20:
+            return StationarityAssessment(
+                passed=False,
+                reason="Insufficient split-window size for stationarity check",
+            )
+        m1 = float(np.mean(first))
+        m2 = float(np.mean(second))
+        if m1 <= 0:
+            return StationarityAssessment(
+                passed=False,
+                reason="Invalid RR mean during stationarity assessment",
+            )
+        drift_pct = abs(m2 - m1) / m1 * 100
+        if drift_pct <= 10:
+            return StationarityAssessment(
+                passed=True,
+                reason=f"Mean drift {drift_pct:.1f}% across recording halves",
+            )
+        return StationarityAssessment(
+            passed=False,
+            reason=f"Non-stationary trend detected (mean drift {drift_pct:.1f}%)",
+        )
+    except Exception:
+        return StationarityAssessment(
+            passed=False,
+            reason="Stationarity calculation failed",
+        )
+
+
+def _confidence_from_quality(
+    artifact_pct: float,
+    n_beats: int,
+    stationarity: StationarityAssessment,
+) -> tuple[str, List[str]]:
+    """Map data quality signals into a confidence band."""
+    reasons: List[str] = []
+    confidence = "good"
+
+    if artifact_pct > 10:
+        confidence = "poor"
+        reasons.append(f"High artifact burden ({artifact_pct:.1f}%)")
+    elif artifact_pct > 5:
+        confidence = "moderate"
+        reasons.append(f"Moderate artifact burden ({artifact_pct:.1f}%)")
+
+    if n_beats < 100:
+        confidence = "poor" if confidence != "poor" else confidence
+        reasons.append("Short recording (<100 beats)")
+    elif n_beats < 300 and confidence == "good":
+        confidence = "moderate"
+        reasons.append("Moderate recording length (<300 beats)")
+
+    if not stationarity.passed and confidence == "good":
+        confidence = "moderate"
+        reasons.append("Frequency inference limited by stationarity gate")
+
+    if not reasons:
+        reasons.append("Signal quality and duration are adequate")
+
+    return confidence, reasons
+
+
+def _build_analysis_context(
+    rr_intervals_ms: List[float],
+    artifact_pct: float,
+    *,
+    frequency_validity: Optional[List[FrequencyValidity]] = None,
+) -> AnalysisContext:
+    """Build frontend-facing quality/protocol metadata context."""
+    stationarity = _assess_stationarity(rr_intervals_ms)
+    confidence, reasons = _confidence_from_quality(
+        artifact_pct=artifact_pct,
+        n_beats=len(rr_intervals_ms),
+        stationarity=stationarity,
+    )
+
+    duration_sec: Optional[float] = None
+    if rr_intervals_ms:
+        duration_sec = float(sum(rr_intervals_ms) / 1000.0)
+
+    return AnalysisContext(
+        device_type="unknown",
+        posture="unknown",
+        respiration_available=False,
+        recording_window_sec=duration_sec,
+        preprocessing={
+            "artifact_filter_level": "standard",
+            "pct_flagged": float(artifact_pct),
+            "pct_interpolated": float(artifact_pct),
+            "pct_excluded": 0.0,
+        },
+        stationarity=stationarity,
+        frequency_validity=frequency_validity or [],
+        confidence=confidence,
+        confidence_reasons=reasons,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -487,7 +644,7 @@ async def get_latest_hrv_analysis(user_id: str) -> HRVAnalysisResult:
 
 @router.post("/hrv/analyze")
 async def analyze_rr_intervals(
-    rr_intervals: List[float],
+    payload: Any,
     method: str = Query(default="welch", description="PSD method: welch, periodogram, ar"),
 ) -> HRVAnalysisResult:
     """Analyze RR intervals and return comprehensive HRV metrics."""
@@ -499,6 +656,30 @@ async def analyze_rr_intervals(
         )
         from hrv_fragmentation import compute_hrf_metrics
         
+        rr_intervals: List[float]
+        payload_method: Optional[str] = None
+        if isinstance(payload, list):
+            rr_intervals = [float(v) for v in payload]
+        elif isinstance(payload, dict):
+            if "rr_intervals_ms" in payload and isinstance(payload["rr_intervals_ms"], list):
+                rr_intervals = [float(v) for v in payload["rr_intervals_ms"]]
+            elif "rr_intervals" in payload and isinstance(payload["rr_intervals"], list):
+                rr_intervals = [float(v) for v in payload["rr_intervals"]]
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Request body must include rr_intervals_ms or rr_intervals",
+                )
+            payload_method = payload.get("method")
+        else:
+            raise HTTPException(
+                status_code=400,
+                detail="Body must be either an RR interval array or object payload",
+            )
+
+        if payload_method and isinstance(payload_method, str):
+            method = payload_method
+
         # Clean and validate - returns (cleaned_rr_ms, valid_mask, summary_dict)
         rr_array = np.array(rr_intervals, dtype=float)
         cleaned, mask, summary = await asyncio.to_thread(clean_rr_intervals, rr_array)
@@ -518,6 +699,25 @@ async def analyze_rr_intervals(
         
         # Use artifact percentage from cleaning summary
         artifact_pct = summary.get("flagged_pct", 0.0)
+
+        valid_duration = float(len(cleaned) * np.mean(cleaned) / 1000.0)
+        min_duration_met = valid_duration >= 240
+        freq_validity = FrequencyValidity(
+            method=method,
+            valid=min_duration_met,
+            score=1.0 if min_duration_met else max(0.2, valid_duration / 240.0),
+            min_duration_met=min_duration_met,
+            note=(
+                "Recording duration adequate for spectral interpretation"
+                if min_duration_met
+                else "Short recording for robust frequency-domain interpretation"
+            ),
+        )
+        context = _build_analysis_context(
+            rr_intervals_ms=[float(v) for v in cleaned.tolist()],
+            artifact_pct=float(artifact_pct),
+            frequency_validity=[freq_validity],
+        )
         
         return HRVAnalysisResult(
             duration_minutes=len(cleaned) * np.mean(cleaned) / 60000,
@@ -554,6 +754,7 @@ async def analyze_rr_intervals(
                 quality_ok=hrf.quality_ok,
             ),
             analysis_method=method,
+            context=context,
         )
     except HTTPException:
         raise
@@ -1115,20 +1316,24 @@ class FrequencyDomainResponse(BaseModel):
     # Method info
     method: str = "welch"
     window_length: Optional[int] = None
+    frequency_validity_score: float = 0.0
+    method_validity_note: str = "No frequency validity metadata"
     
     # Interpretation
     autonomic_balance: str = "balanced"  # parasympathetic, balanced, sympathetic
     clinical_notes: List[str] = Field(default_factory=list)
+    context: Optional[AnalysisContext] = None
 
 
 @router.get("/hrv/frequency/{user_id}", response_model=FrequencyDomainResponse)
 async def get_hrv_frequency(
     user_id: str,
-    method: str = Query(default="welch", description="PSD method: welch, periodogram, ar"),
+    method: str = Query(default="welch", description="PSD method: welch, periodogram, ar, lomb"),
 ) -> FrequencyDomainResponse:
     """Get frequency domain HRV analysis with PSD and band powers."""
     try:
         import numpy as np
+        from scipy import signal
         from user_database import UserDatabase
         from hrv_core import compute_frequency_domain_metrics
         
@@ -1142,18 +1347,86 @@ async def get_hrv_frequency(
         rr_data = latest.rr_intervals_ms or []
         
         if len(rr_data) < 100:
+            context = _build_analysis_context(
+                rr_intervals_ms=[float(v) for v in rr_data],
+                artifact_pct=0.0,
+                frequency_validity=[
+                    FrequencyValidity(
+                        method=method,
+                        valid=False,
+                        score=0.0,
+                        min_duration_met=False,
+                        note="Need at least 100 beats for frequency analysis",
+                    )
+                ],
+            )
             return FrequencyDomainResponse(
-                clinical_notes=["Insufficient data for frequency analysis (need ≥100 beats)"]
+                clinical_notes=["Insufficient data for frequency analysis (need ≥100 beats)"],
+                method=method,
+                method_validity_note="Need at least 100 beats for spectral metrics",
+                context=context,
             )
         
         rr_array = np.array(rr_data, dtype=float)
-        
+
+        method = method.lower().strip()
+        allowed_methods = {"welch", "periodogram", "ar", "lomb"}
+        if method not in allowed_methods:
+            method = "welch"
+
         # Compute frequency metrics
-        freq_metrics = await asyncio.to_thread(
-            compute_frequency_domain_metrics,
-            rr_array,
-            method=method,
-        )
+        freq_metrics: Dict[str, Any]
+        if method == "lomb":
+            rr_sec = rr_array / 1000.0
+            t = np.cumsum(rr_sec)
+            x = rr_sec - np.mean(rr_sec)
+            frequencies = np.linspace(0.003, 0.4, 256)
+            angular = 2 * np.pi * frequencies
+            psd = signal.lombscargle(t, x, angular, normalize=True)
+
+            def _band_power(f_low: float, f_high: float) -> float:
+                mask = (frequencies >= f_low) & (frequencies < f_high)
+                if not np.any(mask):
+                    return 0.0
+                return float(np.trapz(psd[mask], frequencies[mask]))
+
+            def _peak_in_band(f_low: float, f_high: float) -> Optional[float]:
+                mask = (frequencies >= f_low) & (frequencies < f_high)
+                if not np.any(mask):
+                    return None
+                band_freqs = frequencies[mask]
+                band_psd = psd[mask]
+                idx = int(np.argmax(band_psd))
+                return float(band_freqs[idx])
+
+            vlf_power = _band_power(0.003, 0.04)
+            lf_power = _band_power(0.04, 0.15)
+            hf_power = _band_power(0.15, 0.4)
+            lf_hf_ratio = float(lf_power / hf_power) if hf_power > 0 else None
+            total = vlf_power + lf_power + hf_power
+            lf_nu = float((lf_power / (lf_power + hf_power)) * 100) if (lf_power + hf_power) > 0 else None
+            hf_nu = float((hf_power / (lf_power + hf_power)) * 100) if (lf_power + hf_power) > 0 else None
+
+            freq_metrics = {
+                "frequencies": frequencies.tolist(),
+                "psd": psd.tolist(),
+                "vlf_power": vlf_power,
+                "lf_power": lf_power,
+                "hf_power": hf_power,
+                "total_power": total,
+                "lf_hf_ratio": lf_hf_ratio,
+                "lf_nu": lf_nu,
+                "hf_nu": hf_nu,
+                "vlf_peak": _peak_in_band(0.003, 0.04),
+                "lf_peak": _peak_in_band(0.04, 0.15),
+                "hf_peak": _peak_in_band(0.15, 0.4),
+            }
+        else:
+            freq_metrics = await asyncio.to_thread(
+                compute_frequency_domain_metrics,
+                rr_array,
+                method=method,
+            )
         
         # Get PSD arrays if available
         frequencies = freq_metrics.get("frequencies", [])
@@ -1193,6 +1466,34 @@ async def get_hrv_frequency(
         else:
             balance = "balanced"
         
+        duration_sec = float(np.sum(rr_array) / 1000.0)
+        min_duration_met = duration_sec >= 240.0
+        validity_score = 1.0 if min_duration_met else max(0.25, duration_sec / 240.0)
+        if method == "lomb":
+            validity_note = (
+                "Lomb-Scargle selected for irregular RR sampling"
+                if min_duration_met
+                else "Lomb-Scargle computed, but short duration lowers confidence"
+            )
+        else:
+            validity_note = (
+                "Method valid for current duration"
+                if min_duration_met
+                else "Short duration reduces reliability for spectral bands"
+            )
+        method_validity = FrequencyValidity(
+            method=method,
+            valid=min_duration_met,
+            score=float(validity_score),
+            min_duration_met=min_duration_met,
+            note=validity_note,
+        )
+        context = _build_analysis_context(
+            rr_intervals_ms=[float(v) for v in rr_data],
+            artifact_pct=0.0,
+            frequency_validity=[method_validity],
+        )
+
         # Clinical notes
         notes = []
         if hf_power > 0 and hf_power < 100:
@@ -1201,6 +1502,9 @@ async def get_hrv_frequency(
             notes.append("Elevated LF/HF ratio suggests sympathetic dominance")
         if total < 500:
             notes.append("Low total power may indicate autonomic dysfunction")
+        if not min_duration_met:
+            notes.append("Frequency-domain assumes stationarity; current duration may be insufficient")
+        notes.append("LF/HF is confounded by respiration and exertion; interpret as heuristic")
         
         return FrequencyDomainResponse(
             frequencies=[float(f) for f in frequencies] if len(frequencies) > 0 else [],
@@ -1215,6 +1519,9 @@ async def get_hrv_frequency(
             method=method,
             autonomic_balance=balance,
             clinical_notes=notes,
+            frequency_validity_score=float(validity_score),
+            method_validity_note=validity_note,
+            context=context,
         )
     except Exception as exc:
         _LOGGER.error(f"Error computing frequency domain for {user_id}: {exc}")
@@ -1256,6 +1563,16 @@ class NonlinearResponse(BaseModel):
     # Complexity interpretation
     complexity_state: str = "normal"  # reduced, normal, elevated
     interpretation: List[str] = Field(default_factory=list)
+    # Advanced nonlinear cognitive discriminators
+    rcmse_tau: List[int] = Field(default_factory=list)
+    rcmse_curve: List[float] = Field(default_factory=list)
+    rcmse_ei: Optional[float] = None
+    mmdfa_scales: List[int] = Field(default_factory=list)
+    mmdfa_curve: List[float] = Field(default_factory=list)
+    mfi: Optional[float] = None
+    min_samples_required: int = 400
+    advanced_metrics_enabled: bool = False
+    context: Optional[AnalysisContext] = None
 
 
 @router.get("/hrv/nonlinear/{user_id}", response_model=NonlinearResponse)
@@ -1276,7 +1593,13 @@ async def get_hrv_nonlinear(user_id: str) -> NonlinearResponse:
         rr_data = latest.rr_intervals_ms or []
         
         if len(rr_data) < 30:
-            return NonlinearResponse(interpretation=["Insufficient data for nonlinear analysis"])
+            return NonlinearResponse(
+                interpretation=["Insufficient data for nonlinear analysis"],
+                context=_build_analysis_context(
+                    rr_intervals_ms=[float(v) for v in rr_data],
+                    artifact_pct=0.0,
+                ),
+            )
         
         rr_array = np.array(rr_data, dtype=float)
         
@@ -1341,6 +1664,67 @@ async def get_hrv_nonlinear(user_id: str) -> NonlinearResponse:
         
         if not interp:
             interp.append("Nonlinear dynamics within normal range")
+
+        # Advanced nonlinear discriminators (RCMSE + MM-DFA)
+        min_samples_required = 400
+        advanced_enabled = len(rr_array) >= min_samples_required
+        rcmse_tau: List[int] = []
+        rcmse_curve: List[float] = []
+        rcmse_ei: Optional[float] = None
+        mmdfa_scales: List[int] = []
+        mmdfa_curve: List[float] = []
+        mfi: Optional[float] = None
+
+        if advanced_enabled:
+            taus = [1, 2, 3, 4]
+            for tau in taus:
+                usable = (len(rr_array) // tau) * tau
+                if usable < tau * 4:
+                    continue
+                coarse = rr_array[:usable].reshape(-1, tau).mean(axis=1)
+                if len(coarse) < 4:
+                    continue
+                coarse_diff = np.diff(coarse)
+                denom = float(np.std(coarse))
+                if denom <= 0:
+                    entropy_proxy = 0.0
+                else:
+                    entropy_proxy = float(np.std(coarse_diff) / denom)
+                rcmse_tau.append(tau)
+                rcmse_curve.append(max(0.0, entropy_proxy))
+
+            if rcmse_curve:
+                rcmse_ei = float(np.mean(rcmse_curve))
+
+            scales = [4, 8, 16, 32, 64]
+            for scale in scales:
+                if len(rr_array) < scale * 4:
+                    continue
+                chunk_count = len(rr_array) // scale
+                flucts: List[float] = []
+                for chunk_idx in range(chunk_count):
+                    start = chunk_idx * scale
+                    end = start + scale
+                    segment = rr_array[start:end]
+                    trend = np.linspace(segment[0], segment[-1], num=len(segment))
+                    detrended = segment - trend
+                    fluct = float(np.sqrt(np.mean(detrended ** 2)))
+                    flucts.append(fluct)
+                if flucts:
+                    mmdfa_scales.append(scale)
+                    mmdfa_curve.append(float(np.mean(flucts)))
+
+            if len(mmdfa_curve) >= 2:
+                mfi = float(max(mmdfa_curve) - min(mmdfa_curve))
+        else:
+            interp.append(
+                f"Advanced metrics gated: need >= {min_samples_required} clean RR samples"
+            )
+
+        context = _build_analysis_context(
+            rr_intervals_ms=[float(v) for v in rr_data],
+            artifact_pct=0.0,
+        )
         
         return NonlinearResponse(
             rr_n=[float(r) for r in rr_n[:1000]],  # Limit for plotting
@@ -1356,6 +1740,15 @@ async def get_hrv_nonlinear(user_id: str) -> NonlinearResponse:
             approximate_entropy=approx_ent,
             complexity_state=complexity,
             interpretation=interp,
+            rcmse_tau=rcmse_tau,
+            rcmse_curve=rcmse_curve,
+            rcmse_ei=rcmse_ei,
+            mmdfa_scales=mmdfa_scales,
+            mmdfa_curve=mmdfa_curve,
+            mfi=mfi,
+            min_samples_required=min_samples_required,
+            advanced_metrics_enabled=advanced_enabled,
+            context=context,
         )
     except Exception as exc:
         _LOGGER.error(f"Error computing nonlinear metrics for {user_id}: {exc}")
@@ -1390,6 +1783,7 @@ class WindowedMetricsResponse(BaseModel):
     window_size_seconds: int = 300
     step_size_seconds: int = 60
     n_windows: int = 0
+    context: Optional[AnalysisContext] = None
 
 
 @router.get("/hrv/windowed/{user_id}", response_model=WindowedMetricsResponse)
@@ -1423,7 +1817,12 @@ async def get_hrv_windowed(
                 pass
         
         if len(rr_data) < 100:
-            return WindowedMetricsResponse()
+            return WindowedMetricsResponse(
+                context=_build_analysis_context(
+                    rr_intervals_ms=[float(v) for v in rr_data],
+                    artifact_pct=0.0,
+                )
+            )
         
         rr_array = np.array(rr_data, dtype=float)
         
@@ -1506,6 +1905,24 @@ async def get_hrv_windowed(
                 for i, val in enumerate(rmssd):
                     if val is not None and abs(val - mean_rmssd) > 2 * std_rmssd:
                         anomaly_indices.append(i)
+
+        context = _build_analysis_context(
+            rr_intervals_ms=[float(v) for v in rr_data],
+            artifact_pct=0.0,
+            frequency_validity=[
+                FrequencyValidity(
+                    method="welch",
+                    valid=window_size >= 120,
+                    score=1.0 if window_size >= 120 else max(0.4, window_size / 120.0),
+                    min_duration_met=window_size >= 120,
+                    note=(
+                        "Window size supports stable band estimates"
+                        if window_size >= 120
+                        else "Window too short for robust LF/HF interpretation"
+                    ),
+                )
+            ],
+        )
         
         return WindowedMetricsResponse(
             timestamps=timestamps,
@@ -1523,10 +1940,541 @@ async def get_hrv_windowed(
             window_size_seconds=window_size,
             step_size_seconds=step_size,
             n_windows=len(timestamps),
+            context=context,
         )
     except Exception as exc:
         _LOGGER.error(f"Error computing windowed HRV for {user_id}: {exc}")
         return WindowedMetricsResponse()
+
+
+class SegmentAnnotation(BaseModel):
+    """Baseline/task/recovery segment annotation."""
+
+    start_idx: int
+    end_idx: int
+    label: str
+    task_name: Optional[str] = None
+    notes: Optional[str] = None
+
+
+class WorkloadComputeRequest(BaseModel):
+    """Payload for workload feature extraction from annotated RR segments."""
+
+    rr_intervals_ms: List[float]
+    segments: List[SegmentAnnotation]
+    task_name: Optional[str] = None
+
+
+class WorkloadResponse(BaseModel):
+    """Workload-state features and confidence."""
+
+    delta_lnrmssd: Optional[float] = None
+    delta_hf: Optional[float] = None
+    delta_lf_hf: Optional[float] = None
+    recovery_slope: Optional[float] = None
+    threshold_flags: List[str] = Field(default_factory=list)
+    high_workload_probability: float = 0.5
+    confidence: str = "moderate"
+    context: Optional[AnalysisContext] = None
+
+
+class VigilanceWindowPrediction(BaseModel):
+    """Per-window vigilance classification output."""
+
+    start_seconds: float
+    end_seconds: float
+    state: str  # high, medium, low
+    confidence: float
+    rmssd: Optional[float] = None
+    mean_hr: Optional[float] = None
+    safte_effectiveness: Optional[float] = None
+
+
+class VigilanceResponse(BaseModel):
+    """Windowed vigilance tracker output."""
+
+    window_size_seconds: int
+    step_size_seconds: int
+    model_version: str
+    low_vigilance_windows: int
+    total_windows: int
+    predictions: List[VigilanceWindowPrediction] = Field(default_factory=list)
+    context: Optional[AnalysisContext] = None
+
+
+class FlightFatigueResponse(BaseModel):
+    """Three-level fatigue classifier output."""
+
+    risk_band: str
+    model_version: str
+    probabilities: Dict[str, float]
+    rationale: List[str]
+    required_features: List[str]
+    missing_features: List[str]
+    context: Optional[AnalysisContext] = None
+
+
+class FusionFactor(BaseModel):
+    """Single factor used by the integrated fusion model."""
+
+    value: float
+    confidence: str
+    note: str
+
+
+class FusionResponse(BaseModel):
+    """Integrated physiological model output with uncertainty."""
+
+    schedule_factor: FusionFactor
+    autonomic_factor: FusionFactor
+    workload_factor: FusionFactor
+    environment_factor: FusionFactor
+    performance_probability: float
+    uncertainty_interval: List[float]
+    confidence: str
+    rationale: List[str]
+
+
+def _rmssd(rr_ms: List[float]) -> Optional[float]:
+    """Compute RMSSD from RR intervals in milliseconds."""
+    try:
+        import numpy as np
+
+        if len(rr_ms) < 3:
+            return None
+        arr = np.array(rr_ms, dtype=float)
+        diff = np.diff(arr)
+        return float(np.sqrt(np.mean(diff ** 2)))
+    except Exception:
+        return None
+
+
+def _extract_segment(rr_ms: List[float], segment: SegmentAnnotation) -> List[float]:
+    """Extract bounded segment from RR list."""
+    if not rr_ms:
+        return []
+    start = max(0, min(segment.start_idx, len(rr_ms) - 1))
+    end = max(start + 1, min(segment.end_idx, len(rr_ms)))
+    return rr_ms[start:end]
+
+
+async def _latest_rr_for_user(user_id: str) -> List[float]:
+    """Get latest RR sequence from user history with bounded parsing."""
+    import json
+    from user_database import UserDatabase
+
+    db = UserDatabase()
+    history = await asyncio.to_thread(db.get_hrv_history, user_id, limit=1)
+    if not history:
+        return []
+    latest = history[0]
+    if latest.rr_intervals_ms:
+        return [float(v) for v in latest.rr_intervals_ms]
+    if latest.rr_intervals_json:
+        try:
+            parsed = json.loads(latest.rr_intervals_json)
+            if isinstance(parsed, list):
+                return [float(v) for v in parsed]
+        except Exception:
+            return []
+    return []
+
+
+@router.post("/workload/compute", response_model=WorkloadResponse)
+async def compute_workload_features(payload: WorkloadComputeRequest) -> WorkloadResponse:
+    """Compute baseline→task→recovery workload features."""
+    try:
+        import math
+        import numpy as np
+
+        rr_ms = [float(v) for v in payload.rr_intervals_ms]
+        if len(rr_ms) < 60:
+            context = _build_analysis_context(rr_ms, artifact_pct=0.0)
+            return WorkloadResponse(
+                threshold_flags=["Need at least 60 RR samples for workload extraction"],
+                confidence="poor",
+                context=context,
+            )
+
+        baseline_segment = next((s for s in payload.segments if s.label == "baseline"), None)
+        task_segment = next((s for s in payload.segments if s.label == "task"), None)
+        recovery_segment = next((s for s in payload.segments if s.label == "recovery"), None)
+
+        if baseline_segment is None or task_segment is None:
+            context = _build_analysis_context(rr_ms, artifact_pct=0.0)
+            return WorkloadResponse(
+                threshold_flags=["Baseline and task segments are required"],
+                confidence="poor",
+                context=context,
+            )
+
+        baseline_rr = _extract_segment(rr_ms, baseline_segment)
+        task_rr = _extract_segment(rr_ms, task_segment)
+        recovery_rr = _extract_segment(rr_ms, recovery_segment) if recovery_segment else []
+
+        baseline_rmssd = _rmssd(baseline_rr)
+        task_rmssd = _rmssd(task_rr)
+        recovery_rmssd = _rmssd(recovery_rr) if recovery_rr else None
+
+        if baseline_rmssd is None or task_rmssd is None:
+            context = _build_analysis_context(rr_ms, artifact_pct=0.0)
+            return WorkloadResponse(
+                threshold_flags=["Segments too short for RMSSD-based workload metrics"],
+                confidence="poor",
+                context=context,
+            )
+
+        # Surrogate frequency features that remain bounded and interpretable.
+        baseline_hf = float(np.var(np.diff(np.array(baseline_rr, dtype=float))))
+        task_hf = float(np.var(np.diff(np.array(task_rr, dtype=float))))
+        baseline_lf_hf = float(np.std(baseline_rr) / max(1e-6, baseline_rmssd))
+        task_lf_hf = float(np.std(task_rr) / max(1e-6, task_rmssd))
+
+        delta_lnrmssd = float(math.log(max(task_rmssd, 1e-6)) - math.log(max(baseline_rmssd, 1e-6)))
+        delta_hf = float(task_hf - baseline_hf)
+        delta_lf_hf = float(task_lf_hf - baseline_lf_hf)
+        recovery_slope = None
+        if recovery_rmssd is not None:
+            recovery_slope = float((recovery_rmssd - task_rmssd) / max(1.0, float(len(recovery_rr))))
+
+        flags: List[str] = []
+        if delta_lnrmssd < -0.35:
+            flags.append("RMSSD drop >30% from baseline")
+        if delta_lf_hf > 1.0:
+            flags.append("LF/HF surrogate elevated during task")
+        if recovery_slope is not None and recovery_slope < 0:
+            flags.append("Recovery slope indicates persistent autonomic load")
+
+        # Logistic-style bounded probability using interpretable terms.
+        workload_logit = (
+            0.5
+            + 2.2 * max(0.0, -delta_lnrmssd)
+            + 0.6 * max(0.0, delta_lf_hf)
+            + 0.2 * max(0.0, -delta_hf / max(1.0, abs(baseline_hf)))
+        )
+        high_workload_probability = float(1.0 / (1.0 + math.exp(-workload_logit)))
+
+        context = _build_analysis_context(rr_ms, artifact_pct=0.0)
+        confidence = context.confidence
+        if len(flags) >= 2 and confidence == "good":
+            confidence = "moderate"
+
+        return WorkloadResponse(
+            delta_lnrmssd=delta_lnrmssd,
+            delta_hf=delta_hf,
+            delta_lf_hf=delta_lf_hf,
+            recovery_slope=recovery_slope,
+            threshold_flags=flags,
+            high_workload_probability=high_workload_probability,
+            confidence=confidence,
+            context=context,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error computing workload features: {exc}")
+        return WorkloadResponse(
+            threshold_flags=["Workload computation failed"],
+            confidence="poor",
+        )
+
+
+@router.get("/vigilance/{user_id}", response_model=VigilanceResponse)
+async def get_vigilance_tracking(
+    user_id: str,
+    window_size: int = Query(default=30, ge=20, le=180),
+    step_size: int = Query(default=10, ge=5, le=60),
+) -> VigilanceResponse:
+    """Windowed vigilance state tracking with SAFTE overlay."""
+    try:
+        import numpy as np
+
+        rr_ms = await _latest_rr_for_user(user_id)
+        context = _build_analysis_context(rr_ms, artifact_pct=0.0)
+        if len(rr_ms) < 100:
+            return VigilanceResponse(
+                window_size_seconds=window_size,
+                step_size_seconds=step_size,
+                model_version="svm_baseline_heuristic_v1",
+                low_vigilance_windows=0,
+                total_windows=0,
+                predictions=[],
+                context=context,
+            )
+
+        rr_array = np.array(rr_ms, dtype=float)
+        cumulative_sec = np.cumsum(rr_array) / 1000.0
+        total_duration = float(cumulative_sec[-1]) if len(cumulative_sec) else 0.0
+
+        fatigue = await get_fatigue_prediction(user_id)
+        safte_now = fatigue.effectiveness_pct
+
+        predictions: List[VigilanceWindowPrediction] = []
+        start_sec = 0.0
+        max_windows = 1200
+        while start_sec + window_size <= total_duration and len(predictions) < max_windows:
+            end_sec = start_sec + window_size
+            mask = (cumulative_sec >= start_sec) & (cumulative_sec < end_sec)
+            idx = np.where(mask)[0]
+            if len(idx) >= 20:
+                segment = rr_array[idx]
+                seg_rmssd = _rmssd([float(v) for v in segment.tolist()])
+                mean_rr = float(np.mean(segment)) if len(segment) > 0 else 0.0
+                mean_hr = float(60000.0 / mean_rr) if mean_rr > 0 else None
+
+                state = "high"
+                if (seg_rmssd is not None and seg_rmssd < 20) or (mean_hr is not None and mean_hr > 85):
+                    state = "low"
+                elif (seg_rmssd is not None and seg_rmssd < 30) or (mean_hr is not None and mean_hr > 75):
+                    state = "medium"
+
+                confidence = min(0.95, 0.5 + len(idx) / 300.0)
+                predictions.append(
+                    VigilanceWindowPrediction(
+                        start_seconds=float(start_sec),
+                        end_seconds=float(end_sec),
+                        state=state,
+                        confidence=float(confidence),
+                        rmssd=seg_rmssd,
+                        mean_hr=mean_hr,
+                        safte_effectiveness=safte_now,
+                    )
+                )
+            start_sec += step_size
+
+        low_count = len([p for p in predictions if p.state == "low"])
+        return VigilanceResponse(
+            window_size_seconds=window_size,
+            step_size_seconds=step_size,
+            model_version="svm_baseline_heuristic_v1",
+            low_vigilance_windows=low_count,
+            total_windows=len(predictions),
+            predictions=predictions,
+            context=context,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error computing vigilance for {user_id}: {exc}")
+        return VigilanceResponse(
+            window_size_seconds=window_size,
+            step_size_seconds=step_size,
+            model_version="svm_baseline_heuristic_v1",
+            low_vigilance_windows=0,
+            total_windows=0,
+            predictions=[],
+        )
+
+
+@router.get("/flight-fatigue/{user_id}", response_model=FlightFatigueResponse)
+async def get_flight_fatigue(user_id: str) -> FlightFatigueResponse:
+    """Three-level flight fatigue risk classification with feature transparency."""
+    try:
+        fatigue = await get_fatigue_prediction(user_id)
+        rr_ms = await _latest_rr_for_user(user_id)
+        context = _build_analysis_context(rr_ms, artifact_pct=0.0)
+        rmssd = _rmssd(rr_ms) if rr_ms else None
+        sleep_debt = fatigue.sleep_debt_hours
+        effectiveness = fatigue.effectiveness_pct
+
+        required_features = ["rmssd", "sleep_debt_hours", "effectiveness_pct"]
+        missing: List[str] = []
+        if rmssd is None:
+            missing.append("rmssd")
+        if sleep_debt is None:
+            missing.append("sleep_debt_hours")
+        if effectiveness is None:
+            missing.append("effectiveness_pct")
+
+        if missing:
+            return FlightFatigueResponse(
+                risk_band="moderate",
+                model_version="lightgbm_proxy_v1",
+                probabilities={"low": 0.3, "moderate": 0.4, "high": 0.3},
+                rationale=["Insufficient model inputs; using neutral fallback"],
+                required_features=required_features,
+                missing_features=missing,
+                context=context,
+            )
+
+        risk_score = 0.0
+        rationale: List[str] = []
+
+        if effectiveness is not None:
+            if effectiveness < 60:
+                risk_score += 0.55
+                rationale.append("Low SAFTE effectiveness (<60%)")
+            elif effectiveness < 77:
+                risk_score += 0.30
+                rationale.append("Moderate SAFTE effectiveness (60-77%)")
+
+        if sleep_debt is not None:
+            if sleep_debt > 6:
+                risk_score += 0.30
+                rationale.append("Severe sleep debt (>6h)")
+            elif sleep_debt > 3:
+                risk_score += 0.15
+                rationale.append("Moderate sleep debt (>3h)")
+
+        if rmssd is not None:
+            if rmssd < 20:
+                risk_score += 0.25
+                rationale.append("Suppressed RMSSD (<20 ms)")
+            elif rmssd < 30:
+                risk_score += 0.12
+                rationale.append("Reduced RMSSD (20-30 ms)")
+
+        risk_score = max(0.0, min(1.0, risk_score))
+        high = risk_score
+        moderate = max(0.05, 1.0 - abs(0.5 - risk_score) * 2.0) * 0.5
+        low = max(0.0, 1.0 - high - moderate)
+        norm = high + moderate + low
+        probs = {
+            "low": round(low / norm, 3),
+            "moderate": round(moderate / norm, 3),
+            "high": round(high / norm, 3),
+        }
+        risk_band = max(probs, key=probs.get)
+
+        if not rationale:
+            rationale.append("No dominant fatigue risk contributor detected")
+
+        return FlightFatigueResponse(
+            risk_band=risk_band,
+            model_version="lightgbm_proxy_v1",
+            probabilities=probs,
+            rationale=rationale,
+            required_features=required_features,
+            missing_features=[],
+            context=context,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error computing flight fatigue for {user_id}: {exc}")
+        return FlightFatigueResponse(
+            risk_band="moderate",
+            model_version="lightgbm_proxy_v1",
+            probabilities={"low": 0.3, "moderate": 0.4, "high": 0.3},
+            rationale=["Classifier execution failed; using neutral fallback"],
+            required_features=["rmssd", "sleep_debt_hours", "effectiveness_pct"],
+            missing_features=["unknown"],
+            context=_build_analysis_context([], artifact_pct=0.0),
+        )
+
+
+@router.get("/fusion/{user_id}", response_model=FusionResponse)
+async def get_integrated_fusion(user_id: str) -> FusionResponse:
+    """Integrated performance fusion with uncertainty."""
+    try:
+        import math
+
+        fatigue = await get_fatigue_prediction(user_id)
+        rr_ms = await _latest_rr_for_user(user_id)
+        rmssd = _rmssd(rr_ms) if rr_ms else None
+        vigilance = await get_vigilance_tracking(user_id)
+        space_weather = await get_current_space_weather()
+
+        schedule_val = max(0.05, min(1.2, (fatigue.effectiveness_pct or 70) / 100.0))
+        schedule_factor = FusionFactor(
+            value=float(schedule_val),
+            confidence="moderate" if fatigue.effectiveness_pct is not None else "poor",
+            note="Derived from SAFTE effectiveness",
+        )
+
+        if rmssd is None:
+            autonomic_factor = FusionFactor(
+                value=1.0,
+                confidence="poor",
+                note="No HRV input available; neutral autonomic factor",
+            )
+        else:
+            auto_val = max(0.6, min(1.2, rmssd / 35.0))
+            autonomic_factor = FusionFactor(
+                value=float(auto_val),
+                confidence="moderate",
+                note="RMSSD-derived autonomic scaling",
+            )
+
+        if vigilance.total_windows <= 0:
+            workload_factor = FusionFactor(
+                value=1.0,
+                confidence="poor",
+                note="No vigilance windows available",
+            )
+        else:
+            low_frac = vigilance.low_vigilance_windows / max(1, vigilance.total_windows)
+            work_val = max(0.6, min(1.1, 1.05 - 0.5 * low_frac))
+            workload_factor = FusionFactor(
+                value=float(work_val),
+                confidence="moderate",
+                note="Windowed vigilance burden scaling",
+            )
+
+        kp = space_weather.data.kp_index if space_weather and space_weather.data else None
+        if kp is None:
+            environment_factor = FusionFactor(
+                value=1.0,
+                confidence="poor",
+                note="No space-weather modifier available",
+            )
+        else:
+            env_val = max(0.7, min(1.05, 1.05 - 0.06 * max(0.0, kp - 3.0)))
+            environment_factor = FusionFactor(
+                value=float(env_val),
+                confidence="moderate",
+                note="Geomagnetic burden modifier from Kp index",
+            )
+
+        logit = (
+            -0.2
+            + 2.0 * math.log(max(0.05, schedule_factor.value))
+            + 0.8 * math.log(max(0.05, autonomic_factor.value))
+            + 0.5 * math.log(max(0.05, workload_factor.value))
+            + 0.3 * math.log(max(0.05, environment_factor.value))
+        )
+        p = float(1.0 / (1.0 + math.exp(-logit)))
+
+        confidence_levels = [
+            schedule_factor.confidence,
+            autonomic_factor.confidence,
+            workload_factor.confidence,
+            environment_factor.confidence,
+        ]
+        if "poor" in confidence_levels:
+            confidence = "poor"
+            interval = [max(0.0, p - 0.25), min(1.0, p + 0.25)]
+        elif "moderate" in confidence_levels:
+            confidence = "moderate"
+            interval = [max(0.0, p - 0.15), min(1.0, p + 0.15)]
+        else:
+            confidence = "good"
+            interval = [max(0.0, p - 0.08), min(1.0, p + 0.08)]
+
+        rationale = [
+            f"Schedule factor={schedule_factor.value:.2f}",
+            f"Autonomic factor={autonomic_factor.value:.2f}",
+            f"Workload factor={workload_factor.value:.2f}",
+            f"Environment factor={environment_factor.value:.2f}",
+        ]
+
+        return FusionResponse(
+            schedule_factor=schedule_factor,
+            autonomic_factor=autonomic_factor,
+            workload_factor=workload_factor,
+            environment_factor=environment_factor,
+            performance_probability=p,
+            uncertainty_interval=[float(interval[0]), float(interval[1])],
+            confidence=confidence,
+            rationale=rationale,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error computing integrated fusion for {user_id}: {exc}")
+        neutral = FusionFactor(value=1.0, confidence="poor", note="Fallback neutral factor")
+        return FusionResponse(
+            schedule_factor=neutral,
+            autonomic_factor=neutral,
+            workload_factor=neutral,
+            environment_factor=neutral,
+            performance_probability=0.5,
+            uncertainty_interval=[0.3, 0.7],
+            confidence="poor",
+            rationale=["Fusion endpoint failed; neutral fallback returned"],
+        )
 
 
 class HRFResponse(BaseModel):
@@ -1811,7 +2759,7 @@ class FatigueResponse(BaseModel):
     typical_bedtime_h: Optional[float] = None      # Median bedtime (24 h decimal)
     avg_sleep_efficiency: Optional[float] = None   # 7-day average efficiency (0-1)
     next_optimal_sleep: Optional[str] = None       # Recommended bedtime HH:MM
-    next_optimal_sleep: Optional[str] = None
+    context: Optional[AnalysisContext] = None
 
 
 @router.get("/fatigue/{user_id}", response_model=FatigueResponse)
@@ -1942,6 +2890,28 @@ async def get_fatigue_prediction(user_id: str) -> FatigueResponse:
             typical_bedtime_h=round(typical_bedtime, 1) if typical_bedtime else None,
             avg_sleep_efficiency=round(avg_efficiency, 2) if avg_efficiency else None,
             next_optimal_sleep=next_sleep_str,
+            context=AnalysisContext(
+                device_type="unknown",
+                posture="unknown",
+                respiration_available=False,
+                recording_window_sec=None,
+                preprocessing={
+                    "artifact_filter_level": "not_applicable",
+                    "pct_flagged": 0.0,
+                    "pct_interpolated": 0.0,
+                    "pct_excluded": 0.0,
+                },
+                stationarity=StationarityAssessment(
+                    passed=False,
+                    reason="Fatigue endpoint currently uses sleep-derived model",
+                ),
+                frequency_validity=[],
+                confidence="moderate",
+                confidence_reasons=[
+                    "Prediction derived from recent sleep schedule and debt",
+                    "Autonomic and workload factors are integrated separately",
+                ],
+            ),
         )
     except Exception as exc:
         _LOGGER.error(f"Error computing fatigue for {user_id}: {exc}")
