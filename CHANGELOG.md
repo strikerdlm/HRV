@@ -1,11 +1,39 @@
-# Changelog
+# Author: Dr Diego Malpica MD
 
-**Author:** Dr Diego Malpica MD
+# Changelog
 
 All notable changes to the Mission Control - Flight Surgeon are documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.17.0] - 2026-02-22
+
+### Added
+- **Flight-fatigue quality context propagation** (`api/research_endpoints.py`, `frontend/src/app/research/flight-fatigue/page.tsx`, `frontend/src/lib/research-api.ts`, `frontend/src/types/research.ts`):
+  - `FlightFatigueResponse` now carries `AnalysisContext` metadata from the backend.
+  - Flight Fatigue page now renders `QualityPanel` for protocol/confidence context and caveat messaging.
+
+### Changed
+- **Frontend gauge style compliance** (`frontend/src/app/research/frequency/page.tsx`, `frontend/src/app/research/nonlinear/page.tsx`, `frontend/src/app/research/fatigue/page.tsx`):
+  - Replaced legacy speedometer-style ECharts gauges with two-ring SVG gauges in Frequency (LF/HF), Nonlinear (DFA α1), and Fatigue (effectiveness) views.
+  - Aligns research pages with the project gauge policy used across the modern TypeScript frontend.
+- **Research Hub coverage** (`frontend/src/app/research/page.tsx`):
+  - Added a dedicated Flight Fatigue module card for direct navigation to classifier outputs.
+
+### Fixed
+- **Deterministic dashboard behavior** (`frontend/src/app/page.tsx`):
+  - Replaced `Math.random()`-driven crew gauge placeholders with deterministic seeded values derived from user identity, preventing metric jitter across rerenders.
+- **Poincaré rendering realism** (`frontend/src/app/research/hrv-analysis/page.tsx`):
+  - Replaced random synthetic scatter generation with deterministic pairwise points derived from uploaded RR intervals when available.
+- **Fatigue model schema cleanup** (`api/research_endpoints.py`):
+  - Removed duplicate `next_optimal_sleep` field declaration in `FatigueResponse`.
+
+### Documentation
+- Updated `README.md`, `frontend/README.md`, and `docs/Manual.md` to reflect:
+  - HRV-cognition modules (workload, vigilance, flight fatigue, integrated fusion),
+  - quality-context workflow (`AnalysisContext` + `QualityPanel`),
+  - and current frontend research endpoint coverage.
 
 ## [1.16.0] - 2026-02-10
 
