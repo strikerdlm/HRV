@@ -881,7 +881,7 @@ export default function HRVAnalysisPage() {
 
       const primaryTracing = importedTracings[0];
       setSelectedTracing(primaryTracing);
-      void handleAnalyze(primaryTracing);
+      setCurrentAnalysis(primaryTracing.fullAnalysis ?? null);
 
       if (failedImports.length === 0) {
         setUploadError(null);
