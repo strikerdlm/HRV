@@ -700,11 +700,10 @@ export default function HRVAnalysisPage() {
           const parsed = JSON.parse(saved);
           setTracings(parsed);
           // Auto-select first tracing if available
-          if (parsed.length > 0 && !selectedTracing) {
-            setSelectedTracing(parsed[0]);
-            if (parsed[0].fullAnalysis) {
-              setCurrentAnalysis(parsed[0].fullAnalysis);
-            }
+          const firstTracing = parsed.length > 0 ? (parsed[0] as StoredTracing) : null;
+          if (firstTracing) {
+            setSelectedTracing((prev) => prev ?? firstTracing);
+            setCurrentAnalysis((prev) => prev ?? firstTracing.fullAnalysis ?? null);
           }
         } catch (e) {
           console.error("Failed to load tracings:", e);
