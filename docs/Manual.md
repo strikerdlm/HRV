@@ -117,13 +117,16 @@ A modern TypeScript/Next.js frontend is available under `frontend/` with a FastA
   - HRV Analysis (backend-driven time/frequency/nonlinear domains, Poincaré, HRF)
   - Frequency comparison (Welch vs Lomb-Scargle) with method-validity metadata
   - Cognitive Workload (baseline/task/recovery annotations; `ΔlnRMSSD`, `ΔHF`, `ΔLF/HF`)
-  - Vigilance Tracker (30s/10s sliding windows + SAFTE overlay)
-  - Flight Fatigue Classifier (low/moderate/high probabilities with missing-feature transparency)
+  - Vigilance Tracker (30s/10s calibrated sliding windows + SAFTE overlay)
+  - Flight Fatigue Classifier (calibrated low/moderate/high probabilities with missing-feature transparency)
   - Advanced nonlinear outputs (RCMSE and MM-DFA with strict minimum-sample gating)
   - Integrated Physiological Model fusion (probability + uncertainty interval)
   - Solar-HRV Correlations (heatmap, lag analysis)
   - Garmin Integration (sleep, SpO2, body battery)
   - Quality/Protocol panel across pages (stationarity, confidence, and interpretation caveats)
+  - In-app reference/interpretation cards for workload, vigilance, and flight-fatigue metrics
+  - Offline train / online infer split for vigilance and flight-fatigue models (`api/model_artifacts/`)
+  - Calibration report endpoint for model traceability (`/api/research/models/calibration-report`)
 
 **Run TypeScript Frontend (PowerShell)**
 ```powershell
