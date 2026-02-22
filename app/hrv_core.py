@@ -739,6 +739,24 @@ def psd_curve(rr: np.ndarray, sampling_rate: float = 4.0, *, method: str = "welc
 		freqs, psd = signal.welch(rr_det, fs=sampling_rate, nperseg=min(len(rr_det) // 4, 256), window="hann")
 	elif method == "periodogram":
 		freqs, psd = signal.periodogram(rr_det, fs=sampling_rate, window="hann")
+	elif method == "ar":
+		# Match AR PSD approach used by compute_frequency_domain_metrics.
+		order = int(min(16, max(4, len(rr_det) // 20)))
+		x = rr_det - np.mean(rr_det)
+		r = np.correlate(x, x, mode="full")[len(x) - 1 : len(x) - 1 + order + 1] / len(x)
+		R = linalg.toeplitz(r[:-1])
+		try:
+			a = np.linalg.solve(R, -r[1:])
+			sigma2 = float(r[0] + np.dot(a, r[1:]))
+		except Exception:
+			a = np.zeros(order, dtype=float)
+			sigma2 = float(np.var(x))
+		freqs = np.linspace(0.0, sampling_rate / 2.0, num=512, endpoint=True)
+		w = 2.0 * np.pi * freqs / sampling_rate
+		den = np.ones_like(freqs, dtype=complex)
+		for k in range(1, order + 1):
+			den += a[k - 1] * np.exp(-1j * w * k)
+		psd = (sigma2 / (np.abs(den) ** 2)).real
 	else:
 		# fall back to metrics routine for AR or unknown
 		out = compute_frequency_domain_metrics(rr, method=method, sampling_rate=sampling_rate)
