@@ -1253,7 +1253,7 @@ export default function SpaceWeatherPage() {
     );
   };
 
-  const fetchAllData = async (forceRefresh: boolean = false) => {
+  const fetchAllData = React.useCallback(async (forceRefresh: boolean = false) => {
     setLoading(true);
     setError(null);
     try {
@@ -1285,11 +1285,11 @@ export default function SpaceWeatherPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [timeRange]);
 
   React.useEffect(() => {
     fetchAllData(false);
-  }, [timeRange]);
+  }, [fetchAllData]);
 
   // Generate sample data for demonstration when API data is unavailable
   const generateSampleData = React.useCallback((days: number): TimeSeriesData[] => {
