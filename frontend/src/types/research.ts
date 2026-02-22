@@ -117,6 +117,38 @@ export interface HRFMetrics {
   quality_ok: boolean;
 }
 
+export type ConfidenceLevel = "good" | "moderate" | "poor";
+
+export interface StationarityAssessment {
+  passed: boolean;
+  reason: string;
+}
+
+export interface FrequencyValidityAssessment {
+  method: string;
+  valid: boolean;
+  score: number; // 0-1
+  min_duration_met: boolean;
+  note: string;
+}
+
+export interface AnalysisContext {
+  device_type: "ecg" | "ppg" | "unknown";
+  posture: "supine" | "seated" | "standing" | "unknown";
+  respiration_available: boolean;
+  recording_window_sec: number | null;
+  preprocessing: {
+    artifact_filter_level: string;
+    pct_flagged: number;
+    pct_interpolated: number;
+    pct_excluded: number;
+  };
+  stationarity: StationarityAssessment;
+  frequency_validity: FrequencyValidityAssessment[];
+  confidence: ConfidenceLevel;
+  confidence_reasons: string[];
+}
+
 export interface HRVAnalysisResult {
   recording_time: string | null;
   duration_minutes: number | null;
@@ -128,6 +160,7 @@ export interface HRVAnalysisResult {
   hrf: HRFMetrics;
   quality_score: number | null;
   analysis_method: string;
+  context?: AnalysisContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -382,6 +415,9 @@ export interface FrequencyDomainResponse {
   window_length: number | null;
   autonomic_balance: "parasympathetic" | "balanced" | "sympathetic";
   clinical_notes: string[];
+  frequency_validity_score?: number;
+  method_validity_note?: string;
+  context?: AnalysisContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -410,6 +446,16 @@ export interface NonlinearResponse {
   approximate_entropy: number | null;
   complexity_state: "reduced" | "normal" | "elevated";
   interpretation: string[];
+  // Advanced cognitive discriminators (Phase 6)
+  rcmse_tau?: number[];
+  rcmse_curve?: number[];
+  rcmse_ei?: number | null;
+  mmdfa_scales?: number[];
+  mmdfa_curve?: number[];
+  mfi?: number | null;
+  min_samples_required?: number;
+  advanced_metrics_enabled?: boolean;
+  context?: AnalysisContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -432,6 +478,7 @@ export interface WindowedMetricsResponse {
   window_size_seconds: number;
   step_size_seconds: number;
   n_windows: number;
+  context?: AnalysisContext;
 }
 
 // ---------------------------------------------------------------------------
@@ -497,6 +544,73 @@ export interface FatigueResponse {
   avg_sleep_duration_h: number | null;
   typical_bedtime_h: number | null;
   avg_sleep_efficiency: number | null;
+  context?: AnalysisContext;
+}
+
+export interface WorkloadSegment {
+  start_idx: number;
+  end_idx: number;
+  label: "baseline" | "task" | "recovery";
+  task_name?: string;
+  notes?: string;
+}
+
+export interface WorkloadResponse {
+  delta_lnrmssd: number | null;
+  delta_hf: number | null;
+  delta_lf_hf: number | null;
+  recovery_slope: number | null;
+  threshold_flags: string[];
+  high_workload_probability: number;
+  confidence: ConfidenceLevel;
+  context?: AnalysisContext;
+}
+
+export interface VigilanceWindowPrediction {
+  start_seconds: number;
+  end_seconds: number;
+  state: "high" | "medium" | "low";
+  confidence: number;
+  rmssd: number | null;
+  mean_hr: number | null;
+  safte_effectiveness: number | null;
+}
+
+export interface VigilanceResponse {
+  window_size_seconds: number;
+  step_size_seconds: number;
+  model_version: string;
+  low_vigilance_windows: number;
+  total_windows: number;
+  predictions: VigilanceWindowPrediction[];
+  context?: AnalysisContext;
+}
+
+export interface FlightFatigueResponse {
+  risk_band: "low" | "moderate" | "high";
+  model_version: string;
+  probabilities: Record<"low" | "moderate" | "high", number>;
+  rationale: string[];
+  required_features: string[];
+  missing_features: string[];
+  context?: AnalysisContext;
+}
+
+export interface FusionFactor {
+  value: number;
+  confidence: ConfidenceLevel;
+  note: string;
+}
+
+export interface FusionResponse {
+  schedule_factor: FusionFactor;
+  autonomic_factor: FusionFactor;
+  workload_factor: FusionFactor;
+  environment_factor: FusionFactor;
+  performance_probability: number; // 0-1
+  uncertainty_interval: [number, number];
+  confidence: ConfidenceLevel;
+  rationale: string[];
 }
 
 // ---------------------------------------------------------------------------
