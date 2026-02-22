@@ -26,9 +26,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
-import { getFatiguePrediction } from "@/lib/research-api";
+import { getFatiguePrediction, getIntegratedFusion } from "@/lib/research-api";
 import { useAppStore } from "@/lib/store";
-import type { FatigueResponse } from "@/types/research";
+import type { FatigueResponse, FusionResponse } from "@/types/research";
 import { FATIGUE_COLORS } from "@/types/research";
 
 // Default user ID when no user is selected
@@ -45,6 +45,10 @@ import {
 function EffectivenessGauge({ effectiveness }: { effectiveness: number | null }) {
   const value = effectiveness ?? 75;
   const hasData = effectiveness !== null;
+  const max = 100;
+  const clamped = Math.max(0, Math.min(value, max));
+  const circumference = 2 * Math.PI * 40;
+  const dash = (clamped / max) * circumference;
 
   const getColor = (e: number) => {
     if (e >= 80) return SCIENTIFIC_COLORS.success;
@@ -58,90 +62,44 @@ function EffectivenessGauge({ effectiveness }: { effectiveness: number | null })
     return "Impaired";
   };
 
-  const option: Record<string, unknown> = {
-    series: [
-      {
-        type: "gauge",
-        center: ["50%", "65%"],
-        radius: "95%",
-        startAngle: 180,
-        endAngle: 0,
-        min: 0,
-        max: 100,
-        axisLine: {
-          lineStyle: {
-            width: 18,
-            color: [
-              [0.6, SCIENTIFIC_COLORS.danger],
-              [0.8, SCIENTIFIC_COLORS.warning],
-              [1, SCIENTIFIC_COLORS.success],
-            ],
-          },
-        },
-        pointer: {
-          length: "70%",
-          width: 6,
-          offsetCenter: [0, "5%"],
-          itemStyle: {
-            color: hasData ? getColor(value) : "#94a3b8",
-            shadowColor: "rgba(0, 0, 0, 0.3)",
-            shadowBlur: 8,
-            shadowOffsetY: 2,
-          },
-        },
-        anchor: {
-          show: true,
-          showAbove: true,
-          size: 16,
-          itemStyle: {
-            borderWidth: 4,
-            borderColor: hasData ? getColor(value) : "#94a3b8",
-            color: "#fff",
-            shadowColor: "rgba(0, 0, 0, 0.2)",
-            shadowBlur: 6,
-          },
-        },
-        axisTick: { show: false },
-        splitLine: { show: false },
-        axisLabel: {
-          show: true,
-          distance: -32,
-          color: "#1a1a1a",
-          fontSize: 11,
-          fontWeight: "600",
-          formatter: (v: number) => {
-            if ([0, 60, 80, 100].includes(v)) return `${v}`;
-            return "";
-          },
-        },
-        progress: {
-          show: true,
-          overlap: false,
-          roundCap: true,
-          clip: false,
-        },
-        detail: {
-          valueAnimation: true,
-          formatter: () => (hasData ? `${Math.round(value)}%` : "—"),
-          fontSize: 36,
-          fontWeight: "bold",
-          fontFamily: "system-ui, -apple-system, sans-serif",
-          color: hasData ? getColor(value) : "#94a3b8",
-          offsetCenter: [0, "32%"],
-        },
-        title: {
-          show: true,
-          offsetCenter: [0, "55%"],
-          fontSize: 13,
-          fontWeight: "500",
-          color: SCIENTIFIC_COLORS.textSecondary,
-        },
-        data: [{ value, name: hasData ? getLabel(value) : "No Data" }],
-      },
-    ],
-  };
-
-  return <EChartsWrapper option={option} height={260} showToolbox={false} />;
+  return (
+    <div className="flex flex-col items-center justify-center py-2">
+      <div className="relative w-32 h-32">
+        <svg className="w-full h-full -rotate-90" viewBox="0 0 96 96">
+          <circle
+            cx="48"
+            cy="48"
+            r="40"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="8"
+            className="text-muted/30"
+          />
+          <circle
+            cx="48"
+            cy="48"
+            r="40"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="8"
+            strokeDasharray={`${dash} ${circumference}`}
+            className={hasData ? "" : "text-muted/50"}
+            style={{ color: hasData ? getColor(value) : "#94a3b8" }}
+            strokeLinecap="round"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span
+            className="text-3xl font-bold"
+            style={{ color: hasData ? getColor(value) : "#94a3b8" }}
+          >
+            {hasData ? `${Math.round(value)}%` : "—"}
+          </span>
+          <span className="text-xs text-muted-foreground">{hasData ? getLabel(value) : "No Data"}</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -675,62 +633,55 @@ function DerivedMetricsPanel({
 // Based on: "Toward an Integrated Model of Human Performance" (docs/)
 // P(t) = σ(α₀ + α₁·log E_SAFTE + α₂·log A_AN + α₃·log W + α₄·log X)
 // ---------------------------------------------------------------------------
-function IntegratedModelCard({ effectiveness }: { effectiveness: number }) {
-  // Simulated component factors (real values would come from backend)
-  const E_sched = effectiveness / 100;     // Schedule effectiveness [0,1]
-  const A_an = 1.0;                        // Autonomic factor (neutral if no HRV)
-  const W_load = 1.0;                      // Workload factor (neutral default)
-  const X_env = 1.0;                       // Environment modifier (neutral default)
+function IntegratedModelCard({
+  effectiveness,
+  fusion,
+}: {
+  effectiveness: number;
+  fusion: FusionResponse | null;
+}) {
+  const schedule = fusion?.schedule_factor.value ?? effectiveness / 100;
+  const autonomic = fusion?.autonomic_factor.value ?? 1.0;
+  const workload = fusion?.workload_factor.value ?? 1.0;
+  const environment = fusion?.environment_factor.value ?? 1.0;
 
-  // Fusion coefficients (from integrated model discussion)
-  const alpha = { a0: 0.5, a1: 2.0, a2: 0.8, a3: 0.3, a4: 0.2 };
-
-  // Log-linear fusion with sigmoid
-  const logit =
-    alpha.a0 +
-    alpha.a1 * Math.log(Math.max(0.01, E_sched)) +
-    alpha.a2 * Math.log(Math.max(0.01, A_an)) +
-    alpha.a3 * Math.log(Math.max(0.01, W_load)) +
-    alpha.a4 * Math.log(Math.max(0.01, X_env));
-  const P_integrated = 1 / (1 + Math.exp(-logit));
-  const P_pct = Math.round(P_integrated * 1000) / 10;
+  const pIntegrated = fusion?.performance_probability ?? effectiveness / 100;
+  const pPct = Math.round(pIntegrated * 1000) / 10;
+  const uncertainty = fusion?.uncertainty_interval ?? [Math.max(0, pIntegrated - 0.2), Math.min(1, pIntegrated + 0.2)];
+  const modelConfidence = fusion?.confidence ?? "poor";
 
   const factors = [
     {
       label: "Schedule (SAFTE)",
       symbol: "E_SAFTE",
-      value: E_sched,
-      pct: effectiveness,
-      color: effectiveness >= 77 ? SCIENTIFIC_COLORS.success : effectiveness >= 60 ? SCIENTIFIC_COLORS.warning : SCIENTIFIC_COLORS.danger,
-      active: true,
-      description: "Reservoir + circadian + inertia",
+      pct: schedule * 100,
+      color: schedule >= 0.77 ? SCIENTIFIC_COLORS.success : schedule >= 0.6 ? SCIENTIFIC_COLORS.warning : SCIENTIFIC_COLORS.danger,
+      note: fusion?.schedule_factor.note ?? "Reservoir + circadian + inertia",
+      confidence: fusion?.schedule_factor.confidence ?? "moderate",
     },
     {
       label: "Autonomic (HRV/HRF)",
       symbol: "A_AN",
-      value: A_an,
-      pct: A_an * 100,
+      pct: autonomic * 100,
       color: SCIENTIFIC_COLORS.info,
-      active: false,
-      description: "lnRMSSD + PIP, QC-gated",
+      note: fusion?.autonomic_factor.note ?? "Neutral fallback (missing HRV/HRF)",
+      confidence: fusion?.autonomic_factor.confidence ?? "poor",
     },
     {
       label: "Workload",
       symbol: "W",
-      value: W_load,
-      pct: W_load * 100,
+      pct: workload * 100,
       color: "#9b59b6",
-      active: false,
-      description: "Task demand + duty metadata",
+      note: fusion?.workload_factor.note ?? "Neutral fallback (no workload model output)",
+      confidence: fusion?.workload_factor.confidence ?? "poor",
     },
     {
       label: "Environment",
       symbol: "X",
-      value: X_env,
-      pct: X_env * 100,
+      pct: environment * 100,
       color: "#34495e",
-      active: false,
-      description: "Hypoxia, thermal, microgravity",
+      note: fusion?.environment_factor.note ?? "Neutral fallback (no environmental modifier)",
+      confidence: fusion?.environment_factor.confidence ?? "poor",
     },
   ];
 
@@ -741,19 +692,19 @@ function IntegratedModelCard({ effectiveness }: { effectiveness: number }) {
         {factors.map((f) => (
           <div
             key={f.symbol}
-            className={`p-3 rounded-lg border text-center transition-opacity ${f.active ? "opacity-100" : "opacity-50"}`}
+            className="p-3 rounded-lg border text-center"
           >
             <div
               className="w-10 h-10 rounded-full mx-auto mb-2 flex items-center justify-center text-white text-xs font-bold"
               style={{ backgroundColor: f.color }}
             >
-              {f.active ? `${Math.round(f.pct)}` : "—"}
+              {Math.round(f.pct)}
             </div>
             <p className="text-xs font-semibold text-foreground">{f.label}</p>
-            <p className="text-[10px] text-muted-foreground mt-0.5">{f.description}</p>
-            {!f.active && (
-              <Badge variant="outline" className="mt-1 text-[9px]">Neutral</Badge>
-            )}
+            <p className="text-[10px] text-muted-foreground mt-0.5">{f.note}</p>
+            <Badge variant="outline" className="mt-1 text-[9px]">
+              {f.confidence}
+            </Badge>
           </div>
         ))}
       </div>
@@ -768,18 +719,26 @@ function IntegratedModelCard({ effectiveness }: { effectiveness: number }) {
         </p>
         <div className="flex items-center gap-3">
           <div className="text-2xl font-bold" style={{
-            color: P_pct >= 77 ? SCIENTIFIC_COLORS.success : P_pct >= 60 ? SCIENTIFIC_COLORS.warning : SCIENTIFIC_COLORS.danger,
+            color: pPct >= 77 ? SCIENTIFIC_COLORS.success : pPct >= 60 ? SCIENTIFIC_COLORS.warning : SCIENTIFIC_COLORS.danger,
           }}>
-            {P_pct.toFixed(1)}%
+            {pPct.toFixed(1)}%
           </div>
           <div>
             <p className="text-xs font-semibold text-foreground">Integrated Performance</p>
             <p className="text-[10px] text-muted-foreground">
-              {factors.filter((f) => !f.active).length > 0 &&
-                `${factors.filter((f) => !f.active).length} module(s) at neutral — connect HRV/workload for full fusion`}
+              {`Uncertainty ${(uncertainty[0] * 100).toFixed(1)}% to ${(uncertainty[1] * 100).toFixed(1)}% · confidence ${modelConfidence}`}
             </p>
           </div>
         </div>
+        {fusion?.rationale && fusion.rationale.length > 0 && (
+          <div className="mt-2 space-y-1">
+            {fusion.rationale.map((item) => (
+              <p key={item} className="text-[10px] text-muted-foreground">
+                - {item}
+              </p>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -821,6 +780,7 @@ const DAY_OPTIONS = [1, 2, 3, 5, 7] as const;
 
 export default function FatiguePage() {
   const [data, setData] = React.useState<FatigueResponse | null>(null);
+  const [fusion, setFusion] = React.useState<FusionResponse | null>(null);
   const [forecast, setForecast] = React.useState<SAFTEForecast | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [predictionDays, setPredictionDays] = React.useState<number>(1);
@@ -832,7 +792,11 @@ export default function FatiguePage() {
   const fetchData = React.useCallback(async () => {
     setLoading(true);
     try {
-      const result = await getFatiguePrediction(userId);
+      const [result, fusionResult] = await Promise.all([
+        getFatiguePrediction(userId),
+        getIntegratedFusion(userId),
+      ]);
+      setFusion(fusionResult);
 
       // -----------------------------------------------------------------
       // Always generate the 48-point SAFTE circadian forecast locally.
@@ -1122,7 +1086,7 @@ export default function FatiguePage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="pt-2">
-                  <IntegratedModelCard effectiveness={data.effectiveness_pct ?? 75} />
+                  <IntegratedModelCard effectiveness={data.effectiveness_pct ?? 75} fusion={fusion} />
                 </CardContent>
               </Card>
             </motion.div>
