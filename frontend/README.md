@@ -131,6 +131,7 @@ frontend/
 | `/api/research/vigilance/{user_id}` | GET | Windowed vigilance states with SAFTE overlay |
 | `/api/research/flight-fatigue/{user_id}` | GET | Three-level flight fatigue classification |
 | `/api/research/fusion/{user_id}` | GET | Integrated physiological fusion with uncertainty |
+| `/api/research/models/calibration-report` | GET | Deployed model artifact metadata and calibration report |
 | `/api/research/correlations/hrv-space-weather` | GET | HRV-Space Weather correlations |
 | `/api/research/garmin/latest/{user_id}` | GET | Latest Garmin metrics |
 | `/api/research/garmin/history/{user_id}` | GET | Garmin history (30 days) |
@@ -242,11 +243,15 @@ npm run start
   - Reactivity metrics: `ΔlnRMSSD`, `ΔHF`, `ΔLF/HF`, recovery slope
   - Threshold flags for critical-role screening + JSON export
 - **Vigilance Tracker**:
-  - Sliding window vigilance state classification (default 30s/10s)
+  - Calibrated sliding window vigilance state classification (default 30s/10s)
   - SAFTE effectiveness overlay and low-vigilance highlighting
 - **Flight Fatigue Classifier**:
-  - Low/moderate/high risk probabilities with model rationale
+  - Calibrated low/moderate/high risk probabilities with model rationale
   - Required vs missing features visibility for transparent fallback behavior
+- **Train/Infer split for cognition/fatigue models**:
+  - Runtime inference loads offline artifact JSON files from `api/model_artifacts/`
+  - Offline retraining utility: `api/train_research_models.py`
+  - Calibration metadata endpoint for traceability: `/api/research/models/calibration-report`
 - **Integrated Physiological Fusion**:
   - Log-linear factor fusion (schedule/autonomic/workload/environment)
   - Probability output with uncertainty interval and confidence labeling
