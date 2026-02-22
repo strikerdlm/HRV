@@ -31,6 +31,8 @@ import {
   Download,
   Book,
   Heart,
+  Brain,
+  Plane,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -90,6 +92,9 @@ const researchNavHRV = [
 const researchNavClinical = [
   { id: "readiness", label: "Readiness", icon: Target, href: "/research/readiness" },
   { id: "ans-tests", label: "ANS Tests", icon: Heart, href: "/research/ans-tests" },
+  { id: "workload", label: "Workload", icon: Brain, href: "/research/workload" },
+  { id: "vigilance", label: "Vigilance", icon: Activity, href: "/research/vigilance" },
+  { id: "flight-fatigue", label: "Flight Fatigue", icon: Plane, href: "/research/flight-fatigue" },
   { id: "fatigue", label: "Fatigue", icon: Moon, href: "/research/fatigue" },
   { id: "circadian", label: "Circadian", icon: Clock, href: "/research/circadian" },
   { id: "norms", label: "Population Norms", icon: Users, href: "/research/norms" },
