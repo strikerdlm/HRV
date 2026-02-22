@@ -1,3 +1,5 @@
+# Author: Dr Diego Malpica MD
+
 ## Mission Control - Flight Surgeon — Complete User Manual
 
 ### Author
@@ -9,8 +11,8 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.9.16  
-**Last Updated:** 2026-02-02
+**Version:** 1.17.0  
+**Last Updated:** 2026-02-22
 
 ---
 
@@ -110,11 +112,18 @@ A modern TypeScript/Next.js frontend is available under `frontend/` with a FastA
 
 **Features**
 - Dashboard with crew profiles and space weather widget
-- Research hub with 4 modules:
+- Research hub with expanded HRV-cognition modules:
   - Space Weather Dashboard (Kp, F10.7, solar wind gauges)
-  - HRV Analysis (time/frequency/nonlinear domains, Poincaré, HRF)
+  - HRV Analysis (backend-driven time/frequency/nonlinear domains, Poincaré, HRF)
+  - Frequency comparison (Welch vs Lomb-Scargle) with method-validity metadata
+  - Cognitive Workload (baseline/task/recovery annotations; `ΔlnRMSSD`, `ΔHF`, `ΔLF/HF`)
+  - Vigilance Tracker (30s/10s sliding windows + SAFTE overlay)
+  - Flight Fatigue Classifier (low/moderate/high probabilities with missing-feature transparency)
+  - Advanced nonlinear outputs (RCMSE and MM-DFA with strict minimum-sample gating)
+  - Integrated Physiological Model fusion (probability + uncertainty interval)
   - Solar-HRV Correlations (heatmap, lag analysis)
   - Garmin Integration (sleep, SpO2, body battery)
+  - Quality/Protocol panel across pages (stationarity, confidence, and interpretation caveats)
 
 **Run TypeScript Frontend (PowerShell)**
 ```powershell
