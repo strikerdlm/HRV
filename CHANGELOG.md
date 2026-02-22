@@ -52,6 +52,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `/api/research/hrv/upload` now persists new RR recordings to SQLite, reuses existing records for duplicate hashes, and returns tracing metadata (`measurement_id`, `file_hash`, `cached`).
   - `/api/research/hrv/analyze` now persists computed analyses into DB cache and reuses cached outputs for identical tracing+settings requests.
   - HRV Analysis page now merges backend tracing catalog with local traces and can load database tracings/cached analysis on demand.
+- **Frequency-domain PSD plotting across methods** (`api/research_endpoints.py`, `app/hrv_core.py`):
+  - `/api/research/hrv/frequency/{user_id}` now returns `frequencies` and `psd` arrays for Welch, Periodogram, and AR methods (not only Lomb-Scargle), restoring PSD chart rendering for all selector options.
+  - AR PSD curve generation is now explicitly supported in `psd_curve()` for consistent method-specific plotting.
 
 ### Documentation
 - Updated `README.md`, `frontend/README.md`, and `docs/Manual.md` to reflect:
