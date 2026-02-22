@@ -13,6 +13,7 @@ import {
   Zap,
   TrendingUp,
   AlertTriangle,
+  Plane,
 } from "lucide-react";
 import { PageWrapper } from "@/components/layout";
 import {
@@ -58,6 +59,39 @@ const researchModules = [
     color: "text-purple-500",
     bgColor: "bg-purple-500/10",
     features: ["DFA-α1", "VT1/VT2", "Intensity Zones", "Multi-Parameter"],
+  },
+  {
+    id: "workload",
+    title: "Cognitive Workload",
+    description:
+      "Baseline/task/recovery annotation with workload reactivity and recovery metrics",
+    icon: AlertTriangle,
+    href: "/research/workload",
+    color: "text-warning",
+    bgColor: "bg-warning/10",
+    features: ["ΔlnRMSSD", "ΔHF", "ΔLF/HF", "QC-gated"],
+  },
+  {
+    id: "vigilance",
+    title: "Vigilance Tracker",
+    description:
+      "Sliding 30s/10s window vigilance state classification with SAFTE overlay",
+    icon: TrendingUp,
+    href: "/research/vigilance",
+    color: "text-primary",
+    bgColor: "bg-primary/10",
+    features: ["Windowed states", "Low vigilance flags", "SAFTE overlay"],
+  },
+  {
+    id: "flight-fatigue",
+    title: "Flight Fatigue",
+    description:
+      "Three-level operational fatigue classification with transparent feature coverage",
+    icon: Plane,
+    href: "/research/flight-fatigue",
+    color: "text-danger",
+    bgColor: "bg-danger/10",
+    features: ["Low/Moderate/High", "Model rationale", "Missing-feature guardrails"],
   },
   {
     id: "correlations",
