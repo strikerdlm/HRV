@@ -885,6 +885,9 @@ export interface RRUploadRequest {
   rr_intervals_ms: number[];
   recording_timestamp?: string;
   source?: string;
+  user_id?: string;
+  measurement_id?: string;
+  file_hash?: string;
 }
 
 export interface RRUploadResponse {
@@ -899,7 +902,36 @@ export interface RRUploadResponse {
   artifact_percentage: number;
   quality_status: "good" | "moderate" | "poor";
   session_id: string;
+  measurement_id?: string | null;
+  file_hash?: string | null;
+  cached?: boolean;
   message: string;
+}
+
+export interface StoredRRTracing {
+  measurement_id: string;
+  user_id: string;
+  source_file?: string | null;
+  file_hash?: string | null;
+  measurement_date: string;
+  recording_start_utc?: string | null;
+  recording_duration_min?: number | null;
+  n_intervals: number;
+  artifact_percentage?: number | null;
+  quality_status: "good" | "moderate" | "poor" | "unknown";
+  created_at?: string | null;
+  has_cached_analysis: boolean;
+}
+
+export interface RRTracingCatalogResponse {
+  user_id: string;
+  tracings: StoredRRTracing[];
+}
+
+export interface RRTracingDetailResponse {
+  tracing: StoredRRTracing | null;
+  rr_intervals_ms: number[];
+  cached_analysis: HRVAnalysisResult | null;
 }
 
 // ---------------------------------------------------------------------------
