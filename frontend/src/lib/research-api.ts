@@ -34,7 +34,15 @@ import type {
   FlightFatigueResponse,
   FusionResponse,
   CalibrationReportResponse,
+  NOAADataResponse,
+  RRUploadRequest,
+  RRUploadResponse,
+  ComprehensiveCorrelationResponse,
+  CorrelationRequest,
+  RRTracingCatalogResponse,
+  RRTracingDetailResponse,
 } from "@/types/research";
+import { useAppStore } from "@/lib/store";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8180";
 
@@ -109,6 +117,22 @@ async function readApiErrorMessage(response: Response): Promise<string> {
     return detail ? `${baseMessage} - ${detail}` : baseMessage;
   } catch {
     return baseMessage;
+  }
+}
+
+function appendTracingSelectionParams(params: URLSearchParams, userId?: string): void {
+  const selection = useAppStore.getState().rrTracingSelection;
+  if (!selection) {
+    return;
+  }
+  if (userId && selection.user_id !== userId) {
+    return;
+  }
+  if (selection.measurement_id) {
+    params.set("measurement_id", selection.measurement_id);
+  }
+  if (selection.file_hash) {
+    params.set("file_hash", selection.file_hash);
   }
 }
 
@@ -374,8 +398,10 @@ export async function getHRVTimeSeries(
   limit: number = 1000
 ): Promise<RRTimeSeriesResponse> {
   try {
+    const params = new URLSearchParams({ limit: String(limit) });
+    appendTracingSelectionParams(params, userId);
     const response = await fetch(
-      `${API_BASE}/api/research/hrv/timeseries/${userId}?limit=${limit}`,
+      `${API_BASE}/api/research/hrv/timeseries/${userId}?${params.toString()}`,
       {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -420,8 +446,10 @@ export async function getHRVFrequency(
   method: "welch" | "periodogram" | "ar" | "lomb" = "welch"
 ): Promise<FrequencyDomainResponse> {
   try {
+    const params = new URLSearchParams({ method });
+    appendTracingSelectionParams(params, userId);
     const response = await fetch(
-      `${API_BASE}/api/research/hrv/frequency/${userId}?method=${method}`,
+      `${API_BASE}/api/research/hrv/frequency/${userId}?${params.toString()}`,
       {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -465,8 +493,11 @@ export async function getHRVFrequency(
  */
 export async function getHRVNonlinear(userId: string): Promise<NonlinearResponse> {
   try {
+    const params = new URLSearchParams();
+    appendTracingSelectionParams(params, userId);
+    const query = params.toString();
     const response = await fetch(
-      `${API_BASE}/api/research/hrv/nonlinear/${userId}`,
+      `${API_BASE}/api/research/hrv/nonlinear/${userId}${query ? `?${query}` : ""}`,
       {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -520,8 +551,13 @@ export async function getHRVWindowed(
   stepSize: number = 60
 ): Promise<WindowedMetricsResponse> {
   try {
+    const params = new URLSearchParams({
+      window_size: String(windowSize),
+      step_size: String(stepSize),
+    });
+    appendTracingSelectionParams(params, userId);
     const response = await fetch(
-      `${API_BASE}/api/research/hrv/windowed/${userId}?window_size=${windowSize}&step_size=${stepSize}`,
+      `${API_BASE}/api/research/hrv/windowed/${userId}?${params.toString()}`,
       {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -565,8 +601,11 @@ export async function getHRVWindowed(
  */
 export async function getHRVHRF(userId: string): Promise<HRFResponse> {
   try {
+    const params = new URLSearchParams();
+    appendTracingSelectionParams(params, userId);
+    const query = params.toString();
     const response = await fetch(
-      `${API_BASE}/api/research/hrv/hrf/${userId}`,
+      `${API_BASE}/api/research/hrv/hrf/${userId}${query ? `?${query}` : ""}`,
       {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -607,8 +646,11 @@ export async function getHRVHRF(userId: string): Promise<HRFResponse> {
  */
 export async function getReadiness(userId: string): Promise<ReadinessResponse> {
   try {
+    const params = new URLSearchParams();
+    appendTracingSelectionParams(params, userId);
+    const query = params.toString();
     const response = await fetch(
-      `${API_BASE}/api/research/hrv/readiness/${userId}`,
+      `${API_BASE}/api/research/hrv/readiness/${userId}${query ? `?${query}` : ""}`,
       {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -809,8 +851,11 @@ export async function exportHRVData(
  */
 export async function getLatestHRVAnalysis(userId: string): Promise<HRVAnalysisResult> {
   try {
+    const params = new URLSearchParams();
+    appendTracingSelectionParams(params, userId);
+    const query = params.toString();
     const response = await fetch(
-      `${API_BASE}/api/research/hrv/latest/${userId}`,
+      `${API_BASE}/api/research/hrv/latest/${userId}${query ? `?${query}` : ""}`,
       {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -965,14 +1010,6 @@ export async function getGarminHistory(
 // Enhanced NOAA Data API (Phase 6)
 // ---------------------------------------------------------------------------
 
-import type {
-  NOAADataResponse,
-  RRUploadRequest,
-  RRUploadResponse,
-  ComprehensiveCorrelationResponse,
-  CorrelationRequest,
-} from "@/types/research";
-
 /**
  * Get comprehensive NOAA space weather datasets for correlation analysis
  */
@@ -1040,20 +1077,93 @@ export async function uploadRRData(data: RRUploadRequest): Promise<RRUploadRespo
 }
 
 /**
+ * List stored RR tracings for a user.
+ */
+export async function getRRTracingCatalog(
+  userId: string,
+  limit: number = 200,
+): Promise<RRTracingCatalogResponse> {
+  try {
+    const params = new URLSearchParams({ limit: String(limit) });
+    const response = await fetch(
+      `${API_BASE}/api/research/hrv/tracings/${userId}?${params.toString()}`,
+      {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    if (!response.ok) {
+      throw new Error(await readApiErrorMessage(response));
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error loading RR tracing catalog:", error);
+    return {
+      user_id: userId,
+      tracings: [],
+    };
+  }
+}
+
+/**
+ * Load one stored RR tracing with raw RR values and cached analysis.
+ */
+export async function getRRTracingDetail(
+  userId: string,
+  measurementId: string,
+): Promise<RRTracingDetailResponse> {
+  try {
+    const response = await fetch(
+      `${API_BASE}/api/research/hrv/tracings/${userId}/${measurementId}`,
+      {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+    if (!response.ok) {
+      throw new Error(await readApiErrorMessage(response));
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error loading RR tracing detail:", error);
+    return {
+      tracing: null,
+      rr_intervals_ms: [],
+      cached_analysis: null,
+    };
+  }
+}
+
+/**
  * Run comprehensive HRV analysis from RR intervals.
  * Uses the same backend engine as stored analyses.
  */
 export async function analyzeRRIntervals(
   rrIntervalsMs: number[],
   method: "welch" | "periodogram" | "ar" | "lomb" = "welch",
+  options?: {
+    user_id?: string;
+    source?: string;
+    recording_timestamp?: string;
+    measurement_id?: string;
+    file_hash?: string;
+  },
 ): Promise<HRVAnalysisResult> {
   try {
+    const payload = options
+      ? {
+          rr_intervals_ms: rrIntervalsMs,
+          method,
+          ...options,
+        }
+      : rrIntervalsMs;
+
     const response = await fetch(
       `${API_BASE}/api/research/hrv/analyze?method=${method}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(rrIntervalsMs),
+        body: JSON.stringify(payload),
       },
     );
 
@@ -1104,8 +1214,13 @@ export async function getVigilanceTracking(
   stepSize: number = 10,
 ): Promise<VigilanceResponse> {
   try {
+    const params = new URLSearchParams({
+      window_size: String(windowSize),
+      step_size: String(stepSize),
+    });
+    appendTracingSelectionParams(params, userId);
     const response = await fetch(
-      `${API_BASE}/api/research/vigilance/${userId}?window_size=${windowSize}&step_size=${stepSize}`,
+      `${API_BASE}/api/research/vigilance/${userId}?${params.toString()}`,
       {
         method: "GET",
         headers: { "Content-Type": "application/json" },
@@ -1133,7 +1248,10 @@ export async function getFlightFatigueClassification(
   userId: string,
 ): Promise<FlightFatigueResponse> {
   try {
-    const response = await fetch(`${API_BASE}/api/research/flight-fatigue/${userId}`, {
+    const params = new URLSearchParams();
+    appendTracingSelectionParams(params, userId);
+    const query = params.toString();
+    const response = await fetch(`${API_BASE}/api/research/flight-fatigue/${userId}${query ? `?${query}` : ""}`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });
@@ -1159,7 +1277,10 @@ export async function getIntegratedFusion(
   userId: string,
 ): Promise<FusionResponse> {
   try {
-    const response = await fetch(`${API_BASE}/api/research/fusion/${userId}`, {
+    const params = new URLSearchParams();
+    appendTracingSelectionParams(params, userId);
+    const query = params.toString();
+    const response = await fetch(`${API_BASE}/api/research/fusion/${userId}${query ? `?${query}` : ""}`, {
       method: "GET",
       headers: { "Content-Type": "application/json" },
     });
