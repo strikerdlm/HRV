@@ -138,7 +138,12 @@ export default function VigilancePage() {
           <div className="flex items-center gap-2">
             {data && (
               <>
-                <Badge variant="outline">Model: {data.model_version}</Badge>
+                <Badge
+                  variant="outline"
+                  title="Sliding-window calibrated vigilance model using HRV drift relative to personal baseline"
+                >
+                  Model: {data.model_version}
+                </Badge>
                 <Badge variant="outline">
                   Low vigilance windows: {data.low_vigilance_windows}/{data.total_windows}
                 </Badge>
@@ -206,6 +211,54 @@ export default function VigilancePage() {
             </CardContent>
           </Card>
         )}
+
+        {data && (
+          <Card>
+            <CardHeader>
+              <CardTitle>How to Interpret the Vigilance Plot</CardTitle>
+              <CardDescription>
+                This view is intended for operational screening and trend tracking across windows.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                - <strong>Step-line states</strong> summarize each window as high, medium, or low vigilance.
+              </p>
+              <p>
+                - <strong>Red highlighted windows</strong> are low-vigilance periods that may require duty pacing or mitigation.
+              </p>
+              <p>
+                - <strong>Dashed SAFTE line</strong> provides schedule-based fatigue context; concordant SAFTE drops and low-vigilance windows increase concern.
+              </p>
+              <p>
+                - <strong>Low-vigilance burden</strong>: {((100 * data.low_vigilance_windows) / Math.max(1, data.total_windows)).toFixed(1)}% of windows in this run.
+              </p>
+              <p>
+                - <strong>Window/step trade-off</strong>: smaller windows react faster but are noisier; larger windows are more stable but less responsive.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Scientific References</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <p>
+              - Xie T, Ma J. (2025). Real-time vigilance tracking using sliding HRV windows.
+              <span className="ml-1 text-primary">doi:10.1093/sleep/zsae199</span>
+            </p>
+            <p>
+              - Hursh SR et al. (2004). SAFTE framework for alertness/fatigue effectiveness modeling.
+              <span className="ml-1 text-primary">Aviat Space Environ Med, 75(3 Suppl), A44-53</span>
+            </p>
+            <p>
+              - Task Force of ESC/NASPE (1996). HRV acquisition/interpretation standards.
+              <span className="ml-1 text-primary">doi:10.1161/01.CIR.93.5.1043</span>
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </PageWrapper>
   );
