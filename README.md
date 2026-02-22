@@ -5,7 +5,7 @@
 **A Research-Grade Heart Rate Variability Operations Console for Aerospace Medicine**
 
 [![GitHub](https://img.shields.io/badge/GitHub-strikerdlm%2FHRV-blue?logo=github)](https://github.com/strikerdlm/HRV)
-[![Version](https://img.shields.io/badge/Version-1.16.0-green)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/Version-1.17.0-green)](CHANGELOG.md)
 [![Python](https://img.shields.io/badge/Python-3.12-blue?logo=python)](https://python.org)
 [![Next.js](https://img.shields.io/badge/Next.js-14-black?logo=next.js)](https://nextjs.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.100+-009688?logo=fastapi)](https://fastapi.tiangolo.com)
@@ -103,7 +103,7 @@ This architecture is ideal for:
 | ------------------------------- | ----------------------------------------------------------------------------------------- |
 | **Dashboard**             | Crew profiles, space weather widget, IHPI gauges                                          |
 | **Scheduling**            | Activity cards, Go/No-Go indicators, crew management                                      |
-| **Research Hub**          | 18 dedicated analysis pages (Time Series, Frequency, Nonlinear, HRF, VT, Circadian, etc.) |
+| **Research Hub**          | 21+ dedicated analysis pages including workload, vigilance, and flight-fatigue tooling   |
 | **Ventilatory Threshold** | DFA-alpha1 analysis with publication-quality charts                                       |
 | **Space Weather**         | Real-time Kp, F10.7, solar wind gauges                                                    |
 | **Export**                | Publication-grade reports, CSV/JSON data                                                  |
@@ -111,6 +111,19 @@ This architecture is ideal for:
 Both interfaces are **fully independent** — you can run either one or both simultaneously. The Streamlit app connects directly to the SQLite database, while the Next.js frontend communicates through the FastAPI backend.
 
 ---
+
+## HRV-Cognition Frontend Update
+
+The frontend + API stack now includes a dedicated HRV-cognition workflow for operational decision support:
+
+- **Comprehensive backend-driven analysis** via `/api/research/hrv/analyze` with persistent session IDs and quality metadata.
+- **Quality/context propagation** (`AnalysisContext`) shown in-page through a reusable `QualityPanel` (stationarity, method validity, confidence, caveats).
+- **Frequency method parity** with Welch and Lomb-Scargle comparison plus method-specific validity scoring.
+- **Cognitive workload module** (`/research/workload`) with baseline/task/recovery annotation and reactivity metrics (`ΔlnRMSSD`, `ΔHF`, `ΔLF/HF`).
+- **Vigilance tracker** (`/research/vigilance`) using sliding windows and SAFTE overlay for low-vigilance flagging.
+- **Flight fatigue classifier** (`/research/flight-fatigue`) integrated into operational cards/modals with transparent missing-feature fallbacks.
+- **Advanced nonlinear outputs** (RCMSE/MM-DFA) with strict data sufficiency gating.
+- **Integrated physiological fusion** exposed with uncertainty intervals instead of a single deterministic score.
 
 ## Getting Started
 
