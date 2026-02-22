@@ -1071,8 +1071,12 @@ export async function uploadRRData(data: RRUploadRequest): Promise<RRUploadRespo
 
     return await response.json();
   } catch (error) {
-    console.error("Error uploading RR data:", error);
-    throw error;
+    if (error instanceof TypeError) {
+      throw new Error(
+        `Upload service unavailable (${API_BASE}). Ensure backend API is running.`,
+      );
+    }
+    throw error instanceof Error ? error : new Error("RR upload failed");
   }
 }
 
