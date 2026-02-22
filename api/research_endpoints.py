@@ -1461,7 +1461,7 @@ async def get_hrv_frequency(
     try:
         import numpy as np
         from scipy import signal
-        from hrv_core import compute_frequency_domain_metrics
+        from hrv_core import compute_frequency_domain_metrics, psd_curve
 
         latest = await _resolve_measurement_for_user(
             user_id,
@@ -1554,6 +1554,14 @@ async def get_hrv_frequency(
                 rr_array,
                 method=method,
             )
+            curve_freqs, curve_psd = await asyncio.to_thread(
+                psd_curve,
+                rr_array,
+                method=method,
+            )
+            if curve_freqs.size > 0 and curve_psd.size > 0:
+                freq_metrics["frequencies"] = [float(v) for v in curve_freqs.tolist()]
+                freq_metrics["psd"] = [float(v) for v in curve_psd.tolist()]
         
         # Get PSD arrays if available
         frequencies = freq_metrics.get("frequencies", [])
