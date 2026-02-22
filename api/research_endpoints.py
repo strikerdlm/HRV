@@ -3913,7 +3913,7 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
     import uuid
     
     try:
-        from hrv_core import clean_rr_intervals, compute_comprehensive_hrv
+        from hrv_core import clean_rr_intervals, compute_time_domain_metrics
         
         rr_array = np.array(data.rr_intervals_ms, dtype=float)
         
@@ -3935,8 +3935,9 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
         # Use artifact percentage from the cleaning summary
         artifact_pct = summary.get("flagged_pct", 0.0)
         
-        # Compute HRV metrics
-        metrics = await asyncio.to_thread(compute_comprehensive_hrv, cleaned)
+        # Fast upload path: compute lightweight time-domain metrics only.
+        # Full spectral/nonlinear analysis runs when the user explicitly requests Analyze.
+        metrics = await asyncio.to_thread(compute_time_domain_metrics, cleaned)
         
         # Quality assessment
         if artifact_pct > 20:
@@ -4038,7 +4039,10 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
             message=(
                 "RR tracing already exists in database. Reused cached record."
                 if reused_cached
-                else f"Successfully processed {len(cleaned)} RR intervals ({duration_min:.1f} min recording)"
+                else (
+                    f"Successfully uploaded {len(cleaned)} RR intervals "
+                    f"({duration_min:.1f} min recording). Run Analyze to compute full metrics."
+                )
             ),
         )
     except HTTPException:
