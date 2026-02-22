@@ -613,6 +613,27 @@ export interface FusionResponse {
   rationale: string[];
 }
 
+export interface CalibrationModelReport {
+  key: string;
+  model_id: string;
+  model_version: string;
+  trained_at_utc: string;
+  source: string;
+  feature_order: string[];
+  class_labels?: string[];
+  metrics: Record<string, number>;
+  references: string[];
+  notes: string;
+  artifact_path: string;
+  fallback_used: boolean;
+  load_error?: string | null;
+}
+
+export interface CalibrationReportResponse {
+  generated_at_utc: string;
+  models: CalibrationModelReport[];
+}
+
 // ---------------------------------------------------------------------------
 // Circadian Types (Phase 1)
 // ---------------------------------------------------------------------------
