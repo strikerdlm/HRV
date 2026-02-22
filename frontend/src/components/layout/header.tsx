@@ -24,6 +24,7 @@ import {
 import { useAppStore } from "@/lib/store";
 import { checkHealth } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { RRTracingLoader } from "@/components/research/rr-tracing-loader";
 
 interface HeaderProps {
   title: string;
@@ -85,6 +86,8 @@ export function Header({ title, description }: HeaderProps) {
         </div>
 
         <div className="flex items-center gap-2">
+          {appMode === "research" && <RRTracingLoader />}
+
           {/* API Status */}
           <Tooltip>
             <TooltipTrigger asChild>
