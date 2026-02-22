@@ -107,10 +107,16 @@ export default function FlightFatiguePage() {
                         ? "warning"
                         : "destructive"
                   }
+                  title="Top-probability class from calibrated multifeature fatigue scoring"
                 >
                   Risk band: {data.risk_band.toUpperCase()}
                 </Badge>
-                <Badge variant="outline">Model: {data.model_version}</Badge>
+                <Badge
+                  variant="outline"
+                  title="Current backend classifier version"
+                >
+                  Model: {data.model_version}
+                </Badge>
               </>
             )}
           </div>
@@ -125,7 +131,7 @@ export default function FlightFatiguePage() {
             context={data.context}
             showFrequencyDetails={false}
             extraCaveats={[
-              "Flight-fatigue classification currently uses proxy features while richer model inputs are phased in.",
+              "Flight-fatigue output uses calibrated proxy scoring; external retraining on mission-specific cohorts is still pending.",
             ]}
           />
         )}
@@ -186,6 +192,51 @@ export default function FlightFatiguePage() {
             </Card>
           </div>
         )}
+
+        {data && (
+          <Card>
+            <CardHeader>
+              <CardTitle>How to Interpret the Classifier</CardTitle>
+              <CardDescription>
+                Use this output as operational decision support with explicit feature-coverage checks.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-2 text-sm text-muted-foreground">
+              <p>
+                - <strong>Class probabilities</strong> represent relative support for low/moderate/high fatigue in the current input context.
+              </p>
+              <p>
+                - <strong>Risk band</strong> is the top class, but confidence is stronger when probability separation is wide.
+              </p>
+              <p>
+                - <strong>Missing features</strong> trigger neutralization behavior; treat outputs as conservative fallback when coverage is incomplete.
+              </p>
+              <p>
+                - <strong>Proxy model notice</strong>: current version remains a transparent proxy (`lightgbm_proxy_v1`) while full calibrated feature sets are phased in.
+              </p>
+            </CardContent>
+          </Card>
+        )}
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Scientific References</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-muted-foreground space-y-2">
+            <p>
+              - Guo D et al. (2025). Three-level flight fatigue classification from HRV and respiratory features.
+              <span className="ml-1 text-primary">doi:10.3389/fnins.2025.1621638</span>
+            </p>
+            <p>
+              - Yuan Y et al. (2025). Pilot workload feature selection and model performance in A320 traffic patterns.
+              <span className="ml-1 text-primary">doi:10.3389/fnrgo.2025.1672492</span>
+            </p>
+            <p>
+              - Task Force of ESC/NASPE (1996). HRV acquisition and interpretation standards.
+              <span className="ml-1 text-primary">doi:10.1161/01.CIR.93.5.1043</span>
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </PageWrapper>
   );
