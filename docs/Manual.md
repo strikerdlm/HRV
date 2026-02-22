@@ -127,6 +127,8 @@ A modern TypeScript/Next.js frontend is available under `frontend/` with a FastA
   - In-app reference/interpretation cards for workload, vigilance, and flight-fatigue metrics
   - Offline train / online infer split for vigilance and flight-fatigue models (`api/model_artifacts/`)
   - Calibration report endpoint for model traceability (`/api/research/models/calibration-report`)
+  - Persistent RR tracing catalog/detail endpoints with dedupe-aware storage and reusable cached analyses (`/api/research/hrv/tracings/*`)
+  - Global RR tracing loader in the research header so all HRV pages can target the same recording
 
 **Run TypeScript Frontend (PowerShell)**
 ```powershell
