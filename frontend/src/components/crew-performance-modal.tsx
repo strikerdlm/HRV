@@ -30,10 +30,15 @@ import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
 import { EChartsWrapper } from "@/components/charts";
-import { submitVitalsAndAssess, computeJetLag } from "@/lib/research-api";
+import {
+  submitVitalsAndAssess,
+  computeJetLag,
+  getFlightFatigueClassification,
+} from "@/lib/research-api";
 import type {
   EnhancedReadinessResponse,
   SMSMatrixData,
+  FlightFatigueResponse,
 } from "@/types/research";
 import { SMS_RISK_COLORS, READINESS_LABEL_COLORS } from "@/types/research";
 
@@ -486,23 +491,29 @@ export function CrewPerformanceModal({
   onOpenChange,
 }: CrewPerformanceModalProps) {
   const [assessment, setAssessment] = React.useState<EnhancedReadinessResponse | null>(null);
+  const [flightFatigue, setFlightFatigue] = React.useState<FlightFatigueResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
     if (!open || !member) {
       setAssessment(null);
+      setFlightFatigue(null);
       return;
     }
 
     const fetchAssessment = async () => {
       setLoading(true);
       try {
-        const data = await submitVitalsAndAssess(member.id, {
-          sbp_mmhg: member.sbp ?? 120,
-          dbp_mmhg: member.dbp ?? 80,
-          temperature_c: member.tempC ?? 36.6,
-        });
+        const [data, fatigue] = await Promise.all([
+          submitVitalsAndAssess(member.id, {
+            sbp_mmhg: member.sbp ?? 120,
+            dbp_mmhg: member.dbp ?? 80,
+            temperature_c: member.tempC ?? 36.6,
+          }),
+          getFlightFatigueClassification(member.id),
+        ]);
         setAssessment(data);
+        setFlightFatigue(fatigue);
       } catch (err) {
         console.error("Failed to fetch assessment:", err);
       } finally {
@@ -575,6 +586,33 @@ export function CrewPerformanceModal({
                 <Progress value={pct} className="h-1.5 mt-2" />
               </div>
             ))}
+          </div>
+
+          {/* Flight fatigue classifier output */}
+          <div className="p-4 rounded-lg border bg-muted/30">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <p className="text-sm font-semibold">Flight Fatigue Classifier</p>
+              <Badge
+                variant={
+                  flightFatigue?.risk_band === "low"
+                    ? "success"
+                    : flightFatigue?.risk_band === "moderate"
+                      ? "warning"
+                      : "destructive"
+                }
+              >
+                {flightFatigue?.risk_band?.toUpperCase() ?? "MODERATE"} risk
+              </Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-1">
+              {flightFatigue
+                ? `Model ${flightFatigue.model_version}. Missing features: ${
+                    flightFatigue.missing_features.length > 0
+                      ? flightFatigue.missing_features.join(", ")
+                      : "none"
+                  }.`
+                : "Neutral fallback active while classifier data is loading."}
+            </p>
           </div>
 
           {/* Vitals Modifiers */}
