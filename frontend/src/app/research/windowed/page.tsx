@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
+import { QualityPanel } from "@/components/research/quality-panel";
 import { getHRVWindowed } from "@/lib/research-api";
 import { useAppStore } from "@/lib/store";
 import type { WindowedMetricsResponse } from "@/types/research";
@@ -239,58 +240,7 @@ export default function WindowedPage() {
     setLoading(true);
     try {
       const result = await getHRVWindowed(userId, windowSize, stepSize);
-      if (result.n_windows === 0) {
-        // Generate demo data
-        const n = 50;
-        const baseRmssd = 42;
-        const baseSdnn = 58;
-        const demoData: WindowedMetricsResponse = {
-          timestamps: Array.from({ length: n }, (_, i) =>
-            new Date(Date.now() - (n - i) * stepSize * 1000).toISOString()
-          ),
-          rmssd: Array.from({ length: n }, () => baseRmssd + (Math.random() - 0.5) * 20),
-          sdnn: Array.from({ length: n }, () => baseSdnn + (Math.random() - 0.5) * 25),
-          pnn50: Array.from({ length: n }, () => 28 + (Math.random() - 0.5) * 15),
-          mean_hr: Array.from({ length: n }, () => 65 + (Math.random() - 0.5) * 10),
-          lf_power: Array.from({ length: n }, () => 800 + (Math.random() - 0.5) * 400),
-          hf_power: Array.from({ length: n }, () => 600 + (Math.random() - 0.5) * 300),
-          lf_hf_ratio: Array.from({ length: n }, () => 1.3 + (Math.random() - 0.5) * 0.8),
-          rmssd_ewma: [],
-          sdnn_ewma: [],
-          anomaly_indices: [12, 28, 41],
-          cluster_labels: [],
-          window_size_seconds: windowSize,
-          step_size_seconds: stepSize,
-          n_windows: n,
-        };
-        
-        // Calculate EWMA
-        const alpha = 0.2;
-        demoData.rmssd_ewma = demoData.rmssd.reduce<(number | null)[]>((acc, val, i) => {
-          if (i === 0) return [val];
-          const prev = acc[i - 1];
-          if (val !== null && prev !== null) {
-            acc.push(alpha * val + (1 - alpha) * prev);
-          } else {
-            acc.push(prev);
-          }
-          return acc;
-        }, []);
-        demoData.sdnn_ewma = demoData.sdnn.reduce<(number | null)[]>((acc, val, i) => {
-          if (i === 0) return [val];
-          const prev = acc[i - 1];
-          if (val !== null && prev !== null) {
-            acc.push(alpha * val + (1 - alpha) * prev);
-          } else {
-            acc.push(prev);
-          }
-          return acc;
-        }, []);
-        
-        setData(demoData);
-      } else {
-        setData(result);
-      }
+      setData(result);
     } catch (err) {
       console.error(err);
     } finally {
@@ -371,6 +321,8 @@ export default function WindowedPage() {
 
         {data && (
           <>
+            <QualityPanel context={data.context} />
+
             {/* Combined Overview */}
             <motion.div
               initial={{ opacity: 0, y: 20 }}
