@@ -987,7 +987,22 @@ def fetch_cme_enlil_impact(*, lookback_days: int = 45) -> Tuple[Optional[ImpactE
         resp.raise_for_status()
         payload = resp.json()
     except requests.RequestException as exc:
-        return None, f"DONKI WSA+ENLIL fetch failed: {exc}"
+        status_code = exc.response.status_code if exc.response is not None else None
+        if status_code == 503:
+            return (
+                None,
+                "DONKI WSA+ENLIL temporarily unavailable (HTTP 503). "
+                "NOAA/SWPC data remains available.",
+            )
+        if status_code == 429:
+            return (
+                None,
+                "DONKI WSA+ENLIL rate limited (HTTP 429). "
+                "Try refresh after a short cooldown.",
+            )
+        if status_code is not None:
+            return None, f"DONKI WSA+ENLIL fetch failed (HTTP {status_code})."
+        return None, f"DONKI WSA+ENLIL network error ({exc.__class__.__name__})."
     except ValueError as exc:
         return None, f"DONKI WSA+ENLIL JSON parse failed: {exc}"
 
