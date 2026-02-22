@@ -1,6 +1,6 @@
-# Mission Control - Flight Surgeon (TypeScript Frontend)
+# Author: Dr Diego Malpica MD
 
-**Author: Dr Diego Malpica MD**
+# Mission Control - Flight Surgeon (TypeScript Frontend)
 
 Modern TypeScript/React frontend for the HRV Analysis Suite, providing a beautiful, smooth interface while keeping the Streamlit backend intact.
 
@@ -77,6 +77,9 @@ frontend/
 │   │       ├── page.tsx        # Research Hub
 │   │       ├── space-weather/  # Space Weather Dashboard
 │   │       ├── hrv-analysis/   # HRV Analysis (all domains)
+│   │       ├── workload/       # Cognitive workload (segment annotation)
+│   │       ├── vigilance/      # Windowed vigilance tracker
+│   │       ├── flight-fatigue/ # Flight fatigue classifier
 │   │       ├── correlations/   # Solar-HRV Correlations
 │   │       └── garmin/         # Garmin Wearable Data
 │   ├── components/
@@ -121,6 +124,13 @@ frontend/
 | `/api/research/space-weather/noaa` | GET | NOAA data by source |
 | `/api/research/hrv/latest/{user_id}` | GET | Latest HRV analysis for user |
 | `/api/research/hrv/analyze` | POST | Analyze RR intervals |
+| `/api/research/hrv/frequency/{user_id}` | GET | Frequency-domain analysis (Welch/Periodogram/AR/Lomb) |
+| `/api/research/hrv/nonlinear/{user_id}` | GET | Nonlinear metrics with advanced RCMSE/MM-DFA gates |
+| `/api/research/hrv/windowed/{user_id}` | GET | Sliding-window HRV trends and anomaly flags |
+| `/api/research/workload/compute` | POST | Baseline/task/recovery workload reactivity metrics |
+| `/api/research/vigilance/{user_id}` | GET | Windowed vigilance states with SAFTE overlay |
+| `/api/research/flight-fatigue/{user_id}` | GET | Three-level flight fatigue classification |
+| `/api/research/fusion/{user_id}` | GET | Integrated physiological fusion with uncertainty |
 | `/api/research/correlations/hrv-space-weather` | GET | HRV-Space Weather correlations |
 | `/api/research/garmin/latest/{user_id}` | GET | Latest Garmin metrics |
 | `/api/research/garmin/history/{user_id}` | GET | Garmin history (30 days) |
@@ -213,16 +223,33 @@ npm run start
 ### Research Features (NEW)
 
 - **Research Hub**: Central dashboard linking all research modules
+- **Quality-first interpretation layer**:
+  - Shared `AnalysisContext` contract across research endpoints
+  - Reusable `QualityPanel` in key pages (confidence, stationarity, validity, caveats)
 - **Space Weather Dashboard**: 
   - Real-time Kp, Dst, F10.7, solar wind gauges
   - Impact predictions by energy category (photon, SEP, plasma, CME)
   - Polar H10 recording recommendations
   - Scientific context from Alabdulgader et al., Stoupel et al.
 - **HRV Analysis**:
-  - Time-domain metrics (SDNN, RMSSD, pNN50, etc.)
-  - Frequency-domain with PSD bar charts (VLF, LF, HF)
+  - Time-domain metrics (SDNN, RMSSD, pNN50, etc.) from backend analysis endpoint
+  - Frequency-domain with PSD method switching and Welch/Lomb compare mode
   - Nonlinear analysis with Poincaré plot (SD1, SD2, DFA α1, entropy)
+  - Advanced nonlinear outputs (RCMSE/MM-DFA) when data sufficiency gates pass
   - Heart Rate Fragmentation (HRF): PIP, IALS, PSS, PAS
+- **Cognitive Workload**:
+  - Segment annotation (baseline/task/recovery) on RR trace
+  - Reactivity metrics: `ΔlnRMSSD`, `ΔHF`, `ΔLF/HF`, recovery slope
+  - Threshold flags for critical-role screening + JSON export
+- **Vigilance Tracker**:
+  - Sliding window vigilance state classification (default 30s/10s)
+  - SAFTE effectiveness overlay and low-vigilance highlighting
+- **Flight Fatigue Classifier**:
+  - Low/moderate/high risk probabilities with model rationale
+  - Required vs missing features visibility for transparent fallback behavior
+- **Integrated Physiological Fusion**:
+  - Log-linear factor fusion (schedule/autonomic/workload/environment)
+  - Probability output with uncertainty interval and confidence labeling
 - **Solar-HRV Correlations**:
   - Correlation heatmap (solar metrics vs. HRV parameters)
   - Lag analysis charts (0-72 hours)
