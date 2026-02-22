@@ -1245,6 +1245,9 @@ export default function SpaceWeatherPage() {
       "not found",
       "No data available",
       "no recent",
+      "temporarily unavailable",
+      "rate limited",
+      "NOAA/SWPC data remains available",
     ],
     [],
   );
