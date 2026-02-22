@@ -33,6 +33,7 @@ import type {
   VigilanceResponse,
   FlightFatigueResponse,
   FusionResponse,
+  CalibrationReportResponse,
 } from "@/types/research";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8180";
@@ -1098,8 +1099,8 @@ export async function getFlightFatigueClassification(
       risk_band: "moderate",
       model_version: "fallback",
       probabilities: { low: 0.33, moderate: 0.34, high: 0.33 },
-      rationale: ["Insufficient data for classifier; using neutral fallback"],
-      required_features: ["rmssd", "sleep_debt_hours", "effectiveness_pct"],
+      rationale: ["Insufficient data for calibrated classifier; using neutral fallback"],
+      required_features: ["rmssd", "sdnn", "mean_hr", "sleep_debt_hours", "effectiveness_pct"],
       missing_features: ["unknown"],
       context: buildFallbackContext(),
     };
@@ -1129,6 +1130,25 @@ export async function getIntegratedFusion(
       uncertainty_interval: [0.4, 0.8],
       confidence: "poor",
       rationale: ["Fallback fusion response due to unavailable backend data"],
+    };
+  }
+}
+
+export async function getModelCalibrationReport(): Promise<CalibrationReportResponse> {
+  try {
+    const response = await fetch(`${API_BASE}/api/research/models/calibration-report`, {
+      method: "GET",
+      headers: { "Content-Type": "application/json" },
+    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    return await response.json();
+  } catch (error) {
+    console.error("Error fetching model calibration report:", error);
+    return {
+      generated_at_utc: new Date().toISOString(),
+      models: [],
     };
   }
 }
