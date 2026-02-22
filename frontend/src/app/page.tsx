@@ -31,10 +31,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { listUsers, getSpaceWeather } from "@/lib/api";
-import { getCurrentSpaceWeather } from "@/lib/research-api";
+import { getCurrentSpaceWeather, getFlightFatigueClassification } from "@/lib/research-api";
 import type { UserProfile, SpaceWeatherSnapshot } from "@/types";
 import type {
   SpaceWeatherSnapshot as ResearchSpaceWeather,
+  FlightFatigueResponse,
 } from "@/types/research";
 import { EChartsWrapper } from "@/components/charts";
 import { IHPIGauge } from "@/components/ihpi-gauge";
@@ -577,18 +578,31 @@ function buildCrewGaugeData(users: UserProfile[]): Array<{
   hydrationModifier: number;
 }> {
   const roles = ["CDR", "PLT", "MS1", "MS2", "MS3", "MS4"];
+  const seededUnit = (seed: string, salt: number): number => {
+    let hash = 2166136261;
+    for (let i = 0; i < seed.length; i += 1) {
+      hash ^= seed.charCodeAt(i);
+      hash = Math.imul(hash, 16777619);
+    }
+    const mixed = (hash ^ Math.imul(salt, 374761393)) >>> 0;
+    return (mixed % 1000) / 1000;
+  };
+
   return users.map((u, i) => {
-    // Derive IHPI using SAFTE model for fatigue + simulated sleep debt
-    // Each crew member gets a slightly different sleep debt for variation
-    const baseScore = 75 + Math.round(Math.random() * 20);
-    const sleepDebt = +(Math.random() * 3).toFixed(1);
+    // Deterministic synthetic values keep dashboard stable between rerenders.
+    const seed = `${u.user_id}:${u.username}:${i}`;
+    const v1 = seededUnit(seed, 1);
+    const v2 = seededUnit(seed, 2);
+    const v3 = seededUnit(seed, 3);
+    const baseScore = 75 + Math.round(v1 * 20);
+    const sleepDebt = +(v2 * 3).toFixed(1);
     // SAFTE-computed fatigue: 100 - effectiveness (higher = more fatigued)
     const safteEff = currentSAFTEEffectiveness(sleepDebt);
     const fatigue = Math.round(100 - safteEff);
 
     // Hydration-thermoregulation modifier (simulated for dashboard)
     // In production, this would come from real-time physiological data
-    const hydrationModifier = Math.round(-Math.random() * 4 * 10) / 10;
+    const hydrationModifier = Math.round(-(v3 * 4) * 10) / 10;
     const hydrationStatuses = ["Well Hydrated", "Mildly Dehydrated", "Moderately Dehydrated"];
     const hydrationStatus = hydrationModifier > -1 ? hydrationStatuses[0]
       : hydrationModifier > -3 ? hydrationStatuses[1]
@@ -627,6 +641,7 @@ export default function DashboardPage() {
   const [users, setUsers] = React.useState<UserProfile[]>([]);
   const [spaceWeather, setSpaceWeather] = React.useState<SpaceWeatherSnapshot | null>(null);
   const [researchSW, setResearchSW] = React.useState<ResearchSpaceWeather | null>(null);
+  const [flightFatigueByUser, setFlightFatigueByUser] = React.useState<Record<string, FlightFatigueResponse>>({});
   const [_loading, setLoading] = React.useState(true);
 
   // Performance modal state
@@ -642,6 +657,13 @@ export default function DashboardPage() {
           getSpaceWeather().catch(() => null),
           getCurrentSpaceWeather().catch(() => null),
         ]);
+        const fatigueEntries = await Promise.all(
+          usersData.users.map(async (user) => {
+            const fatigue = await getFlightFatigueClassification(user.user_id);
+            return [user.user_id, fatigue] as const;
+          }),
+        );
+        setFlightFatigueByUser(Object.fromEntries(fatigueEntries));
         setUsers(usersData.users);
         setSpaceWeather(weatherData);
         setResearchSW(researchWeather);
@@ -745,6 +767,8 @@ export default function DashboardPage() {
                       sleepDebt={gauge.sleepDebt}
                       readinessScore={gauge.readinessScore}
                       smsRiskLevel={gauge.smsRiskLevel}
+                      flightFatigueBand={flightFatigueByUser[gauge.userId]?.risk_band}
+                      flightFatigueModel={flightFatigueByUser[gauge.userId]?.model_version}
                       onClick={() => handleCrewGaugeClick(gauge)}
                     />
                   ))}
