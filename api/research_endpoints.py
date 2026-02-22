@@ -19,7 +19,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Body, HTTPException, Query
 from pydantic import BaseModel, Field
 
 # Add app directory to path
@@ -650,7 +650,7 @@ async def get_latest_hrv_analysis(user_id: str) -> HRVAnalysisResult:
 
 @router.post("/hrv/analyze")
 async def analyze_rr_intervals(
-    payload: Any,
+    payload: Any = Body(..., description="RR interval array or object payload"),
     method: str = Query(default="welch", description="PSD method: welch, periodogram, ar"),
 ) -> HRVAnalysisResult:
     """Analyze RR intervals and return comprehensive HRV metrics."""
