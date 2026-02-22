@@ -30,6 +30,12 @@ if str(_APP_DIR) not in sys.path:
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+from api.research_model_registry import (  # noqa: E402
+    calibration_report_payload,
+    load_flight_fatigue_model,
+    load_vigilance_model,
+)
+
 _LOGGER = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/research", tags=["Research"])
@@ -2035,6 +2041,31 @@ class FusionResponse(BaseModel):
     rationale: List[str]
 
 
+class CalibrationModelReport(BaseModel):
+    """Calibration metadata for one inference model."""
+
+    key: str
+    model_id: str
+    model_version: str
+    trained_at_utc: str
+    source: str
+    feature_order: List[str]
+    class_labels: Optional[List[str]] = None
+    metrics: Dict[str, float] = Field(default_factory=dict)
+    references: List[str] = Field(default_factory=list)
+    notes: str = ""
+    artifact_path: str = ""
+    fallback_used: bool = False
+    load_error: Optional[str] = None
+
+
+class CalibrationReportResponse(BaseModel):
+    """Calibration report across deployed research models."""
+
+    generated_at_utc: str
+    models: List[CalibrationModelReport] = Field(default_factory=list)
+
+
 def _rmssd(rr_ms: List[float]) -> Optional[float]:
     """Compute RMSSD from RR intervals in milliseconds."""
     try:
@@ -2047,6 +2078,82 @@ def _rmssd(rr_ms: List[float]) -> Optional[float]:
         return float(np.sqrt(np.mean(diff ** 2)))
     except Exception:
         return None
+
+
+def _sdnn(rr_ms: List[float]) -> Optional[float]:
+    """Compute SDNN from RR intervals in milliseconds."""
+    try:
+        import numpy as np
+
+        if len(rr_ms) < 3:
+            return None
+        arr = np.array(rr_ms, dtype=float)
+        return float(np.std(arr, ddof=1))
+    except Exception:
+        return None
+
+
+def _pnn50(rr_ms: List[float]) -> Optional[float]:
+    """Compute pNN50 (%) from RR intervals in milliseconds."""
+    try:
+        import numpy as np
+
+        if len(rr_ms) < 3:
+            return None
+        arr = np.array(rr_ms, dtype=float)
+        diff = np.abs(np.diff(arr))
+        return float(100.0 * np.mean(diff > 50.0))
+    except Exception:
+        return None
+
+
+def _mean_hr(rr_ms: List[float]) -> Optional[float]:
+    """Compute mean HR (bpm) from RR intervals."""
+    if len(rr_ms) < 1:
+        return None
+    try:
+        import numpy as np
+
+        mean_rr = float(np.mean(np.array(rr_ms, dtype=float)))
+        if mean_rr <= 0:
+            return None
+        return float(60000.0 / mean_rr)
+    except Exception:
+        return None
+
+
+def _sigmoid(x: float) -> float:
+    """Bounded logistic transform for calibrated scores."""
+    import math
+
+    if x >= 0:
+        z = math.exp(-x)
+        return 1.0 / (1.0 + z)
+    z = math.exp(x)
+    return z / (1.0 + z)
+
+
+def _softmax_scores(scores: Dict[str, float]) -> Dict[str, float]:
+    """Numerically stable softmax for multiclass probabilities."""
+    import math
+
+    if not scores:
+        return {}
+    max_score = max(scores.values())
+    exp_scores = {k: math.exp(v - max_score) for k, v in scores.items()}
+    norm = sum(exp_scores.values())
+    if norm <= 0:
+        uniform = 1.0 / max(1, len(scores))
+        return {k: uniform for k in scores}
+    return {k: float(exp_scores[k] / norm) for k in scores}
+
+
+def _z_score(value: Optional[float], center: Optional[float], spread: Optional[float]) -> float:
+    """Safe z-score with bounded denominator to avoid unstable scaling."""
+    if value is None or center is None or spread is None:
+        return 0.0
+    denom = max(1e-6, float(spread))
+    return float((value - center) / denom)
 
 
 def _extract_segment(rr_ms: List[float], segment: SegmentAnnotation) -> List[float]:
@@ -2078,6 +2185,29 @@ async def _latest_rr_for_user(user_id: str) -> List[float]:
         except Exception:
             return []
     return []
+
+
+@router.get("/models/calibration-report", response_model=CalibrationReportResponse)
+async def get_models_calibration_report() -> CalibrationReportResponse:
+    """Expose deployed model calibration metadata for transparency."""
+    try:
+        payload = calibration_report_payload()
+        models_raw = payload.get("models", [])
+        models = [
+            CalibrationModelReport(**item)
+            for item in models_raw
+            if isinstance(item, dict)
+        ]
+        return CalibrationReportResponse(
+            generated_at_utc=str(payload.get("generated_at_utc", datetime.now(timezone.utc).isoformat())),
+            models=models,
+        )
+    except Exception as exc:
+        _LOGGER.error(f"Error building calibration report payload: {exc}")
+        return CalibrationReportResponse(
+            generated_at_utc=datetime.now(timezone.utc).isoformat(),
+            models=[],
+        )
 
 
 @router.post("/workload/compute", response_model=WorkloadResponse)
@@ -2187,13 +2317,20 @@ async def get_vigilance_tracking(
     try:
         import numpy as np
 
+        vigilance_model = load_vigilance_model()
+        model_version = vigilance_model.model_version
+        coef_by_feature = {
+            feature: vigilance_model.coefficients[idx]
+            for idx, feature in enumerate(vigilance_model.feature_order)
+        }
+
         rr_ms = await _latest_rr_for_user(user_id)
         context = _build_analysis_context(rr_ms, artifact_pct=0.0)
         if len(rr_ms) < 100:
             return VigilanceResponse(
                 window_size_seconds=window_size,
                 step_size_seconds=step_size,
-                model_version="svm_baseline_heuristic_v1",
+                model_version=model_version,
                 low_vigilance_windows=0,
                 total_windows=0,
                 predictions=[],
@@ -2205,46 +2342,143 @@ async def get_vigilance_tracking(
         total_duration = float(cumulative_sec[-1]) if len(cumulative_sec) else 0.0
 
         fatigue = await get_fatigue_prediction(user_id)
-        safte_now = fatigue.effectiveness_pct
+        safte_now = (
+            float(fatigue.effectiveness_pct)
+            if fatigue.effectiveness_pct is not None
+            else 75.0
+        )
+        safte_penalty = max(0.0, min(1.5, (77.0 - safte_now) / 17.0))
 
-        predictions: List[VigilanceWindowPrediction] = []
+        window_features: List[Dict[str, Optional[float]]] = []
         start_sec = 0.0
         max_windows = 1200
-        while start_sec + window_size <= total_duration and len(predictions) < max_windows:
+        while start_sec + window_size <= total_duration and len(window_features) < max_windows:
             end_sec = start_sec + window_size
             mask = (cumulative_sec >= start_sec) & (cumulative_sec < end_sec)
             idx = np.where(mask)[0]
             if len(idx) >= 20:
-                segment = rr_array[idx]
-                seg_rmssd = _rmssd([float(v) for v in segment.tolist()])
-                mean_rr = float(np.mean(segment)) if len(segment) > 0 else 0.0
-                mean_hr = float(60000.0 / mean_rr) if mean_rr > 0 else None
-
-                state = "high"
-                if (seg_rmssd is not None and seg_rmssd < 20) or (mean_hr is not None and mean_hr > 85):
-                    state = "low"
-                elif (seg_rmssd is not None and seg_rmssd < 30) or (mean_hr is not None and mean_hr > 75):
-                    state = "medium"
-
-                confidence = min(0.95, 0.5 + len(idx) / 300.0)
-                predictions.append(
-                    VigilanceWindowPrediction(
-                        start_seconds=float(start_sec),
-                        end_seconds=float(end_sec),
-                        state=state,
-                        confidence=float(confidence),
-                        rmssd=seg_rmssd,
-                        mean_hr=mean_hr,
-                        safte_effectiveness=safte_now,
-                    )
+                segment = [float(v) for v in rr_array[idx].tolist()]
+                window_features.append(
+                    {
+                        "start_seconds": float(start_sec),
+                        "end_seconds": float(end_sec),
+                        "n_samples": float(len(idx)),
+                        "rmssd": _rmssd(segment),
+                        "sdnn": _sdnn(segment),
+                        "mean_hr": _mean_hr(segment),
+                        "pnn50": _pnn50(segment),
+                    }
                 )
             start_sec += step_size
+
+        if not window_features:
+            return VigilanceResponse(
+                window_size_seconds=window_size,
+                step_size_seconds=step_size,
+                model_version=model_version,
+                low_vigilance_windows=0,
+                total_windows=0,
+                predictions=[],
+                context=context,
+            )
+
+        baseline_n = min(8, max(3, len(window_features) // 5))
+        baseline = window_features[:baseline_n]
+
+        def _baseline_stats(name: str) -> tuple[Optional[float], Optional[float]]:
+            values = [
+                float(item[name])
+                for item in baseline
+                if item.get(name) is not None
+            ]
+            if not values:
+                return None, None
+            arr = np.array(values, dtype=float)
+            spread = float(np.std(arr, ddof=1 if len(values) > 1 else 0))
+            return float(np.mean(arr)), max(1e-3, spread)
+
+        b_rmssd, s_rmssd = _baseline_stats("rmssd")
+        b_sdnn, s_sdnn = _baseline_stats("sdnn")
+        b_hr, s_hr = _baseline_stats("mean_hr")
+        b_pnn50, s_pnn50 = _baseline_stats("pnn50")
+
+        predictions: List[VigilanceWindowPrediction] = []
+        low_prob_ema: Optional[float] = None
+        for item in window_features:
+            rmssd_scale = s_rmssd if s_rmssd is not None else max(2.0, abs(b_rmssd or 30.0) * 0.15)
+            sdnn_scale = s_sdnn if s_sdnn is not None else max(3.0, abs(b_sdnn or 45.0) * 0.15)
+            hr_scale = s_hr if s_hr is not None else 5.0
+            pnn50_scale = s_pnn50 if s_pnn50 is not None else 8.0
+
+            z_rmssd = _z_score(item.get("rmssd"), b_rmssd, rmssd_scale)
+            z_sdnn = _z_score(item.get("sdnn"), b_sdnn, sdnn_scale)
+            z_hr = _z_score(item.get("mean_hr"), b_hr, hr_scale)
+            z_pnn50 = _z_score(item.get("pnn50"), b_pnn50, pnn50_scale)
+
+            rmssd_drop = max(0.0, -z_rmssd)
+            sdnn_drop = max(0.0, -z_sdnn)
+            hr_rise = max(0.0, z_hr)
+            pnn50_drop = max(0.0, -z_pnn50)
+
+            feature_values = {
+                "rmssd_drop_z": rmssd_drop,
+                "sdnn_drop_z": sdnn_drop,
+                "hr_rise_z": hr_rise,
+                "pnn50_drop_z": pnn50_drop,
+                "safte_penalty": safte_penalty,
+                "sample_factor": min(1.0, float(item.get("n_samples") or 0.0) / 80.0),
+            }
+            logit = float(vigilance_model.intercept)
+            for feature_name in vigilance_model.feature_order:
+                logit += float(coef_by_feature.get(feature_name, 0.0)) * float(
+                    feature_values.get(feature_name, 0.0)
+                )
+
+            raw_low_prob = _sigmoid(logit)
+            alpha = max(0.0, min(1.0, float(vigilance_model.smoothing_alpha)))
+            low_prob = (
+                raw_low_prob
+                if low_prob_ema is None
+                else (1.0 - alpha) * low_prob_ema + alpha * raw_low_prob
+            )
+            low_prob_ema = low_prob
+
+            state = "high"
+            if low_prob >= float(vigilance_model.threshold_low):
+                state = "low"
+            elif low_prob >= float(vigilance_model.threshold_medium):
+                state = "medium"
+
+            separation = abs(low_prob - 0.5) * 2.0
+            sample_factor = feature_values["sample_factor"]
+            confidence = (
+                float(vigilance_model.confidence_bias)
+                + float(vigilance_model.confidence_sep_weight) * separation
+                + float(vigilance_model.confidence_sample_weight) * sample_factor
+            )
+            if context.confidence == "moderate":
+                confidence *= 0.90
+            elif context.confidence == "poor":
+                confidence *= 0.80
+            confidence = max(0.30, min(0.97, confidence))
+
+            predictions.append(
+                VigilanceWindowPrediction(
+                    start_seconds=float(item["start_seconds"] or 0.0),
+                    end_seconds=float(item["end_seconds"] or 0.0),
+                    state=state,
+                    confidence=float(confidence),
+                    rmssd=item.get("rmssd"),
+                    mean_hr=item.get("mean_hr"),
+                    safte_effectiveness=float(safte_now),
+                )
+            )
 
         low_count = len([p for p in predictions if p.state == "low"])
         return VigilanceResponse(
             window_size_seconds=window_size,
             step_size_seconds=step_size,
-            model_version="svm_baseline_heuristic_v1",
+            model_version=model_version,
             low_vigilance_windows=low_count,
             total_windows=len(predictions),
             predictions=predictions,
@@ -2255,7 +2489,7 @@ async def get_vigilance_tracking(
         return VigilanceResponse(
             window_size_seconds=window_size,
             step_size_seconds=step_size,
-            model_version="svm_baseline_heuristic_v1",
+            model_version=load_vigilance_model().model_version,
             low_vigilance_windows=0,
             total_windows=0,
             predictions=[],
@@ -2266,92 +2500,153 @@ async def get_vigilance_tracking(
 async def get_flight_fatigue(user_id: str) -> FlightFatigueResponse:
     """Three-level flight fatigue risk classification with feature transparency."""
     try:
+        import math
+
+        fatigue_model = load_flight_fatigue_model()
+        model_version = fatigue_model.model_version
+
         fatigue = await get_fatigue_prediction(user_id)
         rr_ms = await _latest_rr_for_user(user_id)
         context = _build_analysis_context(rr_ms, artifact_pct=0.0)
+        latest_hrv = await get_latest_hrv_analysis(user_id)
+
         rmssd = _rmssd(rr_ms) if rr_ms else None
+        sdnn = _sdnn(rr_ms) if rr_ms else None
+        mean_hr = _mean_hr(rr_ms) if rr_ms else None
+        lf_hf_ratio = (
+            latest_hrv.frequency_domain.lf_hf_ratio
+            if latest_hrv and latest_hrv.frequency_domain
+            else None
+        )
         sleep_debt = fatigue.sleep_debt_hours
         effectiveness = fatigue.effectiveness_pct
 
-        required_features = ["rmssd", "sleep_debt_hours", "effectiveness_pct"]
-        missing: List[str] = []
+        required_features = [
+            "rmssd",
+            "sdnn",
+            "mean_hr",
+            "sleep_debt_hours",
+            "effectiveness_pct",
+        ]
+        missing_required: List[str] = []
         if rmssd is None:
-            missing.append("rmssd")
+            missing_required.append("rmssd")
+        if sdnn is None:
+            missing_required.append("sdnn")
+        if mean_hr is None:
+            missing_required.append("mean_hr")
         if sleep_debt is None:
-            missing.append("sleep_debt_hours")
+            missing_required.append("sleep_debt_hours")
         if effectiveness is None:
-            missing.append("effectiveness_pct")
+            missing_required.append("effectiveness_pct")
 
-        if missing:
+        if missing_required:
             return FlightFatigueResponse(
                 risk_band="moderate",
-                model_version="lightgbm_proxy_v1",
+                model_version=model_version,
                 probabilities={"low": 0.3, "moderate": 0.4, "high": 0.3},
                 rationale=["Insufficient model inputs; using neutral fallback"],
                 required_features=required_features,
-                missing_features=missing,
+                missing_features=missing_required,
                 context=context,
             )
 
-        risk_score = 0.0
-        rationale: List[str] = []
+        eff_term = (float(effectiveness) - 77.0) / 17.0
+        sleep_term = float(sleep_debt) / 6.0
+        rmssd_term = math.log(max(1e-3, float(rmssd)) / 30.0)
+        sdnn_term = math.log(max(1e-3, float(sdnn)) / 50.0)
+        hr_term = (float(mean_hr) - 70.0) / 15.0
+        lfhf_term = (
+            math.log(max(1e-3, float(lf_hf_ratio)) / 1.5)
+            if lf_hf_ratio is not None
+            else 0.0
+        )
 
-        if effectiveness is not None:
-            if effectiveness < 60:
-                risk_score += 0.55
-                rationale.append("Low SAFTE effectiveness (<60%)")
-            elif effectiveness < 77:
-                risk_score += 0.30
-                rationale.append("Moderate SAFTE effectiveness (60-77%)")
+        feature_values = {
+            "effectiveness_term": eff_term,
+            "sleep_term": sleep_term,
+            "rmssd_term": rmssd_term,
+            "sdnn_term": sdnn_term,
+            "hr_term": hr_term,
+            "lfhf_term": lfhf_term,
+        }
+        class_scores: Dict[str, float] = {}
+        temperature = max(1e-3, float(fatigue_model.temperature))
+        for label in fatigue_model.class_labels:
+            coeffs = fatigue_model.class_coefficients.get(label, tuple())
+            score = float(fatigue_model.class_intercepts.get(label, 0.0))
+            for idx, feature_name in enumerate(fatigue_model.feature_order):
+                coeff = float(coeffs[idx]) if idx < len(coeffs) else 0.0
+                score += coeff * float(feature_values.get(feature_name, 0.0))
+            class_scores[label] = score / temperature
 
-        if sleep_debt is not None:
-            if sleep_debt > 6:
-                risk_score += 0.30
-                rationale.append("Severe sleep debt (>6h)")
-            elif sleep_debt > 3:
-                risk_score += 0.15
-                rationale.append("Moderate sleep debt (>3h)")
-
-        if rmssd is not None:
-            if rmssd < 20:
-                risk_score += 0.25
-                rationale.append("Suppressed RMSSD (<20 ms)")
-            elif rmssd < 30:
-                risk_score += 0.12
-                rationale.append("Reduced RMSSD (20-30 ms)")
-
-        risk_score = max(0.0, min(1.0, risk_score))
-        high = risk_score
-        moderate = max(0.05, 1.0 - abs(0.5 - risk_score) * 2.0) * 0.5
-        low = max(0.0, 1.0 - high - moderate)
-        norm = high + moderate + low
+        probs_raw = _softmax_scores(class_scores)
         probs = {
-            "low": round(low / norm, 3),
-            "moderate": round(moderate / norm, 3),
-            "high": round(high / norm, 3),
+            "low": round(probs_raw.get("low", 0.0), 3),
+            "moderate": round(probs_raw.get("moderate", 0.0), 3),
+            "high": round(probs_raw.get("high", 0.0), 3),
         }
         risk_band = max(probs, key=probs.get)
 
-        if not rationale:
-            rationale.append("No dominant fatigue risk contributor detected")
+        missing_features: List[str] = []
+        if lf_hf_ratio is None:
+            missing_features.append("lf_hf_ratio (optional)")
+
+        rationale: List[str] = []
+        if effectiveness < 60:
+            rationale.append("Low SAFTE effectiveness (<60%)")
+        elif effectiveness < 77:
+            rationale.append("Moderate SAFTE effectiveness (60-77%)")
+        else:
+            rationale.append("SAFTE effectiveness in lower-risk range")
+
+        if sleep_debt > 6:
+            rationale.append("Severe sleep debt (>6h)")
+        elif sleep_debt > 3:
+            rationale.append("Moderate sleep debt (>3h)")
+
+        if rmssd < 20:
+            rationale.append("Suppressed RMSSD (<20 ms)")
+        elif rmssd < 30:
+            rationale.append("Reduced RMSSD (20-30 ms)")
+
+        if sdnn < 35:
+            rationale.append("Low SDNN (<35 ms)")
+        elif sdnn < 50:
+            rationale.append("Borderline SDNN (35-50 ms)")
+
+        if mean_hr > 85:
+            rationale.append("Elevated mean HR (>85 bpm)")
+        elif mean_hr > 75:
+            rationale.append("Mildly elevated mean HR (>75 bpm)")
+
+        if lf_hf_ratio is not None:
+            if lf_hf_ratio > 2.5:
+                rationale.append("LF/HF indicates sympathetic dominance (>2.5)")
+            elif lf_hf_ratio < 0.7:
+                rationale.append("LF/HF indicates parasympathetic dominance (<0.7)")
+        else:
+            rationale.append("LF/HF unavailable; neutral spectral term applied")
+
+        rationale.append("Calibrated multifeature scoring (research-aligned proxy; external retraining pending)")
 
         return FlightFatigueResponse(
             risk_band=risk_band,
-            model_version="lightgbm_proxy_v1",
+            model_version=model_version,
             probabilities=probs,
             rationale=rationale,
             required_features=required_features,
-            missing_features=[],
+            missing_features=missing_features,
             context=context,
         )
     except Exception as exc:
         _LOGGER.error(f"Error computing flight fatigue for {user_id}: {exc}")
         return FlightFatigueResponse(
             risk_band="moderate",
-            model_version="lightgbm_proxy_v1",
+            model_version=load_flight_fatigue_model().model_version,
             probabilities={"low": 0.3, "moderate": 0.4, "high": 0.3},
             rationale=["Classifier execution failed; using neutral fallback"],
-            required_features=["rmssd", "sleep_debt_hours", "effectiveness_pct"],
+            required_features=["rmssd", "sdnn", "mean_hr", "sleep_debt_hours", "effectiveness_pct"],
             missing_features=["unknown"],
             context=_build_analysis_context([], artifact_pct=0.0),
         )
