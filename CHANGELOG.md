@@ -13,6 +13,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Flight-fatigue quality context propagation** (`api/research_endpoints.py`, `frontend/src/app/research/flight-fatigue/page.tsx`, `frontend/src/lib/research-api.ts`, `frontend/src/types/research.ts`):
   - `FlightFatigueResponse` now carries `AnalysisContext` metadata from the backend.
   - Flight Fatigue page now renders `QualityPanel` for protocol/confidence context and caveat messaging.
+- **Offline model artifacts + calibration registry** (`api/research_model_registry.py`, `api/model_artifacts/vigilance_model.json`, `api/model_artifacts/flight_fatigue_model.json`, `api/train_research_models.py`):
+  - Introduced explicit train/infer split with runtime artifact loading for vigilance and flight-fatigue scoring.
+  - Added reproducible offline training utility for artifact regeneration.
+- **Calibration metadata endpoint** (`api/research_endpoints.py`, `frontend/src/lib/research-api.ts`, `frontend/src/types/research.ts`):
+  - Added `/api/research/models/calibration-report` for model version/performance/reference traceability.
 
 ### Changed
 - **Frontend gauge style compliance** (`frontend/src/app/research/frequency/page.tsx`, `frontend/src/app/research/nonlinear/page.tsx`, `frontend/src/app/research/fatigue/page.tsx`):
@@ -20,6 +25,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Aligns research pages with the project gauge policy used across the modern TypeScript frontend.
 - **Research Hub coverage** (`frontend/src/app/research/page.tsx`):
   - Added a dedicated Flight Fatigue module card for direct navigation to classifier outputs.
+- **In-app scientific explanation pass** (`frontend/src/app/research/workload/page.tsx`, `frontend/src/app/research/vigilance/page.tsx`, `frontend/src/app/research/flight-fatigue/page.tsx`):
+  - Added explicit metric interpretation panels and scientific reference cards directly in the new cognition/fatigue modules.
+  - Clarified proxy-model and screening-only caveats so interpretation does not rely solely on external docs.
+- **Model calibration pass for cognition/fatigue endpoints** (`api/research_endpoints.py`):
+  - Upgraded vigilance from static threshold logic to calibrated baseline-relative sliding-window scoring (`windowed_hrv_calibrated_v2`).
+  - Upgraded flight-fatigue scoring to calibrated multifeature softmax probabilities (`multifeature_calibrated_v2`) using SAFTE + HRV features with optional LF/HF term.
+  - Preserved transparent missing-feature behavior and rationale outputs for operational traceability.
+- **Artifact-driven inference wiring** (`api/research_endpoints.py`):
+  - Vigilance and flight-fatigue endpoints now read coefficients/thresholds from runtime artifacts instead of hardcoded endpoint constants.
 
 ### Fixed
 - **Deterministic dashboard behavior** (`frontend/src/app/page.tsx`):
