@@ -1240,7 +1240,11 @@ export async function getRRTracingDetail(
     }
     return await response.json();
   } catch (error) {
-    console.error("Error loading RR tracing detail:", error);
+    const message = error instanceof Error ? error.message : String(error);
+    // 404s are expected when stale local entries reference deleted/recreated measurements.
+    if (!message.includes("404")) {
+      console.warn("Error loading RR tracing detail:", error);
+    }
     return {
       tracing: null,
       rr_intervals_ms: [],
