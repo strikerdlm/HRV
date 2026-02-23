@@ -16,6 +16,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -616,7 +617,7 @@ async def get_latest_hrv_analysis(
 
         # Use direct fields from HRVMeasurement dataclass
         return HRVAnalysisResult(
-            recording_time=latest.recording_start_utc or latest.measurement_date,
+            recording_time=_measurement_timestamp_iso(latest),
             duration_minutes=latest.recording_duration_min,
             total_beats=None,  # Not stored in HRVMeasurement
             artifact_percentage=latest.artifact_percentage,
@@ -713,6 +714,10 @@ async def analyze_rr_intervals(
         method = str(method).strip().lower() or "welch"
         if method not in {"welch", "periodogram", "ar", "lomb"}:
             method = "welch"
+        resolved_recording_timestamp = _resolve_recording_timestamp(
+            payload_recording_timestamp,
+            payload_source,
+        )
 
         # Clean and validate - returns (cleaned_rr_ms, valid_mask, summary_dict)
         rr_array = np.array(rr_intervals, dtype=float)
@@ -841,11 +846,11 @@ async def analyze_rr_intervals(
                 measurement = HRVMeasurement(
                     measurement_id=payload_measurement_id or str(uuid.uuid4()),
                     user_id=payload_user_id,
-                    measurement_date=_safe_iso_date(payload_recording_timestamp),
+                    measurement_date=_safe_iso_date(resolved_recording_timestamp),
                     device_name="RR Upload",
                     source_file=payload_source,
                     file_hash=resolved_file_hash,
-                    recording_start_utc=payload_recording_timestamp,
+                    recording_start_utc=resolved_recording_timestamp,
                     recording_duration_min=result.duration_minutes,
                     mean_rr_ms=result.time_domain.mean_rr,
                     sdnn_ms=result.time_domain.sdnn,
@@ -885,7 +890,7 @@ async def analyze_rr_intervals(
                     analysis_settings=analysis_settings,
                     payload=result.model_dump(),
                     source_file=payload_source,
-                    recording_date=_safe_iso_date(payload_recording_timestamp),
+                    recording_date=_safe_iso_date(resolved_recording_timestamp),
                 )
             except Exception as exc:
                 _LOGGER.warning("Failed to persist HRV analysis cache for %s: %s", payload_user_id, exc)
@@ -1324,18 +1329,8 @@ async def get_hrv_timeseries(
         # Generate timestamps (cumulative from RR intervals)
         cumulative_ms = np.cumsum(rr_array)
         
-        # Parse start time from available fields
-        start_time = datetime.now(timezone.utc)
-        if latest.recording_start_utc:
-            try:
-                start_time = datetime.fromisoformat(latest.recording_start_utc.replace("Z", "+00:00"))
-            except ValueError:
-                pass
-        elif latest.measurement_date:
-            try:
-                start_time = datetime.fromisoformat(latest.measurement_date.replace("Z", "+00:00"))
-            except ValueError:
-                pass
+        # Resolve start time using filename-derived timestamp when available.
+        start_time = _measurement_datetime_utc(latest)
         
         timestamps = [
             (start_time + timedelta(milliseconds=float(ms))).isoformat()
@@ -1989,27 +1984,7 @@ async def get_hrv_windowed(
             return out
 
         def _measurement_datetime(measurement: Any) -> datetime:
-            for raw in (
-                getattr(measurement, "recording_start_utc", None),
-                getattr(measurement, "measurement_date", None),
-                getattr(measurement, "created_at", None),
-            ):
-                if not raw:
-                    continue
-                text = str(raw).strip()
-                if not text:
-                    continue
-                try:
-                    dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
-                except ValueError:
-                    try:
-                        dt = datetime.fromisoformat(f"{text}T00:00:00+00:00")
-                    except ValueError:
-                        continue
-                if dt.tzinfo is None:
-                    dt = dt.replace(tzinfo=timezone.utc)
-                return dt.astimezone(timezone.utc)
-            return datetime.now(timezone.utc)
+            return _measurement_datetime_utc(measurement)
 
         def _compute_ewma(values: List[Optional[float]], alpha: float) -> List[Optional[float]]:
             out: List[Optional[float]] = []
@@ -3112,13 +3087,115 @@ def _extract_segment(rr_ms: List[float], segment: SegmentAnnotation) -> List[flo
     return rr_ms[start:end]
 
 
+_FILENAME_TIMESTAMP_PATTERNS: tuple[re.Pattern[str], ...] = (
+    re.compile(
+        r"(?<!\d)"
+        r"(?P<year>20\d{2})[-_.]?"
+        r"(?P<month>0[1-9]|1[0-2])[-_.]?"
+        r"(?P<day>0[1-9]|[12]\d|3[01])"
+        r"(?:[T _-]?"
+        r"(?P<hour>[01]\d|2[0-3])[:._-]?"
+        r"(?P<minute>[0-5]\d)"
+        r"(?:[:._-]?(?P<second>[0-5]\d))?"
+        r")?"
+        r"(?!\d)"
+    ),
+)
+
+
+def _utc_isoformat(dt: datetime) -> str:
+    """Convert datetime to canonical UTC ISO-8601 string."""
+    dt_utc = dt.astimezone(timezone.utc) if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+    return dt_utc.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+
+def _parse_iso_datetime(raw: Optional[str]) -> Optional[datetime]:
+    """Best-effort ISO datetime parser that always returns UTC."""
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    if not text:
+        return None
+    try:
+        dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            dt = datetime.fromisoformat(f"{text}T00:00:00+00:00")
+        except ValueError:
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)
+
+
+def _extract_recording_datetime_from_source(source_file: Optional[str]) -> Optional[datetime]:
+    """Parse YYYYMMDD[_]HHMM[SS] style dates embedded in source filenames."""
+    if source_file is None:
+        return None
+    source_text = str(source_file).strip()
+    if not source_text:
+        return None
+    source_name = Path(source_text).name
+    candidates = [Path(source_name).stem, source_name]
+    for candidate in candidates:
+        for pattern in _FILENAME_TIMESTAMP_PATTERNS:
+            match = pattern.search(candidate)
+            if not match:
+                continue
+            groups = match.groupdict()
+            year = int(groups["year"])
+            month = int(groups["month"])
+            day = int(groups["day"])
+            hour = int(groups["hour"] or 0)
+            minute = int(groups["minute"] or 0)
+            second = int(groups["second"] or 0)
+            try:
+                return datetime(year, month, day, hour, minute, second, tzinfo=timezone.utc)
+            except ValueError:
+                continue
+    return None
+
+
+def _resolve_recording_timestamp(
+    raw_timestamp: Optional[str],
+    source_file: Optional[str],
+) -> str:
+    """Resolve canonical recording timestamp (filename > payload > now)."""
+    source_dt = _extract_recording_datetime_from_source(source_file)
+    if source_dt is not None:
+        return _utc_isoformat(source_dt)
+    parsed = _parse_iso_datetime(raw_timestamp)
+    if parsed is not None:
+        return _utc_isoformat(parsed)
+    return _utc_isoformat(datetime.now(timezone.utc))
+
+
+def _measurement_datetime_utc(measurement: Any) -> datetime:
+    """Resolve measurement datetime in UTC using filename when available."""
+    source_dt = _extract_recording_datetime_from_source(getattr(measurement, "source_file", None))
+    if source_dt is not None:
+        return source_dt
+    for raw in (
+        getattr(measurement, "recording_start_utc", None),
+        getattr(measurement, "measurement_date", None),
+        getattr(measurement, "created_at", None),
+    ):
+        parsed = _parse_iso_datetime(raw)
+        if parsed is not None:
+            return parsed
+    return datetime.now(timezone.utc)
+
+
+def _measurement_timestamp_iso(measurement: Any) -> str:
+    """Return canonical measurement timestamp as UTC ISO string."""
+    return _utc_isoformat(_measurement_datetime_utc(measurement))
+
+
 def _safe_iso_date(raw: Optional[str]) -> str:
     """Convert optional datetime string into an ISO date; fallback to today."""
-    if raw:
-        try:
-            return datetime.fromisoformat(raw.replace("Z", "+00:00")).date().isoformat()
-        except ValueError:
-            pass
+    parsed = _parse_iso_datetime(raw)
+    if parsed is not None:
+        return parsed.date().isoformat()
     return datetime.now(timezone.utc).date().isoformat()
 
 
@@ -4002,7 +4079,7 @@ async def get_hrv_readiness(
             rmssd = h.rmssd_ms
             if rmssd is not None:
                 rmssd_values.append(rmssd)
-                dates.append(h.measurement_date or "")
+                dates.append(_measurement_timestamp_iso(h))
         
         if not rmssd_values:
             return ReadinessResponse(recommendations=["No RMSSD data available"])
@@ -4744,6 +4821,10 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
             )
 
         cleaned_rr_ms = [float(v) for v in cleaned.tolist()]
+        resolved_recording_timestamp = _resolve_recording_timestamp(
+            data.recording_timestamp,
+            data.source,
+        )
         
         # Calculate basic metrics
         mean_rr = float(np.mean(cleaned))
@@ -4786,11 +4867,11 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
                 measurement = HRVMeasurement(
                     measurement_id=data.measurement_id or str(uuid.uuid4()),
                     user_id=data.user_id,
-                    measurement_date=_safe_iso_date(data.recording_timestamp),
+                    measurement_date=_safe_iso_date(resolved_recording_timestamp),
                     device_name="RR Upload",
                     source_file=data.source,
                     file_hash=rr_hash,
-                    recording_start_utc=data.recording_timestamp,
+                    recording_start_utc=resolved_recording_timestamp,
                     recording_duration_min=duration_min,
                     mean_rr_ms=mean_rr,
                     sdnn_ms=metrics.get("sdnn"),
@@ -4830,7 +4911,7 @@ async def upload_rr_data(data: RRData) -> RRUploadResponse:
         # For now, we'll use a global dict (not ideal but simple)
         _RR_SESSION_CACHE[session_id] = {
             "rr_ms": cleaned_rr_ms,
-            "timestamp": data.recording_timestamp or datetime.now(timezone.utc).isoformat(),
+            "timestamp": resolved_recording_timestamp,
             "metrics": metrics,
             "measurement_id": persisted_measurement_id,
             "file_hash": rr_hash,
@@ -4938,14 +5019,15 @@ async def get_hrv_tracing_catalog(
         for meas in history:
             rr_data = _extract_rr_sequence(meas)
             meas_hash = str(meas.file_hash) if meas.file_hash else None
+            resolved_ts = _measurement_timestamp_iso(meas)
             tracings.append(
                 StoredRRTracing(
                     measurement_id=meas.measurement_id,
                     user_id=meas.user_id,
                     source_file=meas.source_file,
                     file_hash=meas_hash,
-                    measurement_date=meas.measurement_date,
-                    recording_start_utc=meas.recording_start_utc,
+                    measurement_date=_safe_iso_date(resolved_ts),
+                    recording_start_utc=resolved_ts,
                     recording_duration_min=meas.recording_duration_min,
                     n_intervals=len(rr_data),
                     artifact_percentage=meas.artifact_percentage,
@@ -4978,13 +5060,14 @@ async def get_hrv_tracing_detail(
             raise HTTPException(status_code=404, detail="RR tracing not found")
 
         rr_data = _extract_rr_sequence(measurement)
+        resolved_ts = _measurement_timestamp_iso(measurement)
         tracing = StoredRRTracing(
             measurement_id=measurement.measurement_id,
             user_id=measurement.user_id,
             source_file=measurement.source_file,
             file_hash=measurement.file_hash,
-            measurement_date=measurement.measurement_date,
-            recording_start_utc=measurement.recording_start_utc,
+            measurement_date=_safe_iso_date(resolved_ts),
+            recording_start_utc=resolved_ts,
             recording_duration_min=measurement.recording_duration_min,
             n_intervals=len(rr_data),
             artifact_percentage=measurement.artifact_percentage,
@@ -5172,11 +5255,8 @@ async def run_correlation_analysis(request: CorrelationRequest) -> Comprehensive
                 # Build daily HRV dataframe from HRVMeasurement fields
                 hrv_records = []
                 for h in history:
-                    if h.rmssd_ms is not None and h.measurement_date:
-                        try:
-                            date_val = datetime.fromisoformat(h.measurement_date.replace("Z", "+00:00")).date()
-                        except ValueError:
-                            continue
+                    if h.rmssd_ms is not None:
+                        date_val = _measurement_datetime_utc(h).date()
                         record = {
                             "date": date_val,
                             "rmssd": h.rmssd_ms,
@@ -5449,8 +5529,9 @@ async def export_hrv_data(
         # Prepare data using HRVMeasurement fields
         records = []
         for h in history:
+            resolved_ts = _measurement_timestamp_iso(h)
             record = {
-                "date": h.recording_start_utc or h.measurement_date,
+                "date": resolved_ts,
                 "duration_min": h.recording_duration_min,
             }
             
@@ -5519,20 +5600,10 @@ async def export_hrv_data(
             content_type = "text/csv"
             filename = f"hrv_export_{user_id}_{now.strftime('%Y%m%d')}.csv"
         
-        # Calculate date range from measurement_date strings
-        date_strs = [h.measurement_date for h in history if h.measurement_date]
-        if date_strs:
-            # Parse date strings and find range
-            parsed_dates = []
-            for d in date_strs:
-                try:
-                    parsed_dates.append(datetime.fromisoformat(d.replace("Z", "+00:00")))
-                except ValueError:
-                    pass
-            if parsed_dates:
-                date_range = f"{min(parsed_dates).strftime('%Y-%m-%d')} to {max(parsed_dates).strftime('%Y-%m-%d')}"
-            else:
-                date_range = "N/A"
+        # Calculate date range using the same timestamp normalization as analysis.
+        parsed_dates = [_measurement_datetime_utc(h) for h in history]
+        if parsed_dates:
+            date_range = f"{min(parsed_dates).strftime('%Y-%m-%d')} to {max(parsed_dates).strftime('%Y-%m-%d')}"
         else:
             date_range = "N/A"
         
