@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **HRV Overview empty-state layout regression** (`frontend/src/app/research/hrv-analysis/page.tsx`):
   - Replaced the oversized upload-only empty state with a selected-tracing overview panel and immediate tachogram preview when a tracing is loaded but full analysis has not run yet.
   - Keeps analysis discoverable (`Analyze Selected Tracing`) while restoring a plot-first visual experience.
+- **Stale tracing-id analysis errors in HRV Overview** (`frontend/src/app/research/hrv-analysis/page.tsx`, `frontend/src/lib/research-api.ts`):
+  - Added recovery logic that re-matches stale local tracings against the current backend catalog by file hash/source and retries detail loading with the refreshed `measurement_id`.
+  - Suppressed expected 404 noise for deleted/recreated measurement ids to avoid unnecessary console-error overlays during recovery.
+  - Improved user-facing failure message when a tracing no longer exists in backend storage and must be re-uploaded.
 - **Filename-based chronology normalization across analysis surfaces** (`api/research_endpoints.py`, `tests/test_research_windowed_endpoint.py`):
   - Added deterministic helpers and backfill logic to prioritize timestamps embedded in source filenames over ingestion time when resolving `recording_start_utc`/`measurement_date`.
   - Ensures consistent ordering in catalog/detail retrieval, longitudinal windowed analytics, readiness trends, correlation timelines, and exports.
