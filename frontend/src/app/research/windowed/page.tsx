@@ -13,6 +13,8 @@ import {
   GitCompare,
   Layers,
   BarChart3,
+  CalendarRange,
+  BrainCircuit,
 } from "lucide-react";
 import { PageWrapper } from "@/components/layout";
 import {
@@ -40,6 +42,7 @@ import type {
   WindowedMetricsResponse,
   TrendStatistic,
   PhysiologicalCorrelation,
+  LongTermTrendStatistic,
 } from "@/types/research";
 
 const DEFAULT_USER_ID = "demo-user";
@@ -48,7 +51,10 @@ function metricLabel(metric: string): string {
   const labels: Record<string, string> = {
     rmssd: "RMSSD",
     sdnn: "SDNN",
+    pnn50: "pNN50",
     mean_hr: "Mean HR",
+    lf_power: "LF Power",
+    hf_power: "HF Power",
     lf_hf_ratio: "LF/HF Ratio",
     resting_hr_bpm: "Resting HR",
     sleep_duration_hours: "Sleep Duration",
@@ -59,6 +65,26 @@ function metricLabel(metric: string): string {
     avg_respiration_awake: "Awake Respiration",
   };
   return labels[metric] ?? metric;
+}
+
+function metricUnit(metric: string): string {
+  const units: Record<string, string> = {
+    rmssd: "ms",
+    sdnn: "ms",
+    pnn50: "%",
+    mean_hr: "bpm",
+    lf_power: "ms²",
+    hf_power: "ms²",
+    lf_hf_ratio: "ratio",
+    resting_hr_bpm: "bpm",
+    sleep_duration_hours: "h",
+    avg_spo2: "%",
+    stress_score: "score",
+    body_battery_avg: "score",
+    avg_respiration_sleep: "brpm",
+    avg_respiration_awake: "brpm",
+  };
+  return units[metric] ?? "";
 }
 
 function formatXLabels(timestamps: string[]): string[] {
@@ -444,6 +470,239 @@ function PhysiologyOverlayChart({ data }: { data: WindowedMetricsResponse }) {
   return <EChartsWrapper option={option} height={330} />;
 }
 
+function LongTermAtlasChart({
+  timestamps,
+  seriesMap,
+  trendMap,
+  metrics,
+}: {
+  timestamps: string[];
+  seriesMap: Record<string, (number | null)[]>;
+  trendMap: Record<string, (number | null)[]>;
+  metrics: string[];
+}) {
+  if (timestamps.length === 0 || metrics.length === 0) {
+    return null;
+  }
+
+  const xLabels = timestamps.map((ts) => {
+    const date = new Date(ts);
+    if (Number.isNaN(date.getTime())) {
+      return ts;
+    }
+    return date.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+  });
+  const interval = Math.max(0, Math.ceil(xLabels.length / 9) - 1);
+
+  const validMetrics = metrics
+    .filter((metric) => (seriesMap[metric] ?? []).some((value) => value !== null))
+    .slice(0, 10);
+  if (!validMetrics.length) {
+    return null;
+  }
+
+  const option: Record<string, unknown> = {
+    grid: { left: 70, right: 25, top: 44, bottom: 75, containLabel: true },
+    xAxis: {
+      type: "category",
+      data: xLabels,
+      axisLabel: {
+        color: SCIENTIFIC_COLORS.textPrimary,
+        interval,
+        showMinLabel: true,
+        showMaxLabel: true,
+        fontSize: 10,
+      },
+      name: "Date",
+      nameLocation: "middle",
+      nameGap: 45,
+      nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 11 },
+    },
+    yAxis: {
+      type: "value",
+      name: "Standardized Trend (z-score)",
+      min: -3.5,
+      max: 3.5,
+      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary },
+      nameTextStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 11 },
+      splitLine: { lineStyle: { color: SCIENTIFIC_COLORS.gridLine } },
+    },
+    legend: {
+      top: 6,
+      right: 10,
+      type: "scroll",
+      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 10 },
+    },
+    tooltip: { trigger: "axis" },
+    dataZoom: [
+      { type: "inside", start: 0, end: 100 },
+      { type: "slider", start: 0, end: 100, height: 18, bottom: 5 },
+    ],
+    series: validMetrics.map((metric, idx) => ({
+      name: metricLabel(metric),
+      type: "line",
+      data: zScoreSeries((trendMap[metric] ?? seriesMap[metric] ?? []) as (number | null)[]),
+      smooth: true,
+      symbol: "none",
+      lineStyle: {
+        width: 2,
+        color: SCIENTIFIC_COLORS.series[idx % SCIENTIFIC_COLORS.series.length],
+      },
+    })),
+  };
+
+  return <EChartsWrapper option={option} height={360} />;
+}
+
+function LongTermMetricChart({
+  metric,
+  timestamps,
+  series,
+  trend,
+}: {
+  metric: string;
+  timestamps: string[];
+  series: (number | null)[];
+  trend: (number | null)[];
+}) {
+  const valid = finiteValues(series);
+  if (timestamps.length === 0 || valid.length < 1) {
+    return null;
+  }
+
+  const xLabels = timestamps.map((ts) => {
+    const date = new Date(ts);
+    if (Number.isNaN(date.getTime())) {
+      return ts;
+    }
+    return date.toLocaleDateString(undefined, { month: "short", day: "2-digit" });
+  });
+  const interval = Math.max(0, Math.ceil(xLabels.length / 7) - 1);
+  const bounds = autoAxisBounds(...valid);
+  const color = SCIENTIFIC_COLORS.series[Math.abs(metric.length) % SCIENTIFIC_COLORS.series.length];
+
+  const option: Record<string, unknown> = {
+    grid: { left: 62, right: 20, top: 28, bottom: 60, containLabel: true },
+    xAxis: {
+      type: "category",
+      data: xLabels,
+      axisLabel: {
+        color: SCIENTIFIC_COLORS.textPrimary,
+        interval,
+        showMinLabel: true,
+        showMaxLabel: true,
+        fontSize: 9,
+      },
+    },
+    yAxis: {
+      type: "value",
+      min: bounds.min,
+      max: bounds.max,
+      axisLabel: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 9 },
+      splitLine: { lineStyle: { color: SCIENTIFIC_COLORS.gridLine } },
+    },
+    legend: {
+      top: 2,
+      right: 6,
+      textStyle: { color: SCIENTIFIC_COLORS.textPrimary, fontSize: 9 },
+    },
+    tooltip: { trigger: "axis" },
+    series: [
+      {
+        name: metricLabel(metric),
+        type: "line",
+        data: series,
+        smooth: true,
+        symbol: "circle",
+        symbolSize: 3,
+        lineStyle: { width: 1.8, color },
+      },
+      {
+        name: "EWMA",
+        type: "line",
+        data: trend,
+        smooth: true,
+        symbol: "none",
+        lineStyle: { width: 2, type: "dashed", color: SCIENTIFIC_COLORS.trend },
+      },
+    ],
+  };
+
+  return <EChartsWrapper option={option} height={240} />;
+}
+
+function LongTermStatisticsGrid({ stats }: { stats: LongTermTrendStatistic[] }) {
+  if (!stats.length) {
+    return null;
+  }
+
+  return (
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {stats.map((item) => {
+        const directionColor = trendBadgeColor(item.direction);
+        return (
+          <div key={item.metric_key} className="rounded-lg border bg-card p-4">
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <p className="text-sm font-semibold">{item.metric}</p>
+              <Badge variant="outline" style={{ borderColor: directionColor, color: directionColor }}>
+                {item.direction}
+              </Badge>
+            </div>
+            <div className="space-y-1 text-xs text-muted-foreground">
+              <p>
+                Robust slope/day:{" "}
+                <span className="font-medium text-foreground">
+                  {item.robust_slope_per_day !== null && item.robust_slope_per_day !== undefined
+                    ? item.robust_slope_per_day.toFixed(4)
+                    : "—"}
+                </span>
+              </p>
+              <p>
+                95% CI:{" "}
+                <span className="font-medium text-foreground">
+                  {item.slope_ci_low !== null &&
+                  item.slope_ci_low !== undefined &&
+                  item.slope_ci_high !== null &&
+                  item.slope_ci_high !== undefined
+                    ? `[${item.slope_ci_low.toFixed(4)}, ${item.slope_ci_high.toFixed(4)}]`
+                    : "—"}
+                </span>
+              </p>
+              <p>
+                Kendall tau / p / q:{" "}
+                <span className="font-medium text-foreground">
+                  {item.kendall_tau !== null && item.kendall_tau !== undefined
+                    ? item.kendall_tau.toFixed(3)
+                    : "—"}
+                  {" / "}
+                  {item.p_value !== null && item.p_value !== undefined
+                    ? item.p_value.toFixed(4)
+                    : "—"}
+                  {" / "}
+                  {item.q_value !== null && item.q_value !== undefined
+                    ? item.q_value.toFixed(4)
+                    : "—"}
+                </span>
+              </p>
+              <p>
+                Delta (%):{" "}
+                <span className="font-medium text-foreground">
+                  {item.delta_pct !== null && item.delta_pct !== undefined
+                    ? `${item.delta_pct.toFixed(1)}%`
+                    : "—"}
+                </span>
+              </p>
+              <p>
+                n={item.n_samples} | FDR={item.fdr_significance ?? "not_tested"}
+              </p>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 function TrendStatisticsCards({ stats }: { stats: TrendStatistic[] }) {
   if (!stats.length) {
     return null;
@@ -580,6 +839,7 @@ export default function WindowedPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [windowSize, setWindowSize] = React.useState(300);
   const [stepSize, setStepSize] = React.useState(60);
+  const [horizonDays, setHorizonDays] = React.useState(30);
   const [scope, setScope] = React.useState<"all" | "selected">("all");
 
   const activeUserId = useAppStore((state) => state.activeUserId);
@@ -593,6 +853,7 @@ export default function WindowedPage() {
         scope,
         includeGarmin: true,
         maxRecordings: 120,
+        horizonDays,
       });
       setData(result);
       if (result.n_windows <= 0) {
@@ -605,13 +866,14 @@ export default function WindowedPage() {
     } finally {
       setLoading(false);
     }
-  }, [userId, windowSize, stepSize, scope]);
+  }, [userId, windowSize, stepSize, horizonDays, scope]);
 
   React.useEffect(() => {
     void fetchData();
   }, [fetchData]);
 
   const trendStats = data?.trend_statistics ?? [];
+  const longTermStats = data?.long_term_statistics ?? [];
   const physiologicalCorrelations = data?.physiological_correlations ?? [];
   const hasPhysioSeries =
     (data?.physiological_timestamps?.length ?? 0) > 0 &&
@@ -619,6 +881,14 @@ export default function WindowedPage() {
   const hasCorrelationMatrix =
     (data?.correlation_metric_labels?.length ?? 0) >= 2 &&
     (data?.correlation_matrix?.length ?? 0) >= 2;
+  const longTermTimestamps = data?.long_term_timestamps ?? [];
+  const longTermSeries = data?.long_term_series ?? {};
+  const longTermTrendSeries = data?.long_term_trend_series ?? {};
+  const longTermGroups = data?.long_term_metric_groups ?? {};
+  const longTermHRVMetrics = longTermGroups.hrv ?? [];
+  const longTermPhysMetrics = longTermGroups.physiology ?? [];
+  const longTermMetricsForAtlas = [...longTermHRVMetrics, ...longTermPhysMetrics];
+  const hasLongTerm = longTermTimestamps.length > 0 && longTermMetricsForAtlas.length > 0;
 
   return (
     <PageWrapper
@@ -645,6 +915,10 @@ export default function WindowedPage() {
                 <Badge variant="outline">
                   Scope: {data.source_scope ?? scope}
                 </Badge>
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <CalendarRange className="h-3 w-3" />
+                  Long horizon: {data.long_term_window_days ?? horizonDays}d
+                </Badge>
                 {data.anomaly_indices.length > 0 && (
                   <Badge variant="warning" className="flex items-center gap-1">
                     <AlertTriangle className="h-3 w-3" />
@@ -663,6 +937,17 @@ export default function WindowedPage() {
               <SelectContent>
                 <SelectItem value="all">All ingested tracings</SelectItem>
                 <SelectItem value="selected">Selected tracing only</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={String(horizonDays)} onValueChange={(value) => setHorizonDays(Number(value))}>
+              <SelectTrigger className="h-8 w-[150px]">
+                <SelectValue placeholder="Horizon" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">7 days</SelectItem>
+                <SelectItem value="14">14 days</SelectItem>
+                <SelectItem value="30">30 days</SelectItem>
               </SelectContent>
             </Select>
 
@@ -764,6 +1049,146 @@ export default function WindowedPage() {
                 </Card>
               </motion.div>
             </div>
+
+            {hasLongTerm && (
+              <>
+                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <CalendarRange className="h-5 w-5 text-primary" />
+                        Long-Term Trend Atlas ({data.long_term_window_days ?? horizonDays} Days)
+                      </CardTitle>
+                      <CardDescription>
+                        Standardized long-horizon trajectories across HRV and Garmin physiology signals for publication-grade longitudinal interpretation.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <LongTermAtlasChart
+                        timestamps={longTermTimestamps}
+                        seriesMap={longTermSeries}
+                        trendMap={longTermTrendSeries}
+                        metrics={longTermMetricsForAtlas}
+                      />
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <TrendingUp className="h-5 w-5 text-success" />
+                        Long-Term HRV Metric Panels
+                      </CardTitle>
+                      <CardDescription>
+                        Daily trajectories and EWMA trends for each HRV metric over the selected horizon.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {longTermHRVMetrics.length > 0 ? (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {longTermHRVMetrics.map((metric) => (
+                            <div key={`long-hrv-${metric}`} className="rounded-lg border bg-card p-3">
+                              <div className="mb-2 flex items-center justify-between">
+                                <p className="text-sm font-semibold">{metricLabel(metric)}</p>
+                                <Badge variant="outline">{metricUnit(metric) || "unitless"}</Badge>
+                              </div>
+                              <LongTermMetricChart
+                                metric={metric}
+                                timestamps={longTermTimestamps}
+                                series={longTermSeries[metric] ?? []}
+                                trend={longTermTrendSeries[metric] ?? []}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No long-term HRV trajectories available for this horizon.
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }}>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <GitCompare className="h-5 w-5 text-warning" />
+                        Long-Term Physiological Panels (Garmin Connect)
+                      </CardTitle>
+                      <CardDescription>
+                        Daily trends of wearable physiology variables aligned with HRV trajectory dynamics.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      {longTermPhysMetrics.length > 0 ? (
+                        <div className="grid gap-4 md:grid-cols-2">
+                          {longTermPhysMetrics.map((metric) => (
+                            <div key={`long-phys-${metric}`} className="rounded-lg border bg-card p-3">
+                              <div className="mb-2 flex items-center justify-between">
+                                <p className="text-sm font-semibold">{metricLabel(metric)}</p>
+                                <Badge variant="outline">{metricUnit(metric) || "unitless"}</Badge>
+                              </div>
+                              <LongTermMetricChart
+                                metric={metric}
+                                timestamps={longTermTimestamps}
+                                series={longTermSeries[metric] ?? []}
+                                trend={longTermTrendSeries[metric] ?? []}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          No synchronized Garmin long-term signals available in this horizon.
+                        </p>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <BarChart3 className="h-5 w-5 text-info" />
+                        Long-Horizon Statistical Rigor
+                      </CardTitle>
+                      <CardDescription>
+                        Theil-Sen slope, Kendall tau, OLS consistency, and FDR-adjusted significance per metric.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <LongTermStatisticsGrid stats={longTermStats} />
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {(data.future_ml_insights ?? []).length > 0 && (
+                  <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.33 }}>
+                    <Card>
+                      <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                          <BrainCircuit className="h-5 w-5 text-primary" />
+                          Future ML Readiness Insights
+                        </CardTitle>
+                        <CardDescription>
+                          Statistical maturity indicators for future predictive modeling and temporal classification.
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="space-y-2 text-sm text-muted-foreground">
+                        {(data.future_ml_insights ?? []).map((note, index) => (
+                          <p key={`ml-note-${index}`}>• {note}</p>
+                        ))}
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                )}
+              </>
+            )}
 
             <div className="grid gap-6 lg:grid-cols-2">
               <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
@@ -902,6 +1327,9 @@ export default function WindowedPage() {
                   </p>
                   <p>
                     • <strong>Physiology coupling:</strong> Correlations use Spearman statistics against wearable physiology (resting HR, sleep duration, SpO2, stress, body battery) with FDR control for multiple comparisons.
+                  </p>
+                  <p>
+                    • <strong>Long-horizon dashboard:</strong> Daily medians are analyzed over selectable 7/14/30-day windows, with EWMA smoothing plus robust Theil-Sen + Kendall inference for each signal.
                   </p>
                   <p>
                     • <strong>References:</strong> Task Force of ESC/NASPE (1996), Shaffer &amp; Ginsberg (2017), Nunan et al. (2010).
