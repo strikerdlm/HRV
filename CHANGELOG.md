@@ -7,6 +7,21 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.1] - 2026-02-23
+
+### Added
+- **Reusable filename timestamp backfill admin endpoint** (`api/research_endpoints.py`):
+  - Added `POST /api/research/hrv/admin/backfill-filename-timestamps` with dry-run (`apply_changes=false`) and apply modes for one-shot correction of persisted chronology from source filenames.
+  - Endpoint reports scanned/parseable/changed counts for `hrv_measurements` and optional `hrv_analysis_cache` updates, with optional DB backup before applying changes.
+
+### Fixed
+- **Runtime local storage quota crash in HRV Analysis uploads** (`frontend/src/app/research/hrv-analysis/page.tsx`):
+  - Replaced raw `localStorage.setItem("hrv_tracings", JSON.stringify(...))` writes with a quota-safe persistence pipeline that stores compact tracing snapshots and gracefully degrades when browser storage is near limits.
+  - Prevents `QuotaExceededError` from crashing the page during high-volume multi-file ingestion.
+- **Filename-based chronology normalization across analysis surfaces** (`api/research_endpoints.py`, `tests/test_research_windowed_endpoint.py`):
+  - Added deterministic helpers and backfill logic to prioritize timestamps embedded in source filenames over ingestion time when resolving `recording_start_utc`/`measurement_date`.
+  - Ensures consistent ordering in catalog/detail retrieval, longitudinal windowed analytics, readiness trends, correlation timelines, and exports.
+
 ## [1.17.0] - 2026-02-22
 
 ### Added
