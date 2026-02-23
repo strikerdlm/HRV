@@ -129,6 +129,7 @@ The frontend + API stack now includes a dedicated HRV-cognition workflow for ope
 - **Integrated physiological fusion** exposed with uncertainty intervals instead of a single deterministic score.
 - **Persistent RR tracing catalog** (`/api/research/hrv/tracings/{user_id}` + detail endpoint) with dedupe-aware upload/analyze storage.
 - **Global RR tracing loader** in the research header so all HRV pages can analyze the same selected recording.
+- **Production-grade windowed longitudinal analytics** (`/api/research/hrv/windowed/{user_id}`) with `scope=all|selected`, robust trend inference (Kendall + Theil-Sen CI), anomaly/change-point flags, and FDR-adjusted physiological correlation outputs (`q` values).
 
 ## Getting Started
 
