@@ -181,6 +181,7 @@ class GarminConnectClient:
 
         # First try to login with stored tokens (avoids MFA prompts on subsequent logins).
         # IMPORTANT: Do this BEFORE requiring GARMIN_EMAIL/GARMIN_PASSWORD.
+        token_login_succeeded = False
         try:
             _LOGGER.info("Attempting to use saved authentication tokens...")
             self.client = Garmin()  # type: ignore[arg-type]
@@ -192,29 +193,37 @@ class GarminConnectClient:
             # We need to trigger a call that populates it, otherwise API calls fail with
             # "None" in the URL path (e.g., /usersummary/daily/None).
             # The get_full_name() method populates display_name as a side effect.
-            if not getattr(self.client, 'display_name', None):
-                _LOGGER.info("display_name not set after token login, fetching user info...")
-                try:
-                    self.client.get_full_name()  # type: ignore[attr-defined]
-                    _LOGGER.info(f"User display_name loaded: {self.client.display_name}")
-                except Exception as name_exc:
-                    _LOGGER.warning(f"Could not fetch display_name: {name_exc}")
-                    # If we can't get the display_name, the token might be invalid
-                    # Fall through to fresh login
-                    if not getattr(self.client, 'display_name', None):
-                        raise GarminConnectAuthenticationError(
-                            "Token login succeeded but display_name not available"
-                        ) from name_exc
+            try:
+                # Always fetch user info to ensure display_name is populated
+                full_name = self.client.get_full_name()  # type: ignore[attr-defined]
+                display_name = getattr(self.client, 'display_name', None)
+                
+                if display_name:
+                    _LOGGER.info(f"User display_name loaded: {display_name} (full name: {full_name})")
+                    token_login_succeeded = True
+                else:
+                    _LOGGER.warning("get_full_name() succeeded but display_name is still None")
+                    raise GarminConnectAuthenticationError(
+                        "Token login succeeded but display_name not available - tokens may be stale"
+                    )
+            except GarminConnectAuthenticationError:
+                raise
+            except Exception as name_exc:
+                _LOGGER.warning(f"Could not fetch user info after token login: {name_exc}")
+                raise GarminConnectAuthenticationError(
+                    "Token login succeeded but could not fetch user info - tokens may be invalid"
+                ) from name_exc
             
-            return self.client
+            if token_login_succeeded:
+                return self.client
         except (
             FileNotFoundError,
             GarthHTTPError,
             GarminConnectAuthenticationError,
             GarminConnectConnectionError,
-        ):
+        ) as exc:
             # No valid tokens found or tokens expired - need fresh login
-            _LOGGER.info("No valid tokens found. Requesting fresh login credentials.")
+            _LOGGER.info(f"Token-based login failed ({type(exc).__name__}). Requesting fresh login credentials.")
             # Continue to fresh login below
         except Exception as exc:
             # Other errors during token restore - log and continue to fresh login
@@ -255,13 +264,28 @@ class GarminConnectClient:
                 )
             
             # Ensure display_name is set after fresh login
-            if not getattr(self.client, 'display_name', None):
-                _LOGGER.info("Fetching user info to populate display_name...")
-                try:
-                    self.client.get_full_name()  # type: ignore[attr-defined]
-                    _LOGGER.info(f"User display_name loaded: {self.client.display_name}")
-                except Exception as name_exc:
-                    _LOGGER.warning(f"Could not fetch display_name: {name_exc}")
+            try:
+                # Always fetch user info to ensure display_name is populated
+                full_name = self.client.get_full_name()  # type: ignore[attr-defined]
+                display_name = getattr(self.client, 'display_name', None)
+                
+                if not display_name:
+                    _LOGGER.error("Fresh login succeeded but display_name is None")
+                    raise GarminAuthError(
+                        "Authentication succeeded but could not retrieve user display name. "
+                        "This may indicate an issue with the Garmin Connect API or your account. "
+                        "Please verify your credentials and try again."
+                    )
+                
+                _LOGGER.info(f"User display_name loaded: {display_name} (full name: {full_name})")
+            except GarminAuthError:
+                raise
+            except Exception as name_exc:
+                _LOGGER.error(f"Could not fetch user info after fresh login: {name_exc}")
+                raise GarminAuthError(
+                    "Authentication succeeded but could not retrieve user information. "
+                    f"Error: {name_exc}"
+                ) from name_exc
             
             # Save tokens for future use (reduces MFA prompts)
             # Following official repository pattern: garmin.garth.dump(tokenstore_path)
