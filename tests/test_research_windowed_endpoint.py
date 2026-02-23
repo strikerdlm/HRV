@@ -149,6 +149,24 @@ def test_benjamini_hochberg_expected_q_values() -> None:
     assert q_values[3] is None
 
 
+def test_resolve_recording_timestamp_prefers_filename_timestamp() -> None:
+    resolved = research_endpoints._resolve_recording_timestamp(
+        "2026-02-22T12:30:00Z",
+        "pilot_rr_2025-12-31_23-59-58.csv",
+    )
+    assert resolved.startswith("2025-12-31T23:59:58")
+
+
+def test_measurement_timestamp_iso_uses_filename_for_chronology() -> None:
+    measurement = _make_measurement(
+        "m-filename-priority",
+        "2026-02-22T00:00:00Z",
+        "session_2024-01-05_06-45-00.txt",
+    )
+    resolved = research_endpoints._measurement_timestamp_iso(measurement)
+    assert resolved.startswith("2024-01-05T06:45:00")
+
+
 def test_get_hrv_windowed_scope_all_returns_enriched_statistics_and_q_values(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
