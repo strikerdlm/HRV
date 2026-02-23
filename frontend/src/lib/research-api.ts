@@ -548,14 +548,27 @@ export async function getHRVNonlinear(userId: string): Promise<NonlinearResponse
 export async function getHRVWindowed(
   userId: string,
   windowSize: number = 300,
-  stepSize: number = 60
+  stepSize: number = 60,
+  options?: {
+    scope?: "all" | "selected";
+    includeGarmin?: boolean;
+    maxRecordings?: number;
+  },
 ): Promise<WindowedMetricsResponse> {
+  const requestedScope = options?.scope ?? "all";
   try {
     const params = new URLSearchParams({
       window_size: String(windowSize),
       step_size: String(stepSize),
+      scope: requestedScope,
+      include_garmin: String(options?.includeGarmin ?? true),
     });
-    appendTracingSelectionParams(params, userId);
+    if (options?.maxRecordings !== undefined) {
+      params.set("max_recordings", String(options.maxRecordings));
+    }
+    if (requestedScope === "selected") {
+      appendTracingSelectionParams(params, userId);
+    }
     const response = await fetch(
       `${API_BASE}/api/research/hrv/windowed/${userId}?${params.toString()}`,
       {
@@ -569,8 +582,7 @@ export async function getHRVWindowed(
     }
 
     return await response.json();
-  } catch (error) {
-    console.error("Error fetching windowed HRV:", error);
+  } catch {
     return {
       timestamps: [],
       rmssd: [],
@@ -587,6 +599,17 @@ export async function getHRVWindowed(
       window_size_seconds: windowSize,
       step_size_seconds: stepSize,
       n_windows: 0,
+      source_scope: requestedScope,
+      n_sessions: 0,
+      session_sources: [],
+      trend_break_indices: [],
+      trend_statistics: [],
+      correlation_metric_labels: [],
+      correlation_matrix: [],
+      correlation_p_values: [],
+      physiological_timestamps: [],
+      physiological_series: {},
+      physiological_correlations: [],
       context: buildFallbackContext(),
     };
   }
