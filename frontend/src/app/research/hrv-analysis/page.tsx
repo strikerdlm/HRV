@@ -93,6 +93,9 @@ interface StoredTracing {
 }
 
 const DEFAULT_USER_ID = "demo-user";
+const LOCAL_TRACINGS_STORAGE_KEY = "hrv_tracings";
+const LOCAL_TRACINGS_MAX_ITEMS = 300;
+const LOCAL_TRACINGS_MAX_LOCAL_RR_VALUES = 512;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -150,6 +153,67 @@ function formatDate(dateString: string): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function isQuotaExceededError(error: unknown): boolean {
+  if (typeof DOMException === "undefined") {
+    return false;
+  }
+  return (
+    error instanceof DOMException &&
+    (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED")
+  );
+}
+
+function compactTracingForStorage(
+  tracing: StoredTracing,
+  options: { aggressive: boolean },
+): StoredTracing {
+  const { aggressive } = options;
+  const canReloadFromBackend = Boolean(tracing.measurementId || tracing.fileHash || tracing.fromDatabase);
+  const allowLocalRR = !aggressive && !canReloadFromBackend;
+  const rrIntervals = allowLocalRR
+    ? tracing.rrIntervals.slice(0, LOCAL_TRACINGS_MAX_LOCAL_RR_VALUES)
+    : [];
+  return {
+    ...tracing,
+    rrIntervals,
+    fullAnalysis: null,
+    analysis: aggressive ? null : tracing.analysis,
+  };
+}
+
+function persistTracingsToLocalStorage(tracings: StoredTracing[]): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const ordered = [...tracings]
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+    .slice(0, LOCAL_TRACINGS_MAX_ITEMS);
+
+  const balancedPayload = ordered.map((tracing) =>
+    compactTracingForStorage(tracing, { aggressive: false }),
+  );
+  try {
+    localStorage.setItem(LOCAL_TRACINGS_STORAGE_KEY, JSON.stringify(balancedPayload));
+    return;
+  } catch (error) {
+    if (!isQuotaExceededError(error)) {
+      console.warn("Failed to persist tracings in local storage:", error);
+      return;
+    }
+  }
+
+  const minimalPayload = ordered
+    .filter((tracing) => Boolean(tracing.measurementId || tracing.fileHash || tracing.fromDatabase))
+    .map((tracing) => compactTracingForStorage(tracing, { aggressive: true }))
+    .slice(0, 200);
+
+  try {
+    localStorage.setItem(LOCAL_TRACINGS_STORAGE_KEY, JSON.stringify(minimalPayload));
+  } catch (error) {
+    console.warn("Unable to persist tracings after quota fallback:", error);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -712,18 +776,22 @@ export default function HRVAnalysisPage() {
     const loadTracings = async () => {
       let localTracings: StoredTracing[] = [];
       if (typeof window !== "undefined") {
-        const saved = localStorage.getItem("hrv_tracings");
+        const saved = localStorage.getItem(LOCAL_TRACINGS_STORAGE_KEY);
         if (saved) {
           try {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) {
-              localTracings = (parsed as StoredTracing[]).map((tracing) => ({
-                ...tracing,
-                timestamp: resolveRecordingTimestamp({
-                  sourceFile: tracing.source || tracing.name,
-                  recordingTimestamp: tracing.timestamp,
-                }),
-              }));
+              localTracings = (parsed as StoredTracing[])
+                .filter((tracing): tracing is StoredTracing => Boolean(tracing?.id && tracing?.name))
+                .map((tracing) => ({
+                  ...tracing,
+                  rrIntervals: Array.isArray(tracing.rrIntervals) ? tracing.rrIntervals : [],
+                  fullAnalysis: null,
+                  timestamp: resolveRecordingTimestamp({
+                    sourceFile: tracing.source || tracing.name,
+                    recordingTimestamp: tracing.timestamp,
+                  }),
+                }));
             }
           } catch (e) {
             console.error("Failed to parse local tracings:", e);
@@ -775,9 +843,7 @@ export default function HRVAnalysisPage() {
       }
 
       setTracings(mergedList);
-      if (typeof window !== "undefined") {
-        localStorage.setItem("hrv_tracings", JSON.stringify(mergedList));
-      }
+      persistTracingsToLocalStorage(mergedList);
       const firstTracing = mergedList.length > 0 ? mergedList[0] : null;
       if (firstTracing) {
         setSelectedTracing((prev) => prev ?? firstTracing);
@@ -794,9 +860,7 @@ export default function HRVAnalysisPage() {
   // Save tracings to localStorage
   const saveTracings = (newTracings: StoredTracing[]) => {
     setTracings(newTracings);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("hrv_tracings", JSON.stringify(newTracings));
-    }
+    persistTracingsToLocalStorage(newTracings);
   };
 
   // Handle file upload
@@ -883,9 +947,7 @@ export default function HRVAnalysisPage() {
         const updated = Array.from(merged.values()).sort(
           (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime(),
         );
-        if (typeof window !== "undefined") {
-          localStorage.setItem("hrv_tracings", JSON.stringify(updated));
-        }
+        persistTracingsToLocalStorage(updated);
         return updated;
       });
 
@@ -981,10 +1043,7 @@ export default function HRVAnalysisPage() {
               }
             : t
         );
-        // Save to localStorage
-        if (typeof window !== "undefined") {
-          localStorage.setItem("hrv_tracings", JSON.stringify(updated));
-        }
+        persistTracingsToLocalStorage(updated);
         return updated;
       });
       
