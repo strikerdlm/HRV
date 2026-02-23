@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import sqlite3
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -165,6 +166,88 @@ def test_measurement_timestamp_iso_uses_filename_for_chronology() -> None:
     )
     resolved = research_endpoints._measurement_timestamp_iso(measurement)
     assert resolved.startswith("2024-01-05T06:45:00")
+
+
+def test_backfill_filename_timestamps_updates_measurement_and_cache(tmp_path: Path) -> None:
+    db_path = tmp_path / "test_hrv_users.db"
+    conn = sqlite3.connect(str(db_path))
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE hrv_measurements (
+            measurement_id TEXT PRIMARY KEY,
+            user_id TEXT,
+            source_file TEXT,
+            recording_start_utc TEXT,
+            measurement_date TEXT
+        )
+        """
+    )
+    cur.execute(
+        """
+        CREATE TABLE hrv_analysis_cache (
+            cache_id TEXT PRIMARY KEY,
+            user_id TEXT,
+            source_file TEXT,
+            recording_date TEXT
+        )
+        """
+    )
+    cur.execute(
+        """
+        INSERT INTO hrv_measurements (
+            measurement_id, user_id, source_file, recording_start_utc, measurement_date
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            "m-001",
+            "demo-user",
+            "2026-01-20 17-14-29.txt",
+            "2026-02-23T00:00:00Z",
+            "2026-02-23",
+        ),
+    )
+    cur.execute(
+        """
+        INSERT INTO hrv_analysis_cache (
+            cache_id, user_id, source_file, recording_date
+        ) VALUES (?, ?, ?, ?)
+        """,
+        (
+            "c-001",
+            "demo-user",
+            "2026-01-20 17-14-29.txt",
+            "2026-02-23",
+        ),
+    )
+    conn.commit()
+    conn.close()
+
+    report = research_endpoints._backfill_filename_timestamps_in_db(
+        db_path=db_path,
+        user_id=None,
+        include_cache=True,
+        apply_changes=True,
+        create_backup=False,
+    )
+    assert report["measurements_rows_changed"] == 1
+    assert report["cache_rows_changed"] == 1
+
+    conn = sqlite3.connect(str(db_path))
+    cur = conn.cursor()
+    row = cur.execute(
+        "SELECT recording_start_utc, measurement_date FROM hrv_measurements WHERE measurement_id = 'm-001'"
+    ).fetchone()
+    assert row is not None
+    assert row[0] == "2026-01-20T17:14:29Z"
+    assert row[1] == "2026-01-20"
+
+    cache_row = cur.execute(
+        "SELECT recording_date FROM hrv_analysis_cache WHERE cache_id = 'c-001'"
+    ).fetchone()
+    assert cache_row is not None
+    assert cache_row[0] == "2026-01-20"
+    conn.close()
 
 
 def test_get_hrv_windowed_scope_all_returns_enriched_statistics_and_q_values(
