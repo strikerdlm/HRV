@@ -3,7 +3,6 @@
 
 import * as React from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { motion } from "framer-motion";
 import { Rocket, Microscope } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAppStore, type AppMode } from "@/lib/store";
@@ -99,17 +98,13 @@ export function ModeSwitcher({ collapsed = false }: ModeSwitcherProps) {
       <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
         Application Mode
       </label>
-      <div className="relative flex rounded-lg bg-muted p-1">
+      <div className="relative grid grid-cols-2 rounded-lg bg-muted p-1">
         {/* Animated background indicator */}
-        <motion.div
-          layoutId="mode-indicator"
-          className="absolute inset-y-1 rounded-md bg-background shadow-sm"
-          initial={false}
-          animate={{
-            x: appMode === "operational" ? 4 : "calc(50% + 2px)",
-            width: "calc(50% - 6px)",
+        <div
+          className="pointer-events-none absolute inset-y-1 left-1 w-[calc(50%-4px)] rounded-md bg-background shadow-sm transition-transform duration-200 ease-out"
+          style={{
+            transform: appMode === "operational" ? "translateX(0%)" : "translateX(100%)",
           }}
-          transition={{ type: "spring", stiffness: 500, damping: 30 }}
         />
 
         {modes.map((mode) => {
