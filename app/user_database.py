@@ -2097,6 +2097,13 @@ class UserDatabase:
             language = row["language"] or "en"
         except (KeyError, IndexError):
             language = "en"
+
+        sex_value = row["sex"]
+        if not isinstance(sex_value, str):
+            sex_value = "other"
+        else:
+            normalized = sex_value.strip().lower()
+            sex_value = normalized if normalized else "other"
         
         # Safely get chronotype_offset_hours with fallback
         # Handle case where column doesn't exist in older database schemas
@@ -2115,7 +2122,7 @@ class UserDatabase:
             full_name=row["full_name"],
             email=row["email"],
             date_of_birth=row["date_of_birth"],
-            sex=row["sex"],
+            sex=sex_value,
             height_cm=row["height_cm"],
             weight_kg=row["weight_kg"],
             resting_hr_bpm=row["resting_hr_bpm"],
