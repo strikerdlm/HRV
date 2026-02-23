@@ -607,9 +607,11 @@ export async function getHRVWindowed(
       correlation_metric_labels: [],
       correlation_matrix: [],
       correlation_p_values: [],
+      correlation_q_values: [],
       physiological_timestamps: [],
       physiological_series: {},
       physiological_correlations: [],
+      statistical_notes: [],
       context: buildFallbackContext(),
     };
   }
