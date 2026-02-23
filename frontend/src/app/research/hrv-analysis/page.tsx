@@ -68,6 +68,7 @@ import {
   getRRTracingCatalog,
   getRRTracingDetail,
   parseRRFile as parseRRIntervalsFromFile,
+  resolveRecordingTimestamp,
   uploadRRData,
 } from "@/lib/research-api";
 import { useAppStore } from "@/lib/store";
@@ -716,7 +717,13 @@ export default function HRVAnalysisPage() {
           try {
             const parsed = JSON.parse(saved);
             if (Array.isArray(parsed)) {
-              localTracings = parsed as StoredTracing[];
+              localTracings = (parsed as StoredTracing[]).map((tracing) => ({
+                ...tracing,
+                timestamp: resolveRecordingTimestamp({
+                  sourceFile: tracing.source || tracing.name,
+                  recordingTimestamp: tracing.timestamp,
+                }),
+              }));
             }
           } catch (e) {
             console.error("Failed to parse local tracings:", e);
@@ -728,7 +735,10 @@ export default function HRVAnalysisPage() {
       const remoteTracings: StoredTracing[] = remote.tracings.map((item) => ({
         id: `db-${item.measurement_id}`,
         name: (item.source_file || "RR tracing").replace(/\.[^/.]+$/, ""),
-        timestamp: item.recording_start_utc || item.measurement_date,
+        timestamp: resolveRecordingTimestamp({
+          sourceFile: item.source_file,
+          recordingTimestamp: item.recording_start_utc || item.measurement_date,
+        }),
         rrIntervals: [],
         sessionId: item.measurement_id,
         source: item.source_file || "database",
@@ -813,7 +823,7 @@ export default function HRVAnalysisPage() {
           }
 
           let uploadResponse: RRUploadResponse | null = null;
-          const recordingTimestamp = new Date().toISOString();
+          const recordingTimestamp = resolveRecordingTimestamp({ sourceFile: file.name });
           try {
             uploadResponse = await uploadRRData({
               rr_intervals_ms: rrIntervals,
