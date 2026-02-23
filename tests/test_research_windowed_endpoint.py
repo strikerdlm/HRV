@@ -181,6 +181,7 @@ def test_get_hrv_windowed_scope_all_returns_enriched_statistics_and_q_values(
             user_id="demo-user",
             window_size=300,
             step_size=60,
+            horizon_days=30,
             scope="all",
             include_garmin=True,
             max_recordings=120,
@@ -195,6 +196,14 @@ def test_get_hrv_windowed_scope_all_returns_enriched_statistics_and_q_values(
     assert payload["n_windows"] >= 12
     assert len(payload["trend_statistics"]) >= 3
     assert any(entry.get("q_value") is not None for entry in payload["trend_statistics"])
+    assert payload["long_term_window_days"] == 30
+    assert payload["long_term_timestamps"]
+    assert len(payload["long_term_timestamps"]) <= 30
+    assert "rmssd" in payload["long_term_series"]
+    assert payload["long_term_metric_groups"].get("hrv")
+    assert payload["long_term_statistics"]
+    assert all("metric_key" in item for item in payload["long_term_statistics"])
+    assert payload["future_ml_insights"]
 
     assert payload["physiological_correlations"]
     assert any(entry.get("q_value") is not None for entry in payload["physiological_correlations"])
@@ -225,6 +234,7 @@ def test_get_hrv_windowed_scope_selected_uses_window_fallback_for_trends(
             user_id="demo-user",
             window_size=300,
             step_size=60,
+            horizon_days=30,
             scope="selected",
             include_garmin=False,
             max_recordings=10,
@@ -247,6 +257,9 @@ def test_get_hrv_windowed_scope_selected_uses_window_fallback_for_trends(
         "trend_statistics",
         "correlation_q_values",
         "physiological_correlations",
+        "long_term_statistics",
+        "long_term_series",
+        "long_term_metric_groups",
         "statistical_notes",
     }
     assert expected_keys.issubset(payload.keys())
