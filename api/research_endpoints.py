@@ -1922,6 +1922,17 @@ class WindowedMetricsResponse(BaseModel):
     window_size_seconds: int = 300
     step_size_seconds: int = 60
     n_windows: int = 0
+    source_scope: str = "all"
+    n_sessions: int = 0
+    session_sources: List[str] = Field(default_factory=list)
+    trend_break_indices: List[int] = Field(default_factory=list)
+    trend_statistics: List[Dict[str, Any]] = Field(default_factory=list)
+    correlation_metric_labels: List[str] = Field(default_factory=list)
+    correlation_matrix: List[List[Optional[float]]] = Field(default_factory=list)
+    correlation_p_values: List[List[Optional[float]]] = Field(default_factory=list)
+    physiological_timestamps: List[str] = Field(default_factory=list)
+    physiological_series: Dict[str, List[Optional[float]]] = Field(default_factory=dict)
+    physiological_correlations: List[Dict[str, Any]] = Field(default_factory=list)
     context: Optional[AnalysisContext] = None
 
 
@@ -1930,6 +1941,9 @@ async def get_hrv_windowed(
     user_id: str,
     window_size: int = Query(default=300, ge=60, le=600, description="Window size in seconds"),
     step_size: int = Query(default=60, ge=30, le=300, description="Step size in seconds"),
+    scope: str = Query(default="all", description="Analysis scope: all or selected"),
+    include_garmin: bool = Query(default=True, description="Merge Garmin physiological trends"),
+    max_recordings: int = Query(default=120, ge=1, le=1000, description="Maximum RR recordings to process"),
     measurement_id: Optional[str] = Query(default=None),
     file_hash: Optional[str] = Query(default=None),
 ) -> WindowedMetricsResponse:
@@ -1938,113 +1952,529 @@ async def get_hrv_windowed(
         import numpy as np
         import pandas as pd
         from hrv_core import compute_windowed_hrv
+        from user_database import UserDatabase
 
-        latest = await _resolve_measurement_for_user(
-            user_id,
-            measurement_id=measurement_id,
-            file_hash=file_hash,
-        )
-        if latest is None:
-            return WindowedMetricsResponse()
+        try:
+            from scipy import stats as scipy_stats
+        except Exception:
+            scipy_stats = None
 
-        rr_data = _extract_rr_sequence(latest)
-        if len(rr_data) < 100:
-            return WindowedMetricsResponse(
-                context=_build_analysis_context(
-                    rr_intervals_ms=[float(v) for v in rr_data],
-                    artifact_pct=0.0,
-                )
+        scope_value = str(scope or "all").strip().lower()
+        if scope_value not in {"all", "selected"}:
+            scope_value = "all"
+
+        db = UserDatabase()
+        await _ensure_user_exists(db, user_id)
+
+        def _safe_float(value: Any) -> Optional[float]:
+            if value is None:
+                return None
+            try:
+                out = float(value)
+            except (TypeError, ValueError):
+                return None
+            if not np.isfinite(out):
+                return None
+            return out
+
+        def _measurement_datetime(measurement: Any) -> datetime:
+            for raw in (
+                getattr(measurement, "recording_start_utc", None),
+                getattr(measurement, "measurement_date", None),
+                getattr(measurement, "created_at", None),
+            ):
+                if not raw:
+                    continue
+                text = str(raw).strip()
+                if not text:
+                    continue
+                try:
+                    dt = datetime.fromisoformat(text.replace("Z", "+00:00"))
+                except ValueError:
+                    try:
+                        dt = datetime.fromisoformat(f"{text}T00:00:00+00:00")
+                    except ValueError:
+                        continue
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                return dt.astimezone(timezone.utc)
+            return datetime.now(timezone.utc)
+
+        def _compute_ewma(values: List[Optional[float]], alpha: float) -> List[Optional[float]]:
+            out: List[Optional[float]] = []
+            prev: Optional[float] = None
+            for value in values:
+                if value is None:
+                    out.append(prev)
+                    continue
+                if prev is None:
+                    prev = float(value)
+                else:
+                    prev = float(alpha * value + (1.0 - alpha) * prev)
+                out.append(prev)
+            return out
+
+        def _series_to_optional_list(series: pd.Series) -> List[Optional[float]]:
+            result: List[Optional[float]] = []
+            for value in series:
+                if pd.isna(value):
+                    result.append(None)
+                    continue
+                safe_value = _safe_float(value)
+                result.append(safe_value)
+            return result
+
+        def _safe_metric_list(df: pd.DataFrame, column: str) -> List[Optional[float]]:
+            if column not in df.columns:
+                return [None] * len(df.index)
+            return _series_to_optional_list(df[column])
+
+        def _spearman_stats(a: pd.Series, b: pd.Series) -> tuple[Optional[float], Optional[float], int]:
+            a_num = pd.to_numeric(a, errors="coerce")
+            b_num = pd.to_numeric(b, errors="coerce")
+            mask = a_num.notna() & b_num.notna()
+            n_samples = int(mask.sum())
+            if n_samples < 4:
+                return None, None, n_samples
+            a_vals = a_num[mask].to_numpy(dtype=float)
+            b_vals = b_num[mask].to_numpy(dtype=float)
+            if scipy_stats is not None:
+                try:
+                    corr, p_value = scipy_stats.spearmanr(a_vals, b_vals)
+                    corr_f = float(corr) if np.isfinite(corr) else None
+                    p_f = float(p_value) if np.isfinite(p_value) else None
+                    return corr_f, p_f, n_samples
+                except Exception:
+                    pass
+            corr = pd.Series(a_vals).corr(pd.Series(b_vals), method="spearman")
+            return (_safe_float(corr), None, n_samples)
+
+        measurements: List[Any] = []
+        if scope_value == "selected":
+            selected = await _resolve_measurement_for_user(
+                user_id,
+                measurement_id=measurement_id,
+                file_hash=file_hash,
             )
-        
-        rr_array = np.array(rr_data, dtype=float)
-        
-        # Create DataFrame with cumulative timestamps
-        cumulative_ms = np.cumsum(rr_array)
-        
-        # Parse start time from available fields
-        start_time = datetime.now(timezone.utc)
-        if latest.recording_start_utc:
-            try:
-                start_time = datetime.fromisoformat(latest.recording_start_utc.replace("Z", "+00:00"))
-            except ValueError:
-                pass
-        elif latest.measurement_date:
-            try:
-                start_time = datetime.fromisoformat(latest.measurement_date.replace("Z", "+00:00"))
-            except ValueError:
-                pass
-        
-        df = pd.DataFrame({
-            "timestamp": [start_time + timedelta(milliseconds=float(ms)) for ms in cumulative_ms],
-            "rr_ms": rr_array,
-        })
-        df["timestamp"] = pd.to_datetime(df["timestamp"])
-        
-        # Compute windowed metrics
-        windowed_df = await asyncio.to_thread(
-            compute_windowed_hrv,
-            df,
-            rr_col="rr_ms",
-            timestamp_col="timestamp",
-            window=f"{int(window_size)}s",
-            step=f"{int(step_size)}s",
+            if selected is not None:
+                measurements = [selected]
+        else:
+            history = await asyncio.to_thread(db.get_hrv_history, user_id, int(max_recordings))
+            if history:
+                # DB query returns descending chronology; this view must show forward trends.
+                measurements = list(reversed(history))
+
+        if not measurements:
+            return WindowedMetricsResponse(source_scope=scope_value)
+
+        session_sources: List[str] = []
+        session_rows: List[pd.DataFrame] = []
+        summary_rows: List[Dict[str, Any]] = []
+        context_rr: List[float] = []
+        context_artifact = 0.0
+
+        # Keep endpoint responsive: windowed trending uses bounded time-domain metrics.
+        include_advanced_windowing = False
+        max_windows_per_recording = max(12, min(80, int(4800 / max(30, int(step_size)))))
+        detailed_window_count = len(measurements)
+        if scope_value == "all":
+            detailed_window_count = min(len(measurements), 40)
+        detailed_start_idx = max(0, len(measurements) - detailed_window_count)
+
+        for idx, measurement in enumerate(measurements):
+            start_time = _measurement_datetime(measurement)
+            source_label = str(
+                getattr(measurement, "source_file", None)
+                or getattr(measurement, "measurement_id", "recording")
+            )
+            session_sources.append(source_label)
+
+            rr_data = _extract_rr_sequence(measurement)
+            if rr_data and not context_rr:
+                context_rr = [float(v) for v in rr_data[:20_000]]
+                context_artifact = float(getattr(measurement, "artifact_percentage", 0.0) or 0.0)
+
+            allow_windowing = idx >= detailed_start_idx
+            if allow_windowing and len(rr_data) >= 100:
+                rr_array = np.array(rr_data, dtype=float)
+                cumulative_ms = np.cumsum(rr_array)
+                df = pd.DataFrame(
+                    {
+                        "timestamp": [
+                            start_time + timedelta(milliseconds=float(ms))
+                            for ms in cumulative_ms
+                        ],
+                        "rr_ms": rr_array,
+                        "source": source_label,
+                    }
+                )
+                df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+                windowed_df = await asyncio.to_thread(
+                    compute_windowed_hrv,
+                    df,
+                    rr_col="rr_ms",
+                    timestamp_col="timestamp",
+                    window=f"{int(window_size)}s",
+                    step=f"{int(step_size)}s",
+                    max_windows=max_windows_per_recording,
+                    include_advanced=include_advanced_windowing,
+                )
+                if windowed_df is not None and not windowed_df.empty:
+                    windowed_df = windowed_df.copy()
+                    if "start" not in windowed_df.columns and "window_start" in windowed_df.columns:
+                        windowed_df["start"] = pd.to_datetime(
+                            windowed_df["window_start"],
+                            errors="coerce",
+                            utc=True,
+                        )
+                    if not include_advanced_windowing:
+                        fallback_lf = _safe_float(getattr(measurement, "lf_power_ms2", None))
+                        fallback_hf = _safe_float(getattr(measurement, "hf_power_ms2", None))
+                        fallback_ratio = _safe_float(getattr(measurement, "lf_hf_ratio", None))
+                        fallback_pnn50 = _safe_float(getattr(measurement, "pnn50_pct", None))
+                        if "lf_power" not in windowed_df.columns:
+                            windowed_df["lf_power"] = [fallback_lf] * len(windowed_df.index)
+                        if "hf_power" not in windowed_df.columns:
+                            windowed_df["hf_power"] = [fallback_hf] * len(windowed_df.index)
+                        if "lf_hf_ratio" not in windowed_df.columns:
+                            windowed_df["lf_hf_ratio"] = [fallback_ratio] * len(windowed_df.index)
+                        if "pnn50" not in windowed_df.columns:
+                            windowed_df["pnn50"] = [fallback_pnn50] * len(windowed_df.index)
+                    windowed_df["measurement_id"] = getattr(measurement, "measurement_id", None)
+                    windowed_df["source_file"] = source_label
+                    session_rows.append(windowed_df)
+                    continue
+
+            # Fallback row from persisted summary metrics when per-beat windows are unavailable.
+            summary_rows.append(
+                {
+                    "start": start_time,
+                    "measurement_id": getattr(measurement, "measurement_id", None),
+                    "source_file": source_label,
+                    "rmssd": _safe_float(getattr(measurement, "rmssd_ms", None)),
+                    "sdnn": _safe_float(getattr(measurement, "sdnn_ms", None)),
+                    "pnn50": _safe_float(getattr(measurement, "pnn50_pct", None)),
+                    "mean_hr": _safe_float(getattr(measurement, "mean_hr_bpm", None)),
+                    "lf_power": _safe_float(getattr(measurement, "lf_power_ms2", None)),
+                    "hf_power": _safe_float(getattr(measurement, "hf_power_ms2", None)),
+                    "lf_hf_ratio": _safe_float(getattr(measurement, "lf_hf_ratio", None)),
+                }
+            )
+
+        if session_rows:
+            analysis_df = pd.concat(session_rows, ignore_index=True)
+        elif summary_rows:
+            analysis_df = pd.DataFrame(summary_rows)
+        else:
+            return WindowedMetricsResponse(
+                source_scope=scope_value,
+                n_sessions=len(measurements),
+                session_sources=session_sources,
+            )
+
+        if "start" not in analysis_df.columns:
+            return WindowedMetricsResponse(
+                source_scope=scope_value,
+                n_sessions=len(measurements),
+                session_sources=session_sources,
+            )
+
+        analysis_df["start"] = pd.to_datetime(analysis_df["start"], errors="coerce", utc=True)
+        analysis_df = analysis_df.dropna(subset=["start"]).sort_values("start").reset_index(drop=True)
+        if analysis_df.empty:
+            return WindowedMetricsResponse(
+                source_scope=scope_value,
+                n_sessions=len(measurements),
+                session_sources=session_sources,
+            )
+
+        timestamps = (
+            analysis_df["start"]
+            .dt.strftime("%Y-%m-%dT%H:%M:%SZ")
+            .fillna("")
+            .tolist()
         )
-        
-        if windowed_df is None or windowed_df.empty:
-            return WindowedMetricsResponse()
-        
-        # Extract data
-        timestamp_col = "start" if "start" in windowed_df.columns else "window_start"
-        timestamp_series = pd.to_datetime(windowed_df[timestamp_col], errors="coerce", utc=True)
-        timestamps = timestamp_series.dt.strftime("%Y-%m-%dT%H:%M:%SZ").fillna("").tolist()
-        
-        def safe_list(col: str) -> List[Optional[float]]:
-            if col in windowed_df.columns:
-                return [None if pd.isna(v) else float(v) for v in windowed_df[col]]
-            return []
-        
-        rmssd = safe_list("rmssd")
-        sdnn = safe_list("sdnn")
-        
-        # Calculate EWMA
-        rmssd_ewma = []
-        sdnn_ewma = []
-        alpha = 2 / (7 + 1)  # 7-window smoothing
-        
-        for i, val in enumerate(rmssd):
-            if i == 0:
-                rmssd_ewma.append(val)
+        rmssd = _safe_metric_list(analysis_df, "rmssd")
+        sdnn = _safe_metric_list(analysis_df, "sdnn")
+        pnn50 = _safe_metric_list(analysis_df, "pnn50")
+        mean_hr = _safe_metric_list(analysis_df, "mean_hr")
+        lf_power = _safe_metric_list(analysis_df, "lf_power")
+        hf_power = _safe_metric_list(analysis_df, "hf_power")
+        lf_hf_ratio = _safe_metric_list(analysis_df, "lf_hf_ratio")
+
+        alpha = 2.0 / (7.0 + 1.0)
+        rmssd_ewma = _compute_ewma(rmssd, alpha)
+        sdnn_ewma = _compute_ewma(sdnn, alpha)
+
+        # Robust anomaly detection (MAD-based) for RMSSD windows.
+        anomaly_indices: List[int] = []
+        valid_rmssd = np.array([v for v in rmssd if v is not None], dtype=float)
+        if valid_rmssd.size >= 5:
+            median_rmssd = float(np.median(valid_rmssd))
+            mad_rmssd = float(np.median(np.abs(valid_rmssd - median_rmssd)))
+            if mad_rmssd > 1e-6:
+                for idx, value in enumerate(rmssd):
+                    if value is None:
+                        continue
+                    robust_z = 0.6745 * (value - median_rmssd) / mad_rmssd
+                    if abs(robust_z) >= 3.5:
+                        anomaly_indices.append(idx)
             else:
-                prev = rmssd_ewma[i - 1]
-                if val is not None and prev is not None:
-                    rmssd_ewma.append(alpha * val + (1 - alpha) * prev)
-                else:
-                    rmssd_ewma.append(prev)
-        
-        for i, val in enumerate(sdnn):
-            if i == 0:
-                sdnn_ewma.append(val)
+                std_rmssd = float(np.std(valid_rmssd))
+                if std_rmssd > 1e-9:
+                    for idx, value in enumerate(rmssd):
+                        if value is None:
+                            continue
+                        if abs(value - median_rmssd) >= 2.5 * std_rmssd:
+                            anomaly_indices.append(idx)
+
+        # Trend break detection based on RMSSD-EWMA slope shifts.
+        trend_break_indices: List[int] = []
+        ewma_points = [(idx, value) for idx, value in enumerate(rmssd_ewma) if value is not None]
+        if len(ewma_points) >= 6:
+            ewma_values = np.array([v for _, v in ewma_points], dtype=float)
+            ewma_diff = np.diff(ewma_values)
+            if ewma_diff.size >= 4:
+                med_diff = float(np.median(ewma_diff))
+                mad_diff = float(np.median(np.abs(ewma_diff - med_diff)))
+                if mad_diff > 1e-9:
+                    for local_idx, diff_value in enumerate(ewma_diff):
+                        robust_z = 0.6745 * (diff_value - med_diff) / mad_diff
+                        if abs(robust_z) >= 3.0:
+                            trend_break_indices.append(int(ewma_points[local_idx + 1][0]))
+
+        analysis_df["date"] = analysis_df["start"].dt.strftime("%Y-%m-%d")
+        metric_candidates = [
+            col
+            for col in ["rmssd", "sdnn", "pnn50", "mean_hr", "lf_power", "hf_power", "lf_hf_ratio"]
+            if col in analysis_df.columns
+        ]
+        if metric_candidates:
+            daily_df = analysis_df.groupby("date", as_index=False)[metric_candidates].median()
+        else:
+            daily_df = pd.DataFrame({"date": analysis_df["date"]})
+
+        # Optional Garmin merge to correlate with additional physiological signals.
+        merged_df = daily_df.copy()
+        if include_garmin:
+            garmin_df = await asyncio.to_thread(
+                db.get_garmin_daily_dataframe,
+                user_id,
+                limit=max(60, int(max_recordings) * 2),
+            )
+            if garmin_df is not None and not garmin_df.empty:
+                garmin_df = garmin_df.copy()
+                if "metric_date" in garmin_df.columns:
+                    garmin_df["date"] = pd.to_datetime(
+                        garmin_df["metric_date"],
+                        errors="coerce",
+                        utc=True,
+                    ).dt.strftime("%Y-%m-%d")
+                    garmin_keep = [
+                        "date",
+                        "resting_hr_bpm",
+                        "sleep_duration_hours",
+                        "avg_spo2",
+                        "stress_score",
+                        "body_battery_avg",
+                        "avg_respiration_awake",
+                        "avg_respiration_sleep",
+                    ]
+                    garmin_keep = [c for c in garmin_keep if c in garmin_df.columns]
+                    if len(garmin_keep) > 1:
+                        merged_df = merged_df.merge(
+                            garmin_df[garmin_keep].dropna(subset=["date"]),
+                            on="date",
+                            how="outer",
+                        )
+
+        merged_df = merged_df.sort_values("date").reset_index(drop=True)
+
+        physiological_timestamps = [
+            f"{d}T00:00:00Z"
+            for d in merged_df["date"].tolist()
+            if isinstance(d, str) and d
+        ]
+
+        physiological_series: Dict[str, List[Optional[float]]] = {}
+        physiological_cols = [
+            "rmssd",
+            "sdnn",
+            "mean_hr",
+            "lf_hf_ratio",
+            "resting_hr_bpm",
+            "sleep_duration_hours",
+            "avg_spo2",
+            "stress_score",
+            "body_battery_avg",
+            "avg_respiration_awake",
+            "avg_respiration_sleep",
+        ]
+        physiological_cols = [c for c in physiological_cols if c in merged_df.columns]
+        for column in physiological_cols:
+            physiological_series[column] = _safe_metric_list(merged_df, column)
+
+        trend_statistics: List[Dict[str, Any]] = []
+        trend_metrics = [
+            ("rmssd", "RMSSD"),
+            ("sdnn", "SDNN"),
+            ("mean_hr", "Mean HR"),
+            ("lf_hf_ratio", "LF/HF"),
+        ]
+        if not daily_df.empty:
+            daily_dates = pd.to_datetime(daily_df["date"], errors="coerce", utc=True)
+            if daily_dates.notna().any():
+                x_days = (
+                    daily_dates - daily_dates[daily_dates.notna()].iloc[0]
+                ).dt.total_seconds() / 86400.0
             else:
-                prev = sdnn_ewma[i - 1]
-                if val is not None and prev is not None:
-                    sdnn_ewma.append(alpha * val + (1 - alpha) * prev)
-                else:
-                    sdnn_ewma.append(prev)
-        
-        # Simple anomaly detection using z-score
-        anomaly_indices = []
-        valid_rmssd = [v for v in rmssd if v is not None]
-        if valid_rmssd:
-            mean_rmssd = np.mean(valid_rmssd)
-            std_rmssd = np.std(valid_rmssd)
-            if std_rmssd > 0:
-                for i, val in enumerate(rmssd):
-                    if val is not None and abs(val - mean_rmssd) > 2 * std_rmssd:
-                        anomaly_indices.append(i)
+                x_days = pd.Series(np.arange(len(daily_df), dtype=float))
+            for metric_key, metric_label in trend_metrics:
+                if metric_key not in daily_df.columns:
+                    continue
+                y_values = pd.to_numeric(daily_df[metric_key], errors="coerce")
+                mask = y_values.notna() & x_days.notna()
+                n_samples = int(mask.sum())
+                if n_samples < 3:
+                    trend_statistics.append(
+                        {
+                            "metric": metric_label,
+                            "n_samples": n_samples,
+                            "direction": "insufficient",
+                        }
+                    )
+                    continue
+
+                x = x_days[mask].to_numpy(dtype=float)
+                y = y_values[mask].to_numpy(dtype=float)
+                slope, intercept = np.polyfit(x, y, 1)
+                y_hat = slope * x + intercept
+                ss_res = float(np.sum((y - y_hat) ** 2))
+                ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+                r_squared = None if ss_tot <= 1e-12 else float(1.0 - (ss_res / ss_tot))
+                kendall_tau = None
+                p_value = None
+                if scipy_stats is not None:
+                    try:
+                        tau, p_raw = scipy_stats.kendalltau(x, y)
+                        kendall_tau = _safe_float(tau)
+                        p_value = _safe_float(p_raw)
+                    except Exception:
+                        pass
+
+                baseline = float(np.mean(y[: min(3, len(y))]))
+                latest = float(y[-1])
+                delta_pct = None
+                if abs(baseline) > 1e-6:
+                    delta_pct = float(((latest - baseline) / abs(baseline)) * 100.0)
+                mean_val = float(np.mean(y))
+                std_val = float(np.std(y, ddof=1)) if len(y) > 1 else 0.0
+                cv_pct = None if abs(mean_val) <= 1e-6 else float((std_val / abs(mean_val)) * 100.0)
+
+                slope_threshold = max(1e-4, 0.01 * max(abs(mean_val), 1.0))
+                direction = "stable"
+                if p_value is not None and p_value < 0.05 and abs(float(slope)) >= slope_threshold:
+                    direction = "increasing" if slope > 0 else "decreasing"
+                elif abs(float(slope)) >= 2.0 * slope_threshold:
+                    direction = "increasing" if slope > 0 else "decreasing"
+
+                trend_statistics.append(
+                    {
+                        "metric": metric_label,
+                        "n_samples": n_samples,
+                        "slope_per_day": float(slope),
+                        "kendall_tau": kendall_tau,
+                        "p_value": p_value,
+                        "r_squared": r_squared,
+                        "direction": direction,
+                        "baseline_value": baseline,
+                        "latest_value": latest,
+                        "delta_pct": delta_pct,
+                        "mean_value": mean_val,
+                        "std_value": std_val,
+                        "cv_pct": cv_pct,
+                    }
+                )
+
+        physiological_correlations: List[Dict[str, Any]] = []
+        if "rmssd" in merged_df.columns:
+            for metric in [
+                "resting_hr_bpm",
+                "sleep_duration_hours",
+                "avg_spo2",
+                "stress_score",
+                "body_battery_avg",
+                "avg_respiration_sleep",
+                "avg_respiration_awake",
+                "lf_hf_ratio",
+                "mean_hr",
+            ]:
+                if metric not in merged_df.columns:
+                    continue
+                corr, p_val, n_samples = _spearman_stats(merged_df["rmssd"], merged_df[metric])
+                if corr is None:
+                    continue
+                strength = (
+                    "strong"
+                    if abs(corr) >= 0.6
+                    else "moderate"
+                    if abs(corr) >= 0.35
+                    else "weak"
+                )
+                direction = "positive" if corr >= 0 else "negative"
+                physiological_correlations.append(
+                    {
+                        "anchor_metric": "rmssd",
+                        "other_metric": metric,
+                        "method": "spearman",
+                        "r": corr,
+                        "p_value": p_val,
+                        "n_samples": n_samples,
+                        "interpretation": f"{direction} {strength} association",
+                    }
+                )
+        physiological_correlations.sort(
+            key=lambda item: abs(float(item.get("r", 0.0))),
+            reverse=True,
+        )
+
+        correlation_metric_labels: List[str] = []
+        correlation_matrix: List[List[Optional[float]]] = []
+        correlation_p_values: List[List[Optional[float]]] = []
+        matrix_candidates = [
+            "rmssd",
+            "sdnn",
+            "mean_hr",
+            "lf_hf_ratio",
+            "resting_hr_bpm",
+            "sleep_duration_hours",
+            "avg_spo2",
+            "stress_score",
+            "body_battery_avg",
+        ]
+        matrix_candidates = [c for c in matrix_candidates if c in merged_df.columns]
+        matrix_candidates = [
+            c for c in matrix_candidates if pd.to_numeric(merged_df[c], errors="coerce").notna().sum() >= 4
+        ][:8]
+        if matrix_candidates:
+            correlation_metric_labels = matrix_candidates
+            for metric_a in matrix_candidates:
+                row_r: List[Optional[float]] = []
+                row_p: List[Optional[float]] = []
+                for metric_b in matrix_candidates:
+                    if metric_a == metric_b:
+                        row_r.append(1.0)
+                        row_p.append(0.0)
+                        continue
+                    corr, p_val, _ = _spearman_stats(merged_df[metric_a], merged_df[metric_b])
+                    row_r.append(corr)
+                    row_p.append(p_val)
+                correlation_matrix.append(row_r)
+                correlation_p_values.append(row_p)
 
         context = _build_analysis_context(
-            rr_intervals_ms=[float(v) for v in rr_data],
-            artifact_pct=0.0,
+            rr_intervals_ms=context_rr,
+            artifact_pct=float(context_artifact),
             frequency_validity=[
                 FrequencyValidity(
                     method="welch",
@@ -2059,28 +2489,39 @@ async def get_hrv_windowed(
                 )
             ],
         )
-        
+
         return WindowedMetricsResponse(
             timestamps=timestamps,
             rmssd=rmssd,
             sdnn=sdnn,
-            pnn50=safe_list("pnn50"),
-            mean_hr=safe_list("mean_hr"),
-            lf_power=safe_list("lf_power"),
-            hf_power=safe_list("hf_power"),
-            lf_hf_ratio=safe_list("lf_hf_ratio"),
+            pnn50=pnn50,
+            mean_hr=mean_hr,
+            lf_power=lf_power,
+            hf_power=hf_power,
+            lf_hf_ratio=lf_hf_ratio,
             rmssd_ewma=rmssd_ewma,
             sdnn_ewma=sdnn_ewma,
             anomaly_indices=anomaly_indices,
-            cluster_labels=[],  # Would need ML module
+            cluster_labels=[],
             window_size_seconds=window_size,
             step_size_seconds=step_size,
             n_windows=len(timestamps),
+            source_scope=scope_value,
+            n_sessions=len(measurements),
+            session_sources=session_sources,
+            trend_break_indices=trend_break_indices,
+            trend_statistics=trend_statistics,
+            correlation_metric_labels=correlation_metric_labels,
+            correlation_matrix=correlation_matrix,
+            correlation_p_values=correlation_p_values,
+            physiological_timestamps=physiological_timestamps,
+            physiological_series=physiological_series,
+            physiological_correlations=physiological_correlations,
             context=context,
         )
     except Exception as exc:
         _LOGGER.error(f"Error computing windowed HRV for {user_id}: {exc}")
-        return WindowedMetricsResponse()
+        return WindowedMetricsResponse(source_scope="all")
 
 
 class SegmentAnnotation(BaseModel):
