@@ -39,6 +39,7 @@ import {
   getNOAADatasets,
   uploadRRData,
   parseRRFile,
+  resolveRecordingTimestamp,
   runCorrelationAnalysis,
 } from "@/lib/research-api";
 import { useAppStore } from "@/lib/store";
@@ -470,7 +471,7 @@ function UploadSection({
   uploadResult,
   loading,
 }: {
-  onUpload: (rr: number[]) => void;
+  onUpload: (rr: number[], sourceFile?: string, recordingTimestamp?: string) => void;
   uploadResult: RRUploadResponse | null;
   loading: boolean;
 }) {
@@ -481,7 +482,11 @@ function UploadSection({
     const text = await file.text();
     const rr = parseRRFile(text);
     if (rr.length >= 30) {
-      onUpload(rr);
+      onUpload(
+        rr,
+        file.name,
+        resolveRecordingTimestamp({ sourceFile: file.name }),
+      );
     } else {
       alert(`Found only ${rr.length} valid RR intervals. Need at least 30.`);
     }
@@ -651,22 +656,30 @@ export default function CorrelationsPage() {
   }, []);
 
   // Handle RR upload
-  const handleRRUpload = React.useCallback(async (rr: number[]) => {
-    setUploadLoading(true);
-    try {
-      const result = await uploadRRData({
-        rr_intervals_ms: rr,
-        recording_timestamp: new Date().toISOString(),
-        source: "uploaded",
-      });
-      setUploadResult(result);
-    } catch (error) {
-      console.error("Upload error:", error);
-      alert("Failed to process RR data: " + (error instanceof Error ? error.message : "Unknown error"));
-    } finally {
-      setUploadLoading(false);
-    }
-  }, []);
+  const handleRRUpload = React.useCallback(
+    async (rr: number[], sourceFile?: string, recordingTimestamp?: string) => {
+      setUploadLoading(true);
+      try {
+        const resolvedTimestamp = resolveRecordingTimestamp({
+          sourceFile,
+          recordingTimestamp,
+        });
+        const result = await uploadRRData({
+          rr_intervals_ms: rr,
+          recording_timestamp: resolvedTimestamp,
+          source: sourceFile || "uploaded",
+          user_id: activeUserId ?? undefined,
+        });
+        setUploadResult(result);
+      } catch (error) {
+        console.error("Upload error:", error);
+        alert("Failed to process RR data: " + (error instanceof Error ? error.message : "Unknown error"));
+      } finally {
+        setUploadLoading(false);
+      }
+    },
+    [activeUserId],
+  );
 
   // Run correlation analysis
   const runAnalysis = React.useCallback(async () => {
