@@ -466,8 +466,15 @@ export interface TrendStatistic {
   metric: string;
   n_samples: number;
   slope_per_day?: number | null;
+  robust_slope_per_day?: number | null;
+  slope_ci_low?: number | null;
+  slope_ci_high?: number | null;
+  trend_method?: string;
   kendall_tau?: number | null;
   p_value?: number | null;
+  q_value?: number | null;
+  significance?: string;
+  fdr_significance?: string;
   r_squared?: number | null;
   direction: "increasing" | "decreasing" | "stable" | "insufficient" | string;
   baseline_value?: number | null;
@@ -484,6 +491,11 @@ export interface PhysiologicalCorrelation {
   method: string;
   r?: number | null;
   p_value?: number | null;
+  q_value?: number | null;
+  effect_size?: string;
+  direction?: "positive" | "negative" | string;
+  significance?: string;
+  is_significant?: boolean;
   n_samples: number;
   interpretation?: string;
 }
@@ -512,9 +524,11 @@ export interface WindowedMetricsResponse {
   correlation_metric_labels?: string[];
   correlation_matrix?: (number | null)[][];
   correlation_p_values?: (number | null)[][];
+  correlation_q_values?: (number | null)[][];
   physiological_timestamps?: string[];
   physiological_series?: Record<string, (number | null)[]>;
   physiological_correlations?: PhysiologicalCorrelation[];
+  statistical_notes?: string[];
   context?: AnalysisContext;
 }
 
