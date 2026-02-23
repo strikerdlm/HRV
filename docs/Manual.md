@@ -704,6 +704,16 @@ LF/HF: 0.67 → Vagal predominance (typical at rest)
 4. Review flag timeline for anomaly episodes
 5. Investigate red/yellow windows in Time Series tab
 
+**Production longitudinal mode (Next.js frontend):**
+- Windowed endpoint supports **`scope=all|selected`**:
+  - `all`: merges windows from all ingested RR tracings to build a longitudinal timeline.
+  - `selected`: analyzes only the RR tracing chosen in the global header loader.
+- Trend review includes:
+  - OLS slope + **Theil-Sen robust slope** with 95% CI
+  - Kendall tau with p-value
+  - FDR-adjusted q-values for trend/correlation screening
+- Correlation heatmaps and association cards prioritize **q-value significance** (Benjamini-Hochberg), while showing raw p-values for transparency.
+
 ### Metrics Tab
 
 **Purpose:** Complete numerical results
