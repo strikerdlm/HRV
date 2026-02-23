@@ -1934,6 +1934,13 @@ class WindowedMetricsResponse(BaseModel):
     physiological_timestamps: List[str] = Field(default_factory=list)
     physiological_series: Dict[str, List[Optional[float]]] = Field(default_factory=dict)
     physiological_correlations: List[Dict[str, Any]] = Field(default_factory=list)
+    long_term_window_days: int = 30
+    long_term_timestamps: List[str] = Field(default_factory=list)
+    long_term_series: Dict[str, List[Optional[float]]] = Field(default_factory=dict)
+    long_term_trend_series: Dict[str, List[Optional[float]]] = Field(default_factory=dict)
+    long_term_metric_groups: Dict[str, List[str]] = Field(default_factory=dict)
+    long_term_statistics: List[Dict[str, Any]] = Field(default_factory=list)
+    future_ml_insights: List[str] = Field(default_factory=list)
     statistical_notes: List[str] = Field(default_factory=list)
     context: Optional[AnalysisContext] = None
 
@@ -1943,6 +1950,7 @@ async def get_hrv_windowed(
     user_id: str,
     window_size: int = Query(default=300, ge=60, le=600, description="Window size in seconds"),
     step_size: int = Query(default=60, ge=30, le=300, description="Step size in seconds"),
+    horizon_days: int = Query(default=30, ge=7, le=31, description="Longitudinal horizon window in days"),
     scope: str = Query(default="all", description="Analysis scope: all or selected"),
     include_garmin: bool = Query(default=True, description="Merge Garmin physiological trends"),
     max_recordings: int = Query(default=120, ge=1, le=1000, description="Maximum RR recordings to process"),
@@ -1964,6 +1972,7 @@ async def get_hrv_windowed(
         scope_value = str(scope or "all").strip().lower()
         if scope_value not in {"all", "selected"}:
             scope_value = "all"
+        horizon_days_value = int(max(7, min(31, int(horizon_days))))
 
         db = UserDatabase()
         await _ensure_user_exists(db, user_id)
@@ -2051,6 +2060,111 @@ async def get_hrv_windowed(
             corr = pd.Series(a_vals).corr(pd.Series(b_vals), method="spearman")
             return (_safe_float(corr), None, n_samples)
 
+        def _compute_trend_summary(
+            *,
+            metric_key: str,
+            metric_label: str,
+            x_days_series: pd.Series,
+            y_series: pd.Series,
+            min_samples: int = 5,
+        ) -> Dict[str, Any]:
+            y_values = pd.to_numeric(y_series, errors="coerce")
+            x_values = pd.to_numeric(x_days_series, errors="coerce")
+            mask = y_values.notna() & x_values.notna()
+            n_samples = int(mask.sum())
+            if n_samples < min_samples:
+                return {
+                    "metric_key": metric_key,
+                    "metric": metric_label,
+                    "n_samples": n_samples,
+                    "direction": "insufficient",
+                }
+
+            x = x_values[mask].to_numpy(dtype=float)
+            y = y_values[mask].to_numpy(dtype=float)
+            slope, intercept = np.polyfit(x, y, 1)
+            y_hat = slope * x + intercept
+            ss_res = float(np.sum((y - y_hat) ** 2))
+            ss_tot = float(np.sum((y - np.mean(y)) ** 2))
+            r_squared = None if ss_tot <= 1e-12 else float(1.0 - (ss_res / ss_tot))
+
+            robust_slope = float(slope)
+            slope_ci_low = None
+            slope_ci_high = None
+            trend_method = "ols+kendall"
+            if scipy_stats is not None:
+                try:
+                    theil_result = scipy_stats.theilslopes(y, x, alpha=0.95)
+                    robust_slope = _safe_float(getattr(theil_result, "slope", None)) or float(theil_result[0])
+                    slope_ci_low = _safe_float(getattr(theil_result, "low_slope", None))
+                    slope_ci_high = _safe_float(getattr(theil_result, "high_slope", None))
+                    trend_method = "theil-sen+kendall"
+                except Exception:
+                    pass
+
+            kendall_tau = None
+            p_value = None
+            if scipy_stats is not None:
+                try:
+                    tau_raw, p_raw = scipy_stats.kendalltau(x, y)
+                    kendall_tau = _safe_float(tau_raw)
+                    p_value = _safe_float(p_raw)
+                except Exception:
+                    pass
+
+            baseline = float(np.mean(y[: min(3, len(y))]))
+            latest = float(y[-1])
+            delta_pct = None
+            if abs(baseline) > 1e-6:
+                delta_pct = float(((latest - baseline) / abs(baseline)) * 100.0)
+
+            mean_val = float(np.mean(y))
+            std_val = float(np.std(y, ddof=1)) if len(y) > 1 else 0.0
+            cv_pct = None if abs(mean_val) <= 1e-6 else float((std_val / abs(mean_val)) * 100.0)
+            slope_threshold = max(1e-4, 0.01 * max(abs(mean_val), 1.0))
+
+            direction = "stable"
+            if slope_ci_low is not None and slope_ci_high is not None:
+                if slope_ci_low > 0.0:
+                    direction = "increasing"
+                elif slope_ci_high < 0.0:
+                    direction = "decreasing"
+            elif p_value is not None and p_value < 0.05 and abs(float(robust_slope)) >= slope_threshold:
+                direction = "increasing" if robust_slope > 0 else "decreasing"
+            elif abs(float(robust_slope)) >= 2.0 * slope_threshold:
+                direction = "increasing" if robust_slope > 0 else "decreasing"
+
+            significance = "not_significant"
+            if p_value is not None:
+                if p_value < 0.001:
+                    significance = "highly_significant"
+                elif p_value < 0.01:
+                    significance = "significant"
+                elif p_value < 0.05:
+                    significance = "suggestive"
+
+            return {
+                "metric_key": metric_key,
+                "metric": metric_label,
+                "n_samples": n_samples,
+                "slope_per_day": float(slope),
+                "robust_slope_per_day": float(robust_slope),
+                "slope_ci_low": slope_ci_low,
+                "slope_ci_high": slope_ci_high,
+                "trend_method": trend_method,
+                "kendall_tau": kendall_tau,
+                "p_value": p_value,
+                "significance": significance,
+                "r_squared": r_squared,
+                "direction": direction,
+                "baseline_value": baseline,
+                "latest_value": latest,
+                "delta_pct": delta_pct,
+                "mean_value": mean_val,
+                "std_value": std_val,
+                "cv_pct": cv_pct,
+            }
+
         measurements: List[Any] = []
         if scope_value == "selected":
             selected = await _resolve_measurement_for_user(
@@ -2067,7 +2181,10 @@ async def get_hrv_windowed(
                 measurements = list(reversed(history))
 
         if not measurements:
-            return WindowedMetricsResponse(source_scope=scope_value)
+            return WindowedMetricsResponse(
+                source_scope=scope_value,
+                long_term_window_days=horizon_days_value,
+            )
 
         session_sources: List[str] = []
         session_rows: List[pd.DataFrame] = []
@@ -2170,6 +2287,7 @@ async def get_hrv_windowed(
         else:
             return WindowedMetricsResponse(
                 source_scope=scope_value,
+                long_term_window_days=horizon_days_value,
                 n_sessions=len(measurements),
                 session_sources=session_sources,
             )
@@ -2177,6 +2295,7 @@ async def get_hrv_windowed(
         if "start" not in analysis_df.columns:
             return WindowedMetricsResponse(
                 source_scope=scope_value,
+                long_term_window_days=horizon_days_value,
                 n_sessions=len(measurements),
                 session_sources=session_sources,
             )
@@ -2186,6 +2305,7 @@ async def get_hrv_windowed(
         if analysis_df.empty:
             return WindowedMetricsResponse(
                 source_scope=scope_value,
+                long_term_window_days=horizon_days_value,
                 n_sessions=len(measurements),
                 session_sources=session_sources,
             )
@@ -2340,116 +2460,31 @@ async def get_hrv_windowed(
                 if not metric_from_daily and not metric_from_window:
                     continue
 
-                y_values = (
-                    pd.to_numeric(daily_df[metric_key], errors="coerce")
-                    if metric_from_daily
-                    else pd.Series(dtype=float)
-                )
-                x_values = x_days
-                mask = y_values.notna() & x_values.notna()
-                n_samples = int(mask.sum())
+                trend_entry: Optional[Dict[str, Any]] = None
+                if metric_from_daily:
+                    trend_entry = _compute_trend_summary(
+                        metric_key=metric_key,
+                        metric_label=metric_label,
+                        x_days_series=x_days,
+                        y_series=daily_df[metric_key],
+                        min_samples=3,
+                    )
 
                 # Fallback to window-level trend when daily aggregation is too sparse.
-                if n_samples < 3 and metric_from_window:
-                    y_values = pd.to_numeric(analysis_df[metric_key], errors="coerce")
-                    x_values = window_x_days
-                    mask = y_values.notna() & x_values.notna()
-                    n_samples = int(mask.sum())
-
-                if n_samples < 3:
-                    trend_statistics.append(
-                        {
-                            "metric": metric_label,
-                            "n_samples": n_samples,
-                            "direction": "insufficient",
-                        }
+                if (
+                    metric_from_window
+                    and (trend_entry is None or trend_entry.get("direction") == "insufficient")
+                ):
+                    trend_entry = _compute_trend_summary(
+                        metric_key=metric_key,
+                        metric_label=metric_label,
+                        x_days_series=window_x_days,
+                        y_series=analysis_df[metric_key],
+                        min_samples=3,
                     )
-                    continue
 
-                x = x_values[mask].to_numpy(dtype=float)
-                y = y_values[mask].to_numpy(dtype=float)
-                slope, intercept = np.polyfit(x, y, 1)
-                y_hat = slope * x + intercept
-                ss_res = float(np.sum((y - y_hat) ** 2))
-                ss_tot = float(np.sum((y - np.mean(y)) ** 2))
-                r_squared = None if ss_tot <= 1e-12 else float(1.0 - (ss_res / ss_tot))
-
-                # Robust slope estimate (Theil-Sen) with confidence interval.
-                robust_slope = float(slope)
-                slope_ci_low = None
-                slope_ci_high = None
-                trend_method = "ols+kendall"
-                if scipy_stats is not None:
-                    try:
-                        theil_result = scipy_stats.theilslopes(y, x, alpha=0.95)
-                        robust_slope = _safe_float(getattr(theil_result, "slope", None)) or float(theil_result[0])
-                        slope_ci_low = _safe_float(getattr(theil_result, "low_slope", None))
-                        slope_ci_high = _safe_float(getattr(theil_result, "high_slope", None))
-                        trend_method = "theil-sen+kendall"
-                    except Exception:
-                        pass
-                kendall_tau = None
-                p_value = None
-                if scipy_stats is not None:
-                    try:
-                        tau, p_raw = scipy_stats.kendalltau(x, y)
-                        kendall_tau = _safe_float(tau)
-                        p_value = _safe_float(p_raw)
-                    except Exception:
-                        pass
-
-                baseline = float(np.mean(y[: min(3, len(y))]))
-                latest = float(y[-1])
-                delta_pct = None
-                if abs(baseline) > 1e-6:
-                    delta_pct = float(((latest - baseline) / abs(baseline)) * 100.0)
-                mean_val = float(np.mean(y))
-                std_val = float(np.std(y, ddof=1)) if len(y) > 1 else 0.0
-                cv_pct = None if abs(mean_val) <= 1e-6 else float((std_val / abs(mean_val)) * 100.0)
-
-                slope_threshold = max(1e-4, 0.01 * max(abs(mean_val), 1.0))
-                direction = "stable"
-                if slope_ci_low is not None and slope_ci_high is not None:
-                    if slope_ci_low > 0.0:
-                        direction = "increasing"
-                    elif slope_ci_high < 0.0:
-                        direction = "decreasing"
-                elif p_value is not None and p_value < 0.05 and abs(float(robust_slope)) >= slope_threshold:
-                    direction = "increasing" if robust_slope > 0 else "decreasing"
-                elif abs(float(robust_slope)) >= 2.0 * slope_threshold:
-                    direction = "increasing" if robust_slope > 0 else "decreasing"
-
-                significance = "not_significant"
-                if p_value is not None:
-                    if p_value < 0.001:
-                        significance = "highly_significant"
-                    elif p_value < 0.01:
-                        significance = "significant"
-                    elif p_value < 0.05:
-                        significance = "suggestive"
-
-                trend_statistics.append(
-                    {
-                        "metric": metric_label,
-                        "n_samples": n_samples,
-                        "slope_per_day": float(slope),
-                        "robust_slope_per_day": float(robust_slope),
-                        "slope_ci_low": slope_ci_low,
-                        "slope_ci_high": slope_ci_high,
-                        "trend_method": trend_method,
-                        "kendall_tau": kendall_tau,
-                        "p_value": p_value,
-                        "significance": significance,
-                        "r_squared": r_squared,
-                        "direction": direction,
-                        "baseline_value": baseline,
-                        "latest_value": latest,
-                        "delta_pct": delta_pct,
-                        "mean_value": mean_val,
-                        "std_value": std_val,
-                        "cv_pct": cv_pct,
-                    }
-                )
+                if trend_entry is not None:
+                    trend_statistics.append(trend_entry)
 
         trend_p_values = [entry.get("p_value") for entry in trend_statistics]
         trend_q_values = _benjamini_hochberg(trend_p_values)
@@ -2465,6 +2500,175 @@ async def get_hrv_windowed(
                     entry["fdr_significance"] = "not_significant"
             else:
                 entry["fdr_significance"] = "not_tested"
+
+        long_term_timestamps: List[str] = []
+        long_term_series: Dict[str, List[Optional[float]]] = {}
+        long_term_trend_series: Dict[str, List[Optional[float]]] = {}
+        long_term_metric_groups: Dict[str, List[str]] = {"hrv": [], "physiology": []}
+        long_term_statistics: List[Dict[str, Any]] = []
+        future_ml_insights: List[str] = []
+
+        long_metric_labels: Dict[str, str] = {
+            "rmssd": "RMSSD",
+            "sdnn": "SDNN",
+            "pnn50": "pNN50",
+            "mean_hr": "Mean HR",
+            "lf_power": "LF Power",
+            "hf_power": "HF Power",
+            "lf_hf_ratio": "LF/HF",
+            "resting_hr_bpm": "Resting HR",
+            "sleep_duration_hours": "Sleep Duration",
+            "avg_spo2": "Avg SpO2",
+            "stress_score": "Stress Score",
+            "body_battery_avg": "Body Battery",
+            "avg_respiration_awake": "Awake Respiration",
+            "avg_respiration_sleep": "Sleep Respiration",
+        }
+        hrv_metric_keys = [
+            "rmssd",
+            "sdnn",
+            "pnn50",
+            "mean_hr",
+            "lf_power",
+            "hf_power",
+            "lf_hf_ratio",
+        ]
+        phys_metric_keys = [
+            "resting_hr_bpm",
+            "sleep_duration_hours",
+            "avg_spo2",
+            "stress_score",
+            "body_battery_avg",
+            "avg_respiration_awake",
+            "avg_respiration_sleep",
+        ]
+
+        long_term_df = merged_df.copy()
+        if not long_term_df.empty and "date" in long_term_df.columns:
+            for column in list(long_term_df.columns):
+                if column == "date":
+                    continue
+                long_term_df[column] = pd.to_numeric(long_term_df[column], errors="coerce")
+
+            long_term_df["date_dt"] = pd.to_datetime(long_term_df["date"], errors="coerce", utc=True)
+            long_term_df = long_term_df.dropna(subset=["date_dt"]).sort_values("date_dt").reset_index(drop=True)
+
+            if not long_term_df.empty:
+                hrv_anchor_mask = pd.Series(False, index=long_term_df.index)
+                for metric_key in hrv_metric_keys:
+                    if metric_key in long_term_df.columns:
+                        hrv_anchor_mask = hrv_anchor_mask | pd.to_numeric(
+                            long_term_df[metric_key],
+                            errors="coerce",
+                        ).notna()
+
+                if bool(hrv_anchor_mask.any()):
+                    latest_day = long_term_df.loc[hrv_anchor_mask, "date_dt"].max()
+                else:
+                    latest_day = long_term_df["date_dt"].max()
+                cutoff_day = latest_day - pd.Timedelta(days=horizon_days_value - 1)
+                long_term_df = long_term_df[
+                    (long_term_df["date_dt"] >= cutoff_day)
+                    & (long_term_df["date_dt"] <= latest_day)
+                ].copy()
+                long_term_df["date"] = long_term_df["date_dt"].dt.strftime("%Y-%m-%d")
+
+                numeric_cols = [c for c in long_term_df.columns if c not in {"date", "date_dt"}]
+                if numeric_cols:
+                    long_term_df = long_term_df.groupby("date", as_index=False)[numeric_cols].median()
+                    long_term_df["date_dt"] = pd.to_datetime(long_term_df["date"], errors="coerce", utc=True)
+                    long_term_df = long_term_df.dropna(subset=["date_dt"]).sort_values("date_dt").reset_index(drop=True)
+                else:
+                    long_term_df = pd.DataFrame(columns=["date", "date_dt"])
+
+        if not long_term_df.empty:
+            long_term_timestamps = (
+                long_term_df["date_dt"]
+                .dt.strftime("%Y-%m-%dT00:00:00Z")
+                .fillna("")
+                .tolist()
+            )
+            long_x_days = (
+                long_term_df["date_dt"] - long_term_df["date_dt"].iloc[0]
+            ).dt.total_seconds() / 86400.0
+            smoothing_span = max(3, min(10, horizon_days_value // 4))
+            long_alpha = 2.0 / (float(smoothing_span) + 1.0)
+
+            for metric_key in hrv_metric_keys:
+                if metric_key not in long_term_df.columns:
+                    continue
+                metric_values = _safe_metric_list(long_term_df, metric_key)
+                valid_count = sum(value is not None for value in metric_values)
+                if valid_count < 1:
+                    continue
+                long_term_metric_groups["hrv"].append(metric_key)
+                long_term_series[metric_key] = metric_values
+                long_term_trend_series[metric_key] = _compute_ewma(metric_values, long_alpha)
+                long_term_statistics.append(
+                    _compute_trend_summary(
+                        metric_key=metric_key,
+                        metric_label=long_metric_labels.get(metric_key, metric_key),
+                        x_days_series=long_x_days,
+                        y_series=long_term_df[metric_key],
+                        min_samples=4,
+                    )
+                )
+
+            for metric_key in phys_metric_keys:
+                if metric_key not in long_term_df.columns:
+                    continue
+                metric_values = _safe_metric_list(long_term_df, metric_key)
+                valid_count = sum(value is not None for value in metric_values)
+                if valid_count < 1:
+                    continue
+                long_term_metric_groups["physiology"].append(metric_key)
+                long_term_series[metric_key] = metric_values
+                long_term_trend_series[metric_key] = _compute_ewma(metric_values, long_alpha)
+                long_term_statistics.append(
+                    _compute_trend_summary(
+                        metric_key=metric_key,
+                        metric_label=long_metric_labels.get(metric_key, metric_key),
+                        x_days_series=long_x_days,
+                        y_series=long_term_df[metric_key],
+                        min_samples=4,
+                    )
+                )
+
+        long_term_p_values = [entry.get("p_value") for entry in long_term_statistics]
+        long_term_q_values = _benjamini_hochberg(long_term_p_values)
+        for idx, entry in enumerate(long_term_statistics):
+            q_value = long_term_q_values[idx]
+            entry["q_value"] = q_value
+            entry["horizon_days"] = horizon_days_value
+            if q_value is not None:
+                if q_value < 0.01:
+                    entry["fdr_significance"] = "fdr_significant"
+                elif q_value < 0.05:
+                    entry["fdr_significance"] = "fdr_suggestive"
+                else:
+                    entry["fdr_significance"] = "not_significant"
+            else:
+                entry["fdr_significance"] = "not_tested"
+
+        long_term_statistics.sort(
+            key=lambda item: (
+                0 if item.get("direction") in {"increasing", "decreasing"} else 1,
+                abs(float(item.get("robust_slope_per_day") or 0.0)),
+            ),
+            reverse=False,
+        )
+        if long_term_statistics:
+            future_ml_insights.append(
+                f"Long-term dataset spans {len(long_term_timestamps)} daily observations over the last {horizon_days_value} days."
+            )
+            if len(long_term_timestamps) >= 21:
+                future_ml_insights.append(
+                    "Sample depth is suitable for future multivariate forecasting baselines (e.g., gradient boosting and temporal sequence models)."
+                )
+            else:
+                future_ml_insights.append(
+                    "Increase longitudinal coverage beyond 21 days to support robust temporal machine-learning validation."
+                )
 
         physiological_correlations: List[Dict[str, Any]] = []
         if "rmssd" in merged_df.columns:
@@ -2585,6 +2789,8 @@ async def get_hrv_windowed(
             "Trends use OLS slope with Kendall tau and optional Theil-Sen confidence intervals.",
             "Physiological correlations use Spearman rank association with Benjamini-Hochberg FDR correction.",
             "Interpret nominal (p<0.05) findings cautiously when FDR significance is not reached.",
+            f"Long-horizon analytics summarize daily trajectories over the most recent {horizon_days_value} days (maximum one-month window).",
+            "Long-term trend panels report both raw daily medians and EWMA-smoothed trajectories for publication-grade interpretation.",
         ]
         if len(physiological_correlations) == 0:
             statistical_notes.append("No synchronized wearable physiology signals were available for correlation inference.")
@@ -2635,12 +2841,22 @@ async def get_hrv_windowed(
             physiological_timestamps=physiological_timestamps,
             physiological_series=physiological_series,
             physiological_correlations=physiological_correlations,
+            long_term_window_days=horizon_days_value,
+            long_term_timestamps=long_term_timestamps,
+            long_term_series=long_term_series,
+            long_term_trend_series=long_term_trend_series,
+            long_term_metric_groups=long_term_metric_groups,
+            long_term_statistics=long_term_statistics,
+            future_ml_insights=future_ml_insights,
             statistical_notes=statistical_notes,
             context=context,
         )
     except Exception as exc:
         _LOGGER.error(f"Error computing windowed HRV for {user_id}: {exc}")
-        return WindowedMetricsResponse(source_scope="all")
+        return WindowedMetricsResponse(
+            source_scope="all",
+            long_term_window_days=int(max(7, min(31, int(horizon_days)))),
+        )
 
 
 class SegmentAnnotation(BaseModel):
