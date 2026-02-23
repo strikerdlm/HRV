@@ -500,6 +500,31 @@ export interface PhysiologicalCorrelation {
   interpretation?: string;
 }
 
+export interface LongTermTrendStatistic {
+  metric_key: string;
+  metric: string;
+  n_samples: number;
+  slope_per_day?: number | null;
+  robust_slope_per_day?: number | null;
+  slope_ci_low?: number | null;
+  slope_ci_high?: number | null;
+  trend_method?: string;
+  kendall_tau?: number | null;
+  p_value?: number | null;
+  q_value?: number | null;
+  significance?: string;
+  fdr_significance?: string;
+  r_squared?: number | null;
+  direction: "increasing" | "decreasing" | "stable" | "insufficient" | string;
+  baseline_value?: number | null;
+  latest_value?: number | null;
+  delta_pct?: number | null;
+  mean_value?: number | null;
+  std_value?: number | null;
+  cv_pct?: number | null;
+  horizon_days?: number;
+}
+
 export interface WindowedMetricsResponse {
   timestamps: string[];
   rmssd: (number | null)[];
@@ -528,6 +553,13 @@ export interface WindowedMetricsResponse {
   physiological_timestamps?: string[];
   physiological_series?: Record<string, (number | null)[]>;
   physiological_correlations?: PhysiologicalCorrelation[];
+  long_term_window_days?: number;
+  long_term_timestamps?: string[];
+  long_term_series?: Record<string, (number | null)[]>;
+  long_term_trend_series?: Record<string, (number | null)[]>;
+  long_term_metric_groups?: Record<string, string[]>;
+  long_term_statistics?: LongTermTrendStatistic[];
+  future_ml_insights?: string[];
   statistical_notes?: string[];
   context?: AnalysisContext;
 }
