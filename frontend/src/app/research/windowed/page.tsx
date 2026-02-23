@@ -290,16 +290,18 @@ function CorrelationHeatmap({
   labels,
   matrix,
   pMatrix,
+  qMatrix,
 }: {
   labels: string[];
   matrix: (number | null)[][];
   pMatrix: (number | null)[][];
+  qMatrix?: (number | null)[][];
 }) {
   if (labels.length === 0 || matrix.length === 0) {
     return null;
   }
 
-  const heatmapData: [number, number, number, number][] = [];
+  const heatmapData: [number, number, number, number, number][] = [];
   for (let row = 0; row < labels.length; row += 1) {
     for (let col = 0; col < labels.length; col += 1) {
       const value = matrix[row]?.[col];
@@ -307,7 +309,8 @@ function CorrelationHeatmap({
         continue;
       }
       const pVal = pMatrix[row]?.[col] ?? 1;
-      heatmapData.push([col, row, value, pVal]);
+      const qVal = qMatrix?.[row]?.[col] ?? pVal;
+      heatmapData.push([col, row, value, pVal, qVal]);
     }
   }
 
@@ -346,11 +349,11 @@ function CorrelationHeatmap({
           fontSize: 9,
           formatter: (params: { value: number[] }) => {
             const r = params.value[2];
-            const p = params.value[3];
+            const q = params.value[4];
             let stars = "";
-            if (p < 0.001) stars = "***";
-            else if (p < 0.01) stars = "**";
-            else if (p < 0.05) stars = "*";
+            if (q < 0.001) stars = "***";
+            else if (q < 0.01) stars = "**";
+            else if (q < 0.05) stars = "*";
             return `${r.toFixed(2)}${stars}`;
           },
         },
@@ -362,8 +365,8 @@ function CorrelationHeatmap({
     ],
     tooltip: {
       formatter: (params: { value: number[] }) => {
-        const [xIdx, yIdx, r, p] = params.value;
-        return `<b>${metricLabel(labels[yIdx])} vs ${metricLabel(labels[xIdx])}</b><br/>r = ${r.toFixed(3)}<br/>p = ${p.toFixed(4)}`;
+        const [xIdx, yIdx, r, p, q] = params.value;
+        return `<b>${metricLabel(labels[yIdx])} vs ${metricLabel(labels[xIdx])}</b><br/>r = ${r.toFixed(3)}<br/>p = ${p.toFixed(4)}<br/>q = ${q.toFixed(4)}`;
       },
     },
   };
@@ -459,10 +462,29 @@ function TrendStatisticsCards({ stats }: { stats: TrendStatistic[] }) {
             </div>
             <div className="space-y-1 text-xs text-muted-foreground">
               <p>
-                Slope/day:{" "}
+                OLS slope/day:{" "}
                 <span className="font-medium text-foreground">
                   {item.slope_per_day !== null && item.slope_per_day !== undefined
                     ? item.slope_per_day.toFixed(3)
+                    : "—"}
+                </span>
+              </p>
+              <p>
+                Robust slope/day:{" "}
+                <span className="font-medium text-foreground">
+                  {item.robust_slope_per_day !== null && item.robust_slope_per_day !== undefined
+                    ? item.robust_slope_per_day.toFixed(3)
+                    : "—"}
+                </span>
+              </p>
+              <p>
+                95% slope CI:{" "}
+                <span className="font-medium text-foreground">
+                  {item.slope_ci_low !== null &&
+                  item.slope_ci_low !== undefined &&
+                  item.slope_ci_high !== null &&
+                  item.slope_ci_high !== undefined
+                    ? `[${item.slope_ci_low.toFixed(3)}, ${item.slope_ci_high.toFixed(3)}]`
                     : "—"}
                 </span>
               </p>
@@ -484,6 +506,20 @@ function TrendStatisticsCards({ stats }: { stats: TrendStatistic[] }) {
                   {item.p_value !== null && item.p_value !== undefined
                     ? item.p_value.toFixed(4)
                     : "—"}
+                </span>
+              </p>
+              <p>
+                q-value:{" "}
+                <span className="font-medium text-foreground">
+                  {item.q_value !== null && item.q_value !== undefined
+                    ? item.q_value.toFixed(4)
+                    : "—"}
+                </span>
+              </p>
+              <p>
+                FDR status:{" "}
+                <span className="font-medium text-foreground">
+                  {item.fdr_significance ?? "not_tested"}
                 </span>
               </p>
               <p>
@@ -512,14 +548,25 @@ function CorrelationInsights({ correlations }: { correlations: PhysiologicalCorr
             <p className="text-sm font-medium">
               RMSSD vs {metricLabel(corr.other_metric)}
             </p>
-            <Badge variant="outline">
-              r={corr.r !== null && corr.r !== undefined ? corr.r.toFixed(3) : "—"}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">
+                r={corr.r !== null && corr.r !== undefined ? corr.r.toFixed(3) : "—"}
+              </Badge>
+              {corr.significance === "fdr_significant" && (
+                <Badge variant="outline" className="border-success text-success">
+                  FDR sig
+                </Badge>
+              )}
+            </div>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
             {corr.interpretation ?? "Association over time"} | p=
             {corr.p_value !== null && corr.p_value !== undefined ? corr.p_value.toFixed(4) : "—"} | n=
             {corr.n_samples}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            q={corr.q_value !== null && corr.q_value !== undefined ? corr.q_value.toFixed(4) : "—"} | effect=
+            {corr.effect_size ?? "—"}
           </p>
         </div>
       ))}
@@ -759,6 +806,7 @@ export default function WindowedPage() {
                       labels={data.correlation_metric_labels ?? []}
                       matrix={data.correlation_matrix ?? []}
                       pMatrix={data.correlation_p_values ?? []}
+                      qMatrix={data.correlation_q_values ?? []}
                     />
                   ) : (
                     <p className="text-sm text-muted-foreground">
@@ -850,14 +898,19 @@ export default function WindowedPage() {
                     • <strong>Windowed HRV:</strong> Sliding windows are computed per tracing, then chronologically merged to produce a longitudinal autonomic timeline across all ingested files.
                   </p>
                   <p>
-                    • <strong>Trend model:</strong> EWMA smoothing plus daily Kendall tau and slope estimates provide robust directionality while limiting outlier sensitivity.
+                    • <strong>Trend model:</strong> EWMA smoothing plus Kendall tau, OLS slope, and robust Theil-Sen slope confidence intervals are used to characterize directionality.
                   </p>
                   <p>
-                    • <strong>Physiology coupling:</strong> Correlations use Spearman statistics against wearable physiology (resting HR, sleep duration, SpO2, stress, body battery) when available.
+                    • <strong>Physiology coupling:</strong> Correlations use Spearman statistics against wearable physiology (resting HR, sleep duration, SpO2, stress, body battery) with FDR control for multiple comparisons.
                   </p>
                   <p>
                     • <strong>References:</strong> Task Force of ESC/NASPE (1996), Shaffer &amp; Ginsberg (2017), Nunan et al. (2010).
                   </p>
+                  {(data.statistical_notes ?? []).map((note, index) => (
+                    <p key={`note-${index}`}>
+                      • {note}
+                    </p>
+                  ))}
                 </CardContent>
               </Card>
             </motion.div>
