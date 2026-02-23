@@ -4033,7 +4033,17 @@ def _create_database_for_path(db_path: Path) -> UserDatabase:
 # Try to use Streamlit's cache_resource for a singleton-per-path pattern.
 # This prevents cross-mission contamination while keeping `get_database()`'s
 # public signature stable across the codebase.
-try:
+
+def _has_streamlit_runtime() -> bool:
+    """Check if we're running in an active Streamlit runtime context."""
+    try:
+        import streamlit as st
+        from streamlit.runtime.scriptrunner import get_script_run_ctx
+        return get_script_run_ctx() is not None
+    except (ImportError, AttributeError):
+        return False
+
+if _has_streamlit_runtime():
     import streamlit as st
 
     @st.cache_resource(show_spinner=False)
@@ -4044,8 +4054,8 @@ try:
         """Get or create the database instance for the active mission."""
         return _get_database_cached(str(get_database_path()))
 
-except ImportError:
-    # Fallback for non-Streamlit contexts (testing, scripts)
+else:
+    # Fallback for non-Streamlit contexts (testing, scripts, FastAPI)
     _db_instances: dict[str, UserDatabase] = {}
 
     def get_database() -> UserDatabase:
@@ -4066,8 +4076,8 @@ except ImportError:
 # Cached Query Functions (Performance Optimization)
 # ---------------------------------------------------------------------------
 
-# Try to use Streamlit caching for expensive queries
-try:
+# Use Streamlit caching for expensive queries only in Streamlit runtime
+if _has_streamlit_runtime():
     import streamlit as st
     
     @st.cache_data(ttl=30, max_entries=32, show_spinner=False)
@@ -4110,8 +4120,8 @@ try:
         """Mission-scoped cached user profile (wrapper)."""
         return _get_cached_user_by_id_for_db(str(get_database_path()), user_id)
 
-except ImportError:
-    # Fallback for non-Streamlit contexts
+else:
+    # Fallback for non-Streamlit contexts (FastAPI, scripts, tests)
     def get_cached_user_list() -> List[Dict[str, Any]]:
         db = get_database()
         return [
