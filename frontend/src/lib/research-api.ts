@@ -553,6 +553,7 @@ export async function getHRVWindowed(
     scope?: "all" | "selected";
     includeGarmin?: boolean;
     maxRecordings?: number;
+    horizonDays?: number;
   },
 ): Promise<WindowedMetricsResponse> {
   const requestedScope = options?.scope ?? "all";
@@ -560,6 +561,7 @@ export async function getHRVWindowed(
     const params = new URLSearchParams({
       window_size: String(windowSize),
       step_size: String(stepSize),
+      horizon_days: String(options?.horizonDays ?? 30),
       scope: requestedScope,
       include_garmin: String(options?.includeGarmin ?? true),
     });
@@ -611,6 +613,13 @@ export async function getHRVWindowed(
       physiological_timestamps: [],
       physiological_series: {},
       physiological_correlations: [],
+      long_term_window_days: options?.horizonDays ?? 30,
+      long_term_timestamps: [],
+      long_term_series: {},
+      long_term_trend_series: {},
+      long_term_metric_groups: {},
+      long_term_statistics: [],
+      future_ml_insights: [],
       statistical_notes: [],
       context: buildFallbackContext(),
     };
