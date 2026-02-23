@@ -17,6 +17,8 @@ import json
 import logging
 import os
 import re
+import shutil
+import sqlite3
 import sys
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -3199,6 +3201,151 @@ def _safe_iso_date(raw: Optional[str]) -> str:
     return datetime.now(timezone.utc).date().isoformat()
 
 
+def _table_exists(cursor: sqlite3.Cursor, table_name: str) -> bool:
+    """Check whether a table exists in SQLite."""
+    row = cursor.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+        (table_name,),
+    ).fetchone()
+    return row is not None
+
+
+def _backfill_filename_timestamps_in_db(
+    *,
+    db_path: Path,
+    user_id: Optional[str],
+    include_cache: bool,
+    apply_changes: bool,
+    create_backup: bool,
+) -> Dict[str, Any]:
+    """Backfill persisted HRV timestamps using filename-derived dates."""
+    report: Dict[str, Any] = {
+        "db_path": str(db_path),
+        "backup_path": None,
+        "measurements_rows_scanned": 0,
+        "measurements_rows_parseable": 0,
+        "measurements_rows_changed": 0,
+        "cache_rows_scanned": 0,
+        "cache_rows_parseable": 0,
+        "cache_rows_changed": 0,
+        "applied": bool(apply_changes),
+    }
+    if not db_path.exists():
+        return report
+
+    if apply_changes and create_backup:
+        stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        backup_path = db_path.with_name(f"{db_path.name}.bak_filename_backfill_{stamp}")
+        shutil.copy2(db_path, backup_path)
+        report["backup_path"] = str(backup_path)
+
+    conn = sqlite3.connect(str(db_path), timeout=30.0)
+    conn.row_factory = sqlite3.Row
+    try:
+        cursor = conn.cursor()
+
+        if _table_exists(cursor, "hrv_measurements"):
+            if user_id:
+                rows = cursor.execute(
+                    """
+                    SELECT measurement_id, user_id, source_file, recording_start_utc, measurement_date
+                    FROM hrv_measurements
+                    WHERE user_id = ?
+                    """,
+                    (user_id,),
+                ).fetchall()
+            else:
+                rows = cursor.execute(
+                    """
+                    SELECT measurement_id, user_id, source_file, recording_start_utc, measurement_date
+                    FROM hrv_measurements
+                    """
+                ).fetchall()
+            report["measurements_rows_scanned"] = len(rows)
+
+            measurement_updates: List[tuple[str, str, str]] = []
+            parseable_count = 0
+            for row in rows:
+                source_dt = _extract_recording_datetime_from_source(row["source_file"])
+                if source_dt is None:
+                    continue
+                parseable_count += 1
+                new_timestamp = _utc_isoformat(source_dt)
+                new_date = source_dt.date().isoformat()
+
+                old_ts_dt = _parse_iso_datetime(row["recording_start_utc"])
+                old_timestamp = _utc_isoformat(old_ts_dt) if old_ts_dt is not None else None
+                old_date_dt = _parse_iso_datetime(row["measurement_date"])
+                old_date = old_date_dt.date().isoformat() if old_date_dt is not None else None
+                if old_timestamp != new_timestamp or old_date != new_date:
+                    measurement_updates.append((new_timestamp, new_date, str(row["measurement_id"])))
+
+            report["measurements_rows_parseable"] = parseable_count
+            report["measurements_rows_changed"] = len(measurement_updates)
+            if apply_changes and measurement_updates:
+                cursor.executemany(
+                    """
+                    UPDATE hrv_measurements
+                    SET recording_start_utc = ?, measurement_date = ?
+                    WHERE measurement_id = ?
+                    """,
+                    measurement_updates,
+                )
+
+        if include_cache and _table_exists(cursor, "hrv_analysis_cache"):
+            if user_id:
+                cache_rows = cursor.execute(
+                    """
+                    SELECT cache_id, user_id, source_file, recording_date
+                    FROM hrv_analysis_cache
+                    WHERE user_id = ?
+                    """,
+                    (user_id,),
+                ).fetchall()
+            else:
+                cache_rows = cursor.execute(
+                    """
+                    SELECT cache_id, user_id, source_file, recording_date
+                    FROM hrv_analysis_cache
+                    """
+                ).fetchall()
+            report["cache_rows_scanned"] = len(cache_rows)
+
+            cache_updates: List[tuple[str, str]] = []
+            cache_parseable = 0
+            for row in cache_rows:
+                source_dt = _extract_recording_datetime_from_source(row["source_file"])
+                if source_dt is None:
+                    continue
+                cache_parseable += 1
+                new_date = source_dt.date().isoformat()
+                old_date_dt = _parse_iso_datetime(row["recording_date"])
+                old_date = old_date_dt.date().isoformat() if old_date_dt is not None else None
+                if old_date != new_date:
+                    cache_updates.append((new_date, str(row["cache_id"])))
+
+            report["cache_rows_parseable"] = cache_parseable
+            report["cache_rows_changed"] = len(cache_updates)
+            if apply_changes and cache_updates:
+                cursor.executemany(
+                    """
+                    UPDATE hrv_analysis_cache
+                    SET recording_date = ?
+                    WHERE cache_id = ?
+                    """,
+                    cache_updates,
+                )
+
+        if apply_changes:
+            conn.commit()
+        else:
+            conn.rollback()
+    finally:
+        conn.close()
+
+    return report
+
+
 def _normalize_rr_sequence(values: List[float], *, max_len: int = 250_000) -> List[float]:
     """Bounded RR normalization for stable hashing/storage."""
     normalized: List[float] = []
@@ -4982,6 +5129,31 @@ class RRTracingDetailResponse(BaseModel):
     cached_analysis: Optional[HRVAnalysisResult] = None
 
 
+class FilenameTimestampBackfillReport(BaseModel):
+    """Per-database filename timestamp backfill report."""
+
+    db_path: str
+    backup_path: Optional[str] = None
+    measurements_rows_scanned: int = 0
+    measurements_rows_parseable: int = 0
+    measurements_rows_changed: int = 0
+    cache_rows_scanned: int = 0
+    cache_rows_parseable: int = 0
+    cache_rows_changed: int = 0
+    applied: bool = False
+
+
+class FilenameTimestampBackfillResponse(BaseModel):
+    """Aggregate response for filename timestamp backfill operation."""
+
+    run_at_utc: str
+    apply_changes: bool
+    include_cache: bool
+    user_id: Optional[str] = None
+    reports: List[FilenameTimestampBackfillReport] = Field(default_factory=list)
+    totals: Dict[str, int] = Field(default_factory=dict)
+
+
 def _quality_status_from_artifact(artifact_percentage: Optional[float]) -> str:
     """Map artifact burden into frontend-friendly quality labels."""
     if artifact_percentage is None:
@@ -5106,6 +5278,64 @@ async def get_hrv_tracing_detail(
         raise
     except Exception as exc:
         _LOGGER.error("Error loading RR tracing detail for %s/%s: %s", user_id, measurement_id, exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post(
+    "/hrv/admin/backfill-filename-timestamps",
+    response_model=FilenameTimestampBackfillResponse,
+)
+async def backfill_hrv_filename_timestamps(
+    apply_changes: bool = Query(
+        default=False,
+        description="Set true to persist updates (default is dry-run).",
+    ),
+    user_id: Optional[str] = Query(
+        default=None,
+        description="Optional user filter; when omitted, scans all users.",
+    ),
+    include_cache: bool = Query(
+        default=True,
+        description="Also backfill hrv_analysis_cache.recording_date from source_file.",
+    ),
+    create_backup: bool = Query(
+        default=True,
+        description="Create a timestamped DB backup before applying changes.",
+    ),
+) -> FilenameTimestampBackfillResponse:
+    """Backfill recording timestamps using dates embedded in source filenames."""
+    try:
+        from user_database import UserDatabase
+
+        db = UserDatabase()
+        db_path = Path(db.db_path)
+        raw_report = await asyncio.to_thread(
+            _backfill_filename_timestamps_in_db,
+            db_path=db_path,
+            user_id=user_id,
+            include_cache=include_cache,
+            apply_changes=apply_changes,
+            create_backup=create_backup,
+        )
+        report = FilenameTimestampBackfillReport(**raw_report)
+        totals = {
+            "measurements_rows_scanned": report.measurements_rows_scanned,
+            "measurements_rows_parseable": report.measurements_rows_parseable,
+            "measurements_rows_changed": report.measurements_rows_changed,
+            "cache_rows_scanned": report.cache_rows_scanned,
+            "cache_rows_parseable": report.cache_rows_parseable,
+            "cache_rows_changed": report.cache_rows_changed,
+        }
+        return FilenameTimestampBackfillResponse(
+            run_at_utc=datetime.now(timezone.utc).isoformat(),
+            apply_changes=apply_changes,
+            include_cache=include_cache,
+            user_id=user_id,
+            reports=[report],
+            totals=totals,
+        )
+    except Exception as exc:
+        _LOGGER.error("Filename timestamp backfill failed: %s", exc)
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
