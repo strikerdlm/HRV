@@ -64,6 +64,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `/api/research/hrv/windowed/{user_id}` now supports `scope=all|selected`, computes merged multi-tracing windowed trajectories, and adds robust trend statistics (EWMA + Kendall slope metadata) plus change-point/anomaly detection.
   - Added physiological co-trend/correlation outputs (including Garmin wearable signals when available) and a publication-style frontend dashboard with longitudinal trend, standardized physiology overlays, and a significance-aware correlation heatmap.
   - Added statistical hardening for scientific review: Theil-Sen slope confidence intervals, Benjamini-Hochberg FDR (`q` values) for physiological correlation screening, and explicit methodology notes rendered in the Windowed page.
+  - Added strict long-horizon analytics (`horizon_days` up to 31 days) with daily trajectory panels for each HRV and Garmin physiology metric, metric-level robust trend inference, and long-term EWMA trend-series payloads for publication-grade longitudinal visualization.
 - **User profile null-sex compatibility for scheduling/user fetches** (`api/main.py`, `app/user_database.py`):
   - Hardened profile normalization so legacy records with `sex = NULL` are coerced to `"other"` before API model validation.
   - Added defensive language fallback to `"en"` in API profile serialization to avoid response validation failures from incomplete historical rows.
