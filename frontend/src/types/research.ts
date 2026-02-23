@@ -462,6 +462,32 @@ export interface NonlinearResponse {
 // Windowed Analysis Types (Phase 1)
 // ---------------------------------------------------------------------------
 
+export interface TrendStatistic {
+  metric: string;
+  n_samples: number;
+  slope_per_day?: number | null;
+  kendall_tau?: number | null;
+  p_value?: number | null;
+  r_squared?: number | null;
+  direction: "increasing" | "decreasing" | "stable" | "insufficient" | string;
+  baseline_value?: number | null;
+  latest_value?: number | null;
+  delta_pct?: number | null;
+  mean_value?: number | null;
+  std_value?: number | null;
+  cv_pct?: number | null;
+}
+
+export interface PhysiologicalCorrelation {
+  anchor_metric: string;
+  other_metric: string;
+  method: string;
+  r?: number | null;
+  p_value?: number | null;
+  n_samples: number;
+  interpretation?: string;
+}
+
 export interface WindowedMetricsResponse {
   timestamps: string[];
   rmssd: (number | null)[];
@@ -478,6 +504,17 @@ export interface WindowedMetricsResponse {
   window_size_seconds: number;
   step_size_seconds: number;
   n_windows: number;
+  source_scope?: "all" | "selected" | string;
+  n_sessions?: number;
+  session_sources?: string[];
+  trend_break_indices?: number[];
+  trend_statistics?: TrendStatistic[];
+  correlation_metric_labels?: string[];
+  correlation_matrix?: (number | null)[][];
+  correlation_p_values?: (number | null)[][];
+  physiological_timestamps?: string[];
+  physiological_series?: Record<string, (number | null)[]>;
+  physiological_correlations?: PhysiologicalCorrelation[];
   context?: AnalysisContext;
 }
 
