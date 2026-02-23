@@ -674,7 +674,7 @@ function HRFRadar({ hrf }: { hrf: HRFMetrics }) {
 }
 
 // RR Tachogram
-function RRTachogram({ rr, onClose }: { rr: number[]; onClose: () => void }) {
+function RRTachogram({ rr, onClose }: { rr: number[]; onClose?: () => void }) {
   const data = rr.slice(0, 500).map((r, i) => [i, r]);
   const hr = rr.slice(0, 500).map((r, i) => [i, 60000 / r]);
 
@@ -738,9 +738,11 @@ function RRTachogram({ rr, onClose }: { rr: number[]; onClose: () => void }) {
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base">RR Interval Tachogram</CardTitle>
-          <Button size="sm" variant="ghost" onClick={onClose}>
-            <X className="h-4 w-4" />
-          </Button>
+          {onClose && (
+            <Button size="sm" variant="ghost" onClick={onClose}>
+              <X className="h-4 w-4" />
+            </Button>
+          )}
         </div>
         <CardDescription>First 500 beats - scroll to explore</CardDescription>
       </CardHeader>
@@ -1445,9 +1447,104 @@ export default function HRVAnalysisPage() {
                   </Card>
                 </motion.div>
               </>
+            ) : selectedTracing ? (
+              <>
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.1 }}
+                >
+                  <Card>
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2">
+                        <FileText className="h-5 w-5 text-primary" />
+                        Tracing Loaded - Ready for Analysis
+                      </CardTitle>
+                      <CardDescription>
+                        {selectedTracing.name} • {formatDate(selectedTracing.timestamp)}. Run comprehensive
+                        analysis to unlock full frequency, nonlinear, and HRF plots.
+                      </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Button
+                          onClick={() => handleAnalyze(selectedTracing)}
+                          disabled={isAnalyzing}
+                        >
+                          <Play className="h-4 w-4 mr-2" />
+                          Analyze Selected Tracing
+                        </Button>
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowUploadDialog(true)}
+                        >
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload More Data
+                        </Button>
+                        <Badge variant="outline">
+                          {selectedTracing.rrIntervals.length || selectedTracing.nIntervals || 0} beats
+                        </Badge>
+                      </div>
+
+                      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+                        <MetricCard
+                          title="Duration"
+                          value={selectedTracing.analysis?.duration_minutes ?? null}
+                          unit="min"
+                          description="Recording length"
+                          icon={Clock}
+                          color="text-primary"
+                        />
+                        <MetricCard
+                          title="Mean HR"
+                          value={selectedTracing.analysis?.mean_hr_bpm ?? null}
+                          unit="bpm"
+                          description="From upload pass"
+                          icon={Heart}
+                          color="text-danger"
+                        />
+                        <MetricCard
+                          title="RMSSD"
+                          value={selectedTracing.analysis?.rmssd ?? null}
+                          unit="ms"
+                          description="Quick time-domain"
+                          icon={Heart}
+                          color="text-success"
+                        />
+                        <MetricCard
+                          title="SDNN"
+                          value={selectedTracing.analysis?.sdnn ?? null}
+                          unit="ms"
+                          description="Quick time-domain"
+                          icon={Activity}
+                          color="text-info"
+                        />
+                        <MetricCard
+                          title="Artifacts"
+                          value={selectedTracing.analysis?.artifact_percentage ?? null}
+                          unit="%"
+                          description="Signal quality"
+                          icon={AlertTriangle}
+                          color="text-warning"
+                        />
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {selectedTracing.rrIntervals.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <RRTachogram rr={selectedTracing.rrIntervals} />
+                  </motion.div>
+                )}
+              </>
             ) : (
               <Card>
-                <CardContent className="py-16 text-center">
+                <CardContent className="py-10 text-center">
                   <motion.div
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
