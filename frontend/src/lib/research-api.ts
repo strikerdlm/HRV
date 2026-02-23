@@ -136,6 +136,83 @@ function appendTracingSelectionParams(params: URLSearchParams, userId?: string):
   }
 }
 
+const FILENAME_TIMESTAMP_REGEX =
+  /(^|[^0-9])(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?(0[1-9]|[12]\d|3[01])(?:[T _-]?([01]\d|2[0-3])[:._-]?([0-5]\d)(?:[:._-]?([0-5]\d))?)?(?!\d)/;
+
+function buildIsoUtcTimestamp(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+  second: number,
+): string | null {
+  const candidate = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  if (
+    candidate.getUTCFullYear() !== year ||
+    candidate.getUTCMonth() !== month - 1 ||
+    candidate.getUTCDate() !== day ||
+    candidate.getUTCHours() !== hour ||
+    candidate.getUTCMinutes() !== minute ||
+    candidate.getUTCSeconds() !== second
+  ) {
+    return null;
+  }
+  return candidate.toISOString();
+}
+
+export function parseRecordingTimestampFromFilename(
+  sourceFile?: string | null,
+): string | null {
+  if (!sourceFile) {
+    return null;
+  }
+  const trimmed = String(sourceFile).trim();
+  if (!trimmed) {
+    return null;
+  }
+  const filename = trimmed.split(/[\\/]/).pop() ?? trimmed;
+  const stem = filename.replace(/\.[^/.]+$/, "");
+  const candidates = [stem, filename];
+  for (const candidate of candidates) {
+    const match = candidate.match(FILENAME_TIMESTAMP_REGEX);
+    if (!match) {
+      continue;
+    }
+    const year = Number.parseInt(match[2], 10);
+    const month = Number.parseInt(match[3], 10);
+    const day = Number.parseInt(match[4], 10);
+    const hour = Number.parseInt(match[5] ?? "0", 10);
+    const minute = Number.parseInt(match[6] ?? "0", 10);
+    const second = Number.parseInt(match[7] ?? "0", 10);
+    const iso = buildIsoUtcTimestamp(year, month, day, hour, minute, second);
+    if (iso) {
+      return iso;
+    }
+  }
+  return null;
+}
+
+export function resolveRecordingTimestamp({
+  sourceFile,
+  recordingTimestamp,
+}: {
+  sourceFile?: string | null;
+  recordingTimestamp?: string | null;
+}): string {
+  const inferred = parseRecordingTimestampFromFilename(sourceFile);
+  if (inferred) {
+    return inferred;
+  }
+  if (recordingTimestamp) {
+    const parsed = new Date(recordingTimestamp);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+  return new Date().toISOString();
+}
+
 /**
  * Get current space weather data and impact predictions
  */
