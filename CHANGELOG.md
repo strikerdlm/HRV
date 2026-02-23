@@ -26,6 +26,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Application mode slider sticking mid-position** (`frontend/src/components/layout/mode-switcher.tsx`):
   - Replaced mixed unit Framer Motion indicator translation with deterministic CSS transform-based segmented control animation.
   - Prevents the operational/research mode indicator from getting visually stuck between options.
+- **HRV Overview empty-state layout regression** (`frontend/src/app/research/hrv-analysis/page.tsx`):
+  - Replaced the oversized upload-only empty state with a selected-tracing overview panel and immediate tachogram preview when a tracing is loaded but full analysis has not run yet.
+  - Keeps analysis discoverable (`Analyze Selected Tracing`) while restoring a plot-first visual experience.
 - **Filename-based chronology normalization across analysis surfaces** (`api/research_endpoints.py`, `tests/test_research_windowed_endpoint.py`):
   - Added deterministic helpers and backfill logic to prioritize timestamps embedded in source filenames over ingestion time when resolving `recording_start_utc`/`measurement_date`.
   - Ensures consistent ordering in catalog/detail retrieval, longitudinal windowed analytics, readiness trends, correlation timelines, and exports.
