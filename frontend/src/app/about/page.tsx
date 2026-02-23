@@ -156,7 +156,61 @@ const references = [
   },
 ];
 
+interface ChangelogCategory {
+  category: string;
+  items: string[];
+}
+
+interface ChangelogReleaseSummary {
+  version: string;
+  date: string;
+  categories: ChangelogCategory[];
+}
+
+interface ChangelogApiResponse {
+  ok: boolean;
+  release: ChangelogReleaseSummary | null;
+  error?: string;
+}
+
 export default function AboutPage() {
+  const [latestRelease, setLatestRelease] = React.useState<ChangelogReleaseSummary | null>(null);
+  const [changelogError, setChangelogError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const loadChangelog = async () => {
+      try {
+        const response = await fetch("/api/about/changelog", {
+          method: "GET",
+          cache: "no-store",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        const payload = (await response.json()) as ChangelogApiResponse;
+        if (!cancelled && payload.ok) {
+          setLatestRelease(payload.release);
+          setChangelogError(null);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setChangelogError(
+            error instanceof Error ? error.message : "Unable to load changelog summary.",
+          );
+        }
+      }
+    };
+    void loadChangelog();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const displayedVersion = latestRelease?.version || APP_VERSION;
+  const displayedDate = latestRelease?.date || APP_VERSION_DATE;
+
   return (
     <PageWrapper
       title="About Operational Frontend"
@@ -232,6 +286,58 @@ export default function AboutPage() {
         >
           <Card>
             <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5" />
+                Latest Release Capabilities by Category
+              </CardTitle>
+              <CardDescription>
+                Auto-read from <code>CHANGELOG.md</code> so this page stays synchronized with release notes.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant="outline">Version {displayedVersion}</Badge>
+                <Badge variant="outline">Updated {displayedDate}</Badge>
+              </div>
+              {latestRelease && latestRelease.categories.length > 0 ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {latestRelease.categories.map((section) => (
+                    <div key={section.category} className="rounded-lg border bg-muted/20 p-4 space-y-2">
+                      <h4 className="text-sm font-semibold">{section.category}</h4>
+                      {section.items.length > 0 ? (
+                        <ul className="space-y-1 text-xs text-muted-foreground">
+                          {section.items.slice(0, 8).map((item) => (
+                            <li key={`${section.category}-${item}`} className="leading-relaxed">
+                              - {item}
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs text-muted-foreground">No capability entries in this section.</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-lg border bg-muted/20 p-4">
+                  <p className="text-xs text-muted-foreground">
+                    {changelogError
+                      ? `Changelog read failed: ${changelogError}`
+                      : "Changelog summary is loading or unavailable."}
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.15 }}
+        >
+          <Card>
+            <CardHeader>
               <CardTitle>Operational Capabilities</CardTitle>
               <CardDescription>
                 Core modules used for day-to-day mission support
@@ -277,7 +383,7 @@ export default function AboutPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.2 }}
+          transition={{ delay: 0.25 }}
         >
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
@@ -349,7 +455,7 @@ export default function AboutPage() {
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.35 }}
         >
           <div className="grid gap-6 lg:grid-cols-2">
             <Card>
@@ -362,11 +468,11 @@ export default function AboutPage() {
               <CardContent className="grid grid-cols-2 gap-4 text-sm">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Version</p>
-                  <p className="font-mono font-semibold">{APP_VERSION}</p>
+                  <p className="font-mono font-semibold">{displayedVersion}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Last Updated</p>
-                  <p className="font-mono font-semibold">{APP_VERSION_DATE}</p>
+                  <p className="font-mono font-semibold">{displayedDate}</p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase tracking-wide">Frontend</p>
@@ -433,7 +539,7 @@ export default function AboutPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.4 }}
+          transition={{ delay: 0.45 }}
           className="text-center text-sm text-muted-foreground py-4"
         >
           <p>
