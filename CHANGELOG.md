@@ -60,6 +60,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `/api/research/hrv/upload` now uses a lightweight time-domain metric pass for faster ingestion while preserving persisted tracing IDs/hashes and deduplication.
 - **Upload fetch error handling in dev UI** (`frontend/src/lib/research-api.ts`):
   - Removed noisy `console.error` emission for expected network upload failures and replaced it with a normalized thrown message so Turbopack does not surface a console TypeError overlay for caught upload failures.
+- **Windowed longitudinal analytics across all ingested RR tracings** (`api/research_endpoints.py`, `frontend/src/lib/research-api.ts`, `frontend/src/types/research.ts`, `frontend/src/app/research/windowed/page.tsx`):
+  - `/api/research/hrv/windowed/{user_id}` now supports `scope=all|selected`, computes merged multi-tracing windowed trajectories, and adds robust trend statistics (EWMA + Kendall slope metadata) plus change-point/anomaly detection.
+  - Added physiological co-trend/correlation outputs (including Garmin wearable signals when available) and a publication-style frontend dashboard with longitudinal trend, standardized physiology overlays, and a significance-aware correlation heatmap.
 
 ### Documentation
 - Updated `README.md`, `frontend/README.md`, and `docs/Manual.md` to reflect:
