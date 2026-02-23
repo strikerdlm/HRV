@@ -2051,34 +2051,6 @@ async def get_hrv_windowed(
             corr = pd.Series(a_vals).corr(pd.Series(b_vals), method="spearman")
             return (_safe_float(corr), None, n_samples)
 
-        def _benjamini_hochberg(p_values: List[Optional[float]]) -> List[Optional[float]]:
-            """Benjamini-Hochberg FDR correction with bounded, deterministic logic."""
-            indexed: List[tuple[int, float]] = []
-            for idx, p_raw in enumerate(p_values):
-                p_val = _safe_float(p_raw)
-                if p_val is None:
-                    continue
-                bounded = min(1.0, max(0.0, float(p_val)))
-                indexed.append((idx, bounded))
-
-            corrected: List[Optional[float]] = [None] * len(p_values)
-            m = len(indexed)
-            if m == 0:
-                return corrected
-
-            indexed.sort(key=lambda item: item[1])
-            running_min = 1.0
-            adjusted_ranked: List[float] = [1.0] * m
-            for rank in range(m, 0, -1):
-                _, p_val = indexed[rank - 1]
-                adjusted = min(1.0, (p_val * m) / rank)
-                running_min = min(running_min, adjusted)
-                adjusted_ranked[rank - 1] = running_min
-
-            for rank, (idx, _) in enumerate(indexed):
-                corrected[idx] = float(adjusted_ranked[rank])
-            return corrected
-
         measurements: List[Any] = []
         if scope_value == "selected":
             selected = await _resolve_measurement_for_user(
@@ -2872,6 +2844,47 @@ def _z_score(value: Optional[float], center: Optional[float], spread: Optional[f
         return 0.0
     denom = max(1e-6, float(spread))
     return float((value - center) / denom)
+
+
+def _benjamini_hochberg(p_values: List[Optional[float]]) -> List[Optional[float]]:
+    """Benjamini-Hochberg FDR correction with deterministic ordering.
+
+    Args:
+        p_values: Raw p-values; None entries are ignored and preserved as None.
+
+    Returns:
+        List of q-values aligned to input order.
+    """
+    indexed: List[tuple[int, float]] = []
+    for idx, p_raw in enumerate(p_values):
+        if p_raw is None:
+            continue
+        try:
+            p_val = float(p_raw)
+        except (TypeError, ValueError):
+            continue
+        if not (p_val >= 0.0):
+            continue
+        bounded = min(1.0, max(0.0, p_val))
+        indexed.append((idx, bounded))
+
+    corrected: List[Optional[float]] = [None] * len(p_values)
+    m = len(indexed)
+    if m == 0:
+        return corrected
+
+    indexed.sort(key=lambda item: item[1])
+    running_min = 1.0
+    adjusted_ranked: List[float] = [1.0] * m
+    for rank in range(m, 0, -1):
+        _, p_val = indexed[rank - 1]
+        adjusted = min(1.0, (p_val * m) / rank)
+        running_min = min(running_min, adjusted)
+        adjusted_ranked[rank - 1] = running_min
+
+    for rank, (idx, _) in enumerate(indexed):
+        corrected[idx] = float(adjusted_ranked[rank])
+    return corrected
 
 
 def _extract_segment(rr_ms: List[float], segment: SegmentAnnotation) -> List[float]:
@@ -5832,7 +5845,7 @@ class JetLagRequest(BaseModel):
 async def get_metar(icao: str) -> Dict[str, Any]:
     """Fetch decoded METAR from FAA AviationWeather.gov (free, no API key).
 
-    Proxies to: https://aviationweather.gov/api/data/metar?ids={ICAO}&format=json
+    Proxies to: https://aviationweather.gov/api/data/metar?ids={ICAO}&format=json&hours=24
     """
     import httpx
 
@@ -5840,7 +5853,7 @@ async def get_metar(icao: str) -> Dict[str, Any]:
     if len(icao_clean) != 4 or not icao_clean.isalpha():
         raise HTTPException(status_code=400, detail="ICAO code must be 4 letters (e.g., SKBO)")
 
-    url = f"https://aviationweather.gov/api/data/metar?ids={icao_clean}&format=json"
+    url = f"https://aviationweather.gov/api/data/metar?ids={icao_clean}&format=json&hours=24"
     try:
         async with httpx.AsyncClient(timeout=15.0) as client:
             resp = await client.get(url, headers={"User-Agent": "MissionControl-FlightSurgeon/1.13"})
@@ -5852,7 +5865,28 @@ async def get_metar(icao: str) -> Dict[str, Any]:
 
         data = resp.json()
         if isinstance(data, list) and len(data) > 0:
-            return {"icao": icao_clean, "metar": data[0], "error": None}
+            # API usually returns descending recency, but select newest explicitly for robustness.
+            def _metar_time_key(item: Any) -> float:
+                if not isinstance(item, dict):
+                    return 0.0
+
+                report_raw = item.get("reportTime")
+                if isinstance(report_raw, str) and report_raw:
+                    try:
+                        return datetime.fromisoformat(report_raw.replace("Z", "+00:00")).timestamp()
+                    except ValueError:
+                        pass
+
+                obs_raw = item.get("obsTime")
+                try:
+                    if obs_raw is not None:
+                        return float(obs_raw)
+                except (TypeError, ValueError):
+                    pass
+                return 0.0
+
+            latest_metar = max(data, key=_metar_time_key)
+            return {"icao": icao_clean, "metar": latest_metar, "error": None}
         return {"icao": icao_clean, "metar": None, "error": "No data returned"}
 
     except Exception as exc:
