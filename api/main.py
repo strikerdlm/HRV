@@ -331,17 +331,38 @@ def _get_user_database():
         ) from exc
 
 
+def _normalize_profile_sex(value: Any) -> str:
+    """Normalize profile sex values to a safe API string."""
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized:
+            return normalized
+    return "other"
+
+
+def _normalize_language(value: Any) -> str:
+    """Normalize language values to a safe API string."""
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        if normalized:
+            return normalized
+    return "en"
+
+
 def _profile_to_dict(profile: Any) -> dict[str, Any]:
     """Convert a UserProfile dataclass to dict safely."""
     if hasattr(profile, "__dataclass_fields__"):
-        return asdict(profile)
+        profile_dict = asdict(profile)
+        profile_dict["sex"] = _normalize_profile_sex(profile_dict.get("sex"))
+        profile_dict["language"] = _normalize_language(profile_dict.get("language"))
+        return profile_dict
     return {
         "user_id": getattr(profile, "user_id", ""),
         "username": getattr(profile, "username", ""),
         "full_name": getattr(profile, "full_name", None),
         "email": getattr(profile, "email", None),
         "date_of_birth": str(getattr(profile, "date_of_birth", "")) if getattr(profile, "date_of_birth", None) else None,
-        "sex": getattr(profile, "sex", "other"),
+        "sex": _normalize_profile_sex(getattr(profile, "sex", None)),
         "height_cm": getattr(profile, "height_cm", None),
         "weight_kg": getattr(profile, "weight_kg", None),
         "resting_hr_bpm": getattr(profile, "resting_hr_bpm", None),
@@ -354,7 +375,7 @@ def _profile_to_dict(profile: Any) -> dict[str, Any]:
         "caffeine_intake_mg": getattr(profile, "caffeine_intake_mg", None),
         "medical_conditions": getattr(profile, "medical_conditions", []) or [],
         "medications": getattr(profile, "medications", []) or [],
-        "language": getattr(profile, "language", "en"),
+        "language": _normalize_language(getattr(profile, "language", None)),
         "crew_role": getattr(profile, "crew_role", None),
         "crew_status": getattr(profile, "crew_status", None),
         "created_at": str(getattr(profile, "created_at", "")) if getattr(profile, "created_at", None) else None,
