@@ -1930,9 +1930,11 @@ class WindowedMetricsResponse(BaseModel):
     correlation_metric_labels: List[str] = Field(default_factory=list)
     correlation_matrix: List[List[Optional[float]]] = Field(default_factory=list)
     correlation_p_values: List[List[Optional[float]]] = Field(default_factory=list)
+    correlation_q_values: List[List[Optional[float]]] = Field(default_factory=list)
     physiological_timestamps: List[str] = Field(default_factory=list)
     physiological_series: Dict[str, List[Optional[float]]] = Field(default_factory=dict)
     physiological_correlations: List[Dict[str, Any]] = Field(default_factory=list)
+    statistical_notes: List[str] = Field(default_factory=list)
     context: Optional[AnalysisContext] = None
 
 
@@ -2048,6 +2050,34 @@ async def get_hrv_windowed(
                     pass
             corr = pd.Series(a_vals).corr(pd.Series(b_vals), method="spearman")
             return (_safe_float(corr), None, n_samples)
+
+        def _benjamini_hochberg(p_values: List[Optional[float]]) -> List[Optional[float]]:
+            """Benjamini-Hochberg FDR correction with bounded, deterministic logic."""
+            indexed: List[tuple[int, float]] = []
+            for idx, p_raw in enumerate(p_values):
+                p_val = _safe_float(p_raw)
+                if p_val is None:
+                    continue
+                bounded = min(1.0, max(0.0, float(p_val)))
+                indexed.append((idx, bounded))
+
+            corrected: List[Optional[float]] = [None] * len(p_values)
+            m = len(indexed)
+            if m == 0:
+                return corrected
+
+            indexed.sort(key=lambda item: item[1])
+            running_min = 1.0
+            adjusted_ranked: List[float] = [1.0] * m
+            for rank in range(m, 0, -1):
+                _, p_val = indexed[rank - 1]
+                adjusted = min(1.0, (p_val * m) / rank)
+                running_min = min(running_min, adjusted)
+                adjusted_ranked[rank - 1] = running_min
+
+            for rank, (idx, _) in enumerate(indexed):
+                corrected[idx] = float(adjusted_ranked[rank])
+            return corrected
 
         measurements: List[Any] = []
         if scope_value == "selected":
@@ -2329,12 +2359,31 @@ async def get_hrv_windowed(
                 ).dt.total_seconds() / 86400.0
             else:
                 x_days = pd.Series(np.arange(len(daily_df), dtype=float))
+            window_x_days = (
+                analysis_df["start"] - analysis_df["start"].iloc[0]
+            ).dt.total_seconds() / 86400.0
             for metric_key, metric_label in trend_metrics:
-                if metric_key not in daily_df.columns:
+                metric_from_daily = metric_key in daily_df.columns
+                metric_from_window = metric_key in analysis_df.columns
+                if not metric_from_daily and not metric_from_window:
                     continue
-                y_values = pd.to_numeric(daily_df[metric_key], errors="coerce")
-                mask = y_values.notna() & x_days.notna()
+
+                y_values = (
+                    pd.to_numeric(daily_df[metric_key], errors="coerce")
+                    if metric_from_daily
+                    else pd.Series(dtype=float)
+                )
+                x_values = x_days
+                mask = y_values.notna() & x_values.notna()
                 n_samples = int(mask.sum())
+
+                # Fallback to window-level trend when daily aggregation is too sparse.
+                if n_samples < 3 and metric_from_window:
+                    y_values = pd.to_numeric(analysis_df[metric_key], errors="coerce")
+                    x_values = window_x_days
+                    mask = y_values.notna() & x_values.notna()
+                    n_samples = int(mask.sum())
+
                 if n_samples < 3:
                     trend_statistics.append(
                         {
@@ -2345,13 +2394,28 @@ async def get_hrv_windowed(
                     )
                     continue
 
-                x = x_days[mask].to_numpy(dtype=float)
+                x = x_values[mask].to_numpy(dtype=float)
                 y = y_values[mask].to_numpy(dtype=float)
                 slope, intercept = np.polyfit(x, y, 1)
                 y_hat = slope * x + intercept
                 ss_res = float(np.sum((y - y_hat) ** 2))
                 ss_tot = float(np.sum((y - np.mean(y)) ** 2))
                 r_squared = None if ss_tot <= 1e-12 else float(1.0 - (ss_res / ss_tot))
+
+                # Robust slope estimate (Theil-Sen) with confidence interval.
+                robust_slope = float(slope)
+                slope_ci_low = None
+                slope_ci_high = None
+                trend_method = "ols+kendall"
+                if scipy_stats is not None:
+                    try:
+                        theil_result = scipy_stats.theilslopes(y, x, alpha=0.95)
+                        robust_slope = _safe_float(getattr(theil_result, "slope", None)) or float(theil_result[0])
+                        slope_ci_low = _safe_float(getattr(theil_result, "low_slope", None))
+                        slope_ci_high = _safe_float(getattr(theil_result, "high_slope", None))
+                        trend_method = "theil-sen+kendall"
+                    except Exception:
+                        pass
                 kendall_tau = None
                 p_value = None
                 if scipy_stats is not None:
@@ -2373,18 +2437,37 @@ async def get_hrv_windowed(
 
                 slope_threshold = max(1e-4, 0.01 * max(abs(mean_val), 1.0))
                 direction = "stable"
-                if p_value is not None and p_value < 0.05 and abs(float(slope)) >= slope_threshold:
-                    direction = "increasing" if slope > 0 else "decreasing"
-                elif abs(float(slope)) >= 2.0 * slope_threshold:
-                    direction = "increasing" if slope > 0 else "decreasing"
+                if slope_ci_low is not None and slope_ci_high is not None:
+                    if slope_ci_low > 0.0:
+                        direction = "increasing"
+                    elif slope_ci_high < 0.0:
+                        direction = "decreasing"
+                elif p_value is not None and p_value < 0.05 and abs(float(robust_slope)) >= slope_threshold:
+                    direction = "increasing" if robust_slope > 0 else "decreasing"
+                elif abs(float(robust_slope)) >= 2.0 * slope_threshold:
+                    direction = "increasing" if robust_slope > 0 else "decreasing"
+
+                significance = "not_significant"
+                if p_value is not None:
+                    if p_value < 0.001:
+                        significance = "highly_significant"
+                    elif p_value < 0.01:
+                        significance = "significant"
+                    elif p_value < 0.05:
+                        significance = "suggestive"
 
                 trend_statistics.append(
                     {
                         "metric": metric_label,
                         "n_samples": n_samples,
                         "slope_per_day": float(slope),
+                        "robust_slope_per_day": float(robust_slope),
+                        "slope_ci_low": slope_ci_low,
+                        "slope_ci_high": slope_ci_high,
+                        "trend_method": trend_method,
                         "kendall_tau": kendall_tau,
                         "p_value": p_value,
+                        "significance": significance,
                         "r_squared": r_squared,
                         "direction": direction,
                         "baseline_value": baseline,
@@ -2395,6 +2478,21 @@ async def get_hrv_windowed(
                         "cv_pct": cv_pct,
                     }
                 )
+
+        trend_p_values = [entry.get("p_value") for entry in trend_statistics]
+        trend_q_values = _benjamini_hochberg(trend_p_values)
+        for idx, entry in enumerate(trend_statistics):
+            q_value = trend_q_values[idx]
+            entry["q_value"] = q_value
+            if q_value is not None:
+                if q_value < 0.01:
+                    entry["fdr_significance"] = "fdr_significant"
+                elif q_value < 0.05:
+                    entry["fdr_significance"] = "fdr_suggestive"
+                else:
+                    entry["fdr_significance"] = "not_significant"
+            else:
+                entry["fdr_significance"] = "not_tested"
 
         physiological_correlations: List[Dict[str, Any]] = []
         if "rmssd" in merged_df.columns:
@@ -2430,9 +2528,31 @@ async def get_hrv_windowed(
                         "r": corr,
                         "p_value": p_val,
                         "n_samples": n_samples,
+                        "effect_size": strength,
+                        "direction": direction,
                         "interpretation": f"{direction} {strength} association",
                     }
                 )
+
+        physiological_p_values = [entry.get("p_value") for entry in physiological_correlations]
+        physiological_q_values = _benjamini_hochberg(physiological_p_values)
+        for idx, entry in enumerate(physiological_correlations):
+            q_value = physiological_q_values[idx]
+            entry["q_value"] = q_value
+            p_value = entry.get("p_value")
+            fdr_significant = q_value is not None and q_value < 0.05
+            entry["is_significant"] = bool(fdr_significant)
+            if fdr_significant:
+                entry["significance"] = "fdr_significant"
+            elif p_value is not None and float(p_value) < 0.05:
+                entry["significance"] = "nominal_significant"
+            else:
+                entry["significance"] = "not_significant"
+            if fdr_significant:
+                entry["interpretation"] = f"{entry['interpretation']} (FDR significant)"
+            elif p_value is not None and float(p_value) < 0.05:
+                entry["interpretation"] = f"{entry['interpretation']} (nominal p<0.05)"
+
         physiological_correlations.sort(
             key=lambda item: abs(float(item.get("r", 0.0))),
             reverse=True,
@@ -2441,6 +2561,7 @@ async def get_hrv_windowed(
         correlation_metric_labels: List[str] = []
         correlation_matrix: List[List[Optional[float]]] = []
         correlation_p_values: List[List[Optional[float]]] = []
+        correlation_q_values: List[List[Optional[float]]] = []
         matrix_candidates = [
             "rmssd",
             "sdnn",
@@ -2458,19 +2579,43 @@ async def get_hrv_windowed(
         ][:8]
         if matrix_candidates:
             correlation_metric_labels = matrix_candidates
-            for metric_a in matrix_candidates:
-                row_r: List[Optional[float]] = []
-                row_p: List[Optional[float]] = []
-                for metric_b in matrix_candidates:
-                    if metric_a == metric_b:
-                        row_r.append(1.0)
-                        row_p.append(0.0)
-                        continue
+            n_metrics = len(matrix_candidates)
+            correlation_matrix = [[None for _ in range(n_metrics)] for _ in range(n_metrics)]
+            correlation_p_values = [[None for _ in range(n_metrics)] for _ in range(n_metrics)]
+            correlation_q_values = [[None for _ in range(n_metrics)] for _ in range(n_metrics)]
+            matrix_tests: List[Dict[str, Any]] = []
+
+            for idx in range(n_metrics):
+                correlation_matrix[idx][idx] = 1.0
+                correlation_p_values[idx][idx] = 0.0
+                correlation_q_values[idx][idx] = 0.0
+
+            for row_idx in range(n_metrics):
+                metric_a = matrix_candidates[row_idx]
+                for col_idx in range(row_idx + 1, n_metrics):
+                    metric_b = matrix_candidates[col_idx]
                     corr, p_val, _ = _spearman_stats(merged_df[metric_a], merged_df[metric_b])
-                    row_r.append(corr)
-                    row_p.append(p_val)
-                correlation_matrix.append(row_r)
-                correlation_p_values.append(row_p)
+                    correlation_matrix[row_idx][col_idx] = corr
+                    correlation_matrix[col_idx][row_idx] = corr
+                    correlation_p_values[row_idx][col_idx] = p_val
+                    correlation_p_values[col_idx][row_idx] = p_val
+                    matrix_tests.append({"row": row_idx, "col": col_idx, "p_value": p_val})
+
+            matrix_q_values = _benjamini_hochberg([entry["p_value"] for entry in matrix_tests])
+            for test_idx, entry in enumerate(matrix_tests):
+                q_value = matrix_q_values[test_idx]
+                row_idx = int(entry["row"])
+                col_idx = int(entry["col"])
+                correlation_q_values[row_idx][col_idx] = q_value
+                correlation_q_values[col_idx][row_idx] = q_value
+
+        statistical_notes: List[str] = [
+            "Trends use OLS slope with Kendall tau and optional Theil-Sen confidence intervals.",
+            "Physiological correlations use Spearman rank association with Benjamini-Hochberg FDR correction.",
+            "Interpret nominal (p<0.05) findings cautiously when FDR significance is not reached.",
+        ]
+        if len(physiological_correlations) == 0:
+            statistical_notes.append("No synchronized wearable physiology signals were available for correlation inference.")
 
         context = _build_analysis_context(
             rr_intervals_ms=context_rr,
@@ -2514,9 +2659,11 @@ async def get_hrv_windowed(
             correlation_metric_labels=correlation_metric_labels,
             correlation_matrix=correlation_matrix,
             correlation_p_values=correlation_p_values,
+            correlation_q_values=correlation_q_values,
             physiological_timestamps=physiological_timestamps,
             physiological_series=physiological_series,
             physiological_correlations=physiological_correlations,
+            statistical_notes=statistical_notes,
             context=context,
         )
     except Exception as exc:
