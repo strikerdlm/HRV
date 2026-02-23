@@ -14,10 +14,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Added `POST /api/research/hrv/admin/backfill-filename-timestamps` with dry-run (`apply_changes=false`) and apply modes for one-shot correction of persisted chronology from source filenames.
   - Endpoint reports scanned/parseable/changed counts for `hrv_measurements` and optional `hrv_analysis_cache` updates, with optional DB backup before applying changes.
 
+### Changed
+- **Operational About page changelog synchronization** (`frontend/src/app/about/page.tsx`, `frontend/src/app/api/about/changelog/route.ts`):
+  - About page now reads the latest release metadata from `CHANGELOG.md` through a dynamic frontend API route.
+  - Added "Latest Release Capabilities by Category" rendering from changelog sections (Added/Changed/Fixed/Documentation) so category capabilities stay current without manual edits.
+
 ### Fixed
 - **Runtime local storage quota crash in HRV Analysis uploads** (`frontend/src/app/research/hrv-analysis/page.tsx`):
   - Replaced raw `localStorage.setItem("hrv_tracings", JSON.stringify(...))` writes with a quota-safe persistence pipeline that stores compact tracing snapshots and gracefully degrades when browser storage is near limits.
   - Prevents `QuotaExceededError` from crashing the page during high-volume multi-file ingestion.
+- **Application mode slider sticking mid-position** (`frontend/src/components/layout/mode-switcher.tsx`):
+  - Replaced mixed unit Framer Motion indicator translation with deterministic CSS transform-based segmented control animation.
+  - Prevents the operational/research mode indicator from getting visually stuck between options.
 - **Filename-based chronology normalization across analysis surfaces** (`api/research_endpoints.py`, `tests/test_research_windowed_endpoint.py`):
   - Added deterministic helpers and backfill logic to prioritize timestamps embedded in source filenames over ingestion time when resolving `recording_start_utc`/`measurement_date`.
   - Ensures consistent ordering in catalog/detail retrieval, longitudinal windowed analytics, readiness trends, correlation timelines, and exports.
