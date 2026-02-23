@@ -821,7 +821,8 @@ export default function HRVAnalysisPage() {
       }));
 
       const merged = new Map<string, StoredTracing>();
-      for (const tracing of [...remoteTracings, ...localTracings]) {
+      // Keep remote catalog authoritative while preserving local RR payloads.
+      for (const tracing of [...localTracings, ...remoteTracings]) {
         const key = tracing.fileHash || tracing.measurementId || tracing.id;
         const existing = merged.get(key);
         if (!existing) {
@@ -1007,10 +1008,69 @@ export default function HRVAnalysisPage() {
         if (detail.tracing?.measurement_id) {
           resolvedMeasurementId = detail.tracing.measurement_id;
         }
+
+        // Recover from stale local measurement ids by re-matching against current catalog.
+        if (!detail.tracing && (!rrForAnalysis || rrForAnalysis.length < 30)) {
+          const catalog = await getRRTracingCatalog(userId, 500);
+          const matched = catalog.tracings.find((item) => {
+            if (resolvedFileHash && item.file_hash === resolvedFileHash) {
+              return true;
+            }
+            if (tracing.source && item.source_file && item.source_file === tracing.source) {
+              return true;
+            }
+            return false;
+          });
+
+          if (matched?.measurement_id) {
+            resolvedMeasurementId = matched.measurement_id;
+            resolvedFileHash = matched.file_hash ?? resolvedFileHash;
+
+            const retryDetail = await getRRTracingDetail(userId, matched.measurement_id);
+            if (retryDetail.rr_intervals_ms.length >= 30) {
+              rrForAnalysis = retryDetail.rr_intervals_ms;
+            }
+            if (retryDetail.cached_analysis) {
+              cachedAnalysis = retryDetail.cached_analysis;
+            }
+            if (retryDetail.tracing?.file_hash) {
+              resolvedFileHash = retryDetail.tracing.file_hash;
+            }
+            if (retryDetail.tracing?.measurement_id) {
+              resolvedMeasurementId = retryDetail.tracing.measurement_id;
+            }
+
+            const syncedTimestamp = resolveRecordingTimestamp({
+              sourceFile: matched.source_file,
+              recordingTimestamp: matched.recording_start_utc || matched.measurement_date,
+            });
+
+            setTracings((prevTracings) => {
+              const updated = prevTracings.map((item) =>
+                item.id === tracing.id
+                  ? {
+                      ...item,
+                      measurementId: resolvedMeasurementId,
+                      fileHash: resolvedFileHash,
+                      source: matched.source_file || item.source,
+                      timestamp: syncedTimestamp,
+                      nIntervals: matched.n_intervals || item.nIntervals,
+                    }
+                  : item,
+              );
+              persistTracingsToLocalStorage(updated);
+              return updated;
+            });
+          }
+        }
       }
 
       if (!cachedAnalysis && (!rrForAnalysis || rrForAnalysis.length < 30)) {
-        throw new Error("Insufficient RR intervals for analysis");
+        throw new Error(
+          tracing.measurementId
+            ? "Selected tracing is no longer available in backend storage. Re-upload this file to analyze."
+            : "Insufficient RR intervals for analysis",
+        );
       }
 
       // Generate analysis from backend (or reuse cached detail analysis).
@@ -1059,7 +1119,6 @@ export default function HRVAnalysisPage() {
         nIntervals: rrForAnalysis.length || tracing.nIntervals,
       });
     } catch (e) {
-      console.error("Analysis failed:", e);
       setUploadError(e instanceof Error ? e.message : "Analysis failed");
     } finally {
       setIsAnalyzing(false);
