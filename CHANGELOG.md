@@ -64,6 +64,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - `/api/research/hrv/windowed/{user_id}` now supports `scope=all|selected`, computes merged multi-tracing windowed trajectories, and adds robust trend statistics (EWMA + Kendall slope metadata) plus change-point/anomaly detection.
   - Added physiological co-trend/correlation outputs (including Garmin wearable signals when available) and a publication-style frontend dashboard with longitudinal trend, standardized physiology overlays, and a significance-aware correlation heatmap.
   - Added statistical hardening for scientific review: Theil-Sen slope confidence intervals, Benjamini-Hochberg FDR (`q` values) for physiological correlation screening, and explicit methodology notes rendered in the Windowed page.
+- **User profile null-sex compatibility for scheduling/user fetches** (`api/main.py`, `app/user_database.py`):
+  - Hardened profile normalization so legacy records with `sex = NULL` are coerced to `"other"` before API model validation.
+  - Added defensive language fallback to `"en"` in API profile serialization to avoid response validation failures from incomplete historical rows.
+  - Extended normalization to non-dataclass profile objects in API serialization fallback paths.
+- **Operational METAR data restoration** (`api/research_endpoints.py`):
+  - Updated AviationWeather METAR proxy to query with a 24-hour observation window, fixing empty responses (`204 No Content`) for active stations like `SKBO`.
+  - Endpoint now explicitly selects the newest report by timestamp before returning decoded METAR data to the dashboard.
 
 ### Documentation
 - Updated `README.md`, `frontend/README.md`, and `docs/Manual.md` to reflect:
