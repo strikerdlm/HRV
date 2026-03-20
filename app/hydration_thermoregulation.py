@@ -665,13 +665,21 @@ def compute_physiological_strain_index(
     """
     if not math.isfinite(core_temp_c) or not math.isfinite(heart_rate_bpm):
         raise ValueError("core_temp_c and heart_rate_bpm must be finite.")
+    if not math.isfinite(baseline_temp_c):
+        raise ValueError("baseline_temp_c must be finite.")
+    if baseline_temp_c >= 39.5:
+        raise ValueError("baseline_temp_c must be < 39.5 C for valid PhSI computation.")
+    if not math.isfinite(resting_hr_bpm) or resting_hr_bpm <= 0:
+        raise ValueError("resting_hr_bpm must be a positive finite number.")
+    if not math.isfinite(max_hr_bpm):
+        raise ValueError("max_hr_bpm must be finite.")
     if max_hr_bpm <= resting_hr_bpm:
         raise ValueError("max_hr_bpm must be greater than resting_hr_bpm.")
 
     tc_denom = 39.5 - baseline_temp_c
     hr_denom = max_hr_bpm - resting_hr_bpm
 
-    thermal = 5.0 * _clamp(core_temp_c - baseline_temp_c, 0.0, 5.0) / tc_denom
+    thermal = 5.0 * _clamp(core_temp_c - baseline_temp_c, 0.0, tc_denom) / tc_denom
     cardio = 5.0 * _clamp(heart_rate_bpm - resting_hr_bpm, 0.0, hr_denom) / hr_denom
 
     phsi = _clamp(thermal + cardio, 0.0, 10.0)

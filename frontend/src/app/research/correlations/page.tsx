@@ -245,6 +245,31 @@ function LagAnalysisChart({ analyses }: { analyses: LagAnalysis[] }) {
 // Scatter plot for a specific correlation
 function CorrelationScatter({ corr }: { corr: DetailedCorrelation }) {
   const data = corr.solar_values.map((s, i) => [s, corr.hrv_values[i]]);
+  const solarMin = Math.min(...corr.solar_values);
+  const solarMax = Math.max(...corr.solar_values);
+
+  let regressionLine: [number, number][] = [
+    [solarMin, Math.min(...corr.hrv_values)],
+    [solarMax, Math.max(...corr.hrv_values)],
+  ];
+
+  if (corr.solar_values.length >= 2 && corr.hrv_values.length === corr.solar_values.length) {
+    const n = corr.solar_values.length;
+    const sumX = corr.solar_values.reduce((acc, x) => acc + x, 0);
+    const sumY = corr.hrv_values.reduce((acc, y) => acc + y, 0);
+    const sumXY = corr.solar_values.reduce((acc, x, idx) => acc + x * corr.hrv_values[idx], 0);
+    const sumX2 = corr.solar_values.reduce((acc, x) => acc + x * x, 0);
+    const denom = n * sumX2 - sumX * sumX;
+
+    if (Math.abs(denom) > 1e-9) {
+      const slope = (n * sumXY - sumX * sumY) / denom;
+      const intercept = (sumY - slope * sumX) / n;
+      regressionLine = [
+        [solarMin, slope * solarMin + intercept],
+        [solarMax, slope * solarMax + intercept],
+      ];
+    }
+  }
 
   const option: Record<string, unknown> = {
     title: {
@@ -283,10 +308,7 @@ function CorrelationScatter({ corr }: { corr: DetailedCorrelation }) {
       // Regression line (simplified)
       {
         type: "line",
-        data: [
-          [Math.min(...corr.solar_values), Math.min(...corr.hrv_values)],
-          [Math.max(...corr.solar_values), Math.max(...corr.hrv_values)],
-        ],
+        data: regressionLine,
         lineStyle: { type: "dashed", color: SCIENTIFIC_COLORS.trend, width: 2 },
         symbol: "none",
       },

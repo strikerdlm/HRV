@@ -7,6 +7,15 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.17.2] - 2026-03-20
+
+### Fixed
+- **PhSI denominator safety and normalization** (`app/hydration_thermoregulation.py`, `tests/test_hydration_thermoregulation.py`, `frontend/src/components/hydration-thermoregulation.tsx`):
+  - Added explicit validation for invalid baseline temperature/HR bounds to prevent zero-division crash paths.
+  - Aligned PhSI thermal component normalization to the model denominator to keep the thermal contribution bounded and stable.
+- **Correlation scatter trendline direction** (`frontend/src/app/research/correlations/page.tsx`):
+  - Replaced min/max diagonal placeholder with a least-squares regression line so negative correlations render with the correct downward slope.
+
 ## [1.17.1] - 2026-02-23
 
 ### Added
