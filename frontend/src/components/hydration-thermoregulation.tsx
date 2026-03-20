@@ -126,8 +126,12 @@ function computePhSI(
   restHR: number = 70,
   maxHR: number = 190,
 ): number {
-  const thermal = 5 * clamp(coreTemp - baseTemp, 0, 5) / (39.5 - baseTemp);
-  const cardio = 5 * clamp(hr - restHR, 0, maxHR - restHR) / (maxHR - restHR);
+  const tcDenom = 39.5 - baseTemp;
+  const hrDenom = maxHR - restHR;
+  if (tcDenom <= 0 || hrDenom <= 0) return 0;
+
+  const thermal = 5 * clamp(coreTemp - baseTemp, 0, tcDenom) / tcDenom;
+  const cardio = 5 * clamp(hr - restHR, 0, hrDenom) / hrDenom;
   return clamp(thermal + cardio, 0, 10);
 }
 
