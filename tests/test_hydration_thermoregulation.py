@@ -236,6 +236,15 @@ class TestPhysiologicalStrainIndex:
         )
         assert 0.0 <= result.phsi_value <= 10.0
 
+    def test_invalid_baseline_temp_raises(self) -> None:
+        """Invalid baseline temperature should raise ValueError."""
+        with pytest.raises(ValueError, match="baseline_temp_c"):
+            compute_physiological_strain_index(
+                core_temp_c=39.6,
+                heart_rate_bpm=120.0,
+                baseline_temp_c=39.5,
+            )
+
 
 # ---------------------------------------------------------------------------
 # Performance Decrement Tests
