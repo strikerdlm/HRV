@@ -11,6 +11,7 @@ from typing import Any, Optional
 
 import pandas as pd
 import pytest
+from fastapi import HTTPException
 
 _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 _APP_DIR = _PROJECT_ROOT / "app"
@@ -248,6 +249,30 @@ def test_backfill_filename_timestamps_updates_measurement_and_cache(tmp_path: Pa
     assert cache_row is not None
     assert cache_row[0] == "2026-01-20"
     conn.close()
+
+
+def test_backfill_admin_token_requires_server_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("HRV_ADMIN_BACKFILL_TOKEN", raising=False)
+
+    with pytest.raises(HTTPException) as exc_info:
+        research_endpoints._require_backfill_admin_token("anything")
+
+    assert exc_info.value.status_code == 503
+
+
+def test_backfill_admin_token_rejects_incorrect_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HRV_ADMIN_BACKFILL_TOKEN", "expected-secret")
+
+    with pytest.raises(HTTPException) as exc_info:
+        research_endpoints._require_backfill_admin_token("wrong-secret")
+
+    assert exc_info.value.status_code == 403
+
+
+def test_backfill_admin_token_accepts_expected_header(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("HRV_ADMIN_BACKFILL_TOKEN", "expected-secret")
+
+    research_endpoints._require_backfill_admin_token("expected-secret")
 
 
 def test_get_hrv_windowed_scope_all_returns_enriched_statistics_and_q_values(
