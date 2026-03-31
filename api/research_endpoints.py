@@ -12,6 +12,7 @@ This module provides comprehensive endpoints for:
 from __future__ import annotations
 
 import asyncio
+import hmac
 import hashlib
 import json
 import logging
@@ -24,7 +25,7 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Body, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query
 from pydantic import BaseModel, Field
 
 # Add app directory to path
@@ -44,6 +45,22 @@ from api.research_model_registry import (  # noqa: E402
 _LOGGER = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/research", tags=["Research"])
+
+
+def _require_backfill_admin_token(
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
+) -> None:
+    """Require a shared admin token before executing DB backfill operations."""
+    expected = os.environ.get("HRV_ADMIN_BACKFILL_TOKEN", "").strip()
+    if not expected:
+        raise HTTPException(
+            status_code=503,
+            detail="Backfill admin token is not configured on the server.",
+        )
+
+    provided = str(x_admin_token or "").strip()
+    if not provided or not hmac.compare_digest(provided, expected):
+        raise HTTPException(status_code=403, detail="Forbidden: invalid admin token.")
 
 
 # ---------------------------------------------------------------------------
@@ -5286,6 +5303,7 @@ async def get_hrv_tracing_detail(
     response_model=FilenameTimestampBackfillResponse,
 )
 async def backfill_hrv_filename_timestamps(
+    _: None = Depends(_require_backfill_admin_token),
     apply_changes: bool = Query(
         default=False,
         description="Set true to persist updates (default is dry-run).",
