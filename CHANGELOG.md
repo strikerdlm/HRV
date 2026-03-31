@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.17.2] - 2026-03-20
 
 ### Fixed
+- **Unauthorized mutation protection for timestamp backfill admin endpoint** (`api/research_endpoints.py`, `tests/test_research_windowed_endpoint.py`):
+  - Added mandatory `X-Admin-Token` verification for `POST /api/research/hrv/admin/backfill-filename-timestamps`.
+  - Endpoint now fails closed with `503` when `HRV_ADMIN_BACKFILL_TOKEN` is not configured, and `403` on invalid/missing tokens, preventing unauthenticated database mutation.
 - **PhSI denominator safety and normalization** (`app/hydration_thermoregulation.py`, `tests/test_hydration_thermoregulation.py`, `frontend/src/components/hydration-thermoregulation.tsx`):
   - Added explicit validation for invalid baseline temperature/HR bounds to prevent zero-division crash paths.
   - Aligned PhSI thermal component normalization to the model denominator to keep the thermal contribution bounded and stable.
