@@ -1012,15 +1012,17 @@ export default function HRVAnalysisPage() {
         // Recover from stale local measurement ids by re-matching against current catalog.
         if (!detail.tracing && (!rrForAnalysis || rrForAnalysis.length < 30)) {
           const catalog = await getRRTracingCatalog(userId, 500);
-          const matched = catalog.tracings.find((item) => {
-            if (resolvedFileHash && item.file_hash === resolvedFileHash) {
-              return true;
-            }
-            if (tracing.source && item.source_file && item.source_file === tracing.source) {
-              return true;
-            }
-            return false;
-          });
+          const hashMatches = resolvedFileHash
+            ? catalog.tracings.filter((item) => item.file_hash === resolvedFileHash)
+            : [];
+          const sourceMatches = tracing.source
+            ? catalog.tracings.filter((item) => item.source_file === tracing.source)
+            : [];
+
+          let matched = hashMatches[0];
+          if (!matched && sourceMatches.length === 1) {
+            matched = sourceMatches[0];
+          }
 
           if (matched?.measurement_id) {
             resolvedMeasurementId = matched.measurement_id;
