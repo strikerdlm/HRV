@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [1.17.2] - 2026-03-20
 
 ### Fixed
+- **Ambiguous stale tracing remap could analyze the wrong backend recording** (`frontend/src/app/research/hrv-analysis/page.tsx`):
+  - Hardened stale `measurement_id` recovery to only auto-remap when a file-hash match exists or exactly one source filename match is found.
+  - Prevents silent cross-recording reassociation when multiple backend rows share the same `source_file`, avoiding incorrect analysis being shown as the selected tracing.
 - **Unauthorized mutation protection for timestamp backfill admin endpoint** (`api/research_endpoints.py`, `tests/test_research_windowed_endpoint.py`):
   - Added mandatory `X-Admin-Token` verification for `POST /api/research/hrv/admin/backfill-filename-timestamps`.
   - Endpoint now fails closed with `503` when `HRV_ADMIN_BACKFILL_TOKEN` is not configured, and `403` on invalid/missing tokens, preventing unauthenticated database mutation.
