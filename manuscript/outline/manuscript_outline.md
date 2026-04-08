@@ -41,10 +41,10 @@ The paper should argue that the key contribution is **integration plus auditabil
 
 ## Planned figures
 
-1. **Figure 1. System architecture across inputs, analytic core, decision layers, and delivery surfaces** — spec and draft caption in `manuscript/figures/figure_plan.md`
-2. **Figure 2. End-to-end operational workflow from RR ingestion to readiness and scheduling outputs** — spec and draft caption in `manuscript/figures/figure_plan.md`
-3. **Figure 3. Example research-to-operations data flow linking HRV, fatigue, and space-weather context** — spec and draft caption in `manuscript/figures/figure_plan.md`
-4. **Figure 4. Verification map or result summary for tested module families** — spec and draft caption in `manuscript/figures/figure_plan.md`
+1. **Figure 1. System architecture across inputs, analytic core, decision layers, and delivery surfaces** — rendered as `manuscript/figures/figure1_platform_architecture.svg`
+2. **Figure 2. End-to-end operational workflow from RR ingestion to readiness and scheduling outputs** — rendered as `manuscript/figures/figure2_end_to_end_workflow.svg`
+3. **Figure 3. Example research-to-operations data flow linking HRV, fatigue, and space-weather context** — rendered as `manuscript/figures/figure3_research_to_operations_coupling.svg`
+4. **Figure 4. Verification map or result summary for tested module families** — rendered as `manuscript/figures/figure4_verification_coverage_map.svg`
 
 See `manuscript/figures/figure_plan.md` for details.
 
@@ -60,8 +60,8 @@ See `manuscript/figures/figure_plan.md` for details.
 
 1. The main manuscript draft now contains a structured abstract, Introduction, Methods, Results, Discussion, and Compliance/Transparency sections.
 2. The planned five-table package now exists as manuscript markdown assets.
-3. Figure specifications and draft captions exist, but rendered figure assets are still pending.
-4. The remaining blockers to a cleaner submission candidate are final reference expansion, rendered figures, and author-level metadata confirmation.
+3. Figure specifications and rendered SVG assets now exist for Figure 1 through Figure 4.
+4. The remaining blockers to a cleaner submission candidate are final reference expansion, author-level metadata confirmation, and release/archive packaging for the cited software version.
 
 ## Scope guardrails
 
