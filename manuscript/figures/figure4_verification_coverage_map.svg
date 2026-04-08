@@ -1,7 +1,7 @@
 <!-- Author: Dr Diego Malpica MD -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="980" viewBox="0 0 1600 980" role="img" aria-labelledby="title desc">
   <title id="title">Figure 4. Verification coverage map</title>
-  <desc id="desc">Coverage matrix distinguishing implemented and test-backed software pathways from claims that remain outside scope pending external validation.</desc>
+  <desc id="desc">Coverage matrix distinguishing strong biomathematical and orchestration layers from weaker or still externally unvalidated claims.</desc>
   <defs>
     <style>
       .title { font: 700 30px Arial, Helvetica, sans-serif; fill: #1a1a1a; }
@@ -23,7 +23,7 @@
   <rect x="20" y="20" width="1560" height="940" class="border" />
   <text x="800" y="70" text-anchor="middle" class="title">Figure 4. Verification Coverage Map</text>
 
-  <text x="120" y="130" class="section">A. Software pathways safe to summarize in Results</text>
+  <text x="120" y="130" class="section">A. Model and orchestration layers safe to summarize in Results</text>
 
   <rect x="90" y="160" width="1420" height="430" fill="#ffffff" stroke="#2c3e50" stroke-width="2" rx="18" ry="18" />
 
@@ -34,7 +34,7 @@
   <rect x="1090" y="190" width="200" height="50" class="headerCell" />
   <rect x="1290" y="190" width="200" height="50" class="headerCell" />
 
-  <text x="290" y="222" text-anchor="middle" class="header">Module family</text>
+  <text x="290" y="222" text-anchor="middle" class="header">Layer</text>
   <text x="560" y="222" text-anchor="middle" class="header">Implemented</text>
   <text x="760" y="222" text-anchor="middle" class="header">Representative tests</text>
   <text x="980" y="222" text-anchor="middle" class="header">Main-text Results use</text>
@@ -43,29 +43,29 @@
 
   <rect x="110" y="240" width="360" height="55" class="rowLabel" />
   <rect x="470" y="240" width="180" height="55" class="yes" />
-  <rect x="650" y="240" width="220" height="55" class="yes" />
+  <rect x="650" y="240" width="220" height="55" class="partial" />
   <rect x="870" y="240" width="220" height="55" class="yes" />
   <rect x="1090" y="240" width="200" height="55" class="future" />
   <rect x="1290" y="240" width="200" height="55" class="yes" />
-  <text x="130" y="274" class="body">Scheduling and IHPI logic</text>
+  <text x="130" y="274" class="body">HRV analytic core</text>
   <text x="560" y="274" text-anchor="middle" class="body">Yes</text>
-  <text x="760" y="274" text-anchor="middle" class="body">Yes</text>
+  <text x="760" y="274" text-anchor="middle" class="body">Some</text>
   <text x="980" y="274" text-anchor="middle" class="body">Safe</text>
   <text x="1190" y="274" text-anchor="middle" class="body">Needed</text>
-  <text x="1390" y="274" text-anchor="middle" class="body">Engineering</text>
+  <text x="1390" y="274" text-anchor="middle" class="body">Model layer</text>
 
   <rect x="110" y="295" width="360" height="55" class="rowLabel" />
   <rect x="470" y="295" width="180" height="55" class="yes" />
-  <rect x="650" y="295" width="220" height="55" class="yes" />
+  <rect x="650" y="295" width="220" height="55" class="partial" />
   <rect x="870" y="295" width="220" height="55" class="yes" />
   <rect x="1090" y="295" width="200" height="55" class="future" />
   <rect x="1290" y="295" width="200" height="55" class="yes" />
-  <text x="130" y="329" class="body">FRMS and fatigue pathways</text>
+  <text x="130" y="329" class="body">SAFTE/circadian dynamics</text>
   <text x="560" y="329" text-anchor="middle" class="body">Yes</text>
-  <text x="760" y="329" text-anchor="middle" class="body">Yes</text>
+  <text x="760" y="329" text-anchor="middle" class="body">Some</text>
   <text x="980" y="329" text-anchor="middle" class="body">Safe</text>
   <text x="1190" y="329" text-anchor="middle" class="body">Needed</text>
-  <text x="1390" y="329" text-anchor="middle" class="body">Engineering</text>
+  <text x="1390" y="329" text-anchor="middle" class="body">Model layer</text>
 
   <rect x="110" y="350" width="360" height="55" class="rowLabel" />
   <rect x="470" y="350" width="180" height="55" class="yes" />
@@ -73,12 +73,12 @@
   <rect x="870" y="350" width="220" height="55" class="yes" />
   <rect x="1090" y="350" width="200" height="55" class="future" />
   <rect x="1290" y="350" width="200" height="55" class="yes" />
-  <text x="130" y="384" class="body">NOAA ingest and cache handling</text>
+  <text x="130" y="384" class="body">Readiness fusion and scheduling</text>
   <text x="560" y="384" text-anchor="middle" class="body">Yes</text>
   <text x="760" y="384" text-anchor="middle" class="body">Yes</text>
   <text x="980" y="384" text-anchor="middle" class="body">Safe</text>
   <text x="1190" y="384" text-anchor="middle" class="body">Needed</text>
-  <text x="1390" y="384" text-anchor="middle" class="body">Engineering</text>
+  <text x="1390" y="384" text-anchor="middle" class="body">Engineering + model</text>
 
   <rect x="110" y="405" width="360" height="55" class="rowLabel" />
   <rect x="470" y="405" width="180" height="55" class="yes" />
@@ -86,12 +86,12 @@
   <rect x="870" y="405" width="220" height="55" class="yes" />
   <rect x="1090" y="405" width="200" height="55" class="future" />
   <rect x="1290" y="405" width="200" height="55" class="yes" />
-  <text x="130" y="439" class="body">Space-weather alignment workflows</text>
+  <text x="130" y="439" class="body">Environmental timing and alignment</text>
   <text x="560" y="439" text-anchor="middle" class="body">Yes</text>
   <text x="760" y="439" text-anchor="middle" class="body">Yes</text>
   <text x="980" y="439" text-anchor="middle" class="body">Safe</text>
   <text x="1190" y="439" text-anchor="middle" class="body">Needed</text>
-  <text x="1390" y="439" text-anchor="middle" class="body">Engineering</text>
+  <text x="1390" y="439" text-anchor="middle" class="body">Context model</text>
 
   <rect x="110" y="460" width="360" height="55" class="rowLabel" />
   <rect x="470" y="460" width="180" height="55" class="yes" />
@@ -99,12 +99,12 @@
   <rect x="870" y="460" width="220" height="55" class="yes" />
   <rect x="1090" y="460" width="200" height="55" class="future" />
   <rect x="1290" y="460" width="200" height="55" class="yes" />
-  <text x="130" y="494" class="body">API normalization and endpoints</text>
+  <text x="130" y="494" class="body">API-backed Node delivery</text>
   <text x="560" y="494" text-anchor="middle" class="body">Yes</text>
   <text x="760" y="494" text-anchor="middle" class="body">Yes</text>
   <text x="980" y="494" text-anchor="middle" class="body">Safe</text>
-  <text x="1190" y="494" text-anchor="middle" class="body">Needed</text>
-  <text x="1390" y="494" text-anchor="middle" class="body">Engineering</text>
+  <text x="1190" y="494" text-anchor="middle" class="body">N/A</text>
+  <text x="1390" y="494" text-anchor="middle" class="body">Software</text>
 
   <rect x="110" y="515" width="360" height="55" class="rowLabel" />
   <rect x="470" y="515" width="180" height="55" class="yes" />
@@ -112,28 +112,28 @@
   <rect x="870" y="515" width="220" height="55" class="yes" />
   <rect x="1090" y="515" width="200" height="55" class="future" />
   <rect x="1290" y="515" width="200" height="55" class="partial" />
-  <text x="130" y="549" class="body">Reporting and export utilities</text>
+  <text x="130" y="549" class="body">Reporting and export infrastructure</text>
   <text x="560" y="549" text-anchor="middle" class="body">Yes</text>
   <text x="760" y="549" text-anchor="middle" class="body">Some</text>
   <text x="980" y="549" text-anchor="middle" class="body">Safe</text>
-  <text x="1190" y="549" text-anchor="middle" class="body">Needed</text>
+  <text x="1190" y="549" text-anchor="middle" class="body">N/A</text>
   <text x="1390" y="549" text-anchor="middle" class="body">Software</text>
 
   <text x="120" y="640" class="section">B. Claims intentionally kept out of scope</text>
 
   <rect x="90" y="670" width="680" height="210" class="calloutGood" />
   <text x="430" y="710" text-anchor="middle" class="section">Safe to claim now</text>
-  <text x="130" y="750" class="body">- Implemented integrated architecture</text>
-  <text x="130" y="780" class="body">- Deterministic scheduling and fatigue-governance pathways</text>
-  <text x="130" y="810" class="body">- Tested NOAA ingest, alignment, and API-facing workflows</text>
+  <text x="130" y="750" class="body">- Node-first client over a shared Python modeling backend</text>
+  <text x="130" y="780" class="body">- Explicit HRV, SAFTE/circadian, readiness, and timing layers</text>
+  <text x="130" y="810" class="body">- Tested readiness fusion, environmental alignment, and API workflows</text>
   <text x="130" y="840" class="body">- Open-source reproducibility and export infrastructure</text>
 
   <rect x="830" y="670" width="680" height="210" class="calloutWarn" />
   <text x="1170" y="710" text-anchor="middle" class="section">Not established by current evidence</text>
   <text x="870" y="750" class="body">- Diagnostic accuracy or patient-level benefit</text>
   <text x="870" y="780" class="body">- Real-world operational effectiveness</text>
-  <text x="870" y="810" class="body">- Full external benchmark parity for the integrated HRV stack</text>
+  <text x="870" y="810" class="body">- Full external benchmark parity for HRV and fatigue/circadian layers</text>
   <text x="870" y="840" class="body">- Regulatory clearance, certification, or legal compliance</text>
 
-  <text x="800" y="925" text-anchor="middle" class="small">Green cells indicate implemented and test-backed software pathways. Amber cells indicate partial or narrower support. Red cells mark evidence classes that remain future work rather than submission-safe claims.</text>
+  <text x="800" y="925" text-anchor="middle" class="small">Green cells indicate strongly implemented and test-backed layers. Amber cells indicate partial or asymmetrical support, especially for canonical model numerics. Red cells mark evidence classes that remain future work rather than submission-safe claims.</text>
 </svg>
