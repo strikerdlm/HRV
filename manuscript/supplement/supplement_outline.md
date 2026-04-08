@@ -6,6 +6,12 @@ The supplementary package should absorb technical depth that would otherwise dis
 
 ## Planned supplementary items
 
+### Current submission-candidate appendix
+
+- `submission_support_appendix.md`
+  - Consolidated appendix covering extended engineering verification inventory, standards crosswalk, reporting-guideline positioning, non-claims, and deployment prerequisites.
+  - This file is currently the most submission-ready supplementary artifact in the package.
+
 ### Supplementary Methods
 
 - **S1. Detailed module inventory**
