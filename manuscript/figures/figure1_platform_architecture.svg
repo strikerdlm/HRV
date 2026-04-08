@@ -1,7 +1,7 @@
 <!-- Author: Dr Diego Malpica MD -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960" role="img" aria-labelledby="title desc">
   <title id="title">Figure 1. Platform architecture</title>
-  <desc id="desc">System architecture showing inputs, shared Python analysis core, contextual layers, decision logic, and delivery surfaces for Mission Control - Flight Surgeon.</desc>
+  <desc id="desc">System architecture showing inputs, shared Python model layers, contextual layers, decision logic, and Node-first delivery surfaces for Mission Control - Flight Surgeon.</desc>
   <defs>
     <style>
       .title { font: 700 30px Arial, Helvetica, sans-serif; fill: #1a1a1a; }
@@ -53,10 +53,10 @@
   <text x="210" y="770" text-anchor="middle" class="body">and reproducibility metadata</text>
 
   <rect x="430" y="110" width="740" height="730" class="panel" />
-  <text x="800" y="150" text-anchor="middle" class="section">Shared Python Analysis Core</text>
+  <text x="800" y="150" text-anchor="middle" class="section">Shared Python Modeling Backend</text>
 
   <rect x="480" y="190" width="280" height="90" class="core" />
-  <text x="620" y="225" text-anchor="middle" class="label">HRV Analytics Core</text>
+  <text x="620" y="225" text-anchor="middle" class="label">HRV Analytic Model Layer</text>
   <text x="620" y="250" text-anchor="middle" class="body">Time, frequency, nonlinear,</text>
   <text x="620" y="270" text-anchor="middle" class="body">and windowed metrics</text>
 
@@ -66,19 +66,19 @@
   <text x="980" y="270" text-anchor="middle" class="body">measurement context</text>
 
   <rect x="480" y="330" width="280" height="90" class="core" />
-  <text x="620" y="365" text-anchor="middle" class="label">Circadian and Fatigue Layer</text>
-  <text x="620" y="390" text-anchor="middle" class="body">SAFTE and circadian</text>
-  <text x="620" y="410" text-anchor="middle" class="body">state interpretation</text>
+  <text x="620" y="365" text-anchor="middle" class="label">Fatigue and Circadian Layer</text>
+  <text x="620" y="390" text-anchor="middle" class="body">Reservoir-based SAFTE</text>
+  <text x="620" y="410" text-anchor="middle" class="body">and circadian dynamics</text>
 
   <rect x="840" y="330" width="280" height="90" class="core" />
-  <text x="980" y="365" text-anchor="middle" class="label">Space-Weather Layer</text>
-  <text x="980" y="390" text-anchor="middle" class="body">Ingest, caching, impact,</text>
+  <text x="980" y="365" text-anchor="middle" class="label">Environmental Timing Layer</text>
+  <text x="980" y="390" text-anchor="middle" class="body">Ingest, propagation, impact,</text>
   <text x="980" y="410" text-anchor="middle" class="body">and temporal alignment</text>
 
   <rect x="610" y="470" width="400" height="100" class="decision" />
-  <text x="810" y="510" text-anchor="middle" class="label">Scheduling and Decision Logic</text>
+  <text x="810" y="510" text-anchor="middle" class="label">Readiness Fusion and Decision Logic</text>
   <text x="810" y="540" text-anchor="middle" class="body">Readiness framing, crew scheduling,</text>
-  <text x="810" y="562" text-anchor="middle" class="body">IHPI-style scoring, and GO/NO-GO support</text>
+  <text x="810" y="562" text-anchor="middle" class="body">deterministic fusion, and GO/NO-GO support</text>
 
   <rect x="610" y="620" width="400" height="110" class="support" />
   <text x="810" y="660" text-anchor="middle" class="label">Export and Audit Infrastructure</text>
@@ -88,24 +88,24 @@
   <rect x="1240" y="110" width="300" height="730" class="panel" />
   <text x="1390" y="150" text-anchor="middle" class="section">Delivery Surfaces</text>
   <rect x="1275" y="190" width="230" height="90" class="delivery" />
-  <text x="1390" y="225" text-anchor="middle" class="label">Research Streamlit</text>
-  <text x="1390" y="250" text-anchor="middle" class="body">Exploratory analytics,</text>
+  <text x="1390" y="225" text-anchor="middle" class="label">Next.js Research Routes</text>
+  <text x="1390" y="250" text-anchor="middle" class="body">API-backed analytics,</text>
   <text x="1390" y="270" text-anchor="middle" class="body">visualization, and exports</text>
 
   <rect x="1275" y="315" width="230" height="90" class="delivery" />
-  <text x="1390" y="350" text-anchor="middle" class="label">Operational Streamlit</text>
+  <text x="1390" y="350" text-anchor="middle" class="label">Next.js Operational Routes</text>
   <text x="1390" y="375" text-anchor="middle" class="body">Crew workspace, readiness,</text>
-  <text x="1390" y="395" text-anchor="middle" class="body">and lower-friction workflows</text>
+  <text x="1390" y="395" text-anchor="middle" class="body">and mission-oriented workflows</text>
 
   <rect x="1275" y="440" width="230" height="90" class="delivery" />
-  <text x="1390" y="475" text-anchor="middle" class="label">FastAPI Backend</text>
+  <text x="1390" y="475" text-anchor="middle" class="label">FastAPI Orchestration</text>
   <text x="1390" y="500" text-anchor="middle" class="body">Structured endpoints for</text>
-  <text x="1390" y="520" text-anchor="middle" class="body">services and interoperability</text>
+  <text x="1390" y="520" text-anchor="middle" class="body">model serving and interoperability</text>
 
   <rect x="1275" y="565" width="230" height="90" class="delivery" />
-  <text x="1390" y="600" text-anchor="middle" class="label">Next.js Frontend</text>
-  <text x="1390" y="625" text-anchor="middle" class="body">Modern web delivery for</text>
-  <text x="1390" y="645" text-anchor="middle" class="body">responsive operational views</text>
+  <text x="1390" y="600" text-anchor="middle" class="label">Secondary Streamlit Views</text>
+  <text x="1390" y="625" text-anchor="middle" class="body">Retained for legacy or</text>
+  <text x="1390" y="645" text-anchor="middle" class="body">rapid-iteration workflows</text>
 
   <rect x="1275" y="690" width="230" height="100" class="delivery" />
   <text x="1390" y="725" text-anchor="middle" class="label">Structured Outputs</text>
@@ -130,5 +130,5 @@
   <path d="M 1010 690 L 1275 610" class="arrow" />
   <path d="M 1010 715 L 1275 740" class="arrow" />
 
-  <text x="800" y="895" text-anchor="middle" class="small">One shared analysis core supports research, operational, API, and web-delivered workflows while preserving contextual interpretation and auditability.</text>
+  <text x="800" y="895" text-anchor="middle" class="small">One shared modeling backend supports a Node-first client, API orchestration, and secondary interfaces while preserving contextual interpretation and auditability.</text>
 </svg>
