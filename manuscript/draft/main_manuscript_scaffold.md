@@ -2,7 +2,7 @@
 
 ## Title
 
-**Mission Control - Flight Surgeon: an open-source aerospace medicine platform for HRV analytics, fatigue modeling, space-weather context, and operational decision support**
+Mission Control - Flight Surgeon: an open-source aerospace medicine platform for HRV analytics, fatigue modeling, space-weather context, and operational decision support
 
 **Running title:** Aerospace Physiology Ops Platform
 
@@ -10,36 +10,19 @@
 
 ### Background and objective
 
-[Draft in 2-3 sentences]
-
-This manuscript describes **Mission Control - Flight Surgeon**, an open-source software platform designed to support aerospace medicine research and operational workflows by integrating heart rate variability (HRV) analytics, longitudinal user context, circadian and fatigue modeling, space-weather context, and mission-oriented decision support.
+Mission Control - Flight Surgeon is an open-source software platform developed to unify heart rate variability (HRV) analytics with longitudinal physiology, circadian and fatigue context, environmental overlays, and operational decision support for aerospace medicine. The objective of this manuscript is to describe the system architecture, implementation, and current verification posture of the platform while explicitly separating engineering evidence from pending external validation.
 
 ### Methods
 
-[Draft in 3-4 sentences]
-
-Describe:
-
-- the shared Python analysis core,
-- the operational and research Streamlit entrypoints,
-- the FastAPI plus Next.js deployment pathway,
-- the main validation posture as engineering verification plus bounded exploratory evidence.
+The platform was documented as a dual-interface software system built on a shared Python analysis core exposed through research and operational Streamlit applications, a FastAPI backend, and a Next.js frontend. Methods focused on the HRV engine, longitudinal user-profile persistence, fatigue and circadian modules, space-weather context, scheduling logic, and export utilities. Evaluation was intentionally bounded to repository-supported evidence, emphasizing architecture inspection, automated software verification, and reproducibility assets rather than human-subject validation.
 
 ### Results
 
-[Draft in 3-4 sentences]
-
-Only report:
-
-- implemented architecture and reproducibility assets,
-- tested module families,
-- any curated quantitative artifacts whose provenance is fully documented.
+The implemented platform integrates HRV computation, longitudinal user persistence, fatigue and circadian modeling, space-weather ingestion, operational scheduling logic, and publication-oriented export workflows within one open repository. Automated tests verify representative operational domains including scheduling and FRMS behavior, space-weather caching and alignment, API normalization, and endpoint-level windowed analytics. Public code availability, deterministic rule-based components, structured logging, and export utilities support reproducible research and auditable deployment-oriented workflows, although integrated external benchmarking and participant validation remain incomplete.
 
 ### Conclusions
 
-[Draft in 2-3 sentences]
-
-Conclude on integration, translational utility, and current validation boundaries. Avoid claims of outcome improvement or certification unless new evidence is added.
+Mission Control - Flight Surgeon extends beyond single-purpose HRV software by coupling physiological analytics with operational context and readiness-oriented workflows in an open-source architecture. Its current evidence base supports a systems and software contribution with engineering verification, while stronger claims regarding numerical benchmarking, clinical benefit, or operational effectiveness require dedicated future validation.
 
 ### Keywords
 
@@ -134,110 +117,89 @@ Importantly, this manuscript does not treat engineering verification as a substi
 
 ### 3.1 System implementation summary
 
-[Draft]
+Mission Control - Flight Surgeon is implemented as a modular translational platform rather than as a single analytic script or isolated dashboard. The repository couples a shared Python analysis core with two Streamlit delivery surfaces, a FastAPI service layer, and a Next.js frontend. Within this architecture, HRV analysis, longitudinal user context, circadian and fatigue modeling, environmental ingestion, scheduling logic, and reporting utilities are organized as interoperable modules rather than disconnected features. This enables the same physiological and contextual logic to be exposed to exploratory research workflows and more focused operational workflows without duplicating the computational substrate.
 
-Report the final implemented platform components and deployment pathways.
+The implemented system also supports persistent user context and mission-oriented interpretation. User-profile and database layers allow physiological outputs to be interpreted alongside person-level and mission-level information when available, while downstream decision-support modules translate schedule, fatigue, hydration, and environmental state into readiness-oriented summaries. In practical terms, the platform can therefore be described as an integrated aerospace physiology workbench with a shared analytic backend and multiple delivery pathways.
 
 ### 3.2 Engineering verification
 
-[Draft]
+Automated verification currently provides the strongest empirical support for the platform. Representative tests cover deterministic scheduling and readiness behavior, FRMS and fatigue logic, NOAA ingest and cache handling, space-weather impact and alignment pathways, API normalization, and endpoint-level windowed analysis behavior. Taken together, these test-backed domains support the claim that major operational pathways are implemented and regression-tested at the software level.
 
-Summarize verified domains using representative test files and module families.
+This evidence should be interpreted as engineering verification rather than clinical or operational validation. The available tests demonstrate bounded rule behavior, stable data transformations, and interface-to-core coupling for key modules, but they do not by themselves establish diagnostic accuracy, real-world deployment effectiveness, or numerical equivalence to external reference HRV packages across the whole platform.
 
 ### 3.3 Reproducibility and reporting assets
 
-[Draft]
+Mission Control - Flight Surgeon is distributed as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. At the time of this draft, the working repository head corresponds to branch `main`, commit `a32959258ff01e459ac9d06609f58c3cd09fee47`. The documented primary execution environment is conda `hrv-py312` with Python 3.12 and dependencies declared in `requirements.txt`. Reproducibility is further supported by automated tests, structured logging, cached data management, and export layers designed to emit manuscript-oriented statistics, tables, and supporting artifacts.
 
-Report:
-
-- repository URL,
-- license,
-- branch and commit hash,
-- environment expectations,
-- export and logging support.
+These features matter because they make the platform auditable beyond the interface layer. Logging, persistence, and export support allow investigators to revisit analysis settings and outputs, while the shared code base permits the same analytic logic to be exercised from research and operational interfaces. Before formal submission, the project would benefit from a tagged software release or archived DOI corresponding exactly to the manuscript version.
 
 ### 3.4 Optional curated analysis vignette
 
-[Draft only if provenance is documented]
-
-Candidate material:
-
-- lag-aware HRV to space-weather exploratory outputs,
-- windowed longitudinal analytics,
-- scheduling and readiness examples tied to documented inputs.
+The repository also contains exported lag-aware HRV-to-space-weather correlation outputs and related analytic artifacts that demonstrate the platform’s ability to generate advanced cross-domain analyses. However, these materials are not elevated to primary manuscript findings in the present draft because the cohort definition, preprocessing pipeline, unit of analysis, and inferential scope are not yet curated in a manuscript-ready form. They are therefore best interpreted as demonstrations of implemented analytical capability and may be moved to supplementary material or a future validation paper once provenance is fully documented.
 
 ## 4. Discussion
 
 ### 4.1 Principal findings
 
-[Draft]
+The principal finding of this manuscript is not the validation of a single new biomarker, but the successful implementation of an integrated translational software platform that connects physiological analytics to operational context. Mission Control - Flight Surgeon combines HRV analysis, longitudinal user context, circadian and fatigue models, environmental overlays, scheduling logic, and reproducibility-oriented export paths within a shared architecture that can be delivered through research and operational interfaces.
 
-Emphasize platform integration, translational reach, and auditability.
+A second principal finding is that the current repository provides meaningful engineering evidence across several modules that are highly relevant to aerospace medicine workflows. This evidence supports reporting the platform as implemented and partly verified at the software level, while also reinforcing the need to keep stronger claims about operational performance, clinical benefit, or numerical benchmarking outside the scope of the present paper.
 
 ### 4.2 Interpretation in context of the literature
 
-[Draft]
+Viewed against dedicated HRV packages such as Kubios, the present platform contributes breadth of context and workflow integration rather than a claim of superior standalone signal-analysis performance (Tarvainen et al., 2014). Relative to open physiological processing frameworks such as PhysioScripts, it extends beyond data handling toward readiness- and decision-oriented layers targeted to aerospace and operational medicine (Christie & Gianaros, 2013). Relative to context-aware HRV architectures such as Arney et al. (2023), the present system similarly treats interoperability and modular integration as central design goals, but expands the domain scope to include crew context, fatigue modeling, environmental overlays, and export-ready reporting.
 
-Position the platform relative to HRV software, fatigue tools, circadian wearable methods, and multimodal monitoring systems.
+The platform also occupies a different niche than FAST/SAFTE-style scheduling tools and wearable circadian monitoring approaches. FAST demonstrates the value of schedule-based fatigue prediction for operational planning (Hursh et al., 2004), while wearable physiology work shows that ecologically collected signals can inform circadian and readiness assessment outside the laboratory (Bowman et al., 2021; Hartmeyer et al., 2025). Mission Control - Flight Surgeon brings these strands together with standards-informed HRV interpretation and aerospace-specific environmental framing. Its contribution is therefore integrative and translational: it reduces the fragmentation that otherwise forces researchers and operators to move between separate analytic, scheduling, and contextual tools.
 
 ### 4.3 Strengths and limitations
 
-[Draft]
+The manuscript has several strengths. The platform is open source, modular, and broad enough to reflect real operational physiology workflows rather than isolated laboratory analysis. Its decision-support layers favor explicit, inspectable rules over opaque logic, and its test surface covers representative scheduling, fatigue, environmental, and interface pathways. The system also treats export and audit support as part of the architecture, which is important for translational research, governance, and future reproducibility.
 
-Required limitations:
-
-- incomplete external benchmarking of the integrated platform,
-- uneven evidence depth across module families,
-- broad scope relative to a single-purpose software paper,
-- lack of certification evidence.
+The limitations are equally important. First, the integrated platform has not yet been externally benchmarked end-to-end against trusted reference HRV software or published test vectors, so the paper should not claim validated numerical parity across all analytic outputs. Second, the evidence depth is uneven across module families: scheduling, FRMS, and environmental pathways are better verified in the repository than some underlying HRV benchmark questions. Relatedly, some endpoint-level tests emphasize data plumbing more directly than full numerical equivalence, which is still valuable engineering evidence but not a substitute for analytic benchmarking. Third, the software scope is broad for a single manuscript, which increases translational relevance but risks diffuseness relative to a narrower software paper. Fourth, the platform is not accompanied by certification, clearance, or formal regulatory evidence. Finally, the documented primary conda environment uses Python 3.12 whereas the current Docker path is not fully harmonized with that environment, so reproducibility claims should remain tied to the documented primary execution route until that inconsistency is resolved.
 
 ### 4.4 Implications for operational and clinical translation
 
-[Draft]
+For operational and clinical translation, the platform’s main value lies in its ability to place physiological measurements inside a richer mission context. In mission medicine or crew-readiness settings, isolated HRV values are rarely sufficient. What is often needed is a structured view that links HRV to sleep opportunity, circadian alignment, workload, environmental exposure, and person-specific history, then presents those relationships in an auditable way. The current architecture is well suited to that role because the same analytic core can support exploratory research, crew-level planning, and more structured web delivery without duplicating logic across tools.
 
-Address:
-
-- mission medicine,
-- crew readiness workflows,
-- research-to-operations transfer,
-- training and governance requirements before deployment.
+At the same time, translation requires governance. Before such a platform is used for consequential operational or clinical decisions, organizations would need local validation, configuration control, operator training, documented escalation rules, and human oversight over any readiness or GO/NO-GO interpretations. The present results support a deployment pathway toward those uses, but they do not establish that the current version should be used autonomously or without institution-specific validation.
 
 ### 4.5 Future work
 
-[Draft]
+The most immediate next step is external numerical benchmarking of the HRV engine against trusted reference software or published test vectors. A second priority is a curated dataset with explicit cohort definition, preprocessing rules, missing-data handling, and inferential scope so that exploratory correlation or readiness outputs can be promoted to manuscript-grade empirical results. A third priority is prospective or retrospective validation in clearly described aerospace, aviation, or analog populations with study-specific ethics and reporting guidance.
 
-Include:
-
-- external benchmarking,
-- prospective validation studies,
-- formal data-sharing pathways,
-- possible regulatory maturation.
+Beyond validation, future work should include a harmonized release package for the exact reported software version, ideally with a tagged release or archived DOI, plus a more formal artifact manifest for figures, tables, and exports. Usability studies, governance workflows, and role-specific deployment playbooks for flight surgeons and operational teams would also strengthen the research-to-operations transfer pathway.
 
 ## 5. Compliance and Transparency
 
 ### 5.1 Data availability statement
 
-[Draft from `manuscript/evidence/compliance_and_transparency_map.md`]
+No new human-subject dataset was generated for the software-verification components reported in this manuscript. Code, manuscript support files, and repository artifacts are available through the public source repository. Additional derived analysis artifacts can be shared by the authors on reasonable request, subject to provenance review and any applicable institutional constraints.
 
 ### 5.2 Code and artifact availability
 
-[Draft from `manuscript/evidence/compliance_and_transparency_map.md`]
+Mission Control - Flight Surgeon is available as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. The current draft references the `main` branch at commit `a32959258ff01e459ac9d06609f58c3cd09fee47`. The documented primary execution environment is conda `hrv-py312` with Python 3.12 and dependencies declared in `requirements.txt`. Before submission, the authors should archive or tag the exact release corresponding to the final manuscript.
 
 ### 5.3 Ethics and regulatory alignment
 
-[Draft from `manuscript/evidence/compliance_and_transparency_map.md`]
+Ethics approval and informed consent were not required for the software-development and repository-verification components reported in this manuscript because no new human-subject dataset was generated or analyzed as part of the primary reported results. If future versions of the manuscript include retrospective or prospective participant data, a study-specific ethics protocol, institutional approval details, and consent language should be added.
+
+The platform is not presented as a certified medical device. Several operational modules were designed with reference to published aerospace, fatigue-management, and safety frameworks, including NASA-STD-3001, ICAO fatigue-management guidance, MIL-STD-882E-aligned risk framing, and crew-rest guidance used in FRMS-related modules. These references inform design and threshold logic but should not be interpreted as evidence of certification, legal compliance, or regulatory clearance.
 
 ### 5.4 Author contributions
 
-[Insert final CRediT roles]
+Dr Diego Malpica MD contributed conceptualization, methodology, software, validation, formal analysis, investigation, writing - original draft, writing - review and editing, visualization, supervision, and project administration. This CRediT statement should be revised if additional authors are added to the final manuscript.
 
 ### 5.5 Funding and conflict of interest
 
-[Insert final declarations]
+At the time of drafting, no project-level external funding statement was identified in the repository materials. This statement should be updated before submission if grant support, institutional sponsorship, or other funding applies. Conflict-of-interest declarations were not explicitly documented in the repository and should be confirmed for all authors before final submission.
 
 ### 5.6 Acknowledgments
 
-[Insert contributors and infrastructure acknowledgments]
+The draft acknowledges the open-source scientific Python ecosystem and the public technical and data resources that inform the platform’s environmental modules and standards framing, including NOAA, NASA, and aviation fatigue-management reference materials. Final acknowledgments for collaborators, institutions, and infrastructure support should be confirmed before submission.
+
+### 5.7 Reporting guideline positioning
+
+This manuscript is being developed as a software and systems paper with a primary emphasis on transparent description of architecture, implementation, verification, and reproducibility. If the final paper remains limited to software verification and repository-backed artifacts, journal-specific software reporting guidance should form the main reporting backbone. If observational analyses are added, adapted STROBE elements should be incorporated. TRIPOD+AI, CLAIM, or related AI reporting extensions should be used only for sections that make genuine predictive-model claims.
 
 ## References
 
