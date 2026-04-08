@@ -93,6 +93,8 @@ User persistence is handled through the platform’s profile and database layers
 
 The core data flow is modular. RR intervals are ingested and cleaned before HRV metrics are computed across time-domain, frequency-domain, nonlinear, and windowed representations. Environmental context is fetched through dedicated ingestion layers such as `app/noaa_space.py`, which harmonizes and caches NOAA-derived space-weather data. Additional domain layers then consume both physiological and contextual information. Fatigue and circadian modules transform sleep- and schedule-related inputs into readiness-relevant states; scheduling modules integrate these states into crew-level decision logic; and export modules assemble structured summaries suitable for reporting or audit. This composition-oriented architecture allows the platform to support both isolated analyses and cross-layer workflows.
 
+The major architecture layers retained in the main text are summarized in Table 1. Submission figures should pair this description with a high-level architecture diagram (Figure 1), an end-to-end workflow view (Figure 2), and a research-to-operations coupling diagram (Figure 3).
+
 ### 2.3 Implementation
 
 The HRV engine is centered in `app/hrv_core.py`. Based on repository documentation and source inspection, this module supports artifact handling and the computation of common short-term HRV families, including time-domain metrics, frequency-domain measures, geometric indices, nonlinear measures, and windowed summaries. The broader platform supplements this engine with interpretation logic, longitudinal context handling, and UI-specific presentation layers. Input formats include Polar-style RR interval files and normalized wearable-derived data, allowing the computational core to remain independent of any single acquisition device.
@@ -121,17 +123,23 @@ Mission Control - Flight Surgeon is implemented as a modular translational platf
 
 The implemented system also supports persistent user context and mission-oriented interpretation. User-profile and database layers allow physiological outputs to be interpreted alongside person-level and mission-level information when available, while downstream decision-support modules translate schedule, fatigue, hydration, and environmental state into readiness-oriented summaries. In practical terms, the platform can therefore be described as an integrated aerospace physiology workbench with a shared analytic backend and multiple delivery pathways.
 
+For submission assembly, Table 1 should accompany this section as the compact module-family summary, while Figures 1 and 2 should provide the corresponding architecture and workflow visuals.
+
 ### 3.2 Engineering verification
 
 Automated verification currently provides the strongest empirical support for the platform. Representative tests cover deterministic scheduling and readiness behavior, FRMS and fatigue logic, NOAA ingest and cache handling, space-weather impact and alignment pathways, API normalization, and endpoint-level windowed analysis behavior. Taken together, these test-backed domains support the claim that major operational pathways are implemented and regression-tested at the software level.
 
 This evidence should be interpreted as engineering verification rather than clinical or operational validation. The available tests demonstrate bounded rule behavior, stable data transformations, and interface-to-core coupling for key modules, but they do not by themselves establish diagnostic accuracy, real-world deployment effectiveness, or numerical equivalence to external reference HRV packages across the whole platform.
 
+Representative test-backed domains are organized in Table 3, and the corresponding submission figure should be a verification coverage map (Figure 4) that visually separates implemented-and-tested modules from areas that still require external validation.
+
 ### 3.3 Reproducibility and reporting assets
 
 Mission Control - Flight Surgeon is distributed as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. At the time of this draft, the working repository head corresponds to branch `main`, commit `a32959258ff01e459ac9d06609f58c3cd09fee47`. The documented primary execution environment is conda `hrv-py312` with Python 3.12 and dependencies declared in `requirements.txt`. Reproducibility is further supported by automated tests, structured logging, cached data management, and export layers designed to emit manuscript-oriented statistics, tables, and supporting artifacts.
 
 These features matter because they make the platform auditable beyond the interface layer. Logging, persistence, and export support allow investigators to revisit analysis settings and outputs, while the shared code base permits the same analytic logic to be exercised from research and operational interfaces. Before formal submission, the project would benefit from a tagged software release or archived DOI corresponding exactly to the manuscript version.
+
+The current reproducibility and deployment metadata are summarized in Table 4.
 
 ### 3.4 Optional curated analysis vignette
 
@@ -171,6 +179,8 @@ Beyond validation, future work should include a harmonized release package for t
 
 ## 5. Compliance and Transparency
 
+The key manuscript declarations that are already supportable from repository evidence are summarized in Table 5. Narrative statements for each required subsection are provided below and should be finalized once authorship, funding, and conflict disclosures are confirmed.
+
 ### 5.1 Data availability statement
 
 No new human-subject dataset was generated for the software-verification components reported in this manuscript. Code, manuscript support files, and repository artifacts are available through the public source repository. Additional derived analysis artifacts can be shared by the authors on reasonable request, subject to provenance review and any applicable institutional constraints.
@@ -203,7 +213,37 @@ This manuscript is being developed as a software and systems paper with a primar
 
 ## References
 
-Seed references are collected in `manuscript/references/seed_references.md`.
+The current in-text citations used in this draft are listed below. Additional candidate sources remain tracked in `manuscript/references/seed_references.md`.
+
+Alabdulgader, A., McCraty, R., Atkinson, M., Dobyns, Y., Vainoras, A., Ragulskis, M., & Stolc, V. (2018). Long-term study of heart rate variability responses to changes in the solar and geomagnetic environment. *Scientific Reports, 8*(1), 2663. <https://doi.org/10.1038/s41598-018-20932-x>
+
+Arney, D., Zhang, Y., Kennedy-Metz, L. R., Dias, R. D., Goldman, J. M., & Zenati, M. A. (2023). An open-source, interoperable architecture for generating real-time surgical team cognitive alerts from heart-rate variability monitoring. *Sensors, 23*(8), 3890. <https://doi.org/10.3390/s23083890>
+
+Bowman, C., Huang, Y., Walch, O. J., Fang, Y., Frank, E., Tyler, J., Mayer, C., Stockbridge, C., Goldstein, C., Sen, S., & Forger, D. B. (2021). A method for characterizing daily physiology from widely used wearables. *Cell Reports Methods, 1*(4), 100058. <https://doi.org/10.1016/j.crmeth.2021.100058>
+
+Christie, I. C., & Gianaros, P. J. (2013). PhysioScripts: An extensible, open source platform for the processing of physiological data. *Behavior Research Methods, 45*(1), 125-131. <https://doi.org/10.3758/s13428-012-0233-x>
+
+Devine, J. K., & Hursh, S. R. (2025). A narrative review on in-flight use of consumer sleep technologies for aviation research. *Sleep Advances*. <https://doi.org/10.1093/sleepadvances/zpaf076>
+
+Gaisenok, O., Gaisenok, D., & Bogachev, S. (2025). The influence of geomagnetic storms on the risks of developing myocardial infarction, acute coronary syndrome, and stroke: Systematic review and meta-analysis. *Journal of Natural Science, Biology and Medicine*. <https://doi.org/10.4103/jmp.jmp_122_24>
+
+Hartmeyer, S. L., Phillips, N. E., Jassil, F. C., Joris, C., Dibner, C., Collet, T. H., & Andersen, M. (2025). Multi-wearable approach for monitoring diurnal light exposure and body rhythms in nightshift workers. *Acta Physiologica*. <https://doi.org/10.1111/apha.70069>
+
+Hursh, S. R., Balkin, T. J., Miller, J. C., & Eddy, D. R. (2004). The Fatigue Avoidance Scheduling Tool: Modeling to minimize the effects of fatigue on cognitive performance. *SAE Technical Paper Series*. <https://doi.org/10.4271/2004-01-2151>
+
+Morris, M. B., Howland, J. P., Amaddio, K. M., & Gunzelmann, G. (2020). Aircrew fatigue perceptions, fatigue mitigation strategies, and circadian typology. *Aerospace Medicine and Human Performance, 91*(4), 363-368. <https://doi.org/10.3357/AMHP.5396.2020>
+
+Quigley, K. S., Gianaros, P. J., Norman, G. J., Jennings, J. R., de Geus, E. J. C., Berntson, G. G., & Task Force on Publication Guidelines for Heart Rate Variability. (2024). Publication guidelines for heart rate and heart rate variability. *Psychophysiology, 61*(4), e14604.
+
+Rogers, B., Murias, J. M., & Fleitas-Paniagua, P. R. (2025). Validity of an open-source mobile app to measure fractal correlation properties of heart rate variability during exercise. *European Journal of Applied Physiology*. <https://doi.org/10.1007/s00421-025-06037-0>
+
+Shaffer, F., & Ginsberg, J. P. (2017). An overview of heart rate variability metrics and norms. *Frontiers in Public Health, 5*, 258. <https://doi.org/10.3389/fpubh.2017.00258>
+
+Tarvainen, M. P., Niskanen, J.-P., Lipponen, J. A., Ranta-aho, P. O., & Karjalainen, P. A. (2014). Kubios HRV - Heart rate variability analysis software. *Computer Methods and Programs in Biomedicine, 113*(1), 210-220. <https://doi.org/10.1016/j.cmpb.2013.07.024>
+
+Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology. (1996). Heart rate variability: Standards of measurement, physiological interpretation and clinical use. *Circulation, 93*(5), 1043-1065.
+
+Yang, C.-J., Fahier, N., He, C.-Y., Li, W.-C., & Fang, W.-C. (2020). An AI-edge platform with multimodal wearable physiological signals monitoring sensors for affective computing applications. In *2020 IEEE International Symposium on Circuits and Systems* (pp. 1-5). IEEE. <https://doi.org/10.1109/ISCAS45731.2020.9180909>
 
 ## Supplementary materials
 
