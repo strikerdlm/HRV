@@ -4,13 +4,13 @@ overview: Plan a full-platform scientific manuscript for Mission Control - Fligh
 todos:
   - id: audit-evidence
     content: Build an evidence matrix linking proposed manuscript claims to repository sources, tests, datasets, ethics documents, and shareable artifacts.
-    status: in_progress
+    status: completed
   - id: select-core-modules
     content: Choose the minimal set of platform modules to feature in the main paper and move secondary capabilities to supplementary material.
-    status: pending
+    status: completed
   - id: literature-gap-review
     content: Assemble a thematic literature comparison covering HRV platforms, fatigue/circadian systems, aerospace medicine decision-support tools, and multimodal monitoring systems.
-    status: pending
+    status: in_progress
   - id: define-validation-story
     content: Distinguish software verification, available empirical evaluation, and remaining evidence gaps so the Methods and Results sections stay defensible.
     status: pending
