@@ -1,7 +1,7 @@
 <!-- Author: Dr Diego Malpica MD -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="920" viewBox="0 0 1600 920" role="img" aria-labelledby="title desc">
   <title id="title">Figure 3. Research-to-operations coupling</title>
-  <desc id="desc">Diagram showing how research and operational interfaces share a common analysis core while emphasizing different workflow outputs.</desc>
+  <desc id="desc">Diagram showing how Node-first research and operational routes share a common modeling backend while Streamlit remains a secondary interface.</desc>
   <defs>
     <style>
       .title { font: 700 30px Arial, Helvetica, sans-serif; fill: #1a1a1a; }
@@ -26,38 +26,38 @@
   <text x="800" y="70" text-anchor="middle" class="title">Figure 3. Research-to-Operations Coupling</text>
 
   <rect x="70" y="120" width="420" height="690" class="research" />
-  <text x="280" y="165" text-anchor="middle" class="section">Research-Facing Workflows</text>
+  <text x="280" y="165" text-anchor="middle" class="section">Research-Facing Delivery</text>
 
   <rect x="120" y="205" width="320" height="105" class="support" />
-  <text x="280" y="240" text-anchor="middle" class="label">Research Streamlit</text>
-  <text x="280" y="268" text-anchor="middle" class="body">Exploratory dashboards, statistical views,</text>
+  <text x="280" y="240" text-anchor="middle" class="label">Next.js Research Routes</text>
+  <text x="280" y="268" text-anchor="middle" class="body">API-backed dashboards, statistical views,</text>
   <text x="280" y="290" text-anchor="middle" class="body">cross-domain plots, and export workflows</text>
 
   <rect x="120" y="350" width="320" height="105" class="support" />
-  <text x="280" y="385" text-anchor="middle" class="label">Analysis Artifacts</text>
+  <text x="280" y="385" text-anchor="middle" class="label">Research API Outputs</text>
   <text x="280" y="413" text-anchor="middle" class="body">Windowed summaries, correlations,</text>
-  <text x="280" y="435" text-anchor="middle" class="body">tables, manuscript-ready exports</text>
+  <text x="280" y="435" text-anchor="middle" class="body">tables, and manuscript-ready exports</text>
 
   <rect x="120" y="495" width="320" height="105" class="support" />
   <text x="280" y="530" text-anchor="middle" class="label">Primary Emphasis</text>
   <text x="280" y="558" text-anchor="middle" class="body">Hypothesis generation, interpretation,</text>
-  <text x="280" y="580" text-anchor="middle" class="body">and transparent exploratory analysis</text>
+  <text x="280" y="580" text-anchor="middle" class="body">and transparent model-facing analysis</text>
 
   <rect x="120" y="640" width="320" height="105" class="support" />
-  <text x="280" y="675" text-anchor="middle" class="label">Governance Boundary</text>
-  <text x="280" y="703" text-anchor="middle" class="body">Exploratory outputs require provenance</text>
-  <text x="280" y="725" text-anchor="middle" class="body">before elevation to scientific findings</text>
+  <text x="280" y="675" text-anchor="middle" class="label">Secondary Streamlit Research View</text>
+  <text x="280" y="703" text-anchor="middle" class="body">Retained for deeper or legacy</text>
+  <text x="280" y="725" text-anchor="middle" class="body">research workflows over the same models</text>
 
   <rect x="570" y="120" width="460" height="690" class="core" />
-  <text x="800" y="165" text-anchor="middle" class="section">Shared Analysis Substrate</text>
+  <text x="800" y="165" text-anchor="middle" class="section">Shared Modeling Substrate</text>
 
   <rect x="625" y="205" width="350" height="90" class="support" />
   <text x="800" y="240" text-anchor="middle" class="label">Shared Python Core</text>
   <text x="800" y="268" text-anchor="middle" class="body">HRV analytics, user persistence, and context fusion</text>
 
   <rect x="625" y="325" width="350" height="90" class="support" />
-  <text x="800" y="360" text-anchor="middle" class="label">Shared Interpretation Layers</text>
-  <text x="800" y="388" text-anchor="middle" class="body">Circadian, fatigue, space-weather, and scheduling logic</text>
+  <text x="800" y="360" text-anchor="middle" class="label">Shared Biomathematical Layers</text>
+  <text x="800" y="388" text-anchor="middle" class="body">SAFTE/circadian, readiness fusion, and environmental timing</text>
 
   <rect x="625" y="445" width="350" height="90" class="support" />
   <text x="800" y="480" text-anchor="middle" class="label">Shared Reproducibility Layer</text>
@@ -65,7 +65,7 @@
 
   <rect x="625" y="575" width="350" height="150" class="support" />
   <text x="800" y="615" text-anchor="middle" class="label">Coupling Principle</text>
-  <text x="800" y="645" text-anchor="middle" class="body">Research and operational interfaces expose</text>
+  <text x="800" y="645" text-anchor="middle" class="body">Node-first research and operational routes expose</text>
   <text x="800" y="667" text-anchor="middle" class="body">different workflow depth and decision emphasis,</text>
   <text x="800" y="689" text-anchor="middle" class="body">but they rely on the same underlying implementation</text>
   <text x="800" y="711" text-anchor="middle" class="body">rather than parallel, divergent code paths.</text>
@@ -74,24 +74,24 @@
   <text x="1320" y="165" text-anchor="middle" class="section">Operational Delivery</text>
 
   <rect x="1160" y="205" width="320" height="105" class="delivery" />
-  <text x="1320" y="240" text-anchor="middle" class="label">Operational Streamlit</text>
+  <text x="1320" y="240" text-anchor="middle" class="label">Next.js Operational Routes</text>
   <text x="1320" y="268" text-anchor="middle" class="body">Crew workspace, readiness summaries,</text>
-  <text x="1320" y="290" text-anchor="middle" class="body">mission-oriented user flows</text>
+  <text x="1320" y="290" text-anchor="middle" class="body">and mission-oriented user flows</text>
 
   <rect x="1160" y="350" width="320" height="105" class="delivery" />
-  <text x="1320" y="385" text-anchor="middle" class="label">FastAPI + Next.js</text>
-  <text x="1320" y="413" text-anchor="middle" class="body">Modern web delivery and structured</text>
-  <text x="1320" y="435" text-anchor="middle" class="body">service-oriented interoperability</text>
+  <text x="1320" y="385" text-anchor="middle" class="label">FastAPI + Model Serving</text>
+  <text x="1320" y="413" text-anchor="middle" class="body">Structured orchestration of backend</text>
+  <text x="1320" y="435" text-anchor="middle" class="body">models for web delivery and interoperability</text>
 
   <rect x="1160" y="495" width="320" height="105" class="delivery" />
   <text x="1320" y="530" text-anchor="middle" class="label">Primary Emphasis</text>
   <text x="1320" y="558" text-anchor="middle" class="body">Readiness framing, schedule support,</text>
-  <text x="1320" y="580" text-anchor="middle" class="body">and lower-friction operational use</text>
+  <text x="1320" y="580" text-anchor="middle" class="body">and lower-friction operational deployment</text>
 
   <rect x="1160" y="640" width="320" height="105" class="delivery" />
-  <text x="1320" y="675" text-anchor="middle" class="label">Governance Boundary</text>
-  <text x="1320" y="703" text-anchor="middle" class="body">Operational use requires local validation,</text>
-  <text x="1320" y="725" text-anchor="middle" class="body">training, oversight, and escalation rules</text>
+  <text x="1320" y="675" text-anchor="middle" class="label">Secondary Streamlit Operational View</text>
+  <text x="1320" y="703" text-anchor="middle" class="body">Retained as a secondary interface</text>
+  <text x="1320" y="725" text-anchor="middle" class="body">rather than the manuscript's primary client</text>
 
   <path d="M 440 257 L 625 250" class="arrow" />
   <path d="M 440 402 L 625 370" class="arrow" />
@@ -101,5 +101,5 @@
   <path d="M 975 495 L 1160 547" class="arrow" />
   <path d="M 800 535 L 800 575" class="dashed" />
 
-  <text x="800" y="850" text-anchor="middle" class="small">The platform couples scientific exploration and operational deployment through one shared code base, improving consistency, auditability, and translational traceability.</text>
+  <text x="800" y="850" text-anchor="middle" class="small">The platform couples scientific exploration and operational deployment through a Node-first client over one shared modeling backend, improving consistency, auditability, and translational traceability.</text>
 </svg>
