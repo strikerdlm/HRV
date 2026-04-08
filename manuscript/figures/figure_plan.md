@@ -2,12 +2,15 @@
 
 ## Figure Plan
 
-This file defines the figures that the manuscript should reference. It does not generate images; it documents the intended content, data source, and caption purpose for each figure.
+This file defines the figures that the manuscript should reference. It now records both the intended content and the current rendered SVG assets for the submission-candidate package.
 
 ## Figure 1. Platform architecture
 
 - **Purpose:** Show the full system at a glance.
-- **Status:** Figure specification complete; rendering asset still pending.
+- **Status:** Rendered.
+- **Asset:** `manuscript/figures/figure1_platform_architecture.svg`
+- **Resolution target:** 1600 x 960 SVG
+- **Insertion point:** Methods 2.2 or Results 3.1
 - **Content:** Inputs, shared Python analysis core, user persistence, fatigue and circadian layer, space-weather layer, scheduling and decision logic, operational and research delivery surfaces.
 - **Primary sources:** `README.md`, `api/main.py`, `app/research_app.py`, `app/operational_app.py`, `manuscript/evidence/core_modules_scope.md`
 - **Caption goal:** Explain how one analysis core supports multiple interfaces and workflow layers.
@@ -16,7 +19,10 @@ This file defines the figures that the manuscript should reference. It does not 
 ## Figure 2. End-to-end translational workflow
 
 - **Purpose:** Show how raw RR or wearable inputs become operational outputs.
-- **Status:** Figure specification complete; rendering asset still pending.
+- **Status:** Rendered.
+- **Asset:** `manuscript/figures/figure2_end_to_end_workflow.svg`
+- **Resolution target:** 1600 x 900 SVG
+- **Insertion point:** Results 3.1
 - **Content:** RR ingestion -> HRV computation -> user context fusion -> fatigue and circadian interpretation -> scheduling and GO/NO-GO outputs -> export and audit trail.
 - **Primary sources:** `app/hrv_core.py`, `app/user_profile_tab.py`, `app/scheduling_core.py`, `app/publication_export.py`
 - **Caption goal:** Emphasize the transition from physiological measurement to decision support.
@@ -25,7 +31,10 @@ This file defines the figures that the manuscript should reference. It does not 
 ## Figure 3. Research-to-operations coupling
 
 - **Purpose:** Show that exploratory analytics and operational workflows are related but not identical.
-- **Status:** Figure specification complete; rendering asset still pending.
+- **Status:** Rendered.
+- **Asset:** `manuscript/figures/figure3_research_to_operations_coupling.svg`
+- **Resolution target:** 1600 x 920 SVG
+- **Insertion point:** Methods 2.2 or Discussion 4.4
 - **Content:** Research Streamlit, operational Streamlit, FastAPI backend, and shared code modules; indicate where analysis artifacts and operational summaries originate.
 - **Primary sources:** `README.md`, `WARP.md`, `api/main.py`
 - **Caption goal:** Clarify the dual-interface architecture and why it matters for translational deployment.
@@ -34,7 +43,10 @@ This file defines the figures that the manuscript should reference. It does not 
 ## Figure 4. Verification coverage map
 
 - **Purpose:** Summarize engineering verification across the platform.
-- **Status:** Figure specification complete; rendering asset still pending.
+- **Status:** Rendered.
+- **Asset:** `manuscript/figures/figure4_verification_coverage_map.svg`
+- **Resolution target:** 1600 x 980 SVG
+- **Insertion point:** Results 3.2
 - **Content:** Matrix or grouped diagram showing tested domains such as scheduling, FRMS, space-weather ingest, API normalization, and export utilities.
 - **Primary sources:** `tests/`, `manuscript/evidence/validation_story.md`
 - **Caption goal:** Distinguish implemented-and-tested workflows from areas awaiting external validation.
@@ -56,4 +68,4 @@ This file defines the figures that the manuscript should reference. It does not 
 3. UI screenshots are acceptable only if used as implementation evidence, not as substitutes for validation.
 4. Any exploratory figure based on `analysis/` artifacts must include explicit provenance and sample definition.
 5. Prefer a clean systems-diagram style for Figures 1-3 and a matrix or coverage heatmap style for Figure 4.
-6. Before final submission, pair each figure with a final exported asset name, resolution target, and insertion point in the manuscript.
+6. The current submission-candidate package already includes SVG filenames, resolution targets, and suggested insertion points; revise these only if a journal template requires different sizing.
