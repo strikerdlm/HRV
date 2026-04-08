@@ -2219,6 +2219,7 @@ aspects of physiological function and recovery capacity.
 ### Documentation
 - **Manuscript MCP verification** (`manuscript/references/mcp_research_notes.md`, scientific paper plan): Documented successful 2026-04-08 smoke tests for Firecrawl (`firecrawl_search`), Tavily (`tavily-search`), and arXiv MCP (`search_papers`) to support reproducible research tooling for the paper effort.
 - **Manuscript draft expansion** (`manuscript/draft/main_manuscript_scaffold.md`, scientific paper plan): Drafted the structured abstract plus Results, Discussion, and Compliance/Transparency sections with repository-bounded claims, explicit validation limits, and updated next-step planning for figures, references, and submission metadata.
+- **Submission-candidate manuscript assets** (`manuscript/tables/*.md`, `manuscript/figures/figure_plan.md`, `manuscript/outline/manuscript_outline.md`): Added the planned table package, upgraded figure specs with draft captions and status, promoted cited references into the manuscript, and synchronized the outline toward a submission-candidate package.
 
 ### Added
 - **FRMS + USAF crew rest dashboard (SAFTE tab)** (`app/app.py`, `app/frms.py`): The SAFTE/Fatigue tab now includes an ICAO-aligned FRMS summary (WOCL exposure + threshold-based risk matrix) and a USAF crew rest compliance checker (AFMAN 11-202V3 baseline), plus publication-grade plot exports (Plotly fallback: HTML/PNG/SVG/PDF).
