@@ -79,7 +79,7 @@ Several non-functional requirements shaped the architecture. First, the platform
 
 The design rationale was therefore to separate **analytic breadth** from **operational focus** without duplicating the computational core. Research-facing workflows were implemented through a broad Streamlit surface that prioritizes exploration, visualization, and cross-domain analysis. Operational workflows were implemented through a lighter Streamlit entrypoint that emphasizes crew workspace management, scheduling, and actionable summaries. A FastAPI layer and a Next.js frontend extend the same core modules to a more modern web application architecture. This dual-path design was chosen to support both rapid scientific iteration and more structured operational deployment.
 
-Domain-specific design choices were also influenced by aerospace and fatigue-management reference frameworks. Modules related to readiness, scheduling, and safety framing were designed with reference to published fatigue-modeling and operational guidance, including FAST/SAFTE literature, NASA human-systems standards, and aviation fatigue-management concepts such as those summarized in ICAO Doc 9966. These references inform threshold selection and workflow logic, but the platform is not presented here as a certified or regulated medical device.
+Domain-specific design choices were also influenced by aerospace and fatigue-management reference frameworks. Modules related to readiness, scheduling, and safety framing were designed with reference to published fatigue-modeling and operational guidance, including FAST/SAFTE literature, NASA human-systems standards, and aviation fatigue-management concepts such as those summarized in ICAO Doc 9966 (Hursh et al., 2004; International Civil Aviation Organization [ICAO], 2020; National Aeronautics and Space Administration [NASA], 2023). These references inform threshold selection and workflow logic, but the platform is not presented here as a certified or regulated medical device.
 
 ### 2.2 System architecture
 
@@ -137,7 +137,7 @@ Representative test-backed domains are organized in Table 3, and the correspondi
 
 Mission Control - Flight Surgeon is distributed as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. At the time of this draft, the working repository head corresponds to branch `main`, commit `a32959258ff01e459ac9d06609f58c3cd09fee47`. The documented primary execution environment is conda `hrv-py312` with Python 3.12 and dependencies declared in `requirements.txt`. Reproducibility is further supported by automated tests, structured logging, cached data management, and export layers designed to emit manuscript-oriented statistics, tables, and supporting artifacts.
 
-These features matter because they make the platform auditable beyond the interface layer. Logging, persistence, and export support allow investigators to revisit analysis settings and outputs, while the shared code base permits the same analytic logic to be exercised from research and operational interfaces. Before formal submission, the project would benefit from a tagged software release or archived DOI corresponding exactly to the manuscript version.
+These features matter because they make the platform auditable beyond the interface layer. Logging, persistence, and export support allow investigators to revisit analysis settings and outputs, while the shared code base permits the same analytic logic to be exercised from research and operational interfaces. These characteristics are also consistent with common recommendations for reproducible computational research, such as preserving transparent workflows and inspectable outputs (Sandve et al., 2013). Before formal submission, the project would benefit from a tagged software release or archived DOI corresponding exactly to the manuscript version.
 
 The current reproducibility and deployment metadata are summarized in Table 4.
 
@@ -193,7 +193,7 @@ Mission Control - Flight Surgeon is available as open-source software at `https:
 
 Ethics approval and informed consent were not required for the software-development and repository-verification components reported in this manuscript because no new human-subject dataset was generated or analyzed as part of the primary reported results. If future versions of the manuscript include retrospective or prospective participant data, a study-specific ethics protocol, institutional approval details, and consent language should be added.
 
-The platform is not presented as a certified medical device. Several operational modules were designed with reference to published aerospace, fatigue-management, and safety frameworks, including NASA-STD-3001, ICAO fatigue-management guidance, MIL-STD-882E-aligned risk framing, and crew-rest guidance used in FRMS-related modules. These references inform design and threshold logic but should not be interpreted as evidence of certification, legal compliance, or regulatory clearance.
+The platform is not presented as a certified medical device. Several operational modules were designed with reference to published aerospace, fatigue-management, and safety frameworks, including NASA-STD-3001, ICAO fatigue-management guidance, MIL-STD-882E-aligned risk framing, and crew-rest guidance used in FRMS-related modules (ICAO, 2020; NASA, 2023). These references inform design and threshold logic but should not be interpreted as evidence of certification, legal compliance, or regulatory clearance.
 
 ### 5.4 Author contributions
 
@@ -229,22 +229,28 @@ Gaisenok, O., Gaisenok, D., & Bogachev, S. (2025). The influence of geomagnetic 
 
 Hartmeyer, S. L., Phillips, N. E., Jassil, F. C., Joris, C., Dibner, C., Collet, T. H., & Andersen, M. (2025). Multi-wearable approach for monitoring diurnal light exposure and body rhythms in nightshift workers. *Acta Physiologica*. <https://doi.org/10.1111/apha.70069>
 
+International Civil Aviation Organization. (2020). *Manual for the oversight of fatigue management approaches (Doc 9966, 2nd ed., Version 2, revised).* <https://www.icao.int/publications/doc-9966-includes-complete-set-fatigue-management-implementation-manuals>
+
 Hursh, S. R., Balkin, T. J., Miller, J. C., & Eddy, D. R. (2004). The Fatigue Avoidance Scheduling Tool: Modeling to minimize the effects of fatigue on cognitive performance. *SAE Technical Paper Series*. <https://doi.org/10.4271/2004-01-2151>
 
 Morris, M. B., Howland, J. P., Amaddio, K. M., & Gunzelmann, G. (2020). Aircrew fatigue perceptions, fatigue mitigation strategies, and circadian typology. *Aerospace Medicine and Human Performance, 91*(4), 363-368. <https://doi.org/10.3357/AMHP.5396.2020>
 
-Quigley, K. S., Gianaros, P. J., Norman, G. J., Jennings, J. R., de Geus, E. J. C., Berntson, G. G., & Task Force on Publication Guidelines for Heart Rate Variability. (2024). Publication guidelines for heart rate and heart rate variability. *Psychophysiology, 61*(4), e14604.
+National Aeronautics and Space Administration. (2023). *NASA Spaceflight Human-System Standard Volume 1, Crew Health (NASA-STD-3001, Vol. 1, Rev. C).* <https://standards.nasa.gov/standard/NASA/NASA-STD-3001_VOL_1>
+
+Quigley, K. S., Gianaros, P. J., Norman, G. J., Jennings, J. R., Berntson, G. G., & de Geus, E. J. C. (2024). Publication guidelines for human heart rate and heart rate variability studies in psychophysiology-Part 1: Physiological underpinnings and foundations of measurement. *Psychophysiology, 61*(9), e14604. <https://doi.org/10.1111/psyp.14604>
 
 Rogers, B., Murias, J. M., & Fleitas-Paniagua, P. R. (2025). Validity of an open-source mobile app to measure fractal correlation properties of heart rate variability during exercise. *European Journal of Applied Physiology*. <https://doi.org/10.1007/s00421-025-06037-0>
+
+Sandve, G. K., Nekrutenko, A., Taylor, J., & Hovig, E. (2013). Ten Simple Rules for Reproducible Computational Research. *PLoS Computational Biology, 9*(10), e1003285. <https://doi.org/10.1371/journal.pcbi.1003285>
 
 Shaffer, F., & Ginsberg, J. P. (2017). An overview of heart rate variability metrics and norms. *Frontiers in Public Health, 5*, 258. <https://doi.org/10.3389/fpubh.2017.00258>
 
 Tarvainen, M. P., Niskanen, J.-P., Lipponen, J. A., Ranta-aho, P. O., & Karjalainen, P. A. (2014). Kubios HRV - Heart rate variability analysis software. *Computer Methods and Programs in Biomedicine, 113*(1), 210-220. <https://doi.org/10.1016/j.cmpb.2013.07.024>
 
-Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology. (1996). Heart rate variability: Standards of measurement, physiological interpretation and clinical use. *Circulation, 93*(5), 1043-1065.
+Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology. (1996). Heart rate variability: Standards of measurement, physiological interpretation and clinical use. *Circulation, 93*(5), 1043-1065. <https://doi.org/10.1161/01.cir.93.5.1043>
 
 Yang, C.-J., Fahier, N., He, C.-Y., Li, W.-C., & Fang, W.-C. (2020). An AI-edge platform with multimodal wearable physiological signals monitoring sensors for affective computing applications. In *2020 IEEE International Symposium on Circuits and Systems* (pp. 1-5). IEEE. <https://doi.org/10.1109/ISCAS45731.2020.9180909>
 
 ## Supplementary materials
 
-Supplementary structure is planned in `manuscript/supplement/supplement_outline.md`.
+The current supplementary package includes `manuscript/supplement/submission_support_appendix.md`, which consolidates the extended engineering verification inventory, standards crosswalk, reporting-guideline positioning, non-claims, and deployment prerequisites. The broader supplementary roadmap remains tracked in `manuscript/supplement/supplement_outline.md`.
