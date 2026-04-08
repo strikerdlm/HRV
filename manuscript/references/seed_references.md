@@ -34,13 +34,21 @@ Yang, C.-J., Fahier, N., He, C.-Y., Li, W.-C., & Fang, W.-C. (2020). An AI-edge 
 
 Devine, J. K., Garcia, C. R., Simoes, A. S., Guelere, M. R., de Godoy, B., Silva, D. S., Pacheco, P. C., Choynowski, J., & Hursh, S. R. (2022). Predictive biomathematical modeling compared to objective sleep during COVID-19 humanitarian flights. *Aerospace Medicine and Human Performance, 93*(1), 4-12. https://doi.org/10.3357/AMHP.5909.2022
 
+Devine, J. K., & Hursh, S. R. (2025). A narrative review on in-flight use of consumer sleep technologies for aviation research. *Sleep Advances*. https://doi.org/10.1093/sleepadvances/zpaf076
+
 Forger, D. B., Jewett, M. E., & Kronauer, R. E. (1999). A simpler model of the human circadian pacemaker. *Journal of Biological Rhythms, 14*(6), 533-538. https://doi.org/10.1177/074873099129000867
+
+Hartmeyer, S. L., Phillips, N. E., Jassil, F. C., Joris, C., Dibner, C., Collet, T. H., & Andersen, M. (2025). Multi-wearable approach for monitoring diurnal light exposure and body rhythms in nightshift workers. *Acta Physiologica*. https://doi.org/10.1111/apha.70069
+
+Morris, M. B., Howland, J. P., Amaddio, K. M., & Gunzelmann, G. (2020). Aircrew fatigue perceptions, fatigue mitigation strategies, and circadian typology. *Aerospace Medicine and Human Performance, 91*(4), 363-368. https://doi.org/10.3357/AMHP.5396.2020
 
 Tavella, F., Hannay, K., & Walch, O. (2023). *Arcascope/circadian* [Software]. Zenodo. https://doi.org/10.5281/zenodo.8206871
 
 ## Space weather and physiology
 
 Alabdulgader, A., McCraty, R., Atkinson, M., Dobyns, Y., Vainoras, A., Ragulskis, M., & Stolc, V. (2018). Long-term study of heart rate variability responses to changes in the solar and geomagnetic environment. *Scientific Reports, 8*(1), 2663. https://doi.org/10.1038/s41598-018-20932-x
+
+Gaisenok, O., Gaisenok, D., & Bogachev, S. (2025). The influence of geomagnetic storms on the risks of developing myocardial infarction, acute coronary syndrome, and stroke: Systematic review and meta-analysis. *Journal of Natural Science, Biology and Medicine*. https://doi.org/10.4103/jmp.jmp_122_24
 
 Vieira, C. L. Z., Alvares, D., Blomberg, A., & Schwartz, J. (2022). Geomagnetic disturbances driven by solar activity enhance total and cardiovascular mortality risk in 263 U.S. cities. *Science of the Total Environment, 839*, 156312.
 
