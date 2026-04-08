@@ -177,6 +177,8 @@ The writing phase should begin only once:
 - The Introduction has been drafted around the translational problem, comparator landscape, gap statement, and contribution framing.
 - The Methods section has been drafted around requirements, architecture, implementation, and a tiered validation methodology.
 - Seed references have been expanded to include aviation fatigue, circadian monitoring, and geomagnetic/autonomic literature used in the draft.
+- The structured abstract, Results, Discussion, and Compliance/Transparency sections have now been drafted in `manuscript/draft/main_manuscript_scaffold.md`.
+- The Results narrative is explicitly bounded to implemented architecture, engineering verification, reproducibility assets, and a qualified exploratory-analysis vignette rather than unsupported validation claims.
 
 ### MCP research status
 
@@ -187,7 +189,8 @@ The writing phase should begin only once:
 
 ### Next writing targets
 
-1. Draft the Results section from supported repository evidence only.
-2. Draft the Discussion section with explicit limitations and deployment-pathway framing.
-3. Convert the compliance map into manuscript-ready transparency statements.
-4. Expand the reference base toward a full journal-length bibliography once the target journal is fixed.
+1. Refine figure and table mapping so the current Results and Discussion sections point to concrete manuscript visuals.
+2. Expand `manuscript/references/seed_references.md` toward a submission-ready bibliography and align all in-text citations.
+3. Confirm final authorship, affiliations, funding, conflict-of-interest, and acknowledgment details before submission.
+4. Decide whether any exploratory analysis vignette will be promoted into the main paper or kept in supplementary material pending provenance curation.
+5. Prepare a tagged release or archived DOI and harmonize environment wording for the final reproducibility statement.
