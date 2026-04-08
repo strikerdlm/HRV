@@ -4,21 +4,21 @@
 
 ## Working title candidates
 
-1. **Mission Control - Flight Surgeon: an open-source aerospace medicine platform for HRV analytics, fatigue modeling, space-weather context, and operational decision support**
-2. **An integrated translational aerospace medicine software platform for autonomic monitoring, fatigue forecasting, and mission-aware decision support**
-3. **A dual-interface physiological operations platform for aerospace medicine research and operational readiness**
+1. **Mission Control - Flight Surgeon: a Next.js and Python biomathematical platform for HRV, fatigue-circadian modeling, and aerospace readiness support**
+2. **A Node-first translational aerospace medicine system for HRV analytics, fatigue biomathematics, and mission-aware decision support**
+3. **An API-backed biomathematical platform for autonomic monitoring, circadian-fatigue dynamics, and operational readiness**
 
 ## Candidate running titles
 
-- **Aerospace Physiology Ops Platform**
+- **Aerospace Biomath Platform**
 - **Mission Control Flight Surgeon**
-- **Integrated Aerospace HRV Platform**
+- **Integrated Aerospace Readiness Platform**
 
 ## Central thesis
 
-This manuscript should present **Mission Control - Flight Surgeon** as a translational software platform that connects standards-informed HRV analytics with longitudinal user context, circadian and fatigue modeling, space-weather context, and operational scheduling logic across research and operational interfaces.
+This manuscript should present **Mission Control - Flight Surgeon** as a Node-first translational biomathematical system that connects standards-informed HRV analytics with longitudinal user context, SAFTE/circadian dynamics, space-weather timing and alignment, and operational scheduling logic through a Next.js frontend, FastAPI orchestration, and a shared Python model stack.
 
-The paper should argue that the key contribution is **integration plus auditability**, not the invention of a single isolated algorithm.
+The paper should argue that the key contribution is **layered biomathematical integration plus auditability**, not the invention of a single isolated algorithm.
 
 ## Section plan
 
@@ -38,6 +38,7 @@ The paper should argue that the key contribution is **integration plus auditabil
 3. **Table 3. Engineering verification coverage by module family** — `manuscript/tables/engineering_verification_coverage.md`
 4. **Table 4. Reproducibility and deployment metadata** — `manuscript/tables/reproducibility_and_deployment_metadata.md`
 5. **Table 5. Compliance and transparency declarations** — `manuscript/tables/compliance_and_transparency_declarations.md`
+6. **Table 6. Model layers, inputs, outputs, and evidence tiers** — `manuscript/tables/model_layers_and_evidence_tiers.md`
 
 ## Planned figures
 
@@ -59,7 +60,7 @@ See `manuscript/figures/figure_plan.md` for details.
 ## Current submission-candidate status
 
 1. The main manuscript draft now contains a structured abstract, Introduction, Methods, Results, Discussion, and Compliance/Transparency sections.
-2. The planned five-table package now exists as manuscript markdown assets.
+2. The planned table package now includes six manuscript markdown assets, including a dedicated biomathematical layer summary.
 3. Figure specifications and rendered SVG assets now exist for Figure 1 through Figure 4.
 4. The remaining blockers to a cleaner submission candidate are final reference expansion, author-level metadata confirmation, and release/archive packaging for the cited software version.
 
