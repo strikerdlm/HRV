@@ -8,13 +8,13 @@ The subset currently cited in `manuscript/draft/main_manuscript_scaffold.md` has
 
 ## Core HRV standards and interpretation
 
-Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology. (1996). Heart rate variability: Standards of measurement, physiological interpretation and clinical use. *Circulation, 93*(5), 1043-1065.
+Task Force of the European Society of Cardiology and the North American Society of Pacing and Electrophysiology. (1996). Heart rate variability: Standards of measurement, physiological interpretation and clinical use. *Circulation, 93*(5), 1043-1065. <https://doi.org/10.1161/01.cir.93.5.1043>
 
 Shaffer, F., & Ginsberg, J. P. (2017). An overview of heart rate variability metrics and norms. *Frontiers in Public Health, 5*, 258. <https://doi.org/10.3389/fpubh.2017.00258>
 
-Nunan, D., Sandercock, G. R. H., & Brodie, D. A. (2010). A quantitative systematic review of normal values for short-term heart rate variability in healthy adults. *Pacing and Clinical Electrophysiology, 33*(11), 1407-1417.
+Nunan, D., Sandercock, G. R. H., & Brodie, D. A. (2010). A quantitative systematic review of normal values for short-term heart rate variability in healthy adults. *Pacing and Clinical Electrophysiology, 33*(11), 1407-1417. <https://doi.org/10.1111/j.1540-8159.2010.02841.x>
 
-Quigley, K. S., Gianaros, P. J., Norman, G. J., Jennings, J. R., de Geus, E. J. C., Berntson, G. G., & Task Force on Publication Guidelines for Heart Rate Variability. (2024). Publication guidelines for heart rate and heart rate variability. *Psychophysiology, 61*(4), e14604.
+Quigley, K. S., Gianaros, P. J., Norman, G. J., Jennings, J. R., Berntson, G. G., & de Geus, E. J. C. (2024). Publication guidelines for human heart rate and heart rate variability studies in psychophysiology-Part 1: Physiological underpinnings and foundations of measurement. *Psychophysiology, 61*(9), e14604. <https://doi.org/10.1111/psyp.14604>
 
 ## Comparator systems and adjacent platforms
 
@@ -52,9 +52,17 @@ Alabdulgader, A., McCraty, R., Atkinson, M., Dobyns, Y., Vainoras, A., Ragulskis
 
 Gaisenok, O., Gaisenok, D., & Bogachev, S. (2025). The influence of geomagnetic storms on the risks of developing myocardial infarction, acute coronary syndrome, and stroke: Systematic review and meta-analysis. *Journal of Natural Science, Biology and Medicine*. <https://doi.org/10.4103/jmp.jmp_122_24>
 
-Vieira, C. L. Z., Alvares, D., Blomberg, A., & Schwartz, J. (2022). Geomagnetic disturbances driven by solar activity enhance total and cardiovascular mortality risk in 263 U.S. cities. *Science of the Total Environment, 839*, 156312.
+Vieira, C. L. Z., Alvares, D., Blomberg, A., Schwartz, J., Coull, B., Huang, S., & Koutrakis, P. (2019). Geomagnetic disturbances driven by solar activity enhance total and cardiovascular mortality risk in 263 U.S. cities. *Environmental Health, 18*(1). <https://doi.org/10.1186/s12940-019-0516-0>
 
-## Reporting and transparency guidelines
+Vieira, C. L. Z., Chen, K., Garshick, E., Liu, M., Vokonas, P., Ljungman, P., Schwartz, J., & Koutrakis, P. (2022). Geomagnetic disturbances reduce heart rate variability in the Normative Aging Study. *Science of The Total Environment, 839*, 156235. <https://doi.org/10.1016/j.scitotenv.2022.156235>
+
+## Standards, reproducibility, and transparency guidance
+
+International Civil Aviation Organization. (2020). *Manual for the oversight of fatigue management approaches (Doc 9966, 2nd ed., Version 2, revised).* <https://www.icao.int/publications/doc-9966-includes-complete-set-fatigue-management-implementation-manuals>
+
+National Aeronautics and Space Administration. (2023). *NASA Spaceflight Human-System Standard Volume 1, Crew Health (NASA-STD-3001, Vol. 1, Rev. C).* <https://standards.nasa.gov/standard/NASA/NASA-STD-3001_VOL_1>
+
+Sandve, G. K., Nekrutenko, A., Taylor, J., & Hovig, E. (2013). Ten Simple Rules for Reproducible Computational Research. *PLoS Computational Biology, 9*(10), e1003285. <https://doi.org/10.1371/journal.pcbi.1003285>
 
 Mongan, J., Moy, L., & Kahn, C. E. (2020). Checklist for Artificial Intelligence in Medical Imaging (CLAIM): A guide for authors and reviewers. *Radiology: Artificial Intelligence, 2*(2), e200029. <https://doi.org/10.1148/ryai.2020200029>
 
