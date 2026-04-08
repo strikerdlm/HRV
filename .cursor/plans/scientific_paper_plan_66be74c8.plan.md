@@ -181,6 +181,8 @@ The writing phase should begin only once:
 - The Results narrative is explicitly bounded to implemented architecture, engineering verification, reproducibility assets, and a qualified exploratory-analysis vignette rather than unsupported validation claims.
 - The submission-candidate asset package now includes Table 1 through Table 5 as manuscript markdown tables, draft figure captions/specifications in `manuscript/figures/figure_plan.md`, and a populated `References` section in the main manuscript draft.
 - Figure 1 through Figure 4 have now been rendered as SVG assets in `manuscript/figures/`, covering platform architecture, end-to-end workflow, research-to-operations coupling, and verification coverage.
+- A later bibliography-verification pass using `paper-search` and `firecrawl` tightened missing DOIs, corrected incomplete reference metadata, and added official NASA/ICAO standards citations plus a reproducibility methods citation to the manuscript package.
+- A consolidated supplementary appendix now exists in `manuscript/supplement/submission_support_appendix.md`, covering extended engineering verification, standards crosswalks, reporting-guideline positioning, non-claims, and deployment prerequisites.
 
 ### MCP research status
 
@@ -196,3 +198,4 @@ The writing phase should begin only once:
 3. Decide whether any exploratory analysis vignette will be promoted into the main paper or kept in supplementary material pending provenance curation.
 4. Prepare a tagged release or archived DOI and harmonize environment wording for the final reproducibility statement.
 5. If needed, convert the manuscript package into the exact journal template and figure-sizing requirements once a target venue is chosen.
+6. Optionally expand the supplementary appendix with reviewer-facing environment setup, failure-mode notes, or curated exploratory examples if the journal supports extended online material.
