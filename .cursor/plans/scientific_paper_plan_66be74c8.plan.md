@@ -183,6 +183,9 @@ The writing phase should begin only once:
 - Figure 1 through Figure 4 have now been rendered as SVG assets in `manuscript/figures/`, covering platform architecture, end-to-end workflow, research-to-operations coupling, and verification coverage.
 - A later bibliography-verification pass using `paper-search` and `firecrawl` tightened missing DOIs, corrected incomplete reference metadata, and added official NASA/ICAO standards citations plus a reproducibility methods citation to the manuscript package.
 - A consolidated supplementary appendix now exists in `manuscript/supplement/submission_support_appendix.md`, covering extended engineering verification, standards crosswalks, reporting-guideline positioning, non-claims, and deployment prerequisites.
+- The manuscript has now been reframed around a Node.js/Next.js-first frontend over FastAPI and a shared Python modeling backend, with Streamlit retained only as a secondary interface in the narrative.
+- The Methods and Results sections now foreground explicit model layers: HRV analytics, SAFTE/circadian dynamics, deterministic readiness fusion, and environmental timing/alignment.
+- Table 6 (`manuscript/tables/model_layers_and_evidence_tiers.md`) now documents the biomathematical layer hierarchy, and the rendered figure set has been updated to match the Node-first, model-centered story.
 
 ### MCP research status
 
@@ -193,9 +196,8 @@ The writing phase should begin only once:
 
 ### Next writing targets
 
-1. Expand and verify the bibliography toward a submission-ready reference list, including any standards documents or additional software-paper references used in the final text.
-2. Confirm final authorship, affiliations, funding, conflict-of-interest, and acknowledgment details before submission.
-3. Decide whether any exploratory analysis vignette will be promoted into the main paper or kept in supplementary material pending provenance curation.
-4. Prepare a tagged release or archived DOI and harmonize environment wording for the final reproducibility statement.
-5. If needed, convert the manuscript package into the exact journal template and figure-sizing requirements once a target venue is chosen.
-6. Optionally expand the supplementary appendix with reviewer-facing environment setup, failure-mode notes, or curated exploratory examples if the journal supports extended online material.
+1. Confirm final authorship, affiliations, funding, conflict-of-interest, and acknowledgment details before submission.
+2. Decide whether any exploratory analysis vignette will be promoted into the main paper or kept in supplementary material pending provenance curation.
+3. Prepare a tagged release or archived DOI and harmonize environment wording for the final reproducibility statement.
+4. If needed, convert the manuscript package into the exact journal template and figure-sizing requirements once a target venue is chosen.
+5. Optionally expand the supplementary appendix with reviewer-facing environment setup, failure-mode notes, or curated exploratory examples if the journal supports extended online material.
