@@ -62,7 +62,8 @@ See `manuscript/figures/figure_plan.md` for details.
 1. The main manuscript draft now contains a structured abstract, Introduction, Methods, Results, Discussion, and Compliance/Transparency sections.
 2. The planned table package now includes six manuscript markdown assets, including a dedicated biomathematical layer summary.
 3. Figure specifications and rendered SVG assets now exist for Figure 1 through Figure 4.
-4. The remaining blockers to a cleaner submission candidate are final reference expansion, author-level metadata confirmation, and release/archive packaging for the cited software version.
+4. Reference expansion and bibliography verification passes have been completed; remaining blockers are author-level metadata confirmation, venue-specific templating, and release/archive packaging for the cited software version.
+5. **Agent orientation:** pipeline position, Q1 publication checklist, and guardrails are maintained in `manuscript/README.md` (read this when onboarding to the paper effort).
 
 ## Scope guardrails
 
