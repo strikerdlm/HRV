@@ -2216,6 +2216,9 @@ aspects of physiological function and recovery capacity.
 
 ## [Unreleased]
 
+### Documentation
+- **Manuscript MCP verification** (`manuscript/references/mcp_research_notes.md`, scientific paper plan): Documented successful 2026-04-08 smoke tests for Firecrawl (`firecrawl_search`), Tavily (`tavily-search`), and arXiv MCP (`search_papers`) to support reproducible research tooling for the paper effort.
+
 ### Added
 - **FRMS + USAF crew rest dashboard (SAFTE tab)** (`app/app.py`, `app/frms.py`): The SAFTE/Fatigue tab now includes an ICAO-aligned FRMS summary (WOCL exposure + threshold-based risk matrix) and a USAF crew rest compliance checker (AFMAN 11-202V3 baseline), plus publication-grade plot exports (Plotly fallback: HTML/PNG/SVG/PDF).
 - **Doctoral thesis proposal** (`docs/PhD.md`): Literature-backed dissertation concept for pilot/commander readiness classification, including multimodal predictors (sleep/fatigue/circadian/HRV/objective vigilance), countermeasure governance, and a 5×5 operational risk matrix for mission go/no-go decision support.
