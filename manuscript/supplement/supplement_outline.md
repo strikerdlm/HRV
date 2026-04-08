@@ -9,7 +9,7 @@ The supplementary package should absorb technical depth that would otherwise dis
 ### Current submission-candidate appendix
 
 - `submission_support_appendix.md`
-  - Consolidated appendix covering extended engineering verification inventory, standards crosswalk, reporting-guideline positioning, non-claims, and deployment prerequisites.
+  - Consolidated appendix covering extended engineering verification inventory, model-layer notes, standards crosswalk, reporting-guideline positioning, non-claims, and deployment prerequisites.
   - This file is currently the most submission-ready supplementary artifact in the package.
 
 ### Supplementary Methods
