@@ -15,14 +15,14 @@ This document converts repository evidence into manuscript-ready transparency in
 | Commit hash at planning time | `a9141a3260ff5cab39eb8ae91dcce516b8d19864` | git metadata |
 | Primary documented Python environment | conda `hrv-py312`, Python 3.12 | `WARP.md`, `README.md`, `AGENTS.md` |
 | Primary dependency file | `requirements.txt` | repository root |
-| Main operational surfaces | Streamlit operational, Streamlit research, FastAPI, Next.js | `README.md`, `api/main.py` |
+| Main operational surfaces | Next.js frontend, FastAPI backend, secondary Streamlit research and operational interfaces | `README.md`, `api/main.py`, `frontend/` |
 
 ## Section-by-section map
 
 | Manuscript subsection | Current repository evidence | Manuscript-safe wording today | Missing inputs or cautions |
 | --- | --- | --- | --- |
 | Data availability statement | `analysis/` exports exist; `docs/lit_review.md` includes review-style availability wording | State availability only for code and repository artifacts unless a curated dataset package is assembled. | Need dataset manifest, sharing conditions, and study linkage for any empirical tables or figures. |
-| Code and artifact availability | Public GitHub URL, MIT license, exact branch and commit hash, dependency docs | Safe to report the repository URL, license, branch, commit hash, and environment notes. | Prefer a tagged release or archived DOI before final submission. |
+| Code and artifact availability | Public GitHub URL, MIT license, exact branch and commit hash, Python and Next.js dependency docs | Safe to report the repository URL, license, branch, commit hash, environment notes, and the presence of a Node.js/Next.js frontend over a Python backend. | Prefer a tagged release or archived DOI before final submission. |
 | Ethics and consent | `docs/lit_review.md` contains a review-only `Not applicable` declaration | Use a software-only statement only if the manuscript reports no new or previously collected human-subject data. | If any human data are reported, insert protocol number, institution, and consent language. |
 | Standards and regulatory alignment | NASA, ICAO, MIL-STD, and related standards are cited in code and docs | Safe to say the platform is informed by or aligned with these reference frameworks. | Do not claim certification, legal compliance, or clearance without formal documentation. |
 | Reporting guideline alignment | Verified references available for STROBE, TRIPOD+AI, and CLAIM | Safe to describe a hybrid reporting strategy driven by manuscript content. | Only invoke TRIPOD+AI or CLAIM if predictive AI claims are actually reported. |
@@ -63,7 +63,7 @@ Avoid these phrases unless new documentation is provided:
 
 ### Code and artifact availability
 
-> Mission Control - Flight Surgeon is available as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. The version referenced in this manuscript corresponds to branch `main`, commit `a9141a3260ff5cab39eb8ae91dcce516b8d19864`.
+> Mission Control - Flight Surgeon is available as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. The version referenced in this manuscript corresponds to branch `main`, commit `a9141a3260ff5cab39eb8ae91dcce516b8d19864`. The repository includes a Next.js/TypeScript frontend over a Python backend and shared modeling core.
 
 ### Data availability
 
