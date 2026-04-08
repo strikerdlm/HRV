@@ -179,6 +179,8 @@ The writing phase should begin only once:
 - Seed references have been expanded to include aviation fatigue, circadian monitoring, and geomagnetic/autonomic literature used in the draft.
 - The structured abstract, Results, Discussion, and Compliance/Transparency sections have now been drafted in `manuscript/draft/main_manuscript_scaffold.md`.
 - The Results narrative is explicitly bounded to implemented architecture, engineering verification, reproducibility assets, and a qualified exploratory-analysis vignette rather than unsupported validation claims.
+- The submission-candidate asset package now includes Table 1 through Table 5 as manuscript markdown tables, draft figure captions/specifications in `manuscript/figures/figure_plan.md`, and a populated `References` section in the main manuscript draft.
+- Figure 1 through Figure 4 have now been rendered as SVG assets in `manuscript/figures/`, covering platform architecture, end-to-end workflow, research-to-operations coupling, and verification coverage.
 
 ### MCP research status
 
@@ -189,8 +191,8 @@ The writing phase should begin only once:
 
 ### Next writing targets
 
-1. Refine figure and table mapping so the current Results and Discussion sections point to concrete manuscript visuals.
-2. Expand `manuscript/references/seed_references.md` toward a submission-ready bibliography and align all in-text citations.
-3. Confirm final authorship, affiliations, funding, conflict-of-interest, and acknowledgment details before submission.
-4. Decide whether any exploratory analysis vignette will be promoted into the main paper or kept in supplementary material pending provenance curation.
-5. Prepare a tagged release or archived DOI and harmonize environment wording for the final reproducibility statement.
+1. Expand and verify the bibliography toward a submission-ready reference list, including any standards documents or additional software-paper references used in the final text.
+2. Confirm final authorship, affiliations, funding, conflict-of-interest, and acknowledgment details before submission.
+3. Decide whether any exploratory analysis vignette will be promoted into the main paper or kept in supplementary material pending provenance curation.
+4. Prepare a tagged release or archived DOI and harmonize environment wording for the final reproducibility statement.
+5. If needed, convert the manuscript package into the exact journal template and figure-sizing requirements once a target venue is chosen.
