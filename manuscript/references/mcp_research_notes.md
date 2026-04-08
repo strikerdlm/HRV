@@ -32,30 +32,30 @@ End-to-end checks were run from Cursor using `call_mcp_tool` against the workspa
 
 ### Comparator and systems papers
 
-- Tarvainen, M. P., Niskanen, J.-P., Lipponen, J. A., Ranta-aho, P. O., & Karjalainen, P. A. (2014). *Kubios HRV - Heart rate variability analysis software*. *Computer Methods and Programs in Biomedicine, 113*(1), 210-220. https://doi.org/10.1016/j.cmpb.2013.07.024
-- Christie, I. C., & Gianaros, P. J. (2013). *PhysioScripts: An extensible, open source platform for the processing of physiological data*. *Behavior Research Methods, 45*(1), 125-131. https://doi.org/10.3758/s13428-012-0233-x
-- Rogers, B., Murias, J. M., & Fleitas-Paniagua, P. R. (2025). *Validity of an open-source mobile app to measure fractal correlation properties of heart rate variability during exercise*. *European Journal of Applied Physiology*. https://doi.org/10.1007/s00421-025-06037-0
-- Arney, D., Zhang, Y., Kennedy-Metz, L. R., Dias, R. D., Goldman, J. M., & Zenati, M. A. (2023). *An open-source, interoperable architecture for generating real-time surgical team cognitive alerts from heart-rate variability monitoring*. *Sensors, 23*(8), 3890. https://doi.org/10.3390/s23083890
-- Bowman, C., Huang, Y., Walch, O. J., Fang, Y., Frank, E., Tyler, J., Mayer, C., Stockbridge, C., Goldstein, C., Sen, S., & Forger, D. B. (2021). *A method for characterizing daily physiology from widely used wearables*. *Cell Reports Methods, 1*(4), 100058. https://doi.org/10.1016/j.crmeth.2021.100058
-- Hursh, S. R., Balkin, T. J., Miller, J. C., & Eddy, D. R. (2004). *The Fatigue Avoidance Scheduling Tool: Modeling to minimize the effects of fatigue on cognitive performance*. *SAE Technical Paper Series*. https://doi.org/10.4271/2004-01-2151
+- Tarvainen, M. P., Niskanen, J.-P., Lipponen, J. A., Ranta-aho, P. O., & Karjalainen, P. A. (2014). *Kubios HRV - Heart rate variability analysis software*. *Computer Methods and Programs in Biomedicine, 113*(1), 210-220. <https://doi.org/10.1016/j.cmpb.2013.07.024>
+- Christie, I. C., & Gianaros, P. J. (2013). *PhysioScripts: An extensible, open source platform for the processing of physiological data*. *Behavior Research Methods, 45*(1), 125-131. <https://doi.org/10.3758/s13428-012-0233-x>
+- Rogers, B., Murias, J. M., & Fleitas-Paniagua, P. R. (2025). *Validity of an open-source mobile app to measure fractal correlation properties of heart rate variability during exercise*. *European Journal of Applied Physiology*. <https://doi.org/10.1007/s00421-025-06037-0>
+- Arney, D., Zhang, Y., Kennedy-Metz, L. R., Dias, R. D., Goldman, J. M., & Zenati, M. A. (2023). *An open-source, interoperable architecture for generating real-time surgical team cognitive alerts from heart-rate variability monitoring*. *Sensors, 23*(8), 3890. <https://doi.org/10.3390/s23083890>
+- Bowman, C., Huang, Y., Walch, O. J., Fang, Y., Frank, E., Tyler, J., Mayer, C., Stockbridge, C., Goldstein, C., Sen, S., & Forger, D. B. (2021). *A method for characterizing daily physiology from widely used wearables*. *Cell Reports Methods, 1*(4), 100058. <https://doi.org/10.1016/j.crmeth.2021.100058>
+- Hursh, S. R., Balkin, T. J., Miller, J. C., & Eddy, D. R. (2004). *The Fatigue Avoidance Scheduling Tool: Modeling to minimize the effects of fatigue on cognitive performance*. *SAE Technical Paper Series*. <https://doi.org/10.4271/2004-01-2151>
 
 ### Aviation, fatigue, and circadian monitoring
 
-- Devine, J. K., & Hursh, S. R. (2025). *A narrative review on in-flight use of consumer sleep technologies for aviation research*. *Sleep Advances*. https://doi.org/10.1093/sleepadvances/zpaf076
-- Morris, M. B., Howland, J. P., Amaddio, K. M., & Gunzelmann, G. (2020). *Aircrew fatigue perceptions, fatigue mitigation strategies, and circadian typology*. *Aerospace Medicine and Human Performance, 91*(4), 363-368. https://doi.org/10.3357/AMHP.5396.2020
-- Yang, S. X., Cheng, S., Sun, Y., Tang, X., & Huang, Z. (2024). *Circadian disruption in civilian airline pilots*. *Aerospace Medicine and Human Performance*. https://doi.org/10.3357/AMHP.6316.2024
-- Hartmeyer, S. L., Phillips, N. E., Jassil, F. C., Joris, C., Dibner, C., Collet, T. H., & Andersen, M. (2025). *Multi-wearable approach for monitoring diurnal light exposure and body rhythms in nightshift workers*. *Acta Physiologica*. https://doi.org/10.1111/apha.70069
+- Devine, J. K., & Hursh, S. R. (2025). *A narrative review on in-flight use of consumer sleep technologies for aviation research*. *Sleep Advances*. <https://doi.org/10.1093/sleepadvances/zpaf076>
+- Morris, M. B., Howland, J. P., Amaddio, K. M., & Gunzelmann, G. (2020). *Aircrew fatigue perceptions, fatigue mitigation strategies, and circadian typology*. *Aerospace Medicine and Human Performance, 91*(4), 363-368. <https://doi.org/10.3357/AMHP.5396.2020>
+- Yang, S. X., Cheng, S., Sun, Y., Tang, X., & Huang, Z. (2024). *Circadian disruption in civilian airline pilots*. *Aerospace Medicine and Human Performance*. <https://doi.org/10.3357/AMHP.6316.2024>
+- Hartmeyer, S. L., Phillips, N. E., Jassil, F. C., Joris, C., Dibner, C., Collet, T. H., & Andersen, M. (2025). *Multi-wearable approach for monitoring diurnal light exposure and body rhythms in nightshift workers*. *Acta Physiologica*. <https://doi.org/10.1111/apha.70069>
 
 ### Space-weather and autonomic physiology
 
-- Alabdulgader, A., McCraty, R., Atkinson, M., Dobyns, Y., Vainoras, A., Ragulskis, M., & Stolc, V. (2018). *Long-term study of heart rate variability responses to changes in the solar and geomagnetic environment*. *Scientific Reports, 8*(1), 2663. https://doi.org/10.1038/s41598-018-20932-x
-- Gaisenok, O., Gaisenok, D., & Bogachev, S. (2025). *The influence of geomagnetic storms on the risks of developing myocardial infarction, acute coronary syndrome, and stroke: Systematic review and meta-analysis*. https://doi.org/10.4103/jmp.jmp_122_24
+- Alabdulgader, A., McCraty, R., Atkinson, M., Dobyns, Y., Vainoras, A., Ragulskis, M., & Stolc, V. (2018). *Long-term study of heart rate variability responses to changes in the solar and geomagnetic environment*. *Scientific Reports, 8*(1), 2663. <https://doi.org/10.1038/s41598-018-20932-x>
+- Gaisenok, O., Gaisenok, D., & Bogachev, S. (2025). *The influence of geomagnetic storms on the risks of developing myocardial infarction, acute coronary syndrome, and stroke: Systematic review and meta-analysis*. <https://doi.org/10.4103/jmp.jmp_122_24>
 
 ### Reporting-guideline sources
 
-- von Elm, E., Altman, D. G., Egger, M., Pocock, S. J., Gotzsche, P. C., & Vandenbroucke, J. P. (2007). *The Strengthening the Reporting of Observational Studies in Epidemiology (STROBE) statement: Guidelines for reporting observational studies*. *PLoS Medicine, 4*(10), e296. https://doi.org/10.1371/journal.pmed.0040296
-- TRIPOD+AI Consortium. (2024). *TRIPOD+AI statement: updated guidance for reporting clinical prediction models that use regression or machine learning methods*. *BMJ*, q902. https://doi.org/10.1136/bmj.q902
-- Mongan, J., Moy, L., & Kahn, C. E. (2020). *Checklist for Artificial Intelligence in Medical Imaging (CLAIM): A guide for authors and reviewers*. *Radiology: Artificial Intelligence, 2*(2), e200029. https://doi.org/10.1148/ryai.2020200029
+- von Elm, E., Altman, D. G., Egger, M., Pocock, S. J., Gotzsche, P. C., & Vandenbroucke, J. P. (2007). *The Strengthening the Reporting of Observational Studies in Epidemiology (STROBE) statement: Guidelines for reporting observational studies*. *PLoS Medicine, 4*(10), e296. <https://doi.org/10.1371/journal.pmed.0040296>
+- TRIPOD+AI Consortium. (2024). *TRIPOD+AI statement: updated guidance for reporting clinical prediction models that use regression or machine learning methods*. *BMJ*, q902. <https://doi.org/10.1136/bmj.q902>
+- Mongan, J., Moy, L., & Kahn, C. E. (2020). *Checklist for Artificial Intelligence in Medical Imaging (CLAIM): A guide for authors and reviewers*. *Radiology: Artificial Intelligence, 2*(2), e200029. <https://doi.org/10.1148/ryai.2020200029>
 
 ## Key findings from `scite`
 
@@ -153,6 +153,40 @@ These Zotero results are useful because they match the manuscript’s three tran
 - **ArXiv** — Docker `arxiv-mcp-server` with storage on `E:\ArXiv`. **Smoke-tested 2026-04-08** (`search_papers` successful).
 
 The numbered literature bullets in “Key scientific sources” and related sections remain sourced from `paper-search`, `scite`, `zotero`, and `brave` unless you append explicit Firecrawl/Tavily/ArXiv harvest subsections with dates and queries.
+
+## Reference verification pass (2026-04-08)
+
+This later pass was used to tighten the submission-candidate bibliography and standards citations in the main manuscript.
+
+### `paper-search` verification outcomes
+
+- `search_crossref` verified the DOI and full title for the updated Quigley et al. psychophysiology guidance paper:
+  - `10.1111/psyp.14604`
+- `search_crossref` verified the DOI for Nunan et al. (2010) normal-value review:
+  - `10.1111/j.1540-8159.2010.02841.x`
+- `search_crossref` and `search_pubmed` verified the classic Task Force HRV standards record:
+  - `10.1161/01.cir.93.5.1043`
+- `search_crossref` corrected the previously incomplete Vieira entry and also surfaced a more HRV-specific geomagnetic paper:
+  - Vieira et al. (2019), *Environmental Health*, `10.1186/s12940-019-0516-0`
+  - Vieira et al. (2022), *Science of The Total Environment*, `10.1016/j.scitotenv.2022.156235`
+- `search_crossref` verified a reproducibility methods reference used to strengthen the transparency framing:
+  - Sandve et al. (2013), *PLoS Computational Biology*, `10.1371/journal.pcbi.1003285`
+
+### `firecrawl` standards-page verification outcomes
+
+- `firecrawl_scrape` on the NASA standards page confirmed:
+  - Title: *NASA Spaceflight Human-System Standard Volume 1, Crew Health*
+  - Standard identifier/version: `NASA-STD-3001_VOL_1`, Version `C`
+  - Document date: `09/15/2023`
+- `firecrawl_scrape` on the ICAO page confirmed:
+  - Title context: *Doc 9966 (Includes complete set of Fatigue Management implementation manuals)*
+  - Manual name: *Manual for the Oversight of Fatigue Management Approaches*
+  - Edition detail shown on page: `Second Edition, Version 2 (Revised) 2020`
+
+### Files updated from this pass
+
+- `manuscript/draft/main_manuscript_scaffold.md`
+- `manuscript/references/seed_references.md`
 
 ## Drafting implications
 
