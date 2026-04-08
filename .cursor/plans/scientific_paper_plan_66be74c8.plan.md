@@ -10,16 +10,16 @@ todos:
     status: completed
   - id: literature-gap-review
     content: Assemble a thematic literature comparison covering HRV platforms, fatigue/circadian systems, aerospace medicine decision-support tools, and multimodal monitoring systems.
-    status: in_progress
+    status: completed
   - id: define-validation-story
     content: Distinguish software verification, available empirical evaluation, and remaining evidence gaps so the Methods and Results sections stay defensible.
-    status: pending
+    status: completed
   - id: plan-manuscript-workspace
     content: Prepare the future `manuscript/` folder structure for outline, draft, tables, figures, references, supplementary files, and evidence tracking.
-    status: pending
+    status: completed
   - id: map-compliance-sections
     content: Collect ethics, standards/regulatory alignment, code/data sharing, authorship, and transparency inputs for the post-Discussion sections.
-    status: pending
+    status: completed
 isProject: false
 ---
 
