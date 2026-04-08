@@ -11,10 +11,10 @@ This file defines the figures that the manuscript should reference. It now recor
 - **Asset:** `manuscript/figures/figure1_platform_architecture.svg`
 - **Resolution target:** 1600 x 960 SVG
 - **Insertion point:** Methods 2.2 or Results 3.1
-- **Content:** Inputs, shared Python analysis core, user persistence, fatigue and circadian layer, space-weather layer, scheduling and decision logic, operational and research delivery surfaces.
+- **Content:** Inputs, shared Python modeling backend, user persistence, HRV analytic layer, SAFTE/circadian dynamics, environmental timing, readiness fusion, Next.js delivery routes, FastAPI orchestration, and secondary Streamlit interfaces.
 - **Primary sources:** `README.md`, `api/main.py`, `app/research_app.py`, `app/operational_app.py`, `manuscript/evidence/core_modules_scope.md`
-- **Caption goal:** Explain how one analysis core supports multiple interfaces and workflow layers.
-- **Draft caption:** *Figure 1. High-level architecture of Mission Control - Flight Surgeon. RR-interval and wearable-derived inputs feed a shared Python analysis core that is coupled to user persistence, circadian and fatigue interpretation, space-weather context, scheduling logic, and export utilities. The same core is exposed through research and operational Streamlit applications, a FastAPI backend, and a Next.js frontend.*
+- **Caption goal:** Explain how one modeling backend supports a Node-first client, FastAPI orchestration, and secondary interfaces.
+- **Draft caption:** *Figure 1. High-level architecture of Mission Control - Flight Surgeon. RR-interval and wearable-derived inputs feed a shared Python modeling backend that is coupled to user persistence, HRV analytics, SAFTE/circadian dynamics, environmental timing, readiness fusion, and export utilities. The same backend is exposed primarily through a Next.js frontend and FastAPI orchestration layer, while Streamlit remains a secondary interface in the repository.*
 
 ## Figure 2. End-to-end translational workflow
 
@@ -23,10 +23,10 @@ This file defines the figures that the manuscript should reference. It now recor
 - **Asset:** `manuscript/figures/figure2_end_to_end_workflow.svg`
 - **Resolution target:** 1600 x 900 SVG
 - **Insertion point:** Results 3.1
-- **Content:** RR ingestion -> HRV computation -> user context fusion -> fatigue and circadian interpretation -> scheduling and GO/NO-GO outputs -> export and audit trail.
+- **Content:** RR ingestion -> HRV computation -> user context fusion -> fatigue and circadian interpretation -> readiness fusion -> scheduling and GO/NO-GO outputs -> export and audit trail.
 - **Primary sources:** `app/hrv_core.py`, `app/user_profile_tab.py`, `app/scheduling_core.py`, `app/publication_export.py`
 - **Caption goal:** Emphasize the transition from physiological measurement to decision support.
-- **Draft caption:** *Figure 2. End-to-end translational workflow. Physiological inputs are ingested and processed into HRV metrics, linked to longitudinal user context, interpreted alongside circadian and fatigue state, and translated into readiness-oriented outputs, scheduling summaries, and exportable audit artifacts.*
+- **Draft caption:** *Figure 2. End-to-end translational workflow. Physiological inputs are ingested and processed into HRV metrics, linked to longitudinal user context, interpreted through fatigue and circadian model layers, and translated into readiness-oriented outputs, scheduling summaries, and exportable audit artifacts.*
 
 ## Figure 3. Research-to-operations coupling
 
@@ -35,10 +35,10 @@ This file defines the figures that the manuscript should reference. It now recor
 - **Asset:** `manuscript/figures/figure3_research_to_operations_coupling.svg`
 - **Resolution target:** 1600 x 920 SVG
 - **Insertion point:** Methods 2.2 or Discussion 4.4
-- **Content:** Research Streamlit, operational Streamlit, FastAPI backend, and shared code modules; indicate where analysis artifacts and operational summaries originate.
+- **Content:** Next.js research routes, Next.js operational routes, FastAPI orchestration, shared Python model layers, and secondary Streamlit views; indicate where analysis artifacts and operational summaries originate.
 - **Primary sources:** `README.md`, `WARP.md`, `api/main.py`
-- **Caption goal:** Clarify the dual-interface architecture and why it matters for translational deployment.
-- **Draft caption:** *Figure 3. Research-to-operations coupling in the platform. Exploratory analytics, operational dashboards, and web-delivered interfaces rely on a common analysis substrate while exposing different levels of detail and workflow focus.*
+- **Caption goal:** Clarify the Node-first client architecture and why model-serving consistency matters for translational deployment.
+- **Draft caption:** *Figure 3. Research-to-operations coupling in the platform. Research and operational routes in the Next.js client rely on a common FastAPI/Python modeling substrate while exposing different levels of detail and workflow focus. Secondary Streamlit interfaces remain available but are not the primary frontend scope of the manuscript.*
 
 ## Figure 4. Verification coverage map
 
@@ -47,10 +47,10 @@ This file defines the figures that the manuscript should reference. It now recor
 - **Asset:** `manuscript/figures/figure4_verification_coverage_map.svg`
 - **Resolution target:** 1600 x 980 SVG
 - **Insertion point:** Results 3.2
-- **Content:** Matrix or grouped diagram showing tested domains such as scheduling, FRMS, space-weather ingest, API normalization, and export utilities.
+- **Content:** Matrix showing major biomathematical and orchestration layers such as HRV analytics, SAFTE/circadian dynamics, readiness fusion, environmental timing, API-backed Node delivery, and export utilities.
 - **Primary sources:** `tests/`, `manuscript/evidence/validation_story.md`
-- **Caption goal:** Distinguish implemented-and-tested workflows from areas awaiting external validation.
-- **Draft caption:** *Figure 4. Verification coverage map. Representative automated tests support major software pathways including scheduling and readiness logic, FRMS behavior, space-weather ingestion and alignment, and API-facing workflows. The figure should visually distinguish software verification from validation work that remains future-facing.*
+- **Caption goal:** Distinguish strong model-adjacent implementation evidence from areas awaiting external numerical or physiological validation.
+- **Draft caption:** *Figure 4. Verification coverage map. Representative automated tests support major readiness, environmental, and API-facing layers, while the HRV and SAFTE/circadian cores remain stronger in explicit code-level formulation than in external benchmark validation. The figure should visually distinguish engineering verification from future-facing model validation.*
 
 ## Optional Figure 5. Exploratory HRV to space-weather example
 
