@@ -12,8 +12,21 @@ This file records the manuscript-development research performed through the conf
 | `user-scite` | Successful | Citation-context retrieval, full-text excerpts, and retraction-aware checks for key papers and reporting guidelines. |
 | `user-zotero` | Partially successful | Confirmed relevant items in the local Zotero library; one metadata search succeeded, some search modes timed out or were unsupported, and one full-text lookup returned not found. |
 | `user-brave` | Successful | Official technical and standards-document discovery for NASA-STD-3001, ICAO Doc 9966, and EQUATOR guidance. |
-| `user-firecrawl` | Blocked | `firecrawl_search` returned `Unauthorized: Invalid token`, so no usable Firecrawl MCP results were available in this session. |
-| `tavily` | Not configured as MCP | No Tavily MCP server is available in this workspace. |
+| `user-firecrawl` | Verified (smoke test 2026-04-08) | Recovered from prior `Unauthorized: Invalid token` after API key correction. `firecrawl_search` returns live web results; see connectivity verification below. First-round manuscript bullets below predate Firecrawl use. |
+| `tavily` | Verified (smoke test 2026-04-08) | Docker `mcp/tavily`; `tavily-search` returned aviation/HRV-relevant hits with snippets. Suitable for search, extract, crawl, and deeper research passes. |
+| `arxiv-mcp-server` | Verified (smoke test 2026-04-08) | Docker `mcp/arxiv-mcp-server` with `E:\ArXiv` mounted at `/local-directory`; `search_papers` returned structured metadata and PDF URLs. `download_paper` / `read_paper` not exercised in this smoke test. |
+
+## MCP connectivity verification (2026-04-08)
+
+End-to-end checks were run from Cursor using `call_mcp_tool` against the workspace MCP identifiers `user-firecrawl`, `user-tavily`, and `user-arxiv-mcp-server`. **All three calls completed without authentication errors** and returned structured results relevant to the manuscript topic (HRV, fatigue, operational physiology).
+
+| Server | Tool | Test parameters | Result summary |
+| --- | --- | --- | --- |
+| `user-firecrawl` | `firecrawl_search` | `query`: “heart rate variability operational medicine”; `limit`: 3 | **Success.** Three web hits (e.g. PMC occupational-medicine HRV guideline, Circulation HRV overview, PMC application guideline). |
+| `user-tavily` | `tavily-search` | `query`: “heart rate variability fatigue aviation research”; `max_results`: 5; `search_depth`: basic | **Success.** Five results including flight-fatigue/HRV and pilot workload themes (e.g. IEEE Explore, PMC/PubMed entries, human-factors summaries). |
+| `user-arxiv-mcp-server` | `search_papers` | `query`: `abs:"heart rate variability"`; `categories`: `["q-bio.QM"]`; `max_results`: 5 | **Success.** Five papers with arXiv ids, titles, authors, abstracts, categories, and `https://arxiv.org/pdf/...` URLs (mix of quantitative biology and related physics.med-ph cross-listings). |
+
+**Research workflow note:** These checks confirm that supplemental harvesting (Firecrawl scrape/extract/crawl, Tavily extract/crawl/research tools, ArXiv download/read) can be used in later sessions. Record any new citations or excerpts in this file or in `seed_references.md` with tool name, date, and query for auditability.
 
 ## Key scientific sources recovered with `paper-search`
 
@@ -129,24 +142,21 @@ These Zotero results are useful because they match the manuscript’s three tran
 - Reporting-guideline selection resource:
   - `https://www.equator-network.org/toolkits/selecting-the-appropriate-reporting-guideline/`
 
-## Firecrawl status
+## Firecrawl, Tavily, and ArXiv (configuration history)
 
-Attempted MCP call:
+**Initial session (draft evidence pass):** `user-firecrawl.firecrawl_search` was attempted and returned `Unauthorized: Invalid token`, so no Firecrawl-derived content entered the first-round notes.
 
-- `user-firecrawl.firecrawl_search`
+**Current configuration (user `C:\Users\User\.cursor\mcp.json`):**
 
-Observed result:
+- **Firecrawl** — `npx firecrawl-mcp`; API key corrected. **Smoke-tested 2026-04-08** (`firecrawl_search` successful).
+- **Tavily** — Docker `mcp/tavily` with `TAVILY_API_KEY`. **Smoke-tested 2026-04-08** (`tavily-search` successful).
+- **ArXiv** — Docker `arxiv-mcp-server` with storage on `E:\ArXiv`. **Smoke-tested 2026-04-08** (`search_papers` successful).
 
-- `Unauthorized: Invalid token`
-
-Interpretation:
-
-- Firecrawl is configured as an MCP server in the workspace, but it is not currently usable for manuscript research in this session.
-- The manuscript-development record should therefore note that Firecrawl was attempted but unavailable because of authentication failure.
+The numbered literature bullets in “Key scientific sources” and related sections remain sourced from `paper-search`, `scite`, `zotero`, and `brave` unless you append explicit Firecrawl/Tavily/ArXiv harvest subsections with dates and queries.
 
 ## Drafting implications
 
 1. Use `paper-search` and `scite` as the primary evidence base for the Introduction and reporting-guideline rationale.
 2. Use `zotero` results to prioritize library-backed references on HRV, vigilance, geomagnetic coupling, and space analogs.
 3. Use `brave` results for official NASA, ICAO, and EQUATOR documentation in Methods, Discussion, and compliance sections.
-4. Do not cite Firecrawl-derived content in the manuscript unless the token issue is resolved and successful results are collected in a later session.
+4. Firecrawl, Tavily, and ArXiv MCP are **verified operational as of 2026-04-08** (see “MCP connectivity verification”). Cite tool-backed findings with provenance (server, tool, query, date). Extend `seed_references.md` when a hit becomes a manuscript reference; the original draft body still rests on paper-search / scite / zotero / brave unless you revise sections with new harvests.
