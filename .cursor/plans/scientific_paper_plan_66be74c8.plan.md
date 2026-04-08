@@ -183,8 +183,7 @@ The writing phase should begin only once:
 - Scientific literature was gathered with `paper-search` and `scite`.
 - Zotero searches were partially successful and yielded relevant library items for HRV, vigilance, geomagnetic coupling, and space analogs.
 - Official technical documentation was located with `brave`, including NASA-STD-3001, ICAO Doc 9966, and EQUATOR resources.
-- The configured Firecrawl MCP server is currently blocked by authentication (`Unauthorized: Invalid token`), so no Firecrawl-derived manuscript evidence has been incorporated yet.
-- No Tavily MCP server is configured in this workspace, so Tavily could not be used as an MCP source in the current session.
+- **Update:** Firecrawl MCP authentication was fixed (valid `FIRECRAWL_API_KEY` in user MCP config); Tavily was added as Docker MCP `mcp/tavily`; ArXiv was added as `arxiv-mcp-server` with local storage on `E:\ArXiv`. **2026-04-08:** Smoke tests succeeded for `firecrawl_search`, `tavily-search`, and arXiv `search_papers`; details are logged in `manuscript/references/mcp_research_notes.md` under “MCP connectivity verification”. Core manuscript bullets still originate from the first pass (paper-search, scite, zotero, brave); use the three servers for supplemental harvesting and extend references as needed.
 
 ### Next writing targets
 
