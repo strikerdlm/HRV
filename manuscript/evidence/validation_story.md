@@ -33,11 +33,12 @@ The paper should therefore distinguish between **software verification**, **expl
 The repository clearly supports a system-level Methods and Results section around:
 
 - the shared Python analysis core,
-- the two Streamlit entrypoints,
-- the FastAPI backend and frontend delivery surface,
+- the Next.js frontend and FastAPI orchestration layer,
+- the secondary Streamlit interfaces retained in the repository,
 - the user-profile persistence layer,
-- the scheduling and readiness logic,
-- the space-weather ingest and impact modules,
+- the SAFTE/circadian model layer,
+- the scheduling and readiness fusion logic,
+- the space-weather ingest, propagation, and alignment modules,
 - the export and reproducibility utilities.
 
 These claims are architecture claims and are directly supported by repository files.
@@ -56,7 +57,7 @@ The test surface is strongest for the modules that matter most to an operational
 - `tests/test_comprehensive_modules.py`
 - `tests/test_api_user_profile_normalization.py`
 
-This supports a Results subsection centered on software verification and deterministic rule behavior.
+This supports a Results subsection centered on software verification, deterministic rule behavior, and model-layer implementation.
 
 ### 3. Quantitative artifacts that may be usable
 
@@ -93,7 +94,11 @@ but should not claim proven numerical equivalence to an external gold standard u
 
 That is still valuable engineering evidence, but the manuscript should phrase it accurately.
 
-### 3. Exploratory correlation outputs are not the same as validated scientific findings
+### 3. Client-side model mirroring is not independent validation
+
+The repository includes a TypeScript SAFTE implementation under `frontend/src/lib/safte-model.ts` that mirrors the canonical Python implementation in `app/fatigue_calculator/safte_model.py`. This is valuable evidence for architectural consistency between the Node-first client and backend model stack. However, it should not be treated as a second validation source. The manuscript should describe the mirrored implementation as consistency-oriented delivery logic unless explicit parity testing is added.
+
+### 4. Exploratory correlation outputs are not the same as validated scientific findings
 
 The presence of effect sizes, confidence intervals, and p-values in exported CSV files does not by itself establish a publishable validation study. The manuscript must first document:
 
@@ -108,16 +113,16 @@ The presence of effect sizes, confidence intervals, and p-values in exported CSV
 
 ### 3.1 System implementation summary
 
-Report implemented architecture, deployment surfaces, and module coupling. This is the strongest Results subsection available today.
+Report Node-first delivery, FastAPI orchestration, model layering, and module coupling. This is the strongest Results subsection available today.
 
 ### 3.2 Engineering verification
 
 Summarize test-backed evidence by domain:
 
-- scheduling and IHPI scoring,
-- fatigue and FRMS logic,
-- space-weather ingest and caching,
-- API normalization and windowed endpoint behavior,
+- readiness fusion and IHPI scoring,
+- SAFTE/fatigue and FRMS logic,
+- space-weather ingest, propagation, and alignment,
+- API normalization and Node-client-facing endpoint behavior,
 - export and reporting helpers.
 
 ### 3.3 Reproducibility and operational artifacts
