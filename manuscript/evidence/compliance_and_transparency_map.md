@@ -12,7 +12,7 @@ This document converts repository evidence into manuscript-ready transparency in
 | Public repository URL | `https://github.com/strikerdlm/HRV.git` | git remote + `README.md` |
 | License | MIT | `LICENSE` |
 | Branch at planning time | `main` | git metadata |
-| Commit hash at planning time | `a9141a3260ff5cab39eb8ae91dcce516b8d19864` | git metadata |
+| Commit hash at planning time | `a32959258ff01e459ac9d06609f58c3cd09fee47` | git metadata |
 | Primary documented Python environment | conda `hrv-py312`, Python 3.12 | `WARP.md`, `README.md`, `AGENTS.md` |
 | Primary dependency file | `requirements.txt` | repository root |
 | Main operational surfaces | Next.js frontend, FastAPI backend, secondary Streamlit research and operational interfaces | `README.md`, `api/main.py`, `frontend/` |
@@ -63,7 +63,7 @@ Avoid these phrases unless new documentation is provided:
 
 ### Code and artifact availability
 
-> Mission Control - Flight Surgeon is available as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. The version referenced in this manuscript corresponds to branch `main`, commit `a9141a3260ff5cab39eb8ae91dcce516b8d19864`. The repository includes a Next.js/TypeScript frontend over a Python backend and shared modeling core.
+> Mission Control - Flight Surgeon is available as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. The version referenced in this manuscript corresponds to branch `main`, commit `a32959258ff01e459ac9d06609f58c3cd09fee47`. The repository includes a Next.js/TypeScript frontend over a Python backend and shared modeling core.
 
 ### Data availability
 
