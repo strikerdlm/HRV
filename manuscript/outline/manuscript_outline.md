@@ -33,18 +33,18 @@ The paper should argue that the key contribution is **integration plus auditabil
 
 ## Planned tables
 
-1. **Table 1. Platform architecture and module families**
-2. **Table 2. Narrative comparison with external systems**
-3. **Table 3. Engineering verification coverage by module family**
-4. **Table 4. Reproducibility and deployment metadata**
-5. **Table 5. Compliance and transparency declarations**
+1. **Table 1. Platform architecture and module families** — `manuscript/tables/platform_architecture_and_module_families.md`
+2. **Table 2. Narrative comparison with external systems** — `manuscript/tables/literature_gap_comparison.md`
+3. **Table 3. Engineering verification coverage by module family** — `manuscript/tables/engineering_verification_coverage.md`
+4. **Table 4. Reproducibility and deployment metadata** — `manuscript/tables/reproducibility_and_deployment_metadata.md`
+5. **Table 5. Compliance and transparency declarations** — `manuscript/tables/compliance_and_transparency_declarations.md`
 
 ## Planned figures
 
-1. **Figure 1. System architecture across inputs, analytic core, decision layers, and delivery surfaces**
-2. **Figure 2. End-to-end operational workflow from RR ingestion to readiness and scheduling outputs**
-3. **Figure 3. Example research-to-operations data flow linking HRV, fatigue, and space-weather context**
-4. **Figure 4. Verification map or result summary for tested module families**
+1. **Figure 1. System architecture across inputs, analytic core, decision layers, and delivery surfaces** — spec and draft caption in `manuscript/figures/figure_plan.md`
+2. **Figure 2. End-to-end operational workflow from RR ingestion to readiness and scheduling outputs** — spec and draft caption in `manuscript/figures/figure_plan.md`
+3. **Figure 3. Example research-to-operations data flow linking HRV, fatigue, and space-weather context** — spec and draft caption in `manuscript/figures/figure_plan.md`
+4. **Figure 4. Verification map or result summary for tested module families** — spec and draft caption in `manuscript/figures/figure_plan.md`
 
 See `manuscript/figures/figure_plan.md` for details.
 
@@ -55,6 +55,13 @@ See `manuscript/figures/figure_plan.md` for details.
 3. Build the Introduction around the literature comparison table after Methods is stable.
 4. Write the Discussion last so it reflects the final bounded evidence posture.
 5. Finish the compliance sections only after the exact code version, data statement, and authorship list are confirmed.
+
+## Current submission-candidate status
+
+1. The main manuscript draft now contains a structured abstract, Introduction, Methods, Results, Discussion, and Compliance/Transparency sections.
+2. The planned five-table package now exists as manuscript markdown assets.
+3. Figure specifications and draft captions exist, but rendered figure assets are still pending.
+4. The remaining blockers to a cleaner submission candidate are final reference expansion, rendered figures, and author-level metadata confirmation.
 
 ## Scope guardrails
 
