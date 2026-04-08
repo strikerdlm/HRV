@@ -163,3 +163,32 @@ The writing phase should begin only once:
 - the validation story is explicitly bounded,
 - the `manuscript/` workspace is created and mapped to section outputs,
 - every major claim has a source or is clearly labeled as limitation/future work.
+
+## Progress Update
+
+### Completed foundation
+
+- The `manuscript/` workspace has been created and populated with outline, draft, tables, figures, references, supplement, and evidence subfolders.
+- The evidence matrix, core module scope, literature-gap comparison, validation story, and compliance/transparency map are complete.
+- The manuscript now has a working scaffold in `manuscript/draft/main_manuscript_scaffold.md`.
+
+### Active drafting status
+
+- The Introduction has been drafted around the translational problem, comparator landscape, gap statement, and contribution framing.
+- The Methods section has been drafted around requirements, architecture, implementation, and a tiered validation methodology.
+- Seed references have been expanded to include aviation fatigue, circadian monitoring, and geomagnetic/autonomic literature used in the draft.
+
+### MCP research status
+
+- Scientific literature was gathered with `paper-search` and `scite`.
+- Zotero searches were partially successful and yielded relevant library items for HRV, vigilance, geomagnetic coupling, and space analogs.
+- Official technical documentation was located with `brave`, including NASA-STD-3001, ICAO Doc 9966, and EQUATOR resources.
+- The configured Firecrawl MCP server is currently blocked by authentication (`Unauthorized: Invalid token`), so no Firecrawl-derived manuscript evidence has been incorporated yet.
+- No Tavily MCP server is configured in this workspace, so Tavily could not be used as an MCP source in the current session.
+
+### Next writing targets
+
+1. Draft the Results section from supported repository evidence only.
+2. Draft the Discussion section with explicit limitations and deployment-pathway framing.
+3. Convert the compliance map into manuscript-ready transparency statements.
+4. Expand the reference base toward a full journal-length bibliography once the target journal is fixed.
