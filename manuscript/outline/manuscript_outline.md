@@ -59,11 +59,41 @@ See `manuscript/figures/figure_plan.md` for details.
 
 ## Current submission-candidate status
 
-1. The main manuscript draft now contains a structured abstract, Introduction, Methods, Results, Discussion, and Compliance/Transparency sections.
+1. The main manuscript draft now contains a structured abstract, Introduction, Methods, Results, Discussion, Conclusion, and Compliance/Transparency sections.
 2. The planned table package now includes six manuscript markdown assets, including a dedicated biomathematical layer summary.
 3. Figure specifications and rendered SVG assets now exist for Figure 1 through Figure 4.
 4. Reference expansion and bibliography verification passes have been completed; remaining blockers are author-level metadata confirmation, venue-specific templating, and release/archive packaging for the cited software version.
 5. **Agent orientation:** pipeline position, Q1 publication checklist, and guardrails are maintained in `manuscript/README.md` (read this when onboarding to the paper effort).
+
+## Q1 journal targeting shortlist
+
+Checked against live journal pages and ranking sources on 2026-04-09. The shortlist below is meant to guide packaging, not to claim template compliance before export into the chosen journal format.
+
+| Journal | Current fit | Main upside | Main risk for this manuscript | Immediate packaging implication |
+| --- | --- | --- | --- | --- |
+| **Computer Methods and Programs in Biomedicine (CMPB)** | **Best current fit** | Q1 venue with explicit scope for biomedical computing methods, software systems, and implementation papers. The current manuscript already reads like a systems-and-methods paper. | Reviewers will still expect a cleaner computational evaluation package than a software-verification-only story. | Keep the Node-first architecture and biomathematical layer narrative central; strengthen reproducibility packaging and keep claims tightly bounded to implementation plus engineering verification. |
+| **Journal of Biomedical Informatics (JBI)** | **Strong alternative** | Q1 biomedical informatics journal with a clear methodological focus and good alignment for an API-backed translational decision-support platform. | JBI is more selective about conceptual informatics contribution than about feature breadth alone; the paper must read as a methodology contribution, not a product description. | Restructure the final export toward JBI's preferred shape: structured abstract, explicit Related Work framing, clear Conclusion, and a graphical abstract. |
+| **npj Digital Medicine** | **Ambitious stretch target** | High-visibility Q1 journal with strong interest in digital medicine platforms and translational deployment. | The current repository-backed evidence base is probably too engineering-heavy unless paired with a stronger external validation, human-use study, or benchmark package. | If this venue is chosen, compress the title and abstract aggressively, add a statistics/reproducibility subsection, and plan for a more demanding validation story than the current draft supports. |
+| **Military Medical Research** | **Domain-forward option** | Q1 operational-medicine venue with stronger mission-readiness and aerospace-adjacent framing than the informatics journals. | The manuscript would need to foreground operational relevance and deployment governance more than software architecture. | Keep the translational discussion, declarations, and operational-readiness framing prominent; expect stricter expectations around practical significance and military/mission context. |
+
+### Recommended submission order
+
+1. **Primary target:** `Computer Methods and Programs in Biomedicine`
+2. **Secondary target:** `Journal of Biomedical Informatics`
+3. **Stretch target if validation is upgraded:** `npj Digital Medicine`
+4. **Domain-specific fallback while staying Q1:** `Military Medical Research`
+
+### Explicit non-priority venue
+
+- **Aerospace Medicine and Human Performance** remains topically relevant, but it is not a Q1 journal in the current ranking sources, so it should not be the lead target if the Q1 requirement is strict.
+
+### Packaging decisions implied by the shortlist
+
+1. Keep the paper framed as a **software / systems / methods manuscript** rather than as a clinical validation paper.
+2. Preserve the **Node-first + shared Python biomathematical stack** as the organizing contribution, because that is the angle with the best cross-journal fit.
+3. Add a **clear Conclusion section** in the main draft and keep the abstract within the usual 150-300 word range expected by the shortlisted journals.
+4. Replace moving-branch metadata with a **tagged release or archived DOI** before submission.
+5. Treat any future empirical vignette as optional unless its provenance is curated strongly enough to survive higher-tier review.
 
 ## Scope guardrails
 
