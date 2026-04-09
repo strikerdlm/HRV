@@ -8,8 +8,8 @@ This table captures manuscript-level reproducibility metadata for the current su
 | --- | --- | --- | --- |
 | Repository URL | `https://github.com/strikerdlm/HRV.git` | Git remote, `README.md` | Safe to report in the manuscript. |
 | License | MIT | `LICENSE` | Safe to report in the manuscript. |
-| Current working branch | `main` | Git metadata | Safe to report in the manuscript. |
-| Current commit hash used in draft | `a32959258ff01e459ac9d06609f58c3cd09fee47` | Git metadata | Prefer a tagged release or archived DOI before submission. |
+| Development state referenced by the draft | Active public git repository | Git metadata | Replace with a tagged release or archived DOI before submission. |
+| Submission identifier | Not yet frozen | Git metadata | Cite a release tag or archive DOI in the final paper, not a moving branch head. |
 | Primary documented environment | conda `hrv-py312`, Python 3.12 | `WARP.md`, `README.md`, `AGENTS.md` | Treat this as the authoritative environment unless container wording is harmonized. |
 | Primary dependency declaration | `requirements.txt` | Repository root | Safe to cite as the dependency anchor. |
 | Primary delivery surfaces | Next.js frontend in the Node.js ecosystem plus FastAPI orchestration | `frontend/`, `frontend/package.json`, `api/main.py`, `api/research_endpoints.py` | Supports the Node-first deployment claim. |

@@ -7,6 +7,14 @@ All notable changes to the Mission Control - Flight Surgeon are documented in th
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Documentation
+- **Q1 manuscript submission pass** (`manuscript/README.md`, `manuscript/outline/manuscript_outline.md`, `manuscript/draft/main_manuscript_scaffold.md`, `manuscript/evidence/compliance_and_transparency_map.md`, `manuscript/evidence/evidence_matrix.md`, `manuscript/tables/reproducibility_and_deployment_metadata.md`):
+  - Added a ranked Q1 journal shortlist with packaging implications and a recommended submission order led by CMPB and JBI.
+  - Tightened the manuscript title, structured abstract, and reproducibility language; added a dedicated Conclusions section for stronger software-methods positioning.
+  - Replaced moving branch/commit metadata in manuscript support files with a frozen-release / DOI requirement to avoid stale submission identifiers.
+
 ## [1.17.2] - 2026-03-20
 
 ### Fixed
