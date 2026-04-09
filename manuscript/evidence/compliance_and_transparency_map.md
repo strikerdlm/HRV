@@ -11,8 +11,8 @@ This document converts repository evidence into manuscript-ready transparency in
 | Repository name | `HRV` / Mission Control - Flight Surgeon | `README.md` |
 | Public repository URL | `https://github.com/strikerdlm/HRV.git` | git remote + `README.md` |
 | License | MIT | `LICENSE` |
-| Branch at planning time | `main` | git metadata |
-| Commit hash at planning time | `a32959258ff01e459ac9d06609f58c3cd09fee47` | git metadata |
+| Draft repository state | Active public git repository under version control | git metadata |
+| Frozen submission identifier | Not yet assigned | git metadata |
 | Primary documented Python environment | conda `hrv-py312`, Python 3.12 | `WARP.md`, `README.md`, `AGENTS.md` |
 | Primary dependency file | `requirements.txt` | repository root |
 | Main operational surfaces | Next.js frontend, FastAPI backend, secondary Streamlit research and operational interfaces | `README.md`, `api/main.py`, `frontend/` |
@@ -22,7 +22,7 @@ This document converts repository evidence into manuscript-ready transparency in
 | Manuscript subsection | Current repository evidence | Manuscript-safe wording today | Missing inputs or cautions |
 | --- | --- | --- | --- |
 | Data availability statement | `analysis/` exports exist; `docs/lit_review.md` includes review-style availability wording | State availability only for code and repository artifacts unless a curated dataset package is assembled. | Need dataset manifest, sharing conditions, and study linkage for any empirical tables or figures. |
-| Code and artifact availability | Public GitHub URL, MIT license, exact branch and commit hash, Python and Next.js dependency docs | Safe to report the repository URL, license, branch, commit hash, environment notes, and the presence of a Node.js/Next.js frontend over a Python backend. | Prefer a tagged release or archived DOI before final submission. |
+| Code and artifact availability | Public GitHub URL, MIT license, Python and Next.js dependency docs, plus a future release identifier | Safe to report the repository URL, license, environment notes, and the presence of a Node.js/Next.js frontend over a Python backend. | Prefer a tagged release or archived DOI before final submission. |
 | Ethics and consent | `docs/lit_review.md` contains a review-only `Not applicable` declaration | Use a software-only statement only if the manuscript reports no new or previously collected human-subject data. | If any human data are reported, insert protocol number, institution, and consent language. |
 | Standards and regulatory alignment | NASA, ICAO, MIL-STD, and related standards are cited in code and docs | Safe to say the platform is informed by or aligned with these reference frameworks. | Do not claim certification, legal compliance, or clearance without formal documentation. |
 | Reporting guideline alignment | Verified references available for STROBE, TRIPOD+AI, and CLAIM | Safe to describe a hybrid reporting strategy driven by manuscript content. | Only invoke TRIPOD+AI or CLAIM if predictive AI claims are actually reported. |
@@ -63,7 +63,7 @@ Avoid these phrases unless new documentation is provided:
 
 ### Code and artifact availability
 
-> Mission Control - Flight Surgeon is available as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. The version referenced in this manuscript corresponds to branch `main`, commit `a32959258ff01e459ac9d06609f58c3cd09fee47`. The repository includes a Next.js/TypeScript frontend over a Python backend and shared modeling core.
+> Mission Control - Flight Surgeon is available as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. The repository includes a Next.js/TypeScript frontend over a Python backend and shared modeling core. Before submission, the manuscript should cite a tagged release or archived DOI corresponding to the frozen software version.
 
 ### Data availability
 

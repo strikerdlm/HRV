@@ -20,7 +20,8 @@ The package is a **submission-oriented draft**: IMRaD scaffold is written, table
 | Figures 1–4 + captions | Done | `figures/*.svg`, `figures/figure_plan.md` |
 | Supplement / appendix | Done | `supplement/submission_support_appendix.md`, `supplement/supplement_outline.md` |
 | Reference seed + MCP notes | Done | `references/seed_references.md`, `references/mcp_research_notes.md` |
-| Journal template / final layout | Not started | Depends on target venue |
+| Journal targeting shortlist | In progress | `outline/manuscript_outline.md` now contains a Q1 venue shortlist and packaging implications |
+| Journal template / final layout | Not started | Depends on final venue choice |
 | Tagged release / archive DOI | Not started | Needed for iron-clad reproducibility statement |
 | Final authorship / funding / COI | Not started | Must be confirmed before submission |
 
@@ -42,7 +43,7 @@ Use this as a checklist; tick items off in repo commits and, where user-visible,
 
 ### A. Venue and packaging (gates everything else)
 
-1. **Shortlist 3–5 Q1 targets** (aerospace medicine, digital health methods, physiological monitoring, or software for science) and record the choice in `outline/manuscript_outline.md` or a short “journal targeting” subsection there.
+1. **Finalize one primary target** from the shortlist already recorded in `outline/manuscript_outline.md`.
 2. **Download the official author guidelines** and note: word limits, structured abstract rules, reference style, figure file formats (PDF/EPS/TIFF vs SVG), and open-access fees.
 3. **Export manuscript** from Markdown into the journal template (Word/LaTeX/Overleaf). Adjust headings, references, and figure callouts to match the template—do not claim template compliance until this is done.
 
@@ -54,7 +55,7 @@ Use this as a checklist; tick items off in repo commits and, where user-visible,
 
 ### C. Reproducibility and software citation
 
-1. **Cut a tagged release** (Git tag) that matches the cited commit hash in `tables/reproducibility_and_deployment_metadata.md` and the draft’s availability statement.
+1. **Cut a tagged release** (Git tag) or archived DOI that becomes the frozen identifier cited in `tables/reproducibility_and_deployment_metadata.md` and the draft’s availability statement.
 2. **Archive** the release (e.g., Zenodo) to obtain a **DOI**; update the manuscript and Table 4 text to match.
 3. **Harmonize environment wording** (Python 3.12, `requirements.txt`, frontend `package.json`, optional container instructions) across the draft, supplement, and root `README.md`.
 

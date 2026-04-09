@@ -2,7 +2,7 @@
 
 ## Title
 
-Mission Control - Flight Surgeon: a Next.js and Python biomathematical platform for HRV, fatigue-circadian modeling, and aerospace readiness support
+Mission Control - Flight Surgeon: an open-source biomathematical platform for HRV, fatigue-circadian modeling, and aerospace readiness
 
 **Running title:** Aerospace Biomath Platform
 
@@ -10,19 +10,19 @@ Mission Control - Flight Surgeon: a Next.js and Python biomathematical platform 
 
 ### Background and objective
 
-Mission Control - Flight Surgeon is an open-source biomathematical software system that couples a Next.js frontend in the Node.js ecosystem to a FastAPI/Python backend for heart rate variability (HRV) analytics, fatigue and circadian modeling, environmental alignment, and operational readiness support. The objective of this manuscript is to describe the Node-first system architecture, the layered modeling substrate behind the software, and the current verification posture of the implementation while explicitly separating engineering evidence from pending external validation.
+Mission Control - Flight Surgeon is an open-source biomathematical software platform that couples a Next.js client to a FastAPI/Python backend for heart rate variability (HRV) analytics, fatigue-circadian modeling, environmental alignment, and aerospace readiness support. This manuscript describes the translational platform, defines its layered model stack, and reports its current verification posture without overstating external validation.
 
 ### Methods
 
-The manuscript documents an API-backed Next.js frontend over a FastAPI orchestration layer and shared Python modeling core, while retaining Streamlit as a secondary interface in the repository. Methods focus on multistage HRV preprocessing and metric extraction, reservoir-based SAFTE-style fatigue and circadian dynamics, deterministic readiness and scheduling fusion, and environmental timing and alignment models. Evaluation is intentionally bounded to repository-supported evidence, emphasizing architecture inspection, automated software verification, and reproducibility assets rather than human-subject validation.
+The manuscript documents an API-backed Next.js frontend over a FastAPI orchestration layer and shared Python modeling core, while retaining Streamlit as a secondary repository interface. Methods focus on multistage HRV preprocessing and metric extraction, reservoir-based SAFTE-style fatigue and circadian dynamics, deterministic readiness and scheduling fusion, environmental timing and alignment models, and reproducibility infrastructure. Evaluation is intentionally bounded to supported evidence, emphasizing architecture inspection, automated software verification, and auditable reporting assets rather than human-subject validation.
 
 ### Results
 
-The implemented system centers on a Next.js operational and research client backed by FastAPI endpoints and a shared Python model stack that integrates HRV analytics, longitudinal user persistence, fatigue-circadian dynamics, environmental alignment, and readiness-oriented scheduling logic. Automated tests verify representative operational domains including scheduling and FRMS behavior, space-weather caching and alignment, API normalization, and endpoint-level analytics. Public code availability, deterministic rule-based fusion, mirrored client and backend fatigue logic, and structured export utilities support reproducible and auditable workflows, although end-to-end numerical benchmarking and participant validation remain incomplete.
+The implemented system centers on a Next.js client backed by FastAPI endpoints and a shared Python model stack that integrates HRV analytics, longitudinal user persistence, fatigue-circadian dynamics, environmental alignment, and readiness-oriented scheduling logic. Automated tests verify representative operational domains including scheduling and FRMS behavior, space-weather caching and alignment, API normalization, and endpoint-level analytics. Public code availability, deterministic rule-based fusion, mirrored client and backend fatigue logic, and structured export utilities support reproducible and auditable workflows, although external numerical benchmarking and participant-level validation remain incomplete.
 
 ### Conclusions
 
-Mission Control - Flight Surgeon extends beyond single-purpose HRV software by coupling a Node-first client architecture to an explicit biomathematical backend for physiological inference and readiness support. Its current evidence base supports a systems-and-modeling contribution with engineering verification, while stronger claims regarding numerical benchmarking, clinical benefit, or operational effectiveness require dedicated future validation.
+Mission Control - Flight Surgeon extends beyond single-purpose HRV software by coupling a Node-first client architecture to an explicit biomathematical backend for physiological inference and readiness support. The current evidence base supports a systems-and-modeling contribution with strong implementation detail and engineering verification, while stronger claims regarding numerical benchmarking, clinical benefit, or operational effectiveness require dedicated future validation.
 
 ### Keywords
 
@@ -153,9 +153,9 @@ Representative test-backed domains are organized in Table 3, and the correspondi
 
 ### 3.3 Reproducibility and reporting assets
 
-Mission Control - Flight Surgeon is distributed as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. At the time of this draft, the working repository head corresponds to branch `main`, commit `a32959258ff01e459ac9d06609f58c3cd09fee47`. The documented primary execution environment is conda `hrv-py312` with Python 3.12 and dependencies declared in `requirements.txt`, while the primary web client is a Next.js/TypeScript application with its own dependency surface under `frontend/package.json`. Reproducibility is further supported by automated tests, structured logging, cached data management, and export layers designed to emit manuscript-oriented statistics, tables, and supporting artifacts.
+Mission Control - Flight Surgeon is distributed as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. The documented primary execution environment is conda `hrv-py312` with Python 3.12 and dependencies declared in `requirements.txt`, while the primary web client is a Next.js/TypeScript application with its own dependency surface under `frontend/package.json`. Reproducibility is further supported by automated tests, structured logging, cached data management, and export layers designed to emit manuscript-oriented statistics, tables, and supporting artifacts.
 
-These features matter because they make the platform auditable beyond the interface layer. Logging, persistence, and export support allow investigators to revisit analysis settings and outputs, while the shared code base permits the same analytic logic to be exercised from research and operational interfaces. These characteristics are also consistent with common recommendations for reproducible computational research, such as preserving transparent workflows and inspectable outputs (Sandve et al., 2013). Before formal submission, the project would benefit from a tagged software release or archived DOI corresponding exactly to the manuscript version.
+These features matter because they make the platform auditable beyond the interface layer. Logging, persistence, and export support allow investigators to revisit analysis settings and outputs, while the shared code base permits the same analytic logic to be exercised from research and operational interfaces. These characteristics are also consistent with common recommendations for reproducible computational research, such as preserving transparent workflows and inspectable outputs (Sandve et al., 2013). Before formal submission, the manuscript should cite a tagged software release or archived DOI rather than a moving development snapshot.
 
 The current reproducibility and deployment metadata are summarized in Table 4.
 
@@ -195,37 +195,43 @@ The most immediate next step is external numerical benchmarking of the HRV engin
 
 Beyond validation, future work should include a harmonized release package for the exact reported software version, ideally with a tagged release or archived DOI, plus a more formal artifact manifest for figures, tables, and exports. Usability studies, governance workflows, and role-specific deployment playbooks for flight surgeons and operational teams would also strengthen the research-to-operations transfer pathway. If the project matures toward a narrower methods paper, the biomathematical layers could later be separated into dedicated validation studies for HRV numerics, fatigue/circadian dynamics, or environment-linked operational modeling.
 
-## 5. Compliance and Transparency
+## 5. Conclusions
+
+Mission Control - Flight Surgeon is best understood as an open, layered biomathematical software platform rather than as a single HRV calculator or a fully validated clinical decision engine. The repository already substantiates a publishable systems contribution through explicit architecture, inspectable model layers, deterministic readiness logic, and meaningful engineering verification across several operational paths. That combination is sufficient for a defensible software-and-methods paper if the claims remain bounded to implementation, verification, and reproducibility.
+
+At the same time, the manuscript should remain explicit about what is not yet established. The current package does not justify claims of end-to-end numerical equivalence to external HRV reference software, operational outcome benefit, or clinical deployment readiness. For a strong Q1 submission, the paper should therefore foreground its integration and auditability contribution, cite a frozen release artifact, and treat stronger empirical validation as the next step rather than as an implied accomplishment.
+
+## 6. Compliance and Transparency
 
 The key manuscript declarations that are already supportable from repository evidence are summarized in Table 5. Narrative statements for each required subsection are provided below and should be finalized once authorship, funding, and conflict disclosures are confirmed.
 
-### 5.1 Data availability statement
+### 6.1 Data availability statement
 
 No new human-subject dataset was generated for the software-verification components reported in this manuscript. Code, manuscript support files, and repository artifacts are available through the public source repository. Additional derived analysis artifacts can be shared by the authors on reasonable request, subject to provenance review and any applicable institutional constraints.
 
-### 5.2 Code and artifact availability
+### 6.2 Code and artifact availability
 
-Mission Control - Flight Surgeon is available as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. The current draft references the `main` branch at commit `a32959258ff01e459ac9d06609f58c3cd09fee47`. The documented primary execution environment is conda `hrv-py312` with Python 3.12 and dependencies declared in `requirements.txt`, while the primary web client is implemented in Next.js/TypeScript under `frontend/`. Before submission, the authors should archive or tag the exact release corresponding to the final manuscript.
+Mission Control - Flight Surgeon is available as open-source software at `https://github.com/strikerdlm/HRV.git` under the MIT license. The documented primary execution environment is conda `hrv-py312` with Python 3.12 and dependencies declared in `requirements.txt`, while the primary web client is implemented in Next.js/TypeScript under `frontend/`. Before submission, the authors should archive or tag the exact release corresponding to the final manuscript and cite that frozen identifier in the paper.
 
-### 5.3 Ethics and regulatory alignment
+### 6.3 Ethics and regulatory alignment
 
 Ethics approval and informed consent were not required for the software-development and repository-verification components reported in this manuscript because no new human-subject dataset was generated or analyzed as part of the primary reported results. If future versions of the manuscript include retrospective or prospective participant data, a study-specific ethics protocol, institutional approval details, and consent language should be added.
 
 The platform is not presented as a certified medical device. Several operational modules were designed with reference to published aerospace, fatigue-management, and safety frameworks, including NASA-STD-3001, ICAO fatigue-management guidance, MIL-STD-882E-aligned risk framing, and crew-rest guidance used in FRMS-related modules (ICAO, 2020; NASA, 2023). These references inform design and threshold logic but should not be interpreted as evidence of certification, legal compliance, or regulatory clearance.
 
-### 5.4 Author contributions
+### 6.4 Author contributions
 
 Dr Diego Malpica MD contributed conceptualization, methodology, software, validation, formal analysis, investigation, writing - original draft, writing - review and editing, visualization, supervision, and project administration. This CRediT statement should be revised if additional authors are added to the final manuscript.
 
-### 5.5 Funding and conflict of interest
+### 6.5 Funding and conflict of interest
 
 At the time of drafting, no project-level external funding statement was identified in the repository materials. This statement should be updated before submission if grant support, institutional sponsorship, or other funding applies. Conflict-of-interest declarations were not explicitly documented in the repository and should be confirmed for all authors before final submission.
 
-### 5.6 Acknowledgments
+### 6.6 Acknowledgments
 
 The draft acknowledges the open-source scientific Python ecosystem and the public technical and data resources that inform the platform’s environmental modules and standards framing, including NOAA, NASA, and aviation fatigue-management reference materials. Final acknowledgments for collaborators, institutions, and infrastructure support should be confirmed before submission.
 
-### 5.7 Reporting guideline positioning
+### 6.7 Reporting guideline positioning
 
 This manuscript is being developed as a software, systems, and biomathematical modeling paper with a primary emphasis on transparent description of architecture, implementation, verification, and reproducibility. If the final paper remains limited to software verification and repository-backed artifacts, journal-specific software or methods-paper guidance should form the main reporting backbone. If observational analyses are added, adapted STROBE elements should be incorporated. TRIPOD+AI, CLAIM, or related AI reporting extensions should be used only for sections that make genuine predictive-model claims.
 
