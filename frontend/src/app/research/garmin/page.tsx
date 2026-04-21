@@ -47,7 +47,15 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { getCurrentSpaceWeather } from "@/lib/research-api";
+import { getMission, listUsers, setMission } from "@/lib/api";
 import type { GarminMetrics, SpaceWeatherSnapshot } from "@/types/research";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8180";
@@ -480,6 +488,10 @@ function SettingsDialog({
   setAutoSync,
   syncDays,
   setSyncDays,
+  activeMission,
+  onActiveMissionChange,
+  onSettingsSaved,
+  crewUserOptions,
 }: {
   userId: string;
   setUserId: (id: string) => void;
@@ -487,22 +499,46 @@ function SettingsDialog({
   setAutoSync: (auto: boolean) => void;
   syncDays: number;
   setSyncDays: (days: number) => void;
+  activeMission: string;
+  onActiveMissionChange: (mission: string) => void;
+  onSettingsSaved?: () => void;
+  crewUserOptions: Array<{ user_id: string; username: string }>;
 }) {
   const [tempUserId, setTempUserId] = React.useState(userId);
   const [tempDays, setTempDays] = React.useState(syncDays);
+  const [tempMission, setTempMission] = React.useState(activeMission);
+  const [saving, setSaving] = React.useState(false);
 
-  const handleSave = () => {
-    setUserId(tempUserId);
-    setSyncDays(tempDays);
-    if (typeof window !== "undefined") {
-      localStorage.setItem("garmin_user_id", tempUserId);
-      localStorage.setItem("garmin_auto_sync", autoSync.toString());
-      localStorage.setItem("garmin_sync_days", tempDays.toString());
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const m = await setMission(tempMission);
+      onActiveMissionChange(m.active_mission);
+      setUserId(tempUserId);
+      setSyncDays(tempDays);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("garmin_user_id", tempUserId);
+        localStorage.setItem("garmin_auto_sync", autoSync.toString());
+        localStorage.setItem("garmin_sync_days", tempDays.toString());
+      }
+      onSettingsSaved?.();
+    } catch (e) {
+      console.error("Failed to save Garmin settings:", e);
+    } finally {
+      setSaving(false);
     }
   };
 
   return (
-    <Dialog>
+    <Dialog
+      onOpenChange={(open) => {
+        if (open) {
+          setTempUserId(userId);
+          setTempDays(syncDays);
+          setTempMission(activeMission);
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Settings className="h-4 w-4 mr-2" />
@@ -521,15 +557,43 @@ function SettingsDialog({
         </DialogHeader>
         <div className="space-y-4 py-4">
           <div className="space-y-2">
+            <Label>Active mission (SQLite scope)</Label>
+            <Select value={tempMission} onValueChange={setTempMission}>
+              <SelectTrigger className="w-full">
+                <SelectValue placeholder="Mission" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Mission 1">Mission 1</SelectItem>
+                <SelectItem value="Mission 2">Mission 2</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              Must match Streamlit&apos;s mission selector (same{" "}
+              <code className="bg-muted px-1 rounded">HRV_ACTIVE_MISSION</code> as the FastAPI
+              process). Changing this switches which{" "}
+              <code className="bg-muted px-1 rounded">crew/.../db/hrv_users.db</code> file is used.
+            </p>
+          </div>
+
+          <div className="space-y-2">
             <Label htmlFor="userId">User ID</Label>
             <Input
               id="userId"
               value={tempUserId}
               onChange={(e) => setTempUserId(e.target.value)}
-              placeholder="Enter your user ID"
+              placeholder="Crew profile user_id (UUID)"
+              list="garmin-crew-user-ids"
             />
+            <datalist id="garmin-crew-user-ids">
+              {crewUserOptions.map((u) => (
+                <option key={u.user_id} value={u.user_id}>
+                  {u.username}
+                </option>
+              ))}
+            </datalist>
             <p className="text-xs text-muted-foreground">
-              Identifier for storing your data locally
+              Use the same <strong>user_id</strong> as the active Streamlit crew profile (usually a
+              UUID), not a placeholder string.
             </p>
           </div>
           
@@ -582,7 +646,8 @@ function SettingsDialog({
             </p>
           </div>
           
-          <Button onClick={handleSave} className="w-full">
+          <Button onClick={() => void handleSave()} className="w-full" disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2 inline" /> : null}
             Save Settings
           </Button>
         </div>
@@ -597,7 +662,7 @@ function SettingsDialog({
 export default function GarminPage() {
   const [metrics, setMetrics] = React.useState<GarminMetrics | null>(null);
   const [history, setHistory] = React.useState<GarminMetrics[]>([]);
-  const [loading, setLoading] = React.useState(true);
+  const [loading, setLoading] = React.useState(false);
   const [syncing, setSyncing] = React.useState(false);
   const [connectionStatus, setConnectionStatus] = React.useState<
     "connected" | "disconnected" | "error"
@@ -605,30 +670,78 @@ export default function GarminPage() {
   const [error, setError] = React.useState<string | null>(null);
   const [spaceWeather, setSpaceWeather] = React.useState<SpaceWeatherSnapshot | null>(null);
   const [spaceWeatherLoading, setSpaceWeatherLoading] = React.useState(false);
-  
-  // Settings state with localStorage persistence
-  const [userId, setUserId] = React.useState("default");
+
+  const [userId, setUserId] = React.useState("");
+  const [crewUserOptions, setCrewUserOptions] = React.useState<
+    Array<{ user_id: string; username: string }>
+  >([]);
+  const [apiMission, setApiMission] = React.useState("Mission 1");
   const [autoSync, setAutoSync] = React.useState(false);
   const [syncDays, setSyncDays] = React.useState(30);
   const [initialLoadDone, setInitialLoadDone] = React.useState(false);
+  const [lastSync, setLastSync] = React.useState<{
+    records_synced: number;
+    message: string;
+    date_range?: string | null;
+    active_mission?: string;
+    database_path?: string;
+    garmin_rows_for_user?: number;
+  } | null>(null);
 
-  // Load settings from localStorage on mount
   React.useEffect(() => {
-    if (typeof window !== "undefined") {
-      const savedUserId = localStorage.getItem("garmin_user_id");
-      const savedAutoSync = localStorage.getItem("garmin_auto_sync");
-      const savedSyncDays = localStorage.getItem("garmin_sync_days");
-      
-      if (savedUserId) setUserId(savedUserId);
+    let cancelled = false;
+    async function bootstrap() {
+      const savedAutoSync =
+        typeof window !== "undefined" ? localStorage.getItem("garmin_auto_sync") : null;
+      const savedSyncDays =
+        typeof window !== "undefined" ? localStorage.getItem("garmin_sync_days") : null;
+      const savedUserId =
+        typeof window !== "undefined" ? localStorage.getItem("garmin_user_id") : null;
+
       if (savedAutoSync) setAutoSync(savedAutoSync === "true");
-      if (savedSyncDays) setSyncDays(parseInt(savedSyncDays) || 30);
-      
-      setInitialLoadDone(true);
+      if (savedSyncDays) setSyncDays(parseInt(savedSyncDays, 10) || 30);
+
+      let uid = (savedUserId ?? "").trim();
+      try {
+        const res = await listUsers();
+        if (!cancelled) {
+          setCrewUserOptions(
+            res.users.map((u) => ({ user_id: u.user_id, username: u.username }))
+          );
+        }
+        if (!uid && res.users.length > 0) {
+          uid = res.users[0].user_id;
+        }
+      } catch (e) {
+        console.warn("[Garmin] listUsers failed (using saved or empty user id):", e);
+      }
+
+      if (!cancelled) {
+        setUserId(uid);
+        setInitialLoadDone(true);
+      }
     }
+    void bootstrap();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  React.useEffect(() => {
+    void getMission()
+      .then((m) => setApiMission(m.active_mission || "Mission 1"))
+      .catch(() => {});
   }, []);
 
   // Fetch Garmin metrics
   const fetchMetrics = React.useCallback(async () => {
+    if (!userId) {
+      setLoading(false);
+      setMetrics(null);
+      setHistory([]);
+      setConnectionStatus("disconnected");
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -696,6 +809,10 @@ export default function GarminPage() {
 
   // Sync data from Garmin Connect
   const syncData = React.useCallback(async () => {
+    if (!userId) {
+      setError("Set a User ID in Settings before syncing.");
+      return;
+    }
     setSyncing(true);
     setError(null);
     try {
@@ -725,8 +842,22 @@ export default function GarminPage() {
 
       const result = await response.json();
       console.log("[Garmin] Sync result:", result);
-      
-      setConnectionStatus("connected");
+
+      setLastSync({
+        records_synced: result.records_synced,
+        message: result.message,
+        date_range: result.date_range,
+        active_mission: result.active_mission,
+        database_path: result.database_path,
+        garmin_rows_for_user: result.garmin_rows_for_user,
+      });
+      if (result.success === false) {
+        setConnectionStatus("error");
+        setError(typeof result.message === "string" ? result.message : "Sync incomplete");
+      } else {
+        setConnectionStatus("connected");
+        setError(null);
+      }
       await fetchMetrics();
     } catch (err) {
       console.error("Failed to sync Garmin data:", err);
@@ -746,24 +877,22 @@ export default function GarminPage() {
     }
   }, [userId, syncDays, fetchMetrics]);
 
-  // Auto-load data on mount (after settings loaded from localStorage)
   React.useEffect(() => {
-    if (!initialLoadDone) return;
-    
-    fetchMetrics();
-    fetchSpaceWeather();
-  }, [initialLoadDone, fetchMetrics, fetchSpaceWeather]);
+    if (!initialLoadDone || !userId) return;
+
+    void fetchMetrics();
+    void fetchSpaceWeather();
+  }, [initialLoadDone, userId, fetchMetrics, fetchSpaceWeather]);
 
   // Auto-sync feature: sync from Garmin Connect when autoSync is enabled
   React.useEffect(() => {
-    if (!initialLoadDone || !autoSync) return;
-    
-    // Check if we need to sync (no data or stale data)
+    if (!initialLoadDone || !userId || !autoSync) return;
+
     const shouldAutoSync = !metrics?.date;
     if (shouldAutoSync) {
-      syncData();
+      void syncData();
     }
-  }, [initialLoadDone, autoSync, metrics?.date, syncData]);
+  }, [initialLoadDone, userId, autoSync, metrics?.date, syncData]);
 
   // Prepare time series data
   const dates = React.useMemo(
@@ -832,7 +961,10 @@ export default function GarminPage() {
                 ? "Error"
                 : "Disconnected"}
             </Badge>
-            <Badge variant="secondary">{userId}</Badge>
+            <Badge variant="secondary">{userId || "no user id"}</Badge>
+            <Badge variant="outline" className="text-xs font-normal">
+              API mission: {apiMission}
+            </Badge>
             {autoSync && (
               <Badge variant="outline" className="border-primary text-primary">
                 <RefreshCw className="h-3 w-3 mr-1" />
@@ -851,6 +983,12 @@ export default function GarminPage() {
               setAutoSync={setAutoSync}
               syncDays={syncDays}
               setSyncDays={setSyncDays}
+              activeMission={apiMission}
+              onActiveMissionChange={setApiMission}
+              onSettingsSaved={() => {
+                void fetchMetrics();
+              }}
+              crewUserOptions={crewUserOptions}
             />
             <Button onClick={fetchMetrics} disabled={loading} variant="outline" size="sm">
               <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
@@ -867,8 +1005,70 @@ export default function GarminPage() {
           </div>
         </motion.div>
 
-        {/* Setup Guide - Show when no data and user ID is default */}
-        {!metrics?.date && userId === "default" && !error && (
+        {lastSync && (
+          <Card className="border-muted">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm">Last sync</CardTitle>
+              <CardDescription className="text-xs">
+                {lastSync.message}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="text-xs text-muted-foreground space-y-1 pt-0">
+              <p>
+                Records written this run:{" "}
+                <span className="font-medium text-foreground">{lastSync.records_synced}</span>
+                {lastSync.date_range ? (
+                  <>
+                    {" "}
+                    · Range:{" "}
+                    <span className="font-mono break-all">{lastSync.date_range}</span>
+                  </>
+                ) : null}
+              </p>
+              {lastSync.garmin_rows_for_user != null ? (
+                <p>
+                  Garmin rows for this user in DB:{" "}
+                  <span className="font-medium text-foreground">{lastSync.garmin_rows_for_user}</span>
+                </p>
+              ) : null}
+              {lastSync.active_mission ? (
+                <p>
+                  Active mission:{" "}
+                  <span className="font-medium text-foreground">{lastSync.active_mission}</span>
+                </p>
+              ) : null}
+              {lastSync.database_path ? (
+                <p className="break-all">
+                  Database: <span className="font-mono">{lastSync.database_path}</span>
+                </p>
+              ) : null}
+              <Button variant="ghost" size="sm" className="h-7 px-2 mt-2" onClick={() => setLastSync(null)}>
+                Dismiss
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Setup Guide - Show when no crew user id resolved */}
+        {!userId && initialLoadDone && !error && (
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardContent className="pt-4">
+              <div className="flex items-start gap-3">
+                <Settings className="h-5 w-5 text-blue-500 mt-0.5" />
+                <div className="space-y-2">
+                  <p className="font-medium text-blue-900">No crew user id</p>
+                  <p className="text-sm text-blue-700">
+                    Open <strong>Settings</strong> and paste the same <code className="bg-blue-100 px-1 rounded text-xs">user_id</code>{" "}
+                    as your Streamlit crew profile (UUID), or create a user via the API first.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Setup Guide - Show when no data */}
+        {userId && !metrics?.date && !error && !loading && (
           <Card className="border-blue-200 bg-blue-50/50">
             <CardContent className="pt-4">
               <div className="flex items-start gap-3">
@@ -879,9 +1079,18 @@ export default function GarminPage() {
                     Configure your Garmin Connect integration to start syncing data:
                   </p>
                   <ol className="text-sm text-blue-700 list-decimal list-inside space-y-1">
-                    <li>Click <strong>Settings</strong> to set your User ID</li>
-                    <li>Ensure <code className="bg-blue-100 px-1 rounded text-xs">GARMIN_EMAIL</code> and <code className="bg-blue-100 px-1 rounded text-xs">GARMIN_PASSWORD</code> are set in your backend <code className="bg-blue-100 px-1 rounded text-xs">.env</code> file</li>
-                    <li>Click <strong>Sync from Garmin</strong> to fetch your data</li>
+                    <li>
+                      In <strong>Settings</strong>, set <strong>Active mission</strong> and{" "}
+                      <strong>User ID</strong> to match Streamlit (same crew DB and profile UUID)
+                    </li>
+                    <li>
+                      Ensure <code className="bg-blue-100 px-1 rounded text-xs">GARMIN_EMAIL</code>{" "}
+                      and <code className="bg-blue-100 px-1 rounded text-xs">GARMIN_PASSWORD</code>{" "}
+                      are set in the backend <code className="bg-blue-100 px-1 rounded text-xs">.env</code>
+                    </li>
+                    <li>
+                      Click <strong>Sync from Garmin</strong>, then <strong>Refresh</strong> if charts stay empty
+                    </li>
                   </ol>
                 </div>
               </div>
@@ -1187,9 +1396,13 @@ export default function GarminPage() {
             ) : (
               <Card>
                 <CardContent className="pt-6 flex items-center justify-center h-64">
-                  <div className="text-center">
+                  <div className="text-center max-w-md space-y-2">
                     <TrendingUp className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
-                    <p className="text-muted-foreground">Sync data to view trends</p>
+                    <p className="text-muted-foreground">No trend history yet for this user.</p>
+                    <p className="text-xs text-muted-foreground">
+                      Sync from Garmin, widen sync days in Settings, and confirm the User ID and
+                      active mission match where Streamlit saved Garmin rows.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -1295,12 +1508,30 @@ export default function GarminPage() {
                   </CardContent>
                 </Card>
               </>
+            ) : dates.length > 0 ? (
+              <Card>
+                <CardContent className="pt-6 flex items-center justify-center min-h-48">
+                  <div className="text-center max-w-md space-y-2">
+                    <BarChart3 className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
+                    <p className="text-muted-foreground">
+                      Correlations need at least <strong>6 days</strong> with valid dates in history.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      You currently have {dates.length} day(s). Increase &quot;Sync days&quot; in Settings
+                      and sync again, or wait until more daily rows accumulate.
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
             ) : (
               <Card>
-                <CardContent className="pt-6 flex items-center justify-center h-64">
-                  <div className="text-center">
+                <CardContent className="pt-6 flex items-center justify-center min-h-48">
+                  <div className="text-center max-w-md space-y-2">
                     <BarChart3 className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-50" />
-                    <p className="text-muted-foreground">Need at least 5 days of data for correlations</p>
+                    <p className="text-muted-foreground">No history rows with dates for correlations.</p>
+                    <p className="text-xs text-muted-foreground">
+                      After a successful sync you need six or more distinct days for scatter plots.
+                    </p>
                   </div>
                 </CardContent>
               </Card>
@@ -1309,6 +1540,14 @@ export default function GarminPage() {
 
           {/* Sleep Tab */}
           <TabsContent value="sleep" className="space-y-6">
+            <Card className="border-dashed">
+              <CardContent className="py-3 text-xs text-muted-foreground">
+                Sleep <strong>stage minutes</strong> (deep / REM / light) come from Garmin daily sleep
+                summaries when the device reports them; duration, score, and efficiency below always
+                reflect stored daily metrics. If architecture is empty, Garmin may not have returned
+                stage seconds for the latest night yet—sync a longer window or another day.
+              </CardContent>
+            </Card>
             {/* Sleep Summary */}
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
               <MetricCard
