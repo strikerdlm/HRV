@@ -440,10 +440,20 @@ export async function refreshSpaceWeather(
 /**
  * Sync Garmin Connect data for a user
  */
+export type GarminSyncResult = {
+  success: boolean;
+  records_synced: number;
+  message: string;
+  date_range?: string | null;
+  active_mission?: string;
+  database_path?: string;
+  garmin_rows_for_user?: number;
+};
+
 export async function syncGarminData(
   userId: string,
   days: number = 14
-): Promise<{ success: boolean; records_synced: number; message: string; date_range?: string }> {
+): Promise<GarminSyncResult> {
   try {
     const response = await fetch(`${API_BASE}/api/research/garmin/sync/${userId}`, {
       method: "POST",
