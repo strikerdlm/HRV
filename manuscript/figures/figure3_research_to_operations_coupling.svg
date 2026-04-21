@@ -1,7 +1,7 @@
 <!-- Author: Dr Diego Malpica MD -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="920" viewBox="0 0 1600 920" role="img" aria-labelledby="title desc">
   <title id="title">Figure 3. Research-to-operations coupling</title>
-  <desc id="desc">Diagram showing how Node-first research and operational routes share a common modeling backend while Streamlit remains a secondary interface.</desc>
+  <desc id="desc">Diagram showing how research and operational routes share a common modeling backend while Streamlit remains a secondary interface.</desc>
   <defs>
     <style>
       .title { font: 700 30px Arial, Helvetica, sans-serif; fill: #1a1a1a; }
@@ -57,7 +57,7 @@
 
   <rect x="625" y="325" width="350" height="90" class="support" />
   <text x="800" y="360" text-anchor="middle" class="label">Shared Biomathematical Layers</text>
-  <text x="800" y="388" text-anchor="middle" class="body">SAFTE/circadian, readiness fusion, and environmental timing</text>
+  <text x="800" y="388" text-anchor="middle" class="body">SAFTE/circadian, task modifiers, and auxiliary modules</text>
 
   <rect x="625" y="445" width="350" height="90" class="support" />
   <text x="800" y="480" text-anchor="middle" class="label">Shared Reproducibility Layer</text>
@@ -65,7 +65,7 @@
 
   <rect x="625" y="575" width="350" height="150" class="support" />
   <text x="800" y="615" text-anchor="middle" class="label">Coupling Principle</text>
-  <text x="800" y="645" text-anchor="middle" class="body">Node-first research and operational routes expose</text>
+  <text x="800" y="645" text-anchor="middle" class="body">Research and operational routes expose</text>
   <text x="800" y="667" text-anchor="middle" class="body">different workflow depth and decision emphasis,</text>
   <text x="800" y="689" text-anchor="middle" class="body">but they rely on the same underlying implementation</text>
   <text x="800" y="711" text-anchor="middle" class="body">rather than parallel, divergent code paths.</text>
@@ -101,5 +101,5 @@
   <path d="M 975 495 L 1160 547" class="arrow" />
   <path d="M 800 535 L 800 575" class="dashed" />
 
-  <text x="800" y="850" text-anchor="middle" class="small">The platform couples scientific exploration and operational deployment through a Node-first client over one shared modeling backend, improving consistency, auditability, and translational traceability.</text>
+  <text x="800" y="850" text-anchor="middle" class="small">The platform couples scientific exploration and operational deployment through shared web and API surfaces over one modeling backend, improving consistency, auditability, and translational traceability.</text>
 </svg>
