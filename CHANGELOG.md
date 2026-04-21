@@ -28,6 +28,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **CITATION.cff at repository root** for Zenodo-GitHub integration once `v0.6.0-opi` (or equivalent) is tagged; author/ORCID/affiliation placeholders clearly marked TODO.
 - **JOSS short-paper skeleton** (`docs/joss/paper.md`, `docs/joss/paper.bib`, `docs/joss/README.md`) for optional parallel software-credit submission covering the OPI reference implementation; 15 DOI-verified references.
 
+### Changed
+- **Primary stack flipped to Next.js + FastAPI** (`README.md`, `AGENTS.md`, `WARP.md`, `docs/Manual.md`, `docs/index.md`):
+  - The TypeScript / Next.js frontend over the FastAPI backend is now the canonical application across all user-facing documentation.
+  - Streamlit interfaces (`app/research_app.py`, `app/operational_app.py`, `app/space_weather_ds_app.py`, `app/*_tab.py`) are marked as **legacy** — retained for single-user / local workflows with maintenance fixes only; new features (OPI, PVT, …) land on the Next.js + FastAPI stack first.
+  - README architecture overview reordered: Next.js + FastAPI first with production-deployment framing, Streamlit second under an explicit legacy banner.
+  - AGENTS services table reordered: FastAPI (port 8180) + Next.js (port 3100) as primary, Streamlit (port 8501) as legacy.
+  - WARP quick-reference moved Next.js + FastAPI commands to the top; legacy Streamlit commands kept below for continuity.
+  - Manual top-of-file banner and chapter-framing note clarifying that the Streamlit tab-by-tab chapters apply to the legacy interface, while OPI / PVT / FastAPI / Next.js chapters describe the primary stack.
+  - `docs/index.md` rewritten so the project is no longer described as "a Streamlit application" — now described as a Next.js + FastAPI platform with legacy Streamlit.
+  - No code was moved or removed; the primacy change is documentation-only in this commit. Streamlit apps continue to import and run from the same shared Python core under `app/`.
+
 ### Documentation
 - **Q1 HF / Human Factors manuscript reframe — Applied Ergonomics target** (`manuscript/outline/novelty_and_venue_2026-04-21.md`, `manuscript/outline/manuscript_outline.md`, `manuscript/draft/opi_main_manuscript.md`, `manuscript/evidence/evidence_matrix.md`, `manuscript/evidence/validation_story.md`, `manuscript/tables/opi_task_taxonomy.md`, `manuscript/tables/opi_weight_profiles.md`, `manuscript/tables/opi_vigilance_latency_models.md`, `manuscript/references/seed_references.md`, `manuscript/figures/figure_plan_opi.md`, `manuscript/submission/cover_letter_applied_ergonomics.md`, `manuscript/submission/highlights.md`, `manuscript/submission/publication_workflow.md`, `manuscript/README.md`, `analysis/opi_worked_example.py`, `analysis/opi_worked_example.json`):
   - Pivoted the primary submission target from biomedical computing (CMPB/JBI) to medical/psychology/human factors with **Applied Ergonomics (Elsevier, Q1 HF, JIF 3.4)** as primary, **Human Factors (HFES/SAGE, JIF 5.72)** as secondary, **Sensors (MDPI, Q1 I&I, JIF 3.5)** as tertiary.
