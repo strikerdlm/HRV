@@ -12,9 +12,9 @@ This table captures manuscript-level reproducibility metadata for the current su
 | Submission identifier | Not yet frozen | Git metadata | Cite a release tag or archive DOI in the final paper, not a moving branch head. |
 | Primary documented environment | conda `hrv-py312`, Python 3.12 | `WARP.md`, `README.md`, `AGENTS.md` | Treat this as the authoritative environment unless container wording is harmonized. |
 | Primary dependency declaration | `requirements.txt` | Repository root | Safe to cite as the dependency anchor. |
-| Primary delivery surfaces | Next.js frontend in the Node.js ecosystem plus FastAPI orchestration | `frontend/`, `frontend/package.json`, `api/main.py`, `api/research_endpoints.py` | Supports the Node-first deployment claim. |
+| Primary delivery surfaces | Next.js frontend plus FastAPI orchestration over a shared Python backend | `frontend/`, `frontend/package.json`, `api/main.py`, `api/research_endpoints.py` | Supports the primary web-delivery claim. |
 | Secondary delivery surfaces | Research Streamlit and operational Streamlit | `app/research_app.py`, `app/operational_app.py` | Keep visible for repo accuracy, but do not frame as the primary frontend scope of the paper. |
 | Logging and audit support | Centralized logs under `logs/` with structured helpers | `logging_config.py`, `WARP.md` | Safe to describe as audit-oriented software infrastructure. |
 | Export and reporting utilities | Structured export modules for tables, summaries, and reporting artifacts | `app/publication_export.py`, `app/export_utils.py` | Safe to report as implemented reproducibility support. |
-| Automated verification surface | Representative tests across scheduling, FRMS, NOAA, API, and alignment pathways | `tests/`, `manuscript/evidence/validation_story.md` | Safe to summarize as engineering verification only. |
-| Derived analysis artifacts | `analysis/` outputs exist for exploratory workflows | Repository artifacts, validation story | Keep secondary unless provenance is manuscript-ready. |
+| Automated verification surface | Representative tests across scheduling, FRMS, PVT, sleep, API, and reporting pathways | `tests/`, `manuscript/evidence/validation_story.md` | Safe to summarize as engineering verification only. |
+| Derived analysis artifacts | Worked-example JSON and figure-generation scripts exist under `analysis/` | Repository artifacts, validation story | Keep secondary unless provenance is manuscript-ready and explicitly disclosed. |
