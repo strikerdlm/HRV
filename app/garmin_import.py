@@ -311,9 +311,32 @@ def _get_garmin_client(credentials: GarminCredentials) -> Any:
         msg = "garminconnect library not installed. Run: pip install garminconnect"
         raise ImportError(msg) from exc
 
-    client = Garmin(credentials.email, credentials.password)
+    tokenstore_path = str((Path.home() / ".garminconnect"))
+    # Use the upstream-recommended login flow:
+    # - Loads and refreshes existing tokens from tokenstore when available
+    # - Falls back to credential auth when needed
+    client = Garmin(
+        credentials.email,
+        credentials.password,
+        is_cn=False,
+        return_on_mfa=True,
+    )
     try:
-        client.login()
+        login_result = client.login(tokenstore_path)
+        if isinstance(login_result, tuple) and len(login_result) >= 1:
+            if login_result[0] == "needs_mfa":
+                msg = (
+                    "Garmin Connect requires MFA. Complete one interactive login with the "
+                    "official python-garminconnect example.py to generate token files in "
+                    "~/.garminconnect, then retry."
+                )
+                raise RuntimeError(msg)
+        # Ensure display name is initialized for APIs that require it internally.
+        if hasattr(client, "get_full_name"):
+            try:
+                _ = client.get_full_name()
+            except Exception:
+                pass
     except Exception as exc:
         msg = f"Garmin Connect authentication failed: {exc}"
         raise RuntimeError(msg) from exc
@@ -324,6 +347,7 @@ def fetch_garmin_sleep(
     credentials: GarminCredentials,
     start_date: date,
     end_date: date,
+    client: Any | None = None,
 ) -> pd.DataFrame:
     """Fetch sleep data from Garmin Connect API.
 
@@ -346,13 +370,13 @@ def fetch_garmin_sleep(
         - avg_spo2: Average SpO2 during sleep (if available).
         - avg_respiration: Average respiration rate during sleep.
     """
-    client = _get_garmin_client(credentials)
+    local_client = client if client is not None else _get_garmin_client(credentials)
     records: list[dict[str, Any]] = []
 
     current = start_date
     while current <= end_date:
         try:
-            data = client.get_sleep_data(current.isoformat())
+            data = local_client.get_sleep_data(current.isoformat())
             if data and isinstance(data, dict):
                 daily_summary = data.get("dailySleepDTO", {})
                 
@@ -406,6 +430,7 @@ def fetch_garmin_hrv(
     credentials: GarminCredentials,
     start_date: date,
     end_date: date,
+    client: Any | None = None,
 ) -> pd.DataFrame:
     """Fetch HRV data from Garmin Connect API.
 
@@ -420,13 +445,13 @@ def fetch_garmin_hrv(
         - hrv_rmssd: HRV RMSSD value in milliseconds.
         - reading_status: Garmin reading status (e.g., "NORMAL").
     """
-    client = _get_garmin_client(credentials)
+    local_client = client if client is not None else _get_garmin_client(credentials)
     records: list[dict[str, Any]] = []
 
     current = start_date
     while current <= end_date:
         try:
-            data = client.get_hrv_data(current.isoformat())
+            data = local_client.get_hrv_data(current.isoformat())
             if data and isinstance(data, dict):
                 hrv_summary = data.get("hrvSummary", {})
                 # Garmin returns overnight HRV values
@@ -461,6 +486,7 @@ def fetch_garmin_hrv(
 def fetch_garmin_heart_rate(
     credentials: GarminCredentials,
     target_date: date,
+    client: Any | None = None,
 ) -> pd.DataFrame:
     """Fetch heart rate data from Garmin Connect API for a single day.
 
@@ -473,11 +499,11 @@ def fetch_garmin_heart_rate(
         - timestamp: Measurement timestamp (UTC).
         - heart_rate: Heart rate in BPM.
     """
-    client = _get_garmin_client(credentials)
+    local_client = client if client is not None else _get_garmin_client(credentials)
     records: list[dict[str, Any]] = []
 
     try:
-        data = client.get_heart_rates(target_date.isoformat())
+        data = local_client.get_heart_rates(target_date.isoformat())
         if data and isinstance(data, dict):
             hr_values = data.get("heartRateValues", [])
             for val in hr_values:
@@ -498,6 +524,7 @@ def fetch_garmin_heart_rate(
 def fetch_garmin_stress(
     credentials: GarminCredentials,
     target_date: date,
+    client: Any | None = None,
 ) -> pd.DataFrame:
     """Fetch stress data from Garmin Connect API for a single day.
 
@@ -510,19 +537,34 @@ def fetch_garmin_stress(
         - timestamp: Measurement timestamp (UTC).
         - stress_level: Stress level (0-100, -1 for rest/sleep).
     """
-    client = _get_garmin_client(credentials)
+    local_client = client if client is not None else _get_garmin_client(credentials)
     records: list[dict[str, Any]] = []
 
     try:
-        data = client.get_stress_data(target_date.isoformat())
+        data: Any = None
+        if hasattr(local_client, "get_stress_data"):
+            data = local_client.get_stress_data(target_date.isoformat())
+        elif hasattr(local_client, "get_all_day_stress"):
+            data = local_client.get_all_day_stress(target_date.isoformat())
         if data and isinstance(data, dict):
             stress_values = data.get("stressValuesArray", [])
             for val in stress_values:
                 if isinstance(val, list) and len(val) >= 2:
-                    records.append({
-                        "timestamp": val[0],
-                        "stress_level": val[1],
-                    })
+                    records.append(
+                        {
+                            "timestamp": val[0],
+                            "stress_level": val[1],
+                        }
+                    )
+            if not records:
+                avg_stress = data.get("averageStressLevel") or data.get("overallStressLevel")
+                if avg_stress is not None:
+                    records.append(
+                        {
+                            "timestamp": pd.Timestamp(target_date).timestamp() * 1000,
+                            "stress_level": avg_stress,
+                        }
+                    )
     except Exception as exc:
         _LOGGER.warning("Failed to fetch stress data for %s: %s", target_date, exc)
 
@@ -535,6 +577,7 @@ def fetch_garmin_stress(
 def fetch_garmin_spo2(
     credentials: GarminCredentials,
     target_date: date,
+    client: Any | None = None,
 ) -> pd.DataFrame:
     """Fetch SpO2 (pulse oximetry) data from Garmin Connect API.
 
@@ -548,12 +591,12 @@ def fetch_garmin_spo2(
         - spo2: SpO2 percentage (typically 90-100%).
         - reading_confidence: Confidence level of reading.
     """
-    client = _get_garmin_client(credentials)
+    local_client = client if client is not None else _get_garmin_client(credentials)
     records: list[dict[str, Any]] = []
 
     try:
         # Try different API endpoints for SpO2 data
-        data = client.get_spo2_data(target_date.isoformat())
+        data = local_client.get_spo2_data(target_date.isoformat())
         if data and isinstance(data, dict):
             # Daily summary
             daily_avg = data.get("averageSpO2")
@@ -605,6 +648,7 @@ def fetch_garmin_spo2(
 def fetch_garmin_respiration(
     credentials: GarminCredentials,
     target_date: date,
+    client: Any | None = None,
 ) -> pd.DataFrame:
     """Fetch respiration rate data from Garmin Connect API.
 
@@ -617,19 +661,33 @@ def fetch_garmin_respiration(
         - timestamp: Measurement timestamp (UTC).
         - respiration_rate: Breaths per minute.
     """
-    client = _get_garmin_client(credentials)
+    local_client = client if client is not None else _get_garmin_client(credentials)
     records: list[dict[str, Any]] = []
 
     try:
-        data = client.get_respiration_data(target_date.isoformat())
+        data = local_client.get_respiration_data(target_date.isoformat())
         if data and isinstance(data, dict):
             resp_values = data.get("respirationValuesArray", [])
             for val in resp_values:
                 if isinstance(val, list) and len(val) >= 2 and val[1] is not None:
-                    records.append({
-                        "timestamp": val[0],
-                        "respiration_rate": val[1],
-                    })
+                    respiration_val = val[1]
+                    if isinstance(respiration_val, list) and len(respiration_val) >= 1:
+                        respiration_val = respiration_val[0]
+                    records.append(
+                        {
+                            "timestamp": val[0],
+                            "respiration_rate": respiration_val,
+                        }
+                    )
+            if not records:
+                avg_awake = data.get("avgWakingRespirationValue") or data.get("awakeRespirationAvg")
+                if avg_awake is not None:
+                    records.append(
+                        {
+                            "timestamp": pd.Timestamp(target_date).timestamp() * 1000,
+                            "respiration_rate": avg_awake,
+                        }
+                    )
     except Exception as exc:
         _LOGGER.warning("Failed to fetch respiration data for %s: %s", target_date, exc)
 
@@ -642,6 +700,7 @@ def fetch_garmin_respiration(
 def fetch_garmin_body_battery(
     credentials: GarminCredentials,
     target_date: date,
+    client: Any | None = None,
 ) -> pd.DataFrame:
     """Fetch body battery data from Garmin Connect API.
 
@@ -655,19 +714,37 @@ def fetch_garmin_body_battery(
         - body_battery: Body battery level (0-100).
         - status: Charging/draining status.
     """
-    client = _get_garmin_client(credentials)
+    local_client = client if client is not None else _get_garmin_client(credentials)
     records: list[dict[str, Any]] = []
 
     try:
-        data = client.get_body_battery(target_date.isoformat())
+        data = local_client.get_body_battery(target_date.isoformat())
         if data and isinstance(data, list):
             for val in data:
                 if isinstance(val, dict):
-                    records.append({
-                        "timestamp": val.get("startTimestampGMT"),
-                        "body_battery": val.get("bodyBatteryLevel"),
-                        "status": val.get("bodyBatteryStatus"),
-                    })
+                    values_array = val.get("bodyBatteryValuesArray")
+                    if isinstance(values_array, list) and values_array:
+                        for pair in values_array:
+                            if (
+                                isinstance(pair, list)
+                                and len(pair) >= 2
+                                and pair[1] is not None
+                            ):
+                                records.append(
+                                    {
+                                        "timestamp": pair[0],
+                                        "body_battery": pair[1],
+                                        "status": "measured",
+                                    }
+                                )
+                    else:
+                        records.append(
+                            {
+                                "timestamp": val.get("startTimestampGMT"),
+                                "body_battery": val.get("bodyBatteryLevel"),
+                                "status": val.get("bodyBatteryStatus"),
+                            }
+                        )
     except Exception as exc:
         _LOGGER.warning("Failed to fetch body battery data for %s: %s", target_date, exc)
 
@@ -2290,36 +2367,62 @@ def import_garmin_data(
             end_date = date.today()
 
         data = GarminWellnessData(source="garmin_connect_api")
-        data.sleep_df = fetch_garmin_sleep(credentials, start_date, end_date)
-        data.hrv_df = fetch_garmin_hrv(credentials, start_date, end_date)
-        data.sleep_df = compute_sleep_metrics(data.sleep_df)
+        shared_client = _get_garmin_client(credentials)
+        try:
+            data.sleep_df = fetch_garmin_sleep(
+                credentials,
+                start_date,
+                end_date,
+                client=shared_client,
+            )
+            data.hrv_df = fetch_garmin_hrv(
+                credentials,
+                start_date,
+                end_date,
+                client=shared_client,
+            )
+            data.sleep_df = compute_sleep_metrics(data.sleep_df)
 
-        # Fetch additional metrics for each day
-        hr_dfs: list[pd.DataFrame] = []
-        stress_dfs: list[pd.DataFrame] = []
-        spo2_dfs: list[pd.DataFrame] = []
-        resp_dfs: list[pd.DataFrame] = []
-        bb_dfs: list[pd.DataFrame] = []
+            # Fetch additional metrics for each day
+            hr_dfs: list[pd.DataFrame] = []
+            stress_dfs: list[pd.DataFrame] = []
+            spo2_dfs: list[pd.DataFrame] = []
+            resp_dfs: list[pd.DataFrame] = []
+            bb_dfs: list[pd.DataFrame] = []
 
-        current = start_date
-        while current <= end_date:
-            hr_dfs.append(fetch_garmin_heart_rate(credentials, current))
-            stress_dfs.append(fetch_garmin_stress(credentials, current))
+            current = start_date
+            while current <= end_date:
+                hr_dfs.append(fetch_garmin_heart_rate(credentials, current, client=shared_client))
+                stress_dfs.append(fetch_garmin_stress(credentials, current, client=shared_client))
 
-            if include_spo2:
-                spo2_dfs.append(fetch_garmin_spo2(credentials, current))
-            if include_respiration:
-                resp_dfs.append(fetch_garmin_respiration(credentials, current))
-            if include_body_battery:
-                bb_dfs.append(fetch_garmin_body_battery(credentials, current))
+                if include_spo2:
+                    spo2_dfs.append(fetch_garmin_spo2(credentials, current, client=shared_client))
+                if include_respiration:
+                    resp_dfs.append(
+                        fetch_garmin_respiration(credentials, current, client=shared_client)
+                    )
+                if include_body_battery:
+                    bb_dfs.append(
+                        fetch_garmin_body_battery(credentials, current, client=shared_client)
+                    )
 
-            current += timedelta(days=1)
+                current += timedelta(days=1)
 
-        data.hr_df = pd.concat(hr_dfs, ignore_index=True) if hr_dfs else pd.DataFrame()
-        data.stress_df = pd.concat(stress_dfs, ignore_index=True) if stress_dfs else pd.DataFrame()
-        data.spo2_df = pd.concat(spo2_dfs, ignore_index=True) if spo2_dfs else pd.DataFrame()
-        data.respiration_df = pd.concat(resp_dfs, ignore_index=True) if resp_dfs else pd.DataFrame()
-        data.body_battery_df = pd.concat(bb_dfs, ignore_index=True) if bb_dfs else pd.DataFrame()
+            data.hr_df = pd.concat(hr_dfs, ignore_index=True) if hr_dfs else pd.DataFrame()
+            data.stress_df = pd.concat(stress_dfs, ignore_index=True) if stress_dfs else pd.DataFrame()
+            data.spo2_df = pd.concat(spo2_dfs, ignore_index=True) if spo2_dfs else pd.DataFrame()
+            data.respiration_df = (
+                pd.concat(resp_dfs, ignore_index=True) if resp_dfs else pd.DataFrame()
+            )
+            data.body_battery_df = (
+                pd.concat(bb_dfs, ignore_index=True) if bb_dfs else pd.DataFrame()
+            )
+        finally:
+            if hasattr(shared_client, "logout"):
+                try:
+                    shared_client.logout()
+                except Exception:
+                    pass
 
         return data
 
