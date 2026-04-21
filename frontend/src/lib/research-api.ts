@@ -448,6 +448,7 @@ export type GarminSyncResult = {
   active_mission?: string;
   database_path?: string;
   garmin_rows_for_user?: number;
+  error_detail?: string | null;
 };
 
 export async function syncGarminData(
