@@ -1321,6 +1321,196 @@ async def sync_garmin_data(
 
 
 # ---------------------------------------------------------------------------
+# Sleep Module Endpoints
+# ---------------------------------------------------------------------------
+# Built on top of `app.sleep_core` + the shared `garmin_daily_metrics`
+# SQLite table. All metric definitions and gate logic live in
+# app/sleep_core.py — this section is orchestration + Pydantic shaping only.
+# ---------------------------------------------------------------------------
+
+
+class SleepSummaryResponse(BaseModel):
+    """Aggregate sleep summary for the research dashboard."""
+    n_nights_total: int
+    n_nights_with_duration: int
+    latest_night_date: Optional[str] = None
+    mean_sleep_duration_hours_30d: Optional[float] = None
+    mean_sleep_efficiency_30d: Optional[float] = None
+    mean_sleep_score_30d: Optional[float] = None
+    debt_7d: Dict[str, Any] = Field(default_factory=dict)
+    regularity_14d: Dict[str, Any] = Field(default_factory=dict)
+    spo2_screen_7d: Dict[str, Any] = Field(default_factory=dict)
+    readiness: Dict[str, Any] = Field(default_factory=dict)
+    stage_balance_latest: Dict[str, Any] = Field(default_factory=dict)
+
+
+class SleepCorrelationItem(BaseModel):
+    metric_x: str
+    metric_y: str
+    method: str
+    n_nights: int
+    r: Optional[float] = None
+    p_value: Optional[float] = None
+    fdr_q: Optional[float] = None
+    note: Optional[str] = None
+
+
+class SleepCorrelationsResponse(BaseModel):
+    user_id: str
+    method: str
+    n_nights_window: int
+    min_nights_for_stats: int
+    results: List[SleepCorrelationItem]
+
+
+class SleepDebtTrendPoint(BaseModel):
+    metric_date: str
+    sleep_duration_hours: Optional[float] = None
+    deficit_hours: Optional[float] = None
+    rolling_debt_7d_hours: Optional[float] = None
+
+
+class SleepDebtTrendResponse(BaseModel):
+    user_id: str
+    typical_target_hours: float
+    series: List[SleepDebtTrendPoint]
+
+
+def _load_nightly_records(user_id: str, days: int) -> list:
+    """Pull up to `days` nights of Garmin daily rows and return the chronologically
+    ordered NightlyRecord list used by app.sleep_core."""
+    from dataclasses import asdict as _asdict
+    from user_database import UserDatabase
+
+    from app.sleep_core import build_records_from_raw
+
+    db = UserDatabase()
+    rows = db.get_garmin_daily_metrics(user_id, days)
+    as_dicts = [_asdict(row) for row in rows]
+    return build_records_from_raw(as_dicts)
+
+
+@router.get("/garmin/sleep-summary/{user_id}", response_model=SleepSummaryResponse)
+async def get_sleep_summary(
+    user_id: str,
+    days: int = Query(default=60, ge=7, le=365),
+) -> SleepSummaryResponse:
+    """Aggregate sleep summary: debt (7d), regularity (14d), SpO2 screening
+    (7d), readiness gate, and latest-night stage balance. All computation is
+    delegated to `app.sleep_core.summarise`."""
+    from dataclasses import asdict as _asdict
+
+    from app.sleep_core import summarise
+
+    try:
+        records = await asyncio.to_thread(_load_nightly_records, user_id, days)
+    except Exception as exc:
+        _LOGGER.error(f"Failed to load Garmin records for {user_id}: {exc}")
+        raise HTTPException(status_code=500, detail="Failed to load sleep data")
+
+    s = summarise(records)
+
+    def _dc_to_dict(dc: Any) -> Dict[str, Any]:
+        try:
+            return _asdict(dc)
+        except Exception:
+            return {"value": str(dc)}
+
+    return SleepSummaryResponse(
+        n_nights_total=s.n_nights_total,
+        n_nights_with_duration=s.n_nights_with_duration,
+        latest_night_date=s.latest_night_date,
+        mean_sleep_duration_hours_30d=s.mean_sleep_duration_hours_30d,
+        mean_sleep_efficiency_30d=s.mean_sleep_efficiency_30d,
+        mean_sleep_score_30d=s.mean_sleep_score_30d,
+        debt_7d=_dc_to_dict(s.debt_7d),
+        regularity_14d=_dc_to_dict(s.regularity_14d),
+        spo2_screen_7d={
+            **_dc_to_dict(s.spo2_screen_7d),
+            "band": s.spo2_screen_7d.band.value,
+        },
+        readiness={
+            "decision": s.readiness.decision.value,
+            "reasons": s.readiness.reasons,
+            "inputs": s.readiness.inputs,
+        },
+        stage_balance_latest=_dc_to_dict(s.stage_balance_latest),
+    )
+
+
+@router.get("/garmin/sleep-correlations/{user_id}", response_model=SleepCorrelationsResponse)
+async def get_sleep_correlations(
+    user_id: str,
+    days: int = Query(default=60, ge=14, le=365),
+    method: str = Query(default="pearson", pattern="^(pearson|spearman)$"),
+) -> SleepCorrelationsResponse:
+    """Pairwise correlations from Pending.md §4 Tier A: sleep duration,
+    score, efficiency, deep/REM minutes, RHR, SpO2, respiration vs overnight
+    HRV RMSSD. Returns Pearson or Spearman r with two-sided p and BH FDR-q.
+    Underpowered flag when n<14."""
+    from app.sleep_core import MIN_NIGHTS_FOR_STATS, compute_correlations
+
+    records = await asyncio.to_thread(_load_nightly_records, user_id, days)
+    results = compute_correlations(records, method=method)
+    return SleepCorrelationsResponse(
+        user_id=user_id,
+        method=method,
+        n_nights_window=len(records),
+        min_nights_for_stats=MIN_NIGHTS_FOR_STATS,
+        results=[
+            SleepCorrelationItem(
+                metric_x=r.metric_x,
+                metric_y=r.metric_y,
+                method=r.method,
+                n_nights=r.n_nights,
+                r=r.r,
+                p_value=r.p_value,
+                fdr_q=r.fdr_q,
+                note=r.note,
+            )
+            for r in results
+        ],
+    )
+
+
+@router.get("/garmin/sleep-debt-trend/{user_id}", response_model=SleepDebtTrendResponse)
+async def get_sleep_debt_trend(
+    user_id: str,
+    days: int = Query(default=30, ge=7, le=180),
+) -> SleepDebtTrendResponse:
+    """Per-night sleep duration + per-night deficit + trailing 7-night rolling
+    debt. Drives the sleep-debt curve plot and the operational debt gauge."""
+    from app.sleep_core import TYPICAL_SLEEP_DURATION_H
+
+    records = await asyncio.to_thread(_load_nightly_records, user_id, days)
+    target = TYPICAL_SLEEP_DURATION_H
+
+    series: list[SleepDebtTrendPoint] = []
+    durations = [r.sleep_duration_hours for r in records]
+    for i, r in enumerate(records):
+        h = r.sleep_duration_hours
+        deficit: Optional[float] = None
+        if h is not None:
+            deficit = max(0.0, target - h)
+        # Trailing 7-night rolling debt
+        lo = max(0, i - 6)
+        window = [d for d in durations[lo : i + 1] if d is not None]
+        rolling = sum(max(0.0, target - v) for v in window) if window else None
+        series.append(SleepDebtTrendPoint(
+            metric_date=r.metric_date.isoformat(),
+            sleep_duration_hours=h,
+            deficit_hours=deficit,
+            rolling_debt_7d_hours=rolling,
+        ))
+
+    return SleepDebtTrendResponse(
+        user_id=user_id,
+        typical_target_hours=target,
+        series=series,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Space Weather Refresh Endpoint
 # ---------------------------------------------------------------------------
 
