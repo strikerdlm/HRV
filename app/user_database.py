@@ -920,6 +920,11 @@ class GarminDailyMetrics:
     body_battery_avg: Optional[float] = None
     body_battery_charge: Optional[float] = None
     body_battery_drain: Optional[float] = None
+    # Sleep stage totals (minutes) when Garmin sleep summary exposes them
+    sleep_deep_minutes: Optional[int] = None
+    sleep_rem_minutes: Optional[int] = None
+    sleep_light_minutes: Optional[int] = None
+    sleep_awake_minutes: Optional[int] = None
     source: str = "garmin_fit"
     created_at: Optional[str] = None
 
@@ -1459,6 +1464,10 @@ class UserDatabase:
                     body_battery_avg REAL,
                     body_battery_charge REAL,
                     body_battery_drain REAL,
+                    sleep_deep_minutes INTEGER,
+                    sleep_rem_minutes INTEGER,
+                    sleep_light_minutes INTEGER,
+                    sleep_awake_minutes INTEGER,
                     source TEXT,
                     created_at TEXT NOT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
@@ -1474,6 +1483,10 @@ class UserDatabase:
                 ("sleep_end_utc", "TEXT"),
                 ("hrv_rmssd_ms", "REAL"),
                 ("hrv_sdnn_ms", "REAL"),
+                ("sleep_deep_minutes", "INTEGER"),
+                ("sleep_rem_minutes", "INTEGER"),
+                ("sleep_light_minutes", "INTEGER"),
+                ("sleep_awake_minutes", "INTEGER"),
             ):
                 try:
                     cursor.execute(f"ALTER TABLE garmin_daily_metrics ADD COLUMN {col_name} {col_type}")
@@ -3022,8 +3035,10 @@ class UserDatabase:
                         avg_spo2, avg_respiration_awake, avg_respiration_sleep,
                         hrv_rmssd_ms, hrv_sdnn_ms,
                         body_battery_avg, body_battery_charge, body_battery_drain,
+                        sleep_deep_minutes, sleep_rem_minutes, sleep_light_minutes,
+                        sleep_awake_minutes,
                         source, created_at
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     ON CONFLICT(user_id, metric_date) DO UPDATE SET
                         steps = COALESCE(excluded.steps, steps),
                         distance_km = COALESCE(excluded.distance_km, distance_km),
@@ -3044,6 +3059,10 @@ class UserDatabase:
                         body_battery_avg = COALESCE(excluded.body_battery_avg, body_battery_avg),
                         body_battery_charge = COALESCE(excluded.body_battery_charge, body_battery_charge),
                         body_battery_drain = COALESCE(excluded.body_battery_drain, body_battery_drain),
+                        sleep_deep_minutes = COALESCE(excluded.sleep_deep_minutes, sleep_deep_minutes),
+                        sleep_rem_minutes = COALESCE(excluded.sleep_rem_minutes, sleep_rem_minutes),
+                        sleep_light_minutes = COALESCE(excluded.sleep_light_minutes, sleep_light_minutes),
+                        sleep_awake_minutes = COALESCE(excluded.sleep_awake_minutes, sleep_awake_minutes),
                         source = excluded.source,
                         created_at = excluded.created_at
                     """,
@@ -3070,6 +3089,10 @@ class UserDatabase:
                         entry.body_battery_avg,
                         entry.body_battery_charge,
                         entry.body_battery_drain,
+                        entry.sleep_deep_minutes,
+                        entry.sleep_rem_minutes,
+                        entry.sleep_light_minutes,
+                        entry.sleep_awake_minutes,
                         entry.source,
                         created_at,
                     ),
@@ -3092,6 +3115,24 @@ class UserDatabase:
             )
             rows = cursor.fetchall()
         return [self._row_to_garmin_daily_metrics(row) for row in rows]
+
+    def count_garmin_daily_metrics(self, user_id: str) -> int:
+        """Return how many Garmin daily rows exist for this user (any dates)."""
+        if not user_id:
+            return 0
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) FROM garmin_daily_metrics WHERE user_id = ?",
+                (user_id,),
+            )
+            row = cursor.fetchone()
+        if row is None:
+            return 0
+        try:
+            return int(row[0])
+        except (TypeError, ValueError):
+            return 0
 
     def get_garmin_daily_dataframe(
         self,
@@ -3368,11 +3409,23 @@ class UserDatabase:
             avg_spo2=row["avg_spo2"],
             avg_respiration_awake=row["avg_respiration_awake"],
             avg_respiration_sleep=row["avg_respiration_sleep"],
-                        hrv_rmssd_ms=row["hrv_rmssd_ms"] if "hrv_rmssd_ms" in row.keys() else None,
-                        hrv_sdnn_ms=row["hrv_sdnn_ms"] if "hrv_sdnn_ms" in row.keys() else None,
+            hrv_rmssd_ms=row["hrv_rmssd_ms"] if "hrv_rmssd_ms" in row.keys() else None,
+            hrv_sdnn_ms=row["hrv_sdnn_ms"] if "hrv_sdnn_ms" in row.keys() else None,
             body_battery_avg=row["body_battery_avg"],
             body_battery_charge=row["body_battery_charge"],
             body_battery_drain=row["body_battery_drain"],
+            sleep_deep_minutes=(
+                row["sleep_deep_minutes"] if "sleep_deep_minutes" in row.keys() else None
+            ),
+            sleep_rem_minutes=(
+                row["sleep_rem_minutes"] if "sleep_rem_minutes" in row.keys() else None
+            ),
+            sleep_light_minutes=(
+                row["sleep_light_minutes"] if "sleep_light_minutes" in row.keys() else None
+            ),
+            sleep_awake_minutes=(
+                row["sleep_awake_minutes"] if "sleep_awake_minutes" in row.keys() else None
+            ),
             source=row["source"],
             created_at=row["created_at"],
         )
