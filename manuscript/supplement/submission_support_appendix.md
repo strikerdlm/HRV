@@ -2,7 +2,7 @@
 
 ## Supplementary Appendix
 
-This appendix consolidates supplementary material that strengthens the manuscript as a systems-and-modeling submission without expanding unsupported scientific claims. It focuses on engineering verification, model-layer notes, standards crosswalks, reporting positioning, and deployment prerequisites.
+This appendix consolidates supplementary material that strengthens the manuscript as a methodology and reference-implementation submission without expanding unsupported scientific claims. It focuses on engineering verification, model-layer notes, standards crosswalks, reporting positioning, and deployment prerequisites.
 
 ## S1. Extended engineering verification inventory
 
@@ -10,11 +10,12 @@ The main manuscript reports engineering verification at a summary level. The tab
 
 | Workflow area | Representative files | What is supported | Safe manuscript interpretation | What remains out of scope |
 | --- | --- | --- | --- | --- |
-| Scheduling, readiness, and IHPI-style logic | `app/scheduling_core.py`, `app/scheduling_engine.py`, `tests/test_scheduling_core.py` | Deterministic scoring rules, threshold behavior, and regression-tested decision pathways. | The platform includes implemented and tested operational decision-support logic. | Real-world mission benefit, decision accuracy, or deployment outcome improvement. |
+| Scheduling and readiness fusion logic | `app/scheduling_core.py`, `app/scheduling_engine.py`, `tests/test_scheduling_core.py` | Deterministic scoring rules, threshold behavior, and regression-tested decision pathways. | The platform includes implemented and tested operational decision-support logic. | Real-world mission benefit, decision accuracy, or deployment outcome improvement. |
 | FRMS and fatigue pathways | `app/frms.py`, `app/frms_v2.py`, `app/fatigue_integration.py`, `tests/test_frms.py`, `tests/test_frms_v2.py`, `tests/test_fatigue_integration.py` | Rule-based fatigue integration and FRMS-related software behavior. | The fatigue layer is implemented as inspectable software rather than as opaque heuristics. | Prospective validation of fatigue predictions in operational cohorts. |
-| Space-weather ingestion and caching | `app/noaa_space.py`, `tests/test_noaa_cache.py`, `tests/test_space_weather_impact.py` | NOAA ingest, cache behavior, and impact-model plumbing. | Environmental context is implemented as a tested software layer. | Proof that the environmental layer yields clinically validated interpretations. |
-| Space-weather alignment workflows | `app/space_weather_alignment.py`, `tests/test_space_weather_alignment.py` | Alignment of environmental and physiological timelines. | The repository supports cross-domain temporal alignment and exploratory coupling. | Publication-grade claims from exploratory outputs without cohort provenance. |
-| API and web-delivery pathways | `api/main.py`, `tests/test_api_user_profile_normalization.py`, `tests/test_research_windowed_endpoint.py` | Endpoint behavior, normalization, and shared-core delivery. | The Node-first delivery architecture is backed by testable service behavior. | End-user usability claims or deployment adoption claims without dedicated study data. |
+| PVT vigilance module | `app/pvt_core.py`, `api/pvt_endpoints.py`, `tests/test_pvt_core.py` | Canonical PVT scoring, operational gating, and variant handling. | The repository includes an inspectable and regression-tested vigilance-related input surface. | Browser timing claims still inherit published web-PVT precision bounds. |
+| Sleep analytics module | `app/sleep_core.py`, `api/research_endpoints.py`, `tests/test_sleep_core.py` | Sleep debt, Sleep Regularity Index, screening bands, operational gate logic, and correlation calculations. | The repository includes an inspectable and regression-tested sleep-derived readiness pathway. | Not evidence of PSG equivalence or clinical sleep-diagnostics validity. |
+| Longitudinal trajectory-risk module | `app/trajectory_risk.py` | EWMA-smoothed trends, alert classes, and a bounded cumulative-strain modifier. | The repository includes an implemented longitudinal-adjustment layer aligned with allostatic-load theory. | Dedicated regression tests are not yet present; do not describe this layer as regression-tested. |
+| API and web-delivery pathways | `api/main.py`, `tests/test_api_user_profile_normalization.py`, `tests/test_research_windowed_endpoint.py` | Endpoint behavior, normalization, and shared-core delivery. | The primary web-delivery architecture is backed by testable service behavior. | End-user usability claims or deployment adoption claims without dedicated study data. |
 | Reporting and export utilities | `app/publication_export.py`, `app/export_utils.py`, `tests/test_comprehensive_modules.py` | Structured statistical outputs, supporting exports, and some reporting helpers. | Reporting support is a first-class implementation concern in the repository. | Full manuscript reproducibility guarantees without a tagged release or archived DOI. |
 
 ## S2. Canonical model-layer notes
@@ -40,11 +41,23 @@ The main manuscript centers the following modeling layers. The notes below clari
 - Main manuscript framing: deterministic fusion of HRV-derived features, SAFTE state, KSS/PVT pathways, mission modifiers, and bounded GO/NO-GO logic
 - Reviewer caveat: strong operational logic evidence does not equal mission-outcome validation
 
-### Environmental timing and alignment layer
+### PVT vigilance module
 
-- Canonical implementations: `app/space_weather_impact.py`, `app/space_weather_alignment.py`, `app/space_weather_influence.py`
-- Main manuscript framing: NOAA ingestion, propagation timing, severity logic, and alignment to physiology windows
-- Reviewer caveat: these are contextual timing models, not validated causal autonomic models
+- Canonical implementation: `app/pvt_core.py`
+- Main manuscript framing: validated PVT variants, operational lapse-based gating, and browser plus PsychoPy administration surfaces
+- Reviewer caveat: browser delivery is suitable for operational gating and longitudinal tracking, not for laboratory-grade reaction-time claims
+
+### Sleep analytics module
+
+- Canonical implementation: `app/sleep_core.py`
+- Main manuscript framing: sleep debt, Sleep Regularity Index, stage-balance summaries, and a screening-only low-SpO₂ proxy
+- Reviewer caveat: consumer-wearable deployment remains pattern-level and screening-only; no PSG-equivalence or sleep-diagnosis claim
+
+### Longitudinal trajectory-risk module
+
+- Canonical implementation: `app/trajectory_risk.py`
+- Main manuscript framing: EWMA-smoothed readiness trends and a bounded cumulative-strain modifier aligned with allostatic-load theory
+- Reviewer caveat: implemented and documented, but not yet backed by a dedicated regression test suite
 
 ### Compact equation-style summary for reviewers
 
@@ -53,7 +66,7 @@ The biomathematical center of the manuscript can be summarized as:
 - `HRV layer`: RR preprocessing -> mult-domain HRV features
 - `Fatigue layer`: `E(t)` derived from homeostatic reservoir, circadian drive, and inertia
 - `Readiness layer`: deterministic fusion of physiological and operational state variables
-- `Environment layer`: timing, propagation, and alignment of space-weather context to physiology windows
+- `Ancillary implemented modules`: PVT vigilance input, sleep-derived modifiers, and a longitudinal trajectory-risk adjustment layer
 
 ## S3. Standards and operational-reference crosswalk
 
@@ -72,7 +85,7 @@ This manuscript should remain anchored to a software/systems/methods reporting p
 
 | Manuscript content area | Primary reporting backbone | Why it applies | Current status |
 | --- | --- | --- | --- |
-| Architecture, implementation, verification, and deployment surfaces | Journal-specific software/system or methods paper guidance | The main contribution is an integrated translational biomathematical software system. | Primary backbone for submission. |
+| Architecture, implementation, verification, and deployment surfaces | Journal-specific software/system or methods paper guidance | The main contribution is an integrated biomathematical methods paper with open reference implementation. | Primary backbone for submission. |
 | Any repository-backed observational analysis that might later be added | STROBE elements | Observational reporting becomes relevant only if empirical data are analyzed as study findings. | Secondary and conditional. |
 | Predictive modeling or AI claims | TRIPOD+AI / CLAIM only where relevant | These frameworks apply only if the manuscript makes explicit predictive-model claims. | Currently not primary because the draft does not center validated predictive AI claims. |
 | Reproducibility and transparency narrative | Versioned software reporting plus explicit availability statements | The paper reports code, artifacts, environment notes, and audit infrastructure. | Already reflected in the current draft. |
