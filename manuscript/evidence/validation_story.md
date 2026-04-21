@@ -64,7 +64,7 @@ This supports a Results subsection on engineering verification of the fusion pat
 
 ### 4. Illustrative worked example (once executed)
 
-The single 128-minute HRV recording in `analysis/hrv_report_complete_20251124T020445Z.md` (8,553 RR intervals, 2025-11-23) supports an illustrative worked example: the pipeline can be run end-to-end (RR → HRV metrics → SAFTE effectiveness estimate → OPI composite) under three hypothetical task scenarios (e.g., IMC approach, UAS ISR sortie, carrier landing) to demonstrate how the same physiological input yields task-specific readiness outputs.
+The single 128-minute HRV recording in `analysis/hrv_report_complete_20251124T020445Z.md` (8,553 RR intervals, 2025-11-23) supports an illustrative worked example: the public artefact can run end-to-end from the recording summary (recording summary -> representative five-minute windows -> SAFTE effectiveness estimate -> OPI composite) under three hypothetical task scenarios (e.g., IMC approach, UAS ISR sortie, carrier landing) to demonstrate how the same summary-consistent physiological input yields task-specific readiness outputs.
 
 This is standard HF methodology-paper practice: frame the example as a framework instantiation, not as inferential data. Explicitly state in Methods and Results that the worked example does not generalise beyond the single recording.
 
