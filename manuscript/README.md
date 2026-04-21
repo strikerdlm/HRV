@@ -4,111 +4,117 @@
 
 **Read this file first** when working under `manuscript/`. It records where the paper sits in the publication pipeline, what is already done, and what remains for a **Q1 scientific journal** submission.
 
+### Current framing — OPI methodology paper for Applied Ergonomics
+
+As of 2026-04-21, the manuscript has been repositioned on branch `q1-hf-opi-reframe` around a task-calibrated **Operational Performance Indicator (OPI)** framework targeted at *Applied Ergonomics* (Elsevier, Q1 Human Factors, JIF 3.4). The prior biomedical-computing (CMPB/JBI) framing remains in git history on `main` but is not the active direction. The OPI reframe is motivated by the author's decision to prioritise medical / psychology / human factors venues where the current evidence base (framework + reference implementation + engineering verification + illustrative worked example) is sufficient for Q1 submission without new external validation studies.
+
+Literature verification and venue targeting rationale: `manuscript/outline/novelty_and_venue_2026-04-21.md`.
+
 ### One-line status
 
-The package is a **submission-oriented draft**: IMRaD scaffold is written, tables (1–6) and Figures 1–4 (SVG) exist, evidence and compliance maps are aligned with a **Node-first (Next.js + FastAPI) + Python biomathematical stack** narrative. **Blocking work is mostly human metadata, venue-specific formatting, and archival reproducibility**—not empty section shells.
+Draft submission package complete on branch `q1-hf-opi-reframe`: IMRaD draft (~5,800 words), three OPI tables (taxonomy, weight profiles, vigilance/latency), four-figure plan, seed references (23 cited + 10 pool, all Crossref-verified), cover letter draft, highlights. Blocking work is now mostly human metadata (authorship, funding, COI), figure generation at publication quality, journal template import, and frozen release identifier.
 
 ---
 
-## Pipeline position (where we are)
+## Pipeline position (OPI reframe)
 
 | Stage | Status | Notes |
 | --- | --- | --- |
-| Evidence and scope | Done | `evidence/evidence_matrix.md`, `evidence/validation_story.md`, `evidence/core_modules_scope.md` |
-| Main draft (abstract → compliance) | Done | `draft/main_manuscript_scaffold.md` |
-| Tables 1–6 | Done | `tables/*.md` including `model_layers_and_evidence_tiers.md` |
-| Figures 1–4 + captions | Done | `figures/*.svg`, `figures/figure_plan.md` |
-| Supplement / appendix | Done | `supplement/submission_support_appendix.md`, `supplement/supplement_outline.md` |
-| Reference seed + MCP notes | Done | `references/seed_references.md`, `references/mcp_research_notes.md` |
-| Journal targeting shortlist | In progress | `outline/manuscript_outline.md` now contains a Q1 venue shortlist and packaging implications |
-| Journal template / final layout | Not started | Depends on final venue choice |
-| Tagged release / archive DOI | Not started | Needed for iron-clad reproducibility statement |
+| Novelty verification vs. 2022–2026 HF literature | Done | `outline/novelty_and_venue_2026-04-21.md` |
+| Evidence matrix and validation-story reframe | Done | `evidence/evidence_matrix.md`, `evidence/validation_story.md` |
+| OPI tables (taxonomy, weights, vigilance/latency) | Done | `tables/opi_task_taxonomy.md`, `tables/opi_weight_profiles.md`, `tables/opi_vigilance_latency_models.md` |
+| Main draft (IMRaD, Applied Ergonomics) | Done | `draft/opi_main_manuscript.md` |
+| Seed references (23 cited + pool) | Done, DOI-verified | `references/seed_references.md` |
+| Figure plan (4 figures) | Done | `figures/figure_plan_opi.md` |
+| Cover letter (Applied Ergonomics) | Done, draft | `submission/cover_letter_applied_ergonomics.md` |
+| Highlights (Elsevier format) | Done | `submission/highlights.md` |
+| Figure generation at publication quality | Not started | Adapt existing SVG + build Figure 3 from worked example |
+| Worked-example numerical output for Results §3.1 | Not started | Optional e2b run; values can be regenerated from existing HRV report |
+| Supplementary appendix refresh | Not started | Terminology alignment to OPI framing in `supplement/submission_support_appendix.md` |
+| Journal template / final layout | Not started | Elsevier Applied Ergonomics template import |
+| Tagged release / archive DOI | Not started | Needed for final availability statement |
 | Final authorship / funding / COI | Not started | Must be confirmed before submission |
 
-**Framing locked in:** primary delivery is **Next.js + TypeScript** over **FastAPI**; **Streamlit** is **secondary**. Claims stay bounded to **engineering verification** and **repository-backed** results unless new empirical studies are added.
+---
+
+## Target outcome (reaffirmed)
+
+- **Goal:** A **Q1** journal article in **Human Factors / Ergonomics** describing the OPI framework as a translational aerospace medicine methodology contribution, with open-source reference implementation and illustrative worked example.
+- **Primary target:** *Applied Ergonomics* (Elsevier). JIF 3.4. Q1 Human Factors.
+- **Paper type:** Methodology + reference software + illustrative case — **not** a clinical trial, **not** a diagnostic-accuracy study, **not** a validation paper. Field validation of per-task OPI weights is explicit future work.
+- **Success criterion:** Reviewers can trace every major claim to repository code, engineering verification, or DOI-verified HF literature, with limitations clearly separated from framework claims.
 
 ---
 
-## Where this is going (target outcome)
+## Q1 publication roadmap — remaining tasks (priority order)
 
-- **Goal:** A **Q1** (high-impact / top-quartile in its category) journal article describing the platform as a **translational aerospace-medicine software system** with explicit **biomathematical layering** (HRV analytics, SAFTE/circadian-style dynamics, readiness fusion, environmental timing), not as a single-algorithm paper.
-- **Paper type:** Systems / methods / software with operational translation angle—**not** a standalone clinical trial report unless the team later adds that evidence tier.
-- **Success criterion:** Reviewers can trace every major claim to **code, tests, or cited literature**, with limitations clearly separated from implementation boasts.
+### A. Complete the submission package
 
----
+1. **Refresh supplementary appendix** (`supplement/submission_support_appendix.md`) to align terminology with OPI framing — light edit, keep engineering verification inventory, standards crosswalk, non-claims, and deployment prerequisites.
+2. **Generate Figures 1-4 at publication quality** — adapt SVG assets per `figures/figure_plan_opi.md`. Build Figure 3 from worked-example output (can regenerate via e2b or Python locally).
+3. **Run the worked example numerically** — optional but recommended. Produce `analysis/opi_worked_example.json` and `analysis/opi_worked_example_figure.*` for Figure 3 and numerical text in Results §3.1. Currently the draft references expected qualitative behaviour; numerical specifics can be inserted once the e2b run completes.
 
-## Q1 publication roadmap — future tasks for agents (priority order)
+### B. Author metadata and human decisions
 
-Use this as a checklist; tick items off in repo commits and, where user-visible, in root `CHANGELOG.md` under Documentation.
+1. **Finalise author list, affiliations, ORCIDs, CRediT roles.** Currently single-author; expand if collaborators added.
+2. **Confirm funding declaration and conflict-of-interest statements** for all authors.
+3. **Confirm acknowledgments** for collaborators, institutions, and infrastructure support.
 
-### A. Venue and packaging (gates everything else)
+### C. Reproducibility
 
-1. **Finalize one primary target** from the shortlist already recorded in `outline/manuscript_outline.md`.
-2. **Download the official author guidelines** and note: word limits, structured abstract rules, reference style, figure file formats (PDF/EPS/TIFF vs SVG), and open-access fees.
-3. **Export manuscript** from Markdown into the journal template (Word/LaTeX/Overleaf). Adjust headings, references, and figure callouts to match the template—do not claim template compliance until this is done.
+1. **Cut a tagged release** on the `strikerdlm/HRV` repository (semantic version, e.g., `v0.6.0-opi`), archive to Zenodo, cite DOI in §6.2 and Table 4.
+2. **Harmonise environment wording** across draft, supplementary, and root `README.md` (`conda hrv-py312`, Python 3.12, `requirements.txt`, `frontend/package.json`).
 
-### B. Claims, evidence, and optional empirical lift
+### D. Venue-specific formatting
 
-1. **Re-audit the draft** against `evidence/evidence_matrix.md` after any code change; downgrade or remove anything that drifts from Supported / Partial tiers.
-2. **Decide** whether an exploratory analysis vignette stays in the main paper or moves fully to supplementary material (`validation_story.md` / outline already flag this).
-3. **If Q1 expectations require it:** add a minimal **external validation or benchmark** subsection (e.g., public HRV dataset, fatigue model comparison, or structured expert review)—only with clean provenance and IRB/ethics as applicable.
+1. **Download the Applied Ergonomics author guidelines** and import the journal template (Word / LaTeX / Overleaf). Adjust headings, reference style, figure file formats (PDF + EPS + TIFF 300 dpi), word limits.
+2. **Adjust reference style** from APA7 to the journal's preferred style if different (Elsevier Applied Ergonomics uses Harvard/APA hybrid).
 
-### C. Reproducibility and software citation
+### E. Submission mechanics
 
-1. **Cut a tagged release** (Git tag) or archived DOI that becomes the frozen identifier cited in `tables/reproducibility_and_deployment_metadata.md` and the draft’s availability statement.
-2. **Archive** the release (e.g., Zenodo) to obtain a **DOI**; update the manuscript and Table 4 text to match.
-3. **Harmonize environment wording** (Python 3.12, `requirements.txt`, frontend `package.json`, optional container instructions) across the draft, supplement, and root `README.md`.
-
-### D. Authorship, ethics, and compliance
-
-1. **Finalize** author list, affiliations, ORCID, CRediT roles, funding, conflicts of interest, and acknowledgments—mirror into `tables/compliance_and_transparency_declarations.md` and the draft compliance section.
-2. **Confirm** any ethics/IRB language with real approvals if human data or identifiable records appear; otherwise keep statements accurate and minimal.
-3. **Map reporting guidelines** (STROBE / TRIPOD+AI / CLAIM only where predictive claims exist) in one short, honest paragraph—see `supplement/submission_support_appendix.md`.
-
-### E. Editorial polish and submission mechanics
-
-1. **Professional language pass:** tighten redundancy, unify notation for model layers (consistent with Table 6), and ensure Abstract/Discussion do not overclaim regulatory certification.
-2. **Figure finalization:** export publication-resolution assets per journal specs; ensure fonts and line weights meet print guidance.
-3. **Internal consistency sweep:** abstract ↔ methods ↔ results ↔ table 6 ↔ figures; update hashes and dates only with real git state.
-4. **Cover letter + highlights** (if required): 3–5 bullet contributions aimed at the journal’s scope.
-5. **Submit** via the journal portal; retain anonymized version if double-masked review is required.
+1. **Editorial Manager portal submission** with cover letter, manuscript, Highlights, figures, tables, supplement.
+2. **Prepare the anonymised version** for double-masked review if required.
+3. **Track submission ID** and first-decision date (Applied Ergonomics median 79 days).
 
 ---
 
 ## Guardrails (do not skip)
 
-1. **Evidence discipline:** If it is not in the repo (tests, docs, logged outputs) or in a cited paper, it is a **limitation** or **future work**—see `evidence/validation_story.md`.
-2. **Regulatory language:** Standards (e.g., NASA, ICAO) are **alignment**, not certification—see `evidence/compliance_and_transparency_map.md`.
-3. **No silent scope drift:** Node-first + biomathematical layers are the agreed spine; do not revert to Streamlit-led framing without explicit author direction.
-4. **Centralized project docs:** Repository-wide documentation changes belong in root `README.md`, `CHANGELOG.md`, and `docs/Manual.md` per project rules; this file is **manuscript-folder local** except for cross-links.
+1. **Evidence discipline:** Framework is theory-derived. Per-task weights are theory-derived pending field calibration. The 128-min worked example is illustrative, not inferential. See `evidence/validation_story.md`.
+2. **Regulatory language:** Standards (NASA, ICAO) are **alignment**, not certification — see `evidence/compliance_and_transparency_map.md`.
+3. **No silent scope drift:** OPI + open-source reference implementation is the spine. Do not revert to the prior CMPB/JBI systems-paper framing without explicit author direction. The prior draft is preserved in git history and supersedes only if the reframe is abandoned.
+4. **Centralised project docs:** Repo-wide documentation changes belong in root `README.md`, `CHANGELOG.md`, and `docs/Manual.md`. This manuscript folder is local except for cross-links.
+5. **Citation discipline:** Every in-text citation in the draft must have a Crossref- or publisher-verified DOI in `references/seed_references.md`. See the verification notes in `outline/novelty_and_venue_2026-04-21.md`.
 
 ---
 
 ## Folder map
 
-- `outline/` — Framing, titles, section plan, writing order (`manuscript_outline.md`)
-- `draft/` — Main manuscript (`main_manuscript_scaffold.md`)
-- `tables/` — Tables 1–6 (architecture, literature gap, verification, reproducibility, compliance, model layers)
-- `figures/` — SVG figures 1–4 and `figure_plan.md`
-- `references/` — Seed bibliography and MCP research log
-- `supplement/` — Supplementary outline and submission support appendix
-- `evidence/` — Evidence matrix, module scope, validation posture, compliance map
+- `outline/` — Framing documents: `manuscript_outline.md` (authoritative), `novelty_and_venue_2026-04-21.md` (verification rationale)
+- `draft/` — Active draft: `opi_main_manuscript.md`; prior scaffold retained as `main_manuscript_scaffold.md` for history
+- `tables/` — OPI framework tables (opi_task_taxonomy, opi_weight_profiles, opi_vigilance_latency_models); retained prior tables for context
+- `figures/` — Figure plan `figure_plan_opi.md`; existing SVG assets serve as source material for adaptation
+- `references/` — `seed_references.md` (23 cited + pool, all DOI-verified) and `mcp_research_notes.md`
+- `supplement/` — `submission_support_appendix.md` (needs OPI terminology refresh), `supplement_outline.md`
+- `evidence/` — `evidence_matrix.md`, `validation_story.md`, `core_modules_scope.md`, `compliance_and_transparency_map.md`
+- `submission/` — `cover_letter_applied_ergonomics.md`, `highlights.md`
 
 ## High-value files (read order for new agents)
 
-1. `outline/manuscript_outline.md` — Thesis, tables/figures index, submission-candidate notes  
-2. `evidence/validation_story.md` — What can be claimed vs verified  
-3. `draft/main_manuscript_scaffold.md` — Full draft  
-4. `tables/model_layers_and_evidence_tiers.md` — Table 6 / model spine  
-5. `supplement/submission_support_appendix.md` — Reviewer-facing extensions  
-6. `.cursor/plans/scientific_paper_plan_66be74c8.plan.md` — Historical plan and “next writing targets” (do not treat as sole source of truth if this README disagrees; prefer repo state)
+1. `outline/manuscript_outline.md` — thesis, table/figure index, venue choice
+2. `outline/novelty_and_venue_2026-04-21.md` — literature verification and venue rationale
+3. `evidence/validation_story.md` — what can be claimed vs. verified
+4. `draft/opi_main_manuscript.md` — active draft
+5. `tables/opi_weight_profiles.md` — OPI formulation and per-task weights
+6. `submission/cover_letter_applied_ergonomics.md` — venue framing and contribution statement
 
 ## Relation to the rest of the repo
 
-- Service ports and run commands: root `AGENTS.md`  
-- Application behavior and features: `docs/Manual.md`, `WARP.md`  
+- Service ports and run commands: root `AGENTS.md`
+- Application behaviour and features: `docs/Manual.md`, `WARP.md`
+- Framework derivation source: `analysis/operational_performance_indicators_research.md`
 - Manuscript milestones: root `CHANGELOG.md` (Documentation entries)
 
 ---
 
-*Last expanded: 2026-04-08 — agent orientation and Q1 roadmap.*
+*Last updated: 2026-04-21 — OPI reframe for Applied Ergonomics, branch `q1-hf-opi-reframe`.*
