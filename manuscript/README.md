@@ -23,7 +23,7 @@ Draft submission package complete on branch `q1-hf-opi-reframe`: IMRaD draft (~5
 | Novelty verification vs. 2022–2026 HF literature | Done | `outline/novelty_and_venue_2026-04-21.md` |
 | Evidence matrix and validation-story reframe | Done | `evidence/evidence_matrix.md`, `evidence/validation_story.md` |
 | OPI tables (taxonomy, weights, vigilance/latency) | Done | `tables/opi_task_taxonomy.md`, `tables/opi_weight_profiles.md`, `tables/opi_vigilance_latency_models.md` |
-| Main draft (IMRaD, Applied Ergonomics) | Done, updated 2026-04-21 to reflect in-platform PVT + Sleep modules | `draft/opi_main_manuscript.md` (~6,900 words) |
+| Main draft (IMRaD, Applied Ergonomics) | Done, updated 2026-04-21 with (a) PVT + Sleep integration pass and (b) novelty / principled-simplicity editorial pass for the doctoral reader — §4.3 expanded to five-paragraph case-for-principled-simplicity | `draft/opi_main_manuscript.md` (~7,700 words) |
 | Seed references (23 cited + pool) | Done, DOI-verified; manuscript body now cites Basner & Dinges 2011, Dinges 1997, Grant 2017, Anwyl-Irvine 2020, Garaizar & Vadillo 2014, Lunsford-Avery 2018, Lee 2025, Schyvens 2024 inline | `references/seed_references.md` + opi_main_manuscript.md References |
 | Figure plan (4 figures) | Done | `figures/figure_plan_opi.md` |
 | Cover letter (Applied Ergonomics) | Done, draft | `submission/cover_letter_applied_ergonomics.md` |
