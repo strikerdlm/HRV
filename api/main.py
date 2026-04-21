@@ -714,6 +714,18 @@ except ImportError as exc:
 
 
 # ---------------------------------------------------------------------------
+# PVT Endpoints
+# ---------------------------------------------------------------------------
+
+try:
+    from api.pvt_endpoints import router as pvt_router
+    app.include_router(pvt_router)
+    _LOGGER.info("PVT endpoints registered")
+except ImportError as exc:
+    _LOGGER.warning(f"Could not load PVT endpoints: {exc}")
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
