@@ -1133,6 +1133,10 @@ class GarminSyncResponse(BaseModel):
         default=0,
         description="Total garmin_daily_metrics rows for user_id after sync attempt.",
     )
+    error_detail: Optional[str] = Field(
+        default=None,
+        description="Machine-readable or truncated SQLite message when save fails.",
+    )
 
 
 @router.post("/garmin/sync/{user_id}", response_model=GarminSyncResponse)
@@ -1157,13 +1161,44 @@ async def sync_garmin_data(
 
         db_path_str = str(get_database_path())
         db = UserDatabase()
-        pre_rows = await asyncio.to_thread(db.count_garmin_daily_metrics, user_id)
+        uid = user_id.strip()
+        pre_rows = await asyncio.to_thread(db.count_garmin_daily_metrics, uid)
+
+        if not uid:
+            return GarminSyncResponse(
+                success=False,
+                records_synced=0,
+                message="user_id is empty; cannot sync.",
+                date_range=None,
+                active_mission=_active_mission_label(),
+                database_path=db_path_str,
+                garmin_rows_for_user=0,
+                error_detail="empty_user_id",
+            )
+
+        profile = await asyncio.to_thread(db.get_user, uid)
+        if profile is None:
+            return GarminSyncResponse(
+                success=False,
+                records_synced=0,
+                message=(
+                    f"No crew profile in this database for user_id={uid!r}. "
+                    "Garmin rows are stored with a FOREIGN KEY to `users`: the profile must exist first. "
+                    "Use the exact user_id from GET /api/users or from Streamlit’s active crew member, "
+                    "or create the user via the API / Mission Control."
+                ),
+                date_range=None,
+                active_mission=_active_mission_label(),
+                database_path=db_path_str,
+                garmin_rows_for_user=pre_rows,
+                error_detail="missing_user_profile",
+            )
 
         # Fetch metrics from Garmin Connect
-        _LOGGER.info(f"Starting Garmin sync for user {user_id}, days={request.days}")
+        _LOGGER.info(f"Starting Garmin sync for user {uid}, days={request.days}")
         records = await asyncio.to_thread(
             fetch_garmin_daily_metrics,
-            user_id,
+            uid,
             request.days,
         )
 
@@ -1183,30 +1218,63 @@ async def sync_garmin_data(
                 active_mission=_active_mission_label(),
                 database_path=db_path_str,
                 garmin_rows_for_user=pre_rows,
+                error_detail=None,
             )
 
         # Save to database (save_garmin_daily_metrics expects a sequence)
+        save_error_text: Optional[str] = None
+        save_exc: Optional[Exception] = None
         try:
             await asyncio.to_thread(db.save_garmin_daily_metrics, records)
             saved_count = len(records)
-        except Exception as save_exc:
-            _LOGGER.warning(f"Failed to save Garmin records: {save_exc}")
+        except Exception as caught:
+            save_exc = caught
+            save_error_text = str(caught).strip()
+            if len(save_error_text) > 480:
+                save_error_text = save_error_text[:480] + "…"
+            _LOGGER.exception(
+                "Garmin SQLite save failed for user_id=%s (%d rows): %s",
+                uid,
+                len(records),
+                save_error_text,
+            )
             saved_count = 0
 
-        post_rows = await asyncio.to_thread(db.count_garmin_daily_metrics, user_id)
+        post_rows = await asyncio.to_thread(db.count_garmin_daily_metrics, uid)
 
-        if saved_count == 0:
+        if saved_count == 0 and records:
+            err_upper = (save_error_text or "").upper()
+            err_lower = (save_error_text or "").lower()
+            if isinstance(save_exc, sqlite3.IntegrityError) or "FOREIGN KEY" in err_upper:
+                friendly = (
+                    "SQLite rejected the insert (FOREIGN KEY). The user_id on each Garmin row must "
+                    "already exist in `users` for this mission database. Confirm Settings → User ID "
+                    "matches a crew profile in this DB (GET /api/users)."
+                )
+            elif "no such column" in err_lower:
+                friendly = (
+                    "SQLite schema mismatch (missing column). Open the app once so UserDatabase can "
+                    "migrate `garmin_daily_metrics`, or replace the DB with a fresh crew copy."
+                )
+            elif "locked" in err_lower or "busy" in err_lower:
+                friendly = (
+                    "Database is locked or busy. Close Streamlit or other writers using the same "
+                    "hrv_users.db; if the file lives under OneDrive, try pausing sync during writes."
+                )
+            else:
+                friendly = (
+                    "Fetched Garmin rows but SQLite save failed. See uvicorn/FastAPI logs for the "
+                    f"full traceback. Summary: {save_error_text or 'unknown error'}"
+                )
             return GarminSyncResponse(
                 success=False,
                 records_synced=0,
-                message=(
-                    "Fetched Garmin rows but SQLite save failed; check server logs and disk permissions. "
-                    f"Garmin rows for this user in DB: {post_rows}."
-                ),
+                message=f"{friendly} Garmin rows for this user in DB: {post_rows}.",
                 date_range=None,
                 active_mission=_active_mission_label(),
                 database_path=db_path_str,
                 garmin_rows_for_user=post_rows,
+                error_detail=save_error_text,
             )
 
         # Get summary
@@ -1220,6 +1288,7 @@ async def sync_garmin_data(
             active_mission=_active_mission_label(),
             database_path=db_path_str,
             garmin_rows_for_user=post_rows,
+            error_detail=None,
         )
     except ImportError as exc:
         _LOGGER.error(f"Garmin Connect module not available: {exc}")
