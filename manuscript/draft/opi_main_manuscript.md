@@ -273,7 +273,9 @@ Dr Diego Malpica MD contributed conceptualisation, methodology, software, formal
 
 ### 6.5 Funding and conflicts of interest
 
-No project-level external funding statement was identified in the repository materials at the time of drafting. This statement will be updated before submission if grant support, institutional sponsorship, or other funding applies. Conflict-of-interest declarations will be confirmed for all authors before submission.
+No project-level external funding supported this work at the time of drafting. If grant support, institutional sponsorship, or other funding applies before acceptance, this section will be updated accordingly.
+
+**Declaration of competing interests.** The author declares no competing financial or non-financial interests related to this manuscript. The author is not currently serving and has not served on the editorial board of *Applied Ergonomics*. For submission via Editorial Manager, the same declaration should be submitted using Elsevier’s declaration-of-interest Word tool or by selecting the portal confirmation that no authors have competing interests, consistent with this statement.
 
 ### 6.6 Acknowledgments
 
@@ -282,6 +284,12 @@ The author acknowledges the open-source scientific Python ecosystem, the Colombi
 ### 6.7 Reporting-guideline positioning
 
 This manuscript is a methodology and reference-implementation paper. The central claims are framework definition, implementation, and illustrative demonstration; the evidence base does not include prospective human-subject outcomes or predictive-accuracy evaluation. Reporting therefore emphasises transparent description of framework components, per-task parameterisation, reference-implementation architecture, and engineering verification. If future versions add empirical validation, adapted STROBE elements will be incorporated, and TRIPOD+AI or CLAIM extensions will apply only to sections making predictive-model claims.
+
+---
+
+## Generative AI and AI-assisted technologies in manuscript preparation
+
+During the preparation of this manuscript the author used AI-assisted tools (including large language-model-based drafting, editing, and research-support workflows under human direction) to assist with structuring, literature cross-checking, prose revision, and formatting. The author reviewed, edited, and verified all scientific and technical content and takes full responsibility for the integrity and accuracy of the published work. Basic grammar and spelling checks alone would not require this statement under Elsevier policy; the above reflects substantive AI-assisted preparation as required by the [Elsevier generative AI policy](https://www.elsevier.com/about/policies/publishing-ethics).
 
 ---
 
