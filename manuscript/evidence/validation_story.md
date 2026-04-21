@@ -1,160 +1,129 @@
 # Author: Dr Diego Malpica MD
 
-## Validation Story
+## Validation Story (OPI methodology paper)
 
-This document defines the evidence posture for the manuscript so that the Methods and Results sections remain defensible.
+This document defines the evidence posture for the manuscript so that Methods, Results, and Discussion sections remain defensible under Q1 HF review. Supersedes the prior systems-and-software validation story.
 
 ## Recommended manuscript stance
 
-Treat the paper as a **translational systems and software manuscript** with:
+Treat the paper as a **methodology + reference implementation** contribution with:
 
-- strong implementation evidence,
-- meaningful engineering verification across several operational paths,
-- selective use of exploratory quantitative artifacts,
-- explicit acknowledgment that integrated human-subject validation is still incomplete.
+- a theoretically grounded framework definition (OPI components + per-task weight profiles + vigilance/latency penalties),
+- inspectable reference code with engineering verification across the fusion pathway,
+- a single illustrative worked example demonstrating the pipeline end-to-end,
+- explicit acknowledgement that field validation in operator populations is the next study.
 
-The paper should therefore distinguish between **software verification**, **exploratory empirical outputs**, and **future formal validation**.
+The paper should not claim diagnostic accuracy, outcome benefit, clinical deployment readiness, or validated numerical parity with any external HRV or fatigue package.
 
 ## Evidence tiers
 
 | Evidence tier | Current repository status | Can it appear in Results? | How to frame it |
 | --- | --- | --- | --- |
-| Architecture and implementation | Strong | Yes | Describe as implemented system capabilities with code anchors. |
-| Unit and integration tests | Strong for several operational modules | Yes | Report as engineering verification, not as clinical validation. |
-| Exported exploratory analyses | Present but not yet fully curated | Cautiously | Use only if provenance, cohort description, and analysis protocol can be documented. |
-| External numerical agreement against a reference HRV package | Not yet assembled for the integrated platform | No, unless added | Move to limitations or future validation. |
-| Prospective or retrospective human-subject validation of the full platform | Not identified as manuscript-ready in the repo | No | Requires protocol, endpoints, and ethics details. |
-| Regulatory certification or compliance evidence | Not present | No | Discuss intended alignment and deployment pathway only. |
+| Framework definition (OPI equations, taxonomy, weights) | Strong (HF literature-grounded) | Yes | Describe as theory-derived framework; reference source literature for each component and weight. |
+| Reference implementation | Strong | Yes | Describe as implemented software with code anchors; include repo URL and frozen release identifier. |
+| Engineering verification of fusion logic | Strong for several modules | Yes | Report as software verification, not as operational validation. |
+| Illustrative worked example (single 128-min recording) | Present | Yes, with explicit illustration framing | Treat as framework-instantiation demonstration, not as inferential data. |
+| External numerical agreement with reference HRV package | Not assembled | No, explicitly out of scope | Move to limitations and future validation. |
+| External benchmarking vs. alternative operator-readiness frameworks | Not assembled | No | Position as future work; cite Stevens 2022, Feng 2018, Vogl 2025 as candidate comparators. |
+| Prospective or retrospective human-subject validation | Not assembled | No | Requires protocol, endpoints, and ethics documentation. |
+| Regulatory certification or compliance evidence | None | No | Discuss intended alignment with NASA-STD-3001 and ICAO Doc 9966 only; never as certification. |
 
 ## What is already strong enough to report
 
-### 1. Platform implementation
+### 1. OPI framework formulation
 
-The repository clearly supports a system-level Methods and Results section around:
+The repository's `analysis/operational_performance_indicators_research.md` contains the full framework derivation:
 
-- the shared Python analysis core,
-- the Next.js frontend and FastAPI orchestration layer,
-- the secondary Streamlit interfaces retained in the repository,
-- the user-profile persistence layer,
-- the SAFTE/circadian model layer,
-- the scheduling and readiness fusion logic,
-- the space-weather ingest, propagation, and alignment modules,
-- the export and reproducibility utilities.
+- Four-component weighted fusion for manned aviation (`OPI_task = w1·SAFTE_eff·Task_mod + w2·HRV_recovery + w3·Autonomic_reserve - Stress_penalty - Task_complexity_penalty`)
+- Extended formulation for UAS (`OPI_UAS = w1·SAFTE_eff + w2·Vigilance_adj + w3·HRV_recovery + w4·Attention_capacity - Latency_penalty - Multi_vehicle_penalty`)
+- Per-task weight profiles for 10 manned and 7 UAS task categories
+- Task-complexity modifiers (0.70-1.0 depending on conditions)
+- Readiness categories (GO / GO-Monitor / CAUTION / NO-GO) with score bands
+- Theoretical grounding in MRT (Wickens 2002, 2008), SAFTE (Hursh 2004), vigilance decrement (Warm 2008), latency (Chen 2007), allostatic load (McEwen 1998), cognitive readiness (Fletcher 2019), Yerkes-Dodson (Teigen 1994)
 
-These claims are architecture claims and are directly supported by repository files.
+These are all directly supported by the framework document and prior HF literature. They can be reported in Methods as theory-derived framework specifications.
 
-### 2. Engineering verification
+### 2. Reference implementation
 
-The test surface is strongest for the modules that matter most to an operational paper:
+The Python backend (`app/fatigue_calculator/safte_model.py`, `app/hrv_core.py`, `app/scheduling_core.py`, `app/frms.py`, `app/frms_v2.py`) implements the OPI components. The TypeScript client mirror (`frontend/src/lib/safte-model.ts`) reproduces the SAFTE equations for responsive operational displays. The FastAPI orchestration layer (`api/main.py`, `api/research_endpoints.py`) exposes the pathway for web-delivered consumption. The repository is open-source under the MIT license at https://github.com/strikerdlm/HRV.
 
-- `tests/test_scheduling_core.py`
-- `tests/test_frms.py`
-- `tests/test_frms_v2.py`
-- `tests/test_fatigue_integration.py`
-- `tests/test_space_weather_impact.py`
-- `tests/test_noaa_cache.py`
-- `tests/test_space_weather_alignment.py`
-- `tests/test_comprehensive_modules.py`
-- `tests/test_api_user_profile_normalization.py`
+### 3. Engineering verification
 
-This supports a Results subsection centered on software verification, deterministic rule behavior, and model-layer implementation.
+The repository's test surface verifies representative behaviours across the OPI pathway:
 
-### 3. Quantitative artifacts that may be usable
+- `tests/test_scheduling_core.py` — readiness fusion and task-complexity behaviour
+- `tests/test_frms.py`, `tests/test_frms_v2.py` — FRMS and SAFTE-adjacent logic
+- `tests/test_fatigue_integration.py` — fatigue component integration
+- `tests/test_comprehensive_modules.py` — broader statistical and charting modules
+- `tests/test_api_user_profile_normalization.py` — API input normalisation
+- `tests/test_research_windowed_endpoint.py` — endpoint behaviour (with monkeypatched HRV inner calls)
+- `tests/test_noaa_cache.py`, `tests/test_space_weather_impact.py`, `tests/test_space_weather_alignment.py` — environmental modifier components
 
-The repository contains exported correlation outputs such as:
+This supports a Results subsection on engineering verification of the fusion pathway, bounded to software behaviour.
 
-- `analysis/noaa_batch_correlations_20251124T020423Z.csv`
-- `analysis/noaa_batch_correlations_20251123T224453Z.csv`
+### 4. Illustrative worked example (once executed)
 
-These show that the code can generate lagged correlation outputs with confidence intervals and sample sizes. However, they should enter the manuscript only if the underlying study context is made explicit:
+The single 128-minute HRV recording in `analysis/hrv_report_complete_20251124T020445Z.md` (8,553 RR intervals, 2025-11-23) supports an illustrative worked example: the pipeline can be run end-to-end (RR → HRV metrics → SAFTE effectiveness estimate → OPI composite) under three hypothetical task scenarios (e.g., IMC approach, UAS ISR sortie, carrier landing) to demonstrate how the same physiological input yields task-specific readiness outputs.
 
-- who or what generated the observations,
-- how recordings were selected,
-- what preprocessing rules were used,
-- whether multiple files or participants were pooled,
-- what the intended inferential scope is.
-
-Without that provenance, these artifacts are best treated as **demonstrations of implemented analysis capability** rather than definitive scientific findings.
+This is standard HF methodology-paper practice: frame the example as a framework instantiation, not as inferential data. Explicitly state in Methods and Results that the worked example does not generalise beyond the single recording.
 
 ## Important caveats for the Results section
 
-### 1. Core HRV numerics are implemented but not yet externally benchmarked
+### 1. The worked example is not an empirical test
 
-`app/hrv_core.py` is central to the paper, but the repository does not yet expose a manuscript-ready benchmark against a trusted reference package or public test vectors. The manuscript can therefore describe:
+The single-subject 128-minute recording demonstrates the pipeline and produces illustrative numbers. It does not test whether the OPI predicts operator outcomes. All Results prose must make this explicit.
 
-- what the engine computes,
-- how it is integrated,
-- how it is parameterized,
+### 2. OPI weights are theory-derived, not empirically calibrated
 
-but should not claim proven numerical equivalence to an external gold standard unless that benchmark is added.
+Per-task weights (`w1`, `w2`, `w3`, `w4`) are derived from HF literature on task demands and Multiple Resource Theory. They have not been optimised against field performance data. The Methods section must trace each weight to its source references.
 
-### 2. Endpoint tests are stronger than some underlying analytic benchmarks
+### 3. HRV numerics are implemented but not externally benchmarked
 
-`tests/test_research_windowed_endpoint.py` verifies endpoint behavior and data plumbing, but it explicitly monkeypatches `hrv_core.compute_windowed_hrv` during the test setup. This means the endpoint pathway is verified more directly than the underlying numerical implementation.
+`app/hrv_core.py` is part of the reference implementation. External numerical agreement with Kubios, pyHRV, or NeuroKit2 is explicitly out of scope for this paper. This is stated as a limitation, not hidden.
 
-That is still valuable engineering evidence, but the manuscript should phrase it accurately.
+### 4. Endpoint tests are stronger than some underlying analytic benchmarks
 
-### 3. Client-side model mirroring is not independent validation
+`tests/test_research_windowed_endpoint.py` verifies endpoint plumbing while monkeypatching `hrv_core.compute_windowed_hrv`. This is valuable engineering evidence for the orchestration layer but not evidence about HRV numerical correctness. Describe accurately.
 
-The repository includes a TypeScript SAFTE implementation under `frontend/src/lib/safte-model.ts` that mirrors the canonical Python implementation in `app/fatigue_calculator/safte_model.py`. This is valuable evidence for architectural consistency between the Node-first client and backend model stack. However, it should not be treated as a second validation source. The manuscript should describe the mirrored implementation as consistency-oriented delivery logic unless explicit parity testing is added.
+### 5. Client-side SAFTE mirror is architectural consistency
 
-### 4. Exploratory correlation outputs are not the same as validated scientific findings
+`frontend/src/lib/safte-model.ts` is a TypeScript re-implementation of the Python canonical SAFTE model. It serves responsive operational displays. It is not an independent validation layer.
 
-The presence of effect sizes, confidence intervals, and p-values in exported CSV files does not by itself establish a publishable validation study. The manuscript must first document:
+### 6. Environmental modifiers are optional and non-causal
 
-- the analytical population,
-- the unit of analysis,
-- time-alignment rules,
-- missing-data handling,
-- multiplicity control,
-- and the intended causal or associative interpretation.
+The environmental modifier layer is kept for framework completeness. The existing single-subject HRV↔space-weather correlation CSVs move to Supplementary demonstrations with explicit caveats about within-subject autocorrelation and inflated nominal p-values. No autonomic↔solar causal claim is made.
 
 ## Recommended Results structure
 
-### 3.1 System implementation summary
+### 3.1 Illustrative worked example
 
-Report Node-first delivery, FastAPI orchestration, model layering, and module coupling. This is the strongest Results subsection available today.
+Run the 128-min recording through the OPI pipeline under three hypothetical task scenarios. Present the per-window OPI time-series for each scenario, the resulting readiness-category assignments, and how the task-specific weight profile changes the composite output for identical physiological input. Figure 3 shows this visually. Table 2 provides numerical summary.
 
-### 3.2 Engineering verification
+### 3.2 Engineering verification of the OPI fusion pathway
 
-Summarize test-backed evidence by domain:
+Summarise test-backed behaviour by OPI component: readiness fusion orchestration, SAFTE/FRMS logic, API normalisation and endpoint behaviour. Table 5 provides the coverage map. Explicitly delimit this as software verification, not operational validation.
 
-- readiness fusion and IHPI scoring,
-- SAFTE/fatigue and FRMS logic,
-- space-weather ingest, propagation, and alignment,
-- API normalization and Node-client-facing endpoint behavior,
-- export and reporting helpers.
+### 3.3 Reproducibility and availability
 
-### 3.3 Reproducibility and operational artifacts
-
-Report:
-
-- repository URL,
-- branch and commit hash,
-- environment expectations,
-- export utilities,
-- logging and audit infrastructure.
-
-### 3.4 Optional exploratory analysis vignette
-
-Include only if provenance can be documented clearly. If not, move these materials to Supplementary Demonstrations or omit from the main Results section.
+Report repository URL, license, environment specifications, frozen release identifier (once issued), and export utilities. Cite the reproducibility literature (Sandve 2013) for reporting-guideline alignment.
 
 ## Claims that should remain out of scope
 
 Do not claim any of the following without new evidence:
 
-- diagnostic accuracy,
-- patient or crew outcome improvement,
-- real-world deployment effectiveness,
-- fairness or subgroup robustness,
-- regulatory clearance,
-- generalizable clinical benefit across populations,
-- validated numerical parity with external reference software.
+- diagnostic or predictive accuracy of the OPI against operator outcomes,
+- performance or safety benefits of OPI-informed decisions,
+- validated numerical parity of the HRV engine with reference packages,
+- validated parity between Python canonical SAFTE and TypeScript client mirror,
+- generalisability of the worked example beyond the single recording,
+- causal inference about environmental modifiers on autonomic state,
+- regulatory clearance, fitness-for-duty determination, or certification.
 
-## Minimal evidence package needed for a stronger future paper
+## Minimal evidence package needed for a follow-up validation paper
 
-1. Reference benchmarking for `app/hrv_core.py` against known HRV outputs.
-2. A curated retrospective or prospective dataset with explicit cohort and protocol details.
-3. Study-specific ethics approval and consent materials if human data are reported.
-4. A tagged software release or archived DOI corresponding to the reported version.
-5. A small set of benchmark tasks linking operational use cases to measurable outcomes.
+1. A multi-subject field dataset with operator performance outcomes (simulator or operational) for the target task categories.
+2. Ethics approval and consent documentation.
+3. External numerical benchmarking of `app/hrv_core.py` against reference HRV software (Kubios, pyHRV, NeuroKit2).
+4. External benchmarking of the OPI composite against alternative frameworks (Stevens 2022 CMP, Feng 2018 logistic, Vogl 2025 SVM).
+5. Sensitivity analysis of the per-task weights against field performance variance.
+6. A tagged release or Zenodo DOI matched to the reported validation version.
