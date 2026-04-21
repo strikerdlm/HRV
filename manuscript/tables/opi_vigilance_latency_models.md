@@ -13,7 +13,7 @@ This table specifies the two UAS-specific OPI components that have no direct ana
 Vigilance capacity is modelled as an exponential decay toward an asymptotic minimum over time-on-task (Warm, Parasuraman & Matthews, 2008):
 
 ```
-Vigilance_capacity(t) = V0 · e^(−λ · t) + Vmin
+Vigilance_capacity(t) = (V0 − Vmin) · e^(−λ · t) + Vmin
 ```
 
 where
@@ -26,12 +26,12 @@ For OPI use, `Vigilance_capacity(t)` is normalised to the `[0, 100]` scale and s
 
 ### Task-specific decay constants
 
-| UAS task type | λ (per hour) | V0 | Vmin | Time to 80 % of V0 | Recommended maximum sortie duration |
-| --- | --- | --- | --- | --- | --- |
-| High-event ISR | 0.08 | 100 | 70 | ≈ 2.5 h | 2.0 h |
-| Low-event ISR | 0.12 | 100 | 65 | ≈ 1.8 h | 1.5 h |
-| Multi-vehicle supervisory | 0.15 | 100 | 60 | ≈ 1.3 h | 1.0 h |
-| Ground teleoperation | 0.10 | 100 | 70 | ≈ 2.0 h | 1.5 h |
+| UAS task type | λ (per hour) | V0 | Vmin | Recommended maximum sortie duration |
+| --- | --- | --- | --- | --- |
+| High-event ISR | 0.08 | 100 | 70 | 2.0 h |
+| Low-event ISR | 0.12 | 100 | 65 | 1.5 h |
+| Multi-vehicle supervisory | 0.15 | 100 | 60 | 1.0 h |
+| Ground teleoperation | 0.10 | 100 | 70 | 1.5 h |
 
 Notes:
 
@@ -41,27 +41,20 @@ Notes:
 
 ### Worked example
 
-ISR operator 1.5 h into a high-event sortie:
+Low-event ISR operator 1.5 h into sortie:
 
 ```
-Vigilance_capacity(1.5) = 100 · e^(−0.08 · 1.5) + 70
-                        = 100 · 0.8869 + 70   [note: formula in practice uses (V0 − Vmin) · decay]
-```
-
-Interpreted with the compositional form `Vigilance = (V0 − Vmin) · e^(−λt) + Vmin`:
-
-```
-Vigilance_capacity(1.5) = (100 − 70) · e^(−0.12) + 70
-                        = 30 · 0.8869 + 70
-                        = 96.6
+Vigilance_capacity(1.5) = (100 − 65) · e^(−0.12 · 1.5) + 65
+                        = 35 · 0.8353 + 65
+                        = 94.2
 ```
 
 At 3 hours:
 
 ```
-Vigilance_capacity(3.0) = (100 − 70) · e^(−0.24) + 70
-                        = 30 · 0.7866 + 70
-                        = 93.6
+Vigilance_capacity(3.0) = (100 − 65) · e^(−0.12 · 3.0) + 65
+                        = 35 · 0.6977 + 65
+                        = 89.4
 ```
 
 The compositional form is preferred in implementation because it bounds the output cleanly to `[Vmin, V0]`.
@@ -137,9 +130,9 @@ Rationale: the operator's attention capacity is assumed to share across vehicles
 
 ## 4. Implementation notes
 
-- Vigilance decay integrates with the user-profile layer (`app/user_profile_tab.py`, `app/user_database.py`) so that previous time-on-task carries forward across sessions.
-- Latency penalty requires external input from the control-loop telemetry. In absence of this input, the default assumption is `latency_ms = 50` (i.e., negligible penalty), with a warning emitted.
-- Multi-vehicle penalty is inferred from the active-vehicle count in the scheduling module (`app/scheduling_core.py`) and can be overridden by the operator-facing UI.
+- In the current repository, the vigilance and latency formulas are instantiated in `analysis/opi_worked_example.py` and documented in `analysis/operational_performance_indicators_research.md`; they are not yet exposed as a separately tested operational API pathway.
+- Latency penalty requires external input from control-loop telemetry. In the worked example, latency is passed explicitly as a scenario parameter.
+- Multi-vehicle penalty is specified at the framework level and can be applied once active-vehicle count is available to the operational pathway.
 
 ## Cross-reference
 
