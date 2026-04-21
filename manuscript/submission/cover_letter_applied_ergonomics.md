@@ -1,25 +1,30 @@
 # Cover Letter — Applied Ergonomics submission
 
-*Draft. Finalise author metadata and institutional address before submission. Placeholder institutional details are marked `[PLACEHOLDER]`.*
-
 ---
 
-Dr Diego Malpica MD
-Aerospace Medicine Specialist
-Bogotá, Colombia
-dlmalpica@yahoo.com
+**Corresponding author (on behalf of all authors):**  
+**Dr. Diego L. Malpica MD** (Principal Investigator)  
+Aerospace Medicine — Subdirectorate of Aerospace Sciences  
+Direction of Aerospace Medicine (DIMAE)  
+Colombian Aerospace Force (Fuerza Aeroespacial Colombiana)  
+**E-mail:** diego.malpica@fac.mil.co  
+**ORCID:** https://orcid.org/0000-0002-2257-4940  
+
+**Co-author:** Ingrid Xiomara Bejarano Cifuentes — Researcher, CITAE, Colombian Aerospace Force — ingrid.bejarano@fac.mil.co — https://orcid.org/0000-0002-7981-2356  
+
+**Postal address (corresponding):** Direction of Aerospace Medicine (DIMAE), Colombian Aerospace Force, Bogotá D.C., Colombia *(add street/building and postal code if the journal requires a full mailing line)*  
 
 Date: [submission date]
 
 ---
 
-To the Editorial Office,
-*Applied Ergonomics*
+To the Editorial Office,  
+*Applied Ergonomics*  
 Elsevier Ltd.
 
 Dear Editor-in-Chief,
 
-I am pleased to submit for your consideration the manuscript **"Task-calibrated Operational Performance Indicators for aviation and unmanned aircraft system operators: a biomathematical framework integrating SAFTE fatigue, heart-rate variability, and cognitive-load theory, with open-source reference implementation"** as a Research Article for *Applied Ergonomics*.
+On behalf of my co-author and myself, I am pleased to submit for your consideration the manuscript **"Task-calibrated Operational Performance Indicators for aviation and unmanned aircraft system operators: a biomathematical framework integrating SAFTE fatigue, heart-rate variability, and cognitive-load theory, with open-source reference implementation"** as a Research Article for *Applied Ergonomics*.
 
 ### What the paper does
 
@@ -44,11 +49,11 @@ The manuscript explicitly does **not** claim validated operator outcomes, diagno
 
 ### Suggested reviewers
 
-(Optional; list to be finalised after internal review. Candidates familiar with the adjacent literature include researchers who have worked on composite pilot workload (Feng C., et al.; Military Psychology and NATO AFRL lineages including Stevens C. A., Morris M. B.), UAS operator cognitive-load assessment (Molloy O., Eves G.), cockpit physiological monitoring (Dehais F., ISAE-SUPAERO), and SAFTE/fatigue-management methodology (Hursh S. R., Devine J. K.). A formal list with ORCIDs and affiliations will be prepared.)
+(Optional; list to be finalised after internal review. Candidates familiar with the adjacent literature include researchers who have worked on composite pilot workload (Feng C., et al.; Military Psychology and NATO AFRL lineages including Stevens C. A., Morris M. B.), UAS operator cognitive-load assessment (Molloy O., Eves G.), cockpit physiological monitoring (Dehais F., ISAE-SUPAERO), and SAFTE/fatigue-management methodology (Hursh S. R., Devine J. K.). A formal list with institutional e-mails, ORCIDs, and diverse geography — per journal instructions — will be entered in Editorial Manager.)
 
 ### Not under consideration elsewhere
 
-This work is original and is not under consideration by any other journal. No portion has been previously published. All authors have approved the submission.
+This work is original and is not under consideration by any other journal. No portion has been previously published. **All authors** have approved the submission.
 
 ### Data and code availability
 
@@ -56,15 +61,17 @@ Code, tables, and all manuscript support files are publicly accessible at `https
 
 ### Conflicts of interest
 
-(To be completed before submission.)
+The authors declare no competing financial or non-financial interests in relation to this manuscript. Neither author is serving or has served on the editorial board of *Applied Ergonomics*. The same declaration will be supplied on the submission portal via Elsevier’s declaration-of-interest tool (Word upload) or the equivalent “no competing interests” confirmation, as required.
 
-Thank you for considering this manuscript for *Applied Ergonomics*. I am available for any questions or clarifications at the contact address above.
+Thank you for considering this manuscript for *Applied Ergonomics*. I am available for any questions or clarifications at **diego.malpica@fac.mil.co**.
 
 Sincerely,
 
-**Dr Diego Malpica MD**
-Aerospace Medicine Specialist
-[PLACEHOLDER — institutional affiliation]
-[PLACEHOLDER — ORCID]
-Bogotá, Colombia
-dlmalpica@yahoo.com
+**Dr. Diego L. Malpica MD**  
+Principal Investigator  
+Aerospace Medicine — Subdirectorate of Aerospace Sciences  
+Direction of Aerospace Medicine (DIMAE)  
+Colombian Aerospace Force  
+Bogotá D.C., Colombia  
+diego.malpica@fac.mil.co  
+ORCID: https://orcid.org/0000-0002-2257-4940  
