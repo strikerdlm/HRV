@@ -1042,8 +1042,10 @@ async def get_latest_garmin_metrics(user_id: str) -> GarminMetrics:
             respiration_sleep=latest.avg_respiration_sleep,
             vo2max=None,  # Not stored in GarminDailyMetrics
             sleep_duration_hours=latest.sleep_duration_hours,
-            sleep_deep_minutes=None,  # Not stored in GarminDailyMetrics
-            sleep_rem_minutes=None,  # Not stored in GarminDailyMetrics
+            sleep_deep_minutes=latest.sleep_deep_minutes,
+            sleep_rem_minutes=latest.sleep_rem_minutes,
+            sleep_light_minutes=latest.sleep_light_minutes,
+            sleep_awake_minutes=latest.sleep_awake_minutes,
             sleep_efficiency=latest.sleep_efficiency,
             sleep_score=int(latest.sleep_score) if latest.sleep_score else None,
             body_battery_high=int(latest.body_battery_charge) if latest.body_battery_charge else None,
@@ -1083,6 +1085,10 @@ async def get_garmin_history(
                 respiration_awake=m.avg_respiration_awake,
                 respiration_sleep=m.avg_respiration_sleep,
                 sleep_duration_hours=m.sleep_duration_hours,
+                sleep_deep_minutes=m.sleep_deep_minutes,
+                sleep_rem_minutes=m.sleep_rem_minutes,
+                sleep_light_minutes=m.sleep_light_minutes,
+                sleep_awake_minutes=m.sleep_awake_minutes,
                 sleep_efficiency=m.sleep_efficiency,
                 sleep_score=int(m.sleep_score) if m.sleep_score else None,
                 body_battery_high=int(m.body_battery_charge) if m.body_battery_charge else None,
@@ -1110,11 +1116,23 @@ class GarminSyncRequest(BaseModel):
 
 class GarminSyncResponse(BaseModel):
     """Garmin sync response."""
-    
+
     success: bool
     records_synced: int
     message: str
     date_range: Optional[str] = None
+    active_mission: str = Field(
+        default="",
+        description="HRV_ACTIVE_MISSION value used for SQLite path (align with Streamlit).",
+    )
+    database_path: str = Field(
+        default="",
+        description="Resolved crew mission database file for this sync.",
+    )
+    garmin_rows_for_user: int = Field(
+        default=0,
+        description="Total garmin_daily_metrics rows for user_id after sync attempt.",
+    )
 
 
 @router.post("/garmin/sync/{user_id}", response_model=GarminSyncResponse)
@@ -1123,17 +1141,24 @@ async def sync_garmin_data(
     request: GarminSyncRequest = GarminSyncRequest(),
 ) -> GarminSyncResponse:
     """Sync Garmin Connect data for a user.
-    
+
     Requires GARMIN_EMAIL and GARMIN_PASSWORD environment variables to be set.
     """
     try:
         from garmin_connect_service import (
             fetch_garmin_daily_metrics,
-            GarminAuthError,
             summarize_garmin_daily,
         )
-        from user_database import UserDatabase
-        
+        from user_database import UserDatabase, get_database_path
+
+        def _active_mission_label() -> str:
+            raw = str(os.environ.get("HRV_ACTIVE_MISSION", "")).strip()
+            return raw if raw else "Mission 1"
+
+        db_path_str = str(get_database_path())
+        db = UserDatabase()
+        pre_rows = await asyncio.to_thread(db.count_garmin_daily_metrics, user_id)
+
         # Fetch metrics from Garmin Connect
         _LOGGER.info(f"Starting Garmin sync for user {user_id}, days={request.days}")
         records = await asyncio.to_thread(
@@ -1141,31 +1166,60 @@ async def sync_garmin_data(
             user_id,
             request.days,
         )
-        
+
         if not records:
+            hint = (
+                "Garmin returned no daily rows for this date range. "
+                "If Streamlit already synced data, use the same profile user_id (UUID) here "
+                "and the same active mission as Streamlit (see active_mission / database_path)."
+            )
+            if pre_rows > 0:
+                hint += f" This database already has {pre_rows} Garmin row(s) for this user_id — try Refresh or increase sync days."
             return GarminSyncResponse(
                 success=True,
                 records_synced=0,
-                message="No new metrics found from Garmin Connect",
+                message=hint,
+                date_range=None,
+                active_mission=_active_mission_label(),
+                database_path=db_path_str,
+                garmin_rows_for_user=pre_rows,
             )
-        
+
         # Save to database (save_garmin_daily_metrics expects a sequence)
-        db = UserDatabase()
         try:
             await asyncio.to_thread(db.save_garmin_daily_metrics, records)
             saved_count = len(records)
         except Exception as save_exc:
             _LOGGER.warning(f"Failed to save Garmin records: {save_exc}")
             saved_count = 0
-        
+
+        post_rows = await asyncio.to_thread(db.count_garmin_daily_metrics, user_id)
+
+        if saved_count == 0:
+            return GarminSyncResponse(
+                success=False,
+                records_synced=0,
+                message=(
+                    "Fetched Garmin rows but SQLite save failed; check server logs and disk permissions. "
+                    f"Garmin rows for this user in DB: {post_rows}."
+                ),
+                date_range=None,
+                active_mission=_active_mission_label(),
+                database_path=db_path_str,
+                garmin_rows_for_user=post_rows,
+            )
+
         # Get summary
         summary = summarize_garmin_daily(records)
-        
+
         return GarminSyncResponse(
             success=True,
             records_synced=saved_count,
             message=f"Successfully synced {saved_count} days of Garmin data",
             date_range=summary.get("dates"),
+            active_mission=_active_mission_label(),
+            database_path=db_path_str,
+            garmin_rows_for_user=post_rows,
         )
     except ImportError as exc:
         _LOGGER.error(f"Garmin Connect module not available: {exc}")
