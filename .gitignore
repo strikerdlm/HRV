@@ -222,6 +222,11 @@ plots_output/
 *.png
 *.jpg
 *.pdf
+# ...but keep manuscript figures (publication artefacts)
+!manuscript/figures/*.pdf
+!manuscript/figures/*.png
+!manuscript/figures/*.svg
+!manuscript/figures/*.jpg
 
 # User data directory (contains sensitive physiological data)
 data/
