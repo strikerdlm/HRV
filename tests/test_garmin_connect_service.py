@@ -28,6 +28,10 @@ def test_fetch_garmin_daily_metrics_with_stub(monkeypatch) -> None:
                 "overallScore": 78,
                 "sleepStartTimestampGMT": start,
                 "sleepEndTimestampGMT": end,
+                "deepSleepSeconds": 90 * 60,
+                "remSleepSeconds": 100 * 60,
+                "lightSleepSeconds": 200 * 60,
+                "awakeSleepSeconds": 30 * 60,
             }
 
         def get_all_day_stress(self, day_iso: str):
@@ -69,6 +73,10 @@ def test_fetch_garmin_daily_metrics_with_stub(monkeypatch) -> None:
     assert rec.sleep_efficiency == 0.92
     assert rec.sleep_score == 78
     assert rec.sleep_start_utc and rec.sleep_end_utc
+    assert rec.sleep_deep_minutes == 90
+    assert rec.sleep_rem_minutes == 100
+    assert rec.sleep_light_minutes == 200
+    assert rec.sleep_awake_minutes == 30
     assert rec.hrv_rmssd_ms == 55
     assert rec.hrv_sdnn_ms == 88
     assert rec.avg_spo2 == 97
