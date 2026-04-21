@@ -1,5 +1,7 @@
 # Author: Dr Diego Malpica MD
 
+> Legacy scaffold retained for archive and planning only. The active submission draft is `draft/opi_main_manuscript.md`. Do not use this file as the manuscript source without an explicit reframing pass.
+
 ## Title
 
 Mission Control - Flight Surgeon: an open-source biomathematical platform for HRV, fatigue-circadian modeling, and aerospace readiness
