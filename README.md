@@ -64,38 +64,24 @@ Most HRV tools do one thing: compute RMSSD and a few frequency-domain metrics. M
 
 ## Architecture Overview
 
-Mission Control - Flight Surgeon has two interfaces that share the same Python analysis core:
+> **Primary interface (2026 →): Next.js + FastAPI.** The TypeScript/Next.js frontend over the FastAPI backend is the **main** application for all new development and deployment. All new features (including the Operational Performance Indicator framework, the in-platform Psychomotor Vigilance Task, the research-grade HRV endpoints, and the Q1 manuscript submission package) are built on this stack. The legacy Streamlit interface remains in the repository as a secondary research workbench for single-user/local workflows but receives only maintenance fixes — new features land on Next.js + FastAPI first.
 
-### The Streamlit Application (Research & Clinical Workflows)
+Mission Control - Flight Surgeon is organised around one Python analysis core served through two interfaces:
 
-The original interface, built with [Streamlit](https://streamlit.io), is a **full-featured research workbench** with 20+ interactive tabs covering every aspect of HRV analysis, circadian physiology, fatigue prediction, and space weather monitoring. It is ideal for:
+### The TypeScript/Next.js Frontend + FastAPI Backend (primary — modern UI, production deployment)
 
-- Exploratory data analysis and research
-- Clinical autonomic assessments
-- Quick data visualization and report generation
-- Single-user or small-team workflows
-
-There are three Streamlit entry points, each tailored to a different use case:
-
-| Entry Point            | File                            | Purpose                                                                   |
-| ---------------------- | ------------------------------- | ------------------------------------------------------------------------- |
-| **Operational**  | `app/operational_app.py`      | Fast clinical workflows, user profiles, lightweight space weather context |
-| **Research**     | `app/research_app.py`         | Full dashboards: HRV analysis, NOAA correlations, ML analytics, all tabs  |
-| **Data Science** | `app/space_weather_ds_app.py` | Single-user space weather data science with latest Streamlit              |
-
-### The TypeScript/Next.js Frontend + FastAPI Backend (Modern UI)
-
-The newer interface, under `frontend/` and `api/`, provides a **modern, responsive web application** built with:
+The main application, under `frontend/` and `api/`, is a **production-grade, responsive web platform** built with:
 
 - **Frontend**: Next.js 14, React, TypeScript, Tailwind CSS, Apache ECharts
-- **Backend**: FastAPI (Python) exposing all HRV analysis modules as REST endpoints
+- **Backend**: FastAPI (Python) exposing all HRV, fatigue, readiness, PVT, and space-weather modules as REST endpoints
+- **Integration target** for the Operational Performance Indicator (OPI) framework, the Psychomotor Vigilance Task module, and the scheduling/readiness pipeline
 
-This architecture is ideal for:
+Suited for:
 
-- Production deployment and multi-user environments
+- Production and multi-user environments
 - Crew scheduling and human performance management
-- Mobile-responsive access
-- Integration with other systems via REST API
+- Mobile-responsive and remote access
+- Integration with external systems via REST API
 
 **Key frontend pages include:**
 
@@ -103,12 +89,33 @@ This architecture is ideal for:
 | ------------------------------- | ----------------------------------------------------------------------------------------- |
 | **Dashboard**             | Crew profiles, space weather widget, IHPI gauges                                          |
 | **Scheduling**            | Activity cards, Go/No-Go indicators, crew management                                      |
-| **Research Hub**          | 21+ dedicated analysis pages including workload, vigilance, and flight-fatigue tooling   |
+| **Operational PVT**       | 3-minute PVT-B pre-flight gate — `/scheduling/pvt`                                        |
+| **Research Hub**          | 21+ dedicated analysis pages including workload, vigilance, and flight-fatigue tooling    |
+| **Research PVT**          | 5-minute PVT with history + variant selector — `/research/pvt`                            |
 | **Ventilatory Threshold** | DFA-alpha1 analysis with publication-quality charts                                       |
 | **Space Weather**         | Real-time Kp, F10.7, solar wind gauges                                                    |
 | **Export**                | Publication-grade reports, CSV/JSON data                                                  |
 
-Both interfaces are **fully independent** — you can run either one or both simultaneously. The Streamlit app connects directly to the SQLite database, while the Next.js frontend communicates through the FastAPI backend.
+### The Streamlit Application (legacy — secondary research workbench)
+
+> ⚠️ **Legacy status.** The Streamlit interface is retained in the repository for single-user / local research workflows and for historical continuity. It remains fully functional and receives bug fixes, but new features (OPI, PVT, …) land on the Next.js + FastAPI stack first. Where a capability exists on both stacks, the Next.js version is canonical.
+
+The original interface, built with [Streamlit](https://streamlit.io), is a full-featured research workbench with 20+ interactive tabs covering HRV analysis, circadian physiology, fatigue prediction, and space weather monitoring. Suited for:
+
+- Exploratory single-user data analysis
+- Clinical autonomic assessments on a local workstation
+- Quick data visualisation and report generation
+- Workflows where launching the full FastAPI + Next.js stack is unnecessary
+
+Three Streamlit entry points remain available:
+
+| Entry Point            | File                            | Purpose                                                                   |
+| ---------------------- | ------------------------------- | ------------------------------------------------------------------------- |
+| **Operational**  | `app/operational_app.py`      | Local clinical workflows, user profiles, lightweight space weather context |
+| **Research**     | `app/research_app.py`         | Full local dashboards: HRV analysis, NOAA correlations, ML analytics       |
+| **Data Science** | `app/space_weather_ds_app.py` | Single-user space weather data science with latest Streamlit              |
+
+Both stacks share the same Python analysis core under `app/`; the Streamlit app talks to SQLite directly, while the Next.js frontend communicates via the FastAPI REST API.
 
 ---
 

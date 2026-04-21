@@ -11,12 +11,20 @@ Physiology Instructor, Colombian Aerospace Force
 Contributing to **AsterPhysiology** Research Initiative
 
 **GitHub Repository:** [https://github.com/strikerdlm/HRV](https://github.com/strikerdlm/HRV)  
-**Version:** 1.17.0  
-**Last Updated:** 2026-02-22
+**Version:** 1.17.2+  
+**Last Updated:** 2026-04-21
 
 ---
 
-This manual provides step-by-step instructions for all features of Mission Control - Flight Surgeon with practical examples, interpretation guidance, and clinical/research best practices.
+> ⚠️ **Primary stack: Next.js + FastAPI (2026 →).** The TypeScript/Next.js frontend over the FastAPI backend is the **canonical application** for all new features: the Operational Performance Indicator (OPI) framework, the in-platform Psychomotor Vigilance Task, the scheduling/readiness pipeline, the research analytics hub, and the Q1 manuscript submission package are all built on this stack.
+>
+> The Streamlit interface described extensively in this manual (tabs, sidebar, `research_app.py`, `operational_app.py`, etc.) is **retained as a legacy research workbench** for single-user and local workflows. It remains fully functional and receives bug fixes, but new features are added to the Next.js + FastAPI stack first. Where a capability exists on both stacks, the Next.js version is the canonical reference.
+>
+> For the primary-stack quickstart (`uvicorn` + `npm run dev`), see `docs/index.md` and the **Getting Started** section of the root `README.md`. For PVT and OPI user guides, see `docs/PVT.md` and the Operational / Research PVT sections below.
+
+---
+
+This manual provides step-by-step instructions for all features of Mission Control - Flight Surgeon. Chapters describing the Streamlit tabs (Overview / Time Series / Frequency / Nonlinear / Windowed / Metrics / Gauges / User Profiles / Scheduling / Circadian / Sleep / etc.) apply to the legacy interface; their content remains useful for local research workflows but is not expected to receive feature expansion. Chapters covering the Operational Performance Indicator, the Psychomotor Vigilance Task, the FastAPI REST surface, and the Next.js frontend routes describe the primary stack.
 
 ---
 
