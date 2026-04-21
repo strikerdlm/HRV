@@ -5982,6 +5982,61 @@ If you're interested in contributing to any of these developments:
 
 ---
 
+## Sleep Module (Garmin-backed)
+
+### Overview
+
+The Sleep module analyses Garmin-derived nightly sleep metrics — duration, efficiency, stage balance, overnight HRV, SpO₂, and respiration — to support both longitudinal research tracking and operational pre-flight readiness gating. Scope is bounded to **metrics available in Garmin daily summaries** (Pending.md Tier A); hypnograms, arousals, fragmentation, and apnea diagnosis are explicitly out of scope. Every visualisation carries "Exploratory — Garmin wellness device; not PSG-diagnostic" per the Lee 2025 and Schyvens 2024 consumer-wearable validation meta-analyses.
+
+### Research dashboard — `/research/sleep`
+
+A chart-first dashboard that assembles eight validated visualisations:
+
+1. **Sleep duration trend** — nightly bars + 7-day rolling mean + 7-9 h target band + 5 h hard-floor dashed line.
+2. **Sleep-debt curve** — 7-night rolling deficit vs 7.5 h target, with 4 h CAUTION and 8 h NO-GO markLines.
+3. **Stage-balance stacked bar** — deep / REM / light / awake minutes per night.
+4. **Latest-night stage pie** — deep, REM, light, awake distribution with deep+REM composite annotated.
+5. **Regularity strip** — bedtime and waketime per night plus Sleep Regularity Index (Lunsford-Avery 2018, DOI 10.1038/s41598-018-32402-5) and bedtime/waketime/midpoint SD in minutes.
+6. **Correlation matrix heatmap** — Tier A pairs × overnight HRV RMSSD (sleep duration / score / efficiency / deep / REM / RHR / SpO₂ / sleep respiration) with Pearson r values displayed and two-sided p + Benjamini-Hochberg FDR-q surfaced via tooltip; grey cells indicate underpowered (n<14) or non-significant.
+7. **Six per-pair scatter plots** — each with OLS regression line and r / p / q caption; colour-coded by significance direction.
+8. **Evidence map card** — per-theme summary with tooltipped PubMed / DOI chips.
+
+Use the **window selector (30 / 60 / 90 / 180 nights)** to trade statistical power for recency. Correlations flagged "Underpowered" when n_nights < 14.
+
+### Operational gate — `/scheduling/sleep`
+
+Pre-flight / shift-check view mirroring the operational PVT gate:
+
+1. **GO / GO_MONITOR / CAUTION / NO-GO decision banner** with icon, guidance, and contributing reasons from `app.sleep_core.operational_sleep_gate`.
+2. Four **KPIs** colour-coded to gate thresholds: last-night hours, 7-night debt, SRI, low-SpO₂ nights (7 d).
+3. Three-panel chart row: **debt gauge** with CAUTION (4 h) and NO-GO (8 h) segmentation; **last-7-night duration bar** with 6 h accept and 5 h floor dashed lines; **SpO₂ screening overview** (never labelled apnea).
+4. 30-night **debt curve** and **decision-detail table** of gate inputs.
+5. Explicit **Garmin vs PSG disclosure card** citing Lee 2025 (DOI 10.5664/jcsm.11460) and Schyvens 2024 (DOI 10.2196/52192) with escalation-to-flight-surgeon guidance for any concerning pattern.
+
+### Gate logic
+
+```
+IF last_night < 5 h            → NO_GO
+ELIF last_night < 6 h          → CAUTION
+ELIF 7-night debt ≥ 8 h        → NO_GO
+ELIF 7-night debt in [4, 8) h  → CAUTION
+ELIF 7-night debt ≥ 2 h        → GO_MONITOR
+IF SRI < 40%                   → escalate to CAUTION
+IF ≥4 low-SpO₂ nights in 7     → escalate to CAUTION (never NO-GO alone)
+IF ≥2 low-SpO₂ nights in 7     → escalate to GO_MONITOR
+ELSE                           → GO
+```
+
+### Language rules
+
+No AHI, RDI, apnea-diagnosis, or any clinical sleep-disorder classification. SpO₂ content is always prefixed with "screening only". Every chart carries the exploratory / wellness-device caveat.
+
+### Further reading
+
+Full platform documentation with the complete DOI-verified reference list, API schema, gate thresholds, and future-work roadmap lives at [`docs/SLEEP.md`](SLEEP.md). The backlog and literature grounding that drove the build is in root-level [`Pending.md`](../Pending.md).
+
+---
+
 ## Psychomotor Vigilance Task (PVT)
 
 ### Overview
