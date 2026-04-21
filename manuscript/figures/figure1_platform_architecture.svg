@@ -1,7 +1,7 @@
 <!-- Author: Dr Diego Malpica MD -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="960" viewBox="0 0 1600 960" role="img" aria-labelledby="title desc">
   <title id="title">Figure 1. Platform architecture</title>
-  <desc id="desc">System architecture showing inputs, shared Python model layers, contextual layers, decision logic, and Node-first delivery surfaces for Mission Control - Flight Surgeon.</desc>
+  <desc id="desc">System architecture showing inputs, shared Python model layers, task-operational modules, decision logic, and web-delivery surfaces for the OPI reference implementation.</desc>
   <defs>
     <style>
       .title { font: 700 30px Arial, Helvetica, sans-serif; fill: #1a1a1a; }
@@ -43,9 +43,9 @@
   <text x="210" y="520" text-anchor="middle" class="body">crew workspace, schedule data</text>
 
   <rect x="95" y="565" width="230" height="90" class="input" />
-  <text x="210" y="600" text-anchor="middle" class="label">Environmental Context</text>
-  <text x="210" y="625" text-anchor="middle" class="body">NOAA space-weather feeds</text>
-  <text x="210" y="645" text-anchor="middle" class="body">and alignment metadata</text>
+  <text x="210" y="600" text-anchor="middle" class="label">Task and Operational Context</text>
+  <text x="210" y="625" text-anchor="middle" class="body">Active task category, sortie</text>
+  <text x="210" y="645" text-anchor="middle" class="body">duration, latency, vehicle count</text>
 
   <rect x="95" y="690" width="230" height="100" class="support" />
   <text x="210" y="725" text-anchor="middle" class="label">Audit Inputs</text>
@@ -71,9 +71,9 @@
   <text x="620" y="410" text-anchor="middle" class="body">and circadian dynamics</text>
 
   <rect x="840" y="330" width="280" height="90" class="core" />
-  <text x="980" y="365" text-anchor="middle" class="label">Environmental Timing Layer</text>
-  <text x="980" y="390" text-anchor="middle" class="body">Ingest, propagation, impact,</text>
-  <text x="980" y="410" text-anchor="middle" class="body">and temporal alignment</text>
+  <text x="980" y="365" text-anchor="middle" class="label">Task and Module Layer</text>
+  <text x="980" y="390" text-anchor="middle" class="body">Task profiles, vigilance/latency,</text>
+  <text x="980" y="410" text-anchor="middle" class="body">and PVT/sleep/trajectory modules</text>
 
   <rect x="610" y="470" width="400" height="100" class="decision" />
   <text x="810" y="510" text-anchor="middle" class="label">Readiness Fusion and Decision Logic</text>
@@ -130,5 +130,5 @@
   <path d="M 1010 690 L 1275 610" class="arrow" />
   <path d="M 1010 715 L 1275 740" class="arrow" />
 
-  <text x="800" y="895" text-anchor="middle" class="small">One shared modeling backend supports a Node-first client, API orchestration, and secondary interfaces while preserving contextual interpretation and auditability.</text>
+  <text x="800" y="895" text-anchor="middle" class="small">One shared modeling backend supports web delivery, API orchestration, and secondary interfaces while preserving auditability and task-aware interpretation.</text>
 </svg>
