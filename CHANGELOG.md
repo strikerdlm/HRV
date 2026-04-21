@@ -9,11 +9,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Psychomotor Vigilance Task (PVT) module** (`app/pvt_core.py`, `tests/test_pvt_core.py`, `api/pvt_endpoints.py`, `api/main.py`, `frontend/src/lib/pvt-scoring.ts`, `frontend/src/components/pvt/pvt-test.tsx`, `frontend/src/app/research/pvt/page.tsx`, `frontend/src/app/scheduling/pvt/page.tsx`, `app/pvt_desktop.py`, `docs/PVT.md`):
+  - Three validated variants: PVT-B (3 min, 355 ms lapse threshold; Basner & Dinges 2011), PVT-5 (5 min, 500 ms), PVT-10 (10 min, Dinges 1997 standard).
+  - Canonical Python scoring in `app/pvt_core.py` — single source of truth with 28 pytest tests covering classification, alert/fatigued sessions, variant scaling, and edge cases. All tests pass.
+  - Full validated metric set: trial classification (valid / lapse / major lapse / false start / no response), core RT (mean, median, SD, CV, percentiles), tail means (fastest 10%, slowest 10%), reciprocal response speed (1/RT in s⁻¹; Basner & Dinges 2011), transformed lapses (√L + √(L+1)), Dinges 1997 response-speed index, `pvt_lapses_3min` with automatic cross-variant scaling.
+  - FastAPI endpoints mounted at `/api/pvt/*` — stateless `/score`, persisted `/sessions` (SQLite-backed `pvt_sessions.db`), history listing, latest-session detail, variant defaults.
+  - TypeScript scoring mirror at `frontend/src/lib/pvt-scoring.ts` for client-side preview, bit-for-bit identical to the Python canonical module.
+  - React PVT test component using `performance.now()` for sub-ms RT timing; keyboard + touch input; configurable variant, seed, minimal stimulus; 12-metric results panel.
+  - Operational route (`/scheduling/pvt`): fixed PVT-B pre-flight gate with GO / GO-MONITOR / CAUTION / NO-GO banner; auto-submits `pvt_lapses_3min` to the existing scheduling/IHPI pipeline via POST `/api/pvt/sessions`.
+  - Research route (`/research/pvt`): variant selector (PVT-B / PVT-5 / PVT-10), session history table with decision badges.
+  - Research-grade PsychoPy desktop driver (`app/pvt_desktop.py`) for sub-millisecond timing (Garaizar & Vadillo 2014) — CLI with `--variant`, `--out`, `--post`; shares Python core scoring with the browser variants.
+  - Browser timing-precision disclosure in-UI per Anwyl-Irvine et al. 2020 (~5–10 ms precision; adequate for operational and longitudinal tracking; points to the PsychoPy desktop driver for lab-grade timing).
+  - Platform documentation at `docs/PVT.md` with nine DOI-verified validation references and explicit integration notes into `app.scheduling_core.score_pvt_lapses_3min()` and the ≥20-lapse hard gate.
+- **Publication-quality Figures 1, 2, 4 for the OPI manuscript** (`manuscript/figures/figure1_opi_conceptual_schematic.{pdf,svg,png}`, `manuscript/figures/figure2_task_taxonomy_hrv_signatures.{pdf,svg,png}`, `manuscript/figures/figure4_reference_implementation_architecture.{pdf,svg,png}`, `analysis/build_figure{1,2,4}.py`):
+  - Reproducible matplotlib/patches-based scripts per figure; PDF + SVG vector + 300 dpi PNG rasters ready for Applied Ergonomics submission.
+  - Colourblind-safe palettes, greyscale-readable, colour-coded signature-family groupings, OPI-pathway highlighting on the architecture diagram.
+- **CITATION.cff at repository root** for Zenodo-GitHub integration once `v0.6.0-opi` (or equivalent) is tagged; author/ORCID/affiliation placeholders clearly marked TODO.
+- **JOSS short-paper skeleton** (`docs/joss/paper.md`, `docs/joss/paper.bib`, `docs/joss/README.md`) for optional parallel software-credit submission covering the OPI reference implementation; 15 DOI-verified references.
+
 ### Documentation
-- **Q1 manuscript submission pass** (`manuscript/README.md`, `manuscript/outline/manuscript_outline.md`, `manuscript/draft/main_manuscript_scaffold.md`, `manuscript/evidence/compliance_and_transparency_map.md`, `manuscript/evidence/evidence_matrix.md`, `manuscript/tables/reproducibility_and_deployment_metadata.md`):
-  - Added a ranked Q1 journal shortlist with packaging implications and a recommended submission order led by CMPB and JBI.
-  - Tightened the manuscript title, structured abstract, and reproducibility language; added a dedicated Conclusions section for stronger software-methods positioning.
-  - Replaced moving branch/commit metadata in manuscript support files with a frozen-release / DOI requirement to avoid stale submission identifiers.
+- **Q1 HF / Human Factors manuscript reframe — Applied Ergonomics target** (`manuscript/outline/novelty_and_venue_2026-04-21.md`, `manuscript/outline/manuscript_outline.md`, `manuscript/draft/opi_main_manuscript.md`, `manuscript/evidence/evidence_matrix.md`, `manuscript/evidence/validation_story.md`, `manuscript/tables/opi_task_taxonomy.md`, `manuscript/tables/opi_weight_profiles.md`, `manuscript/tables/opi_vigilance_latency_models.md`, `manuscript/references/seed_references.md`, `manuscript/figures/figure_plan_opi.md`, `manuscript/submission/cover_letter_applied_ergonomics.md`, `manuscript/submission/highlights.md`, `manuscript/submission/publication_workflow.md`, `manuscript/README.md`, `analysis/opi_worked_example.py`, `analysis/opi_worked_example.json`):
+  - Pivoted the primary submission target from biomedical computing (CMPB/JBI) to medical/psychology/human factors with **Applied Ergonomics (Elsevier, Q1 HF, JIF 3.4)** as primary, **Human Factors (HFES/SAGE, JIF 5.72)** as secondary, **Sensors (MDPI, Q1 I&I, JIF 3.5)** as tertiary.
+  - Reframed the novel contribution around the **Operational Performance Indicator (OPI) framework** — a task-calibrated composite readiness index fusing SAFTE fatigue effectiveness, HRV-derived autonomic markers, Multiple Resource Theory cognitive-load modifiers, and environmental/operational modifiers.
+  - OPI taxonomy covers ten manned-aviation task categories (IMC, NVD, HMD, high-density ATC, critical/non-critical emergencies, test pilot, carrier landing, weapons delivery, new-platform testing) and seven UAS / teleoperator categories (ISR, strike, SAR/CSAR, swarm supervisory, contested-environment, ground-robot teleoperation, subsea/long-latency) with Warm-type vigilance-decrement (Warm et al. 2008) and Chen-type logarithmic control-latency penalty (Chen et al. 2007).
+  - Full IMRaD manuscript draft (~5,800 words) with 23 Crossref-verified DOI citations from HF, aviation psychology, and aerospace physiology literature.
+  - Illustrative worked example: 128-min HRV recording instantiated through the full OPI pipeline under three task hypotheses (CAT II ILS approach, UAS ISR 2-h sortie, carrier landing) yielding substantively different composite distributions from identical physiological input (mean OPI 55.9 / 72.4 / 50.3; category split 0 % / 33.8 % / 86.2 % NO-GO respectively).
+  - Publication workflow integrated: Zenodo archiving via `CITATION.cff` + GitHub release, medRxiv Health Informatics preprint strategy, Elsevier Highlights (5 bullets within 85-char limit), cover letter draft, and optional parallel JOSS submission.
+- **Prior Q1 biomedical-computing submission pass** — superseded by the OPI reframe; the prior `manuscript/draft/main_manuscript_scaffold.md` remains in git history for reference.
 
 ## [1.17.2] - 2026-03-20
 

@@ -5974,6 +5974,99 @@ If you're interested in contributing to any of these developments:
 
 ---
 
+## Psychomotor Vigilance Task (PVT)
+
+### Overview
+
+The Psychomotor Vigilance Task (PVT) is a simple sustained-attention reaction-time test used across sleep, fatigue, and operator-readiness research. An operator sees a millisecond counter appear at random intervals and must press a key as quickly as possible. The canonical outcome metric is the **lapse count** — trials whose reaction time exceeded a variant-specific threshold. Mission Control ships three validated variants and two administration surfaces (browser + PsychoPy desktop) all sharing a single canonical Python scoring module (`app/pvt_core.py`).
+
+### Variants
+
+| Variant | Duration | ISI range | Lapse threshold | Primary use case |
+|---|---|---|---|---|
+| **PVT-B** | 3 min | 1 – 4 s | **355 ms** | Pre-flight / shift-check operational gate (Basner & Dinges 2011, DOI 10.1093/sleep/34.5.581) |
+| **PVT-5** | 5 min | 2 – 10 s | 500 ms | Routine longitudinal research tracking |
+| **PVT-10** | 10 min | 2 – 10 s | 500 ms | Gold-standard reference (Dinges 1997, DOI 10.1093/sleep/20.4.267) |
+
+### Running the operational PVT-B (browser)
+
+1. Navigate to **`/scheduling/pvt`** in the Next.js frontend (or click the sidebar entry).
+2. Read the instructions screen, then press **Space** or tap the big **Start PVT-B** button.
+3. A 3-second countdown appears, then the test begins.
+4. Each trial: wait for the red stopwatch counter to appear (do **not** press early — that flags a false start), then press **Space** or tap the stimulus area as fast as possible.
+5. The session runs for the full 3 minutes. Your progress is shown at the top right.
+6. On completion the app displays a **GO / GO-MONITOR / CAUTION / NO-GO** banner and the full metric tiles. The result is automatically submitted to the scheduling/readiness pipeline via `POST /api/pvt/sessions` and shows up under your user profile's history.
+
+### Running the research PVT-5 or PVT-10 (browser)
+
+1. Navigate to **`/research/pvt`**.
+2. Pick the variant in the top-right **Variant** dropdown (PVT-5 is the default; PVT-B and PVT-10 are also available).
+3. Press **Start** and follow the same test flow as above.
+4. Results append to the **Session history** table at the bottom of the page with decision badges and trend-tracking values (Mean RT, 1/RT, lapses, `pvt_lapses_3min`).
+
+### Running the research-grade PsychoPy desktop PVT
+
+For lab-grade sub-millisecond timing (Garaizar & Vadillo 2014, DOI 10.1371/journal.pone.0112033), use the PsychoPy desktop driver. It is the recommended option when browser-level timing precision (~5–10 ms per Anwyl-Irvine et al. 2020) is insufficient.
+
+```bash
+# one-time setup (dedicated conda env recommended)
+conda create -n pvt-desktop python=3.11
+conda activate pvt-desktop
+pip install psychopy>=2024.1
+
+# run a 3-min PVT-B session, print metrics + gate decision
+python app/pvt_desktop.py --variant PVT-B --user demo-operator
+
+# save to a JSON file and post to the platform API
+python app/pvt_desktop.py --variant PVT-5 --out session.json
+python app/pvt_desktop.py --variant PVT-10 --post http://localhost:8180/api/pvt/sessions
+```
+
+The desktop driver shares `app/pvt_core` scoring with the browser variants — the same metric definitions, the same operational gate, the same `pvt_lapses_3min` feeding the scheduling/IHPI hard gate.
+
+### Metrics computed
+
+Beyond the four standard Dinges 1997 metrics (mean RT, lapses, major lapses, false starts), the module computes the full validated PVT metric set:
+
+- **Core RT (ms):** mean, median, SD, CV, min, max, 10th percentile, 90th percentile
+- **Tail means:** fastest-10% mean RT, slowest-10% mean RT (Dinges 1997 composite)
+- **Reciprocal response speed (1/RT in s⁻¹):** mean, median, fastest-10%, slowest-10% — more normal than raw RT and more sensitive to total sleep deprivation per Basner & Dinges 2011
+- **Transformed lapses:** √L + √(L+1) variance-stabilising transform (Basner & Dinges 2011)
+- **Response-speed index:** Dinges 1997 aggregate alertness measure
+- **`pvt_lapses_3min`:** lapse count scaled to a 3-min equivalent across variants; feeds directly into `app.scheduling_core.score_pvt_lapses_3min()` and the ≥20-lapse low-performance hard gate
+
+### Operational gate
+
+The browser and desktop PVT both surface a four-band operational decision derived from `pvt_lapses_3min`:
+
+| Decision | Lapse range | Operational interpretation |
+|---|---|---|
+| **GO** | 0–4 | Alertness within acceptable operational bounds |
+| **GO (MONITOR)** | 5–9 | Mild degradation; proceed with enhanced CRM awareness |
+| **CAUTION** | 10–19 | Moderate lapse rate; consider mission modification or task-swap |
+| **NO-GO** | ≥ 20 | Low-performance gate; do not proceed — rest or consult the flight surgeon |
+
+### Timing-precision caveat
+
+Browser-based PVT uses `performance.now()` and `keydown`/`pointerdown` events. Independent robot-actuator benchmarking (Anwyl-Irvine et al. 2020, DOI 10.3758/s13428-020-01501-5) shows modern browsers achieve ~5–10 ms RT precision. This is adequate for:
+
+- Operational GO / NO-GO decisions (gated on lapse counts, not individual RT values)
+- Longitudinal within-operator trend tracking
+- Most research applications
+
+It is **not** adequate for:
+
+- Lab-grade absolute RT claims requiring sub-millisecond precision
+- Publishable claims about RT distributional properties (ex-Gaussian parameters etc.)
+
+For those use cases, run the PsychoPy desktop driver.
+
+### Further reading
+
+Complete platform-level documentation including the full DOI reference list, API schema, and integration notes lives at [`docs/PVT.md`](PVT.md).
+
+---
+
 ## Physiological Trajectory Risk Module (Allostatic Load Alarm)
 
 ### Overview
