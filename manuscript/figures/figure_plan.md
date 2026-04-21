@@ -11,10 +11,10 @@ This file defines the figures that the manuscript should reference. It now recor
 - **Asset:** `manuscript/figures/figure1_platform_architecture.svg`
 - **Resolution target:** 1600 x 960 SVG
 - **Insertion point:** Methods 2.2 or Results 3.1
-- **Content:** Inputs, shared Python modeling backend, user persistence, HRV analytic layer, SAFTE/circadian dynamics, environmental timing, readiness fusion, Next.js delivery routes, FastAPI orchestration, and secondary Streamlit interfaces.
+- **Content:** Inputs, shared Python modeling backend, user persistence, HRV analytic layer, SAFTE/circadian dynamics, task-operational modifiers, PVT/sleep/trajectory modules, readiness fusion, Next.js delivery routes, FastAPI orchestration, and secondary Streamlit interfaces.
 - **Primary sources:** `README.md`, `api/main.py`, `app/research_app.py`, `app/operational_app.py`, `manuscript/evidence/core_modules_scope.md`
-- **Caption goal:** Explain how one modeling backend supports a Node-first client, FastAPI orchestration, and secondary interfaces.
-- **Draft caption:** *Figure 1. High-level architecture of Mission Control - Flight Surgeon. RR-interval and wearable-derived inputs feed a shared Python modeling backend that is coupled to user persistence, HRV analytics, SAFTE/circadian dynamics, environmental timing, readiness fusion, and export utilities. The same backend is exposed primarily through a Next.js frontend and FastAPI orchestration layer, while Streamlit remains a secondary interface in the repository.*
+- **Caption goal:** Explain how one modeling backend supports primary web delivery, FastAPI orchestration, and secondary interfaces.
+- **Draft caption:** *Figure 1. High-level architecture of the OPI reference implementation. RR-interval and wearable-derived inputs feed a shared Python modeling backend that is coupled to user persistence, HRV analytics, SAFTE/circadian dynamics, task-operational modifiers, readiness fusion, and export utilities. The same backend is exposed primarily through a Next.js frontend and FastAPI orchestration layer, while Streamlit remains a secondary interface in the repository.*
 
 ## Figure 2. End-to-end translational workflow
 
@@ -37,8 +37,8 @@ This file defines the figures that the manuscript should reference. It now recor
 - **Insertion point:** Methods 2.2 or Discussion 4.4
 - **Content:** Next.js research routes, Next.js operational routes, FastAPI orchestration, shared Python model layers, and secondary Streamlit views; indicate where analysis artifacts and operational summaries originate.
 - **Primary sources:** `README.md`, `WARP.md`, `api/main.py`
-- **Caption goal:** Clarify the Node-first client architecture and why model-serving consistency matters for translational deployment.
-- **Draft caption:** *Figure 3. Research-to-operations coupling in the platform. Research and operational routes in the Next.js client rely on a common FastAPI/Python modeling substrate while exposing different levels of detail and workflow focus. Secondary Streamlit interfaces remain available but are not the primary frontend scope of the manuscript.*
+- **Caption goal:** Clarify the shared web/API architecture and why model-serving consistency matters for translational deployment.
+- **Draft caption:** *Figure 3. Research-to-operations coupling in the platform. Research and operational routes in the web client rely on a common FastAPI/Python modeling substrate while exposing different levels of detail and workflow focus. Secondary Streamlit interfaces remain available but are not the primary frontend scope of the manuscript.*
 
 ## Figure 4. Verification coverage map
 
@@ -47,19 +47,19 @@ This file defines the figures that the manuscript should reference. It now recor
 - **Asset:** `manuscript/figures/figure4_verification_coverage_map.svg`
 - **Resolution target:** 1600 x 980 SVG
 - **Insertion point:** Results 3.2
-- **Content:** Matrix showing major biomathematical and orchestration layers such as HRV analytics, SAFTE/circadian dynamics, readiness fusion, environmental timing, API-backed Node delivery, and export utilities.
+- **Content:** Matrix showing major biomathematical and orchestration layers such as HRV analytics, SAFTE/circadian dynamics, readiness fusion, PVT, sleep, trajectory-risk, and API-backed web delivery.
 - **Primary sources:** `tests/`, `manuscript/evidence/validation_story.md`
 - **Caption goal:** Distinguish strong model-adjacent implementation evidence from areas awaiting external numerical or physiological validation.
-- **Draft caption:** *Figure 4. Verification coverage map. Representative automated tests support major readiness, environmental, and API-facing layers, while the HRV and SAFTE/circadian cores remain stronger in explicit code-level formulation than in external benchmark validation. The figure should visually distinguish engineering verification from future-facing model validation.*
+- **Draft caption:** *Figure 4. Verification coverage map. Representative automated tests support readiness fusion, PVT, sleep, and API-facing delivery layers, while the HRV and SAFTE/circadian cores remain stronger in explicit code-level formulation than in external benchmark validation and the trajectory-risk layer remains only partly verified. The figure should visually distinguish engineering verification from future-facing model validation.*
 
-## Optional Figure 5. Exploratory HRV to space-weather example
+## Retired Figure 5. Exploratory HRV to space-weather example
 
-- **Purpose:** Illustrate the implemented correlation workflow if the underlying dataset provenance is documented well enough for publication.
-- **Status:** Optional only; do not render unless dataset provenance is manuscript-ready.
-- **Content:** A single lag-aware analysis example with metric, confidence interval, and sample size.
+- **Purpose:** Archival note only. This figure is excluded from the current submission package.
+- **Status:** Retired from the OPI methodology paper.
+- **Content:** None in the active submission. The exploratory artifact remains outside manuscript scope.
 - **Primary sources:** `analysis/noaa_batch_correlations_20251124T020423Z.csv`, `app/app.py`
-- **Caption goal:** Demonstrate analysis capability without overstating causal inference.
-- **Draft caption:** *Figure 5. Optional exploratory lag-aware HRV to space-weather example. This figure should be included only if the sample definition, preprocessing rules, and inferential scope are documented well enough to support manuscript reporting.*
+- **Caption goal:** Record that the exploratory space-weather artifact is intentionally excluded from the current paper.
+- **Draft caption:** *Figure 5. Retired exploratory HRV-to-space-weather example. This asset is not part of the current submission because its cohort definition, preprocessing rules, and inferential scope are outside the present methodology paper.*
 
 ## Figure preparation rules
 
