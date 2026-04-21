@@ -156,6 +156,10 @@ def _record_has_any_metric(record: GarminDailyMetrics) -> bool:
         "body_battery_avg",
         "body_battery_charge",
         "body_battery_drain",
+        "sleep_deep_minutes",
+        "sleep_rem_minutes",
+        "sleep_light_minutes",
+        "sleep_awake_minutes",
     )
     for field_name in metric_fields:
         if getattr(record, field_name, None) is not None:
@@ -412,12 +416,22 @@ def _extract_sleep(sleep_payload: Any) -> Dict[str, Any]:
     if eff is not None and eff > 1.2:
         eff = eff / 100.0
 
+    def _seconds_to_minutes(sec_val: Any) -> Optional[int]:
+        sec = _safe_float(sec_val)
+        if sec is None:
+            return None
+        return int(max(0.0, round(sec / 60.0)))
+
     return {
         "sleep_duration_hours": duration_hours,
         "sleep_efficiency": eff,
         "sleep_score": _safe_float(score),
         "sleep_start_utc": sleep_start_utc,
         "sleep_end_utc": sleep_end_utc,
+        "sleep_deep_minutes": _seconds_to_minutes(main.get("deepSleepSeconds")),
+        "sleep_rem_minutes": _seconds_to_minutes(main.get("remSleepSeconds")),
+        "sleep_light_minutes": _seconds_to_minutes(main.get("lightSleepSeconds")),
+        "sleep_awake_minutes": _seconds_to_minutes(main.get("awakeSleepSeconds")),
     }
 
 
@@ -853,6 +867,10 @@ def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDaily
                 sleep_duration_hours=sleep_info.get("sleep_duration_hours"),
                 sleep_start_utc=sleep_info.get("sleep_start_utc"),
                 sleep_end_utc=sleep_info.get("sleep_end_utc"),
+                sleep_deep_minutes=sleep_info.get("sleep_deep_minutes"),
+                sleep_rem_minutes=sleep_info.get("sleep_rem_minutes"),
+                sleep_light_minutes=sleep_info.get("sleep_light_minutes"),
+                sleep_awake_minutes=sleep_info.get("sleep_awake_minutes"),
                 avg_spo2=spo2_avg,
                 avg_respiration_awake=resp_awake,
                 avg_respiration_sleep=resp_sleep,
