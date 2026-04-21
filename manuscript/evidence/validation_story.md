@@ -57,7 +57,8 @@ The repository's test surface verifies representative behaviours across the OPI 
 - `tests/test_comprehensive_modules.py` — broader statistical and charting modules
 - `tests/test_api_user_profile_normalization.py` — API input normalisation
 - `tests/test_research_windowed_endpoint.py` — endpoint behaviour (with monkeypatched HRV inner calls)
-- `tests/test_noaa_cache.py`, `tests/test_space_weather_impact.py`, `tests/test_space_weather_alignment.py` — environmental modifier components
+- `tests/test_pvt_core.py` — PVT trial classification, session metrics, variant scaling, operational gate
+- `tests/test_sleep_core.py` — stage balance, sleep debt, Sleep Regularity Index, SpO₂ screening bands, FDR-adjusted correlation engine
 
 This supports a Results subsection on engineering verification of the fusion pathway, bounded to software behaviour.
 
@@ -89,9 +90,9 @@ Per-task weights (`w1`, `w2`, `w3`, `w4`) are derived from HF literature on task
 
 `frontend/src/lib/safte-model.ts` is a TypeScript re-implementation of the Python canonical SAFTE model. It serves responsive operational displays. It is not an independent validation layer.
 
-### 6. Environmental modifiers are optional and non-causal
+### 6. The experimental space-weather modifier is out of scope for this manuscript
 
-The environmental modifier layer is kept for framework completeness. The existing single-subject HRV↔space-weather correlation CSVs move to Supplementary demonstrations with explicit caveats about within-subject autocorrelation and inflated nominal p-values. No autonomic↔solar causal claim is made.
+The experimental NOAA space-weather modifier layer has been retired from the manuscript narrative. Any remaining single-subject HRV↔space-weather correlation CSVs are not part of this submission and would require their own dedicated, pre-registered protocol with appropriate handling of within-subject autocorrelation before any environmental-modifier claim could be advanced.
 
 ## Recommended Results structure
 
@@ -121,7 +122,7 @@ Do not claim any of the following without new evidence:
 
 ## Minimal evidence package needed for a follow-up validation paper
 
-1. A multi-subject field dataset with operator performance outcomes (simulator or operational) for the target task categories.
+1. A multi-subject field dataset with operator performance outcomes (simulator or operational) for the target task categories. The first such dataset is planned from the 2026–2027 Colombian Antarctic aerial campaign: a Colombian Air Force C-130 Hercules conducting multi-leg Drake Passage sorties during the austral summer, instrumented with the ActiGraph wGT3X-BT wrist accelerometer (Buchan, 2024) and the Polar H10 chest-strap electrocardiogram (Pereira et al., 2020; Hinde et al., 2021; Yang & Ben-Menachem, 2024).
 2. Ethics approval and consent documentation.
 3. External numerical benchmarking of `app/hrv_core.py` against reference HRV software (Kubios, pyHRV, NeuroKit2).
 4. External benchmarking of the OPI composite against alternative frameworks (Stevens 2022 CMP, Feng 2018 logistic, Vogl 2025 SVM).
