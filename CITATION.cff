@@ -1,0 +1,54 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Mission Control — Flight Surgeon: open-source reference implementation of the Operational Performance Indicator (OPI) framework"
+abstract: >-
+  Open-source biomathematical platform for aerospace medicine research
+  and operator-readiness decision support. Implements the Operational
+  Performance Indicator (OPI) framework that fuses SAFTE-style fatigue
+  effectiveness, heart-rate-variability (HRV) derived autonomic markers,
+  task-specific cognitive-load modifiers grounded in Multiple Resource
+  Theory, and environmental/operational modifiers into a per-task
+  composite readiness index for aviation and unmanned aircraft system
+  operators. Delivered through a Next.js client over a FastAPI
+  orchestration layer and a shared Python biomathematical backend.
+authors:
+  - family-names: Malpica
+    given-names: Diego
+    name-suffix: MD
+    email: dlmalpica@yahoo.com
+    # orcid: "https://orcid.org/0000-0000-0000-0000"  # TODO: fill in before Zenodo release
+    # affiliation: "[PLACEHOLDER — institutional affiliation]"
+    city: Bogotá
+    country: CO
+repository-code: "https://github.com/strikerdlm/HRV"
+url: "https://github.com/strikerdlm/HRV"
+license: MIT
+keywords:
+  - heart rate variability
+  - HRV
+  - SAFTE
+  - fatigue risk management
+  - operator readiness
+  - aviation human factors
+  - unmanned aircraft systems
+  - teleoperation
+  - biomathematical modelling
+  - Multiple Resource Theory
+  - open-source software
+# TODO before Zenodo release:
+#   1. Fill in ORCID and affiliation lines above.
+#   2. Set version to match the Git tag (e.g., v0.6.0-opi).
+#   3. Set date-released to the release date (YYYY-MM-DD).
+#   4. After Zenodo DOI is minted, add an identifiers block with type: doi.
+preferred-citation:
+  type: article
+  title: "Task-calibrated Operational Performance Indicators for aviation and unmanned aircraft system operators: a biomathematical framework integrating SAFTE fatigue, heart-rate variability, and cognitive-load theory, with open-source reference implementation"
+  authors:
+    - family-names: Malpica
+      given-names: Diego
+      name-suffix: MD
+  # journal: "Applied Ergonomics"       # fill when accepted
+  # year: 2026
+  # doi: "10.1016/j.apergo.XXXX.XXXXXX" # fill when assigned
+  # Until the journal publication lands, the preferred citation is this software itself.
