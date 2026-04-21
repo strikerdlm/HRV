@@ -1,6 +1,6 @@
 # Author: Dr Diego Malpica MD
 
-## Table 5. Compliance and Transparency Declarations
+## Supplementary Table S2. Compliance and Transparency Declarations
 
 This table converts the current manuscript transparency posture into submission-oriented statements and flags what still requires author confirmation.
 
