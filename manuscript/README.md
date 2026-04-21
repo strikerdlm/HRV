@@ -1,4 +1,4 @@
-# Author: Dr Diego Malpica MD
+# Authors: Diego L. Malpica (PI); Ingrid Xiomara Bejarano Cifuentes
 
 ## Manuscript workspace — orientation for agents and contributors
 
@@ -10,9 +10,20 @@ As of 2026-04-21, the manuscript has been repositioned on branch `q1-hf-opi-refr
 
 Literature verification and venue targeting rationale: `manuscript/outline/novelty_and_venue_2026-04-21.md`.
 
+### Author & affiliation block (copy-paste for Editorial Manager)
+
+| Order | Name | Role | Affiliation | E-mail | ORCID |
+| --- | --- | --- | --- | --- | --- |
+| 1 | **Diego L. Malpica MD** | PI; **corresponding author** | Aerospace Medicine — Subdirectorate of Aerospace Sciences; Direction of Aerospace Medicine (DIMAE); Colombian Aerospace Force — Bogotá D.C., Colombia | diego.malpica@fac.mil.co | https://orcid.org/0000-0002-2257-4940 |
+| 2 | **Ingrid Xiomara Bejarano Cifuentes** | Researcher | Centro de Investigación y Desarrollo de Tecnologías Aeroespaciales (CITAE); Colombian Aerospace Force — Bogotá D.C., Colombia | ingrid.bejarano@fac.mil.co | https://orcid.org/0000-0002-7981-2356 |
+
+**Postal address (corresponding):** Direction of Aerospace Medicine (DIMAE), Colombian Aerospace Force, Bogotá D.C., Colombia — add street/building and postal code if the portal requires a full courier-style line.
+
+Canonical source for prose formatting: `draft/opi_main_manuscript.md` title page and §6.4 CRediT.
+
 ### One-line status
 
-Draft submission package complete on branch `q1-hf-opi-reframe`: IMRaD draft (~5,800 words), three OPI tables (taxonomy, weight profiles, vigilance/latency), four-figure plan, seed references (23 cited + 10 pool, all Crossref-verified), cover letter draft, highlights. Blocking work is now mostly human metadata (authorship, funding, COI), figure generation at publication quality, journal template import, and frozen release identifier.
+Draft submission package on branch `q1-hf-opi-reframe`: IMRaD draft, three OPI table sources (taxonomy, weight profiles, vigilance/latency), four-figure plan, seed references (DOI-verified), cover letter, Highlights. **Applied Ergonomics checklist** (abstract 100–150 words, ≤3 indexed keywords, COI template, AI declaration title, word-limit note): see `submission/highlights.md` §“full submission checklist”. Main narrative likely **exceeds** the journal’s 3k–5k word guideline—contact the Editor if shortening is not planned.
 
 ---
 
@@ -58,7 +69,7 @@ Draft submission package complete on branch `q1-hf-opi-reframe`: IMRaD draft (~5
 
 ### B. Author metadata and human decisions
 
-1. **Finalise author list, affiliations, ORCIDs, CRediT roles.** Currently single-author; expand if collaborators added.
+1. **Author metadata** — Confirmed two-author team; full block for Editorial Manager copy-paste is in **§ Author & affiliation block** below.
 2. **Confirm funding declaration and conflict-of-interest statements** for all authors.
 3. **Confirm acknowledgments** for collaborators, institutions, and infrastructure support.
 
