@@ -28,8 +28,10 @@ Draft submission package complete on branch `q1-hf-opi-reframe`: IMRaD draft (~5
 | Figure plan (4 figures) | Done | `figures/figure_plan_opi.md` |
 | Cover letter (Applied Ergonomics) | Done, draft | `submission/cover_letter_applied_ergonomics.md` |
 | Highlights (Elsevier format) | Done | `submission/highlights.md` |
-| Figure generation at publication quality | Not started | Adapt existing SVG + build Figure 3 from worked example |
-| Worked-example numerical output for Results §3.1 | Not started | Optional e2b run; values can be regenerated from existing HRV report |
+| Publication workflow (Zenodo, JOSS, medRxiv) | Done | `submission/publication_workflow.md` |
+| Figure 3 (publication quality) | Done | `figures/figure3_opi_worked_example.{pdf,svg,png}` + `analysis/opi_worked_example.py` |
+| Worked-example numerical output for Results §3.1 | Done | `analysis/opi_worked_example.json`; §3.1 text updated |
+| Figures 1, 2, 4 (publication quality) | Not started | Adapt existing SVG per `figures/figure_plan_opi.md` |
 | Supplementary appendix refresh | Not started | Terminology alignment to OPI framing in `supplement/submission_support_appendix.md` |
 | Journal template / final layout | Not started | Elsevier Applied Ergonomics template import |
 | Tagged release / archive DOI | Not started | Needed for final availability statement |
@@ -62,8 +64,10 @@ Draft submission package complete on branch `q1-hf-opi-reframe`: IMRaD draft (~5
 
 ### C. Reproducibility
 
-1. **Cut a tagged release** on the `strikerdlm/HRV` repository (semantic version, e.g., `v0.6.0-opi`), archive to Zenodo, cite DOI in §6.2 and Table 4.
+1. **Cut a tagged release** on the `strikerdlm/HRV` repository (semantic version, e.g., `v0.6.0-opi`), archive to Zenodo, cite Concept DOI in §6.2 and Table 4. Full procedure in `submission/publication_workflow.md` §1.
 2. **Harmonise environment wording** across draft, supplementary, and root `README.md` (`conda hrv-py312`, Python 3.12, `requirements.txt`, `frontend/package.json`).
+3. **Post preprint** to medRxiv Health Informatics before Applied Ergonomics submission — see `submission/publication_workflow.md` §2.
+4. **Optional JOSS parallel track** for independent software credit — see `submission/publication_workflow.md` §3.
 
 ### D. Venue-specific formatting
 
@@ -97,7 +101,7 @@ Draft submission package complete on branch `q1-hf-opi-reframe`: IMRaD draft (~5
 - `references/` — `seed_references.md` (23 cited + pool, all DOI-verified) and `mcp_research_notes.md`
 - `supplement/` — `submission_support_appendix.md` (needs OPI terminology refresh), `supplement_outline.md`
 - `evidence/` — `evidence_matrix.md`, `validation_story.md`, `core_modules_scope.md`, `compliance_and_transparency_map.md`
-- `submission/` — `cover_letter_applied_ergonomics.md`, `highlights.md`
+- `submission/` — `cover_letter_applied_ergonomics.md`, `highlights.md`, `publication_workflow.md` (Zenodo/JOSS/preprint/hygiene)
 
 ## High-value files (read order for new agents)
 
