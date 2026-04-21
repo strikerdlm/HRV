@@ -1,36 +1,44 @@
-# Author: Dr Diego Malpica MD
+# Authors: Diego L. Malpica (PI); Ingrid Xiomara Bejarano Cifuentes
 
-## Title
+## Title page
 
-**Task-calibrated Operational Performance Indicators for aviation and unmanned aircraft system operators: a biomathematical framework integrating SAFTE fatigue, heart-rate variability, and cognitive-load theory, with open-source reference implementation**
+**Title:** Task-calibrated Operational Performance Indicators for aviation and unmanned aircraft system operators: a biomathematical framework integrating SAFTE fatigue, heart-rate variability, and cognitive-load theory, with open-source reference implementation
 
 **Running title:** Task-calibrated OPI for aerospace operators
 
-**Target venue:** Applied Ergonomics (Elsevier)
+**Authors**
+
+1. **Diego L. Malpica MD**^a,\* (Principal Investigator)  
+2. **Ingrid Xiomara Bejarano Cifuentes**^b
+
+**Affiliations**
+
+^a Aerospace Medicine — Subdirectorate of Aerospace Sciences, Direction of Aerospace Medicine (DIMAE), Colombian Aerospace Force (Fuerza Aeroespacial Colombiana), Bogotá D.C., Colombia  
+^b Centro de Investigación y Desarrollo de Tecnologías Aeroespaciales (CITAE), Colombian Aerospace Force (Fuerza Aeroespacial Colombiana), Bogotá D.C., Colombia
+
+**Corresponding author**
+
+**Diego L. Malpica MD** — affiliation ^a
+
+| | |
+| --- | --- |
+| **E-mail** | diego.malpica@fac.mil.co |
+| **ORCID** | https://orcid.org/0000-0002-2257-4940 |
+| **Postal address** | Direction of Aerospace Medicine (DIMAE), Colombian Aerospace Force, Bogotá D.C., Colombia *(add building/street and postal code if required by the submission system)* |
+
+**Second author ORCID:** https://orcid.org/0000-0002-7981-2356
+
+*Target journal: Applied Ergonomics (Elsevier). Initial submission may use a single Word or PDF file (“Your Paper Your Way”); journal formatting is required at revision after acceptance.*
 
 ---
 
-## Structured Abstract
+## Abstract
 
-### Background and objective
-
-Operator-state monitoring in aviation and unmanned aircraft system (UAS) operations increasingly combines physiological signals, biomathematical fatigue models, and subjective workload ratings, but no published framework integrates these components into a task-calibrated composite readiness index with per-task weight profiles, an explicit taxonomy covering both manned aviation and UAS operators, and an open-source reference implementation. This manuscript introduces the **Operational Performance Indicator (OPI)** framework and its reference implementation and reports engineering verification and a single illustrative worked example.
-
-### Methods
-
-The OPI combines four biomathematical components: SAFTE-style reservoir fatigue effectiveness, heart-rate-variability (HRV) derived autonomic markers, task-specific cognitive-load modifiers derived from Multiple Resource Theory, and environmental/operational modifiers. Per-task weight profiles and thresholds are specified for ten manned-aviation task categories (including instrument flight, night-vision operations, helmet-mounted-display flying, high-density air-traffic control, emergencies, test-pilot operations, carrier landing, weapons delivery, and new-platform testing) and seven UAS/teleoperator categories (including intelligence-surveillance-reconnaissance, strike, search-and-rescue, supervisory swarm control, contested-environment operations, and ground and subsea teleoperation). A Warm-type vigilance-decrement function and a Chen-type logarithmic control-latency penalty are included for the UAS subset. The reference implementation is open-source (MIT license) and delivered through a Next.js client over a FastAPI orchestration layer and a shared Python biomathematical backend. A single 128-minute HRV recording is used as an illustrative framework-instantiation example across three task hypotheses.
-
-### Results
-
-The reference implementation instantiates the framework end-to-end. Engineering verification covers readiness fusion, fatigue-risk-management behaviour, and API orchestration across the OPI pathway. The worked example demonstrates that an identical physiological input yields substantively different composite readiness outputs when the active task category changes, consistent with the MRT-derived weight profile design intent. Reproducibility is supported by open-source code, a structured export layer, and a documented execution environment.
-
-### Conclusions
-
-The OPI framework offers a theoretically grounded, task-calibrated alternative to machine-learning-only operator-state classifiers and to fatigue-only or HRV-only composites. The present contribution is bounded to framework definition, reference implementation, and illustrative demonstration. A prospective field validation is underway and is scheduled for deployment with the Colombian Antarctic aerial campaign during the 2026–2027 austral summer, with multi-leg Drake Passage sorties flown aboard a Colombian Air Force C-130 Hercules and instrumented with the ActiGraph wGT3X-BT wrist accelerometer and the Polar H10 chest-strap electrocardiogram; empirical calibration of per-task weights against field operator-performance outcomes and multi-subject validation are stated as the next research steps.
+Operator-state monitoring in aviation and unmanned aircraft system operations increasingly combines physiology, biomathematical fatigue models, and workload theory, yet no published framework merges these streams into an interpretable, task-calibrated readiness index that spans manned and unmanned operators with traceable weights and open implementation. This article defines the Operational Performance Indicator (OPI): a weighted composite of SAFTE-style fatigue effectiveness, heart-rate variability markers, Multiple Resource Theory–based task modifiers, and penalties for stress, complexity, sustained-monitoring vigilance decay, and teleoperation latency where applicable. Seventeen operator categories receive explicit weight profiles. We describe an open-source reference implementation under the MIT license, document engineering verification of the fusion pathway, and apply one illustrative heart-rate recording under three task hypotheses to show that identical physiology yields different readiness scores when task context changes. Claims are limited to framework definition, software, and demonstration—not validated prediction of operator performance; prospective field validation is summarised as future work.
 
 ### Keywords
 
-heart rate variability; SAFTE; fatigue risk management; Multiple Resource Theory; operator readiness; aviation human factors; unmanned aircraft systems; teleoperation; biomathematical modelling; open-source software
+Heart rate variability; Fatigue modelling; Aviation ergonomics
 
 ---
 
@@ -165,6 +173,12 @@ Under the **carrier-landing** hypothesis (`w1 = 0.50`, `w2 = 0.30`, `w3 = 0.20`,
 
 The central observation is that identical physiological input yielded composite distributions that differed both in central tendency (mean OPI 55.9 vs. 72.4 vs. 50.3) and in category allocation (0 % / 33.8 % / 86.2 % NO-GO across the three tasks, respectively). This is consistent with the MRT-derived weight-profile design intent and demonstrates that a task-calibrated composite exposes task-specific readiness information that a task-agnostic composite would collapse. The illustrative numerical outputs are framework-instantiation values only; they do not reflect the readiness state of any operator performing any of the three tasks, because the recording was collected from a single individual in a non-operational context. The worked-example parameters and outputs are supplied in full at `analysis/opi_worked_example.json` and are reproducible from `analysis/opi_worked_example.py`.
 
+![Figure 3. Per-window OPI time series for three task hypotheses from one 128-minute recording.](../figures/figure3_opi_worked_example.png)
+
+**Figure 3.** Per-window Operational Performance Indicator (OPI) composite scores for three task hypotheses (CAT II ILS approach, UAS ISR 2-hour sortie, carrier landing) computed from identical physiological input across eighty-five 5-minute windows. *Colour in print:* if colour figures are required in the print edition, indicate preference when submitting; online publication will show colour by default where supplied.
+
+*Tables 1–5.* Editable sources for compilation into the submission file are in `manuscript/tables/` (task taxonomy, weight profiles, vigilance/latency models, reproducibility metadata, verification coverage). Embed each table beside the relevant section or supply as supplementary material per journal instructions.
+
 ### 3.2 Engineering verification of the OPI fusion pathway
 
 Engineering verification of the reference implementation covers the major paths through the OPI pipeline at the software level. Automated tests exercise scheduling-core readiness fusion (`tests/test_scheduling_core.py`), fatigue-risk-management behaviour and SAFTE-adjacent logic (`tests/test_frms.py`, `tests/test_frms_v2.py`, `tests/test_fatigue_integration.py`), API endpoint normalisation and behaviour (`tests/test_api_user_profile_normalization.py`, `tests/test_research_windowed_endpoint.py`), and broader statistical and charting modules (`tests/test_comprehensive_modules.py`). The PVT and sleep reference-implementation modules described in §2.5 are covered by dedicated test suites: `tests/test_pvt_core.py` (28 tests across trial classification, alert- and fatigued-session metrics, variant scaling, edge cases, and the operational gate) and `tests/test_sleep_core.py` (27 tests across stage balance, sleep debt scaling, Sleep Regularity Index behaviour on identical and alternating schedules, SpO₂ screening bands, operational gate escalation, and the Pearson / Spearman correlation engine with Benjamini-Hochberg FDR adjustment). A coverage map at the OPI-component level is supplied in Table 5.
@@ -263,33 +277,37 @@ The reference implementation is available as open-source software at `https://gi
 
 ### 6.3 Ethics and regulatory alignment
 
-Ethics approval and informed consent were not required for the framework-definition and engineering-verification components because no new human-subject dataset was generated or analysed for those components. The single illustrative HRV recording was contributed by the author for framework-demonstration purposes and is not linked to any operational scenario. If future versions of the manuscript incorporate prospective or retrospective operator data, study-specific ethics approval, consent documentation, and reporting-guideline alignment (STROBE for observational, TRIPOD+AI for predictive models) will be added.
+Ethics approval and informed consent were not required for the framework-definition and engineering-verification components because no new human-subject dataset was generated or analysed for those components. The single illustrative HRV recording was contributed by the authors for framework-demonstration purposes and is not linked to any operational scenario. If future versions of the manuscript incorporate prospective or retrospective operator data, study-specific ethics approval, consent documentation, and reporting-guideline alignment (STROBE for observational, TRIPOD+AI for predictive models) will be added. This article does not report primary sex- or gender-stratified human data; if empirical validation is later published, analysis and reporting will follow SAGER-aligned practice and funder requirements.
 
 The platform is not presented as a certified medical device or as a regulated decision-support system. Operational modules were designed with reference to published aerospace, fatigue-management, and safety frameworks, including NASA-STD-3001 human-systems standards and ICAO Doc 9966 fatigue-management guidance (International Civil Aviation Organization, 2020; National Aeronautics and Space Administration, 2023). These references inform design and threshold logic but do not constitute certification, legal compliance, or regulatory clearance.
 
 ### 6.4 Author contributions (CRediT)
 
-Dr Diego Malpica MD contributed conceptualisation, methodology, software, formal analysis, investigation, writing — original draft, writing — review and editing, visualisation, supervision, and project administration. The CRediT statement will be updated if additional authors are added before submission.
+**Diego L. Malpica:** Conceptualisation; Methodology; Software; Formal analysis; Investigation; Writing — original draft; Writing — review & editing; Visualisation; Supervision; Project administration.
+
+**Ingrid Xiomara Bejarano Cifuentes:** Investigation; Writing — review & editing; Resources.
 
 ### 6.5 Funding and conflicts of interest
 
-No project-level external funding supported this work at the time of drafting. If grant support, institutional sponsorship, or other funding applies before acceptance, this section will be updated accordingly.
+**Funding:** This research did not receive any specific grant from funding agencies in the public, commercial, or not-for-profit sectors. If institutional or grant support applies before acceptance, this section will be updated accordingly.
 
-**Declaration of competing interests.** The author declares no competing financial or non-financial interests related to this manuscript. The author is not currently serving and has not served on the editorial board of *Applied Ergonomics*. For submission via Editorial Manager, the same declaration should be submitted using Elsevier’s declaration-of-interest Word tool or by selecting the portal confirmation that no authors have competing interests, consistent with this statement.
+**Declaration of competing interests.** The authors declare no competing financial or non-financial interests related to this manuscript. Neither author is currently serving nor has served on the editorial board of *Applied Ergonomics*. Upload the Elsevier competing-interest declaration using the journal’s official **.docx template** (do not convert to another format) **or** confirm via the Editorial Manager checkbox that matches this statement—see declaration template on the journal’s Guide for Authors.
 
-### 6.6 Acknowledgments
-
-The author acknowledges the open-source scientific Python ecosystem, the Colombian Aerospace Force (Fuerza Aeroespacial Colombiana) and the Colombian Antarctic Program (Programa Antártico Colombiano) for the context of the forthcoming aerial-campaign validation, and the HF research community whose foundational work on Multiple Resource Theory, vigilance, teleoperation, fatigue modelling, and situation awareness provides the theoretical basis for this framework.
-
-### 6.7 Reporting-guideline positioning
+### 6.6 Reporting-guideline positioning
 
 This manuscript is a methodology and reference-implementation paper. The central claims are framework definition, implementation, and illustrative demonstration; the evidence base does not include prospective human-subject outcomes or predictive-accuracy evaluation. Reporting therefore emphasises transparent description of framework components, per-task parameterisation, reference-implementation architecture, and engineering verification. If future versions add empirical validation, adapted STROBE elements will be incorporated, and TRIPOD+AI or CLAIM extensions will apply only to sections making predictive-model claims.
 
 ---
 
-## Generative AI and AI-assisted technologies in manuscript preparation
+## Acknowledgements
 
-During the preparation of this manuscript the author used AI-assisted tools (including large language-model-based drafting, editing, and research-support workflows under human direction) to assist with structuring, literature cross-checking, prose revision, and formatting. The author reviewed, edited, and verified all scientific and technical content and takes full responsibility for the integrity and accuracy of the published work. Basic grammar and spelling checks alone would not require this statement under Elsevier policy; the above reflects substantive AI-assisted preparation as required by the [Elsevier generative AI policy](https://www.elsevier.com/about/policies/publishing-ethics).
+The authors acknowledge the open-source scientific Python ecosystem, DIMAE and CITAE within the Colombian Aerospace Force (Fuerza Aeroespacial Colombiana), and the Colombian Antarctic Program (Programa Antártico Colombiano) for the context of the forthcoming aerial-campaign validation, and the human factors research community whose foundational work on Multiple Resource Theory, vigilance, teleoperation, fatigue modelling, and situation awareness provides the theoretical basis for this framework.
+
+---
+
+## Declaration of generative AI and AI-assisted technologies in the manuscript preparation process
+
+During the preparation of this work the authors used AI-assisted technologies (large language-model-based drafting, editing, literature cross-checking, and formatting workflows under human oversight). After using these tools, the authors reviewed and edited the content as needed and take full responsibility for the content of the manuscript. Basic grammar, spelling, and reference checks alone would not require this statement under Elsevier policy; this declaration reflects substantive AI-assisted preparation as required by the journal’s [generative AI policies](https://www.elsevier.com/about/policies/publishing-ethics).
 
 ---
 
