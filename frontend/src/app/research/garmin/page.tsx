@@ -702,7 +702,12 @@ export default function GarminPage() {
       if (savedAutoSync) setAutoSync(savedAutoSync === "true");
       if (savedSyncDays) setSyncDays(parseInt(savedSyncDays, 10) || 30);
 
-      let uid = (savedUserId ?? "").trim();
+      // Legacy placeholder: older builds used literal "default", which is never a real UUID in `users`.
+      const rawStored = (savedUserId ?? "").trim();
+      const legacyPlaceholder =
+        !rawStored || rawStored.toLowerCase() === "default";
+      let uid = legacyPlaceholder ? "" : rawStored;
+
       try {
         const res = await listUsers();
         if (!cancelled) {
@@ -719,6 +724,13 @@ export default function GarminPage() {
 
       if (!cancelled) {
         setUserId(uid);
+        if (
+          typeof window !== "undefined" &&
+          uid &&
+          legacyPlaceholder
+        ) {
+          localStorage.setItem("garmin_user_id", uid);
+        }
         setInitialLoadDone(true);
       }
     }
