@@ -22,6 +22,8 @@ import {
   BookOpen,
   ExternalLink,
   ArrowRight,
+  Watch,
+  Timer,
 } from "lucide-react";
 import { PageWrapper } from "@/components/layout";
 import {
@@ -45,32 +47,46 @@ import { Separator } from "@/components/ui/separator";
 
 const operationalCapabilities = [
   {
-    title: "Crew Readiness Console",
+    title: "Home Dashboard & Space Weather",
     description:
-      "Mission-level readiness scoring with physiological, fatigue, and environmental context for operational decision support.",
-    icon: Gauge,
-    href: "/scheduling/readiness",
-  },
-  {
-    title: "Scheduling and Risk Control",
-    description:
-      "FRMS-oriented crew scheduling with fatigue-aware planning, conflict checks, and shift-level safety framing.",
-    icon: Shield,
-    href: "/scheduling",
-  },
-  {
-    title: "Space Weather and Environment",
-    description:
-      "Operational monitoring using NOAA/NASA context to support timing and interpretation under geomagnetic and atmospheric stressors.",
+      "Crew snapshot, IHPI-style gauges, and live NOAA/NASA space-weather context for operational timing and risk awareness.",
     icon: Globe,
     href: "/",
   },
   {
-    title: "Scientific Analytics Layer",
+    title: "Crew Readiness Console",
     description:
-      "Deep research modules remain directly available for advanced review, model interpretation, and publication workflows.",
+      "Mission-level readiness scoring with physiological inputs, fatigue context, and scheduling-linked decision support.",
+    icon: Gauge,
+    href: "/scheduling/readiness",
+  },
+  {
+    title: "Scheduling & FRMS Controls",
+    description:
+      "Fatigue-aware duty planning, workload cards, Go/No-Go style indicators, and FRMS-oriented crew safety framing.",
+    icon: Shield,
+    href: "/scheduling",
+  },
+  {
+    title: "Operational PVT (Pre-Flight Gate)",
+    description:
+      "Canonical PVT-B (3-minute) scoring wired to the same Python core as research — used as a scheduling pre-flight vigilance gate.",
+    icon: Timer,
+    href: "/scheduling/pvt",
+  },
+  {
+    title: "Research Hub & HRV Stack",
+    description:
+      "Time, frequency, nonlinear, windowed, and HRF analyses; circadian and SAFTE-style fatigue; ventilatory threshold (DFA-α1); norms, export, and publication-grade charts.",
     icon: Microscope,
     href: "/research",
+  },
+  {
+    title: "Garmin Connect & Correlations",
+    description:
+      "Sync daily wellness metrics via FastAPI, align crew mission and user_id with SQLite, and explore trends plus solar–physiology correlation views.",
+    icon: Watch,
+    href: "/research/garmin",
   },
 ];
 
@@ -83,6 +99,7 @@ const technologies = [
   { name: "Apache ECharts", category: "Visualization" },
   { name: "FastAPI", category: "Backend" },
   { name: "Python 3.12", category: "Runtime" },
+  { name: "React 18", category: "UI" },
   { name: "SQLite", category: "Database" },
   { name: "Zustand", category: "State" },
 ];
@@ -91,25 +108,25 @@ const operationalWorkflow = [
   {
     title: "Ingest",
     description:
-      "Collect user, wearable, RR, and environment signals into a unified operational context.",
+      "RR uploads and tracing, crew profiles, mission-scoped SQLite (per HRV_ACTIVE_MISSION), optional Garmin Connect sync, and NOAA/NASA environment feeds.",
     icon: Database,
   },
   {
     title: "Analyze",
     description:
-      "Compute readiness, trend trajectories, and risk indicators with bounded deterministic pipelines.",
+      "HRV pipelines, PVT scoring, workload and vigilance models, fatigue and readiness endpoints — shared Python core behind FastAPI.",
     icon: LineChart,
   },
   {
     title: "Decide",
     description:
-      "Support mission planning with scheduling constraints, fatigue controls, and safety thresholds.",
+      "Scheduling with fatigue and readiness gates, operational PVT checks, and explainable metrics suitable for clinical and field review.",
     icon: Workflow,
   },
   {
     title: "Monitor",
     description:
-      "Track response over time and update decisions as crew physiology and environment evolve.",
+      "Dashboards and research modules track trajectories over time; Streamlit remains available as a legacy local workbench alongside this UI.",
     icon: Radar,
   },
 ];
@@ -117,15 +134,18 @@ const operationalWorkflow = [
 const integrations = [
   {
     name: "Physiological Data",
-    detail: "HRV streams, RR tracing ingestion, Garmin-linked context, and readiness modifiers.",
+    detail:
+      "Polar-style RR and HRV time series, research PVT variants (PVT-B / PVT-5 / PVT-10), Garmin daily metrics sync, and readiness or fatigue modifiers from the same analysis core.",
   },
   {
     name: "Environmental Signals",
-    detail: "NOAA and NASA space weather feeds, plus local weather overlays for operational interpretation.",
+    detail:
+      "NOAA and NASA space-weather context (e.g., Kp, solar wind) for scheduling and research correlation workflows.",
   },
   {
-    name: "Scheduling Context",
-    detail: "Crew workload blocks, duty-cycle planning, and risk-aware activity timing.",
+    name: "Crew & Mission Context",
+    detail:
+      "Mission 1 / Mission 2 workspaces, crew profiles via REST, and SQLite under crew/<Mission>/db — keep FastAPI and Streamlit on the same active mission when comparing data.",
   },
 ];
 
@@ -213,8 +233,8 @@ export default function AboutPage() {
 
   return (
     <PageWrapper
-      title="About Operational Frontend"
-      description="Mission Control - Flight Surgeon Operational Layer"
+      title="About Mission Control"
+      description="Next.js + FastAPI flight surgeon console — operations, research, and wearables"
     >
       <div className="space-y-6 max-w-6xl">
         {/* Mission Brief */}
@@ -234,13 +254,16 @@ export default function AboutPage() {
                       Mission Control - Flight Surgeon
                     </CardTitle>
                     <CardDescription className="max-w-2xl">
-                      Operational decision support interface for aerospace medicine,
-                      crew readiness, and mission scheduling in high-risk environments.
+                      Primary web stack (2026): production Next.js frontend on FastAPI — crew
+                      readiness, FRMS-oriented scheduling, operational PVT gates, a deep research
+                      analytics hub (HRV through export), and Garmin Connect integration. Shares one
+                      Python analysis core with the legacy Streamlit workbench.
                     </CardDescription>
                     <div className="flex flex-wrap gap-2">
-                      <Badge>Operational</Badge>
-                      <Badge variant="outline">Clinical Oversight</Badge>
-                      <Badge variant="outline">Research-Linked</Badge>
+                      <Badge>Operations</Badge>
+                      <Badge variant="outline">Research</Badge>
+                      <Badge variant="outline">Wearables</Badge>
+                      <Badge variant="outline">FastAPI</Badge>
                     </div>
                   </div>
                 </div>
@@ -250,6 +273,8 @@ export default function AboutPage() {
                       href="https://github.com/strikerdlm/HRV"
                       target="_blank"
                       rel="noopener noreferrer"
+                      title="Mission Control HRV repository on GitHub"
+                      aria-label="Mission Control HRV repository on GitHub"
                     >
                       <Github className="h-4 w-4" />
                     </a>
@@ -265,14 +290,16 @@ export default function AboutPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <p className="text-muted-foreground">
-                Led by <strong>Dr Diego Malpica MD</strong> as a mission-oriented
-                platform for translating physiological and environmental signals
-                into practical crew operations.
+                Led by <strong>Dr Diego Malpica MD</strong> — a mission-oriented platform for
+                translating physiology, fatigue, vigilance, and environment into actionable crew
+                operations and reproducible research outputs.
               </p>
               <p className="text-sm text-muted-foreground">
-                The operational frontend prioritizes rapid comprehension,
-                risk-aware planning, and explainable outputs that are suitable
-                for both field use and scientific review.
+                New capability ships here first: PVT scoring shared with scheduling gates, expanded
+                research routes (workload, flight fatigue, ventilatory threshold, correlations,
+                export), and Garmin sync aligned to mission-scoped databases. The UI favors rapid
+                comprehension, bounded analysis pipelines, and citations where interpretation
+                matters.
               </p>
             </CardContent>
           </Card>
@@ -338,13 +365,21 @@ export default function AboutPage() {
         >
           <Card>
             <CardHeader>
-              <CardTitle>Operational Capabilities</CardTitle>
+              <CardTitle>Product surface</CardTitle>
               <CardDescription>
-                Core modules used for day-to-day mission support
+                Primary entry points for operations and research (see also the sidebar and{" "}
+                <Link
+                  href="/research"
+                  className="text-primary underline-offset-4 hover:underline"
+                  title="Open research hub"
+                >
+                  Research hub
+                </Link>
+                )
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {operationalCapabilities.map((item, index) => (
                   <motion.div
                     key={item.title}
@@ -547,19 +582,26 @@ export default function AboutPage() {
             Diego Malpica MD
           </p>
           <p className="mt-1">
-            Operational frontend for mission readiness, scheduling, and physiological oversight
+            Mission readiness, scheduling, PVT gates, research analytics, and Garmin-backed
+            physiology — one console
           </p>
-          <div className="mt-3 flex items-center justify-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
             <Button size="sm" variant="outline" asChild>
               <Link href="/scheduling">
                 <Calendar className="h-4 w-4 mr-1" />
-                Open Scheduling
+                Scheduling
               </Link>
             </Button>
             <Button size="sm" variant="outline" asChild>
               <Link href="/research">
                 <Activity className="h-4 w-4 mr-1" />
-                Open Research Modules
+                Research hub
+              </Link>
+            </Button>
+            <Button size="sm" variant="outline" asChild>
+              <Link href="/research/garmin">
+                <Watch className="h-4 w-4 mr-1" />
+                Garmin
               </Link>
             </Button>
           </div>
