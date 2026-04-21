@@ -24,6 +24,8 @@ import {
   ArrowRight,
   Watch,
   Timer,
+  Moon,
+  Bed,
 } from "lucide-react";
 import { PageWrapper } from "@/components/layout";
 import {
@@ -70,9 +72,16 @@ const operationalCapabilities = [
   {
     title: "Operational PVT (Pre-Flight Gate)",
     description:
-      "Canonical PVT-B (3-minute) scoring wired to the same Python core as research — used as a scheduling pre-flight vigilance gate.",
+      "Canonical PVT-B (3-minute, 355 ms lapse threshold per Basner & Dinges 2011) scoring wired to the same Python core as research — pre-flight vigilance gate feeding the scheduling pipeline.",
     icon: Timer,
     href: "/scheduling/pvt",
+  },
+  {
+    title: "Operational Sleep Gate",
+    description:
+      "Four-band pre-flight sleep readiness (GO / GO_MONITOR / CAUTION / NO_GO) from last-night duration, 7-night debt, Sleep Regularity Index (Lunsford-Avery 2018), and SpO₂ screening proxy. Garmin-backed; never clinical apnea claims.",
+    icon: Bed,
+    href: "/scheduling/sleep",
   },
   {
     title: "Research Hub & HRV Stack",
@@ -80,6 +89,20 @@ const operationalCapabilities = [
       "Time, frequency, nonlinear, windowed, and HRF analyses; circadian and SAFTE-style fatigue; ventilatory threshold (DFA-α1); norms, export, and publication-grade charts.",
     icon: Microscope,
     href: "/research",
+  },
+  {
+    title: "Research Sleep Dashboard",
+    description:
+      "Chart-heavy Garmin sleep analytics: duration trend, 7-night debt curve, stage balance, bedtime regularity strip, correlation matrix (FDR-q) and six scatter plots vs overnight HRV RMSSD. Bounded to Pending.md Tier A; Lee 2025 / Schyvens 2024 vs-PSG disclosure.",
+    icon: Moon,
+    href: "/research/sleep",
+  },
+  {
+    title: "Research PVT (Longitudinal)",
+    description:
+      "Variant selector (PVT-B / PVT-5 / PVT-10) with session history table and decision badges. Browser timing ~5–10 ms per Anwyl-Irvine 2020; PsychoPy desktop driver for sub-ms research sessions.",
+    icon: Timer,
+    href: "/research/pvt",
   },
   {
     title: "Garmin Connect & Correlations",
@@ -173,6 +196,36 @@ const references = [
     citation:
       "Hursh, S. R., et al. (2004). Fatigue models for applied research in warfighting. Aviation, Space, and Environmental Medicine, 75(3 Suppl), A44-A53.",
     pmid: "15018270",
+  },
+  {
+    title: "PVT-B 3-minute validation (355 ms lapse threshold)",
+    citation:
+      "Basner, M., & Dinges, D. F. (2011). Maximizing sensitivity of the Psychomotor Vigilance Test (PVT) to sleep loss. Sleep, 34(5), 581-591.",
+    pmid: "21532951",
+  },
+  {
+    title: "Mobile PVT-B smartphone/tablet validation",
+    citation:
+      "Grant, D. A., Honn, K. A., Layton, M. E., Riedy, S. M., & Van Dongen, H. P. A. (2017). 3-minute smartphone-based and tablet-based psychomotor vigilance tests for the assessment of reduced alertness due to sleep deprivation. Behavior Research Methods, 49(3), 1020-1029.",
+    pmid: "27325169",
+  },
+  {
+    title: "Sleep Regularity Index (SRI)",
+    citation:
+      "Lunsford-Avery, J. R., Engelhard, M. M., Navar, A. M., & Kollins, S. H. (2018). Validation of the Sleep Regularity Index in Older Adults and Associations with Cardiometabolic Risk. Scientific Reports, 8, 14158.",
+    pmid: "30242174",
+  },
+  {
+    title: "Consumer wearable vs PSG (Garmin, Fitbit, WHOOP) meta-analysis",
+    citation:
+      "Lee, Y. J., Lee, J. Y., Cho, J. H., Kang, Y. J., & Choi, J. H. (2025). Performance of consumer wrist-worn sleep tracking devices compared to polysomnography: a meta-analysis. Journal of Clinical Sleep Medicine, 21(3), 573-582.",
+    pmid: "39484805",
+  },
+  {
+    title: "Browser-based reaction-time timing precision",
+    citation:
+      "Anwyl-Irvine, A., Dalmaijer, E. S., Hodges, N., & Evershed, J. K. (2020). Realistic precision and accuracy of online experiment platforms, web browsers, and devices. Behavior Research Methods, 53(4), 1407-1425.",
+    pmid: "33140376",
   },
 ];
 
