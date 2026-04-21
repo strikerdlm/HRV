@@ -686,6 +686,7 @@ export default function GarminPage() {
     active_mission?: string;
     database_path?: string;
     garmin_rows_for_user?: number;
+    error_detail?: string | null;
   } | null>(null);
 
   React.useEffect(() => {
@@ -850,6 +851,7 @@ export default function GarminPage() {
         active_mission: result.active_mission,
         database_path: result.database_path,
         garmin_rows_for_user: result.garmin_rows_for_user,
+        error_detail: result.error_detail,
       });
       if (result.success === false) {
         setConnectionStatus("error");
@@ -1040,6 +1042,12 @@ export default function GarminPage() {
               {lastSync.database_path ? (
                 <p className="break-all">
                   Database: <span className="font-mono">{lastSync.database_path}</span>
+                </p>
+              ) : null}
+              {lastSync.error_detail ? (
+                <p className="break-all text-foreground/90">
+                  <span className="font-medium">Detail:</span>{" "}
+                  <span className="font-mono">{lastSync.error_detail}</span>
                 </p>
               ) : null}
               <Button variant="ghost" size="sm" className="h-7 px-2 mt-2" onClick={() => setLastSync(null)}>
