@@ -252,15 +252,14 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware for frontend
+# CORS middleware for frontend.
+# Use a regex to accept any localhost / 127.0.0.1 / [::1] variation on any
+# port — browsers (and Next.js dev) sometimes resolve the page origin to the
+# IPv6 loopback or a different host, which a hard-coded allowlist will reject
+# with HTTP 400 "Disallowed CORS origin" on preflight.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3100",
-        "http://127.0.0.1:3100",
-        "http://localhost:3000",
-        "http://127.0.0.1:3000",
-    ],
+    allow_origin_regex=r"^http://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
