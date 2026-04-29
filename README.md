@@ -333,7 +333,6 @@ These modules implement the gold-standard HRV analysis pipeline as defined by th
 
 | Module                                  | Capability                                                                                                                                             |
 | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **GPT-5.2 Interpretation**        | High-reasoning AI analysis with enforced web-search citations, mission logging, markdown export, and text-to-speech playback                           |
 | **Advanced HRV Analytics**        | ML pattern recognition, statistical tests (Shapiro-Wilk, t-tests, Mann-Whitney U), 7-day forecasting, anomaly detection, and clinical decision support |
 | **Wearable Predictive Analytics** | Body Battery forecasting (Holt-Winters), Allostatic Load Index, circadian rhythm analysis, stress prediction, recovery analysis                        |
 
