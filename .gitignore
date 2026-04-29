@@ -218,6 +218,13 @@ Diego_L_Malpica_H/
 # Local-only research notes
 artemis2/
 
+# Local-only collaborator/tool guidance and notes
+AGENTS.md
+CLAUDE.md
+WARP.md
+FIXES_*.md
+NEXT_ITERATIONS.md
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
