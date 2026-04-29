@@ -215,6 +215,9 @@ Diego_Malpica/
 Diego_L_Malpica_H/
 *Malpica*/
 
+# Local-only research notes
+artemis2/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/
