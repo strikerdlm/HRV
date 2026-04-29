@@ -56,9 +56,8 @@ Most HRV tools do one thing: compute RMSSD and a few frequency-domain metrics. M
 5. **Ventilatory Threshold Estimation**: Non-invasive detection of aerobic (VT1) and anaerobic (VT2) thresholds using DFA-alpha1 analysis, eliminating the need for laboratory CPET — a breakthrough for field and operational settings.
 6. **Allostatic Load Monitoring**: Multi-day physiological trajectory tracking that catches cumulative degradation (declining HRV, rising resting HR, eroding sleep quality) before a single-day snapshot would flag a problem.
 7. **Dual Architecture**: Both a feature-rich Streamlit research application and a modern TypeScript/Next.js frontend with FastAPI backend, giving you the choice between rapid prototyping and production deployment.
-8. **AI-Powered Interpretation**: GPT-5.2 high-reasoning analysis with enforced web-search citations, providing doctorate-level physiological interpretation with full audit trails.
-9. **Multi-Device Support**: Native import from Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, and Compumedics Somfit Pro — plus FIT-to-CSV conversion tools built right in.
-10. **Fully Reproducible Science**: Every metric includes citations (Task Force 1996, Shaffer & Ginsberg 2017, Nunan et al. 2010), every chart is exportable in SVG/PDF/PNG at 300+ DPI, and every analysis step is logged for complete audit trails.
+8. **Multi-Device Support**: Native import from Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, and Compumedics Somfit Pro — plus FIT-to-CSV conversion tools built right in.
+9. **Fully Reproducible Science**: Every metric includes citations (Task Force 1996, Shaffer & Ginsberg 2017, Nunan et al. 2010), every chart is exportable in SVG/PDF/PNG at 300+ DPI, and every analysis step is logged for complete audit trails.
 
 ---
 
