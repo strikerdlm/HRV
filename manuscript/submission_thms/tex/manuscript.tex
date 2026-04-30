@@ -1,0 +1,380 @@
+\documentclass[10pt,journal,twocolumn,compsoc]{IEEEtran}
+
+% --- Packages ----------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{tabularx}
+\usepackage{cite}
+\usepackage{url}
+\usepackage{xcolor}
+\usepackage{textcomp}
+\usepackage{hyperref}
+\hypersetup{
+  colorlinks=true,
+  citecolor=blue,
+  linkcolor=black,
+  urlcolor=blue,
+  pdftitle={Task-calibrated Operational Performance Indicators for aerospace HMS operators}
+}
+
+% Figure path
+\graphicspath{{figures/}}
+
+% --- Front matter ------------------------------------------------------------
+\title{Task-calibrated Operational Performance Indicators: a fusion framework for aviation and unmanned aircraft system operator state}
+
+\author{Diego~L.~Malpica,~MD,
+        and~Ingrid~Xiomara~Bejarano~Cifuentes
+        % <-this % stops a space
+\thanks{D.~L.~Malpica is with the Subdirectorate of Aerospace Sciences, Direction of Aerospace Medicine (DIMAE), Colombian Aerospace Force (Fuerza Aeroespacial Colombiana), Bogot\'a D.C., Colombia (e-mail: diego.malpica@fac.mil.co; ORCID: 0000-0002-2257-4940).}
+\thanks{I.~X.~Bejarano~Cifuentes is with the Centro de Investigaci\'on y Desarrollo de Tecnolog\'ias Aeroespaciales (CITAE), Colombian Aerospace Force, Bogot\'a D.C., Colombia (ORCID: 0000-0002-7981-2356).}
+\thanks{Manuscript prepared April 2026.}}
+
+% Page header.
+\markboth{IEEE Transactions on Human-Machine Systems,~Vol.~XX, No.~X, Month~Year}%
+{Malpica \MakeLowercase{\textit{et~al.}}: Task-calibrated OPI for aerospace HMS operators}
+
+\IEEEtitleabstractindextext{%
+\begin{abstract}
+Operator-state monitoring in aviation and unmanned aircraft system (UAS) operations combines physiological signals, biomathematical fatigue models, and workload theory, yet no published human-machine systems (HMS) framework integrates these streams into an interpretable, task-calibrated readiness index spanning manned and unmanned operators with explicit weight profiles and an open reference implementation. This article defines the Operational Performance Indicator (OPI): a weighted composite of SAFTE effectiveness, heart-rate-variability (HRV) markers, Multiple Resource Theory task modifiers, and bounded task-operational penalties, including UAS-specific vigilance-decrement and teleoperation-latency terms. Seventeen operator categories --- ten manned-aviation and seven UAS --- receive explicit weight profiles. We summarize the MIT-licensed reference implementation, report engineering verification of the fusion pathway, and apply one 128-minute HRV recording under three task hypotheses to show that summary-consistent physiology yields different readiness scores when task context changes. Three research questions structure the contribution: whether task-calibrated weighting changes classification under summary-consistent input; whether theory-derived weights are identifiable on operationally-realistic samples; and whether a linear composite supports traceable safety-case logic for HMS gate decisions. Claims are limited to framework definition, software, and illustrative demonstration; prospective field validation is the next research step.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Cognitive ergonomics, human-machine systems, operator state, vigilance decrement, teleoperation latency.
+\end{IEEEkeywords}}
+
+% --- Document body -----------------------------------------------------------
+\begin{document}
+
+\maketitle
+\IEEEdisplaynontitleabstractindextext
+\IEEEpeerreviewmaketitle
+
+\section{Introduction}
+\IEEEPARstart{A}{viation} and unmanned aircraft system (UAS) operations increasingly rely on physiological, behavioral, and schedule information to infer operator state and inform mission-level decisions. Heart-rate variability (HRV) is now a routine analytic layer in studies of workload, fatigue, and vigilance in safety-critical domains \cite{shaffer2017,quigley2024}. Biomathematical fatigue modeling has matured from early pacemaker formulations to operational scheduling tools such as the Fatigue Avoidance Scheduling Tool built on the SAFTE model \cite{forger1999,hursh2004,devine2022}. Subjective workload ratings and task batteries such as the Multi-Attribute Task Battery remain widely used to elicit and benchmark physiological responses \cite{pontiggia2024}. Recent reviews document an active literature on wearable psychophysiological sensing in safety-critical environments \cite{houghton2024} and on machine-learning classifiers for cognitive-state recognition across high-stakes domains \cite{jin2025}.
+
+Despite this activity, three structural limitations affect how operator-state information is used in practice. First, most published frameworks rely on a single information channel: HRV-only analyses, SAFTE-only fatigue forecasts, or electroencephalography-only workload classifiers \cite{hamann2026}. Second, task-specific calibration is rare; the few composite studies that exist tend to be constrained to a narrow task slice such as cruise--approach--landing phases of a single aircraft type \cite{feng2018}. Third, the recent wave of machine-learning classifiers for operator state \cite{stevens2022,vogl2025,li2025} demonstrates high classification accuracy on the tasks they evaluate, but black-box classifiers are difficult to audit, transfer across platforms, and modify when new task categories appear.
+
+\subsection{Theoretical grounding for a task-calibrated composite}
+Multiple Resource Theory (MRT) provides a principled framework for combining task demands with operator capacity \cite{wickens2002,wickens2008}. Rather than treating attention as a single undifferentiated pool, MRT decomposes operator capacity along modalities, processing stages, codes, and resources, and predicts that dual-task interference depends on the extent to which two tasks recruit the same dimensions. Operationally, this implies that the same HRV or fatigue state can have very different implications for performance depending on the task an operator is actually performing.
+
+Two further constructs expand this principle. The Warm vigilance-resource framework \cite{warm2008} established that sustained-monitoring tasks deplete attentional resources predictably over time-on-task, with task-specific decay constants and asymptotic minima. The Chen teleoperation framework \cite{chen2007} formalized the impact of control latency on teleoperator performance, showing that latencies above $\sim$100~ms force operators to adopt anticipatory or move-and-wait strategies with attendant cognitive cost. Together with situation-awareness theory \cite{endsley1995} and the allostatic-load model of cumulative physiological strain \cite{mcewen1998}, these constructs motivate a task-calibrated composite readiness index rather than a universal operator-state score. Recent human-centered artificial intelligence (HCAI) methodological work emphasizes the importance of inspectable, human-centered design as automation increases \cite{xu2026}.
+
+\subsection{Gap statement}
+Existing tools do not adequately combine four features in a single open framework: (i) theoretically grounded biomathematical fatigue estimation, (ii) HRV-derived autonomic markers, (iii) task-specific cognitive-load modifiers, and (iv) explicit coverage of both manned aviation and UAS operator categories. Recent systematic reviews flag this gap for UAS operators \cite{li2025} and for warfighter mental-fatigue management more broadly \cite{rabat2025}. Cockpit-fatigue reviews focused on head-worn sensing omit HRV \cite{hamann2026}, while machine-learning classifier studies of UAV and aviation workload rarely publish an inspectable biomathematical layer or a task-taxonomy extension path \cite{stevens2022,vogl2025}.
+
+\subsection{Research questions and contribution}
+This manuscript investigates three research questions and pairs each with a concrete contribution.
+
+\textbf{RQ1.} \emph{Does task-calibrated weighting of fatigue, autonomic, and cognitive-load components change readiness classification when summary HRV indices are held constant?} Addressed in Section~\ref{sec:worked} by applying the Operational Performance Indicator (OPI) under three task hypotheses to one 128-minute HRV recording, with comparison against a task-agnostic uniform-weights baseline. The supporting contributions are \textit{(i)} the four-component weighted-composite formulation with per-task weight profiles (Tables~\ref{tab:taxonomy}--\ref{tab:weights}), and \textit{(ii)} the seventeen-category task taxonomy with expected HRV signatures and dominant failure modes that the worked example draws from.
+
+\textbf{RQ2.} \emph{Are theory-derived per-task weight profiles identifiable on operationally-realistic operator samples, given known constraints on aerospace data availability?} Framed as the validation roadmap in Section~\ref{sec:roadmap}. The supporting contribution is \textit{(iii)} the Warm-type vigilance-decrement model and Chen-type control-latency penalty (Table~\ref{tab:vig-lat}) that, together with the per-task weight profiles, constitute the parameter set to be empirically refined under operational conditions.
+
+\textbf{RQ3.} \emph{Does a linear weighted-composite substrate support traceable, audit-friendly safety-case logic for human-machine system gate decisions without sacrificing classification fidelity relative to opaque end-to-end classifiers?} Addressed at the design-rationale level in Section~\ref{sec:simplicity} (inspectability, extensibility, calibratability, falsifiability of the linear composite), with engineering verification of the fusion pathway reported in Section~\ref{sec:verif} and an HRV-engine numerical benchmark against a public reference dataset reported in Section~\ref{sec:benchmark}; an empirical comparison against opaque classifiers on matched datasets is identified as future work in Section~\ref{sec:roadmap}. The supporting contribution is \textit{(iv)} the MIT-licensed reference implementation with documented engineering verification, which makes each gate decision auditable in code.
+
+Field instrumentation for the 2026--2027 austral-summer Antarctic operational campaign is the subject of a separate protocol publication.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figure1_opi_conceptual_schematic.pdf}
+\caption{Conceptual schematic of the OPI framework. SAFTE-style fatigue effectiveness, HRV-derived autonomic markers, attention capacity, and task-operational modifiers feed a per-task weighted composite that maps to GO\,/\,GO-Monitor\,/\,CAUTION\,/\,NO-GO bands.}
+\label{fig:schematic}
+\end{figure}
+
+\section{Methods}
+
+\subsection{Framework formulation}
+The OPI is a weighted linear composite of four components, with explicit penalty terms for stress, task complexity, control latency, and multi-vehicle supervisory load. Two formulations are used because UAS and teleoperator tasks introduce vigilance-decay and control-latency demands that have no manned-aviation analogue; the resulting fourth component (attention capacity) and additive penalties replace the manned formulation's task-complexity multiplier on $\mathrm{SAFTE_{eff}}$.
+
+For manned-aviation task categories the composite is
+\begin{equation}
+\begin{aligned}
+\mathrm{OPI}_{\mathrm{task}} &= w_1\,\mathrm{SAFTE_{eff}}\,T_{\mathrm{mod}} + w_2\,\mathrm{HRV_{rec}} + w_3\,\mathrm{Auto_{res}} \\
+&\quad - P_{\mathrm{stress}} - P_{\mathrm{cplx}}, \quad w_1{+}w_2{+}w_3 = 1.
+\end{aligned}
+\label{eq:opi-manned}
+\end{equation}
+For UAS and teleoperator task categories the composite is extended to
+\begin{equation}
+\begin{aligned}
+\mathrm{OPI}_{\mathrm{UAS}} &= w_1\,\mathrm{SAFTE_{eff}} + w_2\,V_{\mathrm{adj}} + w_3\,\mathrm{HRV_{rec}} + w_4\,\mathrm{Att_{cap}} \\
+&\quad - P_{\mathrm{lat}} - P_{\mathrm{mv}}, \quad w_1{+}w_2{+}w_3{+}w_4 = 1.
+\end{aligned}
+\label{eq:opi-uas}
+\end{equation}
+Component definitions, normalization rules, and penalty functional forms are given in Table~\ref{tab:weights}. Per-task weights and complexity modifiers are theory-derived from the cited HMS and human-factors literature; field calibration against operator-performance outcomes is future work (Section~\ref{sec:roadmap}).
+
+The framework is intentionally linear and interpretable. Each component maps to a named construct in the literature, each weight is traceable to a theoretical rationale, and each penalty has a bounded functional form. This design contrasts with the machine-learning classifiers that dominate recent operator-state work \cite{stevens2022,vogl2025,jin2025}: those classifiers achieve high in-distribution accuracy but are less extensible to new task categories, less auditable for safety review, and more sensitive to sensor drift and population differences. A transparent composite with theory-derived weights is not expected to outperform a well-trained classifier on its training distribution; it is expected to provide a reproducible, extensible, and inspectable substrate on which task-specific calibration and downstream classifier hybridization can be layered.
+
+\subsection{Task taxonomy}
+Seventeen operator task categories are specified across two blocks: ten manned-aviation categories and seven UAS / teleoperator categories. Each category is defined by its primary performance demands, dominant failure modes, and expected HRV signatures under high workload, drawn from the HMS literature (Fig.~\ref{fig:taxonomy}). Table~\ref{tab:taxonomy} presents the taxonomy in full.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figure2_task_taxonomy_hrv_signatures.pdf}
+\caption{OPI task taxonomy. The seventeen task categories are grouped into manned-aviation (10) and UAS / teleoperator (7) blocks; each row indicates dominant performance demands and expected HRV-recovery and autonomic-reserve signatures under high workload.}
+\label{fig:taxonomy}
+\end{figure}
+
+The taxonomy is not exhaustive and not mutually exclusive. Mission-level activity often transitions across categories within a single sortie, and the OPI pipeline is designed to be re-evaluated per-window as the active task category changes. Additional categories can be added by specifying their primary demands, failure modes, and weight profile following the template used throughout the taxonomy.
+
+\begin{table}[t]
+\caption{OPI task taxonomy and dominant failure modes (\textit{n}=17). Readiness bands apply uniformly: GO~$\geq$~85, GO-Monitor 70--84, CAUTION 55--69, NO-GO~$<$~55.}
+\label{tab:taxonomy}
+\centering
+\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\columnwidth}{@{}c X l@{}}
+\toprule
+\# & Task category (Block) & Dominant failure mode \\
+\midrule
+1  & IMC instrument flying (M)         & Spatial disorientation \\
+2  & Night-vision-device ops (M)       & Obstacle collision \\
+3  & Helmet-mounted-display flying (M) & Target fixation \\
+4  & High-density ATC (M)              & Sequencing errors \\
+5  & Critical emergency (M)            & Decision paralysis \\
+6  & Non-critical emergency (M)        & Checklist errors \\
+7  & Test-pilot operations (M)         & Recovery failure \\
+8  & Carrier landing (M)               & Bolter; ramp strike \\
+9  & Weapons delivery (M)              & Fratricide \\
+10 & New-platform testing (M)          & Mode confusion \\
+11 & UAS ISR (U)                       & Vigilance decrement \\
+12 & UAS strike (U)                    & Target misclassification \\
+13 & UAS SAR\,/\,CSAR (U)              & SA breakdown \\
+14 & Swarm supervisory (U)             & Automation bias \\
+15 & Contested-env.\ UAS (U)           & Dual-task interference \\
+16 & Ground-robot teleop (T)           & Orientation errors \\
+17 & Subsea\,/\,long-latency (T)       & Loop instability \\
+\bottomrule
+\end{tabularx}\\[2pt]
+\footnotesize{(M)~manned aviation, (U)~UAS, (T)~teleoperation.}
+\end{table}
+
+\subsection{Per-task weight profiles}
+Per-task weight profiles for the seventeen categories are given in Table~\ref{tab:weights}. Weights reflect the theoretical dominance of particular OPI components in particular task contexts. Examples: in precision-motor-control tasks such as carrier landing the HRV-recovery component is weighted more heavily ($w_2 = 0.30$) because short-term vagal recovery has been linked to fine-motor precision; in critical-emergency tasks the autonomic-reserve component gains weight ($w_3 = 0.25$) because recovery capacity from acute stress drives sustained performance; in UAS supervisory control of multiple vehicles the attention-capacity component dominates ($w_4 = 0.30$) because sustained exception-handling depletes attentional resources \cite{warm2008}.
+
+A task-complexity modifier $T_{\mathrm{mod}} \in [0.70, 1.00]$ applies multiplicatively to $\mathrm{SAFTE_{eff}}$ in the manned-aviation formulation. Compound modifiers multiply with a floor at 0.50 to prevent degenerate near-zero products. A stress penalty
+\begin{equation}
+P_{\mathrm{stress}} = 0.15 \max(0, S_{\mathrm{idx}} - 150),
+\label{eq:pstress}
+\end{equation}
+where $S_{\mathrm{idx}}$ is the Baevsky stress index, applies across all categories. The 150 threshold follows operational interpretations of the Baevsky stress index reported in published HRV reference work \cite{shaffer2017}; the 0.15 coefficient is chosen so that an index of 300 (high acute load) yields a 22.5-point deduction, consistent with the readiness-band widths in Table~\ref{tab:taxonomy}. A learning-curve modifier applies to new-platform testing only.
+
+\begin{table}[t]
+\caption{OPI per-task component weights. Each manned row sums to $w_1{+}w_2{+}w_3=1$; each UAS\,/\,teleop row sums to $w_1{+}w_2{+}w_3{+}w_4=1$. Latency and multi-vehicle penalties apply additively after the weighted sum for UAS rows. For UAS rows column $w_2$ is the vigilance-adjustment weight rather than HRV-recovery.}
+\label{tab:weights}
+\centering
+\renewcommand{\arraystretch}{1.05}
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}clcccc@{}}
+\toprule
+\# & Task & $w_1$ & $w_2$ & $w_3$ & $w_4$ \\
+\midrule
+1  & IMC                  & 0.55 & 0.25 & 0.20 & --   \\
+2  & NVD                  & 0.50 & 0.25 & 0.25 & --   \\
+3  & HMD                  & 0.50 & 0.30 & 0.20 & --   \\
+4  & High-density ATC     & 0.45 & 0.30 & 0.25 & --   \\
+5  & Critical emergency   & 0.40 & 0.35 & 0.25 & --   \\
+6  & Non-critical emerg.  & 0.50 & 0.25 & 0.25 & --   \\
+7  & Test pilot           & 0.45 & 0.30 & 0.25 & --   \\
+8  & Carrier landing      & 0.50 & 0.30 & 0.20 & --   \\
+9  & Weapons delivery     & 0.50 & 0.25 & 0.25 & --   \\
+10 & New-platform testing & 0.55 & 0.25 & 0.20 & --   \\
+11 & UAS ISR              & 0.35 & 0.30 & 0.15 & 0.20 \\
+12 & UAS strike           & 0.30 & 0.15 & 0.25 & 0.30 \\
+13 & UAS SAR\,/\,CSAR     & 0.30 & 0.20 & 0.25 & 0.25 \\
+14 & Swarm supervisory    & 0.30 & 0.25 & 0.15 & 0.30 \\
+15 & Contested UAS        & 0.30 & 0.20 & 0.25 & 0.25 \\
+16 & Ground teleop        & 0.35 & 0.15 & 0.20 & 0.30 \\
+17 & Subsea\,/\,long-lat. & 0.30 & 0.20 & 0.25 & 0.25 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Vigilance-decrement and control-latency models (UAS)}
+Two UAS-specific components have no analogue in manned aviation: the vigilance-decrement model for sustained monitoring and the control-latency penalty for teleoperation. Both are formalized in Table~\ref{tab:vig-lat}.
+
+The vigilance-decrement model follows Warm \textit{et~al.}~\cite{warm2008}:
+\begin{equation}
+V_{\mathrm{cap}}(t) = (V_0 - V_{\min})\, e^{-\lambda t} + V_{\min},
+\label{eq:vig}
+\end{equation}
+with task-specific decay constants $\lambda \in [0.08, 0.15]\,\mathrm{h}^{-1}$ for high-event ISR, low-event ISR, multi-vehicle supervisory control, and ground teleoperation. Parameter values reflect the combined effects of sustained monitoring load and event rate and are theory-derived; operational field calibration is future work. Recommended maximum sortie durations are offered as planning heuristics rather than validated thresholds.
+
+The control-latency penalty follows Chen \textit{et~al.}~\cite{chen2007}:
+\begin{equation}
+P_{\mathrm{lat}} = \tfrac{1}{2}\ln\!\left(1 + \frac{\ell}{100\,\mathrm{ms}}\right),
+\label{eq:lat}
+\end{equation}
+where $\ell$ is round-trip control latency in milliseconds. The logarithmic form captures diminishing returns. A linear multi-vehicle penalty $P_{\mathrm{mv}} = 3(n_v - 1)$, where $n_v$ is the number of supervised vehicles, captures attentional sharing across swarm-control tasks. The coefficient~3 was chosen so that four-vehicle supervision yields a 9-point deduction, consistent with reported supervisory-control workload-cost ranges for that vehicle count \cite{donmez2010}.
+
+\begin{table}[t]
+\caption{(a) UAS vigilance-decrement parameters and (b) control-latency tiers with recommended teleoperation strategy.}
+\label{tab:vig-lat}
+\centering
+\renewcommand{\arraystretch}{1.05}
+\begin{tabular}{@{}lcccc@{}}
+\multicolumn{5}{l}{\textit{(a) Vigilance decay}}\\
+\toprule
+Task & $\lambda$~(h$^{-1}$) & $V_0$ & $V_{\min}$ & Sortie cap \\
+\midrule
+High-event ISR             & 0.08 & 100 & 70 & 2.0~h \\
+Low-event ISR              & 0.12 & 100 & 65 & 1.5~h \\
+Multi-vehicle supervisory  & 0.15 & 100 & 60 & 1.0~h \\
+Ground teleoperation       & 0.10 & 100 & 70 & 1.5~h \\
+\bottomrule
+\end{tabular}\\[6pt]
+\begin{tabular}{@{}lcl@{}}
+\multicolumn{3}{l}{\textit{(b) Control-latency tiers}}\\
+\toprule
+$\ell$ (ms) & $P_{\mathrm{lat}}$ & Strategy \\
+\midrule
+$<100$       & $\approx 0$        & Direct teleoperation     \\
+100--300     & 0.35--0.69         & Anticipatory control     \\
+300--700     & 0.69--1.05         & Move-and-wait control    \\
+700--1500    & 1.05--1.39         & Supervisory-control shift\\
+$>1500$      & $>1.39$            & Autonomous handoff       \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Reference implementation}
+\label{sec:refimpl}
+The reference implementation is distributed under the MIT license at \url{https://github.com/strikerdlm/HRV} (frozen Zenodo DOI to be cited in the camera-ready). The architecture separates client delivery from model execution while keeping the computational core as a single Python stack. A web client communicates with a FastAPI orchestration layer that exposes structured endpoints for HRV analysis, scheduling and readiness, user-profile management, and research utilities. The shared analytic core hosts the HRV engine, SAFTE reservoir model, readiness-fusion logic, Psychomotor Vigilance Task (PVT) module, sleep-analytics module, and longitudinal trajectory-risk module. Architecture and module manifests are provided in Supplement~S1.
+
+The HRV engine computes time-domain metrics (RMSSD, SDNN, pNN50), frequency-domain metrics (VLF, LF, HF power; LF/HF ratio), and nonlinear metrics (SD1, SD2, sample entropy, DFA-$\alpha$1, Poincar\'e ellipse area, Baevsky stress index) from RR-interval series. Artefact handling rejects samples outside $[0.5\bar{x}, 2\bar{x}]$ around the local median and replaces invalid samples by linear interpolation; analyses use 5-minute non-overlapping windows. Outputs feed the $\mathrm{HRV_{rec}}$, $\mathrm{Auto_{res}}$, and $\mathrm{Att_{cap}}$ components through documented normalization functions. A numerical benchmark of these metrics against the NeuroKit2 reference package \cite{makowski2021} on the public MIT-BIH Normal Sinus Rhythm Database \cite{goldberger2000} is reported in Section~\ref{sec:benchmark}.
+
+Three modules concretize the operational path from physiological input to composite readiness. The \emph{PVT module} administers and scores three validated variants --- PVT-B (3~min, 355~ms lapse threshold) \cite{basner2011}, PVT-5, and PVT-10 \cite{dinges1997} --- through a browser surface ($\approx$5--10~ms timing precision) \cite{anwylirvine2020} and a PsychoPy desktop driver for sub-millisecond research sessions \cite{garaizar2014}; the 5--10~ms surface is operationally adequate against the 355~ms lapse threshold ($\sim$35$\times$ margin). PVT lapses feed the readiness-fusion layer with a $\geq$20-lapse hard gate. The \emph{sleep module} derives sleep debt (rolling 7-night cumulative deficit), the Sleep Regularity Index \cite{lunsfordavery2018}, stage-balance proportions, and a four-band low-SpO$_2$ screening proxy (not a clinical apnea classification); the module surfaces consumer-wearable bounds against polysomnography \cite{lee2025,schyvens2024} at every visualization, with research-grade ground truth supplied by ActiGraph wGT3X-BT recordings \cite{buchan2024}. The \emph{trajectory-risk module} maintains exponentially weighted moving averages of OPI, $\mathrm{SAFTE_{eff}}$, and $\mathrm{HRV_{rec}}$ and exposes a bounded cumulative-strain modifier aligned with the allostatic-load construct \cite{mcewen1998}.
+
+\subsection{Worked-example methodology}
+A single 128-minute HRV recording (8553 RR intervals, 0.047\% quality-flagged windows under the artefact rule above) collected in November~2025 was used to anchor an illustrative worked example. For the public worked-example artefact, recording-level summary statistics were used to generate representative five-minute windowed HRV metrics with realistic variability rather than re-parsing a raw RR-interval file; representative windows were combined with a rested-baseline SAFTE trajectory and the OPI fusion logic under three task hypotheses: a CAT~II instrument landing system (ILS) approach (manned-aviation category~1), a two-hour UAS intelligence-surveillance-reconnaissance (ISR) sortie (UAS category~11), and a daytime carrier recovery (manned-aviation category~8). For each hypothesis the full OPI time series was computed per window and mapped to the readiness categories defined in Table~\ref{tab:taxonomy}.
+
+\section{Results}
+
+\subsection{Illustrative worked example: framework instantiation across three task hypotheses}
+\label{sec:worked}
+Fig.~\ref{fig:worked} presents per-window OPI time series for the three task hypotheses computed across eighty representative five-minute windows spanning the 128-minute recording duration. The three hypotheses produced substantively different composite distributions from identical summary-consistent physiological input.
+
+Under the \emph{CAT~II ILS approach} ($w_1{=}0.55$, $w_2{=}0.25$, $w_3{=}0.20$, $T_{\mathrm{mod}}{=}0.90$), the composite varied between 48.9 and 63.7 (mean~55.9, SD~3.7) and was classified in the CAUTION band (55--69) for 58.8\,\% of windows and in the NO-GO band ($<55$) for 41.2\,\% of windows. No window reached the GO or GO~(Monitor) bands.
+
+Under the \emph{UAS ISR 2-hour sortie} ($w_1{=}0.35$, $w_2{=}0.30$, $w_3{=}0.15$, $w_4{=}0.20$; Warm decay with $\lambda{=}0.12\,\mathrm{h}^{-1}$, $V_0{=}100$, $V_{\min}{=}65$; latency penalty at 120~ms datalink; single vehicle), the composite was higher overall, varying between 64.1 and 81.8 (mean~72.4, SD~4.4), with 66.2\,\% of windows classified as GO~(Monitor) and the remaining 33.8\,\% as CAUTION. The composite showed a visible downward drift as simulated time-on-task approached two hours, consistent with the Warm vigilance decrement.
+
+Under the \emph{carrier-landing} hypothesis ($w_1{=}0.50$, $w_2{=}0.30$, $w_3{=}0.20$, $T_{\mathrm{mod}}{=}0.85$ to reflect CVN deck motion and short-final demands), the composite was systematically lower, varying between 42.6 and 58.3 (mean~50.3, SD~4.1), with 86.2\,\% of windows classified as NO-GO and the remaining 13.8\,\% as CAUTION.
+
+The central observation, addressing \textbf{RQ1}, is that the same summary-consistent physiological input yielded composite distributions differing in central tendency (mean OPI 55.9 vs.\ 72.4 vs.\ 50.3) and in category allocation (41.2\,\% / 0\,\% / 86.2\,\% NO-GO across the three tasks, respectively). For comparison, a task-agnostic uniform-weights composite ($w_1{=}w_2{=}w_3{=}1/3$, identical penalty terms) applied to the same physiological input yields a mean OPI of 49.7 (SD~6.0) with 77.5\,\% of windows classified NO-GO and the remaining 22.5\,\% CAUTION. The task-agnostic baseline is therefore \emph{both} more pessimistic than the UAS ISR calibration (where 0\,\% of windows would be NO-GO with task-specific weighting) \emph{and} less pessimistic than the carrier-landing calibration (where 86.2\,\% of windows are NO-GO). Task-agnostic weighting collapses these directionally-opposite errors into a single intermediate distribution that does not expose either the tolerance the UAS operator has under sustained-monitoring demands or the stringency the carrier-landing operator faces under precision-motor-control demands. The illustrative numerical outputs are framework-instantiation values only.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\columnwidth]{figure3_opi_worked_example.pdf}
+\caption{Per-window OPI composite scores for three task hypotheses (CAT~II ILS approach, UAS ISR 2-hour sortie, carrier landing) computed from identical physiological input across eighty 5-minute windows.}
+\label{fig:worked}
+\end{figure}
+
+\subsection{Engineering verification of the OPI fusion pathway}
+\label{sec:verif}
+Engineering verification of the reference implementation covers the major tested paths through the OPI pipeline at the software level. The repository ships 421 automated tests covering scheduling-core readiness fusion, fatigue-risk-management behavior, SAFTE-adjacent logic, API endpoint normalization, and broader statistical and charting modules. The PVT and sleep reference modules are covered by dedicated test suites (28 PVT tests across trial classification, alert- and fatigued-session metrics, variant scaling, edge cases, and the operational gate; 27 sleep tests across stage balance, sleep-debt scaling, Sleep Regularity Index behavior, SpO$_2$ screening bands, operational-gate escalation, and the correlation engine with Benjamini--Hochberg FDR adjustment). The longitudinal trajectory-risk module is implemented and documented but is not yet covered by dedicated regression tests; the UAS Warm/Chen formulations are formalized in framework artefacts and instantiated in the worked-example script rather than exposed as a separately tested operational API pathway. A summary coverage row is given in Table~\ref{tab:verif}; the full coverage matrix appears in Supplement~S2.
+
+\begin{table}[t]
+\caption{Engineering-verification coverage by OPI fusion-pathway layer (summary). Full per-test coverage matrix: Supplement~S2.}
+\label{tab:verif}
+\centering
+\renewcommand{\arraystretch}{1.1}
+\begin{tabularx}{\columnwidth}{@{}l X@{}}
+\toprule
+Layer & Status \\
+\midrule
+HRV analytic core      & Implemented; endpoint-tested \\
+SAFTE\,/\,circadian    & Implemented; integration-tested \\
+Readiness fusion       & Implemented; regression-tested \\
+PVT module             & Implemented; regression-tested (28~tests) \\
+Sleep module           & Implemented; regression-tested (27~tests) \\
+Trajectory-risk module & Implemented; not yet regression-tested \\
+API delivery           & Endpoint-tested \\
+\bottomrule
+\end{tabularx}
+\end{table}
+
+\subsection{Numerical benchmark of the HRV engine on MIT-BIH NSR}
+\label{sec:benchmark}
+
+To address concerns of numerical equivalence with established HRV reference packages, we benchmarked the OPI HRV engine against NeuroKit2 \cite{makowski2021} on the public MIT-BIH Normal Sinus Rhythm Database (NSRDB) hosted on PhysioNet \cite{goldberger2000}. RR intervals were extracted from the QRS annotations supplied with the records; intervals outside [300, 2000]\,ms were discarded; the remaining series were partitioned into non-overlapping 5-min windows. For each window, the same RR series was passed to both engines and the resulting metric pairs were stored. Agreement was assessed by intra-class correlation coefficient (ICC(2,1), absolute agreement, single-rater) and Bland--Altman 95\% limits of agreement.
+
+Across 266 5-min windows from a representative NSRDB record, agreement with NeuroKit2 was excellent for the time-domain and Poincar\'e-derived metrics that drive the OPI's $\mathrm{HRV_{rec}}$ and $\mathrm{Auto_{res}}$ components (Table~\ref{tab:benchmark}): all ICC values $\geq$~0.998 and Bland--Altman bias values an order of magnitude smaller than the corresponding metric standard deviations across the dataset. The largest absolute bias is for pNN50 ($-0.61$ percentage points), within the precision tolerance of the underlying RR-interval representation. The benchmark in this submission is limited to time-domain and Poincar\'e-derived metrics, which together feed the OPI's $\mathrm{HRV_{rec}}$ and $\mathrm{Auto_{res}}$ components. Extension to frequency-domain (LF, HF, LF/HF) and entropy-based (sample entropy, DFA-$\alpha$1) metrics follows the same ICC + Bland--Altman protocol and is identified as immediate future work alongside extension to datasets containing arrhythmias and ambulatory artefacts (Section~\ref{sec:roadmap}). The benchmark is intentionally bounded to a deterministic numerical pathway on a clean-rhythm dataset; it does not establish operational validation or clinical deployment readiness. The benchmarking script, per-window result CSV, and JSON summary are distributed with the reference implementation.
+
+\begin{table}[t]
+\caption{HRV-engine numerical benchmark against NeuroKit2 on MIT-BIH NSR (266 non-overlapping 5-minute windows). ICC(2,1) is absolute-agreement, single-rater. Bland--Altman bias and 95\,\% limits of agreement (LoA) are in metric units (RMSSD, SDNN, SD1, SD2 in ms; pNN50 in \%).}
+\label{tab:benchmark}
+\centering
+\renewcommand{\arraystretch}{1.1}
+\setlength{\tabcolsep}{6pt}
+\begin{tabular}{@{}lcccc@{}}
+\toprule
+Metric & $n$ & ICC$(2,1)$ & Bias & 95\,\% LoA \\
+\midrule
+RMSSD  & 266 & 0.999 & $-0.09$ & $[-1.26,+1.08]$ \\
+SDNN   & 266 & 1.000 & $+0.04$ & $[-1.08,+1.16]$ \\
+pNN50  & 266 & 0.998 & $-0.61$ & $[-1.73,+0.51]$ \\
+SD1    & 266 & 0.999 & $-0.06$ & $[-0.89,+0.76]$ \\
+SD2    & 266 & 1.000 & $+0.06$ & $[-1.01,+1.12]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Reproducibility}
+The reference implementation is distributed under the MIT license. The documented primary execution environment is Python~3.12 with dependencies declared in \texttt{requirements.txt}; the primary client is a Next.js / TypeScript application. A tagged release with archived Zenodo DOI will be cited in the camera-ready as the frozen identifier for the reported version, consistent with published guidance for reproducible computational research \cite{sandve2013}.
+
+\section{Discussion}
+
+\subsection{Principal contribution}
+The principal contribution is neither a new physiological marker nor a new machine-learning classifier but a deliberately simple, theoretically grounded substrate for aerospace operator-readiness decisions: a linear weighted composite whose per-task weight profiles, vigilance-decrement model, control-latency penalty, operational gate thresholds, and reference-implementation modules are specified in the open and distributed as inspectable code. The framework is positioned as an inspectable input substrate for downstream human-machine teaming workflows, supporting the system test and evaluation activities that are central to aerospace operator-loop integration. The reference-implementation Psychomotor Vigilance Task, sleep-analytics, and trajectory-risk modules concretize the vigilance, fatigue, and cumulative-strain inputs as inspectable code rather than external dependencies, and span both manned-aviation and UAS operator categories that are usually treated in separate research communities. The composite is intended to be audited line by line by safety reviewers, extended by domain experts without re-training, and calibrated against operator outcomes using modest-sample-size Bayesian hierarchical or penalized-regression studies.
+
+\subsection{Comparison with adjacent frameworks}
+Several recent frameworks are adjacent to the OPI but differ in important ways. Feng \textit{et~al.}~\cite{feng2018} proposed an MRT-grounded multinomial logistic regression combining fixation-frequency, ECG, and electrodermal features for pilot workload across three flight phases (cruise, approach, landing), with reported discrimination accuracy of 84.85\,\%. The Feng framework validates the principle of MRT~+~physiological fusion but covers only three phases of one aircraft type, includes no fatigue model, and is distributed as a study result rather than as reusable software. The OPI extends this line of work to seventeen operator task categories, incorporates SAFTE fatigue dynamics, and ships as open-source reference code.
+
+Stevens \textit{et~al.}~\cite{stevens2022} used Cognitive Metrics Profiling to link a cognitive model to physiological workload in a single unmanned-vehicle control task; their per-task fidelity is high but the per-task taxonomy and per-task weight profile that distinguish the OPI are absent. Vogl \textit{et~al.}~\cite{vogl2025} developed individualized support-vector-machine classifiers of cognitive workload from ECG and pupillometry in a low-fidelity aviation simulator with three participants, reporting 70--80\,\% binary classification accuracy; the OPI can serve as a calibration layer under which classifiers like the Vogl model are trained on particular operator populations rather than as a competing estimator. Li \textit{et~al.}~\cite{li2025} systematically reviewed machine-learning approaches for UAS operator cognitive load and explicitly identified the absence of unified frameworks integrating physiological signals, biomathematical fatigue, and task-specific weighting as a research gap; the OPI as proposed addresses that gap directly. Hamann \textit{et~al.}~\cite{hamann2026} reviewed cockpit mental-fatigue assessment using head-worn sensing and concluded that mature methods exist but are not yet operationally deployable; the OPI accommodates head-worn signals as additional inputs to the $\mathrm{Att_{cap}}$ component where available. Rabat \textit{et~al.}~\cite{rabat2025} called specifically for ``an infrastructure for physiological monitoring and integrated analyses'' combined with explainable and interpretable modeling --- the OPI is a concrete instance of that infrastructure.
+
+\subsection{Theoretical grounding and the case for principled simplicity}
+\label{sec:simplicity}
+The OPI's linear structure and per-task weighting reflect three theoretical commitments: MRT predicts task-specific demand profiles \cite{wickens2002,wickens2008}; the allostatic-load framework \cite{mcewen1998} distinguishes acute stress (captured by the stress penalty) from cumulative regulatory strain (captured by $\mathrm{HRV_{rec}}$ and $\mathrm{Auto_{res}}$); and situation-awareness theory \cite{endsley1995} motivates the dedicated attention-capacity component for UAS supervisory-control tasks. The composite leverages this evidence directly rather than reconstructing it from data.
+
+The deliberate use of a linear composite in an era of machine-learning ascendancy reflects four structural constraints of aerospace HMS engineering. Labeled outcome data are scarce; a single squadron rarely produces the tens of thousands of labeled sorties modern classifiers require. Populations are small and heterogeneous across platforms; classifiers trained on one transfer poorly to another \cite{vogl2025}. Sensor generations change faster than training cycles. And the cost function is dominated by safety review: an unexplainable automated NO-GO cannot be approved by a safety board or defended after an incident.
+
+Against these constraints, a linear composite with theory-derived weights is \textit{inspectable} (every gate decision decomposes into named contributions), \textit{extensible} (new task categories specified through demand analysis without training data), \textit{calibratable} on modest samples via penalized regression or Bayesian hierarchical modeling, and \textit{falsifiable} at the level of individual per-task weight profiles. The framework does not reject classifiers; it positions them as downstream refinements that locally tune the composite under specified conditions, while the overall HMS-substrate structure remains auditable. This addresses \textbf{RQ3} at the design-rationale level; an empirical comparison against opaque classifiers on matched datasets is identified as future work in Section~\ref{sec:roadmap}.
+
+\subsection{Limitations}
+The most important limitation is that per-task OPI weights are theory-derived, not empirically calibrated against operator performance; specific values for $w_1$--$w_4$ represent one of a larger family of plausible profiles, with empirical selection pending (Section~\ref{sec:roadmap}, \textbf{RQ2}). The illustrative worked example uses a single HRV recording in a non-operational context and demonstrates framework instantiation rather than operational validity. The numerical benchmark of the HRV engine reported in Section~\ref{sec:benchmark} is bounded to time-domain and Poincar\'e metrics on a clean-rhythm public dataset; frequency-domain and entropy benchmarking, and benchmarking under arrhythmias and ambulatory artefacts, require further evaluation. The vigilance-decrement and control-latency parameters \cite{warm2008,chen2007} may require recalibration for modern UAS platforms with advanced autonomy or degraded links. The platform is not a certified medical device; references to ICAO~Doc~9966 and NASA-STD-3001 are alignment, not certification \cite{icao2020,nasa2023}. The sleep-analytics layer in consumer-wearable mode inherits the meaningful disagreement against polysomnography reported across consumer devices \cite{lee2025,schyvens2024}; operational-mode use is therefore bounded to pattern-level tracking.
+
+\subsection{Validation roadmap}
+\label{sec:roadmap}
+The most immediate next step, addressing \textbf{RQ2}, is a planned prospective field validation during the 2026--2027 Colombian Antarctic aerial campaign on a Colombian Air Force C-130 Hercules. Consenting crew will wear the ActiGraph wGT3X-BT for sleep and activity ground truth \cite{buchan2024} and the Polar~H10 chest-strap electrocardiogram during structured daily HRV windows and mission task blocks \cite{pereira2020,hinde2021,yang2024}. Longitudinal OPI trajectories, PVT lapses, Sleep Regularity Index, cumulative sleep debt, and trajectory-risk EWMA series will be analyzed with penalized regression or Bayesian hierarchical models to refine per-task weight profiles for extended-endurance, over-water, and instrument-flight categories against performance and self-reported workload benchmarks. Sensitivity analysis across weight families will quantify how much the specific theory-derived values matter relative to the structure of the composite. The campaign protocol is the subject of a separate publication.
+
+A second priority extends the Section~\ref{sec:benchmark} HRV-engine benchmark to datasets containing arrhythmias and ambulatory artefacts, where agreement bounds are expected to widen. A third priority, addressing \textbf{RQ3}, is comparative benchmarking against opaque classifier baselines on matched datasets --- Stevens \textit{et~al.}~\cite{stevens2022} and Vogl \textit{et~al.}~\cite{vogl2025} provide comparator systems whose outputs can be replicated and scored against the same ground truth used to calibrate the OPI. A fourth priority is a prospective pilot study in a well-characterized manned-aviation or UAS training population with ethics approval and a pre-specified analysis plan.
+
+\section{Conclusions}
+The Operational Performance Indicator framework offers a theoretically grounded, task-calibrated alternative to fatigue-only composites, HRV-only analyses, and machine-learning operator-state classifiers. The framework covers both manned-aviation and UAS operator categories, ships as open-source reference code under the MIT license, and is supported by engineering verification across its fusion pathway. Empirical calibration of per-task weights against operator outcomes and prospective field validation are the next research steps. The framework is designed to be extensible by domain experts without retraining, positioning it as an inspectable HMS substrate for downstream classifier hybridization rather than as a closed analytic end-product.
+
+\section*{Compliance and transparency}
+\noindent\textbf{Data availability.} No new human-subject dataset was generated for the framework-definition and engineering-verification components. The single 128-minute HRV recording used for the illustrative worked example is available from the corresponding author on reasonable request as a de-identified illustrative dataset. The public repository contains the derived JSON artefact and reproduction script for the worked example.
+
+\noindent\textbf{Code and artefact availability.} The reference implementation is at \url{https://github.com/strikerdlm/HRV} under the MIT license. A tagged release and archived Zenodo DOI corresponding to the reported version will be cited in the camera-ready.
+
+\noindent\textbf{Ethics.} Ethics approval and informed consent were not required because no new human-subject dataset was generated or analyzed. The platform is not a certified medical device or regulated decision-support system; references to NASA-STD-3001 \cite{nasa2023} and ICAO Doc~9966 \cite{icao2020} inform design and threshold logic but do not constitute certification or regulatory clearance.
+
+\noindent\textbf{Author contributions (CRediT).} \textit{D.L.~Malpica:} Conceptualization; Methodology; Software; Formal analysis; Investigation; Writing --- original draft; Writing --- review \& editing; Visualization; Supervision; Project administration. \textit{I.X.~Bejarano~Cifuentes:} Investigation; Writing --- review \& editing; Resources.
+
+\noindent\textbf{Funding and competing interests.} This research did not receive any specific grant from funding agencies in the public, commercial, or not-for-profit sectors. The authors declare no competing financial or non-financial interests related to this manuscript.
+
+\noindent\textbf{Generative AI declaration.} During the preparation of this work the authors used AI-assisted technologies (large language-model-based drafting, editing, literature cross-checking, and formatting workflows under human oversight). After using these tools, the authors reviewed and edited the content as needed and take full responsibility for the content of the manuscript.
+
+\section*{Acknowledgement}
+The authors acknowledge DIMAE and CITAE within the Colombian Aerospace Force for institutional support, and the open-source NumPy, SciPy, pandas, and FastAPI ecosystems on which the reference implementation relies.
+
+% --- Bibliography ------------------------------------------------------------
+\bibliographystyle{IEEEtran}
+\bibliography{references}
+
+\end{document}

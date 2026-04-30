@@ -249,6 +249,10 @@ plots_output/
 !manuscript/figures/*.png
 !manuscript/figures/*.svg
 !manuscript/figures/*.jpg
+!manuscript/submission_thms/tex/figures/*.pdf
+!manuscript/submission_package/05_figures/*.pdf
+!manuscript/submission_package/05_figures/*.png
+!manuscript/submission_package/05_figures/*.svg
 
 # User data directory (contains sensitive physiological data)
 data/
