@@ -250,6 +250,7 @@ plots_output/
 !manuscript/figures/*.svg
 !manuscript/figures/*.jpg
 !manuscript/submission_thms/tex/figures/*.pdf
+!manuscript/submission_thms/tex/manuscript.pdf
 !manuscript/submission_package/05_figures/*.pdf
 !manuscript/submission_package/05_figures/*.png
 !manuscript/submission_package/05_figures/*.svg
