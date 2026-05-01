@@ -1,6 +1,6 @@
 # OPI Manuscript — Revision Plan for IEEE THMS
 
-**Source manuscript:** `manuscript/submission_package/01_manuscript/manuscript.md` (~7,800 words, last built for Applied Ergonomics)
+**Source manuscript:** historical AE-era source at `manuscript/submission_package/01_manuscript/manuscript.md` (~7,800 words; folder retired in the 2026-04-30 cleanup commit)
 **Target:** IEEE THMS regular paper, 10 IEEE Transactions pages
 **Working budget:** 5,500–6,000 words main text + ≤6 figures + ≤4 tables + ≤60 references
 **Cut required:** ~1,800 words (≈25%) plus relocation of all code blocks and verification detail to a supplement

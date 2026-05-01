@@ -221,7 +221,7 @@ Under the **carrier-landing** hypothesis ($w_1{=}0.50$, $w_2{=}0.30$, $w_3{=}0.2
 
 The central observation, addressing **RQ1**, is that the same summary-consistent physiological input yielded composite distributions differing in central tendency (mean OPI 55.9 vs. 72.4 vs. 50.3) and in category allocation (0 % / 33.8 % / 86.2 % NO-GO). This is consistent with the MRT-derived weight-profile design intent and demonstrates that a task-calibrated composite exposes task-specific readiness information that a task-agnostic composite would collapse. The illustrative numerical outputs are framework-instantiation values only; they do not reflect the readiness state of any operator performing any of the three tasks, because the recording was collected from a single individual in a non-operational context.
 
-![Fig. 3. Per-window OPI time series for three task hypotheses from one 128-minute recording.](../figures/figure3_opi_worked_example.png)
+![Fig. 3. Per-window OPI time series for three task hypotheses from one 128-minute recording.](tex/figures/figure3_opi_worked_example.pdf)
 
 **Fig. 3.** Per-window Operational Performance Indicator (OPI) composite scores for three task hypotheses (CAT II ILS approach, UAS ISR 2-hour sortie, carrier landing) computed from identical physiological input across eighty 5-minute windows.
 
