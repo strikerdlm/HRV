@@ -244,7 +244,7 @@ $>1500$      & $>1.39$            & Autonomous handoff       \\
 
 \subsection{Reference implementation}
 \label{sec:refimpl}
-The reference implementation is distributed under the MIT license at \url{https://github.com/strikerdlm/HRV} (frozen Zenodo DOI to be cited in the camera-ready). The architecture separates client delivery from model execution while keeping the computational core as a single Python stack. A web client communicates with a FastAPI orchestration layer that exposes structured endpoints for HRV analysis, scheduling and readiness, user-profile management, and research utilities. The shared analytic core hosts the HRV engine, SAFTE reservoir model, readiness-fusion logic, Psychomotor Vigilance Task (PVT) module, sleep-analytics module, and longitudinal trajectory-risk module. Architecture and module manifests are provided in Supplement~S1.
+The reference implementation is distributed under the MIT license at \url{https://github.com/strikerdlm/HRV}; the v1.0.0-thms snapshot is archived on Zenodo with permanent DOI \href{https://doi.org/10.5281/zenodo.19935116}{10.5281/zenodo.19935116}. The architecture separates client delivery from model execution while keeping the computational core as a single Python stack. A web client communicates with a FastAPI orchestration layer that exposes structured endpoints for HRV analysis, scheduling and readiness, user-profile management, and research utilities. The shared analytic core hosts the HRV engine, SAFTE reservoir model, readiness-fusion logic, Psychomotor Vigilance Task (PVT) module, sleep-analytics module, and longitudinal trajectory-risk module. Architecture and module manifests are provided in Supplement~S1.
 
 The HRV engine computes time-domain metrics (RMSSD, SDNN, pNN50), frequency-domain metrics (VLF, LF, HF power; LF/HF ratio), and nonlinear metrics (SD1, SD2, sample entropy, DFA-$\alpha$1, Poincar\'e ellipse area, Baevsky stress index) from RR-interval series. Artefact handling rejects samples outside $[0.5\bar{x}, 2\bar{x}]$ around the local median and replaces invalid samples by linear interpolation; analyses use 5-minute non-overlapping windows. Outputs feed the $\mathrm{HRV_{rec}}$, $\mathrm{Auto_{res}}$, and $\mathrm{Att_{cap}}$ components through documented normalization functions. A numerical benchmark of these metrics against the NeuroKit2 reference package \cite{makowski2021} on the public MIT-BIH Normal Sinus Rhythm Database \cite{goldberger2000} is reported in Section~\ref{sec:benchmark}.
 
@@ -325,7 +325,7 @@ SD2    & 266 & 1.000 & $+0.06$ & $[-1.01,+1.12]$ \\
 \end{table}
 
 \subsection{Reproducibility}
-The reference implementation is distributed under the MIT license. The documented primary execution environment is Python~3.12 with dependencies declared in \texttt{requirements.txt}; the primary client is a Next.js / TypeScript application. A tagged release with archived Zenodo DOI will be cited in the camera-ready as the frozen identifier for the reported version, consistent with published guidance for reproducible computational research \cite{sandve2013}.
+The reference implementation is distributed under the MIT license. The documented primary execution environment is Python~3.12 with dependencies declared in \texttt{requirements.txt}; the primary client is a Next.js / TypeScript application. The reported version is the tagged \texttt{v1.0.0-thms} release, archived on Zenodo at DOI \href{https://doi.org/10.5281/zenodo.19935116}{10.5281/zenodo.19935116}, consistent with published guidance for reproducible computational research \cite{sandve2013}.
 
 \section{Discussion}
 
@@ -360,7 +360,7 @@ The Operational Performance Indicator framework offers a theoretically grounded,
 \section*{Compliance and transparency}
 \noindent\textbf{Data availability.} No new human-subject dataset was generated for the framework-definition and engineering-verification components. The single 128-minute HRV recording used for the illustrative worked example is available from the corresponding author on reasonable request as a de-identified illustrative dataset. The public repository contains the derived JSON artefact and reproduction script for the worked example.
 
-\noindent\textbf{Code and artefact availability.} The reference implementation is at \url{https://github.com/strikerdlm/HRV} under the MIT license. A tagged release and archived Zenodo DOI corresponding to the reported version will be cited in the camera-ready.
+\noindent\textbf{Code and artefact availability.} The reference implementation is at \url{https://github.com/strikerdlm/HRV} under the MIT license. The reported version corresponds to the tagged release \texttt{v1.0.0-thms}, archived on Zenodo with permanent DOI \href{https://doi.org/10.5281/zenodo.19935116}{10.5281/zenodo.19935116}.
 
 \noindent\textbf{Ethics.} Ethics approval and informed consent were not required because no new human-subject dataset was generated or analyzed. The platform is not a certified medical device or regulated decision-support system; references to NASA-STD-3001 \cite{nasa2023} and ICAO Doc~9966 \cite{icao2020} inform design and threshold logic but do not constitute certification or regulatory clearance.
 
