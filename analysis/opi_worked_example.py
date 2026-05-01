@@ -197,18 +197,21 @@ def task_summary(name: str, opi: np.ndarray, cats: np.ndarray) -> dict:
 # ---------------------------------------------------------------------------
 
 def build_figure(t_minutes, opi_series_list, titles, fig_path_base: Path):
+    # Grayscale + hatching readiness bands (B&W print compliant).
+    # Lighter = better readiness; CAUTION and NO-GO are hatched.
     bands = [
-        (85, 100, "#bdd7e7", "GO"),
-        (70, 85, "#bae4bc", "GO(Monitor)"),
-        (55, 70, "#fed98e", "CAUTION"),
-        (0, 55, "#fdae61", "NO-GO"),
+        (85, 100, "#f0f0f0", "",   "GO"),
+        (70, 85,  "#d8d8d8", "",   "GO(Monitor)"),
+        (55, 70,  "#b8b8b8", "..", "CAUTION"),
+        (0,  55,  "#8c8c8c", "//", "NO-GO"),
     ]
-    line_colour = "#08519c"
+    line_colour = "#000000"
 
     fig, axes = plt.subplots(1, 3, figsize=(13.2, 4.2), sharey=True, dpi=300)
     for ax, y, title in zip(axes, opi_series_list, titles):
-        for lo, hi, col, _ in bands:
-            ax.axhspan(lo, hi, facecolor=col, alpha=0.55, edgecolor="none")
+        for lo, hi, col, hatch, _ in bands:
+            ax.axhspan(lo, hi, facecolor=col, alpha=0.65,
+                       edgecolor="#666666", linewidth=0.3, hatch=hatch)
         for th in (55, 70, 85):
             ax.axhline(th, color="#4a4a4a", linewidth=0.7, linestyle="--", alpha=0.8)
         ax.plot(
@@ -229,8 +232,9 @@ def build_figure(t_minutes, opi_series_list, titles, fig_path_base: Path):
     axes[0].set_ylabel("OPI composite score")
 
     legend_handles = [
-        mpatches.Patch(color=col, alpha=0.7, label=label)
-        for _, _, col, label in bands
+        mpatches.Patch(facecolor=col, alpha=0.7, edgecolor="#666666",
+                       hatch=hatch, label=label)
+        for _, _, col, hatch, label in bands
     ]
     fig.legend(
         handles=legend_handles, loc="lower center", ncol=4, frameon=False,

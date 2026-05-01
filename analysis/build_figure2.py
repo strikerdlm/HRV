@@ -18,17 +18,21 @@ from matplotlib.patches import FancyBboxPatch
 
 
 # ---------------------------------------------------------------------------
-# Muted signature-family palette coordinated with Figures 1 and 4
+# Grayscale signature-family palette + hatching for B&W print compliance.
+# Each family is a unique (shade, hatch) pair so families remain
+# distinguishable on B&W print and grayscale screens.
 # ---------------------------------------------------------------------------
-SIG_COLOURS = {
-    "LF_HF_dominant":     "#f8d36b",  # warm gold — sympathetic shift
-    "Vagal_withdrawal":   "#e79f7b",  # muted umber — parasympathetic drop
-    "Complexity_drop":    "#dde3ea",  # cool grey — entropy reduction
-    "Precision_markers":  "#b9dfa7",  # calm green — RMSSD / Poincaré targets
-    "Acute_suppression":  "#f5b2a0",  # soft coral — acute stress
-    "Vigilance_decay":    "#fbd9a3",  # pale apricot — Warm decrement
-    "Latency_dominant":   "#c6dbef",  # soft blue — teleoperation
+SIG_STYLES = {
+    "LF_HF_dominant":     ("#ececec", ""),       # very light grey, plain
+    "Vagal_withdrawal":   ("#ececec", "//"),     # very light grey, diagonal
+    "Complexity_drop":    ("#dcdcdc", ""),       # light grey, plain
+    "Precision_markers":  ("#dcdcdc", ".."),     # light grey, dotted
+    "Acute_suppression":  ("#dcdcdc", "xx"),     # light grey, crosshatch
+    "Vigilance_decay":    ("#c4c4c4", ""),       # mid-light grey, plain
+    "Latency_dominant":   ("#c4c4c4", "\\\\"),   # mid-light grey, reverse-diag
 }
+SIG_COLOURS = {k: v[0] for k, v in SIG_STYLES.items()}
+SIG_HATCHES = {k: v[1] for k, v in SIG_STYLES.items()}
 EDGE = "#2c3e50"
 MUTED = "#5a6570"
 TEXT = "#1a1a1a"
@@ -100,10 +104,11 @@ UAS = [
 
 def draw_cell(ax, x, y, w, h, entry):
     face = SIG_COLOURS[entry["family"]]
+    hatch = SIG_HATCHES[entry["family"]]
     ax.add_patch(FancyBboxPatch(
         (x, y), w, h,
         boxstyle="round,pad=0.010,rounding_size=0.04",
-        linewidth=0.6, edgecolor=EDGE, facecolor=face,
+        linewidth=0.6, edgecolor=EDGE, facecolor=face, hatch=hatch,
     ))
     # Index + task name (top)
     ax.text(x + w / 2, y + h - 0.15,
@@ -171,7 +176,8 @@ def build(out_base: Path) -> None:
         ("Vigilance_decay",   "Vigilance decay (UAS)"),
         ("Latency_dominant",  "Latency-dominant (UAS)"),
     ]
-    patches = [mpatches.Patch(facecolor=SIG_COLOURS[k], edgecolor=EDGE, label=v)
+    patches = [mpatches.Patch(facecolor=SIG_COLOURS[k], edgecolor=EDGE,
+                               hatch=SIG_HATCHES[k], label=v)
                for k, v in legend_entries]
     fig.legend(handles=patches, loc="lower center", ncol=7,
                frameon=False, fontsize=8, bbox_to_anchor=(0.5, 0.005))
