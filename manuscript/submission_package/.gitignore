@@ -1,6 +1,0 @@
-# The repo root .gitignore excludes *.png and *.pdf globally; the journal
-# submission package needs these binaries (Manuscript.pdf, figures, combined
-# PDF) to be portal-uploadable from a fresh clone. Re-include them here.
-!*.png
-!*.pdf
-!*.docx

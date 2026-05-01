@@ -81,7 +81,7 @@ Pre-flight before pressing submit on `https://mc.manuscriptcentral.com/thms`.
 - [ ] Branch: `thms-revision`
 - [ ] CHANGELOG entry added for the revision
 - [ ] `manuscript/CLAUDE.md` updated to reflect THMS as the active target (replace Applied Ergonomics references)
-- [ ] `manuscript/outline/manuscript_outline.md` venue-targeting section updated
+- [x] ~~`manuscript/outline/manuscript_outline.md` venue-targeting section updated~~ — outline retired with the AE-era working folders (2026-04-30 cleanup)
 
 ## G2. Verification before sending
 

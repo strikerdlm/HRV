@@ -8,7 +8,7 @@
 
 As of 2026-04-21, the manuscript has been repositioned on branch `q1-hf-opi-reframe` around a task-calibrated **Operational Performance Indicator (OPI)** framework targeted at *Applied Ergonomics* (Elsevier, Q1 Human Factors, JIF 3.4). The prior biomedical-computing (CMPB/JBI) framing remains in git history on `main` but is not the active direction. The OPI reframe is motivated by the author's decision to prioritise medical / psychology / human factors venues where the current evidence base (framework + reference implementation + engineering verification + illustrative worked example) is sufficient for Q1 submission without new external validation studies.
 
-Literature verification and venue targeting rationale: `manuscript/outline/novelty_and_venue_2026-04-21.md`.
+Literature verification and venue targeting rationale was in `manuscript/outline/novelty_and_venue_2026-04-21.md`; that folder was retired in the 2026-04-30 cleanup. Current target is **IEEE Transactions on Human-Machine Systems** — see `manuscript/submission_thms/` for the active submission package.
 
 ### Author & affiliation block (copy-paste for Editorial Manager)
 
