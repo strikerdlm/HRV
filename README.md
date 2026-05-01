@@ -12,6 +12,7 @@
 [![CUDA](https://img.shields.io/badge/CUDA-Optional-76B900?logo=nvidia)](https://developer.nvidia.com/cuda-toolkit)
 [![i18n](https://img.shields.io/badge/i18n-EN%20%7C%20ES-blue)](app/i18n.py)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.19935116.svg)](https://doi.org/10.5281/zenodo.19935116)
 
 ---
 
@@ -646,6 +647,28 @@ All metrics, thresholds, and interpretations in this project are grounded in pee
 - Zhang, S., Wimmer-Schweingruber, R. F., Yu, J., et al. (2020). First measurements of the radiation dose on the lunar surface. *Science Advances, 6*(39), eaaz1334. [DOI: 10.1126/sciadv.aaz1334](https://doi.org/10.1126/sciadv.aaz1334)
 - Zeitlin, C., Hassler, D. M., Cucinotta, F. A., et al. (2013). Measurements of energetic particle radiation in transit to Mars on the Mars Science Laboratory. *Science, 340*(6136), 1080-1084. [DOI: 10.1126/science.1235989](https://doi.org/10.1126/science.1235989)
 - Hassler, D. M., Zeitlin, C., Wimmer-Schweingruber, R. F., et al. (2014). Mars' surface radiation environment measured with the Mars Science Laboratory's Curiosity rover. *Science, 343*(6169), 1244797. [DOI: 10.1126/science.1244797](https://doi.org/10.1126/science.1244797)
+
+---
+
+## Cite This Work
+
+If you use Mission Control - Flight Surgeon in academic work, please cite the archived release:
+
+> Malpica, D. L., & Bejarano Cifuentes, I. X. (2026). Task-calibrated Operational Performance Indicators for aviation and unmanned aircraft system operators: a biomathematical human-machine systems framework (1.0.0-thms). Zenodo. https://doi.org/10.5281/zenodo.19935116
+
+**BibTeX:**
+
+```bibtex
+@software{malpica_2026_hrv,
+  author       = {Malpica, Diego L. and Bejarano Cifuentes, I. X.},
+  title        = {Task-calibrated Operational Performance Indicators for aviation and unmanned aircraft system operators: a biomathematical human-machine systems framework},
+  year         = {2026},
+  publisher    = {Zenodo},
+  version      = {1.0.0-thms},
+  doi          = {10.5281/zenodo.19935116},
+  url          = {https://doi.org/10.5281/zenodo.19935116}
+}
+```
 
 ---
 
