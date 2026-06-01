@@ -577,6 +577,30 @@ export async function getHRVFrequency(
 // ---------------------------------------------------------------------------
 
 /**
+ * Effective, server-configured nonlinear-analysis performance caps.
+ */
+export interface AnalysisSettings {
+  max_nonlinear_samples: number;
+  max_mfdfa_scales: number;
+  nonlinear_samples_env: string;
+  mfdfa_scales_env: string;
+}
+
+/**
+ * Get the effective nonlinear-analysis caps (env-tunable on the server).
+ */
+export async function getAnalysisSettings(): Promise<AnalysisSettings> {
+  const response = await fetch(`${API_BASE}/api/research/analysis-settings`, {
+    method: "GET",
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+  }
+  return (await response.json()) as AnalysisSettings;
+}
+
+/**
  * Get nonlinear HRV analysis (Poincare, DFA, Entropy)
  */
 export async function getHRVNonlinear(userId: string): Promise<NonlinearResponse> {

@@ -157,6 +157,25 @@ def test_entropy_apen_and_sampen_are_distinct():
     assert abs(res["apen"] - res["sampen"]) > 0.1
 
 
+def test_int_setting_parses_and_clamps(monkeypatch):
+    """Env-tunable caps must parse, clamp to a safe range, and reject junk."""
+    monkeypatch.delenv("HRV_TEST_X", raising=False)
+    assert hc._int_setting("HRV_TEST_X", 4000, 256, 10000) == 4000  # unset -> default
+    monkeypatch.setenv("HRV_TEST_X", "2500")
+    assert hc._int_setting("HRV_TEST_X", 4000, 256, 10000) == 2500
+    monkeypatch.setenv("HRV_TEST_X", "99999")
+    assert hc._int_setting("HRV_TEST_X", 4000, 256, 10000) == 10000  # clamp high
+    monkeypatch.setenv("HRV_TEST_X", "10")
+    assert hc._int_setting("HRV_TEST_X", 4000, 256, 10000) == 256  # clamp low
+    monkeypatch.setenv("HRV_TEST_X", "oops")
+    assert hc._int_setting("HRV_TEST_X", 4000, 256, 10000) == 4000  # junk -> default
+
+
+def test_settings_constants_in_safe_range():
+    assert 256 <= hc.MAX_NONLINEAR_SAMPLES <= 10000
+    assert 8 <= hc.MAX_MFDFA_SCALES <= 1000
+
+
 def test_entropy_matches_neurokit2_reference():
     """Cross-validate against neurokit2 (skipped if not installed)."""
     nk = pytest.importorskip("neurokit2")

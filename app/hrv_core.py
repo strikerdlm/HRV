@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -1022,13 +1023,29 @@ def compute_parasympathetic_index(
 	return pns_index
 
 
+def _int_setting(env_name: str, default: int, minimum: int, maximum: int) -> int:
+	"""Read an integer performance setting from the environment, clamped to a safe
+	range. Lets operators tune the nonlinear-analysis caps without code changes;
+	invalid or out-of-range values fall back to the default / nearest bound."""
+	raw = os.getenv(env_name)
+	if raw is None or str(raw).strip() == "":
+		return default
+	try:
+		value = int(str(raw).strip())
+	except (TypeError, ValueError):
+		return default
+	return max(minimum, min(maximum, value))
+
+
 # Entropy (SampEn/ApEn) and RQA are O(n^2). Cap the working window so advanced
 # analysis stays responsive on long (multi-hour) RR recordings; SampEn/RQA are
 # short-term metrics and a contiguous multi-thousand-beat window is standard.
-MAX_NONLINEAR_SAMPLES = 4000
+# Tunable via the HRV_MAX_NONLINEAR_SAMPLES environment variable.
+MAX_NONLINEAR_SAMPLES = _int_setting("HRV_MAX_NONLINEAR_SAMPLES", 4000, 256, 10000)
 # MFDFA scale count is capped (evenly subsampled) so cost stays ~O(n) on long
 # recordings; recordings with fewer scales than the cap are unaffected.
-MAX_MFDFA_SCALES = 100
+# Tunable via the HRV_MFDFA_MAX_SCALES environment variable.
+MAX_MFDFA_SCALES = _int_setting("HRV_MFDFA_MAX_SCALES", 100, 8, 1000)
 
 
 def compute_entropy_metrics(
