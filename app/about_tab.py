@@ -423,7 +423,17 @@ def render_about_tab() -> None:
         {_render_version_badge()}
     </div>
     """, unsafe_allow_html=True)
-    
+
+    # Legacy status notice — the Streamlit UI is maintenance-only.
+    st.warning(
+        "**Legacy interface.** This Streamlit application is in **maintenance mode**. "
+        "Active development has moved to the TypeScript/JavaScript frontend "
+        "(`frontend/`, Next.js) backed by the FastAPI service (`api/`). "
+        "No new features are added to the Streamlit UI — it remains available for "
+        "existing workflows and receives bug fixes only.",
+        icon="🗂️",
+    )
+
     # Author card
     st.markdown(_render_author_card(), unsafe_allow_html=True)
     
