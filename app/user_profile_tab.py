@@ -83,13 +83,16 @@ try:
         GARMIN_LIB_AVAILABLE,
         GarminAuthError,
         fetch_garmin_daily_metrics,
+        login_and_get_display_name,
         summarize_garmin_daily,
     )
 except ImportError:  # pragma: no cover - optional
     GARMIN_LIB_AVAILABLE = False  # type: ignore[assignment]
     class GarminAuthError(RuntimeError):  # type: ignore[override]
         pass
-    def fetch_garmin_daily_metrics(user_id: str, days: int = 14):  # type: ignore[misc]
+    def fetch_garmin_daily_metrics(user_id: str, days: int = 14, *, email=None, password=None):  # type: ignore[misc]
+        raise GarminAuthError("Garmin connect service unavailable.")
+    def login_and_get_display_name(email: str, password: str) -> str:  # type: ignore[misc]
         raise GarminAuthError("Garmin connect service unavailable.")
     def summarize_garmin_daily(records):  # type: ignore[misc]
         return {"count": 0}
@@ -5649,6 +5652,74 @@ def _build_garmin_sleep_payload(
     return payload
 
 
+# ---------------------------------------------------------------------------
+# Garmin Connect credentials (session-only; never written to disk)
+# ---------------------------------------------------------------------------
+
+
+def _session_garmin_credentials(user_id: str) -> Tuple[Optional[str], Optional[str]]:
+    """Return UI-entered Garmin credentials held for this session, if present."""
+    email = st.session_state.get(f"garmin_cred_email_{user_id}")
+    password = st.session_state.get(f"garmin_cred_password_{user_id}")
+    if email and password:
+        return str(email), str(password)
+    return None, None
+
+
+def _fetch_garmin_daily_metrics_ui(user_id: str, days: int = 14):
+    """fetch_garmin_daily_metrics with UI-entered (session) credentials injected.
+
+    Falls back to env/.env inside the service when no session credentials exist,
+    so the .env workflow keeps working unchanged. This is the single fetch entry
+    point every Streamlit caller should use.
+    """
+    email, password = _session_garmin_credentials(user_id)
+    return fetch_garmin_daily_metrics(user_id, days=days, email=email, password=password)
+
+
+def _render_garmin_login_form(user_id: str) -> None:
+    """Render the session-only Garmin Connect credential entry form.
+
+    Credentials are validated immediately via login_and_get_display_name and
+    stored only in st.session_state (never written to disk). A login token is
+    cached by garth at ~/.garminconnect so the account stays connected without
+    re-entering the password next time.
+    """
+    st.caption(
+        "Enter your Garmin Connect credentials to sync. They are kept only for "
+        "this session (never written to disk); a local login token is cached so "
+        "you won't need to re-enter them next time."
+    )
+    with st.form(f"garmin_login_form_{user_id}", clear_on_submit=True):
+        in_email = st.text_input("Garmin email", key=f"garmin_login_email_{user_id}")
+        in_password = st.text_input(
+            "Garmin password", type="password", key=f"garmin_login_password_{user_id}"
+        )
+        connect = st.form_submit_button("Connect", type="primary")
+    if not connect:
+        return
+    email_clean = (in_email or "").strip()
+    if not email_clean or not in_password:
+        st.error("Enter both your Garmin email and password.")
+        return
+    try:
+        with st.spinner("Connecting to Garmin Connect…"):
+            display_name = login_and_get_display_name(email_clean, in_password)
+    except GarminAuthError as exc:
+        st.error(str(exc))
+        return
+    except Exception as exc:  # noqa: BLE001
+        if log_exception is not None:
+            log_exception(_LOGGER, "Garmin Connect login failed", exc)
+        st.error(f"Garmin login failed: {exc}")
+        return
+    st.session_state[f"garmin_cred_email_{user_id}"] = email_clean
+    st.session_state[f"garmin_cred_password_{user_id}"] = in_password
+    st.session_state[f"garmin_connected_name_{user_id}"] = display_name or "Garmin user"
+    st.success(f"Connected as {display_name or 'Garmin user'}.")
+    st.rerun()
+
+
 def _get_latest_garmin_sleep_payload(user: UserProfile, now_dt: datetime) -> Optional[Dict[str, float]]:
     """Fetch latest Garmin Vivosmart sleep metrics to feed SAFTE/HRV inputs."""
     if not user or not user.user_id:
@@ -5668,7 +5739,7 @@ def _get_latest_garmin_sleep_payload(user: UserProfile, now_dt: datetime) -> Opt
     if fetch_garmin_daily_metrics is None:
         return None
     try:
-        records = fetch_garmin_daily_metrics(user.user_id, days=7)
+        records = _fetch_garmin_daily_metrics_ui(user.user_id, days=7)
     except Exception as exc:  # pragma: no cover - defensive
         if log_exception:
             log_exception(_LOGGER, "Garmin autofill failed", exc)
@@ -7624,18 +7695,39 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
             if log_exception is not None:
                 log_exception(_LOGGER, "Failed to persist sidebar Garmin metrics", exc)
 
-    # Live Garmin Connect fetch (manual button; requires env + library)
-    api_env_ready = (
-        GARMIN_LIB_AVAILABLE
-        and bool(os.getenv("GARMIN_EMAIL"))
-        and bool(os.getenv("GARMIN_PASSWORD"))
+    # Live Garmin Connect fetch (manual button; requires the garminconnect library).
+    # Credentials come from the UI session (entered below) or, as a fallback,
+    # from GARMIN_EMAIL / GARMIN_PASSWORD in the environment / .env.
+    session_email, session_password = _session_garmin_credentials(user.user_id)
+    env_creds_ready = bool(os.getenv("GARMIN_EMAIL")) and bool(os.getenv("GARMIN_PASSWORD"))
+    api_creds_ready = GARMIN_LIB_AVAILABLE and (
+        env_creds_ready or bool(session_email and session_password)
     )
     with st.expander("🔄 Import from Garmin Connect (Vivosmart 5)", expanded=False):
         if not GARMIN_LIB_AVAILABLE:
             st.info("Install `garminconnect` to enable live Garmin imports (see requirements.txt).")
-        elif not api_env_ready:
-            st.info("Set GARMIN_EMAIL and GARMIN_PASSWORD in your .env to enable Garmin Connect import.")
+        elif not api_creds_ready:
+            _render_garmin_login_form(user.user_id)
         else:
+            if session_email and session_password:
+                connected_name = st.session_state.get(
+                    f"garmin_connected_name_{user.user_id}", "Garmin user"
+                )
+                status_col, disconnect_col = st.columns([3, 1])
+                with status_col:
+                    st.success(f"✅ Connected as {connected_name}")
+                with disconnect_col:
+                    if st.button("Disconnect", key=f"garmin_disconnect_{user.user_id}"):
+                        for _suffix in (
+                            "garmin_cred_email_",
+                            "garmin_cred_password_",
+                            "garmin_connected_name_",
+                        ):
+                            st.session_state.pop(f"{_suffix}{user.user_id}", None)
+                        st.rerun()
+            else:
+                st.caption("Using Garmin credentials from the environment (.env).")
+
             latest_metric_date: Optional[date] = None
             missing_days: Optional[int] = None
             try:
@@ -7681,7 +7773,7 @@ def _render_garmin_metrics_history(user: UserProfile) -> None:
                 nonlocal refresh_token
                 try:
                     with st.spinner(f"Fetching last {days_requested} day(s) from Garmin Connect…"):
-                        records = fetch_garmin_daily_metrics(user.user_id, days=int(days_requested))
+                        records = _fetch_garmin_daily_metrics_ui(user.user_id, days=int(days_requested))
                 except GarminAuthError as exc:
                     st.error(str(exc))
                 except Exception as exc:  # noqa: BLE001

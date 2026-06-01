@@ -98,6 +98,32 @@ def _env_credentials(*, tokenstore_path: str | None = None) -> Tuple[str, str]:
     return email, password
 
 
+def _resolve_credentials(
+    email: str | None = None,
+    password: str | None = None,
+    *,
+    tokenstore_path: str | None = None,
+) -> Tuple[str, str]:
+    """Resolve Garmin credentials, preferring explicit (UI-entered) values.
+
+    Resolution order:
+        1) Explicit ``email`` and ``password`` arguments (both required).
+        2) Environment / ``.env`` via :func:`_env_credentials`.
+
+    This is the single credential chokepoint shared by the live-sync button,
+    the autofill path, and any other caller, so UI-entered credentials and the
+    ``.env`` workflow stay in sync.
+
+    Raises:
+        GarminAuthError: If no complete credential pair can be resolved.
+    """
+    email_clean = (email or "").strip()
+    password_clean = (password or "").strip()
+    if email_clean and password_clean:
+        return email_clean, password_clean
+    return _env_credentials(tokenstore_path=tokenstore_path)
+
+
 def _safe_float(val: Any) -> Optional[float]:
     try:
         f = float(val)
@@ -170,8 +196,11 @@ def _record_has_any_metric(record: GarminDailyMetrics) -> bool:
 class GarminConnectClient:
     """Context-managed Garmin client with defensive login and session persistence."""
 
-    def __init__(self) -> None:
+    def __init__(self, email: str | None = None, password: str | None = None) -> None:
         self.client: Optional[Garmin] = None
+        # Optional explicit (UI-entered) credentials; fall back to env/.env when None.
+        self._email = email
+        self._password = password
         # Token storage directory (matches garminconnect default: ~/.garminconnect)
         self._tokenstore_dir = Path.home() / ".garminconnect"
         self._tokenstore_dir.mkdir(exist_ok=True)
@@ -233,8 +262,11 @@ class GarminConnectClient:
             # Other errors during token restore - log and continue to fresh login
             _LOGGER.info(f"Token restore failed: {exc}. Attempting fresh login.")
         
-        # Token restore failed or no tokens; fall back to password login.
-        email, password = _env_credentials(tokenstore_path=tokenstore_path)
+        # Token restore failed or no tokens; fall back to password login,
+        # preferring explicit (UI-entered) credentials over env/.env.
+        email, password = _resolve_credentials(
+            self._email, self._password, tokenstore_path=tokenstore_path
+        )
 
         # Fresh login flow (with MFA support if needed)
         # Following official repository pattern from example.py
@@ -610,9 +642,33 @@ def _extract_hrv(hrv_payload: Any) -> Tuple[Optional[float], Optional[float]]:
 # -----------------------------------------------------------------------------
 
 
-def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDailyMetrics]:
+def login_and_get_display_name(email: str, password: str) -> str:
+    """Validate Garmin credentials and return the account's full name.
+
+    Used by the UI "Connect" step to confirm credentials before fetching and to
+    seed the ``~/.garminconnect`` token cache. Raises :class:`GarminAuthError`
+    (or a Garmin library error) if authentication fails.
+    """
+    with GarminConnectClient(email=email, password=password) as client:
+        full_name = client.get_full_name()
+        return str(full_name) if full_name is not None else ""
+
+
+def fetch_garmin_daily_metrics(
+    user_id: str,
+    days: int = 14,
+    *,
+    email: str | None = None,
+    password: str | None = None,
+) -> List[GarminDailyMetrics]:
     """
     Fetch daily Garmin metrics for the last N days (inclusive of today).
+
+    Args:
+        user_id: Profile identifier the metrics are stored against.
+        days: Number of days to fetch (inclusive of today), capped at 90.
+        email: Optional explicit Garmin email (UI-entered). Falls back to env/.env.
+        password: Optional explicit Garmin password (UI-entered). Falls back to env/.env.
 
     Returns a list of GarminDailyMetrics ready for persistence.
     """
@@ -635,7 +691,7 @@ def fetch_garmin_daily_metrics(user_id: str, days: int = 14) -> List[GarminDaily
     errors: list[str] = []
     now_iso = datetime.now(timezone.utc).isoformat()
 
-    with GarminConnectClient() as client:
+    with GarminConnectClient(email=email, password=password) as client:
         for idx in range(days):
             day = start_date + timedelta(days=idx)
             day_iso = day.isoformat()
