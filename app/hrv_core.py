@@ -1026,6 +1026,9 @@ def compute_parasympathetic_index(
 # analysis stays responsive on long (multi-hour) RR recordings; SampEn/RQA are
 # short-term metrics and a contiguous multi-thousand-beat window is standard.
 MAX_NONLINEAR_SAMPLES = 4000
+# MFDFA scale count is capped (evenly subsampled) so cost stays ~O(n) on long
+# recordings; recordings with fewer scales than the cap are unaffected.
+MAX_MFDFA_SCALES = 100
 
 
 def compute_entropy_metrics(
@@ -1035,6 +1038,11 @@ def compute_entropy_metrics(
 	r_ratio: float = 0.2,
 ) -> Dict[str, float]:
 	"""Compute Approximate Entropy (ApEn) and Sample Entropy (SampEn) for RR series.
+
+	ApEn follows Pincus (1991): self-matches included, mean of log match densities.
+	SampEn follows Richman & Moorman (2000): no self-matches, ratio of (m+1)- to
+	m-length template matches over a matched template count. They are distinct
+	metrics (cross-checked against neurokit2).
 
 	Args:
 		rr_intervals: RR intervals in milliseconds.
@@ -1047,8 +1055,7 @@ def compute_entropy_metrics(
 	Notes:
 		These metrics are O(n^2). For long recordings the computation runs on at
 		most the first ``MAX_NONLINEAR_SAMPLES`` intervals (a contiguous window that
-		preserves short-term dynamics) and the inner comparisons are vectorised.
-		Results are numerically identical to the naive definition within the cap.
+		preserves short-term dynamics); the inner comparisons are vectorised.
 	"""
 	if int(rr_intervals.size) < (m + 2):
 		return {"apen": 0.0, "sampen": 0.0}
@@ -1059,42 +1066,40 @@ def compute_entropy_metrics(
 	sd = float(np.std(x, ddof=0))
 	r = float(max(1e-9, r_ratio * sd))
 
+	def _windows(dim: int) -> np.ndarray:
+		return np.lib.stride_tricks.sliding_window_view(x, dim)
+
+	# Approximate Entropy (Pincus): self-matches included, mean of log densities.
 	def _phi(dim: int) -> float:
-		# Embedded templates: shape (N, dim), N = n - dim + 1.
-		templates = np.lib.stride_tricks.sliding_window_view(x, dim)
+		templates = _windows(dim)
 		count = templates.shape[0]
-		if count <= 1:
+		if count == 0:
 			return 0.0
-		denom = max(1, (n - dim))
 		total = 0.0
 		for i in range(count):
-			# Chebyshev distance from template i to all templates (vectorised inner loop).
 			dist = np.max(np.abs(templates - templates[i]), axis=1)
-			# Exclude the self-match (dist == 0 at j == i).
-			matches = int(np.count_nonzero(dist <= r)) - 1
-			total += matches / denom
-		return float(total / count)
+			matches = int(np.count_nonzero(dist <= r))  # includes self-match
+			total += math.log(matches / count)
+		return total / count
 
-	phi_m = _phi(m)
-	phi_m1 = _phi(m + 1)
-	apen = float(-np.log(phi_m1 / max(1e-12, phi_m))) if (phi_m > 0 and phi_m1 > 0) else 0.0
+	apen = float(_phi(m) - _phi(m + 1))
 
-	# SampEn: negative log of conditional probability without self-matches.
-	def _match_count(dim: int) -> Tuple[int, int]:
-		templates = np.lib.stride_tricks.sliding_window_view(x, dim)
+	# Sample Entropy (Richman & Moorman): no self-matches, matched template count.
+	use = n - m
+	def _pair_count(dim: int) -> int:
+		templates = _windows(dim)[:use]
 		count = templates.shape[0]
-		Cm = 0
+		matches = 0
 		for i in range(count - 1):
-			# Unordered pairs (i < j): compare template i against all later templates.
 			dist = np.max(np.abs(templates[i + 1 :] - templates[i]), axis=1)
-			Cm += int(np.count_nonzero(dist <= r))
-		return Cm, (n - dim) * (n - dim + 1) // 2
+			matches += int(np.count_nonzero(dist <= r))
+		return matches
 
-	Cm, total_m = _match_count(m)
-	Cm1, total_m1 = _match_count(m + 1)
-	p_m = float(Cm / max(1, total_m))
-	p_m1 = float(Cm1 / max(1, total_m1))
-	sampen = float(-np.log(p_m1 / max(1e-12, p_m))) if (p_m > 0 and p_m1 > 0) else 0.0
+	b_count = _pair_count(m)
+	a_count = _pair_count(m + 1)
+	sampen = (
+		float(-math.log(a_count / b_count)) if (a_count > 0 and b_count > 0) else 0.0
+	)
 	return {"apen": apen, "sampen": sampen}
 
 
@@ -1380,6 +1385,10 @@ def compute_mfdfa_metrics(
 	if scales is None:
 		max_scale = max(16, int(rr.size // 10))
 		scales = [s for s in range(16, max_scale, 8) if s > order + 1]
+		if len(scales) > MAX_MFDFA_SCALES:
+			# Evenly subsample scales (keeps the [min, max] range) to bound cost.
+			idx = np.linspace(0, len(scales) - 1, MAX_MFDFA_SCALES)
+			scales = sorted({scales[int(round(k))] for k in idx})
 	if not scales:
 		return {
 			"mfdfa_width": 0.0,

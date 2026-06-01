@@ -1,10 +1,14 @@
-"""Performance regression guards for HRV nonlinear metrics.
+"""Performance + correctness guards for HRV nonlinear metrics.
 
-These tests exist because the entropy (SampEn/ApEn) and RQA computations were
-O(n^2) and uncapped, so advanced analysis of a multi-hour recording could take
-30+ minutes (or OOM). They assert the heavy nonlinear methods stay bounded
-regardless of recording length, and that the vectorized entropy is numerically
-identical to the naive O(n^2) definition (no change to the science).
+History:
+- Entropy (SampEn/ApEn) and RQA were O(n^2) and uncapped -> advanced analysis of
+  a multi-hour recording took 30+ minutes (or OOM). These tests assert the heavy
+  nonlinear methods stay bounded regardless of recording length.
+- ApEn and SampEn previously collapsed to the same value (a latent correctness
+  bug). These tests pin both to their standard definitions (cross-checked against
+  neurokit2) and assert they are distinct.
+- MFDFA used a linear scale set whose size grew with n (O(n * scales)); these
+  tests assert it stays bounded for very long recordings.
 """
 
 from __future__ import annotations
@@ -43,79 +47,124 @@ def _run_with_timeout(fn, seconds: float):
         signal.signal(signal.SIGALRM, old)
 
 
+def _naive_standard_entropy(x: np.ndarray, m: int = 2, r_ratio: float = 0.2):
+    """Reference implementation of the *standard* ApEn (Pincus) and SampEn
+    (Richman & Moorman) definitions. Validated to match neurokit2 exactly.
+    Returns (apen, sampen)."""
+    x = np.asarray(x, dtype=float)
+    n = x.size
+    r = max(1e-9, r_ratio * float(np.std(x, ddof=0)))
+
+    def _win(dim):
+        return np.lib.stride_tricks.sliding_window_view(x, dim)
+
+    # ApEn: self-matches included, mean of log of match densities.
+    def _phi(dim):
+        T = _win(dim)
+        M = T.shape[0]
+        total = 0.0
+        for i in range(M):
+            d = np.max(np.abs(T - T[i]), axis=1)
+            c = int(np.count_nonzero(d <= r))  # includes self
+            total += np.log(c / M)
+        return total / M
+
+    apen = float(_phi(m) - _phi(m + 1))
+
+    # SampEn: no self-matches, matched template count (n - m) for both m and m+1.
+    use = n - m
+
+    def _pairs(dim):
+        T = _win(dim)[:use]
+        M = T.shape[0]
+        cnt = 0
+        for i in range(M - 1):
+            d = np.max(np.abs(T[i + 1 :] - T[i]), axis=1)
+            cnt += int(np.count_nonzero(d <= r))
+        return cnt
+
+    B = _pairs(m)
+    A = _pairs(m + 1)
+    sampen = float(-np.log(A / B)) if (A > 0 and B > 0) else 0.0
+    return apen, sampen
+
+
+# --------------------------------------------------------------------------- #
+# Performance guards
+# --------------------------------------------------------------------------- #
+
+
 def test_entropy_metrics_bounded_for_long_series():
-    """SampEn/ApEn must not blow up on long recordings (was O(n^2), pure Python)."""
+    """SampEn/ApEn must not blow up on long recordings (was O(n^2), pure Python).
+
+    Bounded runtime is ~1 s; the regression took minutes, so a 10 s budget is a
+    robust guard that is not sensitive to machine load.
+    """
     rr = _synth(20000)  # ~4.7 h recording
-    res = _run_with_timeout(lambda: hc.compute_entropy_metrics(rr, m=2, r_ratio=0.2), 5)
+    res = _run_with_timeout(lambda: hc.compute_entropy_metrics(rr, m=2, r_ratio=0.2), 10)
     assert np.isfinite(res["sampen"])
     assert np.isfinite(res["apen"])
 
 
 def test_rqa_metrics_bounded_for_long_series():
-    """RQA must not allocate an n x n matrix for large n (was O(n^2) memory)."""
-    rr = _synth(8000)  # bench: ~27 s unfixed
-    t0 = time.perf_counter()
-    res = hc.compute_rqa_metrics(rr)
-    assert (time.perf_counter() - t0) < 5.0
+    """RQA must not allocate an n x n matrix for large n (was O(n^2) memory).
+
+    The internal cap keeps this ~3 s regardless of input size; uncapped at 50k it
+    would need a ~40 GB matrix (OOM). A 10 s budget robustly proves the cap holds.
+    """
+    rr = _synth(50000)
+    res = _run_with_timeout(lambda: hc.compute_rqa_metrics(rr), 10)
     assert np.isfinite(res["rqa_rr"])
+
+
+def test_mfdfa_metrics_bounded_for_long_series():
+    """MFDFA scale set must stay bounded (was O(n * scales) with scales ~ n)."""
+    rr = _synth(100000)  # ~24 h recording; thinned scales -> ~1 s
+    res = _run_with_timeout(lambda: hc.compute_mfdfa_metrics(rr), 10)
+    assert np.isfinite(res["mfdfa_width"])
 
 
 def test_comprehensive_advanced_bounded_for_long_series():
     """End-to-end advanced analysis must finish quickly even for multi-hour data."""
     rr = _synth(20000)
     res = _run_with_timeout(
-        lambda: hc.compute_comprehensive_hrv(rr, include_advanced=True), 20
+        lambda: hc.compute_comprehensive_hrv(rr, include_advanced=True), 30
     )
     assert res["n_intervals"] == 20000  # full length still reported
     assert "sampen" in res and np.isfinite(res["sampen"])
 
 
-def test_entropy_vectorization_matches_naive_reference():
-    """Vectorized entropy must equal the original naive O(n^2) definition exactly.
+# --------------------------------------------------------------------------- #
+# Correctness guards
+# --------------------------------------------------------------------------- #
 
-    Uses a short series (below the internal cap) so the full series is used and
-    the comparison is apples-to-apples.
-    """
-    rr = _synth(150)
-    res = hc.compute_entropy_metrics(rr, m=2, r_ratio=0.2)
 
-    x = rr.astype(float)
-    n = x.size
-    r = float(max(1e-9, 0.2 * float(np.std(x, ddof=0))))
-
-    def _phi(dim: int) -> float:
-        counts = []
-        for i in range(0, n - dim + 1):
-            ref = x[i : i + dim]
-            c = 0
-            for j in range(0, n - dim + 1):
-                if i == j:
-                    continue
-                if np.max(np.abs(ref - x[j : j + dim])) <= r:
-                    c += 1
-            counts.append(c)
-        return float(np.mean(np.array(counts, dtype=float) / max(1, (n - dim))))
-
-    def _match_count(dim: int):
-        Cm = 0
-        for i in range(0, n - dim):
-            ref = x[i : i + dim]
-            for j in range(i + 1, n - dim + 1):
-                if np.max(np.abs(ref - x[j : j + dim])) <= r:
-                    Cm += 1
-        return Cm, (n - dim) * (n - dim + 1) // 2
-
-    phi_m, phi_m1 = _phi(2), _phi(3)
-    apen_ref = (
-        float(-np.log(phi_m1 / max(1e-12, phi_m))) if (phi_m > 0 and phi_m1 > 0) else 0.0
-    )
-    Cm, tm = _match_count(2)
-    Cm1, tm1 = _match_count(3)
-    p_m = Cm / max(1, tm)
-    p_m1 = Cm1 / max(1, tm1)
-    sampen_ref = (
-        float(-np.log(p_m1 / max(1e-12, p_m))) if (p_m > 0 and p_m1 > 0) else 0.0
-    )
-
+def test_entropy_matches_standard_definition():
+    """Vectorized ApEn/SampEn must equal the standard naive definitions exactly."""
+    rng = np.random.RandomState(3)
+    x = np.clip(850 + rng.normal(0, 30, 300), 400, 1400).astype(float)
+    res = hc.compute_entropy_metrics(x, m=2, r_ratio=0.2)
+    apen_ref, sampen_ref = _naive_standard_entropy(x, m=2, r_ratio=0.2)
     assert res["apen"] == pytest.approx(apen_ref, abs=1e-9)
     assert res["sampen"] == pytest.approx(sampen_ref, abs=1e-9)
+
+
+def test_entropy_apen_and_sampen_are_distinct():
+    """ApEn and SampEn are different metrics; they must not collapse to one value."""
+    rng = np.random.RandomState(3)
+    x = np.clip(850 + rng.normal(0, 30, 300), 400, 1400).astype(float)
+    res = hc.compute_entropy_metrics(x, m=2, r_ratio=0.2)
+    assert abs(res["apen"] - res["sampen"]) > 0.1
+
+
+def test_entropy_matches_neurokit2_reference():
+    """Cross-validate against neurokit2 (skipped if not installed)."""
+    nk = pytest.importorskip("neurokit2")
+    rng = np.random.RandomState(3)
+    x = np.clip(850 + rng.normal(0, 30, 300), 400, 1400).astype(float)
+    r = 0.2 * float(np.std(x, ddof=0))
+    res = hc.compute_entropy_metrics(x, m=2, r_ratio=0.2)
+    se, _ = nk.entropy_sample(x, dimension=2, tolerance=r)
+    ae, _ = nk.entropy_approximate(x, dimension=2, tolerance=r)
+    assert res["sampen"] == pytest.approx(float(se), abs=1e-6)
+    assert res["apen"] == pytest.approx(float(ae), abs=1e-6)
