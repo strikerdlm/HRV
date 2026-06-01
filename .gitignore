@@ -324,3 +324,10 @@ GEMINI.md
 .github/copilot-instructions.md
 # Superpowers skill output (design specs / plans authored by agents)
 docs/superpowers/
+
+# ----------------------------------------------------------------------------
+# Manuscripts — kept in a SEPARATE GitHub repo, never committed to HRV.
+# Manuscript research/drafting lives here locally but is version-controlled in
+# the dedicated manuscripts repository only.
+# ----------------------------------------------------------------------------
+manuscript/
