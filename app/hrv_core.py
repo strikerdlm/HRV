@@ -1022,6 +1022,12 @@ def compute_parasympathetic_index(
 	return pns_index
 
 
+# Entropy (SampEn/ApEn) and RQA are O(n^2). Cap the working window so advanced
+# analysis stays responsive on long (multi-hour) RR recordings; SampEn/RQA are
+# short-term metrics and a contiguous multi-thousand-beat window is standard.
+MAX_NONLINEAR_SAMPLES = 4000
+
+
 def compute_entropy_metrics(
 	rr_intervals: np.ndarray,
 	*,
@@ -1033,47 +1039,55 @@ def compute_entropy_metrics(
 	Args:
 		rr_intervals: RR intervals in milliseconds.
 		m: Embedding dimension (commonly 2).
-		r_ratio: Tolerance as fraction of the series standard deviation (commonly 0.15–0.20).
+		r_ratio: Tolerance as fraction of the series standard deviation (commonly 0.15-0.20).
 
 	Returns:
 		Dictionary with 'apen' and 'sampen'. Returns 0.0 when undefined.
+
+	Notes:
+		These metrics are O(n^2). For long recordings the computation runs on at
+		most the first ``MAX_NONLINEAR_SAMPLES`` intervals (a contiguous window that
+		preserves short-term dynamics) and the inner comparisons are vectorised.
+		Results are numerically identical to the naive definition within the cap.
 	"""
-	n = int(rr_intervals.size)
-	if n < (m + 2):
+	if int(rr_intervals.size) < (m + 2):
 		return {"apen": 0.0, "sampen": 0.0}
 	x = rr_intervals.astype(float)
+	if x.size > MAX_NONLINEAR_SAMPLES:
+		x = x[:MAX_NONLINEAR_SAMPLES]
+	n = int(x.size)
 	sd = float(np.std(x, ddof=0))
 	r = float(max(1e-9, r_ratio * sd))
 
 	def _phi(dim: int) -> float:
-		counts: List[int] = []
-		for i in range(0, n - dim + 1):
-			ref = x[i : i + dim]
-			c = 0
-			for j in range(0, n - dim + 1):
-				if i == j:
-					continue
-				win = x[j : j + dim]
-				if np.max(np.abs(ref - win)) <= r:
-					c += 1
-			counts.append(c)
-		if not counts:
+		# Embedded templates: shape (N, dim), N = n - dim + 1.
+		templates = np.lib.stride_tricks.sliding_window_view(x, dim)
+		count = templates.shape[0]
+		if count <= 1:
 			return 0.0
-		return float(np.mean(np.array(counts, dtype=float) / max(1, (n - dim))))
+		denom = max(1, (n - dim))
+		total = 0.0
+		for i in range(count):
+			# Chebyshev distance from template i to all templates (vectorised inner loop).
+			dist = np.max(np.abs(templates - templates[i]), axis=1)
+			# Exclude the self-match (dist == 0 at j == i).
+			matches = int(np.count_nonzero(dist <= r)) - 1
+			total += matches / denom
+		return float(total / count)
 
 	phi_m = _phi(m)
 	phi_m1 = _phi(m + 1)
 	apen = float(-np.log(phi_m1 / max(1e-12, phi_m))) if (phi_m > 0 and phi_m1 > 0) else 0.0
 
-	# SampEn: negative log of conditional probability without self-matches
+	# SampEn: negative log of conditional probability without self-matches.
 	def _match_count(dim: int) -> Tuple[int, int]:
+		templates = np.lib.stride_tricks.sliding_window_view(x, dim)
+		count = templates.shape[0]
 		Cm = 0
-		for i in range(0, n - dim):
-			ref = x[i : i + dim]
-			for j in range(i + 1, n - dim + 1):
-				win = x[j : j + dim]
-				if np.max(np.abs(ref - win)) <= r:
-					Cm += 1
+		for i in range(count - 1):
+			# Unordered pairs (i < j): compare template i against all later templates.
+			dist = np.max(np.abs(templates[i + 1 :] - templates[i]), axis=1)
+			Cm += int(np.count_nonzero(dist <= r))
 		return Cm, (n - dim) * (n - dim + 1) // 2
 
 	Cm, total_m = _match_count(m)
@@ -1441,6 +1455,9 @@ def compute_rqa_metrics(
 			"rqa_lmax": 0.0,
 		}
 	rr = rr_intervals.astype(float)
+	if rr.size > MAX_NONLINEAR_SAMPLES:
+		rr = rr[:MAX_NONLINEAR_SAMPLES]
+		n = int(rr.size)
 	embedded = []
 	for start in range(0, n - required + 1):
 		indices = [start + i * delay for i in range(embedding_dim)]
