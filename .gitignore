@@ -297,3 +297,37 @@ core
 *.db-shm
 *.db-wal
 env
+
+# ----------------------------------------------------------------------------
+# Agentic AI coding-tool files (local-only; not part of the product)
+# These are per-developer agent configs/instructions, kept out of the repo.
+# ----------------------------------------------------------------------------
+# Claude Code
+CLAUDE.md
+.claude/
+# Cursor
+.cursor/
+.cursorrules
+# Warp
+WARP.md
+# OpenAI Codex / Amp / generic agents
+AGENTS.md
+# Gemini CLI
+GEMINI.md
+.gemini/
+# Windsurf
+.windsurfrules
+.windsurf/
+# Aider
+.aider*
+# GitHub Copilot custom instructions
+.github/copilot-instructions.md
+# Superpowers skill output (design specs / plans authored by agents)
+docs/superpowers/
+
+# ----------------------------------------------------------------------------
+# Manuscripts — kept in a SEPARATE GitHub repo, never committed to HRV.
+# Manuscript research/drafting lives here locally but is version-controlled in
+# the dedicated manuscripts repository only.
+# ----------------------------------------------------------------------------
+manuscript/

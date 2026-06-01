@@ -23,7 +23,11 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { EChartsWrapper, SCIENTIFIC_COLORS } from "@/components/charts";
 import { QualityPanel } from "@/components/research/quality-panel";
-import { getHRVNonlinear } from "@/lib/research-api";
+import {
+  getHRVNonlinear,
+  getAnalysisSettings,
+  type AnalysisSettings,
+} from "@/lib/research-api";
 import { useAppStore } from "@/lib/store";
 import type { NonlinearResponse } from "@/types/research";
 import { COMPLEXITY_COLORS } from "@/types/research";
@@ -264,9 +268,85 @@ function AdvancedCurveChart({
   return <EChartsWrapper option={option} height={260} showToolbox={false} />;
 }
 
+// Informs users that nonlinear metrics use a bounded window, and which window
+// suits their recording. Caps are server-configured (env-tunable); see API
+// /api/research/analysis-settings.
+function AnalysisSettingsPanel({ settings }: { settings: AnalysisSettings | null }) {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Info className="h-5 w-5 text-primary" />
+          Analysis Window &amp; Performance
+        </CardTitle>
+        <CardDescription>
+          Nonlinear metrics (SampEn, ApEn, RQA, MFDFA) are computed on a bounded
+          window so analysis stays fast on long recordings. Time- and
+          frequency-domain metrics always use the full recording.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4 text-sm">
+        <div className="flex flex-wrap gap-2">
+          <Badge variant="outline">
+            Nonlinear window:{" "}
+            {settings ? `${settings.max_nonlinear_samples.toLocaleString()} beats` : "—"}
+          </Badge>
+          <Badge variant="outline">
+            MFDFA scales: {settings ? settings.max_mfdfa_scales : "—"}
+          </Badge>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead className="text-muted-foreground">
+              <tr>
+                <th className="py-1 pr-4 font-medium">Recording</th>
+                <th className="py-1 pr-4 font-medium">Recommended window</th>
+                <th className="py-1 font-medium">Notes</th>
+              </tr>
+            </thead>
+            <tbody className="text-muted-foreground">
+              <tr className="border-t border-border">
+                <td className="py-1 pr-4">Short clinical (5–10 min)</td>
+                <td className="py-1 pr-4">Default (4000)</td>
+                <td className="py-1">Whole recording is used; no truncation.</td>
+              </tr>
+              <tr className="border-t border-border">
+                <td className="py-1 pr-4">Ambulatory / multi-hour wearable</td>
+                <td className="py-1 pr-4">4000 (default)</td>
+                <td className="py-1">Fast and representative of short-term dynamics.</td>
+              </tr>
+              <tr className="border-t border-border">
+                <td className="py-1 pr-4">24 h Holter</td>
+                <td className="py-1 pr-4">4000–5000</td>
+                <td className="py-1">
+                  Raise toward 10000 only if you need longer-range complexity and
+                  can accept slower runs.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Set on the server via{" "}
+          <code className="rounded bg-muted px-1 py-0.5">
+            {settings?.nonlinear_samples_env ?? "HRV_MAX_NONLINEAR_SAMPLES"}
+          </code>{" "}
+          (256–10000, default 4000) and{" "}
+          <code className="rounded bg-muted px-1 py-0.5">
+            {settings?.mfdfa_scales_env ?? "HRV_MFDFA_MAX_SCALES"}
+          </code>{" "}
+          (8–1000, default 100). Higher values capture more detail but take
+          longer; out-of-range values are clamped.
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function NonlinearPage() {
   const [data, setData] = React.useState<NonlinearResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [settings, setSettings] = React.useState<AnalysisSettings | null>(null);
 
   // Get user ID from global store
   const activeUserId = useAppStore((state) => state.activeUserId);
@@ -287,6 +367,12 @@ export default function NonlinearPage() {
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  React.useEffect(() => {
+    getAnalysisSettings()
+      .then(setSettings)
+      .catch(() => setSettings(null));
+  }, []);
 
   return (
     <PageWrapper
@@ -318,6 +404,9 @@ export default function NonlinearPage() {
             Refresh
           </Button>
         </motion.div>
+
+        {/* Analysis window & performance settings guidance */}
+        <AnalysisSettingsPanel settings={settings} />
 
         {data && (
           <>

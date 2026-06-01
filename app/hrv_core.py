@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import os
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence, Tuple
 
@@ -1022,6 +1023,31 @@ def compute_parasympathetic_index(
 	return pns_index
 
 
+def _int_setting(env_name: str, default: int, minimum: int, maximum: int) -> int:
+	"""Read an integer performance setting from the environment, clamped to a safe
+	range. Lets operators tune the nonlinear-analysis caps without code changes;
+	invalid or out-of-range values fall back to the default / nearest bound."""
+	raw = os.getenv(env_name)
+	if raw is None or str(raw).strip() == "":
+		return default
+	try:
+		value = int(str(raw).strip())
+	except (TypeError, ValueError):
+		return default
+	return max(minimum, min(maximum, value))
+
+
+# Entropy (SampEn/ApEn) and RQA are O(n^2). Cap the working window so advanced
+# analysis stays responsive on long (multi-hour) RR recordings; SampEn/RQA are
+# short-term metrics and a contiguous multi-thousand-beat window is standard.
+# Tunable via the HRV_MAX_NONLINEAR_SAMPLES environment variable.
+MAX_NONLINEAR_SAMPLES = _int_setting("HRV_MAX_NONLINEAR_SAMPLES", 4000, 256, 10000)
+# MFDFA scale count is capped (evenly subsampled) so cost stays ~O(n) on long
+# recordings; recordings with fewer scales than the cap are unaffected.
+# Tunable via the HRV_MFDFA_MAX_SCALES environment variable.
+MAX_MFDFA_SCALES = _int_setting("HRV_MFDFA_MAX_SCALES", 100, 8, 1000)
+
+
 def compute_entropy_metrics(
 	rr_intervals: np.ndarray,
 	*,
@@ -1030,57 +1056,67 @@ def compute_entropy_metrics(
 ) -> Dict[str, float]:
 	"""Compute Approximate Entropy (ApEn) and Sample Entropy (SampEn) for RR series.
 
+	ApEn follows Pincus (1991): self-matches included, mean of log match densities.
+	SampEn follows Richman & Moorman (2000): no self-matches, ratio of (m+1)- to
+	m-length template matches over a matched template count. They are distinct
+	metrics (cross-checked against neurokit2).
+
 	Args:
 		rr_intervals: RR intervals in milliseconds.
 		m: Embedding dimension (commonly 2).
-		r_ratio: Tolerance as fraction of the series standard deviation (commonly 0.15–0.20).
+		r_ratio: Tolerance as fraction of the series standard deviation (commonly 0.15-0.20).
 
 	Returns:
 		Dictionary with 'apen' and 'sampen'. Returns 0.0 when undefined.
+
+	Notes:
+		These metrics are O(n^2). For long recordings the computation runs on at
+		most the first ``MAX_NONLINEAR_SAMPLES`` intervals (a contiguous window that
+		preserves short-term dynamics); the inner comparisons are vectorised.
 	"""
-	n = int(rr_intervals.size)
-	if n < (m + 2):
+	if int(rr_intervals.size) < (m + 2):
 		return {"apen": 0.0, "sampen": 0.0}
 	x = rr_intervals.astype(float)
+	if x.size > MAX_NONLINEAR_SAMPLES:
+		x = x[:MAX_NONLINEAR_SAMPLES]
+	n = int(x.size)
 	sd = float(np.std(x, ddof=0))
 	r = float(max(1e-9, r_ratio * sd))
 
+	def _windows(dim: int) -> np.ndarray:
+		return np.lib.stride_tricks.sliding_window_view(x, dim)
+
+	# Approximate Entropy (Pincus): self-matches included, mean of log densities.
 	def _phi(dim: int) -> float:
-		counts: List[int] = []
-		for i in range(0, n - dim + 1):
-			ref = x[i : i + dim]
-			c = 0
-			for j in range(0, n - dim + 1):
-				if i == j:
-					continue
-				win = x[j : j + dim]
-				if np.max(np.abs(ref - win)) <= r:
-					c += 1
-			counts.append(c)
-		if not counts:
+		templates = _windows(dim)
+		count = templates.shape[0]
+		if count == 0:
 			return 0.0
-		return float(np.mean(np.array(counts, dtype=float) / max(1, (n - dim))))
+		total = 0.0
+		for i in range(count):
+			dist = np.max(np.abs(templates - templates[i]), axis=1)
+			matches = int(np.count_nonzero(dist <= r))  # includes self-match
+			total += math.log(matches / count)
+		return total / count
 
-	phi_m = _phi(m)
-	phi_m1 = _phi(m + 1)
-	apen = float(-np.log(phi_m1 / max(1e-12, phi_m))) if (phi_m > 0 and phi_m1 > 0) else 0.0
+	apen = float(_phi(m) - _phi(m + 1))
 
-	# SampEn: negative log of conditional probability without self-matches
-	def _match_count(dim: int) -> Tuple[int, int]:
-		Cm = 0
-		for i in range(0, n - dim):
-			ref = x[i : i + dim]
-			for j in range(i + 1, n - dim + 1):
-				win = x[j : j + dim]
-				if np.max(np.abs(ref - win)) <= r:
-					Cm += 1
-		return Cm, (n - dim) * (n - dim + 1) // 2
+	# Sample Entropy (Richman & Moorman): no self-matches, matched template count.
+	use = n - m
+	def _pair_count(dim: int) -> int:
+		templates = _windows(dim)[:use]
+		count = templates.shape[0]
+		matches = 0
+		for i in range(count - 1):
+			dist = np.max(np.abs(templates[i + 1 :] - templates[i]), axis=1)
+			matches += int(np.count_nonzero(dist <= r))
+		return matches
 
-	Cm, total_m = _match_count(m)
-	Cm1, total_m1 = _match_count(m + 1)
-	p_m = float(Cm / max(1, total_m))
-	p_m1 = float(Cm1 / max(1, total_m1))
-	sampen = float(-np.log(p_m1 / max(1e-12, p_m))) if (p_m > 0 and p_m1 > 0) else 0.0
+	b_count = _pair_count(m)
+	a_count = _pair_count(m + 1)
+	sampen = (
+		float(-math.log(a_count / b_count)) if (a_count > 0 and b_count > 0) else 0.0
+	)
 	return {"apen": apen, "sampen": sampen}
 
 
@@ -1366,6 +1402,10 @@ def compute_mfdfa_metrics(
 	if scales is None:
 		max_scale = max(16, int(rr.size // 10))
 		scales = [s for s in range(16, max_scale, 8) if s > order + 1]
+		if len(scales) > MAX_MFDFA_SCALES:
+			# Evenly subsample scales (keeps the [min, max] range) to bound cost.
+			idx = np.linspace(0, len(scales) - 1, MAX_MFDFA_SCALES)
+			scales = sorted({scales[int(round(k))] for k in idx})
 	if not scales:
 		return {
 			"mfdfa_width": 0.0,
@@ -1441,6 +1481,9 @@ def compute_rqa_metrics(
 			"rqa_lmax": 0.0,
 		}
 	rr = rr_intervals.astype(float)
+	if rr.size > MAX_NONLINEAR_SAMPLES:
+		rr = rr[:MAX_NONLINEAR_SAMPLES]
+		n = int(rr.size)
 	embedded = []
 	for start in range(0, n - required + 1):
 		indices = [start + i * delay for i in range(embedding_dim)]

@@ -2000,9 +2000,40 @@ class EllipseParams(BaseModel):
     angle: float  # Rotation angle (typically 45 degrees)
 
 
+class AnalysisSettings(BaseModel):
+    """Effective nonlinear-analysis performance caps (server-configured).
+
+    Nonlinear HRV metrics (SampEn, ApEn, RQA, MFDFA) are O(n^2)/scale-heavy, so
+    they run on a bounded window. These caps are env-tunable on the server; the
+    UI surfaces them so users know which value suits their recording length.
+    """
+
+    max_nonlinear_samples: int = Field(
+        ..., description="Max contiguous beats used for SampEn / ApEn / RQA."
+    )
+    max_mfdfa_scales: int = Field(
+        ..., description="Max number of MFDFA scales (evenly subsampled)."
+    )
+    nonlinear_samples_env: str = "HRV_MAX_NONLINEAR_SAMPLES"
+    mfdfa_scales_env: str = "HRV_MFDFA_MAX_SCALES"
+
+
+@router.get("/analysis-settings", response_model=AnalysisSettings)
+async def get_analysis_settings() -> AnalysisSettings:
+    """Return the effective, env-configurable nonlinear-analysis caps."""
+    try:
+        from hrv_core import MAX_MFDFA_SCALES, MAX_NONLINEAR_SAMPLES
+    except Exception:  # pragma: no cover - defensive fallback to defaults
+        MAX_NONLINEAR_SAMPLES, MAX_MFDFA_SCALES = 4000, 100
+    return AnalysisSettings(
+        max_nonlinear_samples=int(MAX_NONLINEAR_SAMPLES),
+        max_mfdfa_scales=int(MAX_MFDFA_SCALES),
+    )
+
+
 class NonlinearResponse(BaseModel):
     """Nonlinear HRV analysis results."""
-    
+
     # Poincare plot data
     rr_n: List[float] = Field(default_factory=list)  # RR(n)
     rr_n1: List[float] = Field(default_factory=list)  # RR(n+1)
