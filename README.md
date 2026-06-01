@@ -56,9 +56,10 @@ Most HRV tools do one thing: compute RMSSD and a few frequency-domain metrics. M
 4. **SAFTE Fatigue Prediction with FAST-Style Visualization**: Implements the reservoir-based SAFTE biomathematical model (Hursh et al. 2004 / DRDC Peng & Bouak 2015) with multi-day forecasting (1–7 days), Garmin Connect sleep schedule integration, BAC equivalence thresholds (Dawson & Reid 1997), cognitive lapse probability (Van Dongen et al. 2003), and ICAO-aligned FRMS dashboards. Inspired by the FAST (Fatigue Avoidance Scheduling Tool) used by the US Air Force, FAA, and FRA.
 5. **Ventilatory Threshold Estimation**: Non-invasive detection of aerobic (VT1) and anaerobic (VT2) thresholds using DFA-alpha1 analysis, eliminating the need for laboratory CPET — a breakthrough for field and operational settings.
 6. **Allostatic Load Monitoring**: Multi-day physiological trajectory tracking that catches cumulative degradation (declining HRV, rising resting HR, eroding sleep quality) before a single-day snapshot would flag a problem.
-7. **Dual Architecture**: Both a feature-rich Streamlit research application and a modern TypeScript/Next.js frontend with FastAPI backend, giving you the choice between rapid prototyping and production deployment.
-8. **Multi-Device Support**: Native import from Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, and Compumedics Somfit Pro — plus FIT-to-CSV conversion tools built right in.
-9. **Fully Reproducible Science**: Every metric includes citations (Task Force 1996, Shaffer & Ginsberg 2017, Nunan et al. 2010), every chart is exportable in SVG/PDF/PNG at 300+ DPI, and every analysis step is logged for complete audit trails.
+7. **Modern Web Architecture**: A TypeScript/Next.js frontend backed by a FastAPI (Python) service that exposes the full HRV analysis core as REST endpoints — built for production deployment and multi-user environments.
+8. **AI-Powered Interpretation**: GPT-5.2 high-reasoning analysis with enforced web-search citations, providing doctorate-level physiological interpretation with full audit trails.
+9. **Multi-Device Support**: Native import from Polar H10, Garmin Vivosmart 5, ActiGraph GT3X, and Compumedics Somfit Pro — plus FIT-to-CSV conversion tools built right in.
+10. **Fully Reproducible Science**: Every metric includes citations (Task Force 1996, Shaffer & Ginsberg 2017, Nunan et al. 2010), every chart is exportable in SVG/PDF/PNG at 300+ DPI, and every analysis step is logged for complete audit trails.
 
 ---
 
@@ -98,24 +99,9 @@ Suited for:
 
 ### The Streamlit Application (legacy — secondary research workbench)
 
-> ⚠️ **Legacy status.** The Streamlit interface is retained in the repository for single-user / local research workflows and for historical continuity. It remains fully functional and receives bug fixes, but new features (OPI, PVT, …) land on the Next.js + FastAPI stack first. Where a capability exists on both stacks, the Next.js version is canonical.
+> ⚠️ **Legacy status.** The Streamlit interface is retained in the repository for single-user / local research workflows and for historical continuity. It remains functional and receives bug fixes, but new features (OPI, PVT, …) land on the Next.js + FastAPI stack first. Where a capability exists on both stacks, the Next.js version is canonical.
 
-The original interface, built with [Streamlit](https://streamlit.io), is a full-featured research workbench with 20+ interactive tabs covering HRV analysis, circadian physiology, fatigue prediction, and space weather monitoring. Suited for:
-
-- Exploratory single-user data analysis
-- Clinical autonomic assessments on a local workstation
-- Quick data visualisation and report generation
-- Workflows where launching the full FastAPI + Next.js stack is unnecessary
-
-Three Streamlit entry points remain available:
-
-| Entry Point            | File                            | Purpose                                                                   |
-| ---------------------- | ------------------------------- | ------------------------------------------------------------------------- |
-| **Operational**  | `app/operational_app.py`      | Local clinical workflows, user profiles, lightweight space weather context |
-| **Research**     | `app/research_app.py`         | Full local dashboards: HRV analysis, NOAA correlations, ML analytics       |
-| **Data Science** | `app/space_weather_ds_app.py` | Single-user space weather data science with latest Streamlit              |
-
-Both stacks share the same Python analysis core under `app/`; the Streamlit app talks to SQLite directly, while the Next.js frontend communicates via the FastAPI REST API.
+The original interface, built with [Streamlit](https://streamlit.io), is a full-featured research workbench with 20+ interactive tabs covering HRV analysis, circadian physiology, fatigue prediction, and space weather monitoring. Both stacks share the same Python analysis core under `app/`; the Streamlit app talks to SQLite directly, while the Next.js frontend communicates via the FastAPI REST API.
 
 ---
 
@@ -198,27 +184,10 @@ ACCUWEATHER_API_KEY=your_key         # For weather covariates
 
 ### Step 4: Launch the Application
 
-**Option A: Streamlit (Research & Clinical)**
-
-```bash
-# Operational mode (fast, focused on profiles + space weather)
-streamlit run app/operational_app.py
-
-# Research mode (full dashboards: HRV + correlations + ML)
-streamlit run app/research_app.py
-
-# Data science mode (single-user, latest Streamlit)
-pip install -r requirements_streamlit_latest.txt
-streamlit run app/space_weather_ds_app.py
-```
-
-The app will open in your browser at `http://localhost:8501`.
-
-**Option B: TypeScript Frontend + FastAPI Backend ((Recommended)**
+Run the FastAPI backend and the Next.js frontend in two terminals:
 
 ```bash
 # Terminal 1 — Start the FastAPI backend (port 8180)
-conda activate hrv-py312
 uvicorn api.main:app --reload --port 8180
 
 # Terminal 2 — Start the Next.js frontend (port 3100)
@@ -231,12 +200,12 @@ Access points:
 
 - Frontend: http://localhost:3100
 - API Docs: http://localhost:8180/docs
-- Streamlit (if running): http://localhost:8501
 
-**Option C: Docker (Production)**
+**Docker (Production)**
 
 ```bash
-docker-compose up -d
+# Infrastructure (TimescaleDB, Redis) + FastAPI backend
+docker-compose --profile typescript up -d api
 ```
 
 ### Step 5: Your First Analysis (5 Minutes)
@@ -369,10 +338,7 @@ These modules implement the gold-standard HRV analysis pipeline as defined by th
 
 ```
 HRV/
-├── app/                          # Python application core
-│   ├── operational_app.py        # Streamlit: fast clinical workflows
-│   ├── research_app.py           # Streamlit: full research dashboards
-│   ├── space_weather_ds_app.py   # Streamlit: single-user data science
+├── app/                          # Python analysis core (also a legacy Streamlit UI, maintenance-only)
 │   ├── hrv_core.py               # Core HRV computation engine
 │   ├── vt_analysis.py            # Ventilatory threshold (DFA-alpha1)
 │   ├── trajectory_risk.py        # Allostatic load / trajectory risk
@@ -505,17 +471,14 @@ For environments where interactive MFA is impractical:
 For production deployment with persistent data storage:
 
 ```bash
-# Start all services (PostgreSQL, Redis, App)
-docker-compose up -d
-
-# View logs
-docker-compose logs -f app
-
-# Include pgAdmin for database management
-docker-compose --profile admin up -d
-
-# Run TypeScript frontend with FastAPI backend
+# Start infrastructure (TimescaleDB, Redis) + FastAPI backend
 docker-compose --profile typescript up -d api
+
+# View backend logs
+docker-compose logs -f api
+
+# Optional: pgAdmin for database management
+docker-compose --profile admin up -d
 ```
 
 ---
